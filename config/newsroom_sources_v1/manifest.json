@@ -1,0 +1,22 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2026-07-14",
+  "source_count": 127,
+  "files": [
+    "PROMPT_FOR_DEVELOPMENT_CHAT.txt",
+    "README.md",
+    "priorities.yaml",
+    "routing.yaml",
+    "source.schema.json",
+    "sources/accounts.yaml",
+    "sources/custom.yaml",
+    "sources/github.yaml",
+    "sources/keywords.yaml",
+    "sources/media.yaml",
+    "sources/official.yaml",
+    "sources/reddit.yaml",
+    "sources/research.yaml",
+    "sources/social.yaml",
+    "sources/trends.yaml"
+  ]
+}

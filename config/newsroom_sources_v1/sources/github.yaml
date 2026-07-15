@@ -1,0 +1,333 @@
+version: 1
+sources:
+- id: github_trending
+  name: GitHub Trending
+  category: github
+  type: web_page
+  url: https://github.com/trending
+  language: en
+  region: global
+  priority: 88
+  reliability: 0.8
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - github
+  - open-source
+  - trends
+  - coding
+  adapter: github_trending
+- id: openai_github
+  name: OpenAI GitHub
+  category: github
+  type: github_org
+  url: https://api.github.com/orgs/openai/repos
+  language: en
+  region: global
+  priority: 95
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - open-source
+  - openai
+  adapter: github_api
+  auth: GITHUB_TOKEN
+  metadata:
+    repositories:
+    - openai/openai-python
+    - openai/openai-node
+    - openai/codex
+    max_releases_per_repo: 10
+    include_prereleases: true
+- id: anthropics_github
+  name: Anthropic GitHub
+  category: github
+  type: github_org
+  url: https://api.github.com/orgs/anthropics/repos
+  language: en
+  region: global
+  priority: 95
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - open-source
+  - anthropic
+  adapter: github_api
+  auth: GITHUB_TOKEN
+  metadata:
+    repositories:
+    - anthropics/anthropic-sdk-python
+    - anthropics/anthropic-sdk-typescript
+    - anthropics/claude-code
+    max_releases_per_repo: 10
+    include_prereleases: false
+- id: huggingface_github
+  name: Hugging Face GitHub
+  category: github
+  type: github_org
+  url: https://api.github.com/orgs/huggingface/repos
+  language: en
+  region: global
+  priority: 94
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - open-source
+  - huggingface
+  adapter: github_api
+  auth: GITHUB_TOKEN
+  metadata:
+    repositories:
+    - huggingface/diffusers
+    - huggingface/accelerate
+    - huggingface/tokenizers
+    max_releases_per_repo: 10
+    include_prereleases: false
+- id: langchain_releases
+  name: LangChain Releases
+  category: github
+  type: atom
+  url: https://github.com/langchain-ai/langchain/releases.atom
+  language: en
+  region: global
+  priority: 92
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - agents
+  - llm
+  - python
+- id: langgraph_releases
+  name: LangGraph Releases
+  category: github
+  type: atom
+  url: https://github.com/langchain-ai/langgraph/releases.atom
+  language: en
+  region: global
+  priority: 92
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - agents
+  - workflow
+- id: llamaindex_releases
+  name: LlamaIndex Releases
+  category: github
+  type: atom
+  url: https://github.com/run-llama/llama_index/releases.atom
+  language: en
+  region: global
+  priority: 90
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - rag
+  - agents
+- id: ollama_releases
+  name: Ollama Releases
+  category: github
+  type: atom
+  url: https://github.com/ollama/ollama/releases.atom
+  language: en
+  region: global
+  priority: 93
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - local-llm
+  - open-source
+- id: llama_cpp_releases
+  name: llama.cpp Releases
+  category: github
+  type: atom
+  url: https://github.com/ggml-org/llama.cpp/releases.atom
+  language: en
+  region: global
+  priority: 93
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - local-llm
+  - inference
+- id: vllm_releases
+  name: vLLM Releases
+  category: github
+  type: atom
+  url: https://github.com/vllm-project/vllm/releases.atom
+  language: en
+  region: global
+  priority: 92
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - inference
+  - open-source
+- id: open_webui_releases
+  name: Open WebUI Releases
+  category: github
+  type: atom
+  url: https://github.com/open-webui/open-webui/releases.atom
+  language: en
+  region: global
+  priority: 88
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - local-llm
+  - open-source
+- id: comfyui_releases
+  name: ComfyUI Releases
+  category: github
+  type: atom
+  url: https://github.com/comfyanonymous/ComfyUI/releases.atom
+  language: en
+  region: global
+  priority: 90
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - image-generation
+  - open-source
+- id: automatic1111_releases
+  name: AUTOMATIC1111 Stable Diffusion WebUI
+  category: github
+  type: atom
+  url: https://github.com/AUTOMATIC1111/stable-diffusion-webui/releases.atom
+  language: en
+  region: global
+  priority: 86
+  reliability: 1.0
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - ai
+  - image-generation
+  - open-source
+- id: transformers_releases
+  name: Transformers Releases
+  category: github
+  type: atom
+  url: https://github.com/huggingface/transformers/releases.atom
+  language: en
+  region: global
+  priority: 93
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - models
+  - open-source
+- id: pytorch_releases
+  name: PyTorch Releases
+  category: github
+  type: atom
+  url: https://github.com/pytorch/pytorch/releases.atom
+  language: en
+  region: global
+  priority: 92
+  reliability: 1.0
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - ai
+  - machine-learning
+  - framework
+- id: tensorflow_releases
+  name: TensorFlow Releases
+  category: github
+  type: atom
+  url: https://github.com/tensorflow/tensorflow/releases.atom
+  language: en
+  region: global
+  priority: 88
+  reliability: 1.0
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - ai
+  - machine-learning
+  - framework
+- id: mcp_servers
+  name: Model Context Protocol Servers
+  category: github
+  type: atom
+  url: https://github.com/modelcontextprotocol/servers/commits/main.atom
+  language: en
+  region: global
+  priority: 91
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - mcp
+  - agents
+  - open-source
+- id: crew_ai_releases
+  name: CrewAI Releases
+  category: github
+  type: atom
+  url: https://github.com/crewAIInc/crewAI/releases.atom
+  language: en
+  region: global
+  priority: 88
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - agents
+  - open-source
+- id: autogen_releases
+  name: Microsoft AutoGen Releases
+  category: github
+  type: atom
+  url: https://github.com/microsoft/autogen/releases.atom
+  language: en
+  region: global
+  priority: 89
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - agents
+  - microsoft
+- id: browser_use_releases
+  name: browser-use Releases
+  category: github
+  type: atom
+  url: https://github.com/browser-use/browser-use/releases.atom
+  language: en
+  region: global
+  priority: 88
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - agents
+  - browser

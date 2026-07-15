@@ -1,0 +1,136 @@
+version: 1
+sources:
+- id: arxiv_cs_ai
+  name: arXiv cs.AI
+  category: research
+  type: arxiv_api
+  url: https://export.arxiv.org/api/query?search_query=cat:cs.AI&sortBy=submittedDate&sortOrder=descending
+  language: en
+  region: global
+  priority: 90
+  reliability: 0.9
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - research
+  - papers
+  adapter: arxiv
+- id: arxiv_cs_cl
+  name: arXiv cs.CL
+  category: research
+  type: arxiv_api
+  url: https://export.arxiv.org/api/query?search_query=cat:cs.CL&sortBy=submittedDate&sortOrder=descending
+  language: en
+  region: global
+  priority: 92
+  reliability: 0.9
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - llm
+  - nlp
+  - research
+  adapter: arxiv
+- id: arxiv_cs_lg
+  name: arXiv cs.LG
+  category: research
+  type: arxiv_api
+  url: https://export.arxiv.org/api/query?search_query=cat:cs.LG&sortBy=submittedDate&sortOrder=descending
+  language: en
+  region: global
+  priority: 92
+  reliability: 0.9
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - machine-learning
+  - research
+  adapter: arxiv
+- id: arxiv_cs_cv
+  name: arXiv cs.CV
+  category: research
+  type: arxiv_api
+  url: https://export.arxiv.org/api/query?search_query=cat:cs.CV&sortBy=submittedDate&sortOrder=descending
+  language: en
+  region: global
+  priority: 90
+  reliability: 0.9
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - computer-vision
+  - image-generation
+  - research
+  adapter: arxiv
+- id: arxiv_cs_ro
+  name: arXiv cs.RO
+  category: research
+  type: arxiv_api
+  url: https://export.arxiv.org/api/query?search_query=cat:cs.RO&sortBy=submittedDate&sortOrder=descending
+  language: en
+  region: global
+  priority: 88
+  reliability: 0.9
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - ai
+  - robotics
+  - research
+  adapter: arxiv
+- id: arxiv_stat_ml
+  name: arXiv stat.ML
+  category: research
+  type: arxiv_api
+  url: https://export.arxiv.org/api/query?search_query=cat:stat.ML&sortBy=submittedDate&sortOrder=descending
+  language: en
+  region: global
+  priority: 88
+  reliability: 0.9
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - ai
+  - machine-learning
+  - statistics
+  - research
+  adapter: arxiv
+- id: papers_with_code
+  name: Papers with Code
+  category: research
+  type: web_page
+  url: https://paperswithcode.com/latest
+  language: en
+  region: global
+  priority: 88
+  reliability: 0.85
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - ai
+  - research
+  - code
+  - benchmarks
+  adapter: generic_article_index
+- id: semantic_scholar_ai
+  name: Semantic Scholar AI Recent
+  category: research
+  type: api
+  url: https://api.semanticscholar.org/graph/v1/paper/search
+  language: en
+  region: global
+  priority: 85
+  reliability: 0.9
+  fetch_interval: 6h
+  enabled: true
+  tags:
+  - ai
+  - research
+  - papers
+  adapter: semantic_scholar
+  auth: SEMANTIC_SCHOLAR_API_KEY
+  notes: Передавать query и поля через параметры адаптера.

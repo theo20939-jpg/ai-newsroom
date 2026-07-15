@@ -1,0 +1,699 @@
+version: 1
+sources:
+- id: openai_news
+  name: OpenAI News
+  category: official
+  type: web_page
+  url: https://openai.com/news/
+  language: en
+  region: global
+  priority: 100
+  reliability: 1.0
+  fetch_interval: 10m
+  enabled: true
+  tags:
+  - ai
+  - llm
+  - openai
+  - product
+  - research
+  adapter: generic_article_index
+- id: openai_research
+  name: OpenAI Research
+  category: official
+  type: web_page
+  url: https://openai.com/research/
+  language: en
+  region: global
+  priority: 100
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - llm
+  - openai
+  - research
+  adapter: generic_article_index
+- id: openai_security
+  name: OpenAI Security
+  category: official
+  type: web_page
+  url: https://openai.com/news/security/
+  language: en
+  region: global
+  priority: 100
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - security
+  - openai
+  adapter: generic_article_index
+- id: openai_developer_blog
+  name: OpenAI Developer Resources
+  category: official
+  type: web_page
+  url: https://developers.openai.com/
+  language: en
+  region: global
+  priority: 98
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - api
+  - coding
+  - openai
+  adapter: generic_article_index
+- id: anthropic_news
+  name: Anthropic Newsroom
+  category: official
+  type: web_page
+  url: https://www.anthropic.com/news
+  language: en
+  region: global
+  priority: 100
+  reliability: 1.0
+  fetch_interval: 10m
+  enabled: true
+  tags:
+  - ai
+  - llm
+  - claude
+  - anthropic
+  - product
+  adapter: generic_article_index
+- id: anthropic_research
+  name: Anthropic Research
+  category: official
+  type: web_page
+  url: https://www.anthropic.com/research
+  language: en
+  region: global
+  priority: 100
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - llm
+  - claude
+  - safety
+  - research
+  adapter: generic_article_index
+- id: anthropic_engineering
+  name: Anthropic Engineering
+  category: official
+  type: web_page
+  url: https://www.anthropic.com/engineering
+  language: en
+  region: global
+  priority: 98
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - engineering
+  - agents
+  - coding
+  adapter: generic_article_index
+- id: deepmind_blog
+  name: Google DeepMind News
+  category: official
+  type: web_page
+  url: https://deepmind.google/blog/
+  language: en
+  region: global
+  priority: 100
+  reliability: 1.0
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - ai
+  - gemini
+  - deepmind
+  - research
+  adapter: generic_article_index
+- id: google_ai_blog
+  name: Google AI
+  category: official
+  type: web_page
+  url: https://blog.google/technology/ai/
+  language: en
+  region: global
+  priority: 98
+  reliability: 1.0
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - ai
+  - gemini
+  - google
+  - product
+  adapter: generic_article_index
+- id: google_research_blog
+  name: Google Research Blog
+  category: official
+  type: rss
+  url: https://research.google/blog/rss/
+  language: en
+  region: global
+  priority: 98
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - research
+  - google
+- id: google_cloud_ai
+  name: Google Cloud AI & ML Blog
+  category: official
+  type: rss
+  url: https://cloudblog.withgoogle.com/products/ai-machine-learning/rss/
+  language: en
+  region: global
+  priority: 96
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - cloud
+  - enterprise
+  - google
+- id: meta_ai_blog
+  name: Meta AI Blog
+  category: official
+  type: web_page
+  url: https://ai.meta.com/blog/
+  language: en
+  region: global
+  priority: 98
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - llama
+  - meta
+  - open-source
+  adapter: generic_article_index
+- id: meta_engineering
+  name: Meta Engineering
+  category: official
+  type: rss
+  url: https://engineering.fb.com/feed/
+  language: en
+  region: global
+  priority: 93
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - engineering
+  - ai
+  - meta
+  - infrastructure
+- id: microsoft_ai_blog
+  name: Microsoft AI Blog
+  category: official
+  type: web_page
+  url: https://blogs.microsoft.com/ai/
+  language: en
+  region: global
+  priority: 97
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - copilot
+  - microsoft
+  - enterprise
+  adapter: generic_article_index
+- id: microsoft_research
+  name: Microsoft Research Blog
+  category: official
+  type: rss
+  url: https://www.microsoft.com/en-us/research/feed/
+  language: en
+  region: global
+  priority: 96
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - research
+  - microsoft
+- id: azure_ai_blog
+  name: Azure AI Blog
+  category: official
+  type: rss
+  url: https://azure.microsoft.com/en-us/blog/product/ai-machine-learning/feed/
+  language: en
+  region: global
+  priority: 95
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - cloud
+  - azure
+  - enterprise
+- id: nvidia_blog
+  name: NVIDIA Blog
+  category: official
+  type: rss
+  url: https://blogs.nvidia.com/feed/
+  language: en
+  region: global
+  priority: 98
+  reliability: 1.0
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - ai
+  - gpu
+  - hardware
+  - robotics
+  - nvidia
+- id: nvidia_newsroom
+  name: NVIDIA Newsroom
+  category: official
+  type: rss
+  url: https://nvidianews.nvidia.com/rss
+  language: en
+  region: global
+  priority: 99
+  reliability: 1.0
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - ai
+  - gpu
+  - hardware
+  - nvidia
+  - business
+- id: amazon_science
+  name: Amazon Science
+  category: official
+  type: web_page
+  url: https://www.amazon.science/blog
+  language: en
+  region: global
+  priority: 95
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - research
+  - amazon
+  adapter: generic_article_index
+- id: aws_ml_blog
+  name: AWS Machine Learning Blog
+  category: official
+  type: rss
+  url: https://aws.amazon.com/blogs/machine-learning/feed/
+  language: en
+  region: global
+  priority: 96
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - cloud
+  - aws
+  - machine-learning
+- id: apple_ml_research
+  name: Apple Machine Learning Research
+  category: official
+  type: rss
+  url: https://machinelearning.apple.com/rss.xml
+  language: en
+  region: global
+  priority: 98
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - apple
+  - research
+  - on-device
+- id: huggingface_blog
+  name: Hugging Face Blog
+  category: official
+  type: rss
+  url: https://huggingface.co/blog/feed.xml
+  language: en
+  region: global
+  priority: 98
+  reliability: 1.0
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - ai
+  - open-source
+  - models
+  - huggingface
+- id: huggingface_papers
+  name: Hugging Face Daily Papers
+  category: official
+  type: web_page
+  url: https://huggingface.co/papers
+  language: en
+  region: global
+  priority: 91
+  reliability: 0.9
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - research
+  - papers
+  - huggingface
+  adapter: generic_article_index
+- id: mistral_news
+  name: Mistral AI News
+  category: official
+  type: web_page
+  url: https://mistral.ai/news
+  language: en
+  region: global
+  priority: 98
+  reliability: 1.0
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - ai
+  - llm
+  - mistral
+  - open-source
+  adapter: generic_article_index
+- id: xai_news
+  name: xAI News
+  category: official
+  type: web_page
+  url: https://x.ai/news
+  language: en
+  region: global
+  priority: 98
+  reliability: 1.0
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - ai
+  - llm
+  - grok
+  - xai
+  adapter: generic_article_index
+- id: cohere_blog
+  name: Cohere Blog
+  category: official
+  type: web_page
+  url: https://cohere.com/blog
+  language: en
+  region: global
+  priority: 94
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - llm
+  - enterprise
+  - cohere
+  adapter: generic_article_index
+- id: perplexity_blog
+  name: Perplexity Blog
+  category: official
+  type: web_page
+  url: https://www.perplexity.ai/hub/blog
+  language: en
+  region: global
+  priority: 94
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - search
+  - perplexity
+  - product
+  adapter: generic_article_index
+- id: stability_news
+  name: Stability AI News
+  category: official
+  type: web_page
+  url: https://stability.ai/news
+  language: en
+  region: global
+  priority: 94
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - image-generation
+  - open-source
+  - stability
+  adapter: generic_article_index
+- id: runway_news
+  name: Runway News
+  category: official
+  type: web_page
+  url: https://runwayml.com/news
+  language: en
+  region: global
+  priority: 94
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - video-generation
+  - runway
+  adapter: generic_article_index
+- id: elevenlabs_blog
+  name: ElevenLabs Blog
+  category: official
+  type: web_page
+  url: https://elevenlabs.io/blog
+  language: en
+  region: global
+  priority: 94
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - voice
+  - audio
+  - elevenlabs
+  adapter: generic_article_index
+- id: black_forest_labs_news
+  name: Black Forest Labs News
+  category: official
+  type: web_page
+  url: https://bfl.ai/news
+  language: en
+  region: global
+  priority: 93
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - image-generation
+  - flux
+  adapter: generic_article_index
+- id: groq_blog
+  name: Groq Blog
+  category: official
+  type: web_page
+  url: https://groq.com/blog
+  language: en
+  region: global
+  priority: 92
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - inference
+  - hardware
+  - groq
+  adapter: generic_article_index
+- id: cerebras_blog
+  name: Cerebras Blog
+  category: official
+  type: web_page
+  url: https://www.cerebras.ai/blog
+  language: en
+  region: global
+  priority: 92
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - hardware
+  - inference
+  - training
+  adapter: generic_article_index
+- id: together_blog
+  name: Together AI Blog
+  category: official
+  type: web_page
+  url: https://www.together.ai/blog
+  language: en
+  region: global
+  priority: 92
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - inference
+  - open-source
+  - cloud
+  adapter: generic_article_index
+- id: replicate_blog
+  name: Replicate Blog
+  category: official
+  type: rss
+  url: https://replicate.com/blog/rss
+  language: en
+  region: global
+  priority: 91
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - models
+  - api
+  - developers
+- id: langchain_blog
+  name: LangChain Blog
+  category: official
+  type: rss
+  url: https://blog.langchain.dev/rss/
+  language: en
+  region: global
+  priority: 93
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - agents
+  - llm
+  - developers
+- id: llamaindex_blog
+  name: LlamaIndex Blog
+  category: official
+  type: rss
+  url: https://www.llamaindex.ai/blog/rss.xml
+  language: en
+  region: global
+  priority: 91
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - rag
+  - agents
+  - developers
+- id: cloudflare_ai
+  name: Cloudflare AI Blog
+  category: official
+  type: rss
+  url: https://blog.cloudflare.com/tag/ai/rss/
+  language: en
+  region: global
+  priority: 91
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - cloud
+  - infrastructure
+  - developers
+- id: vercel_ai
+  name: Vercel AI
+  category: official
+  type: web_page
+  url: https://vercel.com/blog?category=ai
+  language: en
+  region: global
+  priority: 90
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - web
+  - developers
+  - agents
+  adapter: generic_article_index
+- id: github_blog_ai
+  name: GitHub Blog AI
+  category: official
+  type: rss
+  url: https://github.blog/ai-and-ml/feed/
+  language: en
+  region: global
+  priority: 94
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - coding
+  - github
+  - copilot
+- id: cursor_changelog
+  name: Cursor Changelog
+  category: official
+  type: web_page
+  url: https://www.cursor.com/changelog
+  language: en
+  region: global
+  priority: 92
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - coding
+  - ide
+  - cursor
+  adapter: changelog
+- id: replit_blog
+  name: Replit Blog
+  category: official
+  type: rss
+  url: https://blog.replit.com/feed.xml
+  language: en
+  region: global
+  priority: 89
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - coding
+  - replit
+  - agents

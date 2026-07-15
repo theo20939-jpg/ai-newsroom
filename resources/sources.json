@@ -1,0 +1,36 @@
+{
+  "sources": [
+    {
+      "name": "Хабр",
+      "type": "TELEGRAM",
+      "url": "@habr_com",
+      "category": "TECH",
+      "reliability_score": 0.84,
+      "active": true
+    },
+    {
+      "name": "vc.ru",
+      "type": "TELEGRAM",
+      "url": "@vcnews",
+      "category": "STARTUPS",
+      "reliability_score": 0.78,
+      "active": true
+    },
+    {
+      "name": "Rozetked",
+      "type": "TELEGRAM",
+      "url": "@rozetked",
+      "category": "GADGETS",
+      "reliability_score": 0.8,
+      "active": true
+    },
+    {
+      "name": "Код Дурова",
+      "type": "TELEGRAM",
+      "url": "@d_code",
+      "category": "TECH",
+      "reliability_score": 0.82,
+      "active": true
+    }
+  ]
+}

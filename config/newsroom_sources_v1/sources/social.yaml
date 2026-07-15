@@ -1,0 +1,39 @@
+version: 1
+sources:
+- id: x_official_accounts
+  name: X Official AI Accounts
+  category: social
+  type: requires_adapter
+  url: https://x.com/
+  language: en
+  region: global
+  priority: 90
+  reliability: 0.85
+  fetch_interval: 5m
+  enabled: true
+  tags:
+  - ai
+  - official
+  - breaking-news
+  adapter: x_api
+  auth: X_BEARER_TOKEN
+  notes: Handles находятся в accounts.yaml; использовать только официальный API или разрешённого провайдера.
+- id: telegram_channels
+  name: Telegram Channels
+  category: social
+  type: requires_adapter
+  url: https://telegram.org/
+  language: ru
+  region: ru
+  priority: 82
+  reliability: 0.7
+  fetch_interval: 5m
+  enabled: true
+  tags:
+  - ai
+  - technology
+  - ru
+  - breaking-news
+  adapter: telegram_client
+  auth: TELEGRAM_API_ID,TELEGRAM_API_HASH
+  notes: Список каналов находится в accounts.yaml. Соблюдать условия Telegram и права доступа.

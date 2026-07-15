@@ -1,0 +1,119 @@
+version: 1
+sources:
+- id: product_hunt_ai
+  name: Product Hunt AI
+  category: trends
+  type: web_page
+  url: https://www.producthunt.com/topics/artificial-intelligence
+  language: en
+  region: global
+  priority: 82
+  reliability: 0.7
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - startup
+  - product
+  - trends
+  adapter: product_hunt
+  auth: PRODUCT_HUNT_TOKEN
+  notes: Предпочтительно использовать официальный GraphQL API.
+- id: google_trends_ai
+  name: Google Trends AI Queries
+  category: trends
+  type: requires_adapter
+  url: https://trends.google.com/trends/
+  language: en
+  region: global
+  priority: 80
+  reliability: 0.75
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - search-trends
+  - viral
+  adapter: google_trends
+  notes: Список запросов находится в keywords.yaml.
+- id: know_your_meme
+  name: Know Your Meme
+  category: trends
+  type: rss
+  url: https://knowyourmeme.com/newsfeed.rss
+  language: en
+  region: global
+  priority: 78
+  reliability: 0.72
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - memes
+  - viral
+  - culture
+- id: youtube_trending_tech
+  name: 'YouTube Search: AI & Tech'
+  category: trends
+  type: youtube_api
+  url: https://www.googleapis.com/youtube/v3/search
+  language: en
+  region: global
+  priority: 79
+  reliability: 0.65
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - video
+  - trends
+  adapter: youtube_search
+  auth: YOUTUBE_API_KEY
+  notes: Запросы и channel IDs задаются в keywords.yaml.
+- id: gdelt_tech
+  name: GDELT 2.1 DOC API
+  category: trends
+  type: api
+  url: https://api.gdeltproject.org/api/v2/doc/doc
+  language: en
+  region: global
+  priority: 83
+  reliability: 0.78
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - technology
+  - global
+  - news
+  - trends
+  adapter: gdelt
+- id: google_news_ai
+  name: 'Google News: Artificial Intelligence'
+  category: aggregator
+  type: rss
+  url: https://news.google.com/rss/search?q=%22artificial%20intelligence%22&hl=en-US&gl=US&ceid=US:en
+  language: en
+  region: global
+  priority: 82
+  reliability: 0.7
+  fetch_interval: 10m
+  enabled: true
+  tags:
+  - ai
+  - news
+  - aggregation
+- id: google_news_ru_ai
+  name: 'Google News RU: ИИ'
+  category: aggregator
+  type: rss
+  url: https://news.google.com/rss/search?q=%D0%B8%D1%81%D0%BA%D1%83%D1%81%D1%81%D1%82%D0%B2%D0%B5%D0%BD%D0%BD%D1%8B%D0%B9%20%D0%B8%D0%BD%D1%82%D0%B5%D0%BB%D0%BB%D0%B5%D0%BA%D1%82&hl=ru&gl=RU&ceid=RU:ru
+  language: ru
+  region: ru
+  priority: 80
+  reliability: 0.68
+  fetch_interval: 10m
+  enabled: true
+  tags:
+  - ai
+  - news
+  - ru
+  - aggregation

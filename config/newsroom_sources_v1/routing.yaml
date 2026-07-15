@@ -1,0 +1,38 @@
+note: Это конфигурация маршрутизации в уже существующие стадии. Она не создаёт новые сервисы или агентов.
+routes:
+  official:
+  - deduplicator
+  - analyzer
+  - scorer
+  media:
+  - deduplicator
+  - analyzer
+  - scorer
+  aggregator:
+  - deduplicator
+  - analyzer
+  - scorer
+  github:
+  - deduplicator
+  - analyzer
+  - scorer
+  reddit:
+  - deduplicator
+  - analyzer
+  - scorer
+  community:
+  - deduplicator
+  - analyzer
+  - scorer
+  research:
+  - deduplicator
+  - analyzer
+  - scorer
+  trends:
+  - deduplicator
+  - analyzer
+  - scorer
+  social:
+  - deduplicator
+  - analyzer
+  - scorer

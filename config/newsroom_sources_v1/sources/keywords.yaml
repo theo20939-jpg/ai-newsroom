@@ -1,0 +1,61 @@
+version: 1
+include:
+- artificial intelligence
+- AI
+- LLM
+- large language model
+- agentic AI
+- AI agent
+- multimodal
+- reasoning model
+- foundation model
+- machine learning
+- robotics
+- GPU
+- accelerator
+- semiconductor
+- chip
+- generative AI
+- image generation
+- video generation
+- voice AI
+- text-to-speech
+- open source model
+- MCP
+- искусственный интеллект
+- нейросеть
+- нейронная сеть
+- ИИ-агент
+- генерация видео
+- генерация изображений
+- робототехника
+- видеокарта
+- процессор
+- гаджет
+exclude_soft:
+- sponsored
+- casino
+- betting
+- crypto price prediction
+- airdrop
+high_priority_entities:
+- OpenAI
+- Anthropic
+- Google DeepMind
+- Gemini
+- Meta AI
+- Llama
+- Microsoft Copilot
+- NVIDIA
+- Apple Intelligence
+- Mistral
+- xAI
+- Grok
+- Hugging Face
+- Perplexity
+- Midjourney
+- Runway
+- ElevenLabs
+- Stability AI
+- Black Forest Labs
+- Cursor

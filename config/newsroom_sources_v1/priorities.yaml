@@ -1,0 +1,13 @@
+levels:
+  100: официальное критически важное объявление
+  95: официальный продукт, исследование или крупная компания
+  90: авторитетное профильное СМИ или ключевой open-source проект
+  80: качественное отраслевое СМИ или сильный community-сигнал
+  70: дополнительный community/trend источник
+scoring_guidance:
+  official_confirmation_bonus: 20
+  multiple_independent_sources_bonus: 10
+  engagement_signal_max_bonus: 15
+  duplicate_penalty: -100
+  unverified_claim_penalty: -25
+  sponsored_content_penalty: -40

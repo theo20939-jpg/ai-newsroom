@@ -1,0 +1,544 @@
+version: 1
+sources:
+- id: techcrunch_ai
+  name: TechCrunch AI
+  category: media
+  type: rss
+  url: https://techcrunch.com/category/artificial-intelligence/feed/
+  language: en
+  region: global
+  priority: 90
+  reliability: 0.9
+  fetch_interval: 10m
+  enabled: true
+  tags:
+  - ai
+  - startup
+  - business
+- id: the_verge_ai
+  name: The Verge AI
+  category: media
+  type: rss
+  url: https://www.theverge.com/rss/ai-artificial-intelligence/index.xml
+  language: en
+  region: global
+  priority: 90
+  reliability: 0.9
+  fetch_interval: 10m
+  enabled: true
+  tags:
+  - ai
+  - consumer-tech
+  - business
+- id: arstechnica_ai
+  name: Ars Technica AI
+  category: media
+  type: rss
+  url: https://feeds.arstechnica.com/arstechnica/technology-lab
+  language: en
+  region: global
+  priority: 89
+  reliability: 0.92
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - ai
+  - science
+  - technology
+- id: wired_ai
+  name: WIRED AI
+  category: media
+  type: rss
+  url: https://www.wired.com/feed/tag/ai/latest/rss
+  language: en
+  region: global
+  priority: 89
+  reliability: 0.9
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - ai
+  - society
+  - business
+- id: mit_tech_review_ai
+  name: MIT Technology Review AI
+  category: media
+  type: rss
+  url: https://www.technologyreview.com/topic/artificial-intelligence/feed
+  language: en
+  region: global
+  priority: 92
+  reliability: 0.95
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - ai
+  - research
+  - society
+- id: venturebeat_ai
+  name: VentureBeat AI
+  category: media
+  type: rss
+  url: https://venturebeat.com/category/ai/feed/
+  language: en
+  region: global
+  priority: 86
+  reliability: 0.84
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - ai
+  - enterprise
+  - business
+- id: engadget
+  name: Engadget
+  category: media
+  type: rss
+  url: https://www.engadget.com/rss.xml
+  language: en
+  region: global
+  priority: 82
+  reliability: 0.84
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - gadgets
+  - consumer-tech
+  - ai
+- id: zdnet
+  name: ZDNET
+  category: media
+  type: rss
+  url: https://www.zdnet.com/news/rss.xml
+  language: en
+  region: global
+  priority: 82
+  reliability: 0.85
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - technology
+  - enterprise
+  - ai
+- id: cnet
+  name: CNET
+  category: media
+  type: rss
+  url: https://www.cnet.com/rss/news/
+  language: en
+  region: global
+  priority: 80
+  reliability: 0.82
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - gadgets
+  - consumer-tech
+  - ai
+- id: tomshardware
+  name: Tom's Hardware
+  category: media
+  type: rss
+  url: https://www.tomshardware.com/feeds/all
+  language: en
+  region: global
+  priority: 84
+  reliability: 0.88
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - hardware
+  - gpu
+  - chips
+  - gaming
+- id: anandtech
+  name: AnandTech
+  category: media
+  type: rss
+  url: https://www.anandtech.com/rss/
+  language: en
+  region: global
+  priority: 85
+  reliability: 0.9
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - hardware
+  - chips
+  - gpu
+- id: android_authority
+  name: Android Authority
+  category: media
+  type: rss
+  url: https://www.androidauthority.com/feed/
+  language: en
+  region: global
+  priority: 80
+  reliability: 0.82
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - android
+  - gadgets
+  - mobile
+  - ai
+- id: nine_to_five_google
+  name: 9to5Google
+  category: media
+  type: rss
+  url: https://9to5google.com/feed/
+  language: en
+  region: global
+  priority: 82
+  reliability: 0.85
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - google
+  - android
+  - gadgets
+  - ai
+- id: nine_to_five_mac
+  name: 9to5Mac
+  category: media
+  type: rss
+  url: https://9to5mac.com/feed/
+  language: en
+  region: global
+  priority: 82
+  reliability: 0.85
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - apple
+  - gadgets
+  - mobile
+  - ai
+- id: macrumors
+  name: MacRumors
+  category: media
+  type: rss
+  url: https://www.macrumors.com/macrumors.xml
+  language: en
+  region: global
+  priority: 82
+  reliability: 0.84
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - apple
+  - gadgets
+  - mobile
+- id: windows_central
+  name: Windows Central
+  category: media
+  type: rss
+  url: https://www.windowscentral.com/feeds/all
+  language: en
+  region: global
+  priority: 80
+  reliability: 0.82
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - microsoft
+  - windows
+  - gaming
+  - ai
+- id: pcgamer
+  name: PC Gamer
+  category: media
+  type: rss
+  url: https://www.pcgamer.com/rss/
+  language: en
+  region: global
+  priority: 78
+  reliability: 0.8
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - gaming
+  - hardware
+  - ai
+- id: gamesindustry
+  name: GamesIndustry.biz
+  category: media
+  type: rss
+  url: https://www.gamesindustry.biz/feed
+  language: en
+  region: global
+  priority: 80
+  reliability: 0.85
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - gaming
+  - business
+  - technology
+- id: reuters_technology
+  name: Reuters Technology
+  category: media
+  type: web_page
+  url: https://www.reuters.com/technology/
+  language: en
+  region: global
+  priority: 94
+  reliability: 0.98
+  fetch_interval: 10m
+  enabled: true
+  tags:
+  - technology
+  - business
+  - regulation
+  - ai
+  adapter: generic_article_index
+- id: ap_technology
+  name: Associated Press Technology
+  category: media
+  type: web_page
+  url: https://apnews.com/technology
+  language: en
+  region: global
+  priority: 93
+  reliability: 0.98
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - technology
+  - business
+  - society
+  adapter: generic_article_index
+- id: bbc_technology
+  name: BBC Technology
+  category: media
+  type: rss
+  url: https://feeds.bbci.co.uk/news/technology/rss.xml
+  language: en
+  region: global
+  priority: 90
+  reliability: 0.95
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - technology
+  - society
+  - business
+- id: the_guardian_technology
+  name: The Guardian Technology
+  category: media
+  type: rss
+  url: https://www.theguardian.com/uk/technology/rss
+  language: en
+  region: global
+  priority: 87
+  reliability: 0.9
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - technology
+  - society
+  - ai
+- id: axios_ai
+  name: Axios AI
+  category: media
+  type: rss
+  url: https://api.axios.com/feed/technology
+  language: en
+  region: global
+  priority: 87
+  reliability: 0.88
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - ai
+  - technology
+  - business
+  notes: Проверить доступность endpoint при интеграции.
+- id: semianalysis
+  name: SemiAnalysis
+  category: media
+  type: rss
+  url: https://www.semianalysis.com/feed
+  language: en
+  region: global
+  priority: 91
+  reliability: 0.9
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - chips
+  - datacenter
+  - business
+- id: the_register_ai
+  name: The Register AI
+  category: media
+  type: rss
+  url: https://www.theregister.com/software/ai_ml/headlines.atom
+  language: en
+  region: global
+  priority: 85
+  reliability: 0.87
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - ai
+  - enterprise
+  - security
+- id: 404_media
+  name: 404 Media
+  category: media
+  type: rss
+  url: https://www.404media.co/rss/
+  language: en
+  region: global
+  priority: 86
+  reliability: 0.88
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - technology
+  - internet
+  - security
+  - society
+- id: techmeme
+  name: Techmeme
+  category: aggregator
+  type: rss
+  url: https://www.techmeme.com/feed.xml
+  language: en
+  region: global
+  priority: 86
+  reliability: 0.8
+  fetch_interval: 5m
+  enabled: true
+  tags:
+  - technology
+  - trends
+  - aggregation
+- id: hacker_news_front
+  name: Hacker News Front Page
+  category: community
+  type: api
+  url: https://hacker-news.firebaseio.com/v0/topstories.json
+  language: en
+  region: global
+  priority: 87
+  reliability: 0.75
+  fetch_interval: 5m
+  enabled: true
+  tags:
+  - technology
+  - programming
+  - startup
+  - trends
+  adapter: hacker_news
+- id: lobsters
+  name: Lobsters
+  category: community
+  type: rss
+  url: https://lobste.rs/rss
+  language: en
+  region: global
+  priority: 78
+  reliability: 0.78
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - programming
+  - technology
+  - open-source
+- id: habr_ai
+  name: 'Habr: Artificial Intelligence'
+  category: media
+  type: rss
+  url: https://habr.com/ru/rss/hubs/artificial_intelligence/articles/all/?fl=ru
+  language: ru
+  region: ru
+  priority: 86
+  reliability: 0.86
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - ai
+  - programming
+  - ru
+- id: habr_ml
+  name: 'Habr: Machine Learning'
+  category: media
+  type: rss
+  url: https://habr.com/ru/rss/hubs/machine_learning/articles/all/?fl=ru
+  language: ru
+  region: ru
+  priority: 85
+  reliability: 0.85
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - ai
+  - machine-learning
+  - ru
+- id: vc_ru_ai
+  name: vc.ru AI
+  category: media
+  type: rss
+  url: https://vc.ru/rss/all
+  language: ru
+  region: ru
+  priority: 78
+  reliability: 0.75
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - ai
+  - startup
+  - business
+  - ru
+  notes: Фильтровать по AI/технологическим тегам после загрузки.
+- id: tproger
+  name: Tproger
+  category: media
+  type: rss
+  url: https://tproger.ru/feed
+  language: ru
+  region: ru
+  priority: 78
+  reliability: 0.78
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - programming
+  - ai
+  - ru
+- id: ixbt_news
+  name: iXBT News
+  category: media
+  type: rss
+  url: https://www.ixbt.com/export/news.rss
+  language: ru
+  region: ru
+  priority: 82
+  reliability: 0.82
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - gadgets
+  - hardware
+  - technology
+  - ru
+- id: three_d_news
+  name: 3DNews
+  category: media
+  type: rss
+  url: https://3dnews.ru/news/rss/
+  language: ru
+  region: ru
+  priority: 82
+  reliability: 0.82
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - gadgets
+  - hardware
+  - technology
+  - ru

@@ -1,0 +1,166 @@
+version: 1
+x:
+- handle: OpenAI
+  priority: 100
+  tags:
+  - ai
+  - openai
+  - official
+- handle: AnthropicAI
+  priority: 100
+  tags:
+  - ai
+  - anthropic
+  - official
+- handle: GoogleDeepMind
+  priority: 100
+  tags:
+  - ai
+  - deepmind
+  - official
+- handle: GoogleAI
+  priority: 98
+  tags:
+  - ai
+  - google
+  - official
+- handle: MetaAI
+  priority: 98
+  tags:
+  - ai
+  - meta
+  - official
+- handle: MistralAI
+  priority: 98
+  tags:
+  - ai
+  - mistral
+  - official
+- handle: huggingface
+  priority: 96
+  tags:
+  - ai
+  - open-source
+  - official
+- handle: nvidia
+  priority: 96
+  tags:
+  - ai
+  - gpu
+  - hardware
+  - official
+- handle: perplexity_ai
+  priority: 94
+  tags:
+  - ai
+  - search
+  - official
+- handle: xai
+  priority: 98
+  tags:
+  - ai
+  - grok
+  - official
+- handle: sama
+  priority: 90
+  tags:
+  - ai
+  - openai
+  - executive
+- handle: karpathy
+  priority: 90
+  tags:
+  - ai
+  - research
+  - education
+- handle: demishassabis
+  priority: 90
+  tags:
+  - ai
+  - deepmind
+  - research
+- handle: ylecun
+  priority: 87
+  tags:
+  - ai
+  - research
+  - meta
+- handle: simonw
+  priority: 89
+  tags:
+  - ai
+  - developers
+  - analysis
+- handle: rasbt
+  priority: 87
+  tags:
+  - ai
+  - research
+  - education
+telegram:
+- handle: habr_com
+  name: Хабр
+  priority: 84
+  tags:
+  - technology
+  - programming
+  - ru
+- handle: vcnews
+  name: vc.ru
+  priority: 78
+  tags:
+  - startup
+  - business
+  - technology
+  - ru
+- handle: rozetked
+  name: Rozetked
+  priority: 80
+  tags:
+  - gadgets
+  - technology
+  - ru
+- handle: kod_dourov
+  name: Код Дурова
+  priority: 82
+  tags:
+  - technology
+  - telegram
+  - gadgets
+  - ru
+youtube:
+- name: Two Minute Papers
+  channel_query: Two Minute Papers
+  priority: 86
+  tags:
+  - ai
+  - research
+  - video
+- name: AI Explained
+  channel_query: AI Explained
+  priority: 84
+  tags:
+  - ai
+  - analysis
+  - video
+- name: Fireship
+  channel_query: Fireship
+  priority: 83
+  tags:
+  - programming
+  - technology
+  - video
+- name: Matt Wolfe
+  channel_query: Matt Wolfe AI
+  priority: 78
+  tags:
+  - ai
+  - tools
+  - video
+- name: IBM Technology
+  channel_query: IBM Technology
+  priority: 82
+  tags:
+  - ai
+  - enterprise
+  - education
