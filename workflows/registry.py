@@ -1,17 +1,23 @@
 """WorkflowRegistry: resolves a WorkflowType to its registered WorkflowDefinition.
 
-Built once, from the definitions declared in workflows.definitions, and never
-mutated afterward - there is no dynamic registration at runtime. Every
-workflow that exists in the running system was registered at import time.
-No database access, no Telegram/AI dependency, no runtime state - mirrors the
-immutability of services.adapter_registry.AdapterRegistry, adapted for
-workflow definitions instead of source adapters.
+Built once, from the definitions declared in workflows.definitions, then
+sealed - after seal() is called, register() raises RegistryAlreadySealedError
+instead of silently accepting more definitions. Immutability is therefore
+enforced, not just conventional: nothing can register a workflow at runtime
+even if it tried to. No database access, no Telegram/AI dependency, no
+runtime state - mirrors the immutability of
+services.adapter_registry.AdapterRegistry, adapted for workflow definitions
+instead of source adapters.
 """
 import logging
 
 from schemas.workflow import WorkflowDefinition, WorkflowType
 from workflows.definitions import content_generation, news_analysis
-from workflows.errors import DuplicateWorkflowRegistrationError, UnknownWorkflowTypeError
+from workflows.errors import (
+    DuplicateWorkflowRegistrationError,
+    RegistryAlreadySealedError,
+    UnknownWorkflowTypeError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,16 +25,27 @@ logger = logging.getLogger(__name__)
 class WorkflowRegistry:
     """Resolves a WorkflowType to its registered, immutable WorkflowDefinition.
 
-    register() is only ever called while building the registry (see
-    build_registry() below) - nothing calls it afterward, so the registry is
-    effectively immutable for the lifetime of the process.
+    Mutable (via register()) only until seal() is called - see build_registry()
+    below, which seals the registry before handing it back. Every workflow
+    that exists in the running system was registered before that point.
     """
 
     def __init__(self) -> None:
         self._definitions: dict[WorkflowType, WorkflowDefinition] = {}
+        self._sealed = False
 
     def register(self, definition: WorkflowDefinition) -> None:
-        """Register one WorkflowDefinition. Raises if its (name, version) is already registered."""
+        """Register one WorkflowDefinition.
+
+        Raises RegistryAlreadySealedError if the registry has been sealed, or
+        DuplicateWorkflowRegistrationError if its (name, version) is already
+        registered.
+        """
+        if self._sealed:
+            raise RegistryAlreadySealedError(
+                f"Cannot register {definition.name.value} version {definition.version}: "
+                "this WorkflowRegistry is sealed and accepts no further definitions."
+            )
         existing = self._definitions.get(definition.name)
         if existing is not None:
             raise DuplicateWorkflowRegistrationError(
@@ -38,8 +55,16 @@ class WorkflowRegistry:
         self._definitions[definition.name] = definition
         logger.info("Registered workflow %s version %d", definition.name.value, definition.version)
 
+    def seal(self) -> None:
+        """Permanently stop accepting further register() calls."""
+        self._sealed = True
+
     def resolve(self, workflow_type: WorkflowType) -> WorkflowDefinition:
-        """Return the registered WorkflowDefinition for workflow_type, or raise UnknownWorkflowTypeError."""
+        """Return the registered WorkflowDefinition for workflow_type, or raise UnknownWorkflowTypeError.
+
+        Read-only regardless of seal state - resolve() works identically
+        before and after sealing.
+        """
         definition = self._definitions.get(workflow_type)
         if definition is None:
             raise UnknownWorkflowTypeError(f"No WorkflowDefinition registered for {workflow_type}")
@@ -47,7 +72,7 @@ class WorkflowRegistry:
 
 
 def build_registry() -> WorkflowRegistry:
-    """Build the Phase 5 WorkflowRegistry from the two registered definitions.
+    """Build and seal the Phase 5 WorkflowRegistry from the two registered definitions.
 
     DAILY_DIGEST is intentionally not registered - see the
     workflows.definitions package docstring.
@@ -55,6 +80,7 @@ def build_registry() -> WorkflowRegistry:
     registry = WorkflowRegistry()
     registry.register(news_analysis.DEFINITION)
     registry.register(content_generation.DEFINITION)
+    registry.seal()
     return registry
 
 

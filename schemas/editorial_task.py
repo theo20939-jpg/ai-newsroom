@@ -7,7 +7,7 @@ schemas/source_import.py (which reuses SourceType from database.models).
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from database.models.editorial_task import TaskPriority, TaskStatus
 from schemas.workflow import WorkflowType
@@ -15,6 +15,8 @@ from schemas.workflow import WorkflowType
 
 class EditorialTaskCreate(BaseModel):
     """Input to WorkflowService.create_task()."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     event_id: UUID
     workflow_type: WorkflowType
@@ -27,6 +29,8 @@ class EditorialTaskRead(BaseModel):
     current_step is derived from EditorialTask.workflow (JSON) at read time -
     it is not a database column.
     """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     id: UUID
     event_id: UUID

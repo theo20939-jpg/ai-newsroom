@@ -23,6 +23,11 @@ class DuplicateWorkflowRegistrationError(WorkflowConfigError):
     """Raised when two WorkflowDefinitions share the same (name, version)."""
 
 
+class RegistryAlreadySealedError(WorkflowConfigError):
+    """Raised when register() is called after WorkflowRegistry.seal() - no dynamic
+    registration is permitted once the registry has been built."""
+
+
 class TaskNotFoundError(Exception):
     """Raised when an EditorialTask id does not exist - shared by get_task() and run()."""
 
@@ -56,7 +61,20 @@ class MaxIterationsExceededError(WorkflowRunnerError):
 
 
 class StepTimeoutError(WorkflowRunnerError):
-    """Raised when a single step exceeds WorkflowStepDefinition.timeout_seconds."""
+    """Raised when a single step exceeds WorkflowStepDefinition.timeout_seconds.
+
+    Treated as a retryable failure, exactly like StepExecutionError - retried
+    up to the step's own max_attempts, never affecting iteration_count.
+    """
+
+
+class WorkflowTimeoutError(WorkflowRunnerError):
+    """Raised when the whole workflow run exceeds WorkflowDefinition.timeout_seconds.
+
+    Distinct from StepTimeoutError: this is never retried and always fails the
+    task immediately - it reflects the cumulative run exceeding its overall
+    budget, not any single step's own timeout.
+    """
 
 
 class StepExecutionError(WorkflowRunnerError):

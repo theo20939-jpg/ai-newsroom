@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models.editorial_task import EditorialTask, TaskPriority
 from database.models.news_event import NewsEvent
+from schemas.editorial_task import EditorialTaskCreate
 from schemas.workflow import WorkflowStepDefinition, WorkflowType
 from services import workflow_service
 from workflows.errors import StepExecutionError, TaskAlreadyCompletedError
@@ -34,13 +35,15 @@ class _FailsOnceThenSucceeds:
         return {}
 
 
+def _command(event_id) -> EditorialTaskCreate:
+    return EditorialTaskCreate(event_id=event_id, workflow_type=WorkflowType.NEWS_ANALYSIS, priority=TaskPriority.B)
+
+
 @pytest.mark.asyncio
 async def test_status_transition_is_visible_via_raw_sql(
     db_session: AsyncSession, real_news_event: NewsEvent
 ) -> None:
-    task = await workflow_service.create_task(
-        db_session, real_news_event.id, WorkflowType.NEWS_ANALYSIS, TaskPriority.B
-    )
+    task = await workflow_service.create_task(db_session, _command(real_news_event.id))
 
     before = await db_session.execute(
         text("SELECT status FROM editorial_tasks WHERE id = :id"), {"id": task.id}
@@ -59,9 +62,7 @@ async def test_status_transition_is_visible_via_raw_sql(
 async def test_workflow_json_round_trips_with_started_and_finished_timestamps(
     db_session: AsyncSession, real_news_event: NewsEvent
 ) -> None:
-    task = await workflow_service.create_task(
-        db_session, real_news_event.id, WorkflowType.NEWS_ANALYSIS, TaskPriority.B
-    )
+    task = await workflow_service.create_task(db_session, _command(real_news_event.id))
     await WorkflowRunner(executor=_AlwaysSucceeds()).run(db_session, task.id)
 
     persisted = await db_session.get(EditorialTask, task.id)
@@ -76,9 +77,7 @@ async def test_workflow_json_round_trips_with_started_and_finished_timestamps(
 
 @pytest.mark.asyncio
 async def test_retry_count_persists_in_database(db_session: AsyncSession, real_news_event: NewsEvent) -> None:
-    task = await workflow_service.create_task(
-        db_session, real_news_event.id, WorkflowType.NEWS_ANALYSIS, TaskPriority.B
-    )
+    task = await workflow_service.create_task(db_session, _command(real_news_event.id))
     await WorkflowRunner(executor=_FailsOnceThenSucceeds()).run(db_session, task.id)
 
     result = await db_session.execute(
@@ -91,9 +90,7 @@ async def test_retry_count_persists_in_database(db_session: AsyncSession, real_n
 async def test_rerun_on_completed_task_makes_zero_changes(
     db_session: AsyncSession, real_news_event: NewsEvent
 ) -> None:
-    task = await workflow_service.create_task(
-        db_session, real_news_event.id, WorkflowType.NEWS_ANALYSIS, TaskPriority.B
-    )
+    task = await workflow_service.create_task(db_session, _command(real_news_event.id))
     await WorkflowRunner(executor=_AlwaysSucceeds()).run(db_session, task.id)
 
     before = await db_session.execute(

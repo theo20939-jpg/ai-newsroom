@@ -11,9 +11,9 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models.editorial_task import EditorialTask, TaskPriority, TaskStatus
+from database.models.editorial_task import EditorialTask, TaskStatus
 from database.models.news_event import NewsEvent
-from schemas.editorial_task import EditorialTaskRead
+from schemas.editorial_task import EditorialTaskCreate, EditorialTaskRead
 from schemas.workflow import WorkflowExecutionState, WorkflowType
 from workflows.errors import DuplicateActiveTaskError, NewsEventNotFoundError, TaskNotFoundError
 from workflows.registry import WorkflowRegistry
@@ -26,28 +26,28 @@ ACTIVE_STATUSES = (TaskStatus.CREATED, TaskStatus.RUNNING)
 
 async def create_task(
     session: AsyncSession,
-    event_id: UUID,
-    workflow_type: WorkflowType,
-    priority: TaskPriority,
+    command: EditorialTaskCreate,
     registry: WorkflowRegistry = default_registry,
 ) -> EditorialTaskRead:
-    """Create an EditorialTask for event_id, or raise if one cannot be created.
+    """Create an EditorialTask from a validated EditorialTaskCreate command, or raise.
 
     Validation order: NewsEvent existence, then workflow_type registration,
     then active-task uniqueness - each is an independent precondition, so
-    unrelated failures are reported without wasting the later checks.
+    unrelated failures are reported without wasting the later checks. No ORM
+    model crosses this boundary in either direction - callers pass and
+    receive only these Pydantic schemas.
     """
-    event = await session.get(NewsEvent, event_id)
+    event = await session.get(NewsEvent, command.event_id)
     if event is None:
-        raise NewsEventNotFoundError(f"No NewsEvent with id {event_id}")
+        raise NewsEventNotFoundError(f"No NewsEvent with id {command.event_id}")
 
-    definition = registry.resolve(workflow_type)  # raises UnknownWorkflowTypeError if unregistered
+    definition = registry.resolve(command.workflow_type)  # raises UnknownWorkflowTypeError if unregistered
 
-    existing = await _find_active_task(session, event_id, workflow_type)
+    existing = await _find_active_task(session, command.event_id, command.workflow_type)
     if existing is not None:
         raise DuplicateActiveTaskError(
-            f"An active task already exists for event {event_id} / workflow {workflow_type.value} "
-            f"(task {existing.id}, status {existing.status.value})"
+            f"An active task already exists for event {command.event_id} / "
+            f"workflow {command.workflow_type.value} (task {existing.id}, status {existing.status.value})"
         )
 
     state = WorkflowExecutionState(
@@ -61,8 +61,8 @@ async def create_task(
     )
 
     task = EditorialTask(
-        event_id=event_id,
-        priority=priority,
+        event_id=command.event_id,
+        priority=command.priority,
         workflow=state.model_dump(mode="json"),
         status=TaskStatus.CREATED,
         retry_count=0,
@@ -73,7 +73,7 @@ async def create_task(
 
     logger.info(
         "Created EditorialTask %s: event=%s workflow=%s priority=%s",
-        task.id, event_id, workflow_type.value, priority.value,
+        task.id, command.event_id, command.workflow_type.value, command.priority.value,
     )
     return _to_read_schema(task)
 

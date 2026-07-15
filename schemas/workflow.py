@@ -31,7 +31,7 @@ class WorkflowType(str, Enum):
 class WorkflowRetryPolicy(BaseModel):
     """How a retryable step failure is retried - distinct from the step's own max_attempts ceiling."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     max_attempts: int = Field(ge=1, le=10)
     retry_delay_seconds: float = Field(default=0, ge=0)
@@ -45,7 +45,7 @@ class WorkflowStepDefinition(BaseModel):
     implementation - see workflows.runner.StepExecutor.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str
     capability: str
@@ -57,7 +57,7 @@ class WorkflowStepDefinition(BaseModel):
 class WorkflowDefinition(BaseModel):
     """Typed, versioned, immutable description of one workflow type."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: WorkflowType
     version: int = Field(ge=1)
@@ -80,6 +80,8 @@ class WorkflowStepResult(BaseModel):
     to this shape.
     """
 
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
     step_name: str
     status: StepStatus
     attempt: int = Field(ge=1)
@@ -99,7 +101,15 @@ class WorkflowExecutionState(BaseModel):
     iteration_count and each step's attempt/retry tracking are deliberately
     independent: a retry of one step never increments iteration_count, and
     iteration_count is never used to mean "this step was retried."
+
+    Deliberately not frozen: workflows.runner.WorkflowRunner mutates this
+    object in place throughout a run (current_step, completed_steps,
+    iteration_count, step_results, failure) rather than rebuilding it via
+    model_copy() on every change. extra="forbid" still applies - unknown
+    fields are rejected even though the model itself is mutable.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     workflow_name: WorkflowType
     workflow_version: int
@@ -115,6 +125,8 @@ RunStatus = Literal["COMPLETED", "FAILED"]
 
 class WorkflowRunResult(BaseModel):
     """Returned by WorkflowRunner.run()."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     task_id: UUID
     status: RunStatus
