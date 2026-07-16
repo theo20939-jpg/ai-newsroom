@@ -1,0 +1,147 @@
+"""CapabilityExecutor: implements workflows.runner.StepExecutor, bridging the
+Workflow Engine (Phase 5) to the Capability Framework (Phase 6).
+
+Constructed fresh per (session, task_id, registry), immediately before the
+matching WorkflowRunner.run() call, using the same session and task_id -
+constructor injection, zero changes to workflows/runner.py, workflows/
+registry.py, or schemas/workflow.py (docs/phase6_architecture_contract.md
+§5, rule 1).
+
+Per Amendment B (§16): CapabilityExecutor MUST NOT persist any AIExecution
+row in Phase 6. It holds a live database session only to re-fetch the
+EditorialTask/NewsEvent (read-only) - it never calls CostTracker, BudgetGuard,
+or LLMGateway, and never writes to `ai_executions`.
+"""
+import logging
+from typing import Any
+from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from database.models.editorial_task import EditorialTask
+from database.models.news_event import NewsEvent
+from schemas.capability import (
+    BusinessContext,
+    CapabilityContext,
+    ExecutionContext,
+    NewsEventSnapshot,
+    RuntimeContext,
+    WorkflowExecutionStateSnapshot,
+)
+from schemas.workflow import WorkflowExecutionState, WorkflowStepDefinition
+from capabilities.capability_mapping import resolve_ai_capability
+from capabilities.errors import (
+    CapabilityConfigurationError,
+    CapabilityTimeoutError,
+    PermanentCapabilityError,
+    RetryableCapabilityError,
+    UnknownCapabilityError,
+    ValidationCapabilityError,
+)
+from capabilities.registry import CapabilityRegistry
+from workflows.errors import PermanentStepFailureError, StepExecutionError, TaskNotFoundError
+
+logger = logging.getLogger(__name__)
+
+
+class CapabilityExecutor:
+    """Implements workflows.runner.StepExecutor by dispatching to a registered
+    Capability. The only bridge between StepExecutor and the Capability
+    Framework - never called directly by a Capability, never calling one
+    Capability from another (P4)."""
+
+    def __init__(self, session: AsyncSession, task_id: UUID, registry: CapabilityRegistry) -> None:
+        self._session = session
+        self._task_id = task_id
+        self._registry = registry
+        self._attempts: dict[str, int] = {}
+
+    async def execute(self, step: WorkflowStepDefinition) -> dict[str, Any]:
+        """Run one Workflow step's capability once and return its structured output.
+
+        Raises StepExecutionError for a retryable failure, PermanentStepFailureError
+        for one that must not be retried - never a bare CapabilityError, and
+        never persists an AIExecution row (Amendment B, §16).
+        """
+        attempt = self._attempts.get(step.name, 0) + 1
+        self._attempts[step.name] = attempt
+
+        task = await self._session.get(EditorialTask, self._task_id)
+        if task is None:
+            raise TaskNotFoundError(f"No EditorialTask with id {self._task_id}")
+        news_event = await self._session.get(NewsEvent, task.event_id)
+        if news_event is None:
+            raise PermanentStepFailureError(f"No NewsEvent with id {task.event_id} for task {task.id}")
+
+        # Amendment A (§15): resolve the capability-name -> AICapability mapping
+        # through the single centralized table. Not used for persistence here
+        # (Phase 6 writes nothing) - validated eagerly so an unmapped capability
+        # name fails fast as a configuration error, not silently.
+        try:
+            resolve_ai_capability(step.capability)
+        except CapabilityConfigurationError as error:
+            raise PermanentStepFailureError(str(error)) from error
+
+        try:
+            _definition, capability = self._registry.resolve(step.capability)
+        except UnknownCapabilityError as error:
+            raise PermanentStepFailureError(
+                f"Cannot resolve capability '{step.capability}': {error}"
+            ) from error
+
+        context = self._build_context(task, news_event, step, attempt)
+
+        try:
+            result = await capability.execute(context)
+        except RetryableCapabilityError as error:
+            raise StepExecutionError(str(error)) from error
+        except CapabilityTimeoutError as error:
+            raise StepExecutionError(str(error)) from error
+        except (PermanentCapabilityError, ValidationCapabilityError, CapabilityConfigurationError) as error:
+            raise PermanentStepFailureError(str(error)) from error
+
+        if result.status != "SUCCESS":
+            raise PermanentStepFailureError(
+                f"Capability '{step.capability}' returned status={result.status} "
+                "without raising a CapabilityError - contract violation."
+            )
+
+        return result.structured_output or {}
+
+    def _build_context(
+        self, task: EditorialTask, news_event: NewsEvent, step: WorkflowStepDefinition, attempt: int
+    ) -> CapabilityContext:
+        state = WorkflowExecutionState.model_validate(task.workflow)
+
+        news_event_snapshot = NewsEventSnapshot(
+            id=news_event.id,
+            title=news_event.title,
+            summary=news_event.summary,
+            content=news_event.content,
+            url=news_event.url,
+            category=news_event.category.value,
+            published_at=news_event.published_at,
+        )
+        workflow_state_snapshot = WorkflowExecutionStateSnapshot(
+            workflow_name=state.workflow_name.value,
+            workflow_version=state.workflow_version,
+            completed_steps=list(state.completed_steps),
+            step_results={
+                r.step_name: r.result
+                for r in state.step_results
+                if r.status == "SUCCESS" and r.result is not None
+            },
+        )
+
+        return CapabilityContext(
+            business=BusinessContext(news_event=news_event_snapshot, workflow_state=workflow_state_snapshot),
+            runtime=RuntimeContext(
+                task_id=task.id,
+                event_id=task.event_id,
+                capability_name=step.capability,
+                priority=task.priority,
+                attempt=attempt,
+                iteration_count=state.iteration_count,
+            ),
+            execution=ExecutionContext(),
+        )
