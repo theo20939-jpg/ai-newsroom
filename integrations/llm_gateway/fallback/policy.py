@@ -20,6 +20,19 @@ denial: continue to the next candidate, never fail the call outright while alter
 rate-limited candidate is a transient, try-elsewhere condition, not a terminal one).
 `rate_limiter` is optional (default None, meaning "no rate limiting enforced") so this remains
 backward compatible with every M15 test, which predates this addition.
+
+Resolved-candidate propagation (M18): `_attempt_candidate()` previously called
+`adapter.generate(request)` with the plain, unmodified request - never telling the adapter
+which `(provider_id, model_id)` routing/fallback had actually resolved for this attempt. This
+was invisible with `FakeProviderAdapter` (each fake test instance is hard-wired to exactly one
+model, so it never needed to ask), but breaks down for a real, multi-model provider adapter
+(e.g. `OpenAIAdapter`, serving `gpt-5.6-sol`/`-terra`/`-luna` under one `provider_id`), which has
+no other way to know which model to call. Fixed by injecting `resolved_provider_id`/
+`resolved_model_id` into `request.metadata` immediately before each dispatch attempt - the same
+"extend via metadata, never the frozen schema" pattern already used throughout M17 (request_id,
+capability_name, priority, excluded_providers, cache_policy), and confirmed cache-key-neutral:
+`CacheKeyComponents.normalized_request_hash` (§13.2) already excludes `metadata` entirely, so
+this addition cannot perturb cache correctness.
 """
 import asyncio
 import logging
@@ -159,9 +172,23 @@ class FallbackPolicy:
         adapter = self._provider_registry.resolve(candidate.provider_id)
         provider_id, model_id = candidate.provider_id, candidate.model_id
 
+        # M18 gap fix (see module docstring): tell the adapter which candidate routing/
+        # fallback actually resolved, via metadata - the only channel available on the frozen
+        # GenerateRequest schema. Built once per candidate (not per same-candidate retry
+        # attempt), since it doesn't change across those retries.
+        resolved_request = request.model_copy(
+            update={
+                "metadata": {
+                    **request.metadata,
+                    "resolved_provider_id": provider_id,
+                    "resolved_model_id": model_id,
+                }
+            }
+        )
+
         for attempt_index in range(self._max_same_candidate_retries + 1):
             try:
-                response = await adapter.generate(request)
+                response = await adapter.generate(resolved_request)
                 return _AttemptOutcome(success=True, response=response, failure_class=None)
             except ProviderModerationBlockedError:
                 await self._health_store.mark_runtime_unavailable(provider_id, model_id)

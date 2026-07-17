@@ -1074,3 +1074,157 @@ reasoned deviation from §15.2's literal diagram ordering.
 **Working tree after this milestone**: same file set as the prior session's hand-off (§1 of
 `docs/phase7_session_handoff.md`) plus the one-line test fix in `test_routing_gateway_pipeline.py`
 described above; no other files touched. No commit made.
+
+---
+
+## M18 — Real OpenAI ProviderAdapter, `generate()` only
+
+**Session note**: this milestone starts from the M17 checkpoint commit
+(`9bc0f0338b9972e0a3884462ac3d45e0baf1b146`), created and approved in a separate step after M17.
+
+### Official-source verification (performed before any code was written)
+
+- **Model catalogue re-check**: `models/catalog.py`'s three GPT-5.6 entries were independently
+  re-verified against `developers.openai.com/api/docs/models/gpt-5.6-{sol,terra,luna}` (live
+  fetch, not training-data memory — this milestone's session postdates the assistant's training
+  cutoff and the family itself, so nothing about it could be answered from memory). Every field
+  matched exactly: `model_id`, `context_window_tokens=1_050_000`, `max_output_tokens=128_000`,
+  and standard-tier pricing (Sol $5.00/$30.00, Terra $2.50/$15.00, Luna $1.00/$6.00 per million
+  input/output tokens). **No catalogue change was needed or made** — zero discrepancies found.
+- **SDK and API surface**: the official `openai` PyPI package (installed: 2.45.0, satisfying the
+  `openai>=2.40` constraint added to `pyproject.toml`). Verified against the live
+  `github.com/openai/openai-python` (main branch) source, not documentation summaries alone:
+  `AsyncOpenAI`, `client.responses.create(...)` (OpenAI's Responses API — confirmed as the
+  currently-recommended surface for new integrations per
+  `developers.openai.com/api/docs/guides/migrate-to-responses`, over the older Chat Completions
+  API), the full typed exception hierarchy (`openai/_exceptions.py`), and the exact response
+  field shapes (`Response`, `ResponseUsage`, `ResponseOutputMessage`, `ResponseFunctionToolCall`,
+  `IncompleteDetails`, `ResponseError`) used for translation.
+
+### Architectural gap found and fixed (not OpenAI-specific)
+
+`FallbackPolicy._attempt_candidate()` called `adapter.generate(request)` with the plain,
+unmodified request — never telling the adapter which `(provider_id, model_id)` routing/fallback
+had actually resolved for that attempt. Invisible with `FakeProviderAdapter` (each fake test
+instance is hard-wired to exactly one model), but a real, multi-model provider adapter serving
+three models under one `provider_id` (this milestone's `OpenAIAdapter`, `gpt-5.6-{sol,terra,
+luna}` all under `provider_id="openai"`) has no other way to know which model to call. Fixed by
+having `FallbackPolicy` inject `resolved_provider_id`/`resolved_model_id` into
+`request.metadata` immediately before each dispatch attempt (`fallback/policy.py`) — the same
+"extend via metadata, never the frozen schema" pattern M17 already established for
+`request_id`/`capability_name`/`priority`/`excluded_providers`/`cache_policy`. Confirmed
+cache-key-neutral: `CacheKeyComponents.normalized_request_hash` (§13.2) already excludes
+`metadata` entirely, so the addition cannot perturb cache correctness — verified by the full
+463-test suite staying green, not merely asserted. No schema changed; no Phase 1–6 or Phase 7
+Protocol signature changed. Documented at length in both `fallback/policy.py`'s module docstring
+and `openai_adapter.py`'s own docstring.
+
+**Files created**: `integrations/llm_gateway/providers/openai_adapter.py` (`OpenAIAdapter`,
+`build_openai_provider_factory()`), `tests/test_openai_adapter.py`,
+`scripts/smoke_test_openai_adapter.py`.
+
+**Files changed**: `integrations/llm_gateway/fallback/policy.py` (the gap fix above — 29 lines,
+`_attempt_candidate()` plus its module docstring), `pyproject.toml` (added `"openai>=2.40"` to
+`dependencies`).
+
+**Design notes**:
+- `generate()` only; `generate_stream()`/`embed()`/`classify()`/`moderate()`/`rerank()` all raise
+  `UnsupportedGatewayCapabilityError`, matching `FakeProviderAdapter`'s established pattern for
+  the same five deferred methods exactly.
+- One persistent `AsyncOpenAI` client per adapter instance, constructed once in `__init__`
+  (optionally injectable for tests), reused across every `generate()` call.
+- Request translation: `GenerateRequest.messages` → Responses API `input` items (`input_text`/
+  `input_image` content parts); `tools`/`tool_choice` → `FunctionToolParam`-shaped entries;
+  `response_mode="json_schema"` → `text.format={"type":"json_schema",...}`. `role="tool"`
+  messages explicitly raise a typed error rather than being silently mistranslated — the
+  Responses API has no "tool" input role (only user/assistant/system/developer), and correctly
+  translating a tool result requires the `capability_execution_id`/`call_id` bookkeeping that
+  lives in `Capability.execute()`'s tool loop (§9.3), which has no concrete implementation yet
+  in this codebase.
+- Response translation: `response.output_text` → `text`; `response.output[].type ==
+  "function_call"` items → `tool_calls`; `response.incomplete_details.reason` (`"max_output_
+  tokens"`/`"content_filter"`) → `finish_reason` (`"length"`/`"content_filter"`), matching the
+  Responses API's own literal values exactly; otherwise `"tool_calls"` or `"stop"`.
+  `response.usage.{input,output}_tokens` → `CapabilityUsage`.
+- Exception translation: every `openai.OpenAIError` subtype maps to exactly one of
+  `ProviderTransientError` (`RateLimitError`, `AuthenticationError` — §5.2's own wording, "auth
+  (this attempt only)", is TRANSIENT — `InternalServerError`, `ConflictError`,
+  `APIConnectionError`/`APITimeoutError`), `ProviderPermanentIncompatibleError`
+  (`PermissionDeniedError`, `NotFoundError`, `UnprocessableEntityError`, and `BadRequestError`
+  for a non-moderation code), or `ProviderModerationBlockedError` (`BadRequestError` with a code
+  in `{invalid_prompt, bio_policy, image_content_policy_violation, content_policy_violation}` —
+  the moderation-shaped codes found in `ResponseError.code`'s live type definition). `asyncio.
+  CancelledError` is a `BaseException`, never caught by the `except openai.OpenAIError` clause,
+  and propagates unchanged.
+- Credential redaction: only `.message`/`.code`/`.status_code`/the exception's own type name are
+  ever read from a caught exception — never `.request`/`.response` (the `httpx` objects that
+  carry the `Authorization` header). The assembled message is passed through a `_redact()` helper
+  that replaces the adapter's own literal API-key value plus generic `Bearer <token>`/`sk-...`
+  patterns with `[REDACTED]`, before ever being attached to a raised exception.
+- `build_openai_provider_factory()` returns a ready `ProviderFactory` for M19's
+  `assemble_ai_integration_layer()` to consume — not wired into any real boot sequence yet.
+
+**Tests added**: 32 in `tests/test_openai_adapter.py` — successful text generation, request
+translation (message/tool/tool_choice/max_tokens/temperature → payload), response translation
+(text, tool_calls + `finish_reason="tool_calls"`, `length`, `content_filter`), usage mapping,
+model mapping (resolved_model_id takes precedence over preferred_model; falls back to
+preferred_model when metadata absent; raises when neither is present), metadata-driven dispatch
+target, persistent-client reuse (same instance across 2 calls; exactly one `AsyncOpenAI(...)`
+construction when no client is injected), all 5 deferred methods raise
+`UnsupportedGatewayCapabilityError`, 9 exception-translation cases (rate limit, 5xx, auth,
+connection, timeout, permission-denied, not-found, bad-request, moderation-coded bad-request),
+one explicit "no raw `OpenAIError` crosses the boundary" assertion, 2 credential-redaction cases
+(exact-key-value match and generic Bearer-pattern match), `asyncio.CancelledError` propagation,
+a schema-snapshot test asserting `GenerateRequest`/`GenerateResponse`/`RoutingCriteria`/
+`ModelDescriptor` carry no OpenAI-specific field, a Protocol-shape structural check, and a
+provider-factory construction test. All fake OpenAI responses are built from the real, installed
+`openai` SDK's own Pydantic types (`Response.model_construct(...)`, `ResponseUsage`, etc.) — an
+"official SDK-compatible fake," not an invented shape.
+
+**Bug found and fixed during this milestone's own test run**: the first cut of the test helper
+`_mock_client()` branched on `isinstance(response, Exception)` to decide whether to configure
+`side_effect` vs. `return_value` on the mock. `asyncio.CancelledError` is a `BaseException`
+subclass, not an `Exception` subclass (since Python 3.8) — so the helper silently treated it as
+a *return value* instead of a raised side effect, and `test_cancelled_error_propagates_unchanged`
+failed with `AttributeError: 'CancelledError' object has no attribute 'output'` deep inside
+response translation, not with the expected `CancelledError` propagating. Fixed by checking
+`isinstance(response, BaseException)` instead — a test-fixture bug, not an adapter bug (the
+adapter's own `except openai.OpenAIError` clause was already correct and untouched).
+
+**pytest**: 463 passed, 0 failed, 0 skipped (full suite; 431 from the M17 checkpoint + 32 new).
+No real network call anywhere in the suite — every OpenAI-facing test uses an injected mock
+`AsyncOpenAI`-shaped client.
+
+**ruff**: clean (`integrations/llm_gateway/providers`, `tests`, `scripts`) after removing one
+unused import (`ResponseError`, imported in the test file but never directly referenced — its
+error-code values are used as string literals instead). **mypy**: clean on
+`integrations/llm_gateway/providers` (3 source files).
+
+**Runtime evidence**: `python -c "..."` (via `asyncio.run`) constructing a real `OpenAIAdapter`
+with an injected mock `AsyncOpenAI` client (`responses.create` returning a real
+`openai.types.responses.Response` instance built via `model_construct`) and calling `generate()`
+end to end — correctly returned `model_used="gpt-5.6-terra"`, `usage.input_tokens=42`,
+`usage.output_tokens=7`, `finish_reason="stop"`, with `client.responses.create.await_count == 1`
+confirming exactly one (mocked, no-network) call was made.
+
+**Architecture validation**: PASS (0 violations) — confirms `openai` is imported nowhere outside
+`integrations/llm_gateway/providers/openai_adapter.py` in production source (the
+`provider-sdk-confinement` rule scans `scripts/` too; `smoke_test_openai_adapter.py` imports only
+the adapter/settings modules, never `openai` directly). `tests/` is validator-exempt by design
+(rules apply to production source, not test doubles) — this is why
+`tests/test_openai_adapter.py` may import real `openai` SDK types to build its fakes.
+
+**Known limitations / explicitly deferred (this milestone's own scope, not a new gap)**:
+- `generate_stream()`/`embed()`/`classify()`/`moderate()`/`rerank()` all raise
+  `UnsupportedGatewayCapabilityError` — separately approved future milestones, per instruction.
+- `role="tool"` message translation (mid-tool-loop) is not implemented — raises a clear typed
+  error instead of mistranslating; no concrete `Capability` drives a tool loop yet.
+- `build_openai_provider_factory()` is not wired into any real boot sequence — that's M19's
+  `assemble_ai_integration_layer()`.
+- The live smoke script (`scripts/smoke_test_openai_adapter.py`) was verified to skip cleanly
+  with no `OPENAI_API_KEY` configured (confirmed: no `.env` key present in this environment,
+  exit code 0, no network call, no key printed) but was **not** run against a real key — that
+  requires the user's separate, explicit, in-the-moment approval per instruction.
+
+**Working tree after this milestone**: the 3 new files above, plus the 2 modified files
+(`fallback/policy.py`, `pyproject.toml`) — 5 files total. No other files touched. No commit made.
