@@ -1395,5 +1395,130 @@ confirming the resulting `RoutingGateway` structurally satisfies `LLMGateway` an
 **Working tree after this milestone**: 4 new files (`tools/__init__.py`, `tools/registry.py`,
 `test_tool_registry.py`, `test_boot_assembly.py`) + 6 modified files (`boot.py`,
 `capabilities/registry.py`, `errors.py`, `gateway.py`, `test_capability_registry.py`,
-`test_routing_gateway_pipeline.py`) — 10 files total. No other files touched. No commit made
-until the checkpoint below passes.
+`test_routing_gateway_pipeline.py`) — 10 files total. No other files touched.
+
+**Committed**: `4471e6530dc3fc025a159effc76c66b02781c7d5` (autonomous commit, per this session's
+explicit "you are authorized to create local commits autonomously... for every completed
+milestone" instruction — a standing grant this session, distinct from M17/M18's separate
+per-milestone approval-then-commit turns earlier in this engagement).
+
+---
+
+## M20 — Cross-cutting end-to-end and regression validation
+
+**Session note**: starts from the M19 checkpoint commit
+(`4471e6530dc3fc025a159effc76c66b02781c7d5`), continued autonomously per the same standing
+authorization as M19. This is the last of the 21 documented Phase 7 milestones (M0–M20, per
+`docs/phase7_session_handoff.md` §5 and §6's numbering) — no M21 is defined anywhere in this
+repository's documentation.
+
+**Canonical scope source**: `docs/phase7_session_handoff.md` §5 item 4 — "Cross-cutting
+end-to-end and regression validation. `tests/test_ai_integration_layer_e2e.py`:
+cache-skips-cost-and-budget, budget-denial-continues-fallback anchored to cheapest price,
+cross-provider `TRANSIENT` fallback + unhealthy-TTL-skip on a repeat call, exhaustion →
+`AllProvidersFailedError` with correct reason, retry-ceiling enforced in the real boot path,
+full existing suite re-run to confirm zero regressions."
+
+**Scope interpretation, documented since this file's job differs from `test_routing_gateway_
+pipeline.py`'s existing M17 coverage**: `test_routing_gateway_pipeline.py` already proves cache-
+skip, budget-denial-continues-fallback, cross-provider fallback, and exhaustion at the pipeline
+level - but exclusively against *permissive, always-healthy, in-memory* fakes that never
+persist state across two separate `generate()` calls. This milestone's actual, distinguishing
+job is proving the subset of properties that only manifest against *real*, cross-call-
+persistent infrastructure (real Redis-backed `CacheStore`/`ProviderHealthStore`) driven through
+the full real pipeline more than once - a permissive fake cannot demonstrate "an unhealthy mark
+from call 1 is honored on call 2" because it never actually remembers anything. Two items in
+the hand-off's list needed a closer read against what already exists:
+- **"budget-denial-continues-fallback anchored to cheapest price"** combines two already-proven
+  properties (M17: budget denial continues to the next candidate; M15: the eligibility anchor
+  is the cheapest candidate, not the first-ranked one) that had never been proven *together*,
+  *through the real `gateway.generate()` pipeline*. Constructing a scenario where a real,
+  monotonic `BudgetGuard` ceiling denies a *cheaper* candidate while approving a *pricier* one
+  is mathematically impossible (cost only increases as you move through a real ledger check),
+  so this is proven as the anchor property alone, end to end, under `RoutingGateway.generate()`'s
+  actual default routing objective (`BEST_QUALITY`, per `gateway.py`'s `_build_routing_criteria`
+  never setting `objective` from request metadata) - the scenario the anchor rule specifically
+  guards against, since `BEST_QUALITY`'s first-ranked candidate is deliberately not the cheapest
+  one in the test.
+- **"retry-ceiling enforced in the real boot path"**: M19 documented that
+  `validate_retry_ceiling()` (§6 rule 4) is deliberately not wired into `assemble_ai_integration_
+  layer()` - it needs each registered Capability's Workflow-level retry config cross-referenced
+  against Gateway-level fallback config via a `CapabilityRegistry` iteration API that doesn't
+  exist, and there are zero concrete Capabilities to validate regardless. That gap is unchanged
+  by this milestone (no new capability-enumeration API was invented to close it - inventing one
+  now would be a real architecture change outside a "regression validation" milestone's scope).
+  What this milestone *can* and does prove: the function correctly gates against the exact
+  values the real boot-assembled `FallbackPolicy` actually uses in production
+  (`max_fallback_attempts=3` from `FallbackEligibility`'s default, `max_same_candidate_retries=1`
+  from `FallbackPolicy`'s own default) - proving the arithmetic a real boot path would run,
+  the day a concrete Capability and its enumeration API both exist.
+
+**Files created**: `tests/test_ai_integration_layer_e2e.py`.
+
+**Files changed**: none.
+
+**Tests added**: 6 — cache-hit skips a second dispatch against a *real* `RedisCacheStore` (not
+the in-memory fake M17 uses); the fallback cost anchor is the cheapest candidate in the set, not
+the first-ranked one, proven end to end under `gateway.generate()`'s actual `BEST_QUALITY`
+default (a wrongly-implemented "anchor to first-ranked" would never exclude the expensive,
+first-ranked candidate - this test would catch that regression); an unhealthy mark written by
+one `generate()` call is honored by `RoutingEngine`'s health filter on a second, separate
+`generate()` call, against real Redis (proves cross-call persistence, not just cross-attempt
+persistence within one call, which M15/M17 already covered); exhaustion raises
+`AllProvidersFailedError` with `reason == "all_candidates_failed"` (M17's existing exhaustion
+test didn't assert the specific reason code); `validate_retry_ceiling()` passes/raises correctly
+against the real boot-assembled `FallbackPolicy`'s actual production defaults.
+
+**Bug found and fixed during this milestone's own test run**: none - all 6 tests passed on the
+first run once written; no regression or gap surfaced this time.
+
+**pytest**: 488 passed, 0 failed, 0 skipped (full suite; 482 from the M19 checkpoint + 6 new).
+No real network call anywhere - every provider is a `FakeProviderAdapter`.
+
+**ruff**: clean. **mypy**: clean (1 source file checked - the new test file only; no production
+source changed this milestone).
+
+**Runtime evidence**: this milestone's own tests, run against real local Redis (docker-compose),
+constitute the runtime evidence - see "Tests added" above.
+
+**Architecture validation**: PASS (0 violations).
+
+**Alembic**: no migrations created or touched.
+
+**Known limitations / explicitly deferred (unchanged from M19, not new)**:
+- Retry-multiplication-ceiling boot enforcement remains unwired into a real boot call site
+  (needs a `CapabilityRegistry` iteration API that doesn't exist and isn't needed until a
+  concrete Capability does).
+- `budget_guard`'s presence in `build_registry()`'s signature vs. Amendment C's Capability-side
+  prohibition remains documented, not resolved (M19 decision 3).
+- `PromptRepository`/`CapabilityNegotiator`/the tool-use loop (§9.3–§9.5) remain unbuilt,
+  unchanged from M19.
+
+**Working tree after this milestone**: 1 new file (`tests/test_ai_integration_layer_e2e.py`).
+No other files touched.
+
+---
+
+## Phase 7 completion summary (M0–M20, all 21 documented milestones)
+
+Every milestone from M0 (architecture boundary validator) through M20 (this entry) is complete,
+tested, and committed. `scripts/validate_architecture.py` reports 0 forbidden-dependency
+violations against the full, frozen Phase 7 contract's forbidden-edge table. The full test
+suite (488 tests as of M20) passes with zero failures and zero skips, exercising every
+component named in the contract's §18 table except `CapabilityNegotiator` (deferred, §17.3,
+opt-in and unimplemented) and the real tool-use loop (§9.3–§9.5, deferred - `ToolRegistry`
+itself, §9.1/§9.2, was implemented at M19). No real network call occurs anywhere in the
+standard test suite; `scripts/smoke_test_openai_adapter.py` remains the sole, manual,
+opt-in exception. No database migration was created or touched at any point across M0–M20.
+
+Two genuine architectural gaps were found and fixed during implementation, both documented in
+detail in their respective milestone entries above: `FallbackPolicy` never told a `ProviderAdapter`
+which candidate routing had actually resolved (found and fixed at M18, via the established
+"extend via metadata" pattern), and `RoutingGateway` never implemented the five deferred
+`LLMGateway` Protocol methods (found and fixed at M19, via the same stub-and-raise pattern every
+other adapter in this codebase already uses). One real, load-bearing inconsistency was found in
+the frozen contract itself and deliberately left unresolved rather than silently decided either
+way: §19 rule 2's `build_registry()` signature includes `budget_guard: BudgetGuard`, which
+appears to conflict with Amendment C's (§25) explicit prohibition on `Capability` ever holding
+a `BudgetGuard` reference - harmless today only because zero concrete Capabilities exist to
+receive it, and flagged for whichever future milestone builds the first one.
