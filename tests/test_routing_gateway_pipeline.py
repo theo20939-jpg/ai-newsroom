@@ -18,7 +18,17 @@ from integrations.llm_gateway.errors import AllProvidersFailedError, RateLimitEx
 from integrations.llm_gateway.fallback.policy import FallbackPolicy
 from integrations.llm_gateway.gateway import RoutingGateway
 from integrations.llm_gateway.models.registry import ModelDescriptor, ModelRegistry, PricingTier
-from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, Message, ToolDefinition
+from integrations.llm_gateway.protocol import (
+    ClassifyRequest,
+    ContentPart,
+    EmbedRequest,
+    GenerateRequest,
+    Message,
+    ModerateRequest,
+    RerankRequest,
+    ToolDefinition,
+    UnsupportedGatewayCapabilityError,
+)
 from integrations.llm_gateway.providers.base import ProviderDescriptor, ProviderRegistry
 from integrations.llm_gateway.routing.engine import RoutingEngine
 from integrations.llm_gateway.routing.registry import RoutingPolicyRegistry
@@ -274,3 +284,52 @@ async def test_preferred_model_promotion_works_end_to_end() -> None:
 
     assert response.model_used == "preferred-model"
     assert other.call_count == 0
+
+
+# ---------------------------------------------------------------------------
+# M19 gap fix: RoutingGateway must structurally satisfy LLMGateway (required for
+# capabilities.registry.build_registry(gateway: LLMGateway, ...), §19 rule 2) - the five
+# deferred methods raise UnsupportedGatewayCapabilityError, matching FakeProviderAdapter's and
+# OpenAIAdapter's already-established pattern for the same deferred methods.
+# ---------------------------------------------------------------------------
+
+
+def _single_model_gateway() -> RoutingGateway:
+    adapter = FakeProviderAdapter(provider_id="fake-provider-a", model_id="model-a", behavior="success")
+    return _build_gateway([_model("model-a", "fake-provider-a")], {"fake-provider-a": adapter})
+
+
+@pytest.mark.asyncio
+async def test_generate_stream_raises_unsupported() -> None:
+    gateway = _single_model_gateway()
+    with pytest.raises(UnsupportedGatewayCapabilityError):
+        async for _ in gateway.generate_stream(_request()):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_embed_raises_unsupported() -> None:
+    gateway = _single_model_gateway()
+    with pytest.raises(UnsupportedGatewayCapabilityError):
+        await gateway.embed(EmbedRequest(inputs=["hi"]))
+
+
+@pytest.mark.asyncio
+async def test_classify_raises_unsupported() -> None:
+    gateway = _single_model_gateway()
+    with pytest.raises(UnsupportedGatewayCapabilityError):
+        await gateway.classify(ClassifyRequest(input="hi", labels=["a", "b"]))
+
+
+@pytest.mark.asyncio
+async def test_moderate_raises_unsupported() -> None:
+    gateway = _single_model_gateway()
+    with pytest.raises(UnsupportedGatewayCapabilityError):
+        await gateway.moderate(ModerateRequest(input="hi"))
+
+
+@pytest.mark.asyncio
+async def test_rerank_raises_unsupported() -> None:
+    gateway = _single_model_gateway()
+    with pytest.raises(UnsupportedGatewayCapabilityError):
+        await gateway.rerank(RerankRequest(query="hi", documents=["a", "b"]))

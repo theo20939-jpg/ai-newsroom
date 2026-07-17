@@ -118,3 +118,23 @@ class ProviderModerationBlockedError(GatewayError):
     PERMANENT_INCOMPATIBLE-flavored failure FallbackPolicy MUST NOT continue past: it MUST
     raise immediately, never falling back to a different provider/model for the same
     disallowed content (§5.4)."""
+
+
+class UnknownToolError(GatewayError):
+    """Raised by ToolRegistry.resolve() for an unregistered tool name (§9.2)."""
+
+
+class DuplicateToolRegistrationError(GatewayError):
+    """Raised by ToolRegistry.register() when a tool name is already registered (§9.2)."""
+
+
+class ToolRegistryAlreadySealedError(GatewayError):
+    """Raised by ToolRegistry.register() once seal() has been called (§9.2, P18)."""
+
+
+class CapabilityNegotiatorNotImplementedError(GatewayError):
+    """Raised at boot (M19's assemble_ai_integration_layer()) if
+    settings.verify_capabilities_at_boot=True but no CapabilityNegotiator implementation
+    exists yet (§17.3 is opt-in and deferred past this delivery, per the M17 hand-off's
+    documented scope reduction). Boot MUST fail loud on a requested-but-unhonorable
+    configuration, never silently no-op it."""

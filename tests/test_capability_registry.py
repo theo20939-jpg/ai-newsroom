@@ -7,9 +7,29 @@ from capabilities.errors import (
     DuplicateCapabilityRegistrationError,
     UnknownCapabilityError,
 )
-from capabilities.registry import CapabilityRegistry
-from capabilities.registry import registry as default_registry
+from capabilities.registry import CapabilityRegistry, build_registry
+from integrations.llm_gateway.tools.registry import ToolRegistry
+from integrations.prompts.protocol import PromptRepository, RenderedPrompt
 from tests.fakes.fake_capability import AlwaysSucceedsCapability
+from tests.fakes.fake_gateway import FakeLLMGateway
+from tests.fakes.fake_infra import AllowingBudgetGuard
+
+
+class _FakePromptRepository:
+    """Minimal in-memory PromptRepository, proving build_registry()'s new signature (§19 rule
+    2) is satisfiable - mirrors tests/test_prompt_repository_protocol.py's own fake."""
+
+    def resolve(self, name: str, version: str | None = None) -> RenderedPrompt:
+        return RenderedPrompt(
+            name=name, version=version or "1", system="You are a fake.", rules=[], output_schema={}
+        )
+
+
+def _build_registry() -> CapabilityRegistry:
+    tool_registry = ToolRegistry()
+    tool_registry.seal()
+    prompt_repository: PromptRepository = _FakePromptRepository()
+    return build_registry(FakeLLMGateway(), prompt_repository, AllowingBudgetGuard(), tool_registry)
 
 
 def _definition(name: str = "research", version: int = 1) -> CapabilityDefinition:
@@ -66,11 +86,15 @@ def test_resolution_after_sealing_still_works() -> None:
     assert resolved_capability is capability
 
 
-def test_the_real_registry_ships_empty_but_sealed() -> None:
-    """No concrete Capability implementation exists yet in Phase 6 - mirrors
-    Phase 5's WorkflowType.DAILY_DIGEST precedent (declared, not registered)."""
+def test_build_registry_ships_empty_but_sealed() -> None:
+    """No concrete Capability implementation exists yet - mirrors Phase 5's
+    WorkflowType.DAILY_DIGEST precedent (declared, not registered). build_registry() now
+    requires the four injected dependencies §19 rule 2 specifies (M19) - the registry it
+    produces is still empty-and-sealed regardless, exactly as before."""
+    real_registry = _build_registry()
+
     with pytest.raises(UnknownCapabilityError):
-        default_registry.resolve("research")
+        real_registry.resolve("research")
 
     with pytest.raises(CapabilityRegistryAlreadySealedError):
-        default_registry.register(_definition(), AlwaysSucceedsCapability())
+        real_registry.register(_definition(), AlwaysSucceedsCapability())

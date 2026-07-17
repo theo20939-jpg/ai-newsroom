@@ -21,13 +21,37 @@ unmodified in scenario/assertions, as the simplest regression case for this full
 its setup code was updated to construct the now-required RoutingEngine/FallbackPolicy
 dependencies (a real class's constructor evolving as more of it is built is expected; the
 *behavior* it proves - one provider, one model, deterministic response - is unchanged).
+
+M19 gap found and fixed: `RoutingGateway` is meant to be "the concrete LLMGateway
+implementation" (§1 P13, §18's row) - but only ever implemented `generate()`. The M17
+hand-off's own decision log said the other five Protocol methods should raise
+UnsupportedGatewayCapabilityError, matching FakeProviderAdapter's and OpenAIAdapter's already-
+established pattern for the same deferred methods - that was simply never added. Surfaced now
+because M19's `capabilities.registry.build_registry(gateway: LLMGateway, ...)` (§19 rule 2)
+requires a real `LLMGateway`-typed argument, and mypy correctly rejected `RoutingGateway`
+instances for failing to structurally satisfy the Protocol. Fixed by adding the same five
+stub methods, unchanged in shape from every other LLMGateway implementation in this codebase.
 """
+from collections.abc import AsyncIterator
 from uuid import uuid4
 
 from database.models.editorial_task import TaskPriority
 from integrations.llm_gateway.fallback.policy import FallbackPolicy
 from integrations.llm_gateway.observability import ObservabilityContext
-from integrations.llm_gateway.protocol import GenerateRequest, GenerateResponse
+from integrations.llm_gateway.protocol import (
+    ClassifyRequest,
+    ClassifyResponse,
+    EmbedRequest,
+    EmbedResponse,
+    GenerateChunk,
+    GenerateRequest,
+    GenerateResponse,
+    ModerateRequest,
+    ModerateResponse,
+    RerankRequest,
+    RerankResponse,
+    UnsupportedGatewayCapabilityError,
+)
 from integrations.llm_gateway.routing.criteria import RoutingCriteria
 from integrations.llm_gateway.routing.engine import RoutingEngine
 
@@ -45,6 +69,24 @@ class RoutingGateway:
         criteria = self._build_routing_criteria(request)
         ranked_candidates = await self._routing_engine.route(criteria, observability)
         return await self._fallback_policy.dispatch(request, ranked_candidates, criteria, observability)
+
+    async def generate_stream(self, request: GenerateRequest) -> AsyncIterator[GenerateChunk]:
+        raise UnsupportedGatewayCapabilityError(
+            "RoutingGateway: generate_stream() is deferred past this delivery"
+        )
+        yield  # pragma: no cover - unreachable; keeps this an async generator for typing
+
+    async def embed(self, request: EmbedRequest) -> EmbedResponse:
+        raise UnsupportedGatewayCapabilityError("RoutingGateway: embed() is deferred past this delivery")
+
+    async def classify(self, request: ClassifyRequest) -> ClassifyResponse:
+        raise UnsupportedGatewayCapabilityError("RoutingGateway: classify() is deferred past this delivery")
+
+    async def moderate(self, request: ModerateRequest) -> ModerateResponse:
+        raise UnsupportedGatewayCapabilityError("RoutingGateway: moderate() is deferred past this delivery")
+
+    async def rerank(self, request: RerankRequest) -> RerankResponse:
+        raise UnsupportedGatewayCapabilityError("RoutingGateway: rerank() is deferred past this delivery")
 
     def _build_observability_context(self, request: GenerateRequest) -> ObservabilityContext:
         """Constructs an explicit ObservabilityContext from GenerateRequest.metadata (§16.1:

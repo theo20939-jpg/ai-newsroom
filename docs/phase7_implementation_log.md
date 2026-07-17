@@ -1228,3 +1228,172 @@ the adapter/settings modules, never `openai` directly). `tests/` is validator-ex
 
 **Working tree after this milestone**: the 3 new files above, plus the 2 modified files
 (`fallback/policy.py`, `pyproject.toml`) — 5 files total. No other files touched. No commit made.
+
+---
+
+## M19 — Fixed boot sequence + `CapabilityRegistry` wiring
+
+**Session note**: this milestone starts from the M18 checkpoint commit
+(`e8d642e62b1f471525e81a79227019d8056e8f5f`), approved and continued autonomously per instruction
+("continue implementing the documented Phase 7 milestones autonomously, beginning with M19").
+
+**Canonical scope source**: `docs/phase7_session_handoff.md` §5 item 3 — "Fixed boot sequence +
+`CapabilityRegistry` wiring. `integrations/llm_gateway/boot.py`'s `assemble_ai_integration_layer
+(settings)` (the fixed order: seal registries → consistency check → construct every component →
+assemble `RoutingGateway`); `capabilities/registry.py`'s `build_registry()` gains the
+injected-dependency signature per §19 rule 2 (still ships empty-sealed — no concrete
+`Capability` exists yet)." Cross-checked against `docs/phase7_architecture_contract.md` §19
+rule 3's full fixed-order text (the hand-off's own summary stops at "assemble RoutingGateway";
+the contract's own text continues through "`build_registry()` called → `CapabilityRegistry`
+sealed → process ready to serve" — the contract, as the designated single source of truth, is
+followed in full, treating the hand-off's summary as abbreviated, not a deliberate narrowing).
+
+**Files created**: `integrations/llm_gateway/tools/__init__.py`,
+`integrations/llm_gateway/tools/registry.py` (`ToolExecutionRequest`, `ToolExecutionResult`,
+`ToolExecutor`, `ToolRegistry`), `tests/test_tool_registry.py`, `tests/test_boot_assembly.py`.
+
+**Files changed**: `integrations/llm_gateway/boot.py` (`assemble_ai_integration_layer()`,
+`AIIntegrationLayer`), `capabilities/registry.py` (`build_registry()`'s new signature),
+`integrations/llm_gateway/errors.py` (4 new exceptions), `integrations/llm_gateway/gateway.py`
+(gap fix, see below), `tests/test_capability_registry.py` (updated for the new
+`build_registry()` signature), `tests/test_routing_gateway_pipeline.py` (5 new tests for the
+gateway.py gap fix).
+
+### Scope decisions made during this milestone (documented, not asked, per instruction to
+### proceed without routine approval)
+
+1. **`ToolRegistry` (§9.1, §9.2) implemented now, minimally.** `capabilities.registry.
+   build_registry()`'s contract-mandated signature (§19 rule 2) requires a
+   `tool_registry: ToolRegistry` parameter, and `ToolRegistry` is a concrete class (not a
+   Protocol) per §9.2 - it did not exist anywhere in this codebase before this milestone (tool-
+   calling machinery was explicitly deferred at M17). Implemented exactly and only what §9.1/
+   §9.2 specify verbatim: `ToolExecutionRequest`, `ToolExecutionResult`, `ToolExecutor`
+   (Protocol), `ToolRegistry` (register/seal/resolve, sealed-after-boot, explicit-registration-
+   only - identical discipline to ProviderRegistry/ModelRegistry/RoutingPolicyRegistry, P18).
+   Zero tool-loop logic, zero `MAX_TOOL_ROUNDS`, zero Capability-side machinery (§9.3/§9.4/§9.5
+   remain fully deferred, unchanged) - `assemble_ai_integration_layer()` constructs and seals an
+   *empty* `ToolRegistry`, exactly mirroring `build_registry()`'s own "ships empty-sealed" state.
+2. **`prompt_repository: PromptRepository` is an injected parameter, not internally
+   constructed.** No concrete `PromptRepository` implementation exists anywhere in this codebase
+   (`integrations/prompts/protocol.py`'s own docstring: "prompt lifecycle lives in a separate,
+   not-yet-built Prompt Publisher" - explicitly out of Phase 7's scope). `assemble_ai_
+   integration_layer(settings, prompt_repository, *, redis_client=None)` accepts it as a required
+   parameter instead, matching the dependency-injection discipline every other component in this
+   file already follows.
+3. **A real, documented inconsistency in the frozen contract, not resolved, correctly deferred.**
+   §19 rule 2's `build_registry(gateway, prompt_repository, budget_guard, tool_registry)`
+   signature includes `budget_guard: BudgetGuard` - but Amendment C (§25, appended after §19)
+   explicitly forbids `Capability` from ever holding or calling `BudgetGuard`. §26's append-only
+   discipline means Amendment C never edited §19 rule 2's text in place, so this reads as a
+   holdover from a pre-Amendment-C draft. Not a blocker for this milestone: `build_registry()`
+   still ships an empty, sealed registry (no concrete `Capability` exists to inject anything
+   into), so nothing today actually threads `budget_guard` into a `Capability` constructor. The
+   parameter is accepted and type-checked, matching the contract's literal signature exactly;
+   whether a future concrete `Capability` genuinely receives it (almost certainly it must not,
+   per Amendment C) is left for whichever future milestone builds the first real `Capability` -
+   documented here rather than silently decided either way.
+4. **`CapabilityNegotiator.verify()` (§17.3) fails loud instead of silently no-op'ing.**
+   `settings.verify_capabilities_at_boot` defaults `False` and is honored silently in that case;
+   if set `True`, `assemble_ai_integration_layer()` raises `CapabilityNegotiatorNotImplemented
+   Error` rather than doing nothing, since `CapabilityNegotiator` itself has no implementation
+   anywhere yet (deferred past this delivery). Matches this codebase's established "fail loud on
+   an unhonorable boot configuration" discipline (`RegistryConsistencyError`,
+   `MissingRedisFailurePolicyError`, `UnknownProviderError`).
+5. **Retry-multiplication-ceiling boot enforcement (§6 rule 4) deliberately NOT wired in.**
+   Correctly validating it needs each registered Capability's Workflow-level
+   `WorkflowRetryPolicy.max_attempts` cross-referenced against Gateway-level fallback config -
+   two separate registries (`workflows.registry` + `capabilities.registry`) that
+   `CapabilityRegistry` exposes no public iteration API over. With zero concrete Capabilities
+   registered in this delivery there is nothing to validate against regardless - exactly what
+   M16's own log entry already predicted ("in practice this will have zero capabilities to check
+   against until a future phase adds one"), still true after M19.
+6. **`CostTracker` constructed and returned in `AIIntegrationLayer`, not discarded.** Per §19
+   rule 3's "every §18 component constructed," `RedisCostTracker` is built during boot even
+   though nothing calls it yet (`RoutingGateway.generate()` deliberately never calls
+   `CostTracker.record()`, confirmed at M17) - returned in the bundle rather than constructed
+   and immediately discarded, so a future caller assembling a real Capability has it ready.
+
+### Real gap found and fixed (blocking, not cosmetic)
+
+`RoutingGateway` (M17) never implemented `generate_stream`/`embed`/`classify`/`moderate`/
+`rerank` - only `generate()` existed. The M17 hand-off's own decision log said the other five
+Protocol methods should raise `UnsupportedGatewayCapabilityError`, matching
+`FakeProviderAdapter`'s and (from M18) `OpenAIAdapter`'s already-established pattern - this was
+simply never added to `gateway.py` itself. Invisible until this milestone because nothing
+before required a `RoutingGateway` instance to structurally satisfy `LLMGateway` end to end;
+`capabilities.registry.build_registry(gateway: LLMGateway, ...)` (§19 rule 2) does, and mypy
+correctly rejected `assemble_ai_integration_layer()`'s `build_registry(gateway, ...)` call
+(`Argument 1 to "build_registry" has incompatible type "RoutingGateway"; expected "LLMGateway"`)
+until this was fixed. Fixed by adding the same five stub methods, unchanged in shape from every
+other `LLMGateway` implementation already in this codebase. 5 new tests added in
+`tests/test_routing_gateway_pipeline.py` proving each raises `UnsupportedGatewayCapabilityError`
+against a real, fully-constructed `RoutingGateway`.
+
+**Tests added**: 9 in `test_tool_registry.py` (register/resolve, idempotent flag stored
+per-registration, duplicate registration raises, unknown name raises, registration-after-seal
+raises, resolution-after-seal still works, empty-sealed registry resolves nothing,
+`ToolExecutionRequest`/`ToolExecutionResult` shape); 5 in `test_boot_assembly.py` (successful
+assembly produces a working `RoutingGateway` + empty-sealed `CapabilityRegistry` +
+`RedisCostTracker`, `verify_capabilities_at_boot=True` fails loud,
+missing `redis_unavailable_policy` fails loud at construction, a model registered under a
+disabled provider fails `RegistryConsistencyError`, the injected `redis_client` is actually used
+rather than the cached singleton); 5 in `test_routing_gateway_pipeline.py` (the gateway.py gap
+fix, one per deferred method); `test_capability_registry.py` updated in place (6 existing tests
+now route through `build_registry()`'s new signature via a local `_build_registry()` helper
+instead of the removed module-level singleton - same assertions, same coverage).
+
+**Bug found and fixed during this milestone's own test run**: none beyond the two documented
+above (the `ToolRegistry`-shape and `RoutingGateway`-Protocol-conformance gaps) - both caught by
+mypy/the test suite before commit, not discovered post-hoc.
+
+**pytest**: 482 passed, 0 failed, 0 skipped (full suite; 463 from the M18 checkpoint + 9 tool
+registry + 5 boot assembly + 5 gateway deferred-method tests). No real network call anywhere -
+the boot-assembly tests construct a real `OpenAIAdapter` (via `enabled_providers=["openai"]` +
+a fake, clearly-non-functional key, needed only so `build_provider_registry()`/`validate_
+registry_consistency()` have something real to wire and validate) but never call `generate()`
+on it - `AsyncOpenAI` client construction is pure client-side setup, no request is ever made.
+
+**ruff**: clean (`integrations/llm_gateway`, `capabilities`, `tests`, `scripts`). **mypy**:
+clean on the full changed scope (`boot.py`, `tools/`, `capabilities/registry.py`, `gateway.py` -
+5 source files) and on a broader sweep (`integrations/llm_gateway services scripts capabilities`,
+55 source files) - the same 5 pre-existing, unrelated findings from the Phase 4.2 foundation
+commit (`source_registry.py`, `collector.py`, `create_telegram_session.py`) remain, confirmed
+not a regression (identical to the M17/M18 checkpoints).
+
+**Runtime evidence**: `tests/test_boot_assembly.py`'s own integration tests, run against real
+local Redis (docker-compose), constitute the runtime evidence for this milestone - assembling
+every §18 component for real (Redis-backed `RateLimiter`/`ProviderHealthStore`/`LatencyTracker`/
+`BudgetGuard`/`CostTracker`, a real `ModelRegistry`/`ProviderRegistry` with the real OpenAI
+catalogue and a real `OpenAIAdapter`, a real sealed `RoutingPolicyRegistry` with all four
+built-in policies registered, a real `RoutingEngine`/`FallbackPolicy`/`RoutingGateway`) and
+confirming the resulting `RoutingGateway` structurally satisfies `LLMGateway` and the
+`CapabilityRegistry` resolves and seals correctly.
+
+**Architecture validation**: PASS (0 violations) - confirms `boot.py` importing
+`build_openai_provider_factory` (a plain function, not the `openai` SDK itself) from
+`openai_adapter.py` does not trip the `provider-sdk-confinement` rule, and that
+`capabilities/registry.py`'s new imports (`LLMGateway`, `PromptRepository`, `BudgetGuard`,
+`ToolRegistry`) don't match the `capability-isolation` rule's forbidden prefixes (provider SDKs,
+`database.session`, `sqlalchemy`).
+
+**Alembic**: no migrations created or touched.
+
+**Known limitations / explicitly deferred (this milestone's own scope, not new gaps)**:
+- Retry-multiplication-ceiling boot enforcement remains unwired (see decision 5 above).
+- `budget_guard`'s presence in `build_registry()`'s signature vs. Amendment C's Capability-side
+  prohibition is documented, not resolved (see decision 3 above) - a future milestone building
+  the first real Capability must address it, almost certainly by never threading `budget_guard`
+  through to that Capability's own constructor.
+- `PromptRepository` still has no concrete implementation anywhere (Prompt Publisher remains
+  entirely unbuilt, outside Phase 7's scope) - `assemble_ai_integration_layer()` can only be
+  called today with a caller-supplied fake/stub, exactly as its own tests do.
+- `CapabilityNegotiator` (§17.3) remains unimplemented; `verify_capabilities_at_boot` must stay
+  `False` until a future milestone builds it.
+- `tool_registry`'s tool-use loop (§9.3), `MAX_TOOL_ROUNDS` (§9.4), and per-round timeout split
+  (§9.5) remain entirely unbuilt - `ToolRegistry` itself is the only piece this milestone added.
+
+**Working tree after this milestone**: 4 new files (`tools/__init__.py`, `tools/registry.py`,
+`test_tool_registry.py`, `test_boot_assembly.py`) + 6 modified files (`boot.py`,
+`capabilities/registry.py`, `errors.py`, `gateway.py`, `test_capability_registry.py`,
+`test_routing_gateway_pipeline.py`) — 10 files total. No other files touched. No commit made
+until the checkpoint below passes.
