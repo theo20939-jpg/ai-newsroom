@@ -22,6 +22,7 @@ import uuid
 from collections.abc import AsyncGenerator
 
 import pytest_asyncio
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -30,6 +31,29 @@ from database.models.news_event import EventCategory, NewsEvent
 from database.models.news_source import NewsSource, SourceType
 
 _test_engine = create_async_engine(settings.database_url, poolclass=NullPool)
+
+
+@pytest_asyncio.fixture
+async def redis_client() -> AsyncGenerator[Redis, None]:
+    """A real async Redis client, freshly constructed per test (docker-compose already
+    provisions Redis) - deliberately NOT core.redis.get_redis_client()'s module-level
+    @lru_cache singleton, for the same reason db_session above doesn't reuse
+    database.session.engine: pytest-asyncio gives each test function its own event loop by
+    default, and a connection pool first opened on one test's loop breaks (RuntimeError:
+    Event loop is closed) when reused from a later test's loop. A fresh client per test
+    sidesteps this entirely.
+
+    Phase 7's Redis-backed components (CacheStore, RateLimiter, ProviderHealthStore,
+    LatencyTracker, the real CostTracker ledger) are tested against this directly - every
+    test using it MUST write only uniquely namespaced keys and delete them in its own
+    teardown, since this fixture does not wrap Redis in a transaction the way `db_session`
+    wraps Postgres (Redis has no equivalent rollback-on-teardown mechanism here).
+    """
+    client = Redis.from_url(settings.redis_url, decode_responses=True)
+    try:
+        yield client
+    finally:
+        await client.aclose()
 
 
 @pytest_asyncio.fixture

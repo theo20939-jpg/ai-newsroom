@@ -1,6 +1,7 @@
 """Centralized application configuration loaded from environment variables."""
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -45,6 +46,22 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = None
     max_daily_ai_cost: float | None = None
     max_monthly_ai_cost: float | None = None
+
+    # Phase 7 AI Integration Layer (docs/phase7_architecture_contract.md).
+    # `enabled_providers` gates which providers build_provider_registry() actually
+    # constructs (§2 rule 2) - a provider_id absent here is never registered, even if
+    # its credential is present. Empty by default: no provider goes live until a restart
+    # explicitly opts it in (§17.1, §20.1 step 5/7).
+    enabled_providers: list[str] = []
+    # Gated, boot-time-only, opt-in CapabilityNegotiator pass (§17.3) - deferred past this
+    # delivery (CapabilityNegotiator is not implemented yet), but the setting is added now
+    # so its default ("off") is already the safe, documented value.
+    verify_capabilities_at_boot: bool = False
+    # §28 Q1 (Pending Ratification): deliberately no default. RateLimiter and the real
+    # CostTracker ledger MUST raise a boot-time configuration error if this is left unset,
+    # rather than silently choosing fail-open or fail-closed - the contract's own binding
+    # provisional rule for this one still-open question.
+    redis_unavailable_policy: Literal["fail_open", "fail_closed"] | None = None
 
     # Telegram Client API (Telethon) - used only by the Source Collector.
     # Fully separate from telegram_bot_token, which is Bot API and belongs to bot/.
