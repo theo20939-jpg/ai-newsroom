@@ -1,13 +1,15 @@
 """Tests for capabilities.scoring_capability.ScoringCapability (Phase 8 M3, Golden Path).
 
 Uses the real M1 mechanism (capabilities.gateway_call.call_generate, exercised indirectly
-through execute()) and the real M2 PromptRepository (FilePromptRepository, against the real
-prompts/scoring/v1.yaml content) - only the Gateway itself is faked, via the shared, now-
-configurable tests.fakes.fake_gateway.FakeLLMGateway.
+through execute()) - the Gateway and the PromptRepository are both fakes (tests.fakes.
+fake_gateway.FakeLLMGateway, tests.fakes.fake_prompt_repository.FakePromptRepository),
+per the Phase 8 M6 testing convention (contract §15.1-§15.4: a unit test that resolves a
+prompt MUST use a fake PromptRepository, never a real, published prompt store). The real M2
+FilePromptRepository against real prompts/ content is exercised separately, in
+tests/test_capability_boot_wiring_e2e.py's end-to-end tier (§15.6).
 """
 import inspect
 import logging
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -26,7 +28,7 @@ from integrations.llm_gateway.errors import (
     ProviderModerationBlockedError,
 )
 from integrations.llm_gateway.protocol import GenerateResponse, UnsupportedGatewayCapabilityError
-from integrations.prompts.file_repository import FilePromptRepository
+from integrations.prompts.protocol import RenderedPrompt
 from schemas.capability import (
     BusinessContext,
     CapabilityContext,
@@ -37,12 +39,27 @@ from schemas.capability import (
     WorkflowExecutionStateSnapshot,
 )
 from tests.fakes.fake_gateway import FakeLLMGateway
+from tests.fakes.fake_prompt_repository import FakePromptRepository
 
-_PROMPTS_ROOT = Path(__file__).resolve().parent.parent / "prompts"
+_SCORING_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {"score": {"type": "integer"}, "rationale": {"type": "string"}},
+    "required": ["score", "rationale"],
+}
 
 
-def _prompt_repository() -> FilePromptRepository:
-    return FilePromptRepository(_PROMPTS_ROOT)
+def _prompt_repository() -> FakePromptRepository:
+    repository = FakePromptRepository()
+    repository.register(
+        RenderedPrompt(
+            name=CAPABILITY_NAME,
+            version="1",
+            system="You are a fake scoring assistant for tests.",
+            rules=["Do not invent facts."],
+            output_schema=_SCORING_OUTPUT_SCHEMA,
+        )
+    )
+    return repository
 
 
 def _context(*, title: str = "Example headline", category: str = "technology") -> CapabilityContext:

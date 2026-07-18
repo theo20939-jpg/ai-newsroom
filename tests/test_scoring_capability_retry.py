@@ -1,10 +1,9 @@
 """Tests for ScoringCapability's §10 structured-output correction retry (Phase 8 M5).
 
-Separate from tests/test_scoring_capability.py (M3's own dedicated test file, left
-unmodified) - this file exercises only the retry path, using the real M2 FilePromptRepository
-and the shared, now-sequence-configurable FakeLLMGateway.
+Separate from tests/test_scoring_capability.py (M3's own dedicated test file) - this file
+exercises only the retry path, using the shared, now-sequence-configurable FakeLLMGateway and
+FakePromptRepository (Phase 8 M6 testing convention, contract §15.1-§15.4).
 """
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -13,7 +12,7 @@ from capabilities.errors import ValidationCapabilityError
 from capabilities.scoring_capability import CAPABILITY_NAME, ScoringCapability
 from database.models.editorial_task import TaskPriority
 from integrations.llm_gateway.protocol import GenerateResponse
-from integrations.prompts.file_repository import FilePromptRepository
+from integrations.prompts.protocol import RenderedPrompt
 from schemas.capability import (
     BusinessContext,
     CapabilityContext,
@@ -24,12 +23,27 @@ from schemas.capability import (
     WorkflowExecutionStateSnapshot,
 )
 from tests.fakes.fake_gateway import FakeLLMGateway
+from tests.fakes.fake_prompt_repository import FakePromptRepository
 
-_PROMPTS_ROOT = Path(__file__).resolve().parent.parent / "prompts"
+_SCORING_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {"score": {"type": "integer"}, "rationale": {"type": "string"}},
+    "required": ["score", "rationale"],
+}
 
 
-def _prompt_repository() -> FilePromptRepository:
-    return FilePromptRepository(_PROMPTS_ROOT)
+def _prompt_repository() -> FakePromptRepository:
+    repository = FakePromptRepository()
+    repository.register(
+        RenderedPrompt(
+            name=CAPABILITY_NAME,
+            version="1",
+            system="You are a fake scoring assistant for tests.",
+            rules=["Do not invent facts."],
+            output_schema=_SCORING_OUTPUT_SCHEMA,
+        )
+    )
+    return repository
 
 
 def _context() -> CapabilityContext:
