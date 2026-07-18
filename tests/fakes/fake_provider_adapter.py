@@ -2,7 +2,10 @@
 implementation, §2) for tests - no network, no real provider. Mirrors fake_gateway.py's
 existing FakeLLMGateway style, extended with a `behavior` toggle so tests can exercise
 routing/fallback across multiple distinct fake provider_ids without any real adapter
-existing yet.
+existing yet, and an optional `structured_output` (Phase 8 M4: a real, schema-validated
+Capability's own tests need a response shaped to match its output_schema, which the
+previous unconditional `structured_output=None` could never provide - additive,
+backward-compatible with every existing caller that doesn't set it).
 
 Only `generate()` has real, configurable behavior - matching this delivery's reduced scope
 (docs/phase7_architecture_contract.md's Protocol methods stay unchanged, but
@@ -12,7 +15,7 @@ UnsupportedGatewayCapabilityError, exactly matching what the real OpenAI adapter
 milestone) does for the same deferred methods.
 """
 from collections.abc import AsyncIterator
-from typing import Literal
+from typing import Any, Literal
 
 from integrations.llm_gateway.errors import (
     ProviderModerationBlockedError,
@@ -52,10 +55,13 @@ class FakeProviderAdapter:
         provider_id: str,
         model_id: str,
         behavior: FakeProviderBehavior = "success",
+        *,
+        structured_output: dict[str, Any] | None = None,
     ) -> None:
         self.provider_id = provider_id
         self.model_id = model_id
         self.behavior = behavior
+        self.structured_output = structured_output
         self.call_count = 0
 
     def _maybe_fail(self) -> None:
@@ -77,7 +83,7 @@ class FakeProviderAdapter:
         self._maybe_fail()
         return GenerateResponse(
             text=f"fake response from {self.model_id}",
-            structured_output=None,
+            structured_output=self.structured_output,
             finish_reason="stop",
             model_used=self.model_id,
             usage=CapabilityUsage(input_tokens=10, output_tokens=5),

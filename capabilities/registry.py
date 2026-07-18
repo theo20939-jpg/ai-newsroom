@@ -6,10 +6,11 @@ register() only until seal() is called, after which register() raises
 CapabilityRegistryAlreadySealedError. No dynamic discovery (docs/
 phase6_architecture_contract.md §6, §9/P9).
 
-Phase 6 ships no concrete Capability implementation (Research/Intelligence/
-etc. remain future work) - build_registry() therefore returns an empty,
-sealed registry, exactly mirroring how WorkflowType.DAILY_DIGEST is declared
-but never registered in Phase 5.
+Phase 6/7 shipped no concrete Capability implementation (Research/Intelligence/
+etc. remained future work) - build_registry() returned an empty, sealed
+registry, exactly mirroring how WorkflowType.DAILY_DIGEST is declared but
+never registered in Phase 5. Phase 8 M4 registers the first one: see
+build_registry()'s own docstring below.
 
 M19 (docs/phase7_architecture_contract.md §19 rule 2): build_registry() gains the
 injected-dependency signature the frozen contract specifies -
@@ -45,6 +46,8 @@ from integrations.llm_gateway.protocol import LLMGateway
 from integrations.llm_gateway.tools.registry import ToolRegistry
 from integrations.prompts.protocol import PromptRepository
 from services.budget_guard import BudgetGuard
+
+from capabilities.scoring_capability import SCORING_CAPABILITY_DEFINITION, ScoringCapability
 
 logger = logging.getLogger(__name__)
 
@@ -113,14 +116,18 @@ def build_registry(
     budget_guard: BudgetGuard,
     tool_registry: ToolRegistry,
 ) -> CapabilityRegistry:
-    """Build and seal the CapabilityRegistry (docs/phase7_architecture_contract.md §19 rule 2).
+    """Build and seal the CapabilityRegistry (docs/phase7_architecture_contract.md §19 rule 2,
+    docs/phase8_capability_contract.md §5.1).
 
-    The sole boot-sequence entry point that would construct every Capability with its
-    dependencies injected - no concrete Capability implementation exists yet anywhere in this
-    codebase, so this registry ships empty-but-sealed, exactly mirroring Phase 5's
-    WorkflowType.DAILY_DIGEST precedent (declared, not registered). See this module's
-    docstring for why all four parameters are accepted, type-checked, and unused today.
+    The sole boot-sequence entry point that constructs every Capability with its dependencies
+    injected. Phase 8 M4 registers the first one - ScoringCapability, constructed with only
+    `gateway` and `prompt_repository` (contract §4.2/§5.3): `budget_guard` and `tool_registry`
+    continue to be accepted, type-checked, and passed to nothing (§5.3, §18 rule 19 -
+    unchanged by this milestone; this module's own docstring explains why `budget_guard`
+    remains in this signature at all despite Amendment C forbidding any Capability from ever
+    holding or calling BudgetGuard directly).
     """
     registry = CapabilityRegistry()
+    registry.register(SCORING_CAPABILITY_DEFINITION, ScoringCapability(gateway, prompt_repository))
     registry.seal()
     return registry
