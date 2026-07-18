@@ -4,7 +4,7 @@ the real repo (that's what running the script directly against the repo root
 is for, as a separate runtime-validation step)."""
 from pathlib import Path
 
-from scripts.validate_architecture import Rule, find_violations
+from scripts.validate_architecture import RULES, Rule, find_violations
 
 
 def _write(root: Path, relative_path: str, content: str) -> None:
@@ -142,6 +142,130 @@ def test_syntax_error_is_reported_not_raised(tmp_path: Path) -> None:
 
     assert len(violations) == 1
     assert violations[0].rule_name == "unparseable"
+
+
+def _capability_isolation_rule() -> Rule:
+    return next(rule for rule in RULES if rule.name == "capability-isolation")
+
+
+def test_capability_isolation_exclusion_list_is_exactly_the_named_infra_files() -> None:
+    """Phase 8 contract §2 / M0: the exclusion set is exactly these five files - a future
+    accidental narrowing or widening of the exemption must be caught here, not discovered later."""
+    rule = _capability_isolation_rule()
+    exempt_files = {
+        "capabilities/registry.py",
+        "capabilities/executor.py",
+        "capabilities/errors.py",
+        "capabilities/capability_mapping.py",
+        "capabilities/__init__.py",
+    }
+
+    for path in exempt_files:
+        assert rule.applies_to(path) is False, f"{path} should be exempt"
+
+    assert rule.applies_to("capabilities/some_capability.py") is True
+    assert rule.applies_to("capabilities/another_capability.py") is True
+
+
+def test_capability_importing_budget_guard_is_flagged(tmp_path: Path) -> None:
+    _write(tmp_path, "capabilities/some_capability.py", "from services.budget_guard import BudgetGuard\n")
+
+    violations = find_violations(tmp_path)
+
+    assert any(
+        v.rule_name == "capability-isolation" and v.imported == "services.budget_guard"
+        for v in violations
+    )
+
+
+def test_capability_importing_cost_tracker_is_flagged(tmp_path: Path) -> None:
+    _write(tmp_path, "capabilities/some_capability.py", "from services.cost_tracker import RedisCostTracker\n")
+
+    violations = find_violations(tmp_path)
+
+    assert any(
+        v.rule_name == "capability-isolation" and v.imported == "services.cost_tracker"
+        for v in violations
+    )
+
+
+def test_capability_importing_gateway_cache_is_flagged(tmp_path: Path) -> None:
+    _write(tmp_path, "capabilities/some_capability.py", "from integrations.llm_gateway.cache import store\n")
+
+    violations = find_violations(tmp_path)
+
+    assert any(v.rule_name == "capability-isolation" for v in violations)
+
+
+def test_capability_importing_gateway_rate_limit_is_flagged(tmp_path: Path) -> None:
+    _write(tmp_path, "capabilities/some_capability.py", "from integrations.llm_gateway.rate_limit import limiter\n")
+
+    violations = find_violations(tmp_path)
+
+    assert any(v.rule_name == "capability-isolation" for v in violations)
+
+
+def test_capability_importing_gateway_fallback_is_flagged(tmp_path: Path) -> None:
+    _write(tmp_path, "capabilities/some_capability.py", "from integrations.llm_gateway.fallback import policy\n")
+
+    violations = find_violations(tmp_path)
+
+    assert any(v.rule_name == "capability-isolation" for v in violations)
+
+
+def test_capability_importing_gateway_routing_is_flagged(tmp_path: Path) -> None:
+    _write(tmp_path, "capabilities/some_capability.py", "from integrations.llm_gateway.routing import engine\n")
+
+    violations = find_violations(tmp_path)
+
+    assert any(v.rule_name == "capability-isolation" for v in violations)
+
+
+def test_capability_importing_gateway_providers_is_flagged(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "capabilities/some_capability.py",
+        "import integrations.llm_gateway.providers.base\n",
+    )
+
+    violations = find_violations(tmp_path)
+
+    assert any(v.rule_name == "capability-isolation" for v in violations)
+
+
+def test_capability_importing_workflows_is_flagged(tmp_path: Path) -> None:
+    _write(tmp_path, "capabilities/some_capability.py", "from workflows.errors import TaskNotFoundError\n")
+
+    violations = find_violations(tmp_path)
+
+    assert any(
+        v.rule_name == "capability-isolation" and v.imported == "workflows.errors"
+        for v in violations
+    )
+
+
+def test_registry_is_exempt_from_new_capability_rules(tmp_path: Path) -> None:
+    _write(tmp_path, "capabilities/registry.py", "from services.budget_guard import BudgetGuard\n")
+
+    assert find_violations(tmp_path) == []
+
+
+def test_errors_module_is_exempt_from_new_capability_rules(tmp_path: Path) -> None:
+    _write(tmp_path, "capabilities/errors.py", "from workflows.errors import TaskNotFoundError\n")
+
+    assert find_violations(tmp_path) == []
+
+
+def test_capability_mapping_is_exempt_from_new_capability_rules(tmp_path: Path) -> None:
+    _write(tmp_path, "capabilities/capability_mapping.py", "from services.cost_tracker import RedisCostTracker\n")
+
+    assert find_violations(tmp_path) == []
+
+
+def test_init_is_exempt_from_new_capability_rules(tmp_path: Path) -> None:
+    _write(tmp_path, "capabilities/__init__.py", "from integrations.llm_gateway.fallback import policy\n")
+
+    assert find_violations(tmp_path) == []
 
 
 def test_custom_rule_set_can_be_passed_explicitly(tmp_path: Path) -> None:

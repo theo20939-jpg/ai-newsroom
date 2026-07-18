@@ -111,19 +111,38 @@ RULES: tuple[Rule, ...] = (
     ),
     Rule(
         name="capability-isolation",
-        # capabilities/executor.py is CapabilityExecutor, which legitimately
-        # holds a DB session for the EditorialTask/NewsEvent read-fetch
-        # (Phase 6 §5) - excluded from the DB/provider-SDK-forbidden rule
-        # that applies to actual Capability implementations.
-        applies_to=_under_excluding("capabilities/", "capabilities/executor.py"),
+        # The four named infrastructure files (plus __init__.py) legitimately reference
+        # BudgetGuard/LLMGateway/ToolRegistry/workflows types at the boundary (registry.py's
+        # build_registry() signature, executor.py's DB session and workflows.errors mapping,
+        # etc.) and are excluded from the rules below, which apply only to actual Capability
+        # implementation files (Phase 8 contract §2).
+        applies_to=_under_excluding(
+            "capabilities/",
+            "capabilities/registry.py",
+            "capabilities/executor.py",
+            "capabilities/errors.py",
+            "capabilities/capability_mapping.py",
+            "capabilities/__init__.py",
+        ),
         forbidden_import_prefixes=(
             *PROVIDER_SDK_MODULE_PREFIXES,
             "database.session",
             "sqlalchemy",
+            "services.budget_guard",
+            "services.cost_tracker",
+            "integrations.llm_gateway.cache",
+            "integrations.llm_gateway.rate_limit",
+            "integrations.llm_gateway.fallback",
+            "integrations.llm_gateway.routing",
+            "integrations.llm_gateway.providers",
+            "workflows",
         ),
-        description="Phase 6 contract §14 rule 1 / P3 / P8: a Capability must not import "
-        "a provider SDK or hold a database/ORM session (a plain model/enum reference from "
-        "database.models is not itself a session and is not flagged - see capability_mapping.py).",
+        description="Phase 6 contract §14 rule 1 / P3 / P8, extended by Phase 8 contract §2: a "
+        "Capability implementation must not import a provider SDK, hold a database/ORM session "
+        "(a plain model/enum reference from database.models is not itself a session and is not "
+        "flagged - see capability_mapping.py), import BudgetGuard or CostTracker (Amendment C), "
+        "import Phase 7's internal Gateway machinery (cache/rate_limit/fallback/routing/"
+        "providers, invisible per P14), or import any workflows/ module.",
     ),
     Rule(
         name="prompt-repository-isolation",
