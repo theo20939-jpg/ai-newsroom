@@ -43,6 +43,7 @@ _FORBIDDEN_UNIT_TEST_IMPORTS = (
 _CAPABILITY_UNIT_TEST_FILES = (
     "test_scoring_capability.py",
     "test_scoring_capability_retry.py",
+    "test_quality_capability.py",  # M7 - swept in at M8's §15 cross-cutting review pass
 )
 
 
