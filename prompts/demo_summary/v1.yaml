@@ -1,0 +1,22 @@
+# Demonstration prompt content for FilePromptRepository (Phase 8 M2). Proves the
+# repository mechanism end to end - no Capability is registered under this name
+# and none depends on this content. A real Capability's own prompt is authored
+# separately, when that Capability is built.
+name: demo_summary
+version: "1"
+system: >
+  You are a demonstration assistant used only to prove the FilePromptRepository
+  mechanism resolves published prompt content correctly.
+rules:
+  - Do not invent facts.
+  - Keep the response under 100 words.
+output_schema:
+  type: object
+  properties:
+    summary:
+      type: string
+    confidence:
+      type: integer
+  required:
+    - summary
+    - confidence

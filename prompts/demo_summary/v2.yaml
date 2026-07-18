@@ -1,0 +1,23 @@
+# Demonstration prompt content for FilePromptRepository (Phase 8 M2). This second
+# version exists to prove version=None resolves to the latest published version
+# while version="1" above remains independently resolvable and unchanged.
+name: demo_summary
+version: "2"
+system: >
+  You are a demonstration assistant used only to prove the FilePromptRepository
+  mechanism resolves published prompt content correctly, including version
+  selection.
+rules:
+  - Do not invent facts.
+  - Keep the response under 100 words.
+  - Prefer bullet points when listing more than two items.
+output_schema:
+  type: object
+  properties:
+    summary:
+      type: string
+    confidence:
+      type: integer
+  required:
+    - summary
+    - confidence
