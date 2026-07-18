@@ -24,9 +24,29 @@ from schemas.capability import CapabilityUsage
 
 
 class FakeLLMGateway:
-    """Implements LLMGateway with deterministic, hardcoded responses."""
+    """Implements LLMGateway with deterministic, hardcoded responses.
+
+    generate() returns a fixed default response unless a specific response or exception is
+    configured at construction - additive, backward-compatible with every existing caller
+    that relies on the default shape (Phase 8 M3: a real Capability's own tests need to
+    configure a schema-matching response/failure, which the previous unconditional fixed
+    response could never provide).
+    """
+
+    def __init__(
+        self,
+        *,
+        generate_response: GenerateResponse | None = None,
+        generate_error: Exception | None = None,
+    ) -> None:
+        self._generate_response = generate_response
+        self._generate_error = generate_error
 
     async def generate(self, request: GenerateRequest) -> GenerateResponse:
+        if self._generate_error is not None:
+            raise self._generate_error
+        if self._generate_response is not None:
+            return self._generate_response
         return GenerateResponse(
             text="fake response",
             structured_output={"fake": True},
