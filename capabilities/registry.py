@@ -47,6 +47,7 @@ from integrations.llm_gateway.tools.registry import ToolRegistry
 from integrations.prompts.protocol import PromptRepository
 from services.budget_guard import BudgetGuard
 
+from capabilities.quality_capability import QUALITY_CAPABILITY_DEFINITION, QualityCapability
 from capabilities.scoring_capability import SCORING_CAPABILITY_DEFINITION, ScoringCapability
 
 logger = logging.getLogger(__name__)
@@ -129,5 +130,6 @@ def build_registry(
     """
     registry = CapabilityRegistry()
     registry.register(SCORING_CAPABILITY_DEFINITION, ScoringCapability(gateway, prompt_repository))
+    registry.register(QUALITY_CAPABILITY_DEFINITION, QualityCapability(gateway, prompt_repository))
     registry.seal()
     return registry
