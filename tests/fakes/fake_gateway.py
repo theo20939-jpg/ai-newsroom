@@ -31,20 +31,34 @@ class FakeLLMGateway:
     that relies on the default shape (Phase 8 M3: a real Capability's own tests need to
     configure a schema-matching response/failure, which the previous unconditional fixed
     response could never provide).
+
+    `generate_responses` (Phase 8 M5: a retry-then-succeed test needs a *sequence* of
+    responses, one per successive generate() call - falls back to repeating the last entry
+    once exhausted, rather than raising, to keep tests that don't care about the exact call
+    count simple) takes precedence over `generate_response` when both are set; `received_
+    requests` records every request generate() was called with, in order, so a test can
+    assert on message-list growth / preferred_model pinning across calls.
     """
 
     def __init__(
         self,
         *,
         generate_response: GenerateResponse | None = None,
+        generate_responses: list[GenerateResponse] | None = None,
         generate_error: Exception | None = None,
     ) -> None:
         self._generate_response = generate_response
+        self._generate_responses = generate_responses
         self._generate_error = generate_error
+        self.received_requests: list[GenerateRequest] = []
 
     async def generate(self, request: GenerateRequest) -> GenerateResponse:
+        self.received_requests.append(request)
         if self._generate_error is not None:
             raise self._generate_error
+        if self._generate_responses is not None:
+            index = min(len(self.received_requests) - 1, len(self._generate_responses) - 1)
+            return self._generate_responses[index]
         if self._generate_response is not None:
             return self._generate_response
         return GenerateResponse(

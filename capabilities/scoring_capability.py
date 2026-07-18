@@ -13,8 +13,18 @@ Text-only. The same `Message`/`ContentPart`/`CapabilityResult` shape already acc
 multimodal abstractions contract §6.9 confirms are sufficient - a future multimodal
 `Capability` follows this exact template, not a different one.
 
-Not yet registered in `build_registry()` - that wiring is M4's job, kept separate so this
-milestone stays independently reviewable.
+Registered in `build_registry()` since M4. Phase 8 M5 adds the §10 structured-output
+correction retry: on a first schema-validation mismatch, retry exactly once by appending a
+correction `Message` and pinning `preferred_model` to the first attempt's resolved model
+(§10.2's "no re-routing" obligation - `preferred_model` remains an advisory-only hint per
+§6.2, so this is the only channel available to express it). A second consecutive mismatch
+raises `ValidationCapabilityError` (§10.4) - no third attempt is ever made.
+
+`CapabilityCall` schema note (contract §10.3 verification finding): the frozen `CapabilityCall`
+model (schemas/capability.py, Phase 6, extra="forbid") has no `metadata` field, so
+`retry_reason`/`retried_call_id` are recorded in `CapabilityResult.metadata` instead (which
+does have one) - confirmed as the correct reading, not a Phase 6/7 schema change, since M5's
+own scope forbids touching any Phase 6/7 file.
 """
 from __future__ import annotations
 
@@ -23,8 +33,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 from capabilities.errors import ValidationCapabilityError
-from capabilities.gateway_call import call_generate
-from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, LLMGateway, Message
+from capabilities.gateway_call import GatewayCallOutcome, call_generate
+from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, GenerateResponse, LLMGateway, Message
 from integrations.prompts.protocol import PromptRepository, RenderedPrompt
 from schemas.capability import CapabilityContext, CapabilityResult
 from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
@@ -52,19 +62,24 @@ _SCHEMA_TYPE_TO_PYTHON_TYPE: dict[str, type | tuple[type, ...]] = {
 }
 
 
-def _floor_validate(structured_output: dict[str, Any] | None, output_schema: dict[str, Any]) -> None:
+def _floor_validate(structured_output: dict[str, Any] | None, output_schema: dict[str, Any]) -> str | None:
     """Contract §9.1's floor: at minimum, the JSON Schema *shape* declared by the resolved
     prompt's output_schema. Deliberately not a general JSON Schema engine (no $ref/anyOf/
     format/pattern support, no new dependency) - §19.2 Q3 explicitly leaves validation
     strategy beyond this floor to each Capability author, to be revisited once patterns
-    emerge across several real Capabilities (not yet - only one exists)."""
+    emerge across several real Capabilities (not yet - only one exists).
+
+    Returns None if `structured_output` satisfies the floor, otherwise a human-readable
+    violation description - never raises directly, so the same check can drive both the
+    first attempt (a mismatch triggers §10's retry) and the retry (a mismatch raises
+    ValidationCapabilityError, §10.4)."""
     if structured_output is None:
-        raise ValidationCapabilityError("structured_output is missing; the §9.1 floor requires an object.")
+        return "structured_output is missing; the §9.1 floor requires an object."
 
     required = output_schema.get("required", [])
     missing = [key for key in required if key not in structured_output]
     if missing:
-        raise ValidationCapabilityError(f"structured_output is missing required key(s): {missing}")
+        return f"structured_output is missing required key(s): {missing}"
 
     properties: dict[str, Any] = output_schema.get("properties", {})
     for key, declared in properties.items():
@@ -76,11 +91,39 @@ def _floor_validate(structured_output: dict[str, Any] | None, output_schema: dic
             continue
         value = structured_output[key]
         if declared_type == "integer" and isinstance(value, bool):
-            raise ValidationCapabilityError(f"structured_output['{key}'] must be an integer, got bool.")
+            return f"structured_output['{key}'] must be an integer, got bool."
         if not isinstance(value, expected_python_type):
-            raise ValidationCapabilityError(
-                f"structured_output['{key}'] must be of type '{declared_type}', got {type(value).__name__}."
+            return f"structured_output['{key}'] must be of type '{declared_type}', got {type(value).__name__}."
+
+    return None
+
+
+def _build_correction_request(
+    original_request: GenerateRequest, response: GenerateResponse, violation: str
+) -> GenerateRequest:
+    """§10.2/§10.3: append a new, separate correction Message to the existing message list
+    (never replacing it) and pin `preferred_model` to the same resolved model - the only
+    channel available to express "no re-routing" (§6.2: preferred_model is advisory-only).
+    Never touches `RenderedPrompt` content (system/rules/output_schema) - only this
+    already-built GenerateRequest's own messages/preferred_model."""
+    correction_message = Message(
+        role="user",
+        content=[
+            ContentPart(
+                type="text",
+                text=(
+                    f"Your previous response violated the required output schema: {violation}. "
+                    "Correct it and respond again, matching the schema exactly."
+                ),
             )
+        ],
+    )
+    return original_request.model_copy(
+        update={
+            "messages": [*original_request.messages, correction_message],
+            "preferred_model": response.model_used,
+        }
+    )
 
 
 def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> GenerateRequest:
@@ -123,6 +166,23 @@ class ScoringCapability:
         self._gateway = gateway
         self._prompt_repository = prompt_repository
 
+    def _log_failed_call(self, outcome: GatewayCallOutcome) -> None:
+        # Preserve the failed CapabilityCall (durable, structured) before the classified
+        # CapabilityError crosses this execute() call's boundary (§11.1) - there is no
+        # CapabilityResult to attach it to on this path, since raising IS the failure
+        # signal (§11.1), not a returned status="FAILED" result.
+        logger.info(
+            "capability_call_failed",
+            extra={
+                "capability_name": CAPABILITY_NAME,
+                "call_id": str(outcome.call.call_id),
+                "sequence": outcome.call.sequence,
+                "gateway_method": outcome.call.gateway_method,
+                "status": outcome.call.status,
+                "error": outcome.call.error,
+            },
+        )
+
     async def execute(self, context: CapabilityContext) -> CapabilityResult:
         started_at = datetime.now(timezone.utc)
 
@@ -133,34 +193,57 @@ class ScoringCapability:
         outcome = await call_generate(self._gateway, request, runtime=context.runtime, sequence=0)
 
         if outcome.error is not None:
-            # Preserve the failed CapabilityCall (durable, structured) before the classified
-            # CapabilityError crosses this execute() call's boundary (§11.1) - there is no
-            # CapabilityResult to attach it to on this path, since raising IS the failure
-            # signal (§11.1), not a returned status="FAILED" result.
-            logger.info(
-                "capability_call_failed",
-                extra={
-                    "capability_name": CAPABILITY_NAME,
-                    "call_id": str(outcome.call.call_id),
-                    "sequence": outcome.call.sequence,
-                    "gateway_method": outcome.call.gateway_method,
-                    "status": outcome.call.status,
-                    "error": outcome.call.error,
-                },
-            )
+            self._log_failed_call(outcome)
             raise outcome.error
 
         response = outcome.response
         assert response is not None  # GatewayCallOutcome guarantees exactly one of response/error is set
 
-        _floor_validate(response.structured_output, prompt.output_schema)
+        violation = _floor_validate(response.structured_output, prompt.output_schema)
+        if violation is None:
+            finished_at = datetime.now(timezone.utc)
+            return CapabilityResult(
+                status="SUCCESS",
+                structured_output=response.structured_output,
+                calls=[outcome.call],
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_seconds=(finished_at - started_at).total_seconds(),
+            )
+
+        # §10.2: first mismatch - retry exactly once, appending a correction Message,
+        # never mutating the original RenderedPrompt, never re-routing to a different model.
+        correction_request = _build_correction_request(request, response, violation)
+        retry_outcome = await call_generate(self._gateway, correction_request, runtime=context.runtime, sequence=1)
+
+        if retry_outcome.error is not None:
+            self._log_failed_call(retry_outcome)
+            raise retry_outcome.error
+
+        retry_response = retry_outcome.response
+        assert retry_response is not None
+
+        retry_violation = _floor_validate(retry_response.structured_output, prompt.output_schema)
+        if retry_violation is not None:
+            # §10.4: a second consecutive mismatch raises ValidationCapabilityError - no
+            # third attempt is ever made.
+            raise ValidationCapabilityError(
+                f"structured_output failed validation on both the original attempt and the "
+                f"§10.2 correction retry: {retry_violation}"
+            )
 
         finished_at = datetime.now(timezone.utc)
         return CapabilityResult(
             status="SUCCESS",
-            structured_output=response.structured_output,
-            calls=[outcome.call],
+            structured_output=retry_response.structured_output,
+            calls=[outcome.call, retry_outcome.call],
             started_at=started_at,
             finished_at=finished_at,
             duration_seconds=(finished_at - started_at).total_seconds(),
+            # §10.3's shape, recorded on CapabilityResult.metadata rather than
+            # CapabilityCall.metadata - see this module's docstring for why.
+            metadata={
+                "retry_reason": "schema_validation_failure",
+                "retried_call_id": str(outcome.call.call_id),
+            },
         )
