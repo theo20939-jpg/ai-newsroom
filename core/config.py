@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Project root (core/ is a direct child of it) - used to anchor .env to an
@@ -68,6 +68,16 @@ class Settings(BaseSettings):
     telegram_api_id: int | None = None
     telegram_api_hash: SecretStr | None = None
     telegram_session_string: SecretStr | None = None
+
+    # Phase 9 Triage Orchestrator (docs/phase9_research_intelligence_architecture_contract.md
+    # §7.6/§22). A PROCESSING NewsEvent with no active task becomes a stale-recovery
+    # candidate once its claim age exceeds this many seconds. The Contract freezes this
+    # guard's *existence and positivity* as architecture, not configuration (§7.6 rule 5,
+    # §22) - Field(gt=0) enforces that at Settings construction (process startup), so an
+    # invalid value (0 or negative) fails loudly rather than silently disabling
+    # stale-recovery protection. Only the exact duration (the default below) is product
+    # configuration.
+    stale_processing_threshold_seconds: int = Field(default=900, gt=0)
 
     # GitHub REST API - used only by integrations/sources/github_source.py.
     # Optional: the GitHub API works unauthenticated too, just at a much lower
