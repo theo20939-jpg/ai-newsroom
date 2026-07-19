@@ -268,6 +268,138 @@ def test_init_is_exempt_from_new_capability_rules(tmp_path: Path) -> None:
     assert find_violations(tmp_path) == []
 
 
+def test_clean_phase9_tree_has_no_violations(tmp_path: Path) -> None:
+    _write(tmp_path, "services/freshness.py", "from datetime import datetime\n")
+    _write(
+        tmp_path,
+        "services/triage.py",
+        "from services.freshness import compute_freshness\n"
+        "from database.models.editorial_task import TaskPriority\n",
+    )
+    _write(
+        tmp_path,
+        "services/triage_orchestrator.py",
+        "from services.workflow_service import create_task\n"
+        "from schemas.workflow import WorkflowType\n"
+        "import sqlalchemy\n",
+    )
+
+    assert find_violations(tmp_path) == []
+
+
+def test_freshness_importing_sqlalchemy_is_flagged(tmp_path: Path) -> None:
+    _write(tmp_path, "services/freshness.py", "import sqlalchemy\n")
+
+    violations = find_violations(tmp_path)
+
+    assert any(v.rule_name == "freshness-purity" and v.imported == "sqlalchemy" for v in violations)
+
+
+def test_freshness_importing_another_services_module_is_flagged(tmp_path: Path) -> None:
+    _write(tmp_path, "services/freshness.py", "from services.collector import run_collection_cycle\n")
+
+    violations = find_violations(tmp_path)
+
+    assert any(v.rule_name == "freshness-purity" for v in violations)
+
+
+def test_freshness_importing_llm_gateway_is_flagged(tmp_path: Path) -> None:
+    _write(tmp_path, "services/freshness.py", "import integrations.llm_gateway.gateway\n")
+
+    violations = find_violations(tmp_path)
+
+    assert any(v.rule_name == "freshness-purity" for v in violations)
+
+
+def test_triage_importing_llm_gateway_is_flagged(tmp_path: Path) -> None:
+    _write(tmp_path, "services/triage.py", "import integrations.llm_gateway.gateway\n")
+
+    violations = find_violations(tmp_path)
+
+    assert any(v.rule_name == "triage-purity" for v in violations)
+
+
+def test_triage_importing_capability_registry_is_flagged(tmp_path: Path) -> None:
+    _write(tmp_path, "services/triage.py", "from capabilities.registry import CapabilityRegistry\n")
+
+    violations = find_violations(tmp_path)
+
+    assert any(v.rule_name == "triage-purity" for v in violations)
+
+
+def test_triage_importing_workflows_is_flagged(tmp_path: Path) -> None:
+    _write(tmp_path, "services/triage.py", "from workflows.runner import WorkflowRunner\n")
+
+    violations = find_violations(tmp_path)
+
+    assert any(v.rule_name == "triage-purity" for v in violations)
+
+
+def test_triage_importing_freshness_and_task_priority_is_allowed(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "services/triage.py",
+        "from services.freshness import compute_freshness\n"
+        "from database.models.editorial_task import TaskPriority\n",
+    )
+
+    assert find_violations(tmp_path) == []
+
+
+def test_triage_orchestrator_importing_llm_gateway_is_flagged(tmp_path: Path) -> None:
+    _write(tmp_path, "services/triage_orchestrator.py", "import integrations.llm_gateway.gateway\n")
+
+    violations = find_violations(tmp_path)
+
+    assert any(v.rule_name == "triage-orchestrator-isolation" for v in violations)
+
+
+def test_triage_orchestrator_importing_capabilities_registry_is_flagged(tmp_path: Path) -> None:
+    _write(tmp_path, "services/triage_orchestrator.py", "from capabilities.registry import CapabilityRegistry\n")
+
+    violations = find_violations(tmp_path)
+
+    assert any(v.rule_name == "triage-orchestrator-isolation" for v in violations)
+
+
+def test_triage_orchestrator_importing_research_capability_is_flagged(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "services/triage_orchestrator.py",
+        "from capabilities.research_capability import ResearchCapability\n",
+    )
+
+    violations = find_violations(tmp_path)
+
+    assert any(v.rule_name == "triage-orchestrator-isolation" for v in violations)
+
+
+def test_triage_orchestrator_importing_provider_sdk_is_flagged(tmp_path: Path) -> None:
+    _write(tmp_path, "services/triage_orchestrator.py", "import openai\n")
+
+    violations = find_violations(tmp_path)
+
+    rule_names = {v.rule_name for v in violations}
+    assert "triage-orchestrator-isolation" in rule_names
+    assert "provider-sdk-confinement" in rule_names
+
+
+def test_triage_orchestrator_importing_workflow_service_and_workflow_type_is_allowed(tmp_path: Path) -> None:
+    """The Contract explicitly requires both imports (§7.2 step 3) - this is the one case most
+    likely to be gotten wrong by copy-pasting an existing isolation rule too literally."""
+    _write(
+        tmp_path,
+        "services/triage_orchestrator.py",
+        "from services.workflow_service import create_task\n"
+        "from schemas.workflow import WorkflowType\n"
+        "import sqlalchemy\n"
+        "from sqlalchemy import update\n"
+        "from database.models.news_event import NewsEvent, EventStatus\n",
+    )
+
+    assert find_violations(tmp_path) == []
+
+
 def test_custom_rule_set_can_be_passed_explicitly(tmp_path: Path) -> None:
     _write(tmp_path, "any_module.py", "import banned_thing\n")
 

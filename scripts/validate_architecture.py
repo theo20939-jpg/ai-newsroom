@@ -255,6 +255,50 @@ RULES: tuple[Rule, ...] = (
         "a successful dispatch, never by FallbackPolicy itself), Capability, or "
         "CapabilityExecutor. capabilities.errors is exempted - see comment above.",
     ),
+    Rule(
+        name="freshness-purity",
+        applies_to=_under("services/freshness.py"),
+        forbidden_import_prefixes=(
+            "database.session",
+            "sqlalchemy",
+            "integrations.llm_gateway",
+            "services",
+        ),
+        description="Phase 9 contract §2.1/§2.5: Freshness must not depend on a database "
+        "session, LLMGateway, or any other services/ module - it is a pure function of its "
+        "own scalar arguments only.",
+    ),
+    Rule(
+        name="triage-purity",
+        applies_to=_under("services/triage.py"),
+        forbidden_import_prefixes=(
+            "database.session",
+            "sqlalchemy",
+            "integrations.llm_gateway",
+            "capabilities.registry",
+            "capabilities.executor",
+            "workflows",
+        ),
+        description="Phase 9 contract §2.2/§2.5: Triage must not depend on a database session, "
+        "LLMGateway, CapabilityRegistry/CapabilityExecutor, or any workflows/ module - it reads "
+        "only the scalar values its caller passes in (services.freshness and "
+        "database.models.editorial_task.TaskPriority, a plain enum reference, are not flagged).",
+    ),
+    Rule(
+        name="triage-orchestrator-isolation",
+        applies_to=_under("services/triage_orchestrator.py"),
+        forbidden_import_prefixes=(
+            "integrations.llm_gateway",
+            "capabilities",
+            *PROVIDER_SDK_MODULE_PREFIXES,
+        ),
+        description="Phase 9 contract §2.3/§2.5/§17: the Triage Orchestrator must not depend "
+        "on LLMGateway, any provider SDK, or any part of the Capability layer "
+        "(CapabilityRegistry, CapabilityExecutor, ResearchCapability, IntelligenceCapability, "
+        "or any other capabilities/ module) - it owns NewsEvent claim/recovery and "
+        "EditorialTask creation only. services.workflow_service and schemas.workflow "
+        "(WorkflowType) are not flagged - the Contract explicitly requires both.",
+    ),
 )
 
 
