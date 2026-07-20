@@ -1,4 +1,4 @@
-"""Tests for Phase 9.5 M1: WorkflowRunner._execute_steps()'s per-step persistence invariant
+"""Tests for Phase 9.5's per-step persistence invariant
 (docs/phase9_5_workflow_hardening_architecture_contract.md §3-§4).
 
 Runner-level tests, deliberately independent of the Capability framework: test-local
@@ -8,15 +8,24 @@ pattern) prove the persistence mechanism directly, including a test-local execut
 does (line 114) - proving the *runner's* new invariant without needing the full Capability/
 Gateway stack (that composed proof lives in tests/test_phase9_research_intelligence_integration.py).
 
-Real Postgres via the standard `db_session` fixture (`expire_on_commit=False`) - sufficient for
-every test here, since none requires genuine cross-connection visibility (that proof is Phase
-9.5 M2's own, separate job, per the Contract's §12 item 2 and §14 rule 10).
+M1's tests (same-pass propagation, subsequent-step failure, retry-count durability, one-step
+double-commit, commit-failure propagation) use the standard `db_session` fixture
+(`expire_on_commit=False`) - sufficient since none of them requires genuine cross-connection
+visibility. M2's one test (durability via a genuinely independent connection, Contract §12 item
+2) explicitly does NOT use `db_session` - its SAVEPOINT-based commits are never actually
+persisted to the database (see the fixture's own docstring in tests/conftest.py), so it cannot
+prove cross-connection durability regardless of implementation correctness. M2's test instead
+reuses `independent_session_factory()`/`real_committed_event()` from
+tests/test_triage_orchestrator_claims.py (Phase 9 M2's own precedent) via a plain import,
+exactly as tests/test_triage_orchestrator_cycle.py (Phase 9 M3) already does.
 """
+from collections.abc import AsyncIterator
 from typing import Any
 from uuid import UUID
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+import pytest_asyncio
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from database.models.editorial_task import EditorialTask, TaskPriority, TaskStatus
 from database.models.news_event import NewsEvent
@@ -29,6 +38,7 @@ from schemas.workflow import (
     WorkflowType,
 )
 from services import workflow_service
+from tests.test_triage_orchestrator_claims import independent_session_factory, real_committed_event
 from workflows.errors import PermanentStepFailureError, StepExecutionError
 from workflows.registry import WorkflowRegistry
 from workflows.runner import WorkflowRunner
@@ -264,3 +274,64 @@ async def test_per_step_commit_failure_propagates_uncaught(db_session: AsyncSess
         await WorkflowRunner(executor=_AlwaysSucceeds(), registry=registry).run(db_session, task.id)
 
     assert call_count == 2  # never reached step_two's or any terminal commit attempt
+
+
+# ---------------------------------------------------------------------------
+# 6. Per-step durability via a genuinely independent database connection (Phase 9.5 M2,
+#    Contract §12 item 2 - the highest-scrutiny test in this amendment, deliberately isolated
+#    from M1's tests above, mirroring Phase 9's own M2/M3 precedent for the same reason).
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
+    engine, session_factory = independent_session_factory()
+    yield session_factory
+    await engine.dispose()
+
+
+class _ReadsViaIndependentConnectionExecutor:
+    """step_one always succeeds. step_two, as its own first action - before doing anything
+    else, and therefore before step_two's own per-step commit could possibly have fired -
+    opens a genuinely independent database connection (via `factory`, never the session
+    `WorkflowRunner.run()` itself is using) and reads `task.workflow` directly. This proves
+    step_one's per-step commit is durable to a truly separate connection strictly between the
+    two steps, not merely visible within the one session that produced it."""
+
+    def __init__(self, factory: async_sessionmaker[AsyncSession], task_id: UUID) -> None:
+        self._factory = factory
+        self._task_id = task_id
+        self.observed_from_independent_connection: dict[str, dict[str, Any]] | None = None
+
+    async def execute(self, step: WorkflowStepDefinition) -> dict[str, Any]:
+        if step.name == "step_two":
+            async with self._factory() as independent_session:
+                task = await independent_session.get(EditorialTask, self._task_id)
+                assert task is not None
+                state = WorkflowExecutionState.model_validate(task.workflow)
+                self.observed_from_independent_connection = {
+                    r.step_name: r.result
+                    for r in state.step_results
+                    if r.status == "SUCCESS" and r.result is not None
+                }
+        return {"step": step.name}
+
+
+@pytest.mark.asyncio
+async def test_per_step_commit_is_durable_to_a_genuinely_independent_connection(
+    factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with real_committed_event(factory) as event_id:
+        registry = _two_step_registry()
+        async with factory() as create_session:
+            task = await workflow_service.create_task(create_session, _command(event_id), registry=registry)
+
+        executor = _ReadsViaIndependentConnectionExecutor(factory, task.id)
+        async with factory() as run_session:
+            result = await WorkflowRunner(executor=executor, registry=registry).run(run_session, task.id)
+
+        assert result.status == "COMPLETED"
+        # Step_two's own independent connection - a physically separate connection from the
+        # one WorkflowRunner used to commit step_one's result - already saw it, proving genuine
+        # cross-connection durability, not merely same-session visibility.
+        assert executor.observed_from_independent_connection == {"step_one": {"step": "step_one"}}
