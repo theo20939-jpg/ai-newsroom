@@ -186,6 +186,18 @@ class WorkflowRunner:
 
             state.completed_steps.append(step.name)
 
+            # Phase 9.5: per-step persistence. Commit this step's outcome (SUCCESS, or SKIPPED
+            # for an optional step) immediately, before the next step is attempted - never
+            # reached for a required step's failure, which already returned via _fail() above.
+            # This is the only new invariant Phase 9.5 introduces: it changes persistence
+            # timing, not workflow semantics - task.status is untouched here (still RUNNING,
+            # set by run()'s own earlier commit); only task.workflow becomes durable earlier,
+            # so a later step in the same pass can observe an earlier step's result via
+            # CapabilityExecutor's existing, unmodified step_results read.
+            state.step_results = step_results
+            task.workflow = state.model_dump(mode="json")
+            await session.commit()
+
         state.iteration_count += 1
         state.current_step = None
         state.step_results = step_results

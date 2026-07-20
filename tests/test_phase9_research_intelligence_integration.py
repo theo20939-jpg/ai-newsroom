@@ -41,6 +41,20 @@ See the Phase 9 completion report for this finding's full write-up and its recom
 a future phase revisit `WorkflowRunner`'s per-step persistence discipline before relying on
 live, same-pass `step_results` chaining for any real multi-step AI pipeline.
 
+**Update (Phase 9.5 M1)**: `WorkflowRunner._execute_steps()` now commits `task.workflow` once per
+step whose outcome allows the loop to continue (`SUCCESS`/`SKIPPED`), immediately after
+`state.completed_steps.append(step.name)`, not only after the entire pass finishes
+(`docs/phase9_5_workflow_hardening_architecture_contract.md` §3-§4). This closes the gap
+described above for the same-pass case: `CapabilityExecutor` now observes an earlier step's
+result while a later step in the same pass is still executing.
+`test_both_capabilities_dispatch_in_order_and_synthetic_task_completes` below has been updated
+accordingly - Intelligence's built prompt now genuinely contains Research's facts. The rest of
+this module's discussion (the root cause, why `DAILY_DIGEST` was chosen, and the other three
+tests below) is unaffected and remains accurate; only that one test's expectation changed. Phase
+9.5 changes persistence timing, not workflow semantics - the mechanism this file already proved
+correct (§9.1's `step_results` read) is unchanged; only when `task.workflow` becomes durable
+within one pass is different.
+
 Synthetic `WorkflowType` choice (resolves docs/phase9_implementation_planning_audit.md MINOR
 finding 1): reuses the existing `WorkflowType.DAILY_DIGEST` value, whose own docstring already
 states it is never registered in the real `WorkflowRegistry` - so it has no competing real
@@ -159,9 +173,9 @@ def _request_text(request: GenerateRequest) -> str:
 # ---------------------------------------------------------------------------
 # 1. Both Capabilities dispatch correctly, in order, through the real CapabilityExecutor /
 #    WorkflowRunner / CapabilityRegistry, and the synthetic task reaches COMPLETED - Contract
-#    §13's actual allowed proof. Also regression-locks the discovered same-pass
-#    non-propagation behavior (module docstring) via an explicit assertion, rather than
-#    leaving it silently unobserved.
+#    §13's actual allowed proof. Also confirms (Phase 9.5 M1) that the same-pass step_results
+#    propagation gap the module docstring describes is now closed, via an explicit assertion
+#    that Intelligence's own prompt genuinely reflects Research's facts.
 # ---------------------------------------------------------------------------
 
 
@@ -187,17 +201,17 @@ async def test_both_capabilities_dispatch_in_order_and_synthetic_task_completes(
     assert result.step_results[1].result == _INTELLIGENCE_OUTPUT
     assert len(gateway.received_requests) == 2
 
-    # Regression-lock for the module docstring's discovered finding: within this single,
-    # uninterrupted run() call, Intelligence's own prompt does NOT see Research's facts,
-    # because EditorialTask.workflow (which CapabilityExecutor reads step_results from) is not
-    # reassigned until the entire step loop finishes - strictly after Intelligence's own step
-    # already ran. This is the actual, current, frozen-code behavior - not a bug in this test.
+    # Positive fix-confirmation (Phase 9.5 M1): within this single, uninterrupted run() call,
+    # Intelligence's own prompt now genuinely contains Research's facts, because
+    # EditorialTask.workflow (which CapabilityExecutor reads step_results from) is reassigned
+    # and committed once per step - immediately after Research's own step completes, strictly
+    # before Intelligence's step begins - not only after the entire loop finishes.
     intelligence_request_text = _request_text(gateway.received_requests[1])
-    assert "did not run" in intelligence_request_text.lower()
+    assert "did not run" not in intelligence_request_text.lower()
     canonical_facts = CANONICAL_RESEARCH_OUTPUT["facts"]
     assert isinstance(canonical_facts, list)
     for fact in canonical_facts:
-        assert fact not in intelligence_request_text
+        assert fact in intelligence_request_text
 
 
 # ---------------------------------------------------------------------------
@@ -290,10 +304,12 @@ async def test_both_capabilities_dispatch_through_a_real_routing_gateway_and_com
 # ---------------------------------------------------------------------------
 # 3. The read side of the §9.1 mechanism: CapabilityExecutor genuinely surfaces step_results
 #    content that is already present in EditorialTask.workflow *before* a run begins -
-#    proving the mechanism's wiring is correct given state persisted this way (the only
-#    scenario in which it can fire under WorkflowRunner's current, frozen commit discipline -
-#    see module docstring). This is a direct simulation of a resumed task, clearly labeled as
-#    such, not a claim that WorkflowRunner itself can produce this state from a live run today.
+#    proving the mechanism's wiring is correct given state persisted this way. Since Phase 9.5
+#    M1, this is no longer the *only* scenario in which the read side fires (same-pass
+#    propagation within one run() call now also works - test 1 above) - this test instead
+#    proves the mechanism also works given state a resumed task would have, independent of
+#    same-pass persistence. This is a direct simulation of a resumed task, clearly labeled as
+#    such, not a claim that WorkflowRunner itself can resume a task from a live run today.
 # ---------------------------------------------------------------------------
 
 
@@ -311,9 +327,9 @@ async def test_step_results_mechanism_surfaces_a_result_already_persisted_before
 
     task = await _created_task(db_session, real_news_event, workflow_registry)
 
-    # Simulate "research already completed and was persisted in a prior run()" - the only
-    # scenario in which CapabilityExecutor's step_results read is ever populated, given
-    # WorkflowRunner's current, frozen once-per-pass commit discipline (module docstring).
+    # Simulate "research already completed and was persisted in a prior run()" - proving the
+    # read side works given state a resumed task would have, independent of the same-pass
+    # per-step persistence Phase 9.5 M1 added (test 1 above covers that case).
     raw_task = await db_session.get(EditorialTask, task.id)
     assert raw_task is not None
     assert raw_task.workflow is not None
