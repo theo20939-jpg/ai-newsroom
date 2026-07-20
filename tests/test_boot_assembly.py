@@ -58,8 +58,12 @@ def test_assembles_a_working_gateway_and_empty_sealed_capability_registry(redis_
     assert isinstance(layer.gateway, RoutingGateway)
     assert isinstance(layer.cost_tracker, RedisCostTracker)
 
+    # "research" was an unregistered-name example when this test was written; Phase 9 M6
+    # legitimately registers it (docs/phase9_research_intelligence_architecture_contract.md
+    # §12), so a genuinely-unregistered name is used here instead to preserve this test's
+    # actual intent (an unknown name still raises).
     with pytest.raises(UnknownCapabilityError):
-        layer.capability_registry.resolve("research")
+        layer.capability_registry.resolve("definitely_unregistered_capability")
 
 
 def test_verify_capabilities_at_boot_true_fails_loud_without_an_implementation(redis_client: Redis) -> None:

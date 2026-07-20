@@ -86,15 +86,15 @@ def test_resolution_after_sealing_still_works() -> None:
     assert resolved_capability is capability
 
 
-def test_build_registry_ships_empty_but_sealed() -> None:
-    """No concrete Capability implementation exists yet - mirrors Phase 5's
-    WorkflowType.DAILY_DIGEST precedent (declared, not registered). build_registry() now
-    requires the four injected dependencies §19 rule 2 specifies (M19) - the registry it
-    produces is still empty-and-sealed regardless, exactly as before."""
+def test_build_registry_ships_sealed_and_rejects_an_unregistered_name() -> None:
+    """build_registry() requires the four injected dependencies §19 rule 2 specifies (M19).
+    By Phase 9, it ships registered with "scoring"/"quality" (Phase 8) and
+    "research"/"intelligence" (Phase 9 M6) - no longer empty (that was only ever true through
+    Phase 7) - but remains sealed, and still rejects a genuinely-unregistered name."""
     real_registry = _build_registry()
 
     with pytest.raises(UnknownCapabilityError):
-        real_registry.resolve("research")
+        real_registry.resolve("definitely_unregistered_capability")
 
     with pytest.raises(CapabilityRegistryAlreadySealedError):
         real_registry.register(_definition(), AlwaysSucceedsCapability())
