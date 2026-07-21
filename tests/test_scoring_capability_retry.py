@@ -37,7 +37,7 @@ def _prompt_repository() -> FakePromptRepository:
     repository.register(
         RenderedPrompt(
             name=CAPABILITY_NAME,
-            version="1",
+            version="2",
             system="You are a fake scoring assistant for tests.",
             rules=["Do not invent facts."],
             output_schema=_SCORING_OUTPUT_SCHEMA,
@@ -112,7 +112,7 @@ async def test_first_mismatch_triggers_exactly_one_retry_appending_correction_me
 @pytest.mark.asyncio
 async def test_original_rendered_prompt_is_never_mutated_by_the_retry() -> None:
     prompt_repository = _prompt_repository()
-    original_prompt = prompt_repository.resolve(CAPABILITY_NAME, "1")
+    original_prompt = prompt_repository.resolve(CAPABILITY_NAME, "2")
 
     gateway = FakeLLMGateway(generate_responses=[_MISMATCHED_RESPONSE, _VALID_RESPONSE])
     capability = ScoringCapability(gateway, prompt_repository)
@@ -121,8 +121,8 @@ async def test_original_rendered_prompt_is_never_mutated_by_the_retry() -> None:
 
     # resolve() returns the same frozen, immutable object every time (M2) - if the retry had
     # mutated it in place, this identity/equality would break.
-    assert prompt_repository.resolve(CAPABILITY_NAME, "1") is original_prompt
-    assert prompt_repository.resolve(CAPABILITY_NAME, "1") == original_prompt
+    assert prompt_repository.resolve(CAPABILITY_NAME, "2") is original_prompt
+    assert prompt_repository.resolve(CAPABILITY_NAME, "2") == original_prompt
 
 
 @pytest.mark.asyncio

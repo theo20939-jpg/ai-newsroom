@@ -55,7 +55,7 @@ def _prompt_repository() -> FakePromptRepository:
     repository.register(
         RenderedPrompt(
             name=CAPABILITY_NAME,
-            version="1",
+            version="2",
             system="You are a fake research assistant for tests.",
             rules=["Do not invent facts."],
             output_schema=_RESEARCH_OUTPUT_SCHEMA,

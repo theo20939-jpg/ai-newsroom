@@ -49,7 +49,7 @@ def _prompt_repository() -> FakePromptRepository:
     repository.register(
         RenderedPrompt(
             name=CAPABILITY_NAME,
-            version="2",
+            version="3",
             system="You are a fake quality-check assistant for tests.",
             rules=["Do not invent issues."],
             output_schema=_QUALITY_OUTPUT_SCHEMA,
@@ -248,10 +248,10 @@ async def test_built_request_still_includes_news_event_fields_when_copywriting_a
     assert "did not run" in request_text.lower()  # Copywriting's absence is stated, not hidden
 
 
-def test_prompt_version_resolves_to_2() -> None:
+def test_prompt_version_resolves_to_3() -> None:
     from capabilities.quality_capability import PROMPT_VERSION
 
-    assert PROMPT_VERSION == "2"
+    assert PROMPT_VERSION == "3"
 
 
 def test_v1_prompt_remains_on_disk_and_still_independently_resolvable() -> None:

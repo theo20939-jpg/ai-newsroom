@@ -53,7 +53,7 @@ def _prompt_repository() -> FakePromptRepository:
     repository.register(
         RenderedPrompt(
             name=CAPABILITY_NAME,
-            version="1",
+            version="2",
             system="You are a fake scoring assistant for tests.",
             rules=["Do not invent facts."],
             output_schema=_SCORING_OUTPUT_SCHEMA,

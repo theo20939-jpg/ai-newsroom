@@ -13,11 +13,12 @@ from integrations.llm_gateway.cache.coordinator import CacheCoordinator
 from integrations.llm_gateway.errors import (
     AllProvidersFailedError,
     ProviderModerationBlockedError,
+    ProviderPermanentIncompatibleError,
     RateLimitExceededError,
 )
-from integrations.llm_gateway.fallback.policy import FallbackPolicy
+from integrations.llm_gateway.fallback.policy import FailureClass, FallbackPolicy
 from integrations.llm_gateway.models.registry import ModelDescriptor, ModelRegistry, PricingTier
-from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, Message
+from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, GenerateResponse, Message
 from integrations.llm_gateway.providers.base import ProviderDescriptor, ProviderRegistry
 from integrations.llm_gateway.routing.criteria import FallbackEligibility, RoutingCriteria
 from services.cost_estimator import CostEstimator
@@ -388,3 +389,97 @@ async def test_no_rate_limiter_configured_skips_rate_limiting_entirely() -> None
     response = await policy.dispatch(_request(), [model_a], _criteria())
 
     assert response.model_used == "model-a"
+
+
+# ---------------------------------------------------------------------------
+# OpenAI structured-outputs remediation, Track B (docs/openai_structured_outputs_
+# remediation_plan.md): FallbackPolicy must preserve, not discard, the last attempted
+# candidate's already-redacted provider rejection detail. Existing tests above (unmodified)
+# are the primary no-regression proof; these are additions, not replacements.
+# ---------------------------------------------------------------------------
+
+
+class _CustomMessageFailingAdapter(FakeProviderAdapter):
+    """Raises ProviderPermanentIncompatibleError with a caller-supplied message, instead of
+    FakeProviderAdapter's fixed template string - needed to prove the enrichment threads an
+    arbitrary (already-redacted-by-the-real-adapter-layer) message through unmodified."""
+
+    def __init__(self, provider_id: str, model_id: str, message: str) -> None:
+        super().__init__(provider_id, model_id, behavior="permanent_incompatible")
+        self._message = message
+
+    async def generate(self, request: GenerateRequest) -> GenerateResponse:
+        self.call_count += 1
+        raise ProviderPermanentIncompatibleError(self._message)
+
+
+@pytest.mark.asyncio
+async def test_exhaustion_message_preserves_last_candidates_failure_detail() -> None:
+    """The original provider rejection reason must survive into the final, surfaced
+    AllProvidersFailedError - previously discarded entirely, leaving only a templated string
+    with zero per-candidate detail."""
+    failing = FakeProviderAdapter(provider_id="fake-provider-a", model_id="model-a", behavior="permanent_incompatible")
+    model_a = _model("model-a", "fake-provider-a")
+    policy, _, _, _ = _build_policy([model_a], {"fake-provider-a": failing})
+
+    with pytest.raises(AllProvidersFailedError) as excinfo:
+        await policy.dispatch(_request(), [model_a], _criteria())
+
+    assert "simulated permanent-incompatible failure" in str(excinfo.value)
+    assert excinfo.value.reason == "all_candidates_failed"  # classification unchanged
+
+
+@pytest.mark.asyncio
+async def test_exhaustion_message_does_not_expose_additional_sensitive_data() -> None:
+    """This fix only threads through whatever the provider adapter layer already redacted
+    upstream (openai_adapter.py's own _redact(), unchanged by this fix, is the sole redaction
+    authority) - confirms the fix adds no NEW exposure by passing an already-redacted-looking
+    string through unmodified, never re-exposing anything _redact() would have stripped."""
+    already_redacted_message = "openai: bad request (code=invalid_request): [REDACTED]"
+    failing = _CustomMessageFailingAdapter("fake-provider-a", "model-a", already_redacted_message)
+    model_a = _model("model-a", "fake-provider-a")
+    policy, _, _, _ = _build_policy([model_a], {"fake-provider-a": failing})
+
+    with pytest.raises(AllProvidersFailedError) as excinfo:
+        await policy.dispatch(_request(), [model_a], _criteria())
+
+    assert already_redacted_message in str(excinfo.value)
+    assert "sk-" not in str(excinfo.value)
+    assert "Bearer" not in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_attempt_candidate_failure_classification_unchanged_by_detail_enrichment() -> None:
+    """White-box: FailureClass classification (TRANSIENT vs PERMANENT_INCOMPATIBLE) is exactly
+    what it was before this fix - the new failure_detail field is purely additive on
+    _AttemptOutcome, never a replacement for or influence on failure_class."""
+    permanent = FakeProviderAdapter(provider_id="fake-provider-a", model_id="model-a", behavior="permanent_incompatible")
+    transient = FakeProviderAdapter(provider_id="fake-provider-b", model_id="model-b", behavior="transient_failure")
+    model_a = _model("model-a", "fake-provider-a")
+    model_b = _model("model-b", "fake-provider-b")
+    policy, _, _, _ = _build_policy(
+        [model_a, model_b],
+        {"fake-provider-a": permanent, "fake-provider-b": transient},
+        max_same_candidate_retries=0,
+    )
+
+    permanent_outcome = await policy._attempt_candidate(_request(), model_a, None)
+    transient_outcome = await policy._attempt_candidate(_request(), model_b, None)
+
+    assert permanent_outcome.failure_class == FailureClass.PERMANENT_INCOMPATIBLE
+    assert permanent_outcome.failure_detail is not None
+    assert transient_outcome.failure_class == FailureClass.TRANSIENT
+    assert transient_outcome.failure_detail is not None
+
+
+@pytest.mark.asyncio
+async def test_successful_attempt_has_no_failure_detail() -> None:
+    succeeding = FakeProviderAdapter(provider_id="fake-provider-a", model_id="model-a", behavior="success")
+    model_a = _model("model-a", "fake-provider-a")
+    policy, _, _, _ = _build_policy([model_a], {"fake-provider-a": succeeding})
+
+    outcome = await policy._attempt_candidate(_request(), model_a, None)
+
+    assert outcome.success is True
+    assert outcome.failure_class is None
+    assert outcome.failure_detail is None

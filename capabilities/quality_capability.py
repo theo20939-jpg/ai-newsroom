@@ -40,7 +40,7 @@ from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
 logger = logging.getLogger(__name__)
 
 CAPABILITY_NAME = "quality"
-PROMPT_VERSION = "2"
+PROMPT_VERSION = "3"
 
 QUALITY_CAPABILITY_DEFINITION = CapabilityDefinition(
     name=CAPABILITY_NAME,

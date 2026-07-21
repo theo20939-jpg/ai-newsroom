@@ -34,7 +34,7 @@ from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
 logger = logging.getLogger(__name__)
 
 CAPABILITY_NAME = "research"
-PROMPT_VERSION = "1"
+PROMPT_VERSION = "2"
 
 RESEARCH_CAPABILITY_DEFINITION = CapabilityDefinition(
     name=CAPABILITY_NAME,

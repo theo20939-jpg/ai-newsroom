@@ -73,7 +73,7 @@ def _prompt_repository() -> FakePromptRepository:
     repository.register(
         RenderedPrompt(
             name=CAPABILITY_NAME,
-            version="1",
+            version="2",
             system="You are a fake copywriting assistant for tests.",
             rules=["Do not fabricate facts."],
             output_schema=_COPYWRITING_OUTPUT_SCHEMA,

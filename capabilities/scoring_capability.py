@@ -42,7 +42,7 @@ from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
 logger = logging.getLogger(__name__)
 
 CAPABILITY_NAME = "scoring"
-PROMPT_VERSION = "1"
+PROMPT_VERSION = "2"
 
 SCORING_CAPABILITY_DEFINITION = CapabilityDefinition(
     name=CAPABILITY_NAME,

@@ -1,0 +1,28 @@
+# Demonstration prompt content for FilePromptRepository (Phase 8 M2). v3 adds OpenAI
+# Structured Outputs strict-mode compatibility (additionalProperties: false) - see
+# docs/openai_structured_outputs_remediation_plan.md. Included for repository-wide hygiene
+# only: no Capability is registered under this name and none depends on this content (dormant,
+# confirmed by capabilities/registry.py containing no "demo_summary" reference). v1/v2
+# (prompts/demo_summary/v1.yaml, prompts/demo_summary/v2.yaml) are left in place, unmodified,
+# per Phase 6 §8's prompt-immutability rule.
+name: demo_summary
+version: "3"
+system: >
+  You are a demonstration assistant used only to prove the FilePromptRepository
+  mechanism resolves published prompt content correctly, including version
+  selection.
+rules:
+  - Do not invent facts.
+  - Keep the response under 100 words.
+  - Prefer bullet points when listing more than two items.
+output_schema:
+  type: object
+  properties:
+    summary:
+      type: string
+    confidence:
+      type: integer
+  required:
+    - summary
+    - confidence
+  additionalProperties: false

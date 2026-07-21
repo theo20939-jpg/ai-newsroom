@@ -35,7 +35,7 @@ from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
 logger = logging.getLogger(__name__)
 
 CAPABILITY_NAME = "copywriting"
-PROMPT_VERSION = "1"
+PROMPT_VERSION = "2"
 
 COPYWRITING_CAPABILITY_DEFINITION = CapabilityDefinition(
     name=CAPABILITY_NAME,

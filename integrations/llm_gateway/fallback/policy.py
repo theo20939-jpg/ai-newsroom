@@ -94,6 +94,12 @@ class _AttemptOutcome:
     success: bool
     response: GenerateResponse | None
     failure_class: FailureClass | None
+    # OpenAI structured-outputs remediation, Track B (docs/openai_structured_outputs_
+    # remediation_plan.md): the provider adapter's own already-redacted, safe-to-log exception
+    # message (str(exc) - never a raw provider exception, never request/response objects), so a
+    # genuine provider rejection reason is no longer discarded before it reaches
+    # AllProvidersFailedError / WorkflowStepResult.error. None only when no failure occurred.
+    failure_detail: str | None = None
 
 
 class FallbackPolicy:
@@ -193,12 +199,15 @@ class FallbackPolicy:
             except ProviderModerationBlockedError:
                 await self._health_store.mark_runtime_unavailable(provider_id, model_id)
                 raise  # §5.4: MUST NOT continue the loop at all for a moderation block
-            except ProviderPermanentIncompatibleError:
+            except ProviderPermanentIncompatibleError as exc:
                 await self._health_store.mark_runtime_unavailable(provider_id, model_id)
                 return _AttemptOutcome(
-                    success=False, response=None, failure_class=FailureClass.PERMANENT_INCOMPATIBLE
+                    success=False,
+                    response=None,
+                    failure_class=FailureClass.PERMANENT_INCOMPATIBLE,
+                    failure_detail=str(exc),
                 )
-            except ProviderTransientError:
+            except ProviderTransientError as exc:
                 if attempt_index < self._max_same_candidate_retries:
                     backoff_seconds = _backoff_delay_seconds(attempt_index)
                     logger.info(
@@ -212,7 +221,9 @@ class FallbackPolicy:
                     await asyncio.sleep(backoff_seconds)
                     continue
                 await self._health_store.mark_unhealthy(provider_id, model_id, ttl_seconds=60)
-                return _AttemptOutcome(success=False, response=None, failure_class=FailureClass.TRANSIENT)
+                return _AttemptOutcome(
+                    success=False, response=None, failure_class=FailureClass.TRANSIENT, failure_detail=str(exc)
+                )
 
         raise AssertionError("unreachable - the loop above always returns or raises")
 
@@ -246,6 +257,7 @@ class FallbackPolicy:
         any_dispatch_attempted = False
         any_budget_denied = False
         attempted_pairs: set[tuple[str, str]] = set()
+        last_failure_detail: str | None = None
 
         for attempt_index, candidate in enumerate(sequence):
             attempted_pairs.add((candidate.provider_id, candidate.model_id))
@@ -289,6 +301,7 @@ class FallbackPolicy:
                 )
                 return outcome.response
 
+            last_failure_detail = outcome.failure_detail
             logger.info(
                 "fallback",
                 extra={
@@ -297,6 +310,7 @@ class FallbackPolicy:
                     "candidate_provider_id": candidate.provider_id,
                     "candidate_model_id": candidate.model_id,
                     "reason": outcome.failure_class.value if outcome.failure_class else "unknown",
+                    "failure_detail": outcome.failure_detail,
                 },
             )
 
@@ -320,8 +334,12 @@ class FallbackPolicy:
         else:
             reason = "all_candidates_failed"
 
+        # OpenAI structured-outputs remediation, Track B: surface the last attempted candidate's
+        # already-redacted, safe-to-log provider rejection detail, when one exists - previously
+        # discarded entirely, leaving only this templated string with zero per-candidate detail.
+        detail_suffix = f"; last error: {last_failure_detail}" if last_failure_detail else ""
         raise AllProvidersFailedError(
             f"All candidates exhausted for capability '{criteria.capability_name}' "
-            f"(objective={criteria.objective.value}, reason={reason})",
+            f"(objective={criteria.objective.value}, reason={reason}){detail_suffix}",
             reason=reason,
         )

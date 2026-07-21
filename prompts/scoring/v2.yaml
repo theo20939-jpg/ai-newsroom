@@ -1,0 +1,27 @@
+# Real prompt content for the "scoring" Capability (Phase 8 M3, Golden Path). v2 adds OpenAI
+# Structured Outputs strict-mode compatibility (additionalProperties: false) - see
+# docs/openai_structured_outputs_remediation_plan.md. v1 (prompts/scoring/v1.yaml) is left in
+# place, unmodified, per Phase 6 §8's prompt-immutability rule. Semantic content
+# (system/rules) is unchanged from v1 - only output_schema gains additionalProperties: false
+# (no array properties exist in this schema, so no items sub-schema is needed).
+name: scoring
+version: "2"
+system: >
+  You are a newsworthiness scoring assistant for an AI-driven news editorial pipeline.
+  Given a news event's title, category, and summary, you assign a numeric newsworthiness
+  score and a short rationale.
+rules:
+  - Score strictly on a 0-100 integer scale, where 100 is maximally newsworthy.
+  - Do not invent facts beyond what is given in the event data.
+  - Keep the rationale under 50 words.
+output_schema:
+  type: object
+  properties:
+    score:
+      type: integer
+    rationale:
+      type: string
+  required:
+    - score
+    - rationale
+  additionalProperties: false
