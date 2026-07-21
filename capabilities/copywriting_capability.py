@@ -1,28 +1,23 @@
-"""QualityCapability - Phase 8 M7's second `Capability`, proving contract §14's zero-change
-extension guarantee for real: a second, genuinely different `Capability` (different prompt,
-different output shape - `{"passed": bool, "issues": list}` vs. `ScoringCapability`'s
-`{"score": int, "rationale": str}`), built using only the M6 testing convention, with zero
-modification to `ScoringCapability`, `workflows/`, `LLMGateway`, or `PromptRepository`'s own
-contract.
+"""CopywritingCapability - Phase 10 M1: drafts a short, social-ready post from Research's
+already-extracted facts and Intelligence's already-formed editorial judgment
+(docs/phase10_production_content_pipeline_architecture_contract.md §5).
 
-Identical shape to M3/M4 (single Gateway call, no retry) - M5's correction-retry extension is
-deliberately not pulled in here, to keep this milestone's proof focused on the extension model
-itself, not a re-demonstration of M5.
+An ordinary Phase 8 `Capability`, identical construction shape to `ResearchCapability`/
+`IntelligenceCapability`/`QualityCapability`: `__init__(gateway, prompt_repository)` only, one
+`call_generate()` invocation, no retry (matching every existing Capability's own precedent).
 
-This module intentionally duplicates `scoring_capability.py`'s floor-validation helper rather
-than factoring out a shared one - per §19.2 Q1, validation-strategy sharing is deliberately
-left unresolved until real evidence exists across several Capabilities; this milestone is
-that evidence, not the milestone that acts on it.
+Binding rule (Contract §5): `CopywritingCapability` MUST NOT hold a direct reference to
+`ResearchCapability` or `IntelligenceCapability`, import either, or call either - this file
+contains no such import anywhere. Their output is consumed exclusively through the existing,
+already-frozen Phase 6 mechanism: `context.business.workflow_state.step_results["research"]` /
+`["intelligence"]`. If either key is missing or empty (that step did not run, or this is a
+malformed synthetic test), `execute()` still runs - it does not raise merely for this reason;
+the built prompt states the absence explicitly rather than fabricating facts, mirroring
+`IntelligenceCapability`'s own "Research did not run" degradation exactly.
 
-Phase 10 M2 amendment (docs/phase10_production_content_pipeline_architecture_contract.md §5.1):
-`_build_request()` additionally reads `step_results["copywriting"]` and formats it into
-`context_text`, mirroring `IntelligenceCapability._build_request()`'s own
-`step_results["research"]` formatting exactly, including its "did not run" degradation when the
-key is absent/empty. `PROMPT_VERSION` moves to `"2"`, resolving `prompts/quality/v2.yaml`;
-`prompts/quality/v1.yaml` is left in place, unmodified, per Phase 6 §8's prompt-immutability
-rule. Nothing else in this file changes: `__init__`, `execute()`'s control flow,
-`QUALITY_CAPABILITY_DEFINITION.expected_output_keys`, and `_floor_validate()` are byte-for-byte
-unchanged from M7.
+This module intentionally duplicates `research_capability.py`/`intelligence_capability.py`/
+`quality_capability.py`'s floor-validation helper rather than factoring out a shared one, per
+the same rationale those modules already record (§19.2 Q1 of the Phase 9 contract).
 """
 from __future__ import annotations
 
@@ -39,15 +34,15 @@ from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
 
 logger = logging.getLogger(__name__)
 
-CAPABILITY_NAME = "quality"
-PROMPT_VERSION = "2"
+CAPABILITY_NAME = "copywriting"
+PROMPT_VERSION = "1"
 
-QUALITY_CAPABILITY_DEFINITION = CapabilityDefinition(
+COPYWRITING_CAPABILITY_DEFINITION = CapabilityDefinition(
     name=CAPABILITY_NAME,
     version=1,
     config=CapabilityConfig(timeout_seconds=30),
     required_context=["news_event"],
-    expected_output_keys=["passed", "issues"],
+    expected_output_keys=["title", "body", "hashtags"],
 )
 
 _SCHEMA_TYPE_TO_PYTHON_TYPE: dict[str, type | tuple[type, ...]] = {
@@ -88,34 +83,47 @@ def _floor_validate(structured_output: dict[str, Any] | None, output_schema: dic
     return None
 
 
-def _format_copywriting_draft(copywriting_output: dict[str, Any]) -> str:
-    if not copywriting_output:
-        return "(Copywriting did not run, or produced no output - assess the raw event alone.)"
-    title = copywriting_output.get("title")
-    body = copywriting_output.get("body")
-    hashtags = copywriting_output.get("hashtags")
-    return f"Title: {title}\nBody: {body}\nHashtags: {hashtags}"
+def _format_research_context(research_output: dict[str, Any]) -> str:
+    if not research_output:
+        return "(Research did not run, or produced no output - proceed on title/category alone.)"
+    facts = research_output.get("facts", [])
+    confidence = research_output.get("confidence")
+    gaps = research_output.get("gaps", [])
+    return f"Facts: {facts}\nConfidence: {confidence}\nGaps: {gaps}"
+
+
+def _format_intelligence_context(intelligence_output: dict[str, Any]) -> str:
+    if not intelligence_output:
+        return "(Intelligence did not run, or produced no output - proceed on title/category alone.)"
+    significance = intelligence_output.get("significance")
+    angle = intelligence_output.get("angle")
+    audience_relevance = intelligence_output.get("audience_relevance")
+    recommendation = intelligence_output.get("recommendation")
+    return (
+        f"Significance: {significance}\nAngle: {angle}\n"
+        f"Audience relevance: {audience_relevance}\nRecommendation: {recommendation}"
+    )
 
 
 def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> GenerateRequest:
-    """§7.2/§7.3: CONTEXT/TASK come from CapabilityContext only, never from PromptRepository;
-    CapabilityContext itself is never passed to PromptRepository. Phase 10 §5.1: additionally
-    reads `step_results["copywriting"]` (never a direct import/call of
-    `CopywritingCapability`), mirroring `IntelligenceCapability._build_request()`'s own
-    `step_results["research"]` formatting exactly."""
+    """Contract §5's Input row: title/category only from `context.business.news_event` (never
+    `content`, mirroring `IntelligenceCapability`'s own "MUST NOT re-extract" discipline), plus
+    `context.business.workflow_state.step_results["research"]`/`["intelligence"]` (§5's exact,
+    already-frozen field paths - never a direct import or call of either upstream Capability)."""
     news_event = context.business.news_event
-    copywriting_output = context.business.workflow_state.step_results.get("copywriting", {})
+    research_output = context.business.workflow_state.step_results.get("research", {})
+    intelligence_output = context.business.workflow_state.step_results.get("intelligence", {})
     system_text = prompt.system + "\n\nRULES:\n" + "\n".join(f"- {rule}" for rule in prompt.rules)
     context_text = (
         f"Title: {news_event.title}\n"
         f"Category: {news_event.category}\n"
-        f"Summary: {news_event.summary or '(none)'}\n"
         f"Language: {context.business.language}\n\n"
-        f"Copywriting draft:\n{_format_copywriting_draft(copywriting_output)}"
+        f"Research output:\n{_format_research_context(research_output)}\n\n"
+        f"Intelligence output:\n{_format_intelligence_context(intelligence_output)}"
     )
     task_text = (
-        "Assess whether the generated draft above (if present) meets basic editorial quality "
-        "standards, in light of the underlying event."
+        "Write a short, social-ready post (title, body, hashtags) for the event above, based "
+        "only on the given title/category and Research's/Intelligence's output."
     )
 
     return GenerateRequest(
@@ -135,10 +143,11 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
     )
 
 
-class QualityCapability:
+class CopywritingCapability:
     """Implements the `Capability` Protocol (`capabilities.registry.Capability`). Holds only
-    `LLMGateway` and `PromptRepository` (§4.2) - no `BudgetGuard`, no `CostTracker`
-    (§4.3/§4.4). No per-call mutable state (§3.2)."""
+    `LLMGateway` and `PromptRepository` (§4.2 of the frozen Phase 8 contract) - no
+    `BudgetGuard`, no `CostTracker`. No per-call mutable state (§3.2). Never imports or calls
+    `ResearchCapability`/`IntelligenceCapability` (Contract §5)."""
 
     def __init__(self, gateway: LLMGateway, prompt_repository: PromptRepository) -> None:
         self._gateway = gateway
@@ -156,7 +165,7 @@ class QualityCapability:
         if outcome.error is not None:
             # Preserve the failed CapabilityCall (durable, structured) before the classified
             # CapabilityError crosses this execute() call's boundary (§11.1) - mirrors
-            # ScoringCapability's identical pattern (Task #1's recorded requirement).
+            # ResearchCapability/IntelligenceCapability/QualityCapability's identical pattern.
             logger.info(
                 "capability_call_failed",
                 extra={

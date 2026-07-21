@@ -1,9 +1,12 @@
 """CONTENT_GENERATION WorkflowDefinition.
 
-Maps to steps 9-10 of the docs/13_1 §11 pipeline (Copywriting -> Quality) for
-an already-analyzed NewsEvent/task. Step capabilities are placeholder
-identifiers only - see workflows.runner.StepExecutor for the Phase 5
-executor and docs/phase5_workflow_engine_planning.md for the full rationale.
+Phase 10 M2: research -> intelligence -> copywriting -> quality, for an
+already-analyzed NewsEvent/task (docs/
+phase10_production_content_pipeline_architecture_contract.md §3). `research`/
+`intelligence` are reused unmodified from Phase 9; `copywriting` is the one
+new Phase 10 Capability; `quality` is amended (§5.1) to review `copywriting`'s
+output. `timeout_seconds=120` reuses the same value `NEWS_ANALYSIS` already
+declares for its own 4-step chain - not a newly proven number (§3).
 """
 from schemas.workflow import (
     WorkflowDefinition,
@@ -16,6 +19,8 @@ DEFINITION = WorkflowDefinition(
     name=WorkflowType.CONTENT_GENERATION,
     version=1,
     steps=[
+        WorkflowStepDefinition(name="research", capability="research", timeout_seconds=30),
+        WorkflowStepDefinition(name="intelligence", capability="intelligence", timeout_seconds=30),
         WorkflowStepDefinition(name="copywriting", capability="copywriting", timeout_seconds=30),
         WorkflowStepDefinition(name="quality", capability="quality", timeout_seconds=30),
     ],
@@ -25,7 +30,7 @@ DEFINITION = WorkflowDefinition(
         retry_delay_seconds=0,
         retryable_error_types=["StepExecutionError"],
     ),
-    timeout_seconds=60,
+    timeout_seconds=120,
     required_input=["event_id"],
-    expected_output=["draft_content", "quality_report"],
+    expected_output=["research_summary", "intelligence_report", "draft_content", "quality_report"],
 )
