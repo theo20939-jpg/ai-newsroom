@@ -18,6 +18,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
 from database.models.editorial_task import EditorialTask
 from database.models.news_event import NewsEvent
 from schemas.capability import (
@@ -134,7 +135,13 @@ class CapabilityExecutor:
         )
 
         return CapabilityContext(
-            business=BusinessContext(news_event=news_event_snapshot, workflow_state=workflow_state_snapshot),
+            business=BusinessContext(
+                news_event=news_event_snapshot,
+                workflow_state=workflow_state_snapshot,
+                # Explicit injection (docs/content_generation_language_final_implementation_plan.md)
+                # - never left to BusinessContext.language's own implicit schema default.
+                language=settings.default_content_language,
+            ),
             runtime=RuntimeContext(
                 task_id=task.id,
                 event_id=task.event_id,

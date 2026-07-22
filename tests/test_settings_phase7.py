@@ -40,6 +40,22 @@ def test_redis_unavailable_policy_defaults_none() -> None:
     assert settings.redis_unavailable_policy is None
 
 
+def test_default_content_language_defaults_to_russian() -> None:
+    """docs/content_generation_language_final_implementation_plan.md - Russian is the default
+    target editorial output language."""
+    settings = _settings()
+
+    assert settings.default_content_language == "ru"
+
+
+def test_default_content_language_is_overridable_via_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DEFAULT_CONTENT_LANGUAGE", "en")
+
+    settings = _settings()
+
+    assert settings.default_content_language == "en"
+
+
 def test_enabled_providers_parses_json_array_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ENABLED_PROVIDERS", '["openai", "anthropic"]')
 

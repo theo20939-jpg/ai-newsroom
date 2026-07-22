@@ -58,6 +58,14 @@ class BusinessContext(BaseModel):
 
     news_event: NewsEventSnapshot
     workflow_state: WorkflowExecutionStateSnapshot
+    # The desired EDITORIAL OUTPUT language a Capability should write its result in - not the
+    # source NewsEvent's own language (docs/content_generation_language_final_implementation_plan.md,
+    # Concern 2). Grouped under "editorial config" alongside audience/brand_voice below by original
+    # Phase 6 design intent (docs/phase6_architecture_review.md). Source language is a separate,
+    # currently-unwired concept (schemas/source_definition.py's SourceDefinition.language) - never
+    # conflated with this field. capabilities.executor.CapabilityExecutor._build_context() explicitly
+    # injects core.config.settings.default_content_language here in production; this schema-level
+    # default only applies to a BusinessContext constructed without doing so (e.g. a test fixture).
     language: str = "en"
     audience: str | None = None
     brand_voice: dict[str, Any] | None = None

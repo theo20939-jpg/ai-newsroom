@@ -35,7 +35,10 @@ from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
 logger = logging.getLogger(__name__)
 
 CAPABILITY_NAME = "copywriting"
-PROMPT_VERSION = "2"
+# v3 (docs/content_generation_language_final_implementation_plan.md): adds a governed rule
+# requiring output to match the target editorial language given in context - prompts/copywriting/
+# v2.yaml is left in place, unmodified, per Phase 6 §8's prompt-immutability rule.
+PROMPT_VERSION = "3"
 
 COPYWRITING_CAPABILITY_DEFINITION = CapabilityDefinition(
     name=CAPABILITY_NAME,
@@ -117,7 +120,7 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
     context_text = (
         f"Title: {news_event.title}\n"
         f"Category: {news_event.category}\n"
-        f"Language: {context.business.language}\n\n"
+        f"Target output language: {context.business.language}\n\n"
         f"Research output:\n{_format_research_context(research_output)}\n\n"
         f"Intelligence output:\n{_format_intelligence_context(intelligence_output)}"
     )

@@ -135,7 +135,7 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
         f"Title: {news_event.title}\n"
         f"Category: {news_event.category}\n"
         f"Summary: {news_event.summary or '(none)'}\n"
-        f"Language: {context.business.language}"
+        f"Target output language: {context.business.language}"
     )
     task_text = "Assign a newsworthiness score and a short rationale for the event above."
 

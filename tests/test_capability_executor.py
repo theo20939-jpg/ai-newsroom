@@ -20,9 +20,10 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
 from database.models.ai_execution import AIExecution
-from database.models.editorial_task import TaskPriority, TaskStatus
-from database.models.news_event import NewsEvent
+from database.models.editorial_task import EditorialTask, TaskPriority, TaskStatus
+from database.models.news_event import EventCategory, NewsEvent
 from schemas.capability import CapabilityCall, CapabilityUsage
 from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
 from schemas.editorial_task import EditorialTaskCreate, EditorialTaskRead
@@ -260,3 +261,65 @@ async def test_successful_call_is_compatible_with_ai_execution_mapper_without_pe
     assert mapped.task_id == task.id
 
     assert await _ai_execution_count(db_session) == 0
+
+
+def test_build_context_injects_configured_target_language(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression D (docs/content_generation_language_final_implementation_plan.md): the
+    full config -> executor -> BusinessContext.language chain, proven directly against
+    `_build_context()` - it touches neither `self._session` nor `self._registry`, so neither
+    needs to be real here."""
+    monkeypatch.setattr(settings, "default_content_language", "ru")
+
+    task = EditorialTask(
+        id=uuid4(),
+        event_id=uuid4(),
+        priority=TaskPriority.B,
+        status=TaskStatus.RUNNING,
+        workflow={"workflow_name": "CONTENT_GENERATION", "workflow_version": 1, "current_step": "research"},
+    )
+    news_event = NewsEvent(
+        id=task.event_id,
+        source_id=uuid4(),
+        title="Headline",
+        summary=None,
+        content="Body",
+        url=None,
+        category=EventCategory.AI,
+        published_at=None,
+    )
+    step = WorkflowStepDefinition(name="research", capability="research", timeout_seconds=30)
+    capability_executor = CapabilityExecutor(session=None, task_id=task.id, registry=None)  # type: ignore[arg-type]
+
+    context = capability_executor._build_context(task, news_event, step, attempt=1)
+
+    assert context.business.language == "ru"
+
+
+def test_build_context_respects_overridden_target_language(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The same chain, with a non-default configured value, proving the executor does not
+    hardcode "ru" itself - it reads whatever `settings.default_content_language` says."""
+    monkeypatch.setattr(settings, "default_content_language", "en")
+
+    task = EditorialTask(
+        id=uuid4(),
+        event_id=uuid4(),
+        priority=TaskPriority.B,
+        status=TaskStatus.RUNNING,
+        workflow={"workflow_name": "CONTENT_GENERATION", "workflow_version": 1, "current_step": "research"},
+    )
+    news_event = NewsEvent(
+        id=task.event_id,
+        source_id=uuid4(),
+        title="Headline",
+        summary=None,
+        content="Body",
+        url=None,
+        category=EventCategory.AI,
+        published_at=None,
+    )
+    step = WorkflowStepDefinition(name="research", capability="research", timeout_seconds=30)
+    capability_executor = CapabilityExecutor(session=None, task_id=task.id, registry=None)  # type: ignore[arg-type]
+
+    context = capability_executor._build_context(task, news_event, step, attempt=1)
+
+    assert context.business.language == "en"

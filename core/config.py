@@ -85,6 +85,15 @@ class Settings(BaseSettings):
     # github_api sources to be imported at all (see services/adapter_keys.py).
     github_token: SecretStr | None = None
 
+    # Default editorial target output language (docs/
+    # content_generation_language_final_implementation_plan.md). Injected explicitly by
+    # capabilities.executor.CapabilityExecutor._build_context() into every
+    # BusinessContext.language - never left to that schema field's own implicit default.
+    # This is the language Capabilities are instructed to WRITE their output in, not the
+    # source NewsEvent's own language (unrelated, tracked separately and unwired -
+    # schemas/source_definition.py's SourceDefinition.language).
+    default_content_language: str = "ru"
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""

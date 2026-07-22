@@ -101,7 +101,7 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
     context_text = (
         f"Title: {news_event.title}\n"
         f"Category: {news_event.category}\n"
-        f"Language: {context.business.language}\n\n"
+        f"Target output language: {context.business.language}\n\n"
         f"Research output:\n{_format_research_facts(research_output)}"
     )
     task_text = (

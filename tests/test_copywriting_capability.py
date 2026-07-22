@@ -68,14 +68,20 @@ _INTELLIGENCE_OUTPUT: dict[str, object] = {
 }
 
 
-def _prompt_repository() -> FakePromptRepository:
+_LANGUAGE_RULE = (
+    'Always write the title, body, and hashtags entirely in the language given by "Target '
+    'output language" in the CONTEXT block below.'
+)
+
+
+def _prompt_repository(*, rules: list[str] | None = None) -> FakePromptRepository:
     repository = FakePromptRepository()
     repository.register(
         RenderedPrompt(
             name=CAPABILITY_NAME,
-            version="2",
+            version="3",
             system="You are a fake copywriting assistant for tests.",
-            rules=["Do not fabricate facts."],
+            rules=rules if rules is not None else ["Do not fabricate facts.", _LANGUAGE_RULE],
             output_schema=_COPYWRITING_OUTPUT_SCHEMA,
         )
     )
@@ -86,6 +92,7 @@ def _context(
     *,
     title: str = "Example headline",
     category: str = "technology",
+    language: str = "ru",
     step_results: dict[str, dict[str, object]] | None = None,
 ) -> CapabilityContext:
     return CapabilityContext(
@@ -105,6 +112,7 @@ def _context(
                 completed_steps=list(step_results.keys()) if step_results else [],
                 step_results=step_results or {},
             ),
+            language=language,
         ),
         runtime=RuntimeContext(
             task_id=uuid4(),
@@ -276,3 +284,117 @@ def test_non_coupling_never_imports_research_or_intelligence_capability() -> Non
 
     assert not any("research_capability" in module for module in imported_modules)
     assert not any("intelligence_capability" in module for module in imported_modules)
+
+
+# --- Russian output remediation (docs/content_generation_language_final_implementation_plan.md) --
+
+
+def test_prompt_version_resolves_to_3() -> None:
+    from capabilities.copywriting_capability import PROMPT_VERSION
+
+    assert PROMPT_VERSION == "3"
+
+
+@pytest.mark.asyncio
+async def test_target_output_language_label_and_value_appear_in_request() -> None:
+    """Regression D (partial): a configured language value propagates all the way into the
+    actual constructed request - the label is now unambiguous ("Target output language:"),
+    not the old, ambiguous "Language:" that read like a source-event attribute."""
+    gateway = FakeLLMGateway(generate_response=_valid_response())
+    capability = CopywritingCapability(gateway, _prompt_repository())
+    context = _context(language="ru", step_results={"research": CANONICAL_RESEARCH_OUTPUT})
+
+    await capability.execute(context)
+
+    request_text = "\n".join(
+        part.text for message in gateway.received_requests[0].messages for part in message.content if part.text
+    )
+    assert "Target output language: ru" in request_text
+    assert "Language: ru" not in request_text  # the old, ambiguous label must be gone
+
+
+@pytest.mark.asyncio
+async def test_english_context_still_targets_configured_language_english_case() -> None:
+    """Regression A: an English-language `context.business.news_event` (source content in
+    English) combined with a non-English target `language` value must still surface the target
+    value in the request - proves the target-language signal is independent of source content,
+    matching the required "source may be any language, output targets the configured language"
+    behavior. (Whether the model actually complies is a live-API concern, out of this offline
+    unit test's reach - proven separately, see the plan's live-API check.)"""
+    gateway = FakeLLMGateway(generate_response=_valid_response())
+    capability = CopywritingCapability(gateway, _prompt_repository())
+    context = _context(
+        title="An English-language headline about markets",
+        language="ru",
+        step_results={"research": CANONICAL_RESEARCH_OUTPUT},
+    )
+
+    await capability.execute(context)
+
+    request_text = "\n".join(
+        part.text for message in gateway.received_requests[0].messages for part in message.content if part.text
+    )
+    assert "An English-language headline about markets" in request_text  # source, unchanged
+    assert "Target output language: ru" in request_text  # target, independent of source
+
+
+@pytest.mark.asyncio
+async def test_russian_source_context_still_targets_configured_language() -> None:
+    """Regression B: a Russian-language source event with a Russian target language still
+    correctly surfaces the target value - proves the mechanism doesn't depend on source
+    language matching the target."""
+    gateway = FakeLLMGateway(generate_response=_valid_response())
+    capability = CopywritingCapability(gateway, _prompt_repository())
+    context = _context(
+        title="Заголовок на русском языке о рынках",
+        language="ru",
+        step_results={"research": CANONICAL_RESEARCH_OUTPUT},
+    )
+
+    await capability.execute(context)
+
+    request_text = "\n".join(
+        part.text for message in gateway.received_requests[0].messages for part in message.content if part.text
+    )
+    assert "Заголовок на русском языке о рынках" in request_text
+    assert "Target output language: ru" in request_text
+
+
+@pytest.mark.asyncio
+async def test_governed_language_rule_flows_into_system_text() -> None:
+    """Regression C: the actual Copywriting prompt/request contract contains an explicit
+    governed instruction requiring output in the target language - proves the RULE (not just the
+    dynamic value) reaches the real request the Gateway receives, via the ordinary, unmodified
+    `prompt.rules` -> `system_text` plumbing every capability already uses."""
+    gateway = FakeLLMGateway(generate_response=_valid_response())
+    capability = CopywritingCapability(gateway, _prompt_repository(rules=["Do not fabricate facts.", _LANGUAGE_RULE]))
+    context = _context(step_results={"research": CANONICAL_RESEARCH_OUTPUT})
+
+    await capability.execute(context)
+
+    request_text = "\n".join(
+        part.text for message in gateway.received_requests[0].messages for part in message.content if part.text
+    )
+    assert _LANGUAGE_RULE in request_text
+
+
+def test_real_v3_prompt_file_contains_the_governed_language_rule() -> None:
+    """Proves the *real*, published `prompts/copywriting/v3.yaml` (not merely a test fixture)
+    actually contains the governed language rule, and that `prompts/copywriting/v2.yaml` remains
+    byte-for-byte unmodified (Phase 6 §8 prompt-immutability)."""
+    from integrations.prompts.file_repository import FilePromptRepository
+
+    prompts_root = Path(__file__).resolve().parent.parent / "prompts"
+    repository = FilePromptRepository(prompts_root)
+
+    v3 = repository.resolve(CAPABILITY_NAME, "3")
+    assert any("target output language" in rule.lower() for rule in v3.rules)
+
+    v2 = repository.resolve(CAPABILITY_NAME, "2")
+    assert v2.rules == [
+        "Base the draft only on the given title/category and the supplied Research/Intelligence output"
+        " - never invent facts not present in either.",
+        "Keep the title concise and the body suitable for a short social post.",
+        "Hashtags must be relevant to the event's category and content, no more than a handful.",
+    ]
+    assert not any("target output language" in rule.lower() for rule in v2.rules)

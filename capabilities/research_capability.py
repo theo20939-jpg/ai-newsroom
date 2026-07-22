@@ -92,7 +92,7 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
         f"Title: {news_event.title}\n"
         f"Category: {news_event.category}\n"
         f"Content: {news_event.content or '(none)'}\n"
-        f"Language: {context.business.language}"
+        f"Target output language: {context.business.language}"
     )
     task_text = "Extract the structured factual content actually present in the text above."
 

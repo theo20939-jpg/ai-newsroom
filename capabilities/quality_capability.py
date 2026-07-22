@@ -110,7 +110,7 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
         f"Title: {news_event.title}\n"
         f"Category: {news_event.category}\n"
         f"Summary: {news_event.summary or '(none)'}\n"
-        f"Language: {context.business.language}\n\n"
+        f"Target output language: {context.business.language}\n\n"
         f"Copywriting draft:\n{_format_copywriting_draft(copywriting_output)}"
     )
     task_text = (
