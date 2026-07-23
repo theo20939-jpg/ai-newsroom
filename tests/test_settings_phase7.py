@@ -87,6 +87,44 @@ def test_redis_unavailable_policy_rejects_unknown_value(monkeypatch: pytest.Monk
         _settings()
 
 
+def test_news_collection_enabled_defaults_false() -> None:
+    settings = _settings()
+
+    assert settings.news_collection_enabled is False
+
+
+def test_news_collection_enabled_overridable_via_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NEWS_COLLECTION_ENABLED", "true")
+
+    settings = _settings()
+
+    assert settings.news_collection_enabled is True
+
+
+def test_news_collection_interval_seconds_defaults_1800() -> None:
+    settings = _settings()
+
+    assert settings.news_collection_interval_seconds == 1800
+
+
+def test_news_collection_interval_seconds_overridable_via_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NEWS_COLLECTION_INTERVAL_SECONDS", "60")
+
+    settings = _settings()
+
+    assert settings.news_collection_interval_seconds == 60
+
+
+def test_news_collection_interval_seconds_rejects_zero() -> None:
+    with pytest.raises(Exception):  # noqa: B017 - pydantic ValidationError, no need to import it here
+        _settings(news_collection_interval_seconds=0)
+
+
+def test_news_collection_interval_seconds_rejects_negative() -> None:
+    with pytest.raises(Exception):  # noqa: B017 - pydantic ValidationError, no need to import it here
+        _settings(news_collection_interval_seconds=-1)
+
+
 def test_build_openai_credential_assembles_api_key_from_settings() -> None:
     settings = _settings(openai_api_key=SecretStr("sk-test-value"))
 

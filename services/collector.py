@@ -9,11 +9,13 @@ import asyncio
 import hashlib
 import logging
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Protocol
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from telethon.errors import FloodWaitError
 
 from database.models.news_event import EventCategory, EventStatus, NewsEvent
@@ -21,14 +23,26 @@ from database.models.news_source import NewsSource
 from database.session import async_session_factory
 from integrations.sources.base import SourceAdapter, SourceFetchContext
 from schemas.raw_news_item import RawNewsItem
+from schemas.source_definition import SourceDefinition
 from services import cleaning, deduplication
-from services.adapter_registry import AdapterRegistry, build_registry
-from services.source_registry import load_source_pack
+from services.adapter_registry import AdapterResolution, build_registry
+from services.source_registry import SourceRegistryReport, load_source_pack
 
 logger = logging.getLogger(__name__)
 
 MAX_FETCH_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = 1.0
+
+
+class SourceAdapterResolver(Protocol):
+    """Structural interface for whatever `_load_active_sources()`/`_process_source()` actually
+    call. `services.adapter_registry.AdapterRegistry` already satisfies this exactly, with no
+    change to it required - Python's structural typing does not require an explicit subclass
+    relationship. A test-owned fake object satisfying only this method never touches
+    `AdapterRegistry` or `services.adapter_keys.ADAPTER_KEY_TO_ADAPTER` at all (Phase 12
+    Architecture Contract §7)."""
+
+    def resolve(self, source: NewsSource) -> AdapterResolution | None: ...
 
 
 @dataclass
@@ -41,20 +55,34 @@ class CollectionReport:
     duplicates_skipped: int = 0
 
 
-async def run_collection_cycle() -> CollectionReport:
+async def run_collection_cycle(
+    *,
+    session_factory: async_sessionmaker[AsyncSession] = async_session_factory,
+    source_pack_loader: Callable[
+        [], tuple[list[SourceDefinition], SourceRegistryReport]
+    ] = load_source_pack,
+    adapter_resolver_factory: Callable[
+        [list[SourceDefinition]], SourceAdapterResolver
+    ] = build_registry,
+) -> CollectionReport:
     """Run one collection pass over all active sources with a registered adapter.
 
     A database connectivity failure (e.g. Postgres unreachable) is logged and
     turned into an empty report instead of crashing the process - the same
     "one failure must not stop the system" rule already applied per-source.
+
+    `session_factory`, `source_pack_loader`, and `adapter_resolver_factory` are keyword-only,
+    defaulted testability seams (Phase 12 Architecture Contract §7) - every default is the exact
+    object this function already hardcoded before Phase 12, so calling with zero arguments (as
+    every production call site does) is byte-for-byte unchanged in behavior.
     """
     report = CollectionReport()
 
     try:
-        definitions, _registry_report = load_source_pack()
-        registry = build_registry(definitions)
+        definitions, _registry_report = source_pack_loader()
+        registry = adapter_resolver_factory(definitions)
 
-        async with async_session_factory() as session:
+        async with session_factory() as session:
             sources = await _load_active_sources(session, registry)
 
             for source in sources:
@@ -78,7 +106,9 @@ async def run_collection_cycle() -> CollectionReport:
     return report
 
 
-async def _load_active_sources(session: AsyncSession, registry: AdapterRegistry) -> list[NewsSource]:
+async def _load_active_sources(
+    session: AsyncSession, registry: SourceAdapterResolver
+) -> list[NewsSource]:
     """Load active sources that have a registered adapter."""
     result = await session.execute(select(NewsSource).where(NewsSource.active.is_(True)))
     sources = list(result.scalars().all())
@@ -86,7 +116,7 @@ async def _load_active_sources(session: AsyncSession, registry: AdapterRegistry)
 
 
 async def _process_source(
-    session: AsyncSession, source: NewsSource, registry: AdapterRegistry, report: CollectionReport
+    session: AsyncSession, source: NewsSource, registry: SourceAdapterResolver, report: CollectionReport
 ) -> None:
     """Fetch, clean, deduplicate and store events for a single source."""
     resolution = registry.resolve(source)

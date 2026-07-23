@@ -85,6 +85,14 @@ class Settings(BaseSettings):
     # github_api sources to be imported at all (see services/adapter_keys.py).
     github_token: SecretStr | None = None
 
+    # Phase 12 Fresh News Automation (docs/phase12_fresh_news_automation_architecture_contract.md
+    # §11/§16). Opt-in by default, matching enabled_providers/verify_capabilities_at_boot's own
+    # established convention: automation does not run until explicitly enabled. Global, not
+    # per-source cadence - schemas.source_definition.SourceDefinition.fetch_interval is
+    # deliberately never imported into NewsSource (see services/source_pack_importer.py).
+    news_collection_enabled: bool = False
+    news_collection_interval_seconds: int = Field(default=1800, gt=0)
+
     # Default editorial target output language (docs/
     # content_generation_language_final_implementation_plan.md). Injected explicitly by
     # capabilities.executor.CapabilityExecutor._build_context() into every
