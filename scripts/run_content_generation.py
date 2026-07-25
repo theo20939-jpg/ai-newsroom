@@ -36,7 +36,7 @@ from integrations.llm_gateway.boot import assemble_ai_integration_layer
 from integrations.prompts.file_repository import FilePromptRepository
 from schemas.content_draft import ContentDraftRead
 from schemas.editorial_task import EditorialTaskCreate
-from schemas.workflow import RunStatus, WorkflowType
+from schemas.workflow import RunStatus, WorkflowRunResult, WorkflowType
 from services import workflow_service
 from services.content_draft_service import ContentDraftService
 from workflows.runner import WorkflowRunner
@@ -44,6 +44,22 @@ from workflows.runner import WorkflowRunner
 logger = logging.getLogger(__name__)
 
 _PROMPTS_ROOT = Path(__file__).resolve().parent.parent / "prompts"
+
+
+def _fact_safety_status(result: WorkflowRunResult) -> str | None:
+    """Locate the "quality" step's `fact_safety.status`, if present - mirrors
+    `services.content_draft_service._fact_safety_status()`'s identical lookup shape.
+    Deliberately duplicated, not imported, per this codebase's own established convention for
+    small step_results lookups (e.g. `worker/content_cycle.py::_extract_scoring_result()`'s own
+    docstring records the same rationale for its sibling `_copywriting_output()`)."""
+    for step_result in result.step_results:
+        if step_result.step_name == "quality" and step_result.status == "SUCCESS" and step_result.result:
+            fact_safety = step_result.result.get("fact_safety")
+            if isinstance(fact_safety, dict):
+                status = fact_safety.get("status")
+                if isinstance(status, str):
+                    return status
+    return None
 
 
 @dataclass(frozen=True)
@@ -55,11 +71,18 @@ class ContentGenerationOutcome:
     `workflow_status == "COMPLETED" and content_draft is None` -> outcome 3 (the disclosed,
     accepted gap: ContentDraftService raised after the task had already committed COMPLETED).
     `workflow_status == "COMPLETED" and content_draft is not None` -> outcome 1 (full success).
+
+    `fact_safety_status` (Phase 15 M5): the "quality" step's `fact_safety.status`
+    ("pass"/"review"/"block"), if fact safety ran - `None` when `fact_safety_mode == "off"` or
+    the workflow never reached "quality". Exposed here, extracted directly from `result` (already
+    in scope below), so `worker/content_cycle.py` can make its own enforcement-mode delivery
+    decision (M5.8) without any additional DB query.
     """
 
     task_id: UUID
     workflow_status: RunStatus
     content_draft: ContentDraftRead | None
+    fact_safety_status: str | None = None
 
 
 async def run_content_generation_for_event(
@@ -122,7 +145,10 @@ async def run_content_generation_for_event(
             "content_generation_succeeded",
             extra={"task_id": str(task.id), "event_id": str(event_id), "draft_id": str(draft.id)},
         )
-        return ContentGenerationOutcome(task_id=task.id, workflow_status=result.status, content_draft=draft)
+        return ContentGenerationOutcome(
+            task_id=task.id, workflow_status=result.status, content_draft=draft,
+            fact_safety_status=_fact_safety_status(result),
+        )
 
 
 async def main() -> None:

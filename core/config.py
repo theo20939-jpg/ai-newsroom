@@ -155,6 +155,21 @@ class Settings(BaseSettings):
     editorial_scoring_weight_source_reliability: float = Field(default=0.10, ge=0.0, le=1.0)
     editorial_scoring_weight_novelty: float = Field(default=0.10, ge=0.0, le=1.0)
 
+    # Phase 15 M5: Fact Safety (docs/phase15_m5_fact_safety_report.md). Three-state, not the
+    # usual two-state opt-in flag: "off" (zero processing, byte-identical to pre-M5 behavior -
+    # the rollback path), "shadow" (compute and record findings on the existing "quality" step's
+    # result, but never change delivery behavior - safe to default to, since it is purely
+    # additive/observational), "enforce" (uses shadow's own findings to withhold live Telegram
+    # delivery for a REVIEW/BLOCK-classified draft - see services/fact_safety.py's own docstring
+    # for the exact mechanism). Default is "shadow", not "off": explicitly required by M5's own
+    # task brief ("Preferred initial/default state for M5 validation: shadow") and safe to ship
+    # as the code default without an .env change, because shadow mode is provably delivery-
+    # neutral (tests/test_fact_safety.py's own "shadow mode records but does not block" case).
+    # "enforce" is implemented but never selected by this default - a future milestone's
+    # cutover decision, exactly mirroring editorial_scoring_version's own v1-default,
+    # rollback-without-migration precedent.
+    fact_safety_mode: Literal["off", "shadow", "enforce"] = "shadow"
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""

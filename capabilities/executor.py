@@ -41,6 +41,7 @@ from capabilities.errors import (
 )
 from capabilities.registry import CapabilityRegistry
 from services.editorial_scoring import apply_editorial_scoring_v2
+from services.fact_safety import apply_fact_safety
 from workflows.errors import PermanentStepFailureError, StepExecutionError, TaskNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -117,6 +118,18 @@ class CapabilityExecutor:
         if step.capability == "scoring":
             structured_output = await apply_editorial_scoring_v2(
                 self._session, news_event, structured_output, task_id=self._task_id
+            )
+
+        # Phase 15 M5: deterministic Fact Safety post-processing, only for the "quality" step -
+        # the same architectural seam M4 already proved out for "scoring". Zero new DB queries:
+        # `news_event` is already loaded above, and Research's completed step_results are already
+        # present on `context.business.workflow_state.step_results` (see services/
+        # fact_safety.py's own docstring for why this is the safest available boundary). A
+        # no-op, zero-processing passthrough unless fact_safety_mode != "off".
+        if step.capability == "quality":
+            research_output = context.business.workflow_state.step_results.get("research", {})
+            structured_output = apply_fact_safety(
+                news_event.title, news_event.content, news_event.url, research_output, structured_output
             )
 
         return structured_output

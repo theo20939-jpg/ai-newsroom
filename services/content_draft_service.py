@@ -17,6 +17,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
 from database.models.content_draft import ContentDraft, ContentType
 from schemas.content_draft import ContentDraftRead
 from schemas.workflow import WorkflowRunResult
@@ -42,6 +43,43 @@ def _copywriting_output(result: WorkflowRunResult) -> dict[str, Any]:
         f"WorkflowRunResult for task {result.task_id} has no successful 'copywriting' step "
         "result - create_from_result() MUST only be called on a COMPLETED result."
     )
+
+
+def _fact_safety_status(result: WorkflowRunResult) -> str | None:
+    """Phase 15 M5: locate the "quality" step's `fact_safety.status` ("pass"/"review"/"block"),
+    if present - `None` when fact safety never ran (`fact_safety_mode == "off"`, or a historical
+    task predating M5) or the "quality" step itself is absent, mirroring `_copywriting_output()`'s
+    own lookup shape but never raising: whether fact safety produced a result is optional
+    metadata for this function's own status-setting decision below, not a requirement for
+    ContentDraft persistence to succeed at all (that contract remains "copywriting" alone,
+    unchanged from Phase 10)."""
+    for step_result in result.step_results:
+        if step_result.step_name == "quality" and step_result.status == "SUCCESS" and step_result.result:
+            fact_safety = step_result.result.get("fact_safety")
+            if isinstance(fact_safety, dict):
+                status = fact_safety.get("status")
+                if isinstance(status, str):
+                    return status
+    return None
+
+
+def _draft_status_for(fact_safety_status: str | None) -> str:
+    """Phase 15 M5.8 enforcement design: outside `fact_safety_mode == "enforce"`, this always
+    returns "draft" - byte-identical to pre-M5 behavior (shadow mode must never change delivery
+    or persistence, per M5.6). Only in "enforce" mode does a "review"/"block" fact-safety verdict
+    change the persisted `ContentDraft.status` - free-text column (`database/models/
+    content_draft.py`'s own documented "not a constrained enum" design), so this needs no
+    migration. This is visibility, not deletion: the draft row, its full text, and the
+    fact-safety findings in `EditorialTask.workflow` all remain fully queryable - only
+    `worker/content_cycle.py`'s own delivery decision (a separate change) actually withholds the
+    live Telegram send."""
+    if settings.fact_safety_mode != "enforce" or fact_safety_status is None:
+        return "draft"
+    if fact_safety_status == "block":
+        return "draft_blocked_fact_safety"
+    if fact_safety_status == "review":
+        return "draft_review_fact_safety"
+    return "draft"
 
 
 def _to_read_schema(draft: ContentDraft) -> ContentDraftRead:
@@ -77,7 +115,11 @@ class ContentDraftService:
         Owns its own, single, deterministic commit - a separate transaction from
         WorkflowRunner.run()'s own already-closed final commit. Raises uncaught on failure
         (Contract §7.1: MUST NOT swallow). Phase 10 writes exactly one status ("draft"), one
-        version (1), one type (ContentType.POST) - no migration, no schema change.
+        version (1), one type (ContentType.POST) - no migration, no schema change. Phase 15 M5:
+        `status` varies from "draft" only when `fact_safety_mode == "enforce"` AND the "quality"
+        step's fact-safety verdict is "review"/"block" - see `_draft_status_for()`'s own
+        docstring. In every other case (mode "off"/"shadow", or a "pass" verdict) this is
+        byte-identical to the pre-M5 behavior.
         """
         copywriting_output = _copywriting_output(result)
 
@@ -88,7 +130,7 @@ class ContentDraftService:
             body=copywriting_output["body"],
             hashtags=copywriting_output["hashtags"],
             version=1,
-            status="draft",
+            status=_draft_status_for(_fact_safety_status(result)),
         )
         self._session.add(draft)
         await self._session.commit()

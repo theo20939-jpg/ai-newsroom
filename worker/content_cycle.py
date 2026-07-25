@@ -33,7 +33,26 @@ class ContentCycleResult:
     notified: int = 0
     notification_failed: int = 0
     dry_run_rendered: int = 0
+    # Phase 15 M5.8: counts drafts whose live send was withheld specifically because of a
+    # "review"/"block" fact-safety verdict under fact_safety_mode == "enforce" - a strict subset
+    # of dry_run_rendered (every fact-safety-suppressed send is also counted there), kept
+    # separately so a cycle's own logs distinguish "global dry-run" from "fact safety intervened".
+    # Always 0 outside "enforce" mode.
+    fact_safety_suppressed: int = 0
     event_ids: list[UUID] = field(default_factory=list)
+
+
+def _fact_safety_delivery_decision(
+    base_dry_run: bool, fact_safety_mode: str, fact_safety_status: str | None
+) -> tuple[bool, bool]:
+    """Phase 15 M5.8 enforcement design, factored out as a pure function for direct unit testing.
+
+    Returns `(effective_dry_run, was_fact_safety_suppressed)`. Suppression only ever applies
+    under `fact_safety_mode == "enforce"` and only for a "review"/"block" verdict - a "pass"
+    verdict, or any mode other than "enforce" (including a missing/None status - fact safety
+    never ran), always leaves `base_dry_run` untouched."""
+    suppressed = fact_safety_mode == "enforce" and fact_safety_status in ("review", "block")
+    return (base_dry_run or suppressed), suppressed
 
 
 def _extract_scoring_result(workflow: dict[str, Any] | None) -> int | None:
@@ -121,7 +140,8 @@ async def run_content_cycle(
     for event_id in event_ids:
         outcome = await run_content_generation_for_event(
             event_id, capability_registry=capability_registry, session_factory=session_factory,
-        )  # scripts/run_content_generation.py - UNMODIFIED, imported not copied
+        )  # scripts/run_content_generation.py - imported, not copied (Phase 15 M5 extends its
+           # ContentGenerationOutcome with fact_safety_status; the call site here is unchanged)
         if outcome.content_draft is None:
             result.failed += 1
             continue
@@ -131,11 +151,28 @@ async def run_content_cycle(
             event = await session.get(NewsEvent, event_id)
         assert event is not None  # guaranteed by the FK the selecting query itself already joined on
 
+        # Phase 15 M5.8 enforcement design: the safest existing non-public mechanism is the
+        # notifier's own, already-established dry_run branch (renders and logs, never calls the
+        # Telegram API) - reused verbatim here, never a new suppression code path. Inert (always
+        # False) unless fact_safety_mode == "enforce"; a "pass" verdict never suppresses.
+        effective_dry_run, fact_safety_suppressed = _fact_safety_delivery_decision(
+            settings.content_generation_dry_run, settings.fact_safety_mode, outcome.fact_safety_status
+        )
+        if fact_safety_suppressed:
+            result.fact_safety_suppressed += 1
+            logger.info(
+                "content_notification_suppressed_by_fact_safety",
+                extra={
+                    "event_id": str(event_id), "draft_id": str(outcome.content_draft.id),
+                    "fact_safety_status": outcome.fact_safety_status,
+                },
+            )
+
         notification = await send_editorial_card(
             bot, settings.editorial_chat_id, outcome.content_draft, event,
-            dry_run=settings.content_generation_dry_run,
+            dry_run=effective_dry_run,
         )  # never raises - always returns a NotificationOutcome, dry-run or live
-        if settings.content_generation_dry_run:
+        if effective_dry_run:
             result.dry_run_rendered += 1  # expected outcome in dry-run mode, not a failure
         elif notification.sent:
             result.notified += 1
@@ -154,6 +191,7 @@ async def run_content_cycle(
             "notified": result.notified,
             "notification_failed": result.notification_failed,
             "dry_run_rendered": result.dry_run_rendered,
+            "fact_safety_suppressed": result.fact_safety_suppressed,
         },
     )
     return result
