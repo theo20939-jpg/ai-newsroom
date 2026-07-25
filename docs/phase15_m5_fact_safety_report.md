@@ -581,3 +581,294 @@ Two independent shadow-mode cutover decisions (Editorial Scoring V2 → `v2`, Fa
 M4.2 report both explicitly reserve for a separate, deliberate step — neither was activated by
 this or any prior Phase 15 milestone. `master` and the Phase 13–15 M3 checkpoint branch remain
 untouched throughout.
+
+---
+
+# M5.1 RESEARCH RECOVERY AND LIVE SHADOW VALIDATION
+
+Status: RESEARCH RECOVERED — HEALTHY. Live shadow validation completed to the extent naturally
+practical within this session's window; enforcement remains blocked, for reasons unrelated to
+this recovery (§11).
+
+## 1. Research outage root cause
+
+**Classification: A — provider-availability circuit-breaker state (a recurrence of the exact
+mechanism already documented in `docs/llm_runtime_availability_recovery_report.md`), not B/C/D/E/
+F/G/H/I/J.**
+
+Durable evidence, read directly from `EditorialTask.workflow["step_results"]` for multiple
+recently-`FAILED` `NEWS_ANALYSIS` tasks (e.g. `e389949e-8b29-4bf9-9d67-7145c6967e1e`):
+
+```json
+{"step_name": "research", "status": "FAILED", "attempt": 1,
+ "error": "No routable candidate for capability 'unknown' (objective=best_quality)", "result": null}
+```
+
+- `attempt: 1`, `retry_count: 0` on the owning task — the failure occurred on the **first and
+  only** attempt, never retried. This is the signature of a `PermanentCapabilityError`-class
+  mapping (`CapabilityConfigurationError`/`NoRoutableCandidateError` → `PermanentStepFailureError`
+  in `capabilities/executor.py`), not a `RetryableCapabilityError` — ruling out D (rate limit) and
+  E (timeout/network), both of which map to the retryable path and would show `attempt: 2`/`3`.
+- No `routing_decision` log line appears before the failure in `integrations/llm_gateway/
+  routing/engine.py::RoutingEngine.route()` — the exception is raised at Step 5 of that method
+  (the zero-candidate check), strictly *before* the routing-decision log statement — meaning the
+  request never reached FallbackPolicy or any provider adapter at all. Ruling out B
+  (authentication — that would require a request to actually reach the provider) and F
+  (structured-output/schema incompatibility — same reason).
+- The error string itself (`No routable candidate for capability '{criteria.capability_name}'`)
+  originates from exactly one call site: `integrations/llm_gateway/routing/engine.py:109`, raised
+  only when **zero candidates survive the health filter** (`ProviderHealthStore.is_healthy()`
+  returning `False` for every one of the 3 catalog models).
+
+Recent failures inspected (representative sample, both workflows):
+
+| event_id | task_id | workflow | timestamp (UTC) | failed step | exception class | provider/model | retries | fallback attempted | final task state |
+|---|---|---|---|---|---|---|---|---|---|
+| 34d3a366… | e389949e-8b29… | NEWS_ANALYSIS | 2026-07-25 17:06:07 | research | `NoRoutableCandidateError` (via `PermanentStepFailureError`) | none selected — zero candidates | 0 | No — never reached FallbackPolicy | FAILED |
+| ca01bfcb… | 285529e4-846a… | NEWS_ANALYSIS | 2026-07-25 17:06:07 | research | same | same | 0 | No | FAILED |
+| fa9d4b8e… | a129d52f-4dc8… | CONTENT_GENERATION | 2026-07-25 16:38:09 | research | same | same | 0 | No | FAILED (workflow), `content_generation_task_failed` logged, no `ContentDraft` attempted |
+
+## 2. Provider/runtime state
+
+`KEYS "phase7:health:*"` (before any change): exactly 3 keys, matching the full model catalog
+(`OPENAI_MODELS`, confirmed no drift — `gpt-5.6-sol`/`gpt-5.6-terra`/`gpt-5.6-luna`, all
+`provider_id="openai"`), no other key pattern present.
+
+| Key | Fields (`HGETALL`) | TTL |
+|---|---|---|
+| `phase7:health:openai:gpt-5.6-sol` | `runtime_unavailable=1` | `-1` (no TTL) |
+| `phase7:health:openai:gpt-5.6-luna` | `runtime_unavailable=1` | `-1` (no TTL) |
+| `phase7:health:openai:gpt-5.6-terra` | `runtime_unavailable=1` | `-1` (no TTL) |
+
+**This is the exact same permanent, no-TTL circuit-breaker latch already documented** in
+`docs/llm_runtime_availability_recovery_report.md` §1 — `mark_runtime_unavailable()`
+(`integrations/llm_gateway/fallback/policy.py`), written on a `ProviderPermanentIncompatibleError`
+or `ProviderModerationBlockedError`, with **no automatic-clear or `mark_healthy()`/`reset()`
+mechanism anywhere in this codebase** (re-confirmed: no new clearing mechanism was added between
+that report and now). **Yes, the previously-documented no-TTL permanent-latch mechanism has
+recurred** — a second, independent occurrence of the same architectural gap, not a new class of
+failure. The specific upstream trigger this time was not separately re-diagnosed (the durable
+per-task record only retains the generic `NoRoutableCandidateError` message, not the original
+provider exception that first set the latch — the same limitation §8 of the prior report already
+disclosed); given §4's probe results, whatever it was is no longer active.
+
+## 3. Configuration sanity (no secrets exposed)
+
+Checked inside the live `content_worker` container:
+- `OPENAI_API_KEY` configured: `True` — shape `sk-`-prefixed, length 164 (identical to the prior
+  recovery's own recorded shape — no drift, no value printed).
+- `enabled_providers`: `['openai']` — provider enabled.
+- Model catalog (`OPENAI_MODELS`) lists exactly `gpt-5.6-sol`/`gpt-5.6-terra`/`gpt-5.6-luna`,
+  `provider_id="openai"` for all three — matches the health-store keys exactly, no naming drift.
+- `capabilities.capability_mapping.resolve_ai_capability("research")` → `AICapability.RESEARCH`
+  — ResearchCapability's own configuration mapping resolves correctly; not disabled, not
+  misconfigured.
+- `integrations.llm_gateway.providers.openai_adapter.OpenAIAdapter` imports cleanly — no import-
+  time error, no missing dependency.
+- Redis: `PING` → `PONG`. PostgreSQL: `pg_isready` → `accepting connections`. Both healthy
+  throughout — ruling out H (cache/Redis issue as the *root* cause — Redis itself was never down,
+  it was correctly serving a stale-but-valid latch) and I (database/task-state issue — task state
+  transitions, e.g. `FAILED` after `attempt: 1`, all behaved exactly per `workflows/runner.py`'s
+  own documented contract).
+- Worker code revision: `content_worker` confirmed running the M5 image (`apply_fact_safety`
+  present in `capabilities/executor.py`'s loaded source); `news_analysis_worker` confirmed
+  **not** running M5 code (absent) — the intended, unchanged control: this outage is observed
+  identically on a container that has never had any M5 code deployed to it.
+
+No missing environment variable, no configuration drift, and no application-level bug in
+`ResearchCapability` or its mapping explains the outage (ruling out G) — every check in this
+section passed.
+
+## 4. Minimal safe probe
+
+Used the existing `scripts/smoke_test_openai_adapter.py` (calls `OpenAIAdapter` directly,
+bypassing `FallbackPolicy`/`RoutingEngine`/the Redis health store entirely — the exact same
+probe, and the exact same rationale, as the prior recovery). One request per model, run inside
+the live `content_worker` container (same network egress as production). No `NewsEvent`,
+`EditorialTask`, or `ContentDraft` was created; no Telegram call of any kind.
+
+| Model | Result | Token usage | Response preview |
+|---|---|---|---|
+| gpt-5.6-terra | **SUCCESS** | input=16, output=9 | "I'm online and ready." |
+| gpt-5.6-sol | **SUCCESS** | input=16, output=7 | "I'm online." |
+| gpt-5.6-luna | **SUCCESS** | input=16, output=8 | "I'm online." |
+
+All 3 models responded successfully, normal latency (single round-trip each), zero errors of any
+kind, real structured/plain completion — direct, current, first-hand evidence that the underlying
+provider is healthy right now and the Redis `runtime_unavailable` latch was stale, not reflecting
+current provider reality.
+
+## 5. Recovery action
+
+Per §4's conclusive evidence (provider healthy; Redis state proven stale) and per §2's
+confirmation that manual key deletion is the *only* clearing mechanism this codebase's
+health-store design provides — clearing it is the intended (if manual) recovery path, not a
+workaround.
+
+**Action taken**: re-confirmed the exact key set immediately before deletion (`KEYS
+"phase7:health:*"` → the same 3 keys, no others), then:
+
+```
+DEL phase7:health:openai:gpt-5.6-sol phase7:health:openai:gpt-5.6-luna phase7:health:openai:gpt-5.6-terra
+```
+
+Confirmed after: `KEYS "phase7:health:*"` → empty. No `FLUSHDB`/`FLUSHALL`, no other Redis key
+pattern touched, no PostgreSQL data touched, `.env` never written (`git status --short` showed no
+change throughout this entire recovery).
+
+**Verification, before any natural traffic**: constructed a `RoutingEngine` against the live
+Redis instance and called `route()` directly with `capability_name="research"` — a pure read/
+filter operation, zero network calls to any provider. Result: all 3 models returned as routable
+candidates (`[('openai', 'gpt-5.6-sol'), ('openai', 'gpt-5.6-terra'), ('openai', 'gpt-5.6-luna')]`)
+— before recovery this same call raised `NoRoutableCandidateError`.
+
+## 6. Workers affected
+
+**None restarted.** `ProviderHealthStore` reads Redis fresh on every routing call (no in-process
+caching) — clearing the Redis keys took effect immediately for every worker without any restart,
+rebuild, or redeploy. Confirmed: `docker compose ps` showed identical uptimes for all 5 containers
+immediately before and after the key deletion (`content_worker` continuously "Up" since its
+earlier M5 deployment, `news_analysis_worker`/`automation_worker`/`postgres`/`redis` all
+continuously "Up" since well before this session) — this recovery action touched zero containers.
+
+## 7. Natural pipeline recovery evidence
+
+**No event, task, or draft was manually created or forced at any point** — every completion
+below is a naturally-scheduled worker cycle picking up already-existing, already-eligible
+backlog.
+
+**NEWS_ANALYSIS**: the next natural `news_analysis_worker` cycle after recovery
+(`~17:31:07 UTC`) completed multiple tasks successfully — `abe12f0b-c29a-4fb9-a5a3-c085929e9543`,
+`a8ed0014-5160-4cb2-986a-95d15a281a26`, `5f1834c7-f311-48c6-8d40-cc814664af83`, and more in
+subsequent cycles — each showing the normal, healthy log pattern (`routing_decision` →
+`HTTP/1.1 200 OK` → `latency` → next step, repeated for all 4 steps) that was completely absent
+during the outage. Durably confirmed `status = COMPLETED` for all three sampled directly from
+`editorial_tasks`. **10 NEWS_ANALYSIS tasks completed in total** in the first ~40 minutes after
+recovery — the first successful completions since 11:49:21 UTC the same day (a ~5h40m outage
+window), with real, varied scores (12 to 68) proving genuine LLM-produced output, not a stub or
+cached response.
+
+**CONTENT_GENERATION**: one natural attempt was observed shortly before the fix took effect
+(`a129d52f-4dc8…`, 16:38:09, failed with the identical `NoRoutableCandidateError` signature as
+NEWS_ANALYSIS — confirming both workflows shared the exact same root cause, since they call the
+identical `ResearchCapability`/routing/gateway code). After recovery, `content_worker`'s next two
+natural cycles (17:38:37 and 18:08:53) both found **zero eligible events** — not a failure, a
+`eligible_found=0` outcome, explained fully in §7's own continuation below (not a Research
+problem).
+
+## 7b. Why no CONTENT_GENERATION draft reached "quality" in this session's window
+
+Investigated (read-only) rather than assumed. `worker/content_cycle.py::_select_eligible_events()`
+orders its SQL candidate query by `EditorialTask.updated_at.asc()` (oldest-completed-first) and
+caps it at `content_generation_scan_limit=50` rows, applying the score filter in Python only over
+that capped set (this exact behavior is already documented as intentional in the function's own
+docstring, predating M5). At the time of this validation: **150 `COMPLETED` `NEWS_ANALYSIS` tasks
+existed within the 24-hour `CONTENT_GENERATION` freshness window**, of which 30 already have an
+existing `CONTENT_GENERATION` task (excluded from re-selection), leaving 120 real candidates —
+**far more than the 50-row scan cap**. The outage itself is the direct cause of this backlog
+depth: `content_worker` could not successfully process *any* candidate for ~5h40m, so completed-
+but-unscanned `NEWS_ANALYSIS` tasks accumulated continuously during that entire window. My 3
+newly-completed, genuinely eligible (score 68, 68) events are among the *newest* ~30 of 120
+candidates — sorted to the back of an oldest-first, 50-row-capped scan, and were correctly not
+selected in either post-recovery cycle. This is a **pre-existing, unrelated selection-ordering
+characteristic** (not a bug, not something this recovery or M5 introduced, and explicitly out of
+this task's scope to change — "do not change thresholds, intervals, or batch sizes") that will
+resolve on its own as the older backlog either gets selected (if its own score qualifies) or ages
+out past the 24-hour window (the oldest currently-in-window task is from `2026-07-24 22:41:24`,
+i.e. already ~19 hours old at the time of this check — due to age out within a few more hours of
+normal operation, unassisted).
+
+## 8. Live Fact Safety sample
+
+**0 new live drafts reached the `"quality"` step within this session's practical validation
+window**, for the reason fully explained in §7b — a pre-existing backlog/scan-ordering
+interaction, not a Research-recovery or Fact-Safety problem. This is reported honestly, per the
+task's own explicit "if fewer than 5 drafts naturally appear, use all available drafts and state
+the sample limitation honestly" instruction — extended here to the honest case of a genuine 0 for
+this specific live-forward-observation window, while still providing everything else this step
+asked for:
+
+- **Confirmed indirect evidence the mechanism will work correctly once fed a candidate**:
+  `CONTENT_GENERATION`'s `"research"` step calls the exact same `ResearchCapability` class,
+  through the exact same `LLMGateway`/`RoutingEngine`, as `NEWS_ANALYSIS` — already proven fully
+  healthy by 10 real, successful completions (§7). There is no code-path difference between the
+  two workflows' `"research"` step that could make one work and not the other.
+- **The existing historical backtest remains the evidentiary base for live Fact Safety
+  findings** (Fact Safety report §12, unchanged by this recovery) — 5 real, previously-delivered
+  drafts, already analyzed in full, including the exact Phase 14.5 defect shape.
+- No claim of live findings is fabricated to fill this section — the honest answer is zero new
+  observations this session, with a fully diagnosed, non-M5 reason why.
+
+## 9. False-positive observations
+
+None available to observe from this session's live window (§8 — zero new drafts). No new
+evidence beyond the Fact Safety report's own §13 (Russian brand-name guillemets — fixed;
+digit-heavy date/money collisions — fixed; English Title-Case headline entities — documented,
+unfixed, primary open risk; Russian grammatical name inflection — documented, unfixed, downgrades
+to UNCERTAIN not UNSUPPORTED). No extraction rule was changed during this validation task, per
+instruction — this recovery's scope was strictly the Research outage, not fact-safety
+calibration.
+
+## 10. Provider-call impact
+
+**Zero new provider calls attributable to M5** in this recovery — confirmed by the same
+structural proof already established (`test_18_fact_safety_module_imports_no_llm_gateway_or_
+capability`, unchanged). The provider calls that *did* occur during this session were: (a) 3
+one-shot smoke-test probes (§4, a diagnostic action explicitly authorized by this task's own Step
+4, not part of any workflow), and (b) the normal, expected `ResearchCapability`/`Intelligence`/
+`Scoring` calls made by 10 naturally-scheduled `NEWS_ANALYSIS` cycles recovering to their
+ordinary, already-existing call pattern — no different in kind or volume from any other healthy
+operating period, and in particular unaffected by `fact_safety_mode` (still `shadow`, still
+zero-DB-query/zero-provider-call in that mode's own no-op path since no `"quality"` step ran in
+this session's window at all — §8).
+
+## 11. Runtime health
+
+- `docker compose ps`: all 5 containers `Up`/healthy throughout — `content_worker` unrestarted
+  since its earlier M5 deployment; `automation_worker`/`news_analysis_worker`/`postgres`/`redis`
+  unrestarted since before this session. Zero containers were restarted or rebuilt by this
+  recovery task.
+- `fact_safety_mode`: confirmed still `"shadow"` (live, inside the running container).
+- `editorial_scoring_version`: confirmed still `"v1"`.
+- `.env`: confirmed unchanged throughout (`git status --short` clean for the whole session; the
+  only state ever modified was the 3 Redis keys, never any file).
+- `news_analysis_freshness_cutoff_hours=2.0`, `content_generation_freshness_cutoff_hours=24.0`,
+  `content_generation_min_score=65`, `news_analysis_batch_size=5`,
+  `content_generation_batch_size=5`, `news_analysis_poll_interval_seconds=300`,
+  `content_generation_poll_interval_seconds=1800` — all confirmed unchanged, read live from the
+  running container.
+- No synthetic/test event entered the live flow during this session (confirmed: zero
+  `news_events` rows created during this session's window matching `%synthetic%`).
+- No historical row was modified — this recovery only ever wrote to Redis (3 key deletions,
+  already-fully-disclosed), never to PostgreSQL.
+- No manual Telegram message was sent — confirmed `content_generation_dry_run=False` (live
+  sending remains configured exactly as before this session, unchanged), and zero
+  `CONTENT_GENERATION` drafts were even created during this session's window (§8), so there was
+  nothing for the (unmodified) notifier to send, manually or otherwise.
+
+## 12. Remaining enforcement blockers
+
+Unchanged from the Fact Safety report's own §17 — this recovery did not add or remove any
+enforcement blocker, and did not touch `fact_safety_mode`. The two reasons `enforce` remains
+not-recommended stand exactly as documented: (1) the historical backtest's 5-draft sample is too
+small to characterize a false-positive *rate*, and (2) the English Title-Case-entity limitation
+is a real, demonstrated risk of blocking a legitimate draft, not yet mitigated. This recovery
+task's own scope explicitly excluded any fact-safety calibration change (§9) — nothing here moves
+that recommendation in either direction.
+
+## 13. Final recommendation
+
+**Research is fully recovered and confirmed healthy** — no further diagnostic or recovery action
+is needed for the outage itself. **Live Fact Safety validation on a genuinely new natural draft
+remains open**, not because of any Research or Fact-Safety defect, but because of an orthogonal,
+pre-existing backlog/scan-ordering condition (§7b) that this task's own scope correctly forbids
+"fixing" (no threshold/batch-size/ordering changes authorized). Recommended next step for a
+future session: simply re-check `content_worker`'s natural cycles after the current 120-deep
+`CONTENT_GENERATION` candidate backlog has had more time to age out or clear — no code or
+configuration change is needed, only the passage of normal operating time. No `.env` change, no
+`fact_safety_mode` change, and no `editorial_scoring_version` change were made or are recommended
+at this time.
+
+---
+
+PHASE 15 M5 LIVE SHADOW VALIDATION COMPLETE — ENFORCEMENT REMAINS BLOCKED
