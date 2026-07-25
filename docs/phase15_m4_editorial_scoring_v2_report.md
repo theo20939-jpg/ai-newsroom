@@ -882,3 +882,296 @@ with a human in the loop, exactly as the original M4 report's §13 already recom
 ---
 
 PHASE 15 M4.1 CALIBRATION COMPLETE — READY FOR CUTOVER REVIEW
+
+---
+
+# M4.2 SHADOW CUTOVER REVIEW
+
+Status: REVIEW COMPLETE — cutover **NOT** authorized this milestone (see §10). Purely read-only:
+no `.env` change, no version activation, no historical row mutated, no manual workflow triggered,
+zero new provider calls. `editorial_scoring_version` remains `"v1"` throughout.
+
+## 1. Clean sample boundary
+
+Determined directly from the database, not assumed: querying `news_events` joined to `sources`
+for Telegram rows, the **last** collection cycle with zero engagement fields populated was
+`2026-07-24 22:16:06.548206+00`, and the **first** cycle with engagement fields populated was
+`2026-07-25 07:36:38.828476+00` — a clean, hard on/off switch (not a gradual rollout), consistent
+with the Phase 13–15 M3 checkpoint's own container-rebuild timeline. Boundary used for this
+review: **`2026-07-25 07:30:00 UTC`** (a round timestamp strictly between the two observed
+values). Every event collected before this boundary is excluded from the review sample,
+regardless of source type — not just Telegram, for a consistent, single sample-construction rule.
+
+## 2. Sample size and limitations
+
+Query: all `EditorialTask` rows with `status=COMPLETED`, `workflow_name=NEWS_ANALYSIS`, a real
+extractable integer `score`, whose `NewsEvent.collected_at >= boundary`, further filtered through
+`services.cleaning.is_valid_title()` and the same synthetic-event exclusion string used by every
+prior backtest in this report.
+
+- **109 clean samples** — comfortably above the task's own 30-sample floor in aggregate.
+- **Zero excluded for malformed title or synthetic content** in this window (expected: the
+  malformed-title backlog predates the Phase 15 M1 gate and is entirely pre-boundary; 244 rows
+  were excluded for being pre-boundary, 1 for lacking a legacy score).
+- By source type: **RSS n=98**, **TELEGRAM n=9**, **NEWS_API n=2**.
+
+**Explicit limited-confidence flag, per the task's own instruction**: Telegram (9) and NEWS_API
+(2) are both far below the 30-sample floor *individually* — every Telegram/NEWS_API-specific
+finding below is reported honestly as preliminary, not as a settled conclusion. The entire clean
+sample also spans only **4.01 hours of wall-clock collection** (07:36 to 11:37 UTC on
+2026-07-25) — a single operational window, not multiple days — so even the well-populated RSS
+figures should be read as "first look," not "stable average."
+
+## 3. Post-M3 Telegram analysis
+
+All 9 clean-sample Telegram events fall between **17 and 47 minutes old at scoring time**
+(`age_at_scoring_hours` 0.28–0.78) — there is currently **no post-M3 Telegram data at all** older
+than 47 minutes at scoring time. This is itself the headline finding of this review: the original
+M4/M4.1 backtests' Telegram bias was measured almost entirely against **pre-M3 historical rows**
+that structurally could never carry engagement data; the *actual* live post-M3 Telegram picture
+looks different and is analyzed on its own terms below (§4/§5).
+
+`engagement_available = True` for **9/9 (100%)** — M3's capture mechanism is working correctly
+for every single post-boundary Telegram event, no exceptions. `source_baseline_available = True`
+for only **4/9 (44%)** — expected and correct: most Telegram sources simply have not yet
+accumulated the minimum 3 same-source historical engagement rows this early after M3's
+deployment, not a defect.
+
+## 4. Engagement maturity analysis
+
+Age-bucketed (`age_at_scoring_hours`, the actual gap between `EditorialTask.updated_at` at
+completion and the event's `published_at`/`collected_at` anchor):
+
+| Bucket | n | v1 median | V2 median | engagement median | eligible@65 | baseline_available |
+|---|---|---|---|---|---|---|
+| <15min | 0 | — | — | — | — | — |
+| 15–30min | 5 | 28 | 50 | 0.50 | 2 | 40% |
+| 30–60min | 4 | 8.5 | 41.0 | 0.55 | 1 | 50% |
+| 60–120min | 0 | — | — | — | — | — |
+| >120min | 0 | — | — | — | — | — |
+
+**No data exists yet in the <15min, 60–120min, or >120min buckets** — a real, honestly-reported
+gap in the evidence base, not glossed over. Within the two populated buckets, the finding is the
+opposite of "mechanical penalty for immaturity": engagement medians (0.50, 0.55) sit at or
+slightly above neutral, and V2 medians substantially *exceed* v1 medians in both buckets (50 vs.
+28, 41.0 vs. 8.5) — driven by freshness (near-maximal for every one of these very-fresh posts)
+and the M4.1-calibrated neutral fallback, not by any engagement-driven suppression.
+
+Distinguishing the five maturity/measurement states directly from the 9-event Telegram detail:
+
+1. **Unavailable engagement**: 0 of 9 (M3 capture is 100% successful post-boundary).
+2. **Observed zero engagement**: 0 of 9 (no Telegram event in this window has all-zero metrics).
+3. **Immature engagement (data present, baseline too thin — `baseline_n` 0–2)**: 5 of 9 — these
+   get the fixed-neutral engagement component (M4 design) or, per M4.1, would be shrunk toward
+   neutral if `baseline_n` were exactly at the 3-row floor; at 0–2 rows they fall below even that
+   floor and are `source_baseline_available=False` outright.
+4. **Mature below-baseline engagement** (`baseline_n>=3`, percentile <0.5): 2 of 9 (the SpaceX
+   story at 0.30 and the Paramount story at 0.40 percentile) — both real, modest, defensible
+   penalties (delta -10 and -2 respectively), not extreme.
+5. **Mature at/above-baseline engagement** (`baseline_n>=3`, percentile ≥0.5): 2 of 9 (0.60 and
+   0.70 percentile) — both real, modest lifts.
+
+No case in this sample exhibits an extreme 0.0/1.0 percentile from a thin sample — M4.1's own
+baseline-confidence shrinkage (§ M4.1 report) is already functioning as designed. Conclusion:
+**very fresh Telegram events are not being mechanically penalized by immaturity** in the
+available evidence — see §8 for why no additional age-aware adjustment is implemented.
+
+## 5. Source-type comparison
+
+| Source | n | v1 mean/median | V2 mean/median | eligible@65 (v1→V2) | semantic | freshness | engagement | reliability | engagement_avail | baseline_avail |
+|---|---|---|---|---|---|---|---|---|---|---|
+| TELEGRAM | 9 | 29 / 12 | 50.3 / 44 | 2 (22%) → 3 (33%) | 0.29 | 0.78 | 0.50 | 0.80 | 100% | 44% |
+| RSS | 98 | 46.5 / 42.0 | 57.6 / 55.0 | 26 (27%) → 28 (29%) | 0.46 | 0.79 | 0.50 | 0.75 | 0% | 0% |
+| NEWS_API | 2 | 36.5 / 36.5 | 49.0 / 49.0 | 0 (0%) → 0 (0%) | 0.36 | 0.60 | 0.50 | 0.75 | 0% | 0% |
+
+**Telegram eligibility increases under V2 in this clean sample (22%→33%)** — the reverse of the
+original M4/M4.1 finding, strong preliminary evidence that the earlier Telegram penalty was
+predominantly a **stale-data artifact** (pre-M3 rows with permanently-unavailable engagement
+mixed into the same backtest as post-M3 rows with legitimately-thin-but-present engagement), not
+a formula defect. Caveat: n=9, one flipped story changes the percentage by 11 points — treat the
+direction as encouraging, not the exact magnitude as stable.
+
+**RSS is essentially flat (27%→29%)** — confirms M4.1's calibration is not *systematically*
+rewarding RSS for its permanent lack of engagement data relative to its own v1 baseline, in this
+fresher, less freshness-decayed sample than the original full backtest.
+
+**NEWS_API's 0%→0% is unresolved by n=2** — cannot be attributed to any single concrete factor
+with confidence at this sample size. Both available NEWS_API events have `engagement_available =
+False` (expected, matches RSS/NEWS_API's design) and `freshness` in the 0.6 (moderate) band
+rather than the 0.78–0.79 near-maximal band RSS/Telegram show — a *preliminary* signal that
+NEWS_API events may be scored somewhat less immediately after publication than other source
+types, worth a dedicated investigation with a larger sample, not something this review can
+conclude from 2 data points. Semantic scores (0.18, 0.55) span too wide a range in n=2 to draw
+any conclusion about systematic LLM-scoring bias against NEWS_API content specifically.
+
+## 6. Threshold comparison
+
+Same 109-sample clean set, sweeping the candidate global threshold (v1's own eligible count at
+65, within this same clean sample, is 28 — used as the ratio denominator, not the older
+stale-data-inclusive 49 from §12/§13 of the M4 report, since that number is no longer the
+relevant comparison baseline for a clean-sample decision):
+
+| Threshold | Total eligible | Ratio vs. v1@65 (28) | RSS | TELEGRAM | NEWS_API | Top-10 overlap | Top-20 overlap |
+|---|---|---|---|---|---|---|---|
+| 50 | 77 | 275% | 72 | 4 | 1 | 10/10 | 20/20 |
+| 55 | 59 | 211% | 55 | 3 | 1 | 10/10 | 20/20 |
+| 57.5 | 47 | 168% | 44 | 3 | 0 | 10/10 | 20/20 |
+| 60 | 45 | 161% | 42 | 3 | 0 | 10/10 | 20/20 |
+| 62.5 | 36 | 129% | 33 | 3 | 0 | 10/10 | 20/20 |
+| **65** | **31** | **111%** | **28** | **3** | **0** | **10/10** | **20/20** |
+| 67.5 | 26 | 93% | 25 | 1 | 0 | 10/10 | 19/20 |
+| 70 | 19 | 68% | 19 | 0 | 0 | 8/10 | 17/20 |
+
+**Threshold 65 (the current, unchanged live threshold) is the strongest candidate**: closest to
+v1 parity (111%, not the ~2× or ~50% extremes the M4 task's own safety rule flags), full top-10
+and top-20 overlap with v1's own ranking (the two formulas agree on which stories matter most,
+they just disagree on the exact score), and a sensible, gradual falloff on either side (no cliff
+edge). 50/55/57.5/60/62.5 all produce 129–275% of v1's volume — too permissive, would likely flood
+`content_generation_batch_size=5`'s per-cycle cap. 70 drops to 68% and starts losing top-10
+agreement — too conservative.
+
+**Expected delivery-volume impact at threshold 65** (using this sample's own 4.01-hour span and
+this environment's actual live settings — `news_analysis_poll_interval_seconds=300`,
+`content_generation_poll_interval_seconds=1800`, `content_generation_batch_size=5`,
+`content_generation_scan_limit=50`, confirmed by reading the running container's settings, not
+assumed): v1 produces ≈3.49 eligible events per 30-minute `content_generation` cycle in this
+window; V2 at 65 produces ≈3.86 — both comfortably under the `batch_size=5` cap, meaning nearly
+every eligible story would actually be processed rather than queued/dropped, under either
+version. This is a reassuring, non-extreme volume comparison, but based on a single 4-hour
+window, not a multi-day average — flagged as a limitation, not a settled fact.
+
+## 7. Editorial review examples
+
+**Top 10 by V2 score**: dominated by RSS (9 of 10) — "OpenAI's rogue agent went on a hacking
+spree..." (88→82), "Samsung announces a $200B+ contract..." (91→78), "The OpenAI Models That
+Hacked Hugging Face..." (78→74) — all very fresh (0.31–1.03h), all comfortably eligible under
+either version, calibration mainly trims a few points of legacy-score inflation rather than
+inverting rankings.
+
+**5 nearest threshold** (60–70 band has ~28 entries in this sample — the tightest cluster is at
+64–68): "xAI открыла код Grok Build..." (RSS, 72→70), "Meshy... AI-powered 3D asset generation"
+(RSS, 82→70), a Russian-language GADGETS story (72→70), "OpenAI шокировал..." (RSS/GADGETS,
+72→70), "Everything announced at Galaxy Unpacked 2026..." (RSS, 68→69) — all sit at a defensible
+editorial margin, none looks like an obviously wrong promotion or demotion.
+
+**5 newly admitted at a lower candidate threshold (57.5) vs. the current 65**: a cluster of
+RSS/AI stories in the 58–64 range ("US debates AI kill switch," "Universities ask for $24.5
+million...," "No, OpenAI's models didn't go 'rogue'...") — all legitimate AI-industry news,
+reasonable additions at a looser threshold, no obviously weak story slipping in.
+
+**Excluded vs. v1 at 65**: **only one event in the entire 109-sample clean set** flips from
+v1-eligible to V2-ineligible at threshold 65 — "Мишень номер один — не Пентагон, а стартапы"
+(RSS/AI, 68→62, 1.7h old, moderate-not-maximal freshness band) — a single, freshness-driven,
+individually defensible demotion, not a pattern.
+
+**Strongest Telegram movers**: three low-legacy-score (0, 5, 12), very-fresh posts jump the most
+in *relative* terms (+42, +38, +35 — "Следим за новостями:", "Так фейк или нет?", "Мужчины, общий
+сбор") — **flagged explicitly per the task's own instruction**: "Следим за новостями:" ("Following
+the news:") is a near-empty-content post the LLM itself correctly scored 0 (no real editorial
+content), yet V2's freshness+neutral-engagement combination still lifts it to 42 — a
+**mathematically consistent but editorially borderline** case: the math is doing exactly what the
+formula specifies (very fresh + neutral fallback = a meaningful score contribution even with a
+near-zero semantic component), but a human editor would likely find a 42 for literally-empty
+content questionable, even though it stays well below every candidate threshold in §6 and is
+never actually deliverable. Two Telegram stories move down modestly (-2, -10) from real,
+baseline-backed measured engagement — legitimate, not flagged.
+
+**Strongest RSS movers**: upward moves are dominated by the same low-legacy-score, very-fresh
+pattern as Telegram ("A shell colon does nothing. Use it anyway," legacy 8→46; "Emacs Writing
+Machine," 18→50; "v0.26.0," 18→48) — niche developer-tooling posts inflated by freshness, but
+**none cross any candidate threshold from §6**, so this pattern is visible in the data but not
+yet operationally consequential. Downward moves are all high-legacy-score stories (91→78, 82→70,
+78→68) pulled toward the middle by average freshness/engagement/reliability — all remain
+comfortably eligible, no false exclusion.
+
+**All NEWS_API events**: both of the 2 available events shown in full in §5's underlying data —
+"ARC-AGI Leaderboard" (18→41, low semantic, moderate freshness, unavailable engagement) and
+"Android May Soon Restrict On-Device ADB" (55→57, moderate semantic, moderate freshness) —
+neither eligible under either version at 65; too few events to characterize a pattern.
+
+**Overall flag for §8/§10**: the "very fresh + low-legacy-score + neutral fallback" inflation
+pattern (visible in both Telegram and RSS) is real and worth watching, but in this clean sample
+it never actually crosses into delivery-eligible territory at any of the reasonable candidate
+thresholds (57.5–70) — a risk to monitor as more data accumulates, not a currently-active defect.
+
+## 8. Age-aware calibration
+
+**Not implemented.** Per the task's own explicit instruction ("Do not implement this adjustment
+unless the clean post-M3 sample proves it is required"), §4's evidence does not show a material
+mechanical penalty from engagement immaturity — if anything, the opposite risk is visible (§7's
+flagged inflation pattern, freshness dominance being *too generous* to weak-but-fresh content,
+not too harsh). Adding a maturity-based *additional* down-weighting of engagement toward neutral
+for very-fresh events would only compound the inflation risk already flagged, not fix a penalty
+that does not appear in the evidence. M4.1's existing baseline-confidence shrinkage
+(`_baseline_confidence`, `ENGAGEMENT_BASELINE_FULL_CONFIDENCE_SAMPLE=10`) already addresses the
+closest real phenomenon found (thin same-source baselines), and is confirmed working as intended
+in §4's per-event detail (no extreme 0.0/1.0 outputs from small samples). No code change, no new
+tests, no new commit for this section.
+
+## 9. Tests and validation
+
+No code changed in this milestone — §8 explains why. All validation is read-only analysis against
+the already-committed, already-tested `services.editorial_scoring` module from M4/M4.1 (48/48
+focused tests, 1058/1062 full suite, both already documented). No new test run was required or
+performed; the existing test suite's state is unchanged by this review.
+
+## 10. Exact recommended scoring version
+
+**`v2`, but not yet — recommend deferral, not rejection.** The clean-sample evidence is
+*encouraging* (Telegram bias appears to have been substantially a stale-data artifact; RSS is not
+over-rewarded; threshold 65 already looks like a strong candidate with 111% volume parity and
+full top-10/20 ranking agreement with v1) but **does not meet this review's own evidentiary bar**
+for a confident cutover recommendation, because:
+- Telegram (n=9) and NEWS_API (n=2) are both far below the 30-sample floor the task itself set —
+  every finding specific to those two source types is preliminary.
+- Zero data exists beyond 78 minutes of Telegram post age — the 60–120min and >120min buckets are
+  completely unobserved; a maturity-related problem could still exist in a range this review
+  cannot see yet.
+- The entire clean sample spans a single 4-hour window — not evidence of a stable, multi-day
+  pattern.
+
+## 11. Exact recommended global threshold
+
+**65 (the current, unchanged live `CONTENT_GENERATION_MIN_SCORE`)** is the strongest candidate
+identified in §6, if/when cutover is eventually authorized — no threshold change is recommended
+alongside a future cutover. This is explicitly a candidate for a **future** decision, not an
+action taken in this review.
+
+## 12. Expected delivery-volume impact
+
+At threshold 65, in this clean sample's own 4.01-hour window: ≈3.86 eligible V2 events per
+30-minute `content_generation` cycle vs. ≈3.49 for v1 in the same window — both under the
+`content_generation_batch_size=5` cap (§6). No evidence of either an explosion or a starvation at
+this threshold. This estimate should be re-verified once a longer observation window is
+available (§13).
+
+## 13. Remaining risks
+
+- **Thin Telegram/NEWS_API samples** (§2) — the single largest limitation of this review; more
+  post-M3 data is needed before any of the source-type-specific findings can be trusted at the
+  same confidence level as the RSS findings.
+- **No data beyond ~80 minutes of Telegram post age** (§3/§4) — a real gap; a future review with
+  a longer observation window is needed to confirm the maturity finding holds at longer horizons.
+- **The "very fresh + low-legacy-score + inflation" pattern** (§7) is real, currently
+  inconsequential (never crosses a candidate threshold in this sample), but worth monitoring as
+  volume grows — if it starts producing delivery-eligible near-empty content, a future milestone
+  should revisit whether freshness/engagement should be capped from fully compensating for a
+  near-zero semantic score, a genuine formula question this review surfaces but does not resolve.
+- **NEWS_API's freshness gap** (§5, 0.60 vs. 0.78–0.79 for other source types) is a preliminary
+  signal, not a finding — worth a dedicated investigation (collection/backlog timing? genuinely
+  later-scored content?) once NEWS_API's post-M3 sample grows past single digits.
+- **Single 4-hour observation window** (§2/§6/§12) — every volume/ratio figure in this review
+  should be treated as a first look, to be reconfirmed once multiple days of post-M3 data exist.
+
+## 14. Rollback instruction
+
+No change was made in this review, so no rollback is needed — `editorial_scoring_version` was
+never touched and remains `"v1"` (its code default) in every environment. If a future milestone
+does activate `v2`, the existing rollback path (documented in the M4 report's own §14, unchanged
+here) applies: flip `editorial_scoring_version` back to `"v1"` — zero code change, zero DB
+change, zero downstream-consumer impact, since `apply_editorial_scoring_v2()`'s first line
+returns immediately whenever the setting is not `"v2"`.
+
+---
+
+PHASE 15 M4.2 CUTOVER REVIEW BLOCKED — MORE POST-M3 DATA REQUIRED
