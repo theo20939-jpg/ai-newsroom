@@ -31,6 +31,7 @@ from schemas.workflow import WorkflowDefinition, WorkflowRetryPolicy, WorkflowSt
 from services import workflow_service
 from services.editorial_scoring import (
     DEFAULT_WEIGHTS,
+    ENGAGEMENT_BASELINE_FULL_CONFIDENCE_SAMPLE,
     MIN_ENGAGEMENT_BASELINE_SAMPLE,
     NEUTRAL_COMPONENT_VALUE,
     apply_editorial_scoring_v2,
@@ -128,9 +129,17 @@ def test_settings_weights_sum_to_one_and_match_defaults() -> None:
 
 
 def test_weights_used_are_echoed_back_in_output() -> None:
+    """Phase 15 M4.1: novelty's slice is always redistributed (weight 0 in the output), so the
+    echoed weights are the *effective* (renormalized) weights, not a literal copy of the input -
+    their ratios relative to each other match the input's ratios among the four scored keys."""
     custom = {"semantic_editorial": 0.5, "freshness": 0.2, "engagement": 0.1, "source_reliability": 0.1, "novelty": 0.1}
     result = _compute(weights=custom)
-    assert result["weights"] == custom
+    assert result["weights"]["novelty"] == 0.0
+    assert sum(result["weights"].values()) == pytest.approx(1.0)
+    scored = ("semantic_editorial", "freshness", "engagement", "source_reliability")
+    nominal_sum = sum(custom[k] for k in scored)
+    for k in scored:
+        assert result["weights"][k] == pytest.approx(custom[k] / nominal_sum)
 
 
 # ---------------------------------------------------------------------------
@@ -169,19 +178,26 @@ def test_freshness_missing_timestamp_falls_back_to_collected_at() -> None:
 
 
 def test_engagement_above_baseline_scores_high_component() -> None:
-    result = _compute(event_metrics=_metrics(views=10_000), baseline_samples=[100, 200, 150, 180, 90])
+    """Full-confidence baseline (>= ENGAGEMENT_BASELINE_FULL_CONFIDENCE_SAMPLE rows) so the
+    result is the raw, unshrunk percentile - shrinkage itself is tested separately below."""
+    baseline = [100, 200, 150, 180, 90, 110, 130, 170, 95, 105]
+    assert len(baseline) >= ENGAGEMENT_BASELINE_FULL_CONFIDENCE_SAMPLE
+    result = _compute(event_metrics=_metrics(views=10_000), baseline_samples=baseline)
     assert result["components"]["engagement"] == 1.0
     assert result["coverage"]["engagement_available"] is True
     assert result["coverage"]["source_baseline_available"] is True
 
 
 def test_engagement_near_baseline_scores_mid_component() -> None:
-    result = _compute(event_metrics=_metrics(views=150), baseline_samples=[100, 120, 150, 180, 200])
+    baseline = [100, 120, 150, 180, 200, 110, 130, 170, 95, 105]
+    result = _compute(event_metrics=_metrics(views=150), baseline_samples=baseline)
     assert 0.0 < result["components"]["engagement"] < 1.0
 
 
 def test_engagement_below_baseline_scores_low_component() -> None:
-    result = _compute(event_metrics=_metrics(views=1), baseline_samples=[100, 200, 150, 180, 90])
+    baseline = [100, 200, 150, 180, 90, 110, 130, 170, 95, 105]
+    assert len(baseline) >= ENGAGEMENT_BASELINE_FULL_CONFIDENCE_SAMPLE
+    result = _compute(event_metrics=_metrics(views=1), baseline_samples=baseline)
     assert result["components"]["engagement"] == 0.0
 
 
@@ -203,14 +219,18 @@ def test_engagement_unsupported_metrics_is_neutral_and_flagged() -> None:
 def test_engagement_observed_zero_is_not_treated_as_unavailable() -> None:
     """A real, measured 0 (all four fields present, all zero) is a valid low-engagement
     observation, not a missing-metric fallback - it must still be ranked against the baseline,
-    not silently defaulted to neutral."""
-    result = _compute(event_metrics=_metrics(0, 0, 0, 0), baseline_samples=[10, 20, 30])
+    not silently defaulted to neutral. Full-confidence baseline so the ranking is unshrunk."""
+    baseline = [10, 20, 30, 15, 25, 12, 18, 22, 28, 14]
+    assert len(baseline) >= ENGAGEMENT_BASELINE_FULL_CONFIDENCE_SAMPLE
+    result = _compute(event_metrics=_metrics(0, 0, 0, 0), baseline_samples=baseline)
     assert result["coverage"]["engagement_available"] is True
     assert result["components"]["engagement"] == 0.0  # correctly ranks at the bottom, not neutral
 
 
 def test_engagement_extreme_outlier_still_bounded() -> None:
-    result = _compute(event_metrics=_metrics(views=10**9), baseline_samples=[1, 2, 3, 2, 1])
+    baseline = [1, 2, 3, 2, 1, 2, 3, 1, 2, 3]
+    assert len(baseline) >= ENGAGEMENT_BASELINE_FULL_CONFIDENCE_SAMPLE
+    result = _compute(event_metrics=_metrics(views=10**9), baseline_samples=baseline)
     assert result["components"]["engagement"] == 1.0  # bounded, not blown up
 
 
@@ -288,7 +308,9 @@ def test_output_contains_all_expected_keys_and_version_metadata() -> None:
         "engagement_available", "source_baseline_available", "source_reliability_available", "novelty_available",
     }
     assert isinstance(result["reason"], str) and len(result["reason"]) > 0
-    assert result["weights"] == DEFAULT_WEIGHTS
+    assert set(result["weights"]) == set(DEFAULT_WEIGHTS)
+    assert result["weights"]["novelty"] == 0.0
+    assert sum(result["weights"].values()) == pytest.approx(1.0)
 
 
 def test_reason_is_deterministic_and_never_calls_an_llm() -> None:
@@ -599,3 +621,115 @@ async def test_apply_editorial_scoring_v2_is_a_noop_passthrough_when_not_v2(
     output = await apply_editorial_scoring_v2(db_session, event, original, task_id=uuid4())
 
     assert output is original  # identity, not just equality - proves zero processing occurred
+
+
+# ---------------------------------------------------------------------------
+# M4.1 FAIRNESS CALIBRATION - focused tests for the diagnosed compression/self-referential-
+# imputation bugs and their fix (novelty always redistributed; engagement/reliability never
+# redistributed when unavailable; baseline-confidence shrinkage). See
+# docs/phase15_m4_editorial_scoring_v2_report.md, "M4.1 FAIRNESS CALIBRATION" for the full
+# offline evidence (Variant B's naive full redistribution was backtested, found to reward
+# missing engagement data over honestly-measured-average engagement, and rejected).
+# ---------------------------------------------------------------------------
+
+
+def test_unsupported_engagement_gains_no_advantage_over_measured_average_engagement() -> None:
+    """The bug this calibration specifically fixes: a story whose engagement is fully
+    unsupported (RSS/NEWS_API-shaped - no fields at all) must score the SAME as an otherwise
+    identical story whose engagement WAS measured and happened to land exactly at its source's
+    own baseline average - not higher. (Full redistribution of engagement's weight, which was
+    tested and rejected, would have made the unsupported story score strictly higher.)"""
+    common = dict(legacy_llm_score=90, published_at=NOW - timedelta(hours=1), collected_at=NOW - timedelta(hours=1),
+                  reference_now=NOW, reliability_score=0.8)
+    baseline = [10, 20, 30, 15, 25, 12, 18, 22, 28, 14]  # full-confidence sample, median-ish = ~19-20
+
+    unsupported = compute_editorial_score_v2(event_metrics=_EMPTY_METRICS, baseline_samples=[], **common)
+    # A magnitude landing at exactly the 50th percentile of the baseline (5 of 10 values <= 19).
+    measured_average = compute_editorial_score_v2(event_metrics=_metrics(views=19), baseline_samples=baseline, **common)
+
+    assert unsupported["coverage"]["engagement_available"] is False
+    assert measured_average["coverage"]["engagement_available"] is True
+    assert measured_average["components"]["engagement"] == pytest.approx(0.5, abs=0.05)
+    assert unsupported["score"] == measured_average["score"]  # no advantage for having no data
+
+
+def test_measured_zero_and_unavailable_produce_different_coverage_even_when_scores_are_close() -> None:
+    zero = compute_editorial_score_v2(
+        legacy_llm_score=50, published_at=NOW - timedelta(hours=1), collected_at=NOW - timedelta(hours=1),
+        reference_now=NOW, reliability_score=0.5, event_metrics=_metrics(0, 0, 0, 0),
+        baseline_samples=[10, 20, 30, 15, 25, 12, 18, 22, 28, 14],
+    )
+    unavailable = compute_editorial_score_v2(
+        legacy_llm_score=50, published_at=NOW - timedelta(hours=1), collected_at=NOW - timedelta(hours=1),
+        reference_now=NOW, reliability_score=0.5, event_metrics=_EMPTY_METRICS, baseline_samples=[],
+    )
+    assert zero["coverage"]["engagement_available"] is True
+    assert unavailable["coverage"]["engagement_available"] is False
+    assert zero["components"]["engagement"] == 0.0  # ranks at the true bottom
+    assert unavailable["components"]["engagement"] == NEUTRAL_COMPONENT_VALUE  # never conflated with 0
+
+
+def test_thin_baseline_immature_engagement_is_shrunk_not_excessively_penalized() -> None:
+    """A very fresh post whose same-source baseline has only just started accumulating (the
+    minimum allowed 3 rows) and which currently ranks at the bottom of that thin sample must not
+    receive the FULL penalty a confidently-measured below-baseline post would."""
+    thin_baseline = [100, 200, 150]  # n=3, the floor
+    full_baseline = [100, 200, 150, 120, 180, 140, 160, 110, 190, 130]  # n=10, full confidence
+
+    thin = compute_editorial_score_v2(
+        legacy_llm_score=60, published_at=NOW - timedelta(minutes=10), collected_at=NOW - timedelta(minutes=8),
+        reference_now=NOW, reliability_score=0.5, event_metrics=_metrics(views=1), baseline_samples=thin_baseline,
+    )
+    mature = compute_editorial_score_v2(
+        legacy_llm_score=60, published_at=NOW - timedelta(hours=6), collected_at=NOW - timedelta(hours=6),
+        reference_now=NOW, reliability_score=0.5, event_metrics=_metrics(views=1), baseline_samples=full_baseline,
+    )
+
+    assert thin["coverage"]["source_baseline_available"] is True
+    assert mature["coverage"]["source_baseline_available"] is True
+    # Both rank at the bottom of their own baseline, but the thin sample is shrunk toward
+    # neutral (0.5) while the full-confidence sample gets the full, undamped penalty (0.0).
+    assert thin["components"]["engagement"] > mature["components"]["engagement"]
+    assert mature["components"]["engagement"] == 0.0
+    assert thin["components"]["engagement"] == pytest.approx(0.35, abs=0.01)  # 0.5 + 0.3*(0.0-0.5)
+
+
+def test_mature_below_baseline_post_receives_full_justified_penalty() -> None:
+    full_baseline = [100, 200, 150, 120, 180, 140, 160, 110, 190, 130]
+    result = compute_editorial_score_v2(
+        legacy_llm_score=70, published_at=NOW - timedelta(hours=10), collected_at=NOW - timedelta(hours=10),
+        reference_now=NOW, reliability_score=0.7, event_metrics=_metrics(views=1), baseline_samples=full_baseline,
+    )
+    assert result["coverage"]["source_baseline_available"] is True
+    assert result["components"]["engagement"] == 0.0  # full, undamped penalty - confidently measured
+
+
+@pytest.mark.parametrize(
+    ("engagement_available", "reliability_available"),
+    [(True, True), (True, False), (False, True), (False, False)],
+)
+def test_effective_weights_always_sum_to_one_regardless_of_availability(
+    engagement_available: bool, reliability_available: bool
+) -> None:
+    metrics = _metrics(views=100) if engagement_available else _EMPTY_METRICS
+    baseline = [10, 20, 30, 15, 25, 12, 18, 22, 28, 14] if engagement_available else []
+    reliability = 0.6 if reliability_available else None
+
+    result = _compute(event_metrics=metrics, baseline_samples=baseline, reliability_score=reliability)
+
+    assert sum(result["weights"].values()) == pytest.approx(1.0)
+    assert result["weights"]["novelty"] == 0.0  # always excluded, regardless of every other flag
+    assert 0 <= result["score"] <= 100
+
+
+def test_novelty_weight_is_permanently_zero_never_conditional() -> None:
+    """Confirms the constant-reweighting design: novelty's effective weight is 0.0 even when
+    every other signal is fully available (not merely when something else is missing)."""
+    result = _compute(
+        reliability_score=0.9,
+        event_metrics=_metrics(views=1000),
+        baseline_samples=[10, 20, 30, 15, 25, 12, 18, 22, 28, 14],
+    )
+    assert result["coverage"]["engagement_available"] is True
+    assert result["coverage"]["source_reliability_available"] is True
+    assert result["weights"]["novelty"] == 0.0

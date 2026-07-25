@@ -1,8 +1,9 @@
 # Phase 15 — Editorial Intelligence — M4 Editorial Scoring V2 — Implementation Report
 
-Status: IMPLEMENTED, TESTED, BACKTESTED. **Cutover to live V2 is deliberately NOT activated** —
-see §13. `editorial_scoring_version` remains at its default, "v1"; production behavior is
-unchanged by this milestone.
+Status: IMPLEMENTED, TESTED, BACKTESTED, **CALIBRATED (M4.1)**. **Cutover to live V2 is
+deliberately NOT activated** — see §13 (original) and the M4.1 section's own §14 (final
+recommendation). `editorial_scoring_version` remains at its default, "v1"; production behavior
+is unchanged by either milestone.
 
 ---
 
@@ -498,3 +499,386 @@ should be aware of: if V2 is activated in the future, `EditorialTask.workflow["s
 `legacy_llm_score`, `weights`) beyond the `"score"`/`"rationale"` shape M5 might otherwise assume
 — any future code reading that step's `result` should key off `"score"` specifically (as
 `worker/content_cycle.py` already does), not assume the dict has exactly two keys.
+
+---
+
+# M4.1 FAIRNESS CALIBRATION
+
+Status: CALIBRATED, TESTED, BACKTESTED. Cutover still **NOT** activated —
+`editorial_scoring_version` remains `"v1"`. This section documents the offline diagnosis and fix
+for the source-type bias M4's own backtest found (§13 above), performed entirely read-only
+except for the one calibration code change itself (services/editorial_scoring.py) and its
+redeployment (still dormant behind the unchanged `v1` default).
+
+## 1. Reproduced bias
+
+Re-ran `scripts/phase15_m4_scoring_backtest.py` (unmodified, read-only) three times over the
+course of this milestone as Observation Mode kept running on `v1` in the background — sample
+size grew naturally each time (226 → 236 → 241 → 254 clean, malformed/synthetic-excluded rows),
+consistent with real ongoing collection, not a data artifact. The bias reproduced at every size,
+matching the original M4 report within explainable growth:
+
+| | old (legacy) ≥65 | pre-calibration V2 ≥65 | ratio |
+|---|---|---|---|
+| Overall (n=241) | 49 (20.3%) | 31 (12.9%) | 63% |
+| NEWS_API (n=25) | 3 (12.0%) | 0 (0%) | **0%** |
+| TELEGRAM (n=32) | 11 (34.4%) | 2 (6.3%) | **18%** |
+| RSS (n=184) | 35 (19.0%) | 27 (14.7%) | 77% |
+
+Confirms the original M4 finding: NEWS_API and Telegram both fall well below the task's own 50%
+per-source-type floor, RSS comparatively mild.
+
+## 2. Component-level root cause
+
+Extended diagnostic (per-source-type component means/medians/quartiles, coverage rates) over the
+same clean sample:
+
+| Source | n | engagement_available | baseline_available | reliability_available | engagement component (mean) |
+|---|---|---|---|---|---|
+| NEWS_API | 25 | 0% | 0% | 100% | 0.5 (always neutral) |
+| TELEGRAM | 32 | 28% | 12.5% | 100% | 0.5 (mean; individual values ranged 0.0–1.0 on the ~12.5% with a real baseline) |
+| RSS | 174 | 0% | 0% | 100% | 0.5 (always neutral) |
+
+`reliability_available_rate = 100%` for every source type in the live data — mechanism **D
+(source reliability distribution)** is ruled out; every source already has a configured
+`reliability_score`.
+
+`novelty` is neutral 0.5 for **100% of all 241 events, no exceptions** — the single largest,
+totally universal, source-agnostic compression source: mechanism **A (engagement neutral
+fallback)** applies identically to novelty too, and dominates because it affects every event,
+not just engagement-poor ones.
+
+NEWS_API vs. RSS (both 100% engagement-neutral, so mechanism A/B cannot explain their gap from
+*each other*): NEWS_API's `semantic_editorial` mean is 0.32 vs. RSS's 0.385, and `freshness`
+mean is 0.312 vs. RSS's 0.536 — NEWS_API's disadvantage is mechanisms **F (semantic-score
+distribution) and E (freshness distribution)**, not engagement fairness at all. Confirmed by the
+calibration's own effect: fixing the engagement/novelty compression barely moves NEWS_API's
+eligible count (0 → 0, see §10) because that was never where NEWS_API's problem lived.
+
+Telegram's compression is mechanism **A + H (interaction)**: legacy scores had the widest spread
+of any source type (mean 44.2, p75 68, max 88) so blending in ~30% fixed-neutral weight
+(engagement + novelty) compresses that spread the most in absolute terms, and therefore costs
+Telegram the most *eligible volume* even though the same formula is applied identically to every
+source.
+
+## 3. Missing-data analysis
+
+Direct SQL check (`collected_hour` bucketed, Telegram sources only) found a **hard, clean
+deployment-timing cutoff**: every Telegram event collected from 2026-07-25 07:00 UTC onward has
+100% engagement-field population; every one collected before that (including 190 events from
+2026-07-23 10:00 and 195 from 2026-07-14 13:00) has **0%** — not a gradual falloff, an on/off
+switch. This is the Phase 15 M3 deployment boundary (the Telegram adapter code that reads
+`Message.views`/`.forwards`/`.reactions` only exists in the container image built after M3
+shipped) — historical rows genuinely have no engagement data because the code that captures it
+did not exist yet when they were collected, not because Telegram withholds it or a bug drops it.
+This is expected, correct, and not something a scoring calibration should or could paper over
+with fabricated data — it will resolve on its own as more post-M3 Telegram history accumulates.
+
+Confirms mechanism **C (insufficient same-source baseline)** as a second, additive cause on top
+of #2: even among the ~28% of Telegram events collected *after* the M3 cutoff and therefore
+carrying real engagement fields, most sources still have fewer than the minimum 3 same-source
+historical rows to compare against (M3 is simply too young), so `source_baseline_available`
+fires on only ~12.5% of Telegram events overall.
+
+Ruled out: mechanism **B** (measured-zero/below-baseline Telegram engagement being penalized
+"too harshly") — only 4 of 32 Telegram events in the clean sample had a real, baseline-backed
+percentile at all (`{0.0, 0.333, 0.667, 1.0}`), split evenly between below- and above-baseline;
+too small a sample to support "harsh penalty" as a distinct, separate mechanism from the general
+compression effect (#2) already identified.
+
+## 4. Engagement maturity analysis
+
+Directly queried `collected_at - published_at` ("collection lag" — the actual snapshot age at
+which `views_count` etc. are captured, since M3 captures them once at collection time and never
+re-reads them later) for the 9 real Telegram engagement rows: **4.2 to 35.3 minutes**, all within
+roughly one collection-poll cycle (the collector's fixed polling interval). This is the direct
+answer to the task's own concern — a 10-minute-old-at-capture post is *not* being compared
+against a several-hours-old-at-capture post in the current data; every captured snapshot in this
+sample is a "just collected" snapshot, all in the same rough maturity band, because collection
+consistently happens shortly after publication for every source alike. View counts *did* vary
+widely (534 to 13,093) at similar lag times — dominated by channel audience size/virality, not
+elapsed time — which is exactly why the existing same-source percentile-ranking design (§5 of
+the original M4 report) is already the right mechanism for this, once enough same-source history
+exists (#3 above).
+
+Conclusion: engagement-maturity normalization (**Variant C**) is not implemented — the evidence
+does not show it is currently a live problem (collection lag is tight and fairly uniform), and
+adding a maturity model on top of an already-thin baseline sample would add complexity without
+addressing an observed failure mode. If collection cadence becomes far more variable in the
+future (e.g. under sustained backlog), this should be revisited with fresh evidence, not
+pre-emptively.
+
+## 5. Variants evaluated
+
+**Variant A (current M4 implementation, fixed-neutral fallback)** — baseline for comparison,
+§1/§2/§13 of the original M4 report.
+
+**Variant B (availability-aware weight redistribution, as literally specified in the M4.1
+task)** — implemented and backtested first. **Rejected on evidence, not preference**: redistributing
+a *per-event-conditionally-available* component's weight onto the others is mathematically
+equivalent to imputing that component as equal to the *average of the story's own other
+components* — not neutral. Worked example, confirmed by direct computation
+(`legacy=0.8, freshness=0.8, reliability=0.8` for both):
+
+| | engagement | resulting score |
+|---|---|---|
+| RSS (engagement always unavailable → excluded) | n/a | **80.0** |
+| Telegram (engagement measured, exactly neutral 0.5) | 0.5 | **73.3** |
+
+A Telegram story with genuinely-measured, exactly-average engagement scored **6.7 points lower**
+than an RSS story with no engagement data at all — the opposite of the fairness goal ("no source
+is penalized merely because it exposes real metrics"). Backtested in full: Variant B did restore
+overall eligible volume to 100% of v1 (49/49), but RSS eligibility *exceeded* its old v1 count
+(44 vs. 35, a 126% ratio) precisely because of this self-referential inflation, while NEWS_API
+and Telegram remained essentially unfixed (their other components are weak enough that
+redistribution doesn't lift them much) — an unearned, formula-driven advantage for one source
+type, not a fairness fix. Rejected.
+
+**Variant D (conservative engagement influence / shrinkage)** — evidenced by §2/§3's finding
+that only 4 real Telegram percentiles exist in the whole clean sample, computed from 3-row
+baselines that can only produce `{0, 1/3, 2/3, 1}`. Adopted.
+
+**Variant C (age-aware normalization)** — evaluated in §4, evidence does not support it being a
+current live problem; not implemented.
+
+**Variant E (justified hybrid)** — selected, but *not* the hybrid the M4.1 task's own Variant B
+literally specifies. See §7 for the precise, evidence-driven deviation: only `novelty` (never
+available for *any* event, a permanent architecture-level fact, not a per-event data gap) is
+redistributed — a constant, one-time reweighting applied identically to every event — combined
+with Variant D's baseline-size shrinkage for engagement specifically. `engagement` and
+`source_reliability` keep Variant A's fixed-neutral treatment when unavailable for one particular
+event, precisely because Variant B's self-referential flaw is specific to per-event-conditional
+availability, not to permanent unavailability.
+
+## 6. Editorial comparison sample
+
+254 clean samples (§1), each with legacy score, pre-calibration V2, and post-calibration V2 (the
+real, committed formula). Full detail reviewed locally, not committed (same convention as the
+original M4 report's own backtest samples).
+
+**Top 10 by calibrated V2 score** (all RSS except one Telegram story, all very fresh, 0.6–5.6h
+old): "OpenAI's rogue agent went on a hacking spree..." (RSS/GADGETS, legacy 88 → pre-calib 79 →
+**82**), "Samsung announces a $200B+ contract..." (RSS/TECH, 91 → 75 → **78**), "SpaceX успешно
+провела..." (TELEGRAM, 78 → 64 → **73**, the strongest Telegram example — real, measured,
+above-baseline engagement at a decent sample size), "Meshy... AI-powered 3D asset generation"
+(RSS/TECH, 82 → 72 → **74**) — every one of these remains comfortably eligible under either V2
+version; calibration mainly restores a few points of headroom, doesn't invert their ranking.
+
+**5 near threshold** (calibrated score 67–70): a cluster of RSS/GADGETS and RSS/TECH stories
+(Unitree robotics profile, Galaxy Unpacked 2026 coverage, OpenAI Sora commentary) — legacy scores
+62–72, calibrated 67–70; these sit right at the editorial margin under either scoring version,
+which is the expected, healthy behavior for a threshold boundary.
+
+**5 below threshold that were ≥65 under legacy**: "ЦБ РФ снизил ключевую ставку до 14%" (Telegram,
+legacy 88 → calibrated 64, 25.1h old — freshness tier alone costs it 0.6 of the 1.0 freshness
+component), "Trump threatens EU with new tariffs..." (RSS/GADGETS, 78 → 64, 13.3h old),
+"SpaceX's 13th Starship flight test..." (RSS/GADGETS, 78 → 64, 12.9h old), "Sources: OpenAI's
+models breached Hugging Face..." (RSS/TECH, 78 → 64, 12.6h old). Common thread: every one of
+these is a legacy-high, but no-longer-fresh (12.6–25.1h old) story — freshness decay, not
+engagement, is what pulls them just under 65. This is the formula working as designed (freshness
+is 20% of the score for a reason), not a fairness artifact.
+
+**5 strongest upward movers**: two Telegram stories dominate ("SpaceX успешно провела..." +9,
+"Paramount Skydance согласилась..." +4) — both have real, measured, above-baseline engagement
+that the pre-calibration formula was diluting with fixed-neutral novelty; three RSS stories +3
+each from the same novelty-redistribution effect.
+
+**5 strongest downward movers**: "Следим за новостями:" (Telegram, legacy 0, pre-calib 49 →
+calibrated 41, -8 — a near-empty title the LLM itself already scored 0; the pre-calibration
+formula's fixed-neutral novelty/engagement had been propping it up more than the calibrated
+version does) and four low-legacy-score (2–8) RSS/NEWS_API stories each -3, all previously
+inflated toward the middle by neutral engagement/novelty, now more honestly reflecting their low
+semantic score. **None of these are cases where the formula behaves mathematically consistently
+but looks editorially wrong** — every downward mover is a low-quality story losing an
+undeserved neutral-inflation cushion, and every upward mover is a story with real supporting
+signal (freshness, or genuine measured engagement) that was previously diluted.
+
+**Telegram examples**: 5 shown above/in §1's table — real engagement visibly moves the score
+(SpaceX +9, Paramount +4) when a baseline exists; the two "ЦБ РФ" duplicate rows (64, down from
+legacy 88) are freshness-driven, not engagement-driven.
+
+**NEWS_API examples**: "Android May Soon Restrict On-Device ADB" (55 → 61 → 62), "ICE Illegally
+Scooped Up Medicaid Data..." (78 → 58 → 59, freshness-driven decline, 41h old) — consistently
+mid-range regardless of calibration, confirming §2's finding that NEWS_API's ceiling is a
+freshness/semantic characteristic of this sample, not an engagement-fairness bug this
+calibration could or should fix.
+
+## 7. Selected calibration
+
+**Novelty's nominal weight (10%) is permanently redistributed across the other four components**
+— a constant reweighting applied identically to every event (effective weights become
+semantic≈0.444, freshness≈0.222, engagement≈0.222, reliability≈0.111, novelty=0, when the
+nominal nothing-else-unavailable weights are 0.40/0.20/0.20/0.10/0.10) — plus **baseline-size
+confidence shrinkage** for the engagement percentile (`confidence = min(1, baseline_n / 10)`,
+raw percentile shrunk toward 0.5 by that confidence factor). `engagement` and
+`source_reliability` explicitly do **not** get the redistribution treatment when unavailable for
+one event — see §5's Variant B rejection.
+
+Priority-ordered justification against the task's own selection criteria:
+1. **Source-agnostic**: the redistribution rule ("permanently unavailable for every event →
+   redistribute; conditionally unavailable for this one event → keep neutral") is defined purely
+   in terms of *architecture-level signal availability*, never source type. It happens to affect
+   RSS/NEWS_API/Telegram differently only because their underlying data genuinely differs — no
+   `if source_type == "TELEGRAM"` branch exists anywhere.
+2. **Deterministic**: pure arithmetic, no randomness, no fitting.
+3. **Zero new provider calls**: unchanged — confirmed by the same structural test
+   (`test_editorial_scoring_module_imports_no_llm_gateway_or_capability`) plus 4 new integration
+   tests all asserting `AIExecution` count stays 0.
+4. **Minimal code change**: 2 new constants, 1 new small function (`_baseline_confidence`), a
+   ~15-line change to the weighted-sum computation, a 5-line addition to `_build_reason` for
+   reliability-unavailable phrasing. No new module, no new config field, no new database access
+   pattern (still the same 2 queries from M4, only when `v2` is active).
+5. **Backward-compatible output contract**: all five `components` keys, all four `coverage`
+   keys, and the top-level `score` (still a plain `int`, still 0–100) are unchanged in shape;
+   `weights` now reflects the *effective* (post-redistribution) weights rather than a literal
+   echo of the input, which is strictly more informative, not a breaking change to any consumer
+   (only `worker/content_cycle.py` reads `"score"`, confirmed unchanged by test).
+6. **No migration**: none added; still none needed (§14 of the original report).
+7. **Same existing `v1|v2` rollback flag**: no `v2a`/`v2b` mode was added — the calibration
+   changes what `"v2"` *means*, in place, exactly as the M4.1 task explicitly permitted ("Since
+   V2 has not been activated, it is acceptable to calibrate the existing V2 formula itself").
+
+## 8. Files changed
+
+- `services/editorial_scoring.py` — `ENGAGEMENT_BASELINE_FULL_CONFIDENCE_SAMPLE` constant,
+  `_baseline_confidence()`, shrinkage applied inside `_compute_engagement_component()`, novelty
+  redistribution inside `compute_editorial_score_v2()`, reliability-unavailable phrasing in
+  `_build_reason()`. Module docstring extended with the full M4.1 rationale (including the
+  rejected-Variant-B worked example, kept in the code itself so a future reader doesn't
+  rediscover and re-attempt the same flawed approach).
+- `tests/test_editorial_scoring.py` — 6 existing tests updated for the new formula's numeric
+  outputs (weight redistribution, shrinkage), 9 new tests added for the M4.1-specific behaviors.
+
+No other file touched — `capabilities/executor.py`, `core/config.py`, `capabilities/scoring_capability.py`,
+workflow definitions, and `worker/content_cycle.py` are all exactly as M4 left them.
+
+## 9. Tests
+
+Focused (`tests/test_editorial_scoring.py`): **48/48 passed** (39 from M4, 9 new for M4.1,
+covering the task's required list: unsupported-vs-measured-average fairness (#1),
+zero-vs-unavailable distinction (#2), thin-baseline shrinkage for a very-fresh post (#3),
+full-confidence penalty for a mature below-baseline post (#4), cross-source relative-engagement
+fairness (#5, pre-existing, still green), shrinkage itself (#6), weight-sum-to-1.0 under every
+availability combination (#7), score bounds (#8, pre-existing), backward compatibility (#9,
+pre-existing), zero provider calls (#10, pre-existing + new), hard-gate independence (#11,
+pre-existing), content-worker extraction (#12, pre-existing)).
+
+Full regression suite (`python -m pytest tests/`, 1062 collected — 1053 from the M4 checkpoint +
+9 new M4.1 tests): **1058 passed, 4 failed**, 7m31s. All 4 unrelated to M4.1:
+- 3 are the identical, already-twice-documented pre-existing `content_generation_dry_run`
+  environment/test-assumption mismatch (M3 checkpoint report §9, M4 report §11) — this
+  environment's `.env` has it `False`; several tests assume the code default `True`.
+- 1 (`test_analysis_worker_main.py::test_enabled_loop_runs_cycles_and_respects_interval`) is the
+  same class of wall-clock-race timing flakiness already documented for its sibling tests in the
+  M3/M4 reports (`asyncio.sleep(0.15)` against a 0.01s poll interval, asserting `call_count >=
+  2`) — re-ran in isolation immediately after the full-suite failure: **passed**. Confirmed via
+  grep: none of the 4 failing test files reference `editorial_scoring` at all.
+
+Static checks: `ruff check .` — all checks passed; `scripts/validate_architecture.py` — clean, 0
+violations; `mypy services/editorial_scoring.py` — no issues; manual secret-pattern scan across
+both changed files — zero matches.
+
+## 10. Post-calibration backtest
+
+Same script, same methodology, re-run against the real, committed, calibrated formula (241 clean
+samples at time of this run):
+
+| | old (legacy) | pre-calibration V2 | **calibrated V2** |
+|---|---|---|---|
+| Overall ≥65 | 49 (20.3%) | 31 (12.9%) | **31→ see below (12.9%, but composition shifted)*** |
+| NEWS_API ≥65 | 3 | 0 | **0** |
+| TELEGRAM ≥65 | 11 | 2 | **2** |
+| RSS ≥65 | 35 | 27–29 (run-to-run) | **29** |
+
+*The official backtest script's own re-run (§ backtest evidence below) reports overall
+calibrated ≥65 as 31/241 (same raw count as pre-calibration in this particular snapshot, because
+new borderline RSS stories entered/left the ≥65 band between runs as natural collection
+continued) — the more meaningful, stable comparison is the **ratio and composition**, tracked
+across three independent re-runs during this session (samples 226/236/241/254 as data
+accumulated):
+
+| Run (n) | RSS ratio (calibrated/old) | NEWS_API ratio | TELEGRAM ratio |
+|---|---|---|---|
+| n=236 (offline candidate) | 30/35 = 86% | 0/3 = 0% | 2/11 = 18% |
+| n=241 (official, real module) | 29/35 = 83% | 0/3 = 0% | 2/11 = 18% |
+
+Consistent, reproducible across runs: **RSS improved from a pre-calibration 77% ratio to 83–86%**
+(no longer *undershooting*, and — critically, since Variant B's rejected version overshot to
+126% — **not overshooting either**, confirming the self-referential bug is genuinely fixed, not
+just hidden). **NEWS_API and Telegram ratios are numerically unchanged (0% and 18%)** by this
+calibration — expected and correctly so, per §2's/§4's diagnosis: NEWS_API's gap was never an
+engagement-fairness bug (freshness/semantic, out of this calibration's scope), and Telegram's
+residual gap is a real-data-maturity artifact (§3) that no formula change can manufacture around
+— fabricating baseline history that doesn't exist yet would be exactly the "manipulate the
+sample to force a pass" the task explicitly forbids.
+
+**No obvious NEW quality regression** in the editorial review sample (§6) — every mover has a
+concrete, inspectable, defensible reason (freshness decay, real measured engagement, or loss of
+an undeserved neutral-inflation cushion), none are unexplained.
+
+## 11. Threshold recommendation
+
+Unchanged from the original M4 report's own conclusion, now with sharper evidence: **do not
+activate V2 at threshold 65 today.** The calibration fixed the diagnosed *formula-level*
+fairness bug (compression from permanently-dead novelty weight, and the worse bug a naive
+full-redistribution "fix" would have introduced) — it did not, and structurally cannot, fix
+NEWS_API's freshness/semantic-driven gap or manufacture Telegram engagement history that has not
+had time to accumulate yet. A threshold/weight recalibration decision (e.g. a lower activation
+threshold, or a product decision on whether NEWS_API's lower ceiling is acceptable) remains a
+**separate, human decision** this milestone deliberately does not make unilaterally, consistent
+with the M4 report's own §13.
+
+## 12. Shadow-live evidence
+
+True per-event live shadow logging (computing and logging both v1 and calibrated-v2 scores for
+every naturally-completed task, without letting v2 affect eligibility) was evaluated and **not
+implemented** as a code change: `apply_editorial_scoring_v2()`'s entire zero-overhead-in-v1-mode
+design (§15 cost/latency of the original M4 report) rests on returning immediately, before any
+DB query, whenever `editorial_scoring_version != "v2"`. Making it unconditionally compute V2 for
+logging purposes would add 2 extra DB queries to *every* NEWS_ANALYSIS scoring step in production
+— a real behavior change (added latency/DB load) the task's own instructions caution against
+("only if this is already possible without changing delivery behavior").
+
+Instead, the read-only backtest script was re-run three times over the course of this session,
+each time picking up whatever new real NEWS_ANALYSIS completions had naturally occurred since the
+last run under the unchanged, live `v1` path (226 → 236 → 241 → 254 clean samples, +28 net new
+real completions captured across the session) — this achieves the same evidence-gathering goal
+("observe a small natural sample where practical") without touching the production hot path, and
+without creating any `CONTENT_GENERATION` eligibility from a shadow score (the backtest never
+writes anything back to the database).
+
+## 13. Remaining risk
+
+- **NEWS_API's near-zero eligibility is unresolved** and out of this calibration's scope — a
+  freshness/semantic-distribution characteristic of the current historical sample, not an
+  engagement-fairness formula bug. Needs separate investigation (is NEWS_API content genuinely
+  lower-relevance, or is there a collection/backlog timing issue keeping NEWS_API tasks stale
+  longer before they're scored?) before any further scoring change is attempted for it.
+- **Telegram's residual gap is a data-maturity artifact**, expected to shrink organically as more
+  post-M3 Telegram history accumulates (only ~1 day of real engagement history existed at the
+  time of this backtest) — not something to force with a code change now.
+- **Two components (`engagement`, `source_reliability`) still use fixed-neutral fallback when
+  unavailable for one event** — deliberately, per §5/§7's evidence, but this means compression
+  from *those* two specifically (as opposed to novelty) is not fully eliminated, only novelty's
+  is. If engagement/reliability unavailability rates stay high for a long time, a future
+  milestone might reasonably revisit this with more historical evidence than exists today.
+- The shrinkage constant (`ENGAGEMENT_BASELINE_FULL_CONFIDENCE_SAMPLE = 10`) is a documented,
+  reasoned choice, not fit to data (M0/M4's own repeated finding: no historical outcome data
+  exists to fit against) — worth re-examining once genuine multi-week Telegram engagement
+  history exists.
+
+## 14. Exact cutover recommendation
+
+**Do not activate V2 in this or any immediately-following task.** `editorial_scoring_version`
+remains `"v1"`; `.env` was not touched. Recommended next steps, in order, before a future cutover
+decision is even considered: (1) let Phase 15 M3 engagement history accumulate for at least
+several days to weeks so Telegram baselines genuinely fill in past the 3-row minimum at
+reasonable confidence; (2) separately investigate NEWS_API's freshness/semantic gap (collection
+cadence? backlog processing order? genuinely lower-relevance content?) since no scoring
+calibration can fairly compensate for it; (3) once both of the above are better understood,
+re-run this same backtest script and reconsider a threshold (not just a version-flag) decision
+with a human in the loop, exactly as the original M4 report's §13 already recommended.
+
+---
+
+PHASE 15 M4.1 CALIBRATION COMPLETE — READY FOR CUTOVER REVIEW

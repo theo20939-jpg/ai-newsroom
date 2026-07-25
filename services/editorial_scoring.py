@@ -10,6 +10,34 @@ Split into a pure calculator (`compute_editorial_score_v2`, no I/O, fully unit-t
 services/freshness.py and services/triage.py's own established pure-function convention) and one
 thin async orchestration function (`apply_editorial_scoring_v2`) that does the two extra,
 cheap, indexed DB reads V2 needs and is the only piece capabilities/executor.py calls.
+
+Phase 15 M4.1 fairness calibration (docs/phase15_m4_editorial_scoring_v2_report.md, "M4.1
+FAIRNESS CALIBRATION"): two changes to the formula below, both evidence-based, both
+source-agnostic.
+
+1. `novelty`'s weight is permanently redistributed across the other four components (a constant
+   reweighting applied identically to every event, never conditional on any one event's own
+   data) - novelty has no real signal for *any* event, ever (see its own comment below), so
+   giving it a fixed, non-zero nominal weight was pure dead-weight compression: 10% of every
+   score was a constant that discriminated nothing.
+
+   `engagement` and `source_reliability` deliberately do NOT get this same redistribution
+   treatment when unavailable for one particular event - offline backtesting proved that doing
+   so is a *worse* bug, not a fix: excluding a per-event-conditionally-available component from
+   the weighted average is mathematically equivalent to imputing it as equal to the *average of
+   the story's own other components* (optimistic for strong stories, pessimistic for weak ones),
+   not as neutral. Concretely, an RSS story with no engagement data at all scored higher than an
+   otherwise-identical Telegram story with genuinely-measured, exactly-average engagement -
+   rewarding the absence of data over an honest average measurement, the opposite of the
+   fairness goal. Novelty is exempt from this concern specifically because its unavailability is
+   permanent and universal (not a per-event/per-source fact that varies), so redistributing its
+   weight is a one-time, uniform formula decision, not a per-event judgment call.
+
+2. The engagement percentile is shrunk toward neutral in proportion to same-source baseline
+   sample size (`_baseline_confidence`) - a percentile computed from the minimum-allowed 3-row
+   baseline can only take 4 possible values (0, 1/3, 2/3, 1) and was producing extreme,
+   overconfident 0.0/1.0 outputs from very little evidence. This does not change *what counts as
+   available* (the coverage flags are unchanged) - it changes how much a thin sample is trusted.
 """
 from __future__ import annotations
 
@@ -42,6 +70,11 @@ NEUTRAL_COMPONENT_VALUE = 0.5
 # swing the result arbitrarily. Below the minimum, engagement falls back to neutral and
 # `coverage.source_baseline_available` is reported False, never silently computed anyway.
 MIN_ENGAGEMENT_BASELINE_SAMPLE = 3
+# Phase 15 M4.1: below this sample size, the engagement percentile is shrunk toward neutral
+# proportionally (confidence = baseline_n / this constant, capped at 1.0) rather than trusted at
+# full strength - a 3-row baseline can only ever produce {0, 1/3, 2/3, 1}, too noisy to treat as
+# a confident measurement on its own.
+ENGAGEMENT_BASELINE_FULL_CONFIDENCE_SAMPLE = 10
 # Bounded rolling window (Contract-style "PRODUCT CONFIGURATION", not architecture) - recent
 # same-source events only, not the source's entire history, so the baseline tracks a channel's
 # *current* typical performance rather than being diluted by very old posts.
@@ -58,10 +91,6 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "novelty": 0.10,
 }
 
-_COMPONENT_KEYS: tuple[str, ...] = (
-    "semantic_editorial", "freshness", "engagement", "source_reliability", "novelty",
-)
-
 
 def _clamp01(value: float) -> float:
     return max(0.0, min(1.0, value))
@@ -77,6 +106,13 @@ def _engagement_magnitude(metrics: dict[str, int | None]) -> int:
     return sum(value for value in metrics.values() if value is not None)
 
 
+def _baseline_confidence(baseline_size: int) -> float:
+    """Phase 15 M4.1: linear ramp from `MIN_ENGAGEMENT_BASELINE_SAMPLE` (low confidence) to
+    `ENGAGEMENT_BASELINE_FULL_CONFIDENCE_SAMPLE` (full confidence), capped at 1.0. Deterministic,
+    no fitting - a documented, simple shrinkage schedule, not a statistical model."""
+    return min(1.0, baseline_size / ENGAGEMENT_BASELINE_FULL_CONFIDENCE_SAMPLE)
+
+
 def _compute_engagement_component(
     metrics: dict[str, int | None], baseline_samples: list[int]
 ) -> tuple[float, bool, bool]:
@@ -87,6 +123,12 @@ def _compute_engagement_component(
     cross-source scale differences (a 1M-audience channel is only ever compared against its own
     baseline, never against a small channel's raw counts) and to a single extreme outlier in the
     baseline (percentile rank does not blow up the way a raw ratio would).
+
+    Phase 15 M4.1: the raw percentile is shrunk toward `NEUTRAL_COMPONENT_VALUE` by
+    `_baseline_confidence()` - a bare-minimum 3-row baseline is trusted at only 30% strength, a
+    10+-row baseline at full strength. `source_baseline_available` (and therefore whether
+    engagement participates in the weighted average at all) is unchanged by this - shrinkage
+    only affects how strongly a *available* small sample is trusted, never whether it counts.
     """
     observed = [value for value in metrics.values() if value is not None]
     engagement_available = len(observed) > 0
@@ -98,8 +140,10 @@ def _compute_engagement_component(
 
     current = sum(observed)
     at_or_below = sum(1 for sample in baseline_samples if sample <= current)
-    percentile = at_or_below / len(baseline_samples)
-    return _clamp01(percentile), True, True
+    raw_percentile = at_or_below / len(baseline_samples)
+    confidence = _baseline_confidence(len(baseline_samples))
+    shrunk = NEUTRAL_COMPONENT_VALUE + confidence * (raw_percentile - NEUTRAL_COMPONENT_VALUE)
+    return _clamp01(shrunk), True, True
 
 
 def _band(value: float) -> str:
@@ -131,7 +175,10 @@ def _build_reason(components: dict[str, float], coverage: dict[str, bool]) -> st
     else:
         parts.append("engagement data unavailable")
 
-    rel_word = f"{_band(components['source_reliability'])} source reliability"
+    if coverage["source_reliability_available"]:
+        rel_word = f"{_band(components['source_reliability'])} source reliability"
+    else:
+        rel_word = "source reliability unknown"
     parts.append(rel_word)
 
     sentence = ", ".join(parts)
@@ -173,7 +220,8 @@ def compute_editorial_score_v2(
     # measure, and no Research/Intelligence/Engagement Capability output carries a
     # novelty/duplicate field - docs/phase15_m4_editorial_scoring_v2_report.md §7). A precise
     # novelty score is never fabricated; this is a permanent, honestly-labeled fallback for M4,
-    # not a placeholder awaiting silent replacement.
+    # not a placeholder awaiting silent replacement. Still computed and shown for transparency
+    # (components dict) even though its weight is always 0 in practice - see below.
     novelty = NEUTRAL_COMPONENT_VALUE
     novelty_available = False
 
@@ -185,7 +233,16 @@ def compute_editorial_score_v2(
         "novelty": novelty,
     }
 
-    weighted_sum = sum(components[key] * active_weights[key] for key in _COMPONENT_KEYS)
+    # Phase 15 M4.1: novelty's nominal weight is permanently redistributed across the other four
+    # - a constant reweighting (identical for every event), not a per-event decision. See this
+    # module's own docstring for why engagement/source_reliability do NOT get the same treatment
+    # when unavailable for one particular event.
+    scored_keys = ("semantic_editorial", "freshness", "engagement", "source_reliability")
+    scored_weight_total = sum(active_weights[key] for key in scored_keys)
+    effective_weights = {key: active_weights[key] / scored_weight_total for key in scored_keys}
+    effective_weights["novelty"] = 0.0
+
+    weighted_sum = sum(components[key] * effective_weights[key] for key in scored_keys)
     score = round(_clamp01(weighted_sum) * 100)
 
     coverage = {
@@ -202,7 +259,7 @@ def compute_editorial_score_v2(
         "coverage": coverage,
         "reason": _build_reason(components, coverage),
         "legacy_llm_score": legacy_llm_score,
-        "weights": dict(active_weights),
+        "weights": effective_weights,
     }
 
 
