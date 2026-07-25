@@ -128,8 +128,10 @@ class CapabilityExecutor:
         # no-op, zero-processing passthrough unless fact_safety_mode != "off".
         if step.capability == "quality":
             research_output = context.business.workflow_state.step_results.get("research", {})
+            copywriting_output = context.business.workflow_state.step_results.get("copywriting", {})
             structured_output = apply_fact_safety(
-                news_event.title, news_event.content, news_event.url, research_output, structured_output
+                news_event.title, news_event.content, news_event.url,
+                research_output, copywriting_output, structured_output,
             )
 
         return structured_output

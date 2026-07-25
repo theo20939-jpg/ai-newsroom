@@ -348,6 +348,196 @@ def test_scan_limit_is_at_least_batch_size() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Phase 15 M5.2 - candidate-starvation fix (freshest-editorial-content-first ordering).
+# Every test below exercises only _select_eligible_events() directly - a pure selection-query
+# call, no draft generation, no LLM call, no Telegram send - so "no manual delivery side
+# effects" (the task's own item J) is satisfied structurally, not by a separate assertion.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_starvation_reproduction_fresh_high_score_event_survives_a_full_scan_window(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None
+) -> None:
+    """Reproduces the exact real starvation this milestone fixes: under the OLD ordering
+    (oldest-task-completed-first), a backlog of `scan_limit` older-completed, low-score
+    candidates would fill the entire scan window before a single fresher, genuinely eligible,
+    high-score event is ever considered - even though that fresher event completed its own
+    NEWS_ANALYSIS run only slightly later. Under the NEW ordering (freshest-editorial-content-
+    first), the fresh event's own recent `published_at` guarantees it is scanned regardless of
+    how many older-but-still-freshness-window-eligible tasks exist."""
+    original_scan_limit = settings.content_generation_scan_limit
+    settings.content_generation_scan_limit = 5
+    try:
+        async with factory() as session:
+            now = datetime.now(timezone.utc)
+            old_event_ids = []
+            for _ in range(5):
+                # Old EDITORIAL content (published 10 hours ago) whose NEWS_ANALYSIS task
+                # completed EARLIER (task updated_at) than the fresh event below - exactly the
+                # shape a provider-outage backlog produces (old news, recently caught up on).
+                old_event = await _make_event(session, test_source, published_at=now - timedelta(hours=10))
+                await _make_completed_news_analysis_task(
+                    session, old_event, score=settings.content_generation_min_score,
+                    completed_at=now - timedelta(minutes=2),
+                )
+                old_event_ids.append(old_event.id)
+
+            # Fresh EDITORIAL content (published just now) whose task completed LAST (most
+            # recent task updated_at) - the real scenario: a just-analyzed, genuinely fresh,
+            # high-score story arriving after a backlog of older-but-still-eligible tasks.
+            fresh_event = await _make_event(session, test_source, published_at=now)
+            await _make_completed_news_analysis_task(
+                session, fresh_event, score=settings.content_generation_min_score, completed_at=now,
+            )
+
+            eligible = await _select_eligible_events(session)
+
+            assert fresh_event.id in eligible, (
+                "the fresh, high-score event must not be starved out by an older backlog "
+                "filling the bounded scan window"
+            )
+    finally:
+        settings.content_generation_scan_limit = original_scan_limit
+
+
+@pytest.mark.asyncio
+async def test_b_freshness_priority_orders_by_published_at_descending(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None
+) -> None:
+    original_batch_size = settings.content_generation_batch_size
+    settings.content_generation_batch_size = 1  # forces selection of exactly the single top-priority candidate
+    try:
+        async with factory() as session:
+            now = datetime.now(timezone.utc)
+            old_event = await _make_event(session, test_source, published_at=now - timedelta(hours=5))
+            await _make_completed_news_analysis_task(session, old_event, score=settings.content_generation_min_score)
+            medium_event = await _make_event(session, test_source, published_at=now - timedelta(hours=1))
+            await _make_completed_news_analysis_task(session, medium_event, score=settings.content_generation_min_score)
+            fresh_event = await _make_event(session, test_source, published_at=now)
+            await _make_completed_news_analysis_task(session, fresh_event, score=settings.content_generation_min_score)
+
+            eligible = await _select_eligible_events(session)
+
+            assert eligible == [fresh_event.id]  # the single freshest of the three, not an arbitrary one
+    finally:
+        settings.content_generation_batch_size = original_batch_size
+
+
+@pytest.mark.asyncio
+async def test_c_tie_breaking_is_stable_and_deterministic_across_repeated_calls(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None
+) -> None:
+    """Two events with an identical published_at (a real, possible tie - e.g. two stories
+    ingested from the same source batch) must still produce a stable, reproducible ordering,
+    not one that varies call-to-call - satisfied by the EditorialTask.id ASC tie-breaker."""
+    async with factory() as session:
+        now = datetime.now(timezone.utc)
+        event_a = await _make_event(session, test_source, published_at=now)
+        task_a = await _make_completed_news_analysis_task(session, event_a, score=settings.content_generation_min_score)
+        event_b = await _make_event(session, test_source, published_at=now)
+        task_b = await _make_completed_news_analysis_task(session, event_b, score=settings.content_generation_min_score)
+
+        first_call = await _select_eligible_events(session)
+        second_call = await _select_eligible_events(session)
+
+        assert first_call == second_call  # stable across repeated calls, not merely non-crashing
+        expected_first = event_a.id if task_a.id < task_b.id else event_b.id
+        assert first_call[0] == expected_first  # matches the documented EditorialTask.id ASC tie-break
+
+
+@pytest.mark.asyncio
+async def test_c2_tie_breaking_with_missing_published_at_falls_back_to_collected_at(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None
+) -> None:
+    """A NewsEvent with no published_at at all (a real, common case - many RSS/NEWS_API items
+    never carry one) must not crash the ordering or be silently dropped - it falls back to
+    NewsEvent.collected_at, the same coalesce anchor already established for NEWS_ANALYSIS's own
+    eligibility query (worker/analysis_cycle.py)."""
+    async with factory() as session:
+        event = await _make_event(session, test_source, published_at=None)  # type: ignore[arg-type]
+        await _make_completed_news_analysis_task(session, event, score=settings.content_generation_min_score)
+
+        eligible = await _select_eligible_events(session)
+
+        assert event.id in eligible
+
+
+@pytest.mark.asyncio
+async def test_d_stale_task_outside_freshness_cutoff_remains_ineligible_despite_high_score_and_fresh_content(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None
+) -> None:
+    """Proves the M5.2 ordering change did not touch the existing eligibility WHERE clause: a
+    task whose own `updated_at` (completion time) is older than the freshness cutoff remains
+    excluded, even when paired with a very recent `published_at` and a qualifying score - the
+    cutoff is still evaluated on task-completion time, unchanged, exactly as before this fix."""
+    async with factory() as session:
+        now = datetime.now(timezone.utc)
+        event = await _make_event(session, test_source, published_at=now)  # very fresh content
+        await _make_completed_news_analysis_task(
+            session, event, score=settings.content_generation_min_score,
+            completed_at=now - timedelta(hours=1),  # older than the 3-minute isolated window
+        )
+
+        eligible = await _select_eligible_events(session)
+
+        assert event.id not in eligible
+
+
+@pytest.mark.asyncio
+async def test_e_duplicate_content_generation_sibling_still_excludes_the_freshest_event(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None
+) -> None:
+    """Re-confirms M5.2 did not weaken duplicate protection: even the single freshest, highest-
+    priority candidate is still excluded once any CONTENT_GENERATION sibling exists for it."""
+    async with factory() as session:
+        event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
+        await _make_completed_news_analysis_task(session, event, score=settings.content_generation_min_score)
+        await _make_content_generation_sibling(session, event, TaskStatus.COMPLETED)
+
+        eligible = await _select_eligible_events(session)
+
+        assert event.id not in eligible
+
+
+@pytest.mark.asyncio
+async def test_g_fresh_event_below_threshold_is_not_selected(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None
+) -> None:
+    """The freshest possible event still must not bypass the score threshold - freshness
+    priority is an ordering concern only, never a substitute for the eligibility/score gate."""
+    async with factory() as session:
+        event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
+        await _make_completed_news_analysis_task(session, event, score=settings.content_generation_min_score - 1)
+
+        eligible = await _select_eligible_events(session)
+
+        assert event.id not in eligible
+
+
+def test_h_ordering_contains_no_source_type_reference() -> None:
+    """Structural: the M5.2 ordering fix is source-agnostic by construction - it reads only
+    NewsEvent.published_at/.collected_at, never NewsSource.type or any per-source-type branch."""
+    source = Path("worker/content_cycle.py").read_text(encoding="utf-8")
+    assert "SourceType" not in source
+    assert "source.type" not in source
+    assert "source_type" not in source
+
+
+def test_i_content_cycle_module_imports_no_llm_gateway_or_capability_execution() -> None:
+    """Structural: the M5.2 change (a `func`/`NewsEvent` join for ordering only) introduces no
+    new provider-call surface - content_cycle.py still only imports CapabilityRegistry as a
+    type, never the gateway/executor machinery that would actually dispatch a call."""
+    import_lines = [
+        line.strip() for line in Path("worker/content_cycle.py").read_text(encoding="utf-8").splitlines()
+        if line.strip().startswith(("import ", "from "))
+    ]
+    for line in import_lines:
+        assert "llm_gateway" not in line
+        assert "capabilities.executor" not in line
+
+
+# ---------------------------------------------------------------------------
 # run_content_cycle() - orchestration
 # ---------------------------------------------------------------------------
 

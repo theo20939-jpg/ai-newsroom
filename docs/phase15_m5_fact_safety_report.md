@@ -1,9 +1,11 @@
 # Phase 15 — Editorial Intelligence — M5 Fact Safety and Unsupported Claims Guard — Implementation Report
 
-Status: IMPLEMENTED, TESTED, BACKTESTED, DEPLOYED IN SHADOW MODE. `fact_safety_mode` is `"shadow"`
-— findings are computed and recorded on every real CONTENT_GENERATION run, but **delivery
-behavior is unchanged**: nothing is blocked, no draft's status changes, Telegram sends proceed
-exactly as before. Enforcement is fully implemented but not activated.
+Status: IMPLEMENTED, TESTED, BACKTESTED, DEPLOYED IN SHADOW MODE, LIVE-VALIDATED (M5.2).
+`fact_safety_mode` is `"shadow"` — findings are computed and recorded on every real
+CONTENT_GENERATION run, but **delivery behavior is unchanged**: nothing is blocked, no draft's
+status changes, Telegram sends proceed exactly as before. Enforcement is fully implemented but not
+activated. M5.2 fixed a critical defect (fact safety silently never ran in production — see its own
+section below) and completed live validation on 5 natural drafts.
 
 ---
 
@@ -868,6 +870,268 @@ future session: simply re-check `content_worker`'s natural cycles after the curr
 configuration change is needed, only the passage of normal operating time. No `.env` change, no
 `fact_safety_mode` change, and no `editorial_scoring_version` change were made or are recommended
 at this time.
+
+---
+
+## M5.2 Content candidate starvation fix and live shadow completion
+
+### 1. Exact starvation root cause
+
+`worker/content_cycle.py::_select_eligible_events()` selected `CONTENT_GENERATION` candidates
+with `.order_by(EditorialTask.updated_at.asc()).limit(settings.content_generation_scan_limit)`
+(`scan_limit=50`) — **oldest-completed-`NEWS_ANALYSIS`-task first**, capped at a 50-row window per
+cycle. M5.1's Research outage (already fully diagnosed and recovered in that section) had, during
+its downtime, allowed a large backlog of `NEWS_ANALYSIS`-completed tasks to accumulate with
+`updated_at` timestamps clustered around the outage window. Once Research recovered, every
+30-minute `content_worker` cycle's 50-row scan window was filled entirely by that stale backlog,
+in oldest-first order — a fresh, high-scoring, real-time-relevant event completed *after* the
+backlog could take many cycles to reach the front of a strictly FIFO 50-row window, even though it
+was fully eligible and above threshold the moment it completed. This is a scan-ordering interaction
+with a one-time backlog spike, not a defect in Research, Fact Safety, or scoring.
+
+Confirmed with direct SQL evidence before the fix: of 2 known real, fresh, score-68 eligible
+events, 0 of 2 appeared in the old ordering's top-50 window; both were present further back in the
+same eligible set.
+
+### 2. Old candidate-query behavior
+
+```python
+.order_by(EditorialTask.updated_at.asc())
+.limit(settings.content_generation_scan_limit)
+```
+
+Pure oldest-task-completion-first FIFO, with no regard for the underlying event's own actual
+freshness (`published_at`/`collected_at`).
+
+### 3. Selected minimal fix
+
+Re-ordered the same query to freshest-event-first, reusing the exact `coalesce(published_at,
+collected_at)` anchor pattern already established in `worker/analysis_cycle.py::_select_eligible_task_ids()`
+for `NEWS_ANALYSIS`'s own eligibility query — no new pattern introduced:
+
+```python
+anchor = func.coalesce(NewsEvent.published_at, NewsEvent.collected_at)
+...
+.order_by(anchor.desc(), EditorialTask.id.asc())
+.limit(settings.content_generation_scan_limit)
+```
+
+`EditorialTask.id.asc()` is a stable tie-breaker for events sharing the same anchor timestamp
+(deterministic, repeatable ordering across calls). No change to `scan_limit` (50), the freshness
+cutoff (`content_generation_freshness_cutoff_hours=24.0`, still applied via the unchanged
+`EditorialTask.updated_at >= cutoff` filter), the duplicate-exclusion `~exists(...)` clause, batch
+size, or poll interval. Confirmed with the same direct SQL evidence after the fix: both previously
+starved score-68 events now appear in the top-50 window (2/2).
+
+### 4. Files changed
+
+- `worker/content_cycle.py` — ordering fix (§3); `func` added to the existing `sqlalchemy` import
+  line.
+- `capabilities/executor.py` — unrelated but co-discovered critical fix (§5 below): the `"quality"`
+  step now extracts `context.business.workflow_state.step_results.get("copywriting", {})` and
+  passes it to `apply_fact_safety()` as a new, separate argument.
+- `services/fact_safety.py` — `apply_fact_safety()` signature changed to accept `copywriting_output`
+  separately from `structured_output` (Quality's own real output), and reads `title`/`body` from
+  the former instead of the latter (§5).
+- `tests/test_content_worker_cycle.py` — 9 new tests (A–I, listed in §5 of this milestone's test
+  section below).
+- `tests/test_fact_safety.py` — test harness fix separating fake Copywriting/Quality capabilities
+  to match real production shapes; 2 direct-call tests updated to the new `apply_fact_safety()`
+  signature (§5).
+- `tests/test_phase10_workflow_integration.py` — isolated one pre-existing Phase-10 test from M5's
+  own cross-cutting `"quality"`-step hook via `monkeypatch.setattr(settings, "fact_safety_mode",
+  "off")`, since that test's own purpose (workflow step order/shape) predates and is unrelated to
+  Fact Safety, and `fact_safety_mode` defaults to `"shadow"` (unlike `editorial_scoring_version`'s
+  `"v1"`/off default) so it would otherwise now correctly add a real `fact_safety` key the test
+  never expected.
+
+### 5. Critical defect found during live validation: Fact Safety was never actually running in production
+
+While checking the first natural post-fix drafts for real `fact_safety` data, none was present
+despite `fact_safety_mode=shadow` being active. Root cause: `apply_fact_safety()` read
+`title`/`body` from `structured_output` — **Quality's own real output**
+(`{"passed": bool, "issues": list}` per `QUALITY_CAPABILITY_DEFINITION.expected_output_keys`),
+which never contains `title`/`body` in production. The function's own defensive type guard
+(`if not isinstance(title, str)...: return structured_output`) therefore fired on every single
+real run, silently no-opping Fact Safety for the entire M5/M5.1 shadow period. This was masked by
+all 76 passing `test_fact_safety.py` tests because `_FakeQualityCapability`'s test double
+incorrectly included `title`/`body` keys on its fake Quality output — sharing the exact same wrong
+assumption as the production bug, so no test could have caught it.
+
+Fixed by: (1) adding a `copywriting_output: dict[str, Any]` parameter to `apply_fact_safety()` and
+reading `title`/`body` from it instead; (2) updating `capabilities/executor.py`'s `"quality"` call
+site to extract and pass `context.business.workflow_state.step_results.get("copywriting", {})`;
+(3) splitting the test harness into a correctly-shaped `_FakeCopywritingCapability`
+(`{"title", "body", "hashtags"}`) and `_FakeQualityCapability` (`{"passed", "issues"}` only), with a
+proper 3-step `research → copywriting → quality` registry matching production; (4) updating the 2
+direct-call unit tests (`test_15`, `test_16`) to the new signature. This is the single most
+significant defect found in the entire Phase 15 M3–M5.2 arc — a "tests all green, feature never
+ran in production" case, caught only by inspecting real production data directly, not by any test
+suite. An initial `content_worker` deployment (before this fix) had already produced 5 real drafts
+with silently-absent `fact_safety` data; those were superseded by the corrected redeploy's own
+natural sample (§8).
+
+### 6. Tests and exact results
+
+New tests added to `tests/test_content_worker_cycle.py` (all passing): `test_a_starvation_
+reproduction_fresh_high_score_event_survives_a_full_scan_window`, `test_b_freshness_priority_
+orders_by_published_at_descending`, `test_c_tie_breaking_is_stable_and_deterministic_across_
+repeated_calls`, `test_c2_tie_breaking_with_missing_published_at_falls_back_to_collected_at`,
+`test_d_stale_task_outside_freshness_cutoff_remains_ineligible_despite_high_score_and_fresh_
+content`, `test_e_duplicate_content_generation_sibling_still_excludes_the_freshest_event`,
+`test_g_fresh_event_below_threshold_is_not_selected`, `test_h_ordering_contains_no_source_type_
+reference` (structural — proves the fix is freshness-based, not a source-type rule),
+`test_i_content_cycle_module_imports_no_llm_gateway_or_capability_execution` (structural — proves
+zero new provider calls).
+
+Full regression suite (post-fix, final state): **1144 passed** in the isolated targeted re-runs of
+every file touched this session (`test_fact_safety.py`, `test_content_worker_cycle.py`,
+`test_phase10_workflow_integration.py`, plus the full suite). The only recurring, pre-existing,
+already-documented-in-every-prior-milestone-report failures are: (a) 3
+`content_generation_dry_run` environment-mismatch tests (this environment's live `.env` has
+`content_generation_dry_run=False`; these 3 tests assert the code's own `True` default with no
+monkeypatch — present in every M3–M5.2 full-suite run, unrelated to any change made in this
+milestone); (b) occasional `test_triage_orchestrator_cycle.py` transient failures under full-suite
+DB contention (confirmed passing 14/14 in isolation, 328.90s — this file's own documented
+unscoped-live-DB pattern, unrelated to this milestone's files per direct `grep` confirmation).
+`test_phase10_workflow_integration.py::test_content_generation_reaches_completed_in_exact_step_
+order` — confirmed passing in isolation after the §5 fix and its own `monkeypatch` isolation.
+
+### 7. Deployment
+
+`docker compose build content_worker && docker compose up -d --no-deps content_worker` — twice:
+once for the ordering fix, and a second time after discovering and fixing the §5 defect (the first
+deploy's 5 drafts, produced with the bug still present, were excluded from the live sample and
+superseded by the corrected redeploy's own natural drafts). No other container was rebuilt or
+restarted. No `.env` change. No manual task/draft/event creation. No manual `CONTENT_GENERATION`
+trigger — all 5 sample drafts arose from `content_worker`'s own normal 30-minute polling cycle.
+
+### 8. Live Fact Safety sample (5 natural drafts, post-fix)
+
+| task_id | event | source | score | fact_safety status | claims checked | supported/uncertain/unsupported | highest severity |
+|---|---|---|---|---|---|---|---|
+| `6be6b78b…` | China AI-agent standard | RSS | 72 | pass | 0 | 0/0/0 | — |
+| `c52c5f11…` | SpaceX Starship 13th test | Telegram | 78 | pass | 2 | 2/0/0 | — |
+| `123e66c8…` | SpaceX Starship 13th test | RSS | 78 | pass | 3 | 3/0/0 | — |
+| `1c6f68e5…` | China/Trip.com $770M fine | RSS | 82 | **block** | 4 | 1/0/3 | high |
+| `4a8aa6f9…` | AI/synthetic CRISPR | RSS | 78 | **block** | 5 | 2/0/3 | high |
+
+All 5 tasks reached `COMPLETED`; all 5 produced a `ContentDraft`; `fact_safety_mode` remained
+`"shadow"` throughout, so **none of the 2 "block" verdicts affected delivery** — confirmed both by
+code (`_fact_safety_delivery_decision()` only ever suppresses under `mode == "enforce"`) and by the
+running container's live settings (`content_generation_dry_run=False`, `fact_safety_mode=shadow`
+→ suppression inert). No `ERROR`-level `content_notification_failed` or `content_notification_
+render_failed` log line appears anywhere in `content_worker`'s full log history, indicating no
+Telegram send failure occurred for any of the 5 drafts. Per-message HTTP-level send confirmation
+is **not independently obtainable from current logs** — a pre-existing observability gap, not
+introduced by this milestone: `aiogram`'s own HTTP client, unlike the LLM Gateway's `httpx` client,
+is not logged at `INFO` level, and the cycle's own `notified`/`notification_failed` counters are
+logged only via `extra={...}`, which `core/logging.py`'s plain `%(message)s` formatter never
+renders to stdout.
+
+### 9. False-positive review
+
+Both "block" verdicts were fully traced against their real source text. **Zero true positives**
+(no fabricated or hallucinated claim) in this 5-draft sample. All 5 unsupported findings are false
+positives, all rooted in narrow, previously-uncharacterized entity/currency-matching gaps — not in
+any fabrication by the pipeline:
+
+- **Task `1c6f68e5…` (Trip.com fine), money findings ×2 ("5,2 млрд")**: the source states, verbatim,
+  *"a total of 5.2 billion yuan ($770 million)"* — the draft's claim is factually identical to the
+  source. The finding is a **false positive caused by a missing currency word**: `services/
+  fact_safety.py`'s money normalizer only recognizes USD/EUR/GBP/RUB magnitude/currency words; it
+  has no entry for Yuan/CNY (Russian "юаней"), so "5,2 млрд юаней" cannot resolve to a currency and
+  therefore can never match, even against an identical mention. A real, newly-discovered gap given
+  this pipeline covers Chinese-market news routinely.
+- **Task `1c6f68e5…`, entity finding ("КНР")**: the source says "China" (English); the draft says
+  "КНР" (Russian abbreviation for "People's Republic of China"). Same real-world entity, no
+  string-level or cross-language equivalence in the current matcher — a **false positive** from a
+  cross-language entity-equivalence gap.
+- **Task `4a8aa6f9…` (CRISPR), entity findings ×2 ("ИИ")**: the source title says "Искусственный
+  интеллект" (spelled-out); the draft uses "ИИ" (the standard Russian abbreviation for the same
+  phrase, same language). A **false positive** from an abbreviation-expansion gap — the same class
+  of limitation as "КНР"/"China" above, but monolingual.
+- **Task `4a8aa6f9…`, entity finding ("CRISPR-система")**: the source mentions bare "CRISPR"; the
+  draft's token is the compound "CRISPR-система" ("CRISPR-system", a generic Russian descriptive
+  suffix attached to the proper noun). The existing suffix-stripping logic (built for legal-entity
+  suffixes like ООО/Inc/LLC) does not cover generic descriptive suffixes. A **false positive** from
+  an entity-normalization gap.
+- The CRISPR draft itself is worth noting as evidence the pipeline is behaving well independent of
+  Fact Safety: its body explicitly hedges the source's own unverified claim ("without data on
+  methodology, metrics, experimental conditions, and a primary source, it's too early to call this
+  a confirmed breakthrough") — good editorial caution, not a fabrication risk.
+
+Per this task's explicit instruction ("do not expand the parser during this task unless a critical
+runtime defect prevents it from functioning"), **none of these three gaps (Yuan currency, cross-
+language/abbreviation entity equivalence, generic descriptive-suffix stripping) were fixed now** —
+they are documented here for a future calibration milestone, on top of the previously-documented
+English Title-Case-entity and Russian-inflection limitations (§13 of the base M5 report).
+
+### 10. Provider-call impact
+
+Zero new provider calls attributable to this milestone's own fix — confirmed structurally
+(`test_i_content_cycle_module_imports_no_llm_gateway_or_capability_execution`, `test_18_fact_
+safety_module_imports_no_llm_gateway_or_capability`, both unchanged/still passing). The 5 real
+`CONTENT_GENERATION` runs in §8 made exactly the same `research → intelligence → copywriting →
+quality` LLM call pattern the workflow always makes; Fact Safety and the ordering fix are both
+pure/DB-only code paths with no LLM call of their own.
+
+### 11. Runtime health
+
+- All 5 containers `Up`/healthy at time of writing (`postgres`, `redis` also reporting `healthy`).
+- `fact_safety_mode`: confirmed `"shadow"` (read live from the running `content_worker`).
+- `editorial_scoring_version`: confirmed `"v1"`.
+- `.env`: untouched — untracked/gitignored throughout, never written to by this milestone.
+- `content_generation_scan_limit=50`, `content_generation_freshness_cutoff_hours=24.0`,
+  `content_generation_poll_interval_seconds=1800` — all confirmed unchanged, read live from the
+  running container; `core/config.py` has no diff in this milestone's changeset at all.
+- No historical row was mutated or deleted — this milestone only ever read the database, except
+  for the two `content_worker` rebuild/redeploys (§7), which touch no data directly.
+- No synthetic/test event entered the live flow — all 5 sample drafts trace to real RSS/Telegram
+  `NewsEvent` rows with real source URLs.
+- No manual Telegram message was sent — all 5 sends (or non-sends) were `content_worker`'s own
+  normal cycle behavior, `dry_run=False`, no code path invoked outside the worker's own loop.
+
+### 12. Enforcement recommendation
+
+**`fact_safety_mode` remains `shadow`; enforcement is not recommended at this time.** Two things
+now anchor this instead of one: (1) the pre-existing English Title-Case-entity risk (base M5
+report §17, unchanged), and (2) this milestone's own newly-characterized false-positive classes
+(§9) — a missing Yuan currency mapping and unresolved abbreviation/cross-language entity
+equivalence — which, in this very sample, would have caused `enforce` mode to block 2 of 5 (40%)
+of real, factually-accurate drafts had it been active. The false-positive *rate* is still not
+well-characterized on a sample this small (5 drafts, 2 of which happened to trigger the newly-found
+gaps) — a larger natural sample, plus the targeted currency/entity-equivalence fixes recommended
+in §9, are the natural next calibration milestone before `enforce` can be safely considered.
+
+### 13. Remaining limitations
+
+- Currency vocabulary covers only USD/EUR/GBP/RUB; Yuan/CNY (and by extension any other
+  non-covered currency) claims can never match, producing guaranteed false positives on any
+  Chinese-market (or other uncovered-currency) story with a monetary claim.
+- Entity matching has no abbreviation-expansion (ИИ/Искусственный интеллект), no cross-language
+  equivalence (КНР/China), and no generic descriptive-suffix stripping (CRISPR-система/CRISPR) —
+  three distinct, now-evidenced gaps beyond the previously-documented English Title-Case-entity and
+  Russian-inflection limitations.
+- Per-message Telegram delivery confirmation is not obtainable from current logs (§8) — a
+  pre-existing observability gap or, if this ever tightens as a project requirement, a candidate
+  for adding `logger.info` visibility into `NotificationOutcome` at the point of the existing
+  `notified`/`notification_failed` counters (structurally already present in `ContentCycleResult`,
+  just not rendered to stdout by the current plain-text formatter).
+- All limitations here are characterization gaps in Fact Safety's own claim-matching, not defects
+  in the underlying pipeline's own factual accuracy — this sample found zero true positives (no
+  fabricated claim reached delivery), consistent with the base M5 historical backtest.
+
+### 14. Final verdict
+
+**PHASE 15 M5.2 COMPLETE — LIVE SHADOW VALIDATED, ENFORCEMENT REMAINS BLOCKED.** The starvation
+defect is fixed and proven (§1–§3, §6 tests, §7 deploy). A separate, more significant defect
+(Fact Safety silently never running in production, §5) was found and fixed during this milestone's
+own live validation. 5 real natural drafts now carry genuine Fact Safety data (§8), all reaching
+`COMPLETED` and proceeding to normal delivery (shadow mode, delivery-neutral by design and
+confirmed by runtime settings). Zero true positives; all 5 unsupported findings are characterized,
+narrow false positives (§9) that sharpen — rather than close — the case for a future calibration
+milestone before `enforce` can be safely activated.
 
 ---
 

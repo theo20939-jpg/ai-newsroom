@@ -9,7 +9,7 @@ from typing import Any
 from uuid import UUID
 
 from aiogram import Bot
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
@@ -79,15 +79,32 @@ def _extract_scoring_result(workflow: dict[str, Any] | None) -> int | None:
 async def _select_eligible_events(session: AsyncSession) -> list[UUID]:
     """SQL-side: status, workflow-name match, duplicate exclusion (§3 of the Plan - the entire
     duplicate-prevention mechanism), freshness bound (a technical safety boundary only - see the
-    Plan's own §0/§3, never an editorial-freshness control), ordering, and a scan-limit cap are
-    all evaluated by Postgres. Only the final, capped result rows are ever materialized into
-    Python, for the score-threshold check below - the worker never loads an unbounded number of
-    NEWS_ANALYSIS tasks (Plan §3's own scan-limit guarantee)."""
+    Plan's own §0/§3, never an editorial-freshness control - unchanged by Phase 15 M5.2, still
+    `EditorialTask.updated_at >= cutoff`), ordering, and a scan-limit cap are all evaluated by
+    Postgres. Only the final, capped result rows are ever materialized into Python, for the
+    score-threshold check below - the worker never loads an unbounded number of NEWS_ANALYSIS
+    tasks (Plan §3's own scan-limit guarantee).
+
+    Phase 15 M5.2: ordering changed from `EditorialTask.updated_at.asc()` (oldest-task-COMPLETED-
+    first - a technical FIFO, not an editorial signal) to freshest-EDITORIAL-content-first, using
+    the exact same `coalesce(NewsEvent.published_at, NewsEvent.collected_at)` anchor
+    `worker/analysis_cycle.py::_select_eligible_task_ids()` already established as this
+    codebase's one authoritative freshness field - not a new convention. Root cause this fixes
+    (docs/phase15_m5_fact_safety_report.md, "M5.2..."): after any sustained processing gap (a
+    provider outage, a burst of collection), old-task-completion-first ordering can starve
+    genuinely fresh, high-scoring stories behind a backlog of older-but-still-cutoff-eligible
+    tasks once that backlog exceeds `content_generation_scan_limit` - freshest-first ordering
+    means a truly fresh eligible story is never pushed out of the scan window by an older one,
+    regardless of backlog depth. The eligibility WHERE clause (which rows qualify at all) is
+    completely unchanged - only the ordering of already-eligible rows, before LIMIT, changed.
+    """
     cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.content_generation_freshness_cutoff_hours)
     ContentGenTask = aliased(EditorialTask)
+    anchor = func.coalesce(NewsEvent.published_at, NewsEvent.collected_at)
 
     stmt = (
         select(EditorialTask.id, EditorialTask.event_id, EditorialTask.workflow)
+        .join(NewsEvent, EditorialTask.event_id == NewsEvent.id)
         .where(
             EditorialTask.status == TaskStatus.COMPLETED,
             EditorialTask.workflow["workflow_name"].as_string() == WorkflowType.NEWS_ANALYSIS.value,
@@ -101,7 +118,7 @@ async def _select_eligible_events(session: AsyncSession) -> list[UUID]:
                 )
             ),
         )
-        .order_by(EditorialTask.updated_at.asc(), EditorialTask.id.asc())
+        .order_by(anchor.desc(), EditorialTask.id.asc())
         .limit(settings.content_generation_scan_limit)
     )
     rows = (await session.execute(stmt)).all()

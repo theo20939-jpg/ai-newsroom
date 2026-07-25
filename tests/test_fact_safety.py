@@ -333,13 +333,15 @@ def test_14_null_missing_evidence_produces_uncertain_not_fabricated_support() ->
 
 def test_15_shadow_mode_records_but_does_not_block(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "fact_safety_mode", "shadow")
-    original = {"title": "X", "body": "Компания привлекла $2 billion", "hashtags": []}
+    copywriting_output = {"title": "X", "body": "Компания привлекла $2 billion", "hashtags": []}
+    quality_output = {"passed": True, "issues": []}
     out = apply_fact_safety(
         "Startup raises $1.7 billion", "The company announced it raised $1.7 billion in funding.",
-        None, {}, original,
+        None, {}, copywriting_output, quality_output,
     )
     assert out["fact_safety"]["status"] == "block"  # correctly detected...
-    assert out["title"] == "X" and out["body"] == original["body"]  # ...but nothing about the draft itself changed
+    assert out["passed"] is True  # ...but Quality's own original field is untouched
+    assert "title" not in out and "body" not in out  # never leaks copywriting's own fields into quality's result
     # And, at the enforcement-decision level, shadow mode never suppresses delivery:
     effective_dry_run, suppressed = _fact_safety_delivery_decision(False, "shadow", "block")
     assert suppressed is False
@@ -348,9 +350,10 @@ def test_15_shadow_mode_records_but_does_not_block(monkeypatch: pytest.MonkeyPat
 
 def test_16_off_mode_preserves_previous_behavior_exactly(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "fact_safety_mode", "off")
-    original = {"title": "X", "body": "Y", "hashtags": []}
-    out = apply_fact_safety("Any title", "Any content", None, {}, original)
-    assert out is original  # identity, not just equality - zero processing occurred
+    copywriting_output = {"title": "X", "body": "Y", "hashtags": []}
+    quality_output = {"passed": True, "issues": []}
+    out = apply_fact_safety("Any title", "Any content", None, {}, copywriting_output, quality_output)
+    assert out is quality_output  # identity, not just equality - zero processing occurred
     assert "fact_safety" not in out
 
 
@@ -496,10 +499,26 @@ def test_claim_counts_are_internally_consistent() -> None:
 
 
 class _FakeQualityCapability:
-    """Deterministic fake mirroring capabilities/quality_capability.py's real output shape -
-    zero LLMGateway, zero network. `draft` is what the *upstream* Copywriting step "wrote" -
-    this fake stands in for Quality's own step but reports on that draft, exactly like the real
-    QualityCapability's own `_format_copywriting_draft()` reads step_results["copywriting"]."""
+    """Deterministic fake mirroring capabilities/quality_capability.py's REAL output shape
+    exactly - `{"passed": bool, "issues": list}` ONLY, zero LLMGateway, zero network. Phase 15
+    M5.2 regression: an earlier version of this fake incorrectly also included `title`/`body`
+    keys (which the real QualityCapability's own output never carries - confirmed by
+    `QUALITY_CAPABILITY_DEFINITION.expected_output_keys`), which silently masked a real bug in
+    `services.fact_safety.apply_fact_safety()` reading the draft text from the wrong step
+    result. Fixed here and in `apply_fact_safety()` itself - see its own docstring."""
+
+    async def execute(self, context: CapabilityContext) -> CapabilityResult:
+        now = datetime.now(UTC)
+        return CapabilityResult(
+            status="SUCCESS", structured_output={"passed": True, "issues": []},
+            calls=[], started_at=now, finished_at=now, duration_seconds=0.0,
+        )
+
+
+class _FakeCopywritingCapability:
+    """Deterministic fake mirroring capabilities/copywriting_capability.py's real output shape
+    (`{"title", "body", "hashtags"}`) - this, not Quality, is where the draft text actually
+    lives in production."""
 
     def __init__(self, draft_title: str, draft_body: str) -> None:
         self._draft_title = draft_title
@@ -509,7 +528,7 @@ class _FakeQualityCapability:
         now = datetime.now(UTC)
         return CapabilityResult(
             status="SUCCESS",
-            structured_output={"passed": True, "issues": [], "title": self._draft_title, "body": self._draft_body},
+            structured_output={"title": self._draft_title, "body": self._draft_body, "hashtags": []},
             calls=[], started_at=now, finished_at=now, duration_seconds=0.0,
         )
 
@@ -527,12 +546,17 @@ class _FakeResearchCapability:
 
 
 def _quality_workflow_registry() -> WorkflowRegistry:
+    """Matches production's real CONTENT_GENERATION step sequence
+    (workflows/definitions/content_generation.py): research -> copywriting -> quality - not a
+    shortened research -> quality sequence, since M5.2's own regression is specifically about
+    fact safety needing the real "copywriting" step's own result."""
     registry = WorkflowRegistry()
     registry.register(
         WorkflowDefinition(
             name=WorkflowType.CONTENT_GENERATION, version=1,
             steps=[
                 WorkflowStepDefinition(name="research", capability="research", timeout_seconds=10),
+                WorkflowStepDefinition(name="copywriting", capability="copywriting", timeout_seconds=10),
                 WorkflowStepDefinition(name="quality", capability="quality", timeout_seconds=10),
             ],
             max_iterations=3,
@@ -555,10 +579,17 @@ def _quality_capability_registry(research_facts: list[str], draft_title: str, dr
     )
     registry.register(
         CapabilityDefinition(
+            name="copywriting", version=1, config=CapabilityConfig(timeout_seconds=10),
+            required_context=["news_event"], expected_output_keys=["title", "body", "hashtags"],
+        ),
+        _FakeCopywritingCapability(draft_title, draft_body),
+    )
+    registry.register(
+        CapabilityDefinition(
             name="quality", version=1, config=CapabilityConfig(timeout_seconds=10),
             required_context=["news_event"], expected_output_keys=["passed", "issues"],
         ),
-        _FakeQualityCapability(draft_title, draft_body),
+        _FakeQualityCapability(),
     )
     registry.seal()
     return registry
@@ -600,7 +631,7 @@ async def test_off_mode_leaves_quality_step_result_completely_unchanged(
 
     assert result.status == "COMPLETED"
     quality_result = next(r for r in result.step_results if r.step_name == "quality").result
-    assert quality_result == {"passed": True, "issues": [], "title": "X", "body": "Компания привлекла $2 billion"}
+    assert quality_result == {"passed": True, "issues": []}  # QualityCapability's real, unmodified shape
     assert "fact_safety" not in quality_result
     assert await _ai_execution_count(db_session) == 0
 

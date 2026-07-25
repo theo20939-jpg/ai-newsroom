@@ -30,6 +30,7 @@ from capabilities.intelligence_capability import CAPABILITY_NAME as INTELLIGENCE
 from capabilities.quality_capability import CAPABILITY_NAME as QUALITY_CAPABILITY_NAME
 from capabilities.registry import build_registry
 from capabilities.research_capability import CAPABILITY_NAME as RESEARCH_CAPABILITY_NAME
+from core.config import settings
 from database.models.news_event import NewsEvent
 from database.models.editorial_task import TaskPriority
 from integrations.llm_gateway.protocol import GenerateRequest, GenerateResponse
@@ -84,7 +85,7 @@ def _request_text(request: GenerateRequest) -> str:
 
 @pytest.mark.asyncio
 async def test_content_generation_reaches_completed_in_exact_step_order(
-    db_session: AsyncSession, real_news_event: NewsEvent
+    db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """1. Research output is available to Intelligence.
     2. Upstream results are available to Copywriting as defined by its contract.
@@ -92,7 +93,13 @@ async def test_content_generation_reaches_completed_in_exact_step_order(
     4. Quality actually receives/evaluates the generated Copywriting content.
     5. The workflow reaches COMPLETED when all four capabilities succeed.
 
-    Never claims ContentDraft persistence (M3's own, not-yet-built responsibility)."""
+    Never claims ContentDraft persistence (M3's own, not-yet-built responsibility).
+
+    Phase 15 M5 isolation: `fact_safety_mode` defaults to "shadow" (unlike
+    `editorial_scoring_version`'s own "v1"/off default), so it is explicitly pinned to "off"
+    here - this test asserts on QualityCapability's own, unmodified step_results shape, a
+    Phase 10 concern predating and unrelated to M5's own cross-cutting "quality"-step hook."""
+    monkeypatch.setattr(settings, "fact_safety_mode", "off")
     gateway = FakeLLMGateway(
         generate_responses=[
             _generate_response(CANONICAL_RESEARCH_OUTPUT),

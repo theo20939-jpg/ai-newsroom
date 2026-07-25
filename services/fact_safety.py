@@ -537,11 +537,24 @@ def apply_fact_safety(
     news_event_content: str | None,
     news_event_url: str | None,
     research_output: dict[str, Any],
+    copywriting_output: dict[str, Any],
     structured_output: dict[str, Any],
 ) -> dict[str, Any]:
     """Called only from `capabilities/executor.py`, only for the "quality" step, only after
     QualityCapability's own LLM call already succeeded. Returns `structured_output` completely
     unchanged when `fact_safety_mode == "off"` (M5.6's zero-processing rollback path).
+
+    `copywriting_output` - NOT `structured_output` - is where the actual draft `title`/`body`
+    live: `QualityCapability`'s own real output schema is `{"passed": bool, "issues": list}`
+    only (confirmed by `capabilities/quality_capability.py`'s own `QUALITY_CAPABILITY_DEFINITION.
+    expected_output_keys`) - it never carries the draft text itself. `copywriting_output` is
+    `context.business.workflow_state.step_results["copywriting"]`, already present on the
+    context with zero extra DB query, exactly like `research_output`. (A real bug during initial
+    M5 development: `apply_fact_safety` originally read `title`/`body` from `structured_output`
+    - i.e. Quality's own output - which is always `{}` for those two keys in production, so the
+    function always silently no-opped via the guard below; only local test doubles that
+    incorrectly included `title`/`body` on their *fake* Quality output masked this. Fixed in
+    Phase 15 M5.2, alongside the regression test that would have caught it.)
 
     On "shadow"/"enforce", the original `structured_output` (`passed`/`issues`, preserved
     verbatim) is merged with a `"fact_safety"` key - purely additive, matching
@@ -553,11 +566,14 @@ def apply_fact_safety(
     if settings.fact_safety_mode == "off":
         return structured_output
 
-    title = structured_output.get("title")
-    body = structured_output.get("body")
+    title = copywriting_output.get("title")
+    body = copywriting_output.get("body")
     if not isinstance(title, str) or not isinstance(body, str):
         # Defensive only, mirrors apply_editorial_scoring_v2()'s identical guard: Copywriting's
-        # own floor-validation already guarantees these are strings in practice.
+        # own floor-validation already guarantees these are strings in practice - this only
+        # fires if Copywriting's own step never ran or produced no result, which the workflow's
+        # own step ordering (copywriting before quality) makes structurally unreachable for a
+        # successfully-running "quality" step.
         return structured_output
 
     evidence = FactEvidence(
