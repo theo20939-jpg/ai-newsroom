@@ -133,6 +133,28 @@ class Settings(BaseSettings):
     # schemas/source_definition.py's SourceDefinition.language).
     default_content_language: str = "ru"
 
+    # Phase 15 M4: Editorial Scoring V2 (docs/phase15_m4_editorial_scoring_v2_report.md).
+    # Explicit default "v1" - matches every other Phase 9-14 automation flag's own established
+    # "opt-in, safe default" convention (news_collection_enabled, news_analysis_enabled,
+    # content_generation_enabled, verify_capabilities_at_boot). Switching to "v2" requires no
+    # database migration - the breakdown lives in the existing EditorialTask.workflow
+    # step_results JSON (services.editorial_scoring). Switching back to "v1" (no code change,
+    # no DB change) is the rollback path.
+    editorial_scoring_version: Literal["v1", "v2"] = "v1"
+    # Weights for services.editorial_scoring.compute_editorial_score_v2()'s five components -
+    # must sum to 1.0 (tests/test_editorial_scoring.py enforces this against these exact
+    # defaults, mirroring content_generation_scan_limit's own established
+    # tested-not-validated convention - this Settings class has no cross-field-validator
+    # precedent). Reasoned, not fit to historical outcome data (none exists yet - see
+    # docs/phase15_editorial_intelligence_discovery_report.md §9) - kept here, not hardcoded,
+    # so they are tunable without a code change once M4's backtest/live-validation evidence
+    # supports a different distribution.
+    editorial_scoring_weight_semantic: float = Field(default=0.40, ge=0.0, le=1.0)
+    editorial_scoring_weight_freshness: float = Field(default=0.20, ge=0.0, le=1.0)
+    editorial_scoring_weight_engagement: float = Field(default=0.20, ge=0.0, le=1.0)
+    editorial_scoring_weight_source_reliability: float = Field(default=0.10, ge=0.0, le=1.0)
+    editorial_scoring_weight_novelty: float = Field(default=0.10, ge=0.0, le=1.0)
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""

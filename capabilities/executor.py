@@ -40,6 +40,7 @@ from capabilities.errors import (
     ValidationCapabilityError,
 )
 from capabilities.registry import CapabilityRegistry
+from services.editorial_scoring import apply_editorial_scoring_v2
 from workflows.errors import PermanentStepFailureError, StepExecutionError, TaskNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -107,7 +108,18 @@ class CapabilityExecutor:
                 "without raising a CapabilityError - contract violation."
             )
 
-        return result.structured_output or {}
+        structured_output = result.structured_output or {}
+
+        # Phase 15 M4: deterministic Editorial Score V2 post-processing, only for the "scoring"
+        # step, only after its own LLM call already succeeded above - see
+        # services/editorial_scoring.py's own docstring for why this is the correct seam (it is
+        # a no-op, zero-DB-query passthrough unless editorial_scoring_version == "v2").
+        if step.capability == "scoring":
+            structured_output = await apply_editorial_scoring_v2(
+                self._session, news_event, structured_output, task_id=self._task_id
+            )
+
+        return structured_output
 
     def _build_context(
         self, task: EditorialTask, news_event: NewsEvent, step: WorkflowStepDefinition, attempt: int
