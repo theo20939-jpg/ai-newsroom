@@ -21,6 +21,17 @@ logger = logging.getLogger(__name__)
 MESSAGE_FETCH_LIMIT = 50
 
 
+def _reactions_count(message: Message) -> int | None:
+    """Deterministic aggregate: sum of every reaction type's count (Phase 15 M3.3) - no
+    sentiment/taxonomy, just a total. `None` when the message carries no `reactions` object at
+    all (reactions disabled, or Telethon simply has nothing for this message) - a message with
+    reactions enabled but zero cast reactions has `reactions.results == []`, which correctly
+    sums to `0`, not `None`."""
+    if message.reactions is None:
+        return None
+    return sum(result.count for result in message.reactions.results)
+
+
 class TelegramSourceAdapter(SourceAdapter):
     """Fetches recent messages from a Telegram channel via Telethon."""
 
@@ -55,7 +66,14 @@ class TelegramSourceAdapter(SourceAdapter):
 
     @staticmethod
     def _to_raw_item(message: Message, channel: str) -> RawNewsItem | None:
-        """Convert one Telethon message into a RawNewsItem, or None to skip it."""
+        """Convert one Telethon message into a RawNewsItem, or None to skip it.
+
+        Phase 15 M3: views/forwards/replies/reactions are read directly from the `Message`
+        object already fetched above by `iter_messages()` - no additional Telethon/Telegram API
+        call is made to obtain them. Each is left `None` (not 0) when Telethon itself has no
+        value for it (private/limited channels, older messages, reactions/comments disabled,
+        or a message type that doesn't carry the field at all) - see `_reactions_count()`.
+        """
         if message.action is not None:
             return None  # service message (join/leave/pin/...), not news content
 
@@ -64,4 +82,8 @@ class TelegramSourceAdapter(SourceAdapter):
             text=message.text or None,
             url=f"https://t.me/{channel}/{message.id}",
             published_at=message.date,
+            views_count=message.views,
+            forwards_count=message.forwards,
+            replies_count=message.replies.replies if message.replies is not None else None,
+            reactions_count=_reactions_count(message),
         )

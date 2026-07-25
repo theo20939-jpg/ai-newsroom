@@ -50,6 +50,7 @@ class RSSSourceAdapter(SourceAdapter):
 
         return RawNewsItem(
             external_id=external_id,
+            title=entry.get("title"),
             text=text,
             url=entry.get("link"),
             published_at=parse_entry_date(entry),

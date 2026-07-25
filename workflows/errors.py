@@ -41,7 +41,7 @@ class NewsEventNotFoundError(WorkflowServiceError):
 
 
 class DuplicateActiveTaskError(WorkflowServiceError):
-    """Raised when an active (CREATED/RUNNING) task already exists for (event_id, workflow_type)."""
+    """Raised when a task already exists, in any status, for (event_id, workflow_type)."""
 
 
 class WorkflowRunnerError(Exception):

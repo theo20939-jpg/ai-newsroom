@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models.editorial_task import TaskPriority, TaskStatus
+from database.models.editorial_task import EditorialTask, TaskPriority, TaskStatus
 from database.models.news_event import NewsEvent
 from schemas.editorial_task import EditorialTaskCreate
 from schemas.workflow import WorkflowType
@@ -55,6 +55,28 @@ async def test_create_task_unknown_workflow_type_raises(
 @pytest.mark.asyncio
 async def test_duplicate_active_task_raises(db_session: AsyncSession, real_news_event: NewsEvent) -> None:
     await workflow_service.create_task(db_session, _command(real_news_event.id))
+
+    with pytest.raises(DuplicateActiveTaskError):
+        await workflow_service.create_task(db_session, _command(real_news_event.id, priority=TaskPriority.A))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("prior_status", [TaskStatus.CREATED, TaskStatus.RUNNING, TaskStatus.COMPLETED, TaskStatus.FAILED])
+async def test_duplicate_task_blocked_regardless_of_prior_status(
+    db_session: AsyncSession, real_news_event: NewsEvent, prior_status: TaskStatus
+) -> None:
+    """Phase 15 M0's own documented gap: 108 NewsEvent rows in production had a second
+    NEWS_ANALYSIS task created after the first had already reached a terminal status
+    (COMPLETED/FAILED), because the old duplicate check only looked at CREATED/RUNNING.
+    A second create_task() call for the same (event, workflow_type) must be blocked no
+    matter what status the existing task is in - mirrors the already-established,
+    already-tested CONTENT_GENERATION-side contract in
+    tests/test_content_worker_cycle.py::test_duplicate_content_generation_sibling_excludes_regardless_of_status."""
+    first = await workflow_service.create_task(db_session, _command(real_news_event.id))
+    persisted = await db_session.get(EditorialTask, first.id)
+    assert persisted is not None
+    persisted.status = prior_status
+    await db_session.commit()
 
     with pytest.raises(DuplicateActiveTaskError):
         await workflow_service.create_task(db_session, _command(real_news_event.id, priority=TaskPriority.A))

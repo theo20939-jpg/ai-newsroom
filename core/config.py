@@ -93,6 +93,37 @@ class Settings(BaseSettings):
     news_collection_enabled: bool = False
     news_collection_interval_seconds: int = Field(default=1800, gt=0)
 
+    # Phase 13 M4: automatic NEWS_ANALYSIS execution worker. Disabled by default, matching
+    # news_collection_enabled's own established convention. No max_daily_ai_cost - cost exposure
+    # is bounded entirely by news_analysis_freshness_cutoff_hours/news_analysis_batch_size/no
+    # automatic FAILED retry (docs/phase13_automatic_news_analysis_implementation_plan.md §21).
+    news_analysis_enabled: bool = False
+    news_analysis_poll_interval_seconds: int = Field(default=300, gt=0)
+    news_analysis_batch_size: int = Field(default=5, gt=0)
+    news_analysis_freshness_cutoff_hours: float = Field(default=48.0, gt=0)
+
+    # Phase 14: automatic CONTENT_GENERATION trigger + Telegram editorial notification (docs/
+    # phase14_autonomous_newsroom_implementation_plan.md §6). Disabled by default, matching
+    # news_analysis_enabled's own established convention.
+    content_generation_enabled: bool = False
+    content_generation_poll_interval_seconds: int = Field(default=300, gt=0)
+    content_generation_batch_size: int = Field(default=5, gt=0)
+    # SQL-side candidate scan cap, evaluated before Python-side score filtering - must be >=
+    # content_generation_batch_size (enforced by tests/test_settings_phase7.py against the
+    # defaults, not by a new cross-field validator - this codebase's Settings class has no
+    # existing cross-field-validator precedent to extend).
+    content_generation_scan_limit: int = Field(default=50, gt=0)
+    content_generation_min_score: int = Field(default=70, ge=0, le=100)
+    # Technical safety boundary only (bounds initial-enablement backlog cost, gives tests a safe
+    # isolation lever) - NOT an editorial "is this still newsworthy" control. That judgment, to
+    # the extent Phase 14 makes one at all, lives entirely in content_generation_min_score above.
+    content_generation_freshness_cutoff_hours: float = Field(default=24.0, gt=0)
+    # Safe default: dry-run only. Live sending requires a deliberate, explicit flip to False,
+    # plus editorial_chat_id already configured (services/telegram_notifier.py fails loud
+    # otherwise) - never a silent path to sending a real Telegram message.
+    content_generation_dry_run: bool = True
+    editorial_chat_id: int | None = None
+
     # Default editorial target output language (docs/
     # content_generation_language_final_implementation_plan.md). Injected explicitly by
     # capabilities.executor.CapabilityExecutor._build_context() into every

@@ -117,6 +117,21 @@ _INTELLIGENCE_OUTPUT = {
     "recommendation": "Publish with standard priority",
 }
 
+_ENGAGEMENT_OUTPUT = {
+    "engagement_potential_score": 0.65,
+    "audience_fit": "AI/tech enthusiasts",
+    "reasoning": "Novel technical development with broad relevance.",
+}
+
+# NEWS_ANALYSIS's real, frozen WorkflowDefinition (workflows/definitions/news_analysis.py) has
+# FOUR capability-backed steps, not three: research -> intelligence -> engagement_analysis ->
+# scoring. ScoringCapability was already registered (Phase 8) before Phase 13 - once
+# engagement_analysis succeeds, the workflow proceeds to and requires a successful scoring step
+# too, for the task to reach COMPLETED. {"score": ..., "rationale": ...} mirrors this
+# repository's own established canonical scoring-output shape (e.g.
+# tests/test_phase8_cross_cutting_regression.py, tests/test_capability_boot_wiring_e2e.py).
+_SCORING_OUTPUT = {"score": 85, "rationale": "Broadly relevant."}
+
 
 def _prompt_repository() -> PromptRepository:
     return FilePromptRepository(_PROMPTS_ROOT)
@@ -366,19 +381,27 @@ async def test_step_results_mechanism_surfaces_a_result_already_persisted_before
 
 
 # ---------------------------------------------------------------------------
-# 4. Negative/boundary (Contract §13): the real, frozen NEWS_ANALYSIS WorkflowDefinition,
-#    run through the real, unmodified WorkflowRunner, still ends FAILED - now at the third
-#    step (engagement_analysis/"engagement", unregistered) instead of the first, since
-#    research/intelligence are now independently executable. Never used as a completion proof.
+# 4. Positive (Phase 13 M1, docs/phase13_automatic_news_analysis_implementation_plan.md §7.4):
+#    supersedes the removed prior negative-boundary test (see git history) - the negative
+#    boundary it proved (engagement unregistered) no longer exists once EngagementCapability is
+#    registered. The real, frozen NEWS_ANALYSIS WorkflowDefinition, run
+#    through the real, unmodified WorkflowRunner/CapabilityExecutor/CapabilityRegistry, now
+#    completes all four capability-backed steps (research -> intelligence ->
+#    engagement_analysis -> scoring) and reaches COMPLETED.
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_real_news_analysis_still_fails_at_engagement_analysis_step(
+async def test_real_news_analysis_now_completes_through_engagement_analysis(
     db_session: AsyncSession, real_news_event: NewsEvent
 ) -> None:
     gateway = FakeLLMGateway(
-        generate_responses=[_generate_response(CANONICAL_RESEARCH_OUTPUT), _generate_response(_INTELLIGENCE_OUTPUT)]
+        generate_responses=[
+            _generate_response(CANONICAL_RESEARCH_OUTPUT),
+            _generate_response(_INTELLIGENCE_OUTPUT),
+            _generate_response(_ENGAGEMENT_OUTPUT),
+            _generate_response(_SCORING_OUTPUT),
+        ]
     )
     capability_registry = build_registry(gateway, _prompt_repository(), AllowingBudgetGuard(), ToolRegistry())  # type: ignore[arg-type]
 
@@ -387,8 +410,27 @@ async def test_real_news_analysis_still_fails_at_engagement_analysis_step(
     executor = CapabilityExecutor(db_session, task.id, capability_registry)
     result = await WorkflowRunner(executor=executor, registry=real_workflow_registry).run(db_session, task.id)
 
-    assert result.status == "FAILED"
-    assert [r.step_name for r in result.step_results] == ["research", "intelligence", "engagement_analysis"]
+    assert result.status == "COMPLETED"
+    assert [r.step_name for r in result.step_results] == [
+        "research",
+        "intelligence",
+        "engagement_analysis",
+        "scoring",
+    ]
     assert result.step_results[0].status == "SUCCESS"
     assert result.step_results[1].status == "SUCCESS"
-    assert result.step_results[2].status == "FAILED"  # "engagement" is not a registered Capability
+    assert result.step_results[2].status == "SUCCESS"
+    assert result.step_results[2].result == _ENGAGEMENT_OUTPUT
+    assert result.step_results[3].status == "SUCCESS"
+    assert result.step_results[3].result == _SCORING_OUTPUT
+
+    # Propagation proof (mirrors this file's own established pattern): Engagement's own
+    # request must reflect both Research's and Intelligence's prior output, not just the raw
+    # event - the third gateway call (index 2) is Engagement's.
+    engagement_request_text = _request_text(gateway.received_requests[2])
+    assert "did not run" not in engagement_request_text.lower()
+    canonical_facts = CANONICAL_RESEARCH_OUTPUT["facts"]
+    assert isinstance(canonical_facts, list)
+    for fact in canonical_facts:
+        assert fact in engagement_request_text
+    assert _INTELLIGENCE_OUTPUT["angle"] in engagement_request_text

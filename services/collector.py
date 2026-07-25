@@ -2,8 +2,13 @@
 
 Loads active NewsSource rows, fetches raw items through the adapter
 matching each source's type, cleans and deduplicates them, and stores new
-NewsEvent rows with status=NEW and category=UNKNOWN. Contains no AI,
-scoring, ranking or content generation logic - orchestration only.
+NewsEvent rows with status=NEW. category is assigned deterministically from
+the resolved source's config-level tags (services.event_category, Phase 15
+M2) - never UNKNOWN by default, only when no tag maps to a known category.
+Real engagement metrics (views/forwards/replies/reactions_count), where the
+source exposes them, are persisted verbatim - never fabricated (Phase 15 M3).
+Contains no AI, scoring, ranking or content generation logic - orchestration
+only.
 """
 import asyncio
 import hashlib
@@ -18,7 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from telethon.errors import FloodWaitError
 
-from database.models.news_event import EventCategory, EventStatus, NewsEvent
+from database.models.news_event import EventStatus, NewsEvent
 from database.models.news_source import NewsSource
 from database.session import async_session_factory
 from integrations.sources.base import SourceAdapter, SourceFetchContext
@@ -26,6 +31,7 @@ from schemas.raw_news_item import RawNewsItem
 from schemas.source_definition import SourceDefinition
 from services import cleaning, deduplication
 from services.adapter_registry import AdapterResolution, build_registry
+from services.event_category import categorize_from_tags
 from services.source_registry import SourceRegistryReport, load_source_pack
 
 logger = logging.getLogger(__name__)
@@ -125,7 +131,7 @@ async def _process_source(
     raw_items = await _fetch_with_retry(resolution.adapter, source, context)
 
     for raw in raw_items:
-        await _process_item(session, source, raw, report)
+        await _process_item(session, source, raw, resolution.definition, report)
 
     await session.commit()
 
@@ -165,7 +171,11 @@ async def _fetch_with_retry(
 
 
 async def _process_item(
-    session: AsyncSession, source: NewsSource, raw: RawNewsItem, report: CollectionReport
+    session: AsyncSession,
+    source: NewsSource,
+    raw: RawNewsItem,
+    definition: SourceDefinition | None,
+    report: CollectionReport,
 ) -> None:
     """Clean one raw item, hash it, and store it as a NewsEvent unless it is a duplicate."""
     cleaned = cleaning.clean_item(raw)
@@ -183,10 +193,14 @@ async def _process_item(
         title=cleaned.title,
         content=cleaned.text,
         url=cleaned.url,
-        category=EventCategory.UNKNOWN,
+        category=categorize_from_tags(definition.tags if definition is not None else None),
         published_at=cleaned.published_at,
         hash=content_hash,
         status=EventStatus.NEW,
+        views_count=cleaned.views_count,
+        forwards_count=cleaned.forwards_count,
+        replies_count=cleaned.replies_count,
+        reactions_count=cleaned.reactions_count,
     )
 
     try:

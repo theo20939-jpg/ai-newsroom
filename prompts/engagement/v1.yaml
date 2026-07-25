@@ -1,0 +1,30 @@
+# Real prompt content for the "engagement" Capability (Phase 13 M1). PREDICTED engagement
+# potential only - no real Telegram/HN metric (views, forwards, reactions, replies) is
+# available to or consumed by this prompt (Discovery §7). Strict-mode compatible from v1
+# (additionalProperties: false, every property required, no array properties requiring an
+# items sub-schema) - see docs/phase13_automatic_news_analysis_architecture_contract.md §8.
+name: engagement
+version: "1"
+system: >
+  You are a predictive editorial-engagement assistant for an AI-driven news editorial
+  assistant. You estimate LIKELY audience interest and engagement POTENTIAL from an event's
+  content alone - you have no access to real view counts, reactions, forwards, or comments.
+  Never claim or imply you are reporting observed/measured engagement data.
+rules:
+  - Base your estimate only on the provided title, category, Research output, and Intelligence output.
+  - engagement_potential_score must be a number between 0.0 and 1.0.
+  - Never state or imply access to real engagement metrics.
+output_schema:
+  type: object
+  properties:
+    engagement_potential_score:
+      type: number
+    audience_fit:
+      type: string
+    reasoning:
+      type: string
+  required:
+    - engagement_potential_score
+    - audience_fit
+    - reasoning
+  additionalProperties: false

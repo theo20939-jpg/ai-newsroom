@@ -31,6 +31,36 @@ services:
       postgres:
         condition: service_healthy
 
+  news_analysis_worker:
+    build: .
+    container_name: ai_newsroom_news_analysis_worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+    command: ["python", "-m", "worker.analysis_main"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  content_worker:
+    build: .
+    container_name: ai_newsroom_content_worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+    command: ["python", "-m", "worker.content_main"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   postgres:
     image: postgres:16-alpine
     container_name: ai_newsroom_postgres

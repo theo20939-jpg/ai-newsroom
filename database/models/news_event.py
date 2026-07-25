@@ -3,7 +3,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -59,6 +59,14 @@ class NewsEvent(Base):
     status: Mapped[EventStatus] = mapped_column(
         Enum(EventStatus, name="event_status"), nullable=False, default=EventStatus.NEW, index=True
     )
+    # Phase 15 M3: real, observed engagement metrics captured at collection time, where the
+    # source exposes them. NULL means "unavailable from this source" - never conflated with a
+    # real, observed 0 (see services/cleaning.py and integrations/sources/telegram_source.py).
+    # RSS/web-sourced events always have all four NULL; no value is ever fabricated.
+    views_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    forwards_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    replies_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reactions_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -47,6 +47,24 @@ ATOM_BODY = b"""<?xml version="1.0" encoding="utf-8"?>
 </feed>
 """
 
+# Shaped after the real, live-observed malformation (Phase 15 M0 discovery/observation
+# report): Google News RSS wraps the real headline in an anchor inside <description>,
+# while <title> itself stays a clean, readable headline.
+GOOGLE_NEWS_STYLE_BODY = b"""<?xml version="1.0"?>
+<rss version="2.0">
+  <channel>
+    <title>Google News: Artificial Intelligence</title>
+    <item>
+      <title>OpenAI announces GPT-5 Turbo</title>
+      <link>https://news.google.com/articles/abc</link>
+      <guid>https://news.google.com/articles/abc</guid>
+      <description>&lt;a href="https://news.google.com/articles/abc"&gt;OpenAI announces GPT-5 Turbo&lt;/a&gt;&amp;nbsp;&amp;nbsp;&lt;font color="#6f6f6f"&gt;Example News&lt;/font&gt;</description>
+      <pubDate>Wed, 03 Jan 2024 09:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
+"""
+
 
 def _source(url: str | None) -> NewsSource:
     return NewsSource(name="Test", type=SourceType.RSS, url=url)
@@ -64,6 +82,7 @@ async def test_fetch_parses_rss_entries(monkeypatch: pytest.MonkeyPatch) -> None
     assert len(items) == 2
     assert items[0].external_id == "https://example.com/first"
     assert items[0].url == "https://example.com/first"
+    assert items[0].title == "First post"
     assert items[0].text == "Body of the first post"
     assert items[0].published_at is not None
 
@@ -79,7 +98,29 @@ async def test_fetch_parses_atom_entries(monkeypatch: pytest.MonkeyPatch) -> Non
 
     assert len(items) == 1
     assert items[0].external_id == "https://example.com/releases/1.0"
+    assert items[0].title == "Release 1.0"
     assert items[0].text == "Release notes for 1.0"
+
+
+@pytest.mark.asyncio
+async def test_fetch_captures_clean_title_separately_from_html_heavy_description(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Root-cause regression (Phase 15 M1): the adapter itself must pass through the
+    feed's own <title> element, not only the HTML-wrapped <description> - normalization
+    and validation of the two candidates is services.cleaning's job, but the adapter
+    must not silently drop the clean candidate before cleaning ever sees it."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=GOOGLE_NEWS_STYLE_BODY)
+
+    _patch_httpx_client(monkeypatch, handler)
+
+    items = await RSSSourceAdapter().fetch(_source("https://news.google.com/rss"), CONTEXT)
+
+    assert len(items) == 1
+    assert items[0].title == "OpenAI announces GPT-5 Turbo"
+    assert items[0].text.startswith("<a href=")
 
 
 @pytest.mark.asyncio

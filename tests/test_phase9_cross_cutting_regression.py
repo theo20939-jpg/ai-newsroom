@@ -78,7 +78,7 @@ def test_no_phase9_test_pairs_real_news_analysis_with_completed_status() -> None
             continue  # this file's own docstring/text legitimately names both tokens
         text = path.read_text(encoding="utf-8")
         if "NEWS_ANALYSIS" in text and '"COMPLETED"' in text and "status ==" in text:
-            if "test_real_news_analysis_still_fails_at_engagement_analysis_step" not in text:
+            if "test_real_news_analysis_now_completes_through_engagement_analysis" not in text:
                 offending_files.append(path.name)
 
     assert offending_files == []

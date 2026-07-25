@@ -48,6 +48,7 @@ async def real_committed_event(
     *,
     status: EventStatus = EventStatus.NEW,
     updated_at: datetime | None = None,
+    title: str = "Concurrency test event",
 ) -> AsyncIterator[UUID]:
     """Insert a real, committed NewsSource + NewsEvent pair (not wrapped in the
     db_session fixture's rollback-on-teardown SAVEPOINT, since the concurrency tests
@@ -60,7 +61,7 @@ async def real_committed_event(
 
         event = NewsEvent(
             source_id=source.id,
-            title="Concurrency test event",
+            title=title,
             category=EventCategory.UNKNOWN,
             hash=f"claims-test-{uuid4()}",
             status=status,
@@ -226,6 +227,37 @@ async def test_active_task_blocks_recovery_regardless_of_age(
                 event_id=event_id,
                 priority=TaskPriority.B,
                 status=TaskStatus.CREATED,
+                workflow={"workflow_name": "NEWS_ANALYSIS", "workflow_version": 1, "step_results": []},
+            )
+            session.add(task)
+            await session.commit()
+
+        async with factory() as session:
+            candidates = await _select_recovery_candidates(session, now=now, staleness_threshold_seconds=1)
+        assert event_id not in {c.id for c in candidates}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("terminal_status", [TaskStatus.COMPLETED, TaskStatus.FAILED])
+async def test_terminal_task_blocks_recovery_regardless_of_age(
+    factory: async_sessionmaker[AsyncSession], terminal_status: TaskStatus
+) -> None:
+    """Phase 15 M1: the exact previously-open gap (Phase 15 M0 discovery) - a NEWS_ANALYSIS
+    task that already reached COMPLETED/FAILED must still block this event from being
+    treated as a recovery candidate. Before this fix, only CREATED/RUNNING blocked
+    recovery, so a PROCESSING event whose task had already finished kept being
+    "recovered" and given a brand-new, unwanted duplicate NEWS_ANALYSIS task on every
+    later stale pass - the mechanism that produced 108 duplicated NewsEvent rows in
+    production."""
+    now = datetime.now(UTC)
+    very_old = now - timedelta(days=30)
+
+    async with real_committed_event(factory, status=EventStatus.PROCESSING, updated_at=very_old) as event_id:
+        async with factory() as session:
+            task = EditorialTask(
+                event_id=event_id,
+                priority=TaskPriority.B,
+                status=terminal_status,
                 workflow={"workflow_name": "NEWS_ANALYSIS", "workflow_version": 1, "step_results": []},
             )
             session.add(task)

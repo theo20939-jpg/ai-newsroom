@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from database.models.ai_execution import AIExecution
 from database.models.content_draft import ContentDraft
 from database.models.editorial_task import EditorialTask, TaskStatus
-from database.models.news_event import NewsEvent
+from database.models.news_event import EventCategory, NewsEvent
 from database.models.news_source import NewsSource, SourceType
 from database.session import async_session_factory as production_session_factory
 from schemas.raw_news_item import RawNewsItem
@@ -90,23 +90,53 @@ async def test_source(factory: async_sessionmaker[AsyncSession]) -> AsyncIterato
 
 
 def _fake_seam(
-    source: NewsSource, items: list[RawNewsItem], *, error: Exception | None = None
+    source: NewsSource,
+    items: list[RawNewsItem],
+    *,
+    error: Exception | None = None,
+    definition: SourceDefinition | None = None,
 ) -> tuple[FakeSourceAdapter, dict]:
     """Build a fake source_pack_loader/adapter_resolver_factory pair for run_collection_cycle(),
     scoped to resolve only the given test-owned source - never any other active NewsSource row
-    in the shared database (Plan §12.0)."""
+    in the shared database (Plan §12.0).
+
+    `definition`, when given, is handed straight through to FakeAdapterRegistry (Phase 15 M2) -
+    the exact same object services.collector._process_item now reads .tags from to assign
+    NewsEvent.category, mirroring how services.adapter_registry.AdapterRegistry.resolve() hands
+    back a real SourceDefinition in production.
+    """
     adapter = FakeSourceAdapter(items=items, error=error)
 
     def fake_source_pack_loader() -> tuple[list[SourceDefinition], SourceRegistryReport]:
         return [], SourceRegistryReport()  # unused by the fake resolver below
 
     def fake_adapter_resolver_factory(_definitions: list) -> FakeAdapterRegistry:
-        return FakeAdapterRegistry(adapter, resolvable_source_ids={source.id})
+        return FakeAdapterRegistry(adapter, resolvable_source_ids={source.id}, definition=definition)
 
     return adapter, {
         "source_pack_loader": fake_source_pack_loader,
         "adapter_resolver_factory": fake_adapter_resolver_factory,
     }
+
+
+def _make_definition(*, tags: list[str]) -> SourceDefinition:
+    """A minimal, valid SourceDefinition for M2 category-assignment tests - every field besides
+    `tags` is an arbitrary valid placeholder, since only `.tags` is read by
+    services.event_category.categorize_from_tags()."""
+    return SourceDefinition(
+        id="phase15_m2_test_source",
+        name="Phase 15 M2 Test Source",
+        category="media",
+        type="rss",
+        url="https://example.com/phase15-m2-test-feed.xml",
+        language="en",
+        region="global",
+        priority=50,
+        reliability=0.5,
+        fetch_interval="30m",
+        enabled=True,
+        tags=tags,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -316,3 +346,85 @@ async def test_repeated_triage_does_not_create_duplicate_active_tasks(
         ).scalars().all()
 
     assert len(tasks) == 1, "a second scheduled triage pass must not create a duplicate active task"
+
+
+# ---------------------------------------------------------------------------
+# Phase 15 M2 - category assignment from the resolved source's config-level tags
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_collected_event_category_assigned_from_definition_tags(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource
+) -> None:
+    item = RawNewsItem(external_id=f"phase15-m2-test-item-{uuid4()}", text="An AI research article")
+    definition = _make_definition(tags=["ai", "llm", "research"])
+    _adapter, seam = _fake_seam(test_source, [item], definition=definition)
+
+    report = await run_collection_cycle(session_factory=factory, **seam)
+    assert report.events_created == 1
+
+    async with factory() as session:
+        event = (
+            await session.execute(select(NewsEvent).where(NewsEvent.source_id == test_source.id))
+        ).scalars().one()
+
+    assert event.category == EventCategory.AI
+
+
+@pytest.mark.asyncio
+async def test_collected_event_category_prefers_specific_tag_over_ai(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource
+) -> None:
+    """Mirrors a real source-pack entry (nvidia_blog: ['ai', 'gpu', 'hardware', 'robotics',
+    'nvidia']) - proves the mapping is not a silent 'everything = AI' fallback."""
+    item = RawNewsItem(external_id=f"phase15-m2-test-item-{uuid4()}", text="A new GPU announcement")
+    definition = _make_definition(tags=["ai", "gpu", "hardware"])
+    _adapter, seam = _fake_seam(test_source, [item], definition=definition)
+
+    await run_collection_cycle(session_factory=factory, **seam)
+
+    async with factory() as session:
+        event = (
+            await session.execute(select(NewsEvent).where(NewsEvent.source_id == test_source.id))
+        ).scalars().one()
+
+    assert event.category == EventCategory.HARDWARE
+
+
+@pytest.mark.asyncio
+async def test_collected_event_category_stays_unknown_for_unrecognized_tags(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource
+) -> None:
+    item = RawNewsItem(external_id=f"phase15-m2-test-item-{uuid4()}", text="Unclassifiable content")
+    definition = _make_definition(tags=["totally-unrecognized-tag"])
+    _adapter, seam = _fake_seam(test_source, [item], definition=definition)
+
+    await run_collection_cycle(session_factory=factory, **seam)
+
+    async with factory() as session:
+        event = (
+            await session.execute(select(NewsEvent).where(NewsEvent.source_id == test_source.id))
+        ).scalars().one()
+
+    assert event.category == EventCategory.UNKNOWN
+
+
+@pytest.mark.asyncio
+async def test_collected_event_category_stays_unknown_without_a_resolved_definition(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource
+) -> None:
+    """No SourceDefinition resolves for this source (e.g. a manually imported source with no
+    matching pack entry, AdapterResolution.definition=None) - regression: must safely stay
+    UNKNOWN, never raise and never guess."""
+    item = RawNewsItem(external_id=f"phase15-m2-test-item-{uuid4()}", text="No definition available")
+    _adapter, seam = _fake_seam(test_source, [item])  # definition=None, the existing default
+
+    await run_collection_cycle(session_factory=factory, **seam)
+
+    async with factory() as session:
+        event = (
+            await session.execute(select(NewsEvent).where(NewsEvent.source_id == test_source.id))
+        ).scalars().one()
+
+    assert event.category == EventCategory.UNKNOWN

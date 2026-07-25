@@ -48,6 +48,7 @@ from integrations.prompts.protocol import PromptRepository
 from services.budget_guard import BudgetGuard
 
 from capabilities.copywriting_capability import COPYWRITING_CAPABILITY_DEFINITION, CopywritingCapability
+from capabilities.engagement_capability import ENGAGEMENT_CAPABILITY_DEFINITION, EngagementCapability
 from capabilities.intelligence_capability import INTELLIGENCE_CAPABILITY_DEFINITION, IntelligenceCapability
 from capabilities.quality_capability import QUALITY_CAPABILITY_DEFINITION, QualityCapability
 from capabilities.research_capability import RESEARCH_CAPABILITY_DEFINITION, ResearchCapability
@@ -137,5 +138,6 @@ def build_registry(
     registry.register(RESEARCH_CAPABILITY_DEFINITION, ResearchCapability(gateway, prompt_repository))
     registry.register(INTELLIGENCE_CAPABILITY_DEFINITION, IntelligenceCapability(gateway, prompt_repository))
     registry.register(COPYWRITING_CAPABILITY_DEFINITION, CopywritingCapability(gateway, prompt_repository))
+    registry.register(ENGAGEMENT_CAPABILITY_DEFINITION, EngagementCapability(gateway, prompt_repository))
     registry.seal()
     return registry

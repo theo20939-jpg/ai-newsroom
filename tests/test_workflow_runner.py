@@ -8,13 +8,20 @@ integer >= 1) rather than the real registered definitions' 30s/120s budgets,
 so they add only a few real seconds to the suite instead of minutes.
 """
 import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
+from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+import pytest_asyncio
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
+from core.config import settings
 from database.models.editorial_task import EditorialTask, TaskPriority, TaskStatus
-from database.models.news_event import NewsEvent
+from database.models.news_event import EventCategory, NewsEvent
+from database.models.news_source import NewsSource, SourceType
 from schemas.editorial_task import EditorialTaskCreate, EditorialTaskRead
 from schemas.workflow import (
     WorkflowDefinition,
@@ -314,3 +321,155 @@ async def test_whole_workflow_timeout_fails_task_distinctly_from_step_timeout(
     assert failure is not None
     assert failure["error_type"] == "WorkflowTimeoutError"
     assert "timeout" in failure["message"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Phase 13 M2: atomic CREATED->RUNNING claim, proven under genuine concurrency (docs/
+# phase13_automatic_news_analysis_implementation_plan.md §8.1/§8.2/§19). Two fully independent
+# AsyncSession/connection pairs, real Postgres row-locking - never the shared
+# tests/conftest.py::db_session fixture (single physical SAVEPOINT connection, cannot model a
+# genuine cross-connection race) - mirrors tests/test_triage_orchestrator_claims.py's own
+# already-proven concurrency-test shape for _claim_new_event() exactly, not invented fresh.
+# ---------------------------------------------------------------------------
+
+def _independent_session_factory() -> tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
+    """A fresh engine + session factory, fully independent of any other test's connection -
+    required for genuine cross-connection concurrency proofs. Mirrors
+    tests/test_triage_orchestrator_claims.py's own module-local helper of the same name."""
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    return engine, async_sessionmaker(engine, expire_on_commit=False)
+
+
+@asynccontextmanager
+async def _real_committed_created_task(
+    factory: async_sessionmaker[AsyncSession],
+) -> AsyncIterator[UUID]:
+    """Insert a real, committed NewsSource + NewsEvent + EditorialTask(CREATED, a throwaway
+    single-step CONTENT_GENERATION registry) - not wrapped in db_session's rollback SAVEPOINT,
+    since the concurrency test needs genuinely separate, independently-committing sessions -
+    and delete all three on exit, FK-safe order, regardless of what the test did to them."""
+    registry = _single_step_registry(step_timeout=10, workflow_timeout=30)
+    async with factory() as session:
+        source = NewsSource(name=f"claim-test-{uuid4()}", type=SourceType.RSS, active=True)
+        session.add(source)
+        await session.flush()
+
+        event = NewsEvent(
+            source_id=source.id,
+            title="Atomic claim concurrency test event",
+            category=EventCategory.UNKNOWN,
+            hash=f"claim-test-{uuid4()}",
+        )
+        session.add(event)
+        await session.flush()
+        await session.commit()
+        event_id = event.id
+        source_id = source.id
+
+        task = await workflow_service.create_task(
+            session, _command(event_id, WorkflowType.CONTENT_GENERATION), registry=registry
+        )
+        task_id = task.id
+
+    try:
+        yield task_id
+    finally:
+        async with factory() as session:
+            existing_task = await session.get(EditorialTask, task_id)
+            if existing_task is not None:
+                await session.delete(existing_task)
+            existing_event = await session.get(NewsEvent, event_id)
+            if existing_event is not None:
+                await session.delete(existing_event)
+            existing_source = await session.get(NewsSource, source_id)
+            if existing_source is not None:
+                await session.delete(existing_source)
+            await session.commit()
+
+
+class _CountingAlwaysSucceeds:
+    """Spy StepExecutor - proves the claim loser never enters CapabilityExecutor/executor path
+    at all (its own execute() call count must remain 0)."""
+
+    def __init__(self) -> None:
+        self.call_count = 0
+
+    async def execute(self, step: WorkflowStepDefinition) -> dict[str, Any]:
+        self.call_count += 1
+        return {"ok": True}
+
+
+@pytest_asyncio.fixture
+async def _claim_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
+    engine, session_factory = _independent_session_factory()
+    yield session_factory
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_atomic_claim_exactly_one_winner_under_real_concurrency(
+    _claim_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    registry = _single_step_registry(step_timeout=10, workflow_timeout=30)
+
+    async with _real_committed_created_task(_claim_factory) as task_id:
+        winner_executor = _CountingAlwaysSucceeds()
+        loser_executor = _CountingAlwaysSucceeds()
+
+        async def _attempt(executor: _CountingAlwaysSucceeds) -> str:
+            async with _claim_factory() as session:
+                runner = WorkflowRunner(executor=executor, registry=registry)
+                try:
+                    result = await runner.run(session, task_id)
+                    return result.status
+                except (TaskAlreadyRunningError, TaskAlreadyCompletedError):
+                    return "LOST_RACE"
+
+        results = await asyncio.gather(_attempt(winner_executor), _attempt(loser_executor))
+
+        # Exactly one of the two attempts actually ran the workflow (reached COMPLETED); the
+        # other lost the race and made zero capability/executor calls.
+        outcomes = sorted(results)
+        assert outcomes == ["COMPLETED", "LOST_RACE"]
+
+        winner_calls = winner_executor.call_count
+        loser_calls = loser_executor.call_count
+        # Exactly one executor was ever invoked (the winner, exactly once - one step, no
+        # retry needed); the other made zero calls, regardless of which local variable
+        # ("winner_executor"/"loser_executor") actually won the real race.
+        assert sorted([winner_calls, loser_calls]) == [0, 1]
+
+        async with _claim_factory() as verify_session:
+            final_task = await verify_session.get(EditorialTask, task_id)
+            assert final_task is not None
+            assert final_task.status == TaskStatus.COMPLETED  # never left RUNNING, no ambiguity
+
+
+@pytest.mark.asyncio
+async def test_atomic_claim_loser_never_marked_failed(
+    _claim_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The claim loser raises TaskAlreadyRunningError/TaskAlreadyCompletedError - it must never
+    cause the task to be (re-)marked FAILED merely because it lost the race."""
+    registry = _single_step_registry(step_timeout=10, workflow_timeout=30)
+
+    async with _real_committed_created_task(_claim_factory) as task_id:
+
+        async def _attempt() -> str:
+            async with _claim_factory() as session:
+                runner = WorkflowRunner(executor=_CountingAlwaysSucceeds(), registry=registry)
+                try:
+                    result = await runner.run(session, task_id)
+                    return result.status
+                except (TaskAlreadyRunningError, TaskAlreadyCompletedError):
+                    return "LOST_RACE"
+
+        results = await asyncio.gather(_attempt(), _attempt())
+
+        assert sorted(results) == ["COMPLETED", "LOST_RACE"]
+
+        async with _claim_factory() as verify_session:
+            final_task = await verify_session.get(EditorialTask, task_id)
+            assert final_task is not None
+            assert final_task.status != TaskStatus.FAILED
+            assert final_task.status == TaskStatus.COMPLETED

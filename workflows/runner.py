@@ -36,6 +36,7 @@ from datetime import datetime, timezone
 from typing import Any, Protocol
 from uuid import UUID
 
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models.editorial_task import EditorialTask, TaskStatus
@@ -111,16 +112,34 @@ class WorkflowRunner:
         task = await session.get(EditorialTask, task_id)
         if task is None:
             raise TaskNotFoundError(f"No EditorialTask with id {task_id}")
-        if task.status == TaskStatus.RUNNING:
-            raise TaskAlreadyRunningError(f"EditorialTask {task_id} is already RUNNING")
-        if task.status in (TaskStatus.COMPLETED, TaskStatus.FAILED):
+
+        now = datetime.now(timezone.utc)
+        claim_result = await session.execute(
+            update(EditorialTask)
+            .where(EditorialTask.id == task_id, EditorialTask.status == TaskStatus.CREATED)
+            .values(status=TaskStatus.RUNNING, updated_at=now)
+        )
+        await session.commit()
+
+        if claim_result.rowcount != 1:  # type: ignore[attr-defined]
+            # Someone else already claimed/completed/failed this task (or it was never CREATED).
+            # task.status in memory may be stale relative to what we just tried to commit - force
+            # a reload so the exception raised below reflects the true, current, authoritative
+            # state.
+            await session.refresh(task)
+            if task.status == TaskStatus.RUNNING:
+                raise TaskAlreadyRunningError(f"EditorialTask {task_id} is already RUNNING")
             raise TaskAlreadyCompletedError(f"EditorialTask {task_id} is already {task.status.value}")
+
+        # Claim succeeded at the database level - sync the already-loaded in-memory object so
+        # every downstream read (this method's own remaining logic, and any future maintainer
+        # reading this code) sees a consistent, non-stale task.status. No ambiguity window
+        # exists after this line.
+        task.status = TaskStatus.RUNNING
+        task.updated_at = now
 
         state = WorkflowExecutionState.model_validate(task.workflow)
         definition = self._registry.resolve(state.workflow_name)
-
-        task.status = TaskStatus.RUNNING
-        await session.commit()
 
         logger.info("Workflow %s starting for task %s", state.workflow_name.value, task_id)
 

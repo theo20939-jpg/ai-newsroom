@@ -22,6 +22,8 @@ import pytest
 
 from capabilities.copywriting_capability import CAPABILITY_NAME as COPYWRITING_CAPABILITY_NAME
 from capabilities.copywriting_capability import COPYWRITING_CAPABILITY_DEFINITION
+from capabilities.engagement_capability import CAPABILITY_NAME as ENGAGEMENT_CAPABILITY_NAME
+from capabilities.engagement_capability import ENGAGEMENT_CAPABILITY_DEFINITION
 from capabilities.intelligence_capability import CAPABILITY_NAME as INTELLIGENCE_CAPABILITY_NAME
 from capabilities.intelligence_capability import INTELLIGENCE_CAPABILITY_DEFINITION
 from capabilities.quality_capability import CAPABILITY_NAME as QUALITY_CAPABILITY_NAME
@@ -47,6 +49,7 @@ _ACTIVE_STRUCTURED_OUTPUT_CAPABILITIES: list[tuple[str, str, CapabilityDefinitio
     (RESEARCH_CAPABILITY_NAME, "2", RESEARCH_CAPABILITY_DEFINITION),
     (INTELLIGENCE_CAPABILITY_NAME, "2", INTELLIGENCE_CAPABILITY_DEFINITION),
     (COPYWRITING_CAPABILITY_NAME, "2", COPYWRITING_CAPABILITY_DEFINITION),
+    (ENGAGEMENT_CAPABILITY_NAME, "1", ENGAGEMENT_CAPABILITY_DEFINITION),
 ]
 
 

@@ -27,6 +27,7 @@ from database.models.news_source import NewsSource
 from database.session import async_session_factory
 from schemas.editorial_task import EditorialTaskCreate
 from schemas.workflow import WorkflowType
+from services.cleaning import is_valid_title
 from services.triage import decide_triage
 from services.workflow_service import _find_active_task, create_task
 from workflows.errors import DuplicateActiveTaskError
@@ -75,15 +76,19 @@ async def _select_recovery_candidates(
     exact precedence order):
 
         status == PROCESSING
-        AND no active (CREATED/RUNNING) EditorialTask exists for it
+        AND no EditorialTask already exists for it (any status - Phase 15 M1;
+            was CREATED/RUNNING-only, see _find_active_task()'s own docstring
+            for why that let a completed/failed sibling go unnoticed)
         AND (now - updated_at) > staleness_threshold_seconds
 
-    `PROCESSING` + no-active-task alone is NOT sufficient - a legitimately in-flight
-    claim also transiently has no active task; only once its age exceeds the
-    threshold does it become a candidate. The active-task check takes precedence over
-    staleness and is evaluated first per candidate (an event with an active task is
+    `PROCESSING` + no-existing-task alone is NOT sufficient - a legitimately in-flight
+    claim also transiently has no task yet; only once its age exceeds the
+    threshold does it become a candidate. The existing-task check takes precedence over
+    staleness and is evaluated first per candidate (an event with an existing task is
     never a candidate, regardless of how old `updated_at` is) - _find_active_task()
-    is reused unmodified, never reimplemented, exactly as the Contract requires.
+    is reused unmodified here (not reimplemented as a second, parallel query), exactly
+    as the Contract requires; Phase 15 M1 fixed its one shared implementation, not this
+    call site.
 
     Age is computed with strict inequality (`>`, not `>=`) - an event whose age
     exactly equals the threshold is treated as NOT yet stale (Contract §7.6 rule 3,
@@ -148,6 +153,7 @@ class TriageCycleReport:
     tasks_created: int = 0
     claim_races_lost: int = 0
     duplicate_active_task_outcomes: int = 0
+    events_rejected_invalid_title: int = 0
     other_failures: int = 0
 
 
@@ -171,6 +177,24 @@ async def _run_phase_b(session: AsyncSession, event_id: UUID, report: TriageCycl
         reference_now = datetime.now(timezone.utc)
         event = await session.get(NewsEvent, event_id)
         assert event is not None  # just claimed/recovered this exact event; it cannot have vanished
+
+        # Phase 15 M1: cheap deterministic gate, before Triage/create_task() ever run - a
+        # malformed title (raw HTML fragment, empty, bare URL) must not reach NEWS_ANALYSIS's
+        # LLM calls just because it scored low; scoring is not a reliable filter for this
+        # (Phase 15 M0: a malformed title scored 78 and was delivered). Defense-in-depth for
+        # events collected before services.cleaning's own ingestion-time check existed.
+        # Reuses the existing EventStatus.REJECTED lifecycle state - no new status, no new
+        # table. decide_triage()'s own closed input contract is untouched: this check runs
+        # before it and never becomes one of its inputs.
+        if not is_valid_title(event.title):
+            event.status = EventStatus.REJECTED
+            await session.commit()
+            report.events_rejected_invalid_title += 1
+            logger.info(
+                "phase15_event_rejected_invalid_title",
+                extra={"event_id": str(event_id), "source_id": str(event.source_id)},
+            )
+            return
 
         source = await session.get(NewsSource, event.source_id)
         reliability_score = source.reliability_score if source is not None else None
@@ -294,6 +318,7 @@ async def run_triage_cycle(
             "tasks_created": report.tasks_created,
             "claim_races_lost": report.claim_races_lost,
             "duplicate_active_task_outcomes": report.duplicate_active_task_outcomes,
+            "events_rejected_invalid_title": report.events_rejected_invalid_title,
             "other_failures": report.other_failures,
         },
     )

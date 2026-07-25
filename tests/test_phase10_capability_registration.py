@@ -14,6 +14,8 @@ import pytest
 
 from capabilities.copywriting_capability import CAPABILITY_NAME as COPYWRITING_CAPABILITY_NAME
 from capabilities.copywriting_capability import CopywritingCapability
+from capabilities.engagement_capability import CAPABILITY_NAME as ENGAGEMENT_CAPABILITY_NAME
+from capabilities.engagement_capability import EngagementCapability
 from capabilities.errors import UnknownCapabilityError
 from capabilities.intelligence_capability import CAPABILITY_NAME as INTELLIGENCE_CAPABILITY_NAME
 from capabilities.quality_capability import CAPABILITY_NAME as QUALITY_CAPABILITY_NAME
@@ -71,8 +73,12 @@ def test_build_registry_resolves_all_five_capabilities() -> None:
 
 def test_unregistered_capability_still_raises_unknown_capability_error() -> None:
     """Proves the two-line registry addition (capabilities/registry.py) is purely additive and
-    does not alter resolve()'s existing behavior for any other, still-unregistered name -
-    "engagement" is the same real, already-unregistered name Contract §3 itself cites."""
+    does not alter resolve()'s existing behavior for any other, still-unregistered name. Phase 13
+    M1 registers "engagement" (previously this test's own example name, per Contract §3's
+    citation of it) - "definitely_unregistered_capability" is used instead, mirroring the same,
+    already-established repository precedent for this exact situation
+    (tests/test_boot_assembly.py:61-66, written when Phase 9 M6 registered "research" out from
+    under that test's own prior example)."""
     registry = build_registry(
         gateway=None,  # type: ignore[arg-type]
         prompt_repository=_prompt_repository(),
@@ -81,7 +87,24 @@ def test_unregistered_capability_still_raises_unknown_capability_error() -> None
     )
 
     with pytest.raises(UnknownCapabilityError):
-        registry.resolve("engagement")
+        registry.resolve("definitely_unregistered_capability")
 
     with pytest.raises(UnknownCapabilityError):
         registry.resolve("no_such_capability")
+
+
+def test_build_registry_resolves_engagement_directly() -> None:
+    """Registered-capability proof (Phase 13 M1) - mirrors this file's own existing
+    test_build_registry_resolves_copywriting_directly() pattern exactly, for the sixth
+    capability."""
+    registry = build_registry(
+        gateway=None,  # type: ignore[arg-type]
+        prompt_repository=_prompt_repository(),
+        budget_guard=AllowingBudgetGuard(),  # type: ignore[arg-type]
+        tool_registry=ToolRegistry(),
+    )
+
+    definition, capability = registry.resolve(ENGAGEMENT_CAPABILITY_NAME)
+
+    assert definition.name == ENGAGEMENT_CAPABILITY_NAME
+    assert isinstance(capability, EngagementCapability)

@@ -21,8 +21,6 @@ from workflows.registry import registry as default_registry
 
 logger = logging.getLogger(__name__)
 
-ACTIVE_STATUSES = (TaskStatus.CREATED, TaskStatus.RUNNING)
-
 
 async def create_task(
     session: AsyncSession,
@@ -32,7 +30,7 @@ async def create_task(
     """Create an EditorialTask from a validated EditorialTaskCreate command, or raise.
 
     Validation order: NewsEvent existence, then workflow_type registration,
-    then active-task uniqueness - each is an independent precondition, so
+    then existing-task uniqueness - each is an independent precondition, so
     unrelated failures are reported without wasting the later checks. No ORM
     model crosses this boundary in either direction - callers pass and
     receive only these Pydantic schemas.
@@ -46,7 +44,7 @@ async def create_task(
     existing = await _find_active_task(session, command.event_id, command.workflow_type)
     if existing is not None:
         raise DuplicateActiveTaskError(
-            f"An active task already exists for event {command.event_id} / "
+            f"A task already exists for event {command.event_id} / "
             f"workflow {command.workflow_type.value} (task {existing.id}, status {existing.status.value})"
         )
 
@@ -89,17 +87,27 @@ async def get_task(session: AsyncSession, task_id: UUID) -> EditorialTaskRead:
 async def _find_active_task(
     session: AsyncSession, event_id: UUID, workflow_type: WorkflowType
 ) -> EditorialTask | None:
-    """Find an active (CREATED/RUNNING) task for (event_id, workflow_type), if any.
+    """Find an existing task for (event_id, workflow_type), in any status, if any.
 
     workflow_type is matched against the JSON snapshot's workflow_name field,
     since EditorialTask has no dedicated column for it.
+
+    Phase 15 M1: matches any TaskStatus, not only CREATED/RUNNING. Phase 15 M0
+    found 108 NewsEvent rows with duplicate NEWS_ANALYSIS tasks, caused by this
+    query's previous active-only scope: a status.in_(CREATED, RUNNING) filter
+    means a COMPLETED or FAILED sibling is invisible here, so both this
+    function's callers - create_task()'s own duplicate check, and
+    services.triage_orchestrator._select_recovery_candidates()'s "no active
+    task" gate - would treat an event whose task already finished as if no
+    task had ever been created for it, and (for a recovered event) let a
+    fresh, unwanted duplicate task be created. The one-task-per-(event,
+    workflow_type) contract this module documents was always meant to be
+    permanent, not "until the task leaves CREATED/RUNNING" - retries of a
+    single task happen in place (EditorialTask.retry_count, entirely inside
+    WorkflowRunner) and never call create_task() a second time, so widening
+    this check cannot affect legitimate in-task retry/failure handling.
     """
-    result = await session.execute(
-        select(EditorialTask).where(
-            EditorialTask.event_id == event_id,
-            EditorialTask.status.in_(ACTIVE_STATUSES),
-        )
-    )
+    result = await session.execute(select(EditorialTask).where(EditorialTask.event_id == event_id))
     for task in result.scalars().all():
         if task.workflow is not None and task.workflow.get("workflow_name") == workflow_type.value:
             return task

@@ -98,3 +98,17 @@ def test_build_registry_ships_sealed_and_rejects_an_unregistered_name() -> None:
 
     with pytest.raises(CapabilityRegistryAlreadySealedError):
         real_registry.register(_definition(), AlwaysSucceedsCapability())
+
+
+def test_build_registry_resolves_engagement_once_registered() -> None:
+    """Phase 13 M1: CapabilityRegistry.resolve("engagement") succeeds once EngagementCapability
+    is registered in build_registry()."""
+    from capabilities.engagement_capability import CAPABILITY_NAME as ENGAGEMENT_CAPABILITY_NAME
+    from capabilities.engagement_capability import EngagementCapability
+
+    real_registry = _build_registry()
+
+    definition, capability = real_registry.resolve(ENGAGEMENT_CAPABILITY_NAME)
+
+    assert definition.name == ENGAGEMENT_CAPABILITY_NAME
+    assert isinstance(capability, EngagementCapability)

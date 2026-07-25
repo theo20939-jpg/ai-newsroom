@@ -1,0 +1,78 @@
+"""Entry point for running the automatic CONTENT_GENERATION + Telegram notification worker.
+
+Launch with:
+    python -m worker.content_main
+
+Mirrors worker/analysis_main.py's own established shape (Phase 13) exactly for the enabled/
+disabled loop and signal handling. Additionally assembles a real Bot once at startup (via the
+existing, unmodified bot/loader.py::create_bot()), alongside the real AI integration layer.
+"""
+import asyncio
+import logging
+import signal
+from pathlib import Path
+
+from bot.loader import create_bot
+from core.config import settings
+from core.logging import setup_logging
+from integrations.llm_gateway.boot import assemble_ai_integration_layer
+from integrations.prompts.file_repository import FilePromptRepository
+from worker.content_cycle import run_content_cycle
+
+logger = logging.getLogger(__name__)
+
+_PROMPTS_ROOT = Path(__file__).resolve().parent.parent / "prompts"
+
+
+async def _run_enabled_loop() -> None:
+    """startup -> assemble AI layer + Bot once -> run one cycle -> cancellation-aware
+    sleep(interval) -> next cycle. Cadence is cycle duration + configured interval (not
+    wall-clock-fixed), mirroring worker/analysis_main.py's own disclosed, accepted behavior
+    exactly."""
+    prompt_repository = FilePromptRepository(_PROMPTS_ROOT)
+    ai_layer = assemble_ai_integration_layer(settings, prompt_repository)  # constructed once
+    bot = create_bot()  # constructed once, identically regardless of content_generation_dry_run
+
+    while True:
+        try:
+            await run_content_cycle(ai_layer.capability_registry, bot)
+        except Exception:
+            logger.exception("content_cycle_failed")
+        await asyncio.sleep(settings.content_generation_poll_interval_seconds)
+
+
+async def _run_disabled_idle() -> None:
+    """Deterministic idle-while-alive model for content_generation_enabled=False, mirroring
+    worker/analysis_main.py's own _run_disabled_idle() exactly - no cycle, no DB/AI/Telegram
+    access, no restart loop under `restart: unless-stopped`."""
+    logger.info("content_generation_enabled is False - content worker idling, no cycles will run")
+    try:
+        await asyncio.Event().wait()
+    except asyncio.CancelledError:
+        logger.info("content_worker_shutting_down_disabled")
+        raise
+
+
+async def main() -> None:
+    setup_logging()
+    task = asyncio.current_task()
+    assert task is not None
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, task.cancel)
+        except NotImplementedError:
+            pass  # Windows dev-only limitation, identical to worker/analysis_main.py's own guard
+
+    try:
+        if not settings.content_generation_enabled:
+            await _run_disabled_idle()
+            return
+        await _run_enabled_loop()
+    except asyncio.CancelledError:
+        logger.info("content_worker_shutdown_complete")
+        raise
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

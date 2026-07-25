@@ -119,7 +119,8 @@ async def run_content_generation_for_event(
             return ContentGenerationOutcome(task_id=task.id, workflow_status=result.status, content_draft=None)
 
         logger.info(
-            "content_generation_succeeded", extra={"task_id": str(task.id), "draft_id": str(draft.id)}
+            "content_generation_succeeded",
+            extra={"task_id": str(task.id), "event_id": str(event_id), "draft_id": str(draft.id)},
         )
         return ContentGenerationOutcome(task_id=task.id, workflow_status=result.status, content_draft=draft)
 
