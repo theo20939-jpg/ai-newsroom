@@ -206,6 +206,7 @@ def assemble_ai_integration_layer(
         cost_estimator=cost_estimator,
         budget_guard=budget_guard,
         rate_limiter=rate_limiter,
+        regional_unavailable_cooldown_seconds=settings.provider_regional_unavailable_cooldown_seconds,
     )
     gateway = RoutingGateway(routing_engine=routing_engine, fallback_policy=fallback_policy)
 

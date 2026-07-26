@@ -20,12 +20,23 @@ class PermissiveProviderHealthStore:
     def __init__(self) -> None:
         self.unhealthy_marks: list[tuple[str, str]] = []
         self.runtime_unavailable_marks: list[tuple[str, str]] = []
+        # Phase 15 runtime reliability fix: records (provider_id, model_id, ttl_seconds) so a
+        # test can assert whether a mark was bounded (regional) or permanent (None), and
+        # separately records every mark_healthy() call for auto-clear-on-success assertions.
+        self.runtime_unavailable_ttls: list[tuple[str, str, int | None]] = []
+        self.healthy_marks: list[tuple[str, str]] = []
 
     async def mark_unhealthy(self, provider_id: str, model_id: str, ttl_seconds: int = 60) -> None:
         self.unhealthy_marks.append((provider_id, model_id))
 
-    async def mark_runtime_unavailable(self, provider_id: str, model_id: str) -> None:
+    async def mark_runtime_unavailable(
+        self, provider_id: str, model_id: str, ttl_seconds: int | None = None
+    ) -> None:
         self.runtime_unavailable_marks.append((provider_id, model_id))
+        self.runtime_unavailable_ttls.append((provider_id, model_id, ttl_seconds))
+
+    async def mark_healthy(self, provider_id: str, model_id: str) -> None:
+        self.healthy_marks.append((provider_id, model_id))
 
     async def is_healthy(self, provider_id: str, model_id: str) -> bool:
         return True

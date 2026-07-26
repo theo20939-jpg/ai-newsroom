@@ -20,6 +20,7 @@ from typing import Any, Literal
 from integrations.llm_gateway.errors import (
     ProviderModerationBlockedError,
     ProviderPermanentIncompatibleError,
+    ProviderRegionalUnavailableError,
     ProviderTransientError,
 )
 from integrations.llm_gateway.protocol import (
@@ -39,7 +40,7 @@ from integrations.llm_gateway.protocol import (
 from schemas.capability import CapabilityUsage
 
 FakeProviderBehavior = Literal[
-    "success", "transient_failure", "permanent_incompatible", "moderation_block"
+    "success", "transient_failure", "permanent_incompatible", "moderation_block", "regional_unavailable"
 ]
 
 
@@ -76,6 +77,10 @@ class FakeProviderAdapter:
         if self.behavior == "moderation_block":
             raise ProviderModerationBlockedError(
                 f"[{self.provider_id}/{self.model_id}] simulated moderation block"
+            )
+        if self.behavior == "regional_unavailable":
+            raise ProviderRegionalUnavailableError(
+                f"[{self.provider_id}/{self.model_id}] simulated regional/account permission failure"
             )
 
     async def generate(self, request: GenerateRequest) -> GenerateResponse:

@@ -44,15 +44,27 @@ class _FakeProviderHealthStore:
     def __init__(self) -> None:
         self.unhealthy_marks: list[tuple[str, str]] = []
         self.runtime_unavailable_marks: list[tuple[str, str]] = []
+        # Phase 15 runtime reliability fix: records the ttl_seconds passed to each
+        # mark_runtime_unavailable() call (None = permanent, unbounded), and every mark_healthy()
+        # call - so tests can assert bounded-vs-permanent classification and auto-clear-on-success.
+        self.runtime_unavailable_ttls: list[tuple[str, str, int | None]] = []
+        self.healthy_marks: list[tuple[str, str]] = []
         self._down: set[tuple[str, str]] = set()
 
     async def mark_unhealthy(self, provider_id: str, model_id: str, ttl_seconds: int = 60) -> None:
         self.unhealthy_marks.append((provider_id, model_id))
         self._down.add((provider_id, model_id))
 
-    async def mark_runtime_unavailable(self, provider_id: str, model_id: str) -> None:
+    async def mark_runtime_unavailable(
+        self, provider_id: str, model_id: str, ttl_seconds: int | None = None
+    ) -> None:
         self.runtime_unavailable_marks.append((provider_id, model_id))
+        self.runtime_unavailable_ttls.append((provider_id, model_id, ttl_seconds))
         self._down.add((provider_id, model_id))
+
+    async def mark_healthy(self, provider_id: str, model_id: str) -> None:
+        self.healthy_marks.append((provider_id, model_id))
+        self._down.discard((provider_id, model_id))
 
     async def is_healthy(self, provider_id: str, model_id: str) -> bool:
         return (provider_id, model_id) not in self._down
@@ -197,6 +209,76 @@ async def test_permanent_incompatible_marks_runtime_unavailable_and_continues() 
     assert response.model_used == "model-b"
     assert ("fake-provider-a", "model-a") in health_store.runtime_unavailable_marks
     assert failing.call_count == 1  # never retried - permanent_incompatible is never retried
+    # A genuinely permanent config failure is marked with no TTL (None) - unbounded, unchanged.
+    assert ("fake-provider-a", "model-a", None) in health_store.runtime_unavailable_ttls
+
+
+@pytest.mark.asyncio
+async def test_regional_unavailable_marks_runtime_unavailable_with_a_bounded_ttl_and_continues() -> None:
+    """Phase 15 runtime reliability fix (docs/phase15_runtime_reliability_report.md): a
+    regional/account-scoped permission failure (403) is marked runtime_unavailable WITH the
+    configured cooldown TTL - unlike a genuinely permanent config failure (the test above),
+    which gets no TTL at all."""
+    failing = FakeProviderAdapter(provider_id="fake-provider-a", model_id="model-a", behavior="regional_unavailable")
+    succeeding = FakeProviderAdapter(provider_id="fake-provider-b", model_id="model-b", behavior="success")
+    model_a = _model("model-a", "fake-provider-a")
+    model_b = _model("model-b", "fake-provider-b")
+    policy, health_store, _, _ = _build_policy(
+        [model_a, model_b], {"fake-provider-a": failing, "fake-provider-b": succeeding}
+    )
+
+    response = await policy.dispatch(_request(), [model_a, model_b], _criteria())
+
+    assert response.model_used == "model-b"
+    assert ("fake-provider-a", "model-a") in health_store.runtime_unavailable_marks
+    assert failing.call_count == 1  # never retried - same as permanent_incompatible
+    ttl_entries = [t for t in health_store.runtime_unavailable_ttls if t[:2] == ("fake-provider-a", "model-a")]
+    assert len(ttl_entries) == 1
+    assert ttl_entries[0][2] == 3600  # the default cooldown, since _build_policy doesn't override it
+
+
+@pytest.mark.asyncio
+async def test_regional_unavailable_cooldown_is_configurable_via_constructor() -> None:
+    failing = FakeProviderAdapter(provider_id="fake-provider-a", model_id="model-a", behavior="regional_unavailable")
+    succeeding = FakeProviderAdapter(provider_id="fake-provider-b", model_id="model-b", behavior="success")
+    model_a = _model("model-a", "fake-provider-a")
+    model_b = _model("model-b", "fake-provider-b")
+    provider_registry = ProviderRegistry()
+    provider_registry.register(ProviderDescriptor(provider_id="fake-provider-a", display_name="a"), failing)
+    provider_registry.register(ProviderDescriptor(provider_id="fake-provider-b", display_name="b"), succeeding)
+    provider_registry.seal()
+    model_registry = ModelRegistry()
+    model_registry.register(model_a)
+    model_registry.register(model_b)
+    model_registry.seal()
+    health_store = _FakeProviderHealthStore()
+    policy = FallbackPolicy(
+        provider_registry=provider_registry,
+        health_store=health_store,
+        cache_coordinator=CacheCoordinator(_InMemoryCacheStore()),
+        cost_estimator=_CountingCostEstimator(ModelRegistryPricingCatalog(model_registry)),
+        budget_guard=_ConfigurableBudgetGuard(),
+        regional_unavailable_cooldown_seconds=120,
+    )
+
+    await policy.dispatch(_request(), [model_a, model_b], _criteria())
+
+    ttl_entries = [t for t in health_store.runtime_unavailable_ttls if t[:2] == ("fake-provider-a", "model-a")]
+    assert ttl_entries[0][2] == 120
+
+
+@pytest.mark.asyncio
+async def test_successful_dispatch_marks_the_candidate_healthy() -> None:
+    """Phase 15 runtime reliability fix: a real successful call clears any stale unhealthy/
+    runtime_unavailable state for that exact candidate immediately - the other half of automatic
+    recovery, alongside the bounded TTL above."""
+    succeeding = FakeProviderAdapter(provider_id="fake-provider-a", model_id="model-a", behavior="success")
+    model_a = _model("model-a", "fake-provider-a")
+    policy, health_store, _, _ = _build_policy([model_a], {"fake-provider-a": succeeding})
+
+    await policy.dispatch(_request(), [model_a], _criteria())
+
+    assert ("fake-provider-a", "model-a") in health_store.healthy_marks
 
 
 @pytest.mark.asyncio

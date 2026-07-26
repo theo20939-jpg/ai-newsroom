@@ -110,7 +110,24 @@ class ProviderPermanentIncompatibleError(GatewayError):
     """Raised by a ProviderAdapter when a claimed capability is not actually supported by the
     candidate that was dispatched to (§5.2). FallbackPolicy classifies this as
     FailureClass.PERMANENT_INCOMPATIBLE: mark (provider_id, model_id) runtime_unavailable with
-    no TTL, move to the next candidate (§5.4)."""
+    no TTL, move to the next candidate (§5.4).
+
+    Reserved for genuinely permanent configuration failures: an unknown model id
+    (`NotFoundError`), a request shape the model rejects (`UnprocessableEntityError`, a
+    non-moderation `BadRequestError`). A regional/account-level permission failure
+    (`PermissionDeniedError`) is deliberately NOT included here - see
+    `ProviderRegionalUnavailableError` below (docs/phase15_runtime_reliability_report.md)."""
+
+
+class ProviderRegionalUnavailableError(GatewayError):
+    """Phase 15 runtime reliability fix. Raised by a ProviderAdapter for a `PermissionDeniedError`
+    (HTTP 403) specifically - historically observed (docs/llm_runtime_availability_recovery_
+    report.md) as an account/region-scoped condition that a direct re-probe hours later found
+    already resolved, i.e. NOT the same kind of failure as an invalid model id or a rejected
+    request shape (`ProviderPermanentIncompatibleError`), which never self-resolve. FallbackPolicy
+    classifies this as a bounded-cooldown latch: mark (provider_id, model_id) runtime_unavailable
+    WITH a TTL (`settings.provider_regional_unavailable_cooldown_seconds`), not the permanent,
+    no-TTL, manual-clear-only latch used for genuinely permanent configuration errors."""
 
 
 class ProviderModerationBlockedError(GatewayError):

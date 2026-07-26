@@ -61,6 +61,7 @@ from integrations.llm_gateway.errors import (
     GatewayError,
     ProviderModerationBlockedError,
     ProviderPermanentIncompatibleError,
+    ProviderRegionalUnavailableError,
     ProviderTransientError,
 )
 from integrations.llm_gateway.protocol import (
@@ -132,7 +133,17 @@ def _translate_exception(exc: Exception, api_key: str | None) -> GatewayError:
             return ProviderModerationBlockedError(message)
         return ProviderPermanentIncompatibleError(message)
 
-    if isinstance(exc, (openai.PermissionDeniedError, openai.NotFoundError, openai.UnprocessableEntityError)):
+    if isinstance(exc, openai.PermissionDeniedError):
+        # Phase 15 runtime reliability fix: split out from NotFoundError/UnprocessableEntityError
+        # below - a 403 is regional/account-scoped (docs/llm_runtime_availability_recovery_
+        # report.md's own directly-observed `unsupported_country_region_territory` case, proven
+        # stale by a same-day re-probe), never a genuinely permanent model/schema misconfiguration.
+        message = _redact(
+            f"openai: {kind} (status={exc.status_code}): {exc.message}", api_key  # type: ignore[attr-defined]
+        )
+        return ProviderRegionalUnavailableError(message)
+
+    if isinstance(exc, (openai.NotFoundError, openai.UnprocessableEntityError)):
         message = _redact(
             f"openai: {kind} (status={exc.status_code}): {exc.message}", api_key  # type: ignore[attr-defined]
         )

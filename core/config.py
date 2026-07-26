@@ -62,6 +62,13 @@ class Settings(BaseSettings):
     # rather than silently choosing fail-open or fail-closed - the contract's own binding
     # provisional rule for this one still-open question.
     redis_unavailable_policy: Literal["fail_open", "fail_closed"] | None = None
+    # Phase 15 runtime reliability fix (docs/phase15_runtime_reliability_report.md): bounded
+    # cooldown for a regional/account-scoped provider permission failure (403), which - unlike a
+    # genuinely permanent invalid-model/invalid-request config error - has been directly observed
+    # to self-resolve within the same day. Threaded into FallbackPolicy at boot
+    # (integrations/llm_gateway/boot.py); a model latched for this reason automatically becomes
+    # routable again once this many seconds elapse, with no manual Redis intervention required.
+    provider_regional_unavailable_cooldown_seconds: int = 3600
 
     # Telegram Client API (Telethon) - used only by the Source Collector.
     # Fully separate from telegram_bot_token, which is Bot API and belongs to bot/.

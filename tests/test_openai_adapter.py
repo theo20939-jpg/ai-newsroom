@@ -26,6 +26,7 @@ from openai.types.responses.response_usage import InputTokensDetails, OutputToke
 from integrations.llm_gateway.errors import (
     ProviderModerationBlockedError,
     ProviderPermanentIncompatibleError,
+    ProviderRegionalUnavailableError,
     ProviderTransientError,
 )
 from integrations.llm_gateway.protocol import (
@@ -425,10 +426,14 @@ async def test_timeout_error_translates_to_provider_transient_error() -> None:
 
 
 @pytest.mark.asyncio
-async def test_permission_denied_error_translates_to_provider_permanent_incompatible_error() -> None:
+async def test_permission_denied_error_translates_to_provider_regional_unavailable_error() -> None:
+    """Phase 15 runtime reliability fix: split out from ProviderPermanentIncompatibleError - a
+    403 is regional/account-scoped, not a genuinely permanent model/schema misconfiguration (see
+    ProviderRegionalUnavailableError's own docstring and docs/phase15_runtime_reliability_
+    report.md)."""
     client = _mock_client(_status_error(openai.PermissionDeniedError, 403))
     adapter = OpenAIAdapter(_credential(), client=client)
-    with pytest.raises(ProviderPermanentIncompatibleError):
+    with pytest.raises(ProviderRegionalUnavailableError):
         await adapter.generate(_request(resolved_model_id="gpt-5.6-terra"))
 
 

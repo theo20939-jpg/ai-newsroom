@@ -24,8 +24,13 @@ class _FakeProviderHealthStore:
     async def mark_unhealthy(self, provider_id: str, model_id: str, ttl_seconds: int = 60) -> None:
         self._unhealthy.add((provider_id, model_id))
 
-    async def mark_runtime_unavailable(self, provider_id: str, model_id: str) -> None:
+    async def mark_runtime_unavailable(
+        self, provider_id: str, model_id: str, ttl_seconds: int | None = None
+    ) -> None:
         self._unhealthy.add((provider_id, model_id))
+
+    async def mark_healthy(self, provider_id: str, model_id: str) -> None:
+        self._unhealthy.discard((provider_id, model_id))
 
     async def is_healthy(self, provider_id: str, model_id: str) -> bool:
         return (provider_id, model_id) not in self._unhealthy

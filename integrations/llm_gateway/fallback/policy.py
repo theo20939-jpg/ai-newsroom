@@ -47,6 +47,7 @@ from integrations.llm_gateway.errors import AllProvidersFailedError, RateLimitEx
 from integrations.llm_gateway.errors import (
     ProviderModerationBlockedError,
     ProviderPermanentIncompatibleError,
+    ProviderRegionalUnavailableError,
     ProviderTransientError,
 )
 from integrations.llm_gateway.fallback.health_store import ProviderHealthStore
@@ -81,6 +82,12 @@ class FailureClass(str, Enum):
     TRANSIENT = "transient"  # auth (this attempt only), rate limit, timeout, 5xx
     PERMANENT_INCOMPATIBLE = "permanent_incompatible"  # claimed capability not actually
     # supported, or a moderation block
+    REGIONAL_UNAVAILABLE = "regional_unavailable"  # Phase 15 runtime reliability fix: a
+    # regional/account-scoped permission failure - marked runtime_unavailable with a bounded
+    # TTL, never permanently, unlike PERMANENT_INCOMPATIBLE above.
+
+
+_DEFAULT_REGIONAL_UNAVAILABLE_COOLDOWN_SECONDS = 3600
 
 
 def _backoff_delay_seconds(attempt_index: int) -> float:
@@ -113,6 +120,7 @@ class FallbackPolicy:
         *,
         rate_limiter: RateLimiter | None = None,
         max_same_candidate_retries: int = 1,
+        regional_unavailable_cooldown_seconds: int = _DEFAULT_REGIONAL_UNAVAILABLE_COOLDOWN_SECONDS,
     ) -> None:
         self._provider_registry = provider_registry
         self._health_store = health_store
@@ -121,6 +129,11 @@ class FallbackPolicy:
         self._budget_guard = budget_guard
         self._rate_limiter = rate_limiter
         self._max_same_candidate_retries = max_same_candidate_retries
+        # Phase 15 runtime reliability fix (docs/phase15_runtime_reliability_report.md):
+        # bounded, not indefinite, latch duration for a regional/account-scoped permission
+        # failure - the previous "no automatic recovery" gap that repeatedly stopped the
+        # pipeline until a manual Redis diagnosis-and-clear.
+        self._regional_unavailable_cooldown_seconds = regional_unavailable_cooldown_seconds
 
     def _build_attempt_sequence(
         self,
@@ -195,6 +208,11 @@ class FallbackPolicy:
         for attempt_index in range(self._max_same_candidate_retries + 1):
             try:
                 response = await adapter.generate(resolved_request)
+                # Phase 15 runtime reliability fix: a real, observed successful call is
+                # unambiguous proof this candidate is healthy right now - clear any stale
+                # unhealthy/runtime_unavailable state immediately, rather than waiting out
+                # whatever cooldown a prior failure may have set.
+                await self._health_store.mark_healthy(provider_id, model_id)
                 return _AttemptOutcome(success=True, response=response, failure_class=None)
             except ProviderModerationBlockedError:
                 await self._health_store.mark_runtime_unavailable(provider_id, model_id)
@@ -205,6 +223,16 @@ class FallbackPolicy:
                     success=False,
                     response=None,
                     failure_class=FailureClass.PERMANENT_INCOMPATIBLE,
+                    failure_detail=str(exc),
+                )
+            except ProviderRegionalUnavailableError as exc:
+                await self._health_store.mark_runtime_unavailable(
+                    provider_id, model_id, ttl_seconds=self._regional_unavailable_cooldown_seconds
+                )
+                return _AttemptOutcome(
+                    success=False,
+                    response=None,
+                    failure_class=FailureClass.REGIONAL_UNAVAILABLE,
                     failure_detail=str(exc),
                 )
             except ProviderTransientError as exc:

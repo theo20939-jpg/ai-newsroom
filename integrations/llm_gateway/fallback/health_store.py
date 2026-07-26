@@ -16,11 +16,28 @@ TTL semantics use an explicit `unhealthy_until_ms` timestamp compared at read ti
 Redis's own key-level EXPIRE - the same hash key also carries `runtime_unavailable`, which per
 §4.3 step 4 "MUST NOT expire within the life of the process." Expiring the whole key would
 silently clear that too.
+
+Phase 15 runtime reliability fix (docs/phase15_runtime_reliability_report.md): a recurring
+production incident showed `runtime_unavailable` staying latched long after the underlying
+account/region condition had cleared, with no automatic recovery mechanism - manual Redis key
+deletion was the only remedy (docs/llm_runtime_availability_recovery_report.md). `mark_runtime_
+unavailable()` now accepts an OPTIONAL `ttl_seconds` (default `None`, preserving the exact old
+"no TTL, permanent until manual clear" behavior for genuinely permanent configuration failures -
+backward compatible with every existing caller). A bounded caller (`FallbackPolicy`, for a
+`ProviderRegionalUnavailableError`) passes a real TTL, stored in a second field,
+`runtime_unavailable_until_ms`, using the same explicit-timestamp-at-read-time pattern as
+`unhealthy_until_ms` above (never Redis's own key-level EXPIRE, for the same co-located-fields
+reason). `mark_healthy()` is new: clears all three fields on a real, observed successful call -
+the other half of automatic recovery, so a model does not have to wait out its full cooldown if
+it turns out to already be working again.
 """
+import logging
 import time
 from typing import Protocol
 
 from redis.asyncio import Redis
+
+logger = logging.getLogger(__name__)
 
 
 class ProviderHealthStore(Protocol):
@@ -29,15 +46,29 @@ class ProviderHealthStore(Protocol):
         §4.3 step 4) that expires automatically."""
         ...
 
-    async def mark_runtime_unavailable(self, provider_id: str, model_id: str) -> None:
-        """PERMANENT_INCOMPATIBLE-classified failure (§5.2, §5.4): mark runtime_unavailable
-        with no TTL - persists for the life of the process."""
+    async def mark_runtime_unavailable(
+        self, provider_id: str, model_id: str, ttl_seconds: int | None = None
+    ) -> None:
+        """PERMANENT_INCOMPATIBLE-classified failure (§5.2, §5.4): mark runtime_unavailable.
+        `ttl_seconds=None` (default) persists for the life of the process, exactly as before -
+        the correct behavior for a genuinely permanent configuration failure. A caller that
+        knows the failure is bounded/recoverable (Phase 15 runtime reliability fix - a
+        `ProviderRegionalUnavailableError`) passes a real `ttl_seconds`, after which `is_healthy()`
+        automatically re-admits the candidate with no manual intervention."""
+        ...
+
+    async def mark_healthy(self, provider_id: str, model_id: str) -> None:
+        """Phase 15 runtime reliability fix: clears any unhealthy/runtime_unavailable state for
+        this candidate. Called after a real, observed successful dispatch - the other half of
+        automatic recovery, letting a model recover immediately on proof-of-health rather than
+        only once its cooldown TTL elapses."""
         ...
 
     async def is_healthy(self, provider_id: str, model_id: str) -> bool:
-        """False if currently unhealthy (TTL not yet elapsed) or runtime_unavailable is set.
-        Fails open (returns True) on backend unavailability - §18's binding failure
-        behavior: "Backend down -> fail open (assume healthy)"."""
+        """False if currently unhealthy (TTL not yet elapsed) or runtime_unavailable is set (and,
+        if it was set with a bounded TTL, that TTL has not yet elapsed either). Fails open
+        (returns True) on backend unavailability - §18's binding failure behavior: "Backend down
+        -> fail open (assume healthy)"."""
         ...
 
 
@@ -59,24 +90,56 @@ class RedisProviderHealthStore:
         except Exception:  # noqa: BLE001 - a failed write degrades health tracking, never blocks a call
             return
 
-    async def mark_runtime_unavailable(self, provider_id: str, model_id: str) -> None:
+    async def mark_runtime_unavailable(
+        self, provider_id: str, model_id: str, ttl_seconds: int | None = None
+    ) -> None:
         key = self._redis_key(provider_id, model_id)
         try:
-            await self._redis.hset(key, "runtime_unavailable", "1")
+            if ttl_seconds is None:
+                # Genuinely permanent: write only the flag, no expiry field at all - the exact
+                # pre-existing behavior, untouched.
+                await self._redis.hset(key, "runtime_unavailable", "1")
+            else:
+                runtime_unavailable_until_ms = (time.time() + ttl_seconds) * 1000
+                await self._redis.hset(
+                    key,
+                    mapping={
+                        "runtime_unavailable": "1",
+                        "runtime_unavailable_until_ms": str(runtime_unavailable_until_ms),
+                    },
+                )
+            logger.info(
+                "provider_marked_runtime_unavailable",
+                extra={"provider_id": provider_id, "model_id": model_id, "ttl_seconds": ttl_seconds},
+            )
+        except Exception:  # noqa: BLE001 - a failed write degrades health tracking, never blocks a call
+            return
+
+    async def mark_healthy(self, provider_id: str, model_id: str) -> None:
+        key = self._redis_key(provider_id, model_id)
+        try:
+            await self._redis.hdel(
+                key, "unhealthy_until_ms", "runtime_unavailable", "runtime_unavailable_until_ms"
+            )
         except Exception:  # noqa: BLE001 - a failed write degrades health tracking, never blocks a call
             return
 
     async def is_healthy(self, provider_id: str, model_id: str) -> bool:
         key = self._redis_key(provider_id, model_id)
         try:
-            unhealthy_until_raw, runtime_unavailable_raw = await self._redis.hmget(
-                key, "unhealthy_until_ms", "runtime_unavailable"
+            unhealthy_until_raw, runtime_unavailable_raw, runtime_unavailable_until_raw = await self._redis.hmget(
+                key, "unhealthy_until_ms", "runtime_unavailable", "runtime_unavailable_until_ms"
             )
         except Exception:  # noqa: BLE001 - §18 binding failure behavior: fail open
             return True
 
         if runtime_unavailable_raw == "1":
-            return False
+            if runtime_unavailable_until_raw is None:
+                return False  # no bound - the genuinely-permanent case, unchanged
+            if time.time() * 1000 < float(runtime_unavailable_until_raw):
+                return False  # bounded, but the cooldown has not yet elapsed
+            # else: bounded and expired - falls through, no longer treated as unavailable for
+            # this reason (a stale latch self-clearing, the fix's whole point).
         if unhealthy_until_raw is not None and time.time() * 1000 < float(unhealthy_until_raw):
             return False
         return True
