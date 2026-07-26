@@ -1175,3 +1175,127 @@ returns immediately whenever the setting is not `"v2"`.
 ---
 
 PHASE 15 M4.2 CUTOVER REVIEW BLOCKED — MORE POST-M3 DATA REQUIRED
+
+---
+
+# FINAL M4 CUTOVER REVIEW (Phase 15 autonomous completion, Workstream C)
+
+Status: **REVIEW COMPLETE — cutover NOT authorized.** Read-only: no `.env` change, no version
+activation, no row mutated, zero new provider calls. `editorial_scoring_version` remains `"v1"`.
+
+## 1. Method
+
+Re-ran M4.2's own clean-post-M3-sample methodology (`scripts/phase15_m4_final_cutover_backtest.
+py`, adapted from `scripts/phase15_m4_scoring_backtest.py`), reusing the same verified boundary
+(`2026-07-25 07:30:00 UTC`, M3's own engagement-capture cutover point) rather than re-deriving
+it, now against however much additional post-M3 history has accumulated since M4.2's original
+4-hour snapshot. Added a threshold sweep (55/57.5/60/62.5/65/67.5/70) for both v1 and v2 that
+M4.2 did not include.
+
+## 2. Sample
+
+**177 clean samples** (244 excluded for being pre-boundary, 1 for lacking a legacy score, 0 for
+malformed title or synthetic content) — up from M4.2's 109, spanning **~23 hours** of wall-clock
+collection (`2026-07-25T07:30` to `2026-07-26T06:38`), a meaningfully longer window than M4.2's
+single 4-hour snapshot, though still short of the "multiple days" M4.2 itself flagged as needed
+for full confidence.
+
+By source type: **RSS n=156**, **TELEGRAM n=13**, **NEWS_API n=8**. Telegram and NEWS_API both
+remain well below the 30-sample floor individually (13 and 8 respectively) — improved from
+M4.2's 9 and 2, but still not enough for an individually-confident source-type conclusion.
+
+## 3. Score distributions
+
+| | v1 (legacy) | v2 |
+|---|---|---|
+| min | 0 | 26 |
+| max | 91 | 71 |
+| avg | 44.55 | 48.97 |
+| median | 42 | 48 |
+| p75 | 68.0 | 59.0 |
+| p90 | 78.0 | 63.0 |
+
+**V2 substantially compresses the score range** (max 91→71, min 0→26) — expected, since v1 is
+100% semantic-score-driven while v2 blends it with freshness/engagement/reliability/novelty
+components that pull toward the middle, especially when engagement is unavailable (RSS, the
+large majority of this sample) and falls back to the neutral 0.5 baseline.
+
+## 4. Top10/top20 overlap and movers
+
+**Top 10 overlap: 7/10. Top 20 overlap: 14/20.** Moderate reordering, not wholesale
+disagreement — most of what v1 considers "top" content, v2 still does.
+
+**Top 5 movers down** are uniformly real, high-legacy-score mega-stories (OpenAI's rogue-agent
+story 88→68, Samsung/SK/Nvidia $700bn AI push 86→66, Samsung/Broadcom $200B+ chip deal 91→69,
+the SpaceX Starship launch 78→54) — v2's broader component blend genuinely down-weights
+pure-semantic "big number" stories relative to v1, which is the intended design, not a bug, but
+a real, material behavior change worth the operator's awareness before any cutover.
+
+## 5. Threshold sweep — the decisive finding
+
+| Threshold | v1 eligible | v2 eligible | v1 % | v2 % |
+|---|---|---|---|---|
+| 55 | 75 | 60 | 42.4% | 33.9% |
+| 57.5 | 71 | 50 | 40.1% | 28.2% |
+| 60 | 56 | 38 | 31.6% | 21.5% |
+| 62.5 | 45 | 22 | 25.4% | 12.4% |
+| **65 (live)** | **45** | **9** | **25.4%** | **5.1%** |
+| 67.5 | 45 | 6 | 25.4% | 3.4% |
+| 70 | 33 | 2 | 18.6% | 1.1% |
+
+**At the live threshold (65), activating v2 without any other change would collapse eligible
+volume by ~80% (45→9)** — a severe, immediate violation of the cutover criteria's own "overall
+eligible volume remains operationally reasonable" and "no source-type collapse" requirements.
+Even at the lowest swept threshold (55), v2 eligibility is still ~20% lower in relative terms
+(75→60). This is a new, previously-uncharacterized finding — M4.2's own review never swept
+thresholds and so never surfaced it.
+
+## 6. Cutover criteria evaluation
+
+1. *≥30 clean post-M3 Telegram events* — **not met** (13, though improved from 9).
+2. *No mechanical penalty for exposing real engagement* — inconclusive at this sample size;
+   unchanged from M4.2's own finding.
+3. *Unsupported engagement sources receive no artificial advantage* — holds (unchanged
+   mechanism from M4/M4.1).
+4. *Overall eligible volume remains operationally reasonable* — **not met at the live
+   threshold** (§5 — an ~80% collapse).
+5. *No source-type collapse or explosion* — **not met at the aggregate level**: independent of
+   any single source type's own direction of movement (Telegram's v2 median of 39 is in fact
+   well above its v1 median of 12, a directional improvement), the aggregate ~80% volume
+   collapse at the live threshold (§5) is itself a collapse that would affect every source type's
+   absolute eligible count.
+6. *Top editorial ranking remains credible* — largely holds (§4 — 70% top-10 overlap).
+7. *Threshold impact is understood* — **now yes** (§5, this review's own main contribution) —
+   but understanding the impact is not the same as having chosen and validated a new value.
+8. *Rollback to v1 remains immediate* — holds, unchanged (`apply_editorial_scoring_v2()`'s
+   own first-line early-return).
+9. *No new provider calls* — holds (pure backtest, read-only).
+10. *Natural live sample shows no worker regression* — not directly exercised by this backtest;
+    v1 remains the only version ever live-executed, so there is no v2 worker-regression evidence
+    to report either way.
+
+**3 of 10 criteria fail (1, 4/5, and 7-is-necessary-but-insufficient).** Per instruction,
+`CONTENT_GENERATION_MIN_SCORE` may only be changed "if the backtest proves it necessary" — this
+backtest proves a threshold change would be *necessary for volume* if v2 activates, but does not
+itself validate *which* new threshold value is correct (that requires its own dedicated
+calibration pass a single "final review" script is not the right vehicle for) — changing the
+live threshold as a side effect of this review would be exactly the kind of ad-hoc, unvalidated
+production change Phase 15's own M4 series has consistently avoided.
+
+## 7. Decision
+
+**`editorial_scoring_version` remains `"v1"`. V2 activation is deliberately deferred, not
+rejected.** The evidence base is now substantially stronger than M4.2's (177 vs 109 samples, 23
+vs 4 hours), and confirms M4.2's own recommendation was correct to defer — with one materially
+new finding this review adds: **a live-threshold volume collapse that any future cutover
+decision must budget its own dedicated threshold-recalibration work for**, not just a
+sample-size wait. `.env` was not touched; no restart was performed for this workstream.
+
+## 8. Rollback
+
+Unchanged — no activation occurred, so there is nothing to roll back. The existing rollback path
+(flip `editorial_scoring_version` to `"v1"`, zero code/DB change) remains available and unused.
+
+---
+
+PHASE 15 FINAL M4 CUTOVER REVIEW COMPLETE — V2 DEFERRED, THRESHOLD IMPACT NOW CHARACTERIZED
