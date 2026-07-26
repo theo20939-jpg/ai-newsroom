@@ -47,6 +47,7 @@ from services.fact_safety import (
 )
 from worker.content_cycle import _fact_safety_delivery_decision
 from workflows.registry import WorkflowRegistry
+from workflows.registry import registry as real_workflow_registry
 from workflows.runner import WorkflowRunner
 
 UTC = timezone.utc
@@ -274,6 +275,23 @@ def test_8b_unsupported_entity_central_to_story_is_high() -> None:
     ev = _ev(source_title="A company raised funding", source_content="A company raised funding today.")
     result = evaluate_fact_safety("OpenAI привлекла funding", "Компания довольна результатом.", ev)
     finding = next(f for f in result["findings"] if f["type"] == "entity")
+    assert finding["severity"] == "high"
+
+
+def test_8c_alias_canonicalization_does_not_break_centrality_for_a_still_genuinely_unsupported_entity() -> None:
+    """M5.3 regression: `_entity_severity()`'s centrality check ("does the draft's own title
+    literally contain this entity") must use the entity's ORIGINAL wording, never its alias
+    canonical form - "ИИ" canonicalizes to "ai" for cross-language matching purposes, but a
+    Russian title literally contains "ии", never the Latin string "ai". Using the canonical
+    form for centrality would make a real central subject look non-central and silently
+    downgrade a genuine HIGH-severity unsupported claim to MEDIUM. The source here does NOT
+    mention AI/artificial intelligence at all, so "ИИ" stays genuinely unsupported - this test
+    only pins its severity, not its support level (already covered by the money/entity alias
+    tests elsewhere)."""
+    ev = _ev(source_title="Satellites launched successfully", source_content="Satellites launched successfully.")
+    result = evaluate_fact_safety("Новость об ИИ вызывает вопросы", "Подробности не раскрыты.", ev)
+    finding = next(f for f in result["findings"] if f["type"] == "entity" and f["claim"] == "ИИ")
+    assert finding["support"] == "unsupported"
     assert finding["severity"] == "high"
 
 
@@ -710,3 +728,77 @@ async def test_shadow_mode_uses_research_facts_from_step_results_without_extra_d
     fact_safety = quality_result["fact_safety"]
     # Unprovenanced Research fact -> uncertain, never silently promoted to "pass".
     assert fact_safety["status"] == "review"
+
+
+@pytest.mark.asyncio
+async def test_real_four_step_content_generation_workflow_runs_fact_safety_from_copywriting_output(
+    db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """M5.3: the strongest available production-shaped proof - the REAL, unmodified
+    `WorkflowType.CONTENT_GENERATION` definition (`workflows/registry.py`'s real singleton, the
+    same one `capabilities.registry.build_registry()`-produced real Capability classes run
+    against in production), all four real steps in order (research -> intelligence ->
+    copywriting -> quality), with only the LLM Gateway faked (never a live provider call, per
+    Contract discipline - mirrors `tests/test_phase10_workflow_integration.py`'s own technique
+    exactly). Unlike that file, `fact_safety_mode` is pinned to `"shadow"` (not `"off"`) here,
+    specifically to prove the real wiring end-to-end: Quality's own real output never carries
+    `title`/`body` (`QUALITY_CAPABILITY_DEFINITION.expected_output_keys`), so this test only
+    passes if `apply_fact_safety()` actually reads the draft text from the real Copywriting
+    step's real output - the exact seam whose breakage (M5.2) went undetected for an entire
+    shadow-mode deployment. If that wiring regresses again, `quality_result["fact_safety"]`
+    would be absent and the final assertion's dict lookup would raise `KeyError`, failing this
+    test immediately."""
+    from capabilities.registry import build_registry
+    from integrations.llm_gateway.tools.registry import ToolRegistry
+    from integrations.prompts.file_repository import FilePromptRepository
+    from schemas.capability import CapabilityUsage
+    from tests.fakes.fake_gateway import FakeLLMGateway
+    from tests.fakes.fake_infra import AllowingBudgetGuard
+
+    monkeypatch.setattr(settings, "fact_safety_mode", "shadow")
+
+    research_output = {"facts": ["The company raised $5 million in seed funding."], "confidence": 0.9, "gaps": []}
+    intelligence_output = {
+        "significance": 0.6, "angle": "Funding", "audience_relevance": "General",
+        "recommendation": "Publish",
+    }
+    # The draft's own body states a materially different, unsupported amount ($50 million, not
+    # the $5 million Research actually found) - a deliberate, precisely-fabricatable HIGH-severity
+    # money claim, so a correctly-wired Fact Safety must flag it.
+    copywriting_output = {"title": "Startup raises $50 million", "body": "The round totaled $50 million.", "hashtags": []}
+    quality_output = {"passed": True, "issues": []}  # QualityCapability's real, unmodified shape
+
+    def _response(structured_output: dict[str, object]) -> object:
+        from integrations.llm_gateway.protocol import GenerateResponse
+        return GenerateResponse(
+            text=None, structured_output=structured_output, finish_reason="stop",
+            model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=10, output_tokens=5),
+        )
+
+    gateway = FakeLLMGateway(
+        generate_responses=[
+            _response(research_output), _response(intelligence_output),
+            _response(copywriting_output), _response(quality_output),
+        ]
+    )
+    prompts_root = Path(__file__).resolve().parent.parent / "prompts"
+    capability_registry = build_registry(
+        gateway, FilePromptRepository(prompts_root), AllowingBudgetGuard(), ToolRegistry()
+    )  # type: ignore[arg-type]
+
+    task = await workflow_service.create_task(
+        db_session,
+        EditorialTaskCreate(event_id=real_news_event.id, workflow_type=WorkflowType.CONTENT_GENERATION, priority=TaskPriority.B),
+    )  # real, default WorkflowRegistry - the actual production CONTENT_GENERATION definition
+    executor = CapabilityExecutor(db_session, task.id, capability_registry)
+    result = await WorkflowRunner(executor=executor, registry=real_workflow_registry).run(db_session, task.id)
+
+    assert result.status == "COMPLETED"
+    assert [r.step_name for r in result.step_results] == ["research", "intelligence", "copywriting", "quality"]
+    quality_result = next(r for r in result.step_results if r.step_name == "quality").result
+    assert quality_result["passed"] is True  # Quality's own real field, untouched
+    assert "title" not in quality_result and "body" not in quality_result  # real shape, no draft text
+    fact_safety = quality_result["fact_safety"]  # KeyError here == the wiring regressed (see docstring)
+    assert fact_safety["status"] == "block"
+    assert fact_safety["highest_risk"] == "high"
+    assert any(f["claim"] == "$50 million" and f["support"] == "unsupported" for f in fact_safety["findings"])

@@ -110,11 +110,19 @@ _MONEY_MAGNITUDE: dict[str, float] = {
     "m": 1e6, "mn": 1e6, "million": 1e6, "млн": 1e6,
     "k": 1e3, "thousand": 1e3, "тыс": 1e3,
 }
+# M5.3 calibration: added Yuan/CNY/RMB - the pipeline covers Chinese-market news routinely (the
+# live Trip.com/$770M fine draft, docs/phase15_m5_fact_safety_report.md M5.2 §9) and previously
+# had zero currency-word coverage beyond USD/EUR/GBP/RUB, so any Yuan-denominated claim could
+# never resolve to a currency and was guaranteed to be a false-positive UNSUPPORTED finding even
+# when it exactly matched the source. No conversion rate is introduced - matching still requires
+# the same currency code and the same exact numeric amount (_money_matches).
 _CURRENCY_SYMBOLS: dict[str, str] = {
     "$": "USD", "usd": "USD", "dollar": "USD", "dollars": "USD", "долларов": "USD", "доллара": "USD", "доллар": "USD",
     "€": "EUR", "eur": "EUR", "euro": "EUR", "euros": "EUR", "евро": "EUR",
     "£": "GBP", "gbp": "GBP", "pound": "GBP", "pounds": "GBP",
     "₽": "RUB", "rub": "RUB", "ruble": "RUB", "rubles": "RUB", "рублей": "RUB", "рубля": "RUB", "рубль": "RUB",
+    "cny": "CNY", "rmb": "CNY", "yuan": "CNY", "yuans": "CNY", "renminbi": "CNY",
+    "юаней": "CNY", "юаня": "CNY", "юань": "CNY",
 }
 
 # Shared "number" fragment (M5.3): either proper thousands-grouping (each group after the first
@@ -128,7 +136,11 @@ _MONEY_NUMBER = r"\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?"
 # an unrelated longer word (e.g. "bears" -> "b").
 _MONEY_MAGNITUDE_WORD = r"(?:billion|bn|million|mn|thousand|млрд|млн|тыс)\b"
 _MONEY_MAGNITUDE_LETTER = r"[bmk]\b"
-_MONEY_CURRENCY_WORD = r"(?:dollars?|euros?|pounds?|rubles?|долларов|доллара|доллар|евро|рублей|рубля|рубль|usd|eur|gbp|rub)\b"
+_MONEY_CURRENCY_WORD = (
+    r"(?:dollars?|euros?|pounds?|rubles?|yuans?|renminbi|"
+    r"долларов|доллара|доллар|евро|рублей|рубля|рубль|юаней|юаня|юань|"
+    r"usd|eur|gbp|rub|cny|rmb)\b"
+)
 
 _MONEY_PATTERN = re.compile(
     rf"(?P<currency>\$|€|£|₽)?\s*"
@@ -281,13 +293,43 @@ _ENTITY_SUFFIX_PATTERN = re.compile(r"\b(inc|llc|ltd|corp|corporation|co|gmbh|pl
 # Russian legal-entity markers are written BEFORE the name ("ООО Ромашка" = "Romashka LLC"), the
 # reverse convention from English suffixes - a distinct pattern, anchored at the start.
 _ENTITY_PREFIX_PATTERN = re.compile(r"^(ооо|зао|пао|оао)\b\.?\s*", re.IGNORECASE)
+# M5.3 calibration: a narrow, explicit set of generic Russian descriptive nouns commonly
+# hyphen-attached to a proper noun ("CRISPR-система" = "the CRISPR system") - the live sample's
+# own CRISPR/CRISPR-система false positive. Deliberately a small, fixed word list (not a
+# morphological/suffix-stripping algorithm) - conservative by instruction: it only ever strips
+# one of these exact words, never guesses at an unlisted suffix.
+_ENTITY_DESCRIPTIVE_SUFFIX_PATTERN = re.compile(
+    r"-(?:система|технология|платформа|модель|метод|алгоритм|инструмент)\b", re.IGNORECASE
+)
+
+# M5.3 calibration: explicit, hand-curated equivalence groups for same-real-world-entity aliases
+# that never string-match - a same-language abbreviation ("ИИ" / "искусственный интеллект") or a
+# cross-language name ("КНР" / "China") - both observed as live false positives (docs/
+# phase15_m5_fact_safety_report.md M5.2 §9). Deliberately a short, explicit, hand-reviewed list,
+# never general acronym-guessing or transliteration inference (M5.3 instruction) - an alias not
+# listed here simply stays unmatched, which only ever costs a false positive, never risks a false
+# negative by inventing an equivalence that isn't actually certain.
+_ENTITY_ALIAS_GROUPS: tuple[frozenset[str], ...] = (
+    frozenset({"ии", "искусственный интеллект", "ai", "artificial intelligence"}),
+    frozenset({"кнр", "китай", "china", "people's republic of china", "peoples republic of china"}),
+)
+_ENTITY_ALIAS_CANONICAL: dict[str, str] = {
+    alias: min(group) for group in _ENTITY_ALIAS_GROUPS for alias in group
+}
+_ENTITY_ALIAS_CANONICAL_VALUES: frozenset[str] = frozenset(_ENTITY_ALIAS_CANONICAL.values())
+# English possessive - "China's" and "China" name the same entity. Narrow (only a trailing
+# 's/'s), not a general grammar normalizer.
+_POSSESSIVE_SUFFIX_PATTERN = re.compile(r"[’']s$", re.IGNORECASE)
 
 
 def _normalize_entity(raw_text: str) -> str:
     text = _normalize_text(raw_text)
     text = _ENTITY_PREFIX_PATTERN.sub("", text)
     text = _ENTITY_SUFFIX_PATTERN.sub("", text).strip()
-    return text.strip(" .,’'\"")
+    text = _ENTITY_DESCRIPTIVE_SUFFIX_PATTERN.sub("", text).strip()
+    text = _POSSESSIVE_SUFFIX_PATTERN.sub("", text).strip()
+    text = text.strip(" .,’'\"")
+    return _ENTITY_ALIAS_CANONICAL.get(text, text)
 
 
 # ---------------------------------------------------------------------------
@@ -329,6 +371,18 @@ _ENTITY_RUN_PATTERN = re.compile(
 )
 _INTERNAL_CAPITAL_PATTERN = re.compile(r"^.+[A-ZА-ЯЁ]")  # a capital letter anywhere after index 0
 _LEGAL_SUFFIX_PATTERN = re.compile(r"(?:Inc|LLC|Ltd|Corp|Corporation|Co|GmbH|plc|ООО|ЗАО|ПАО)\.?$")
+# M5.3 calibration: a multi-word common-noun alias phrase ("искусственный интеллект") never
+# satisfies _ENTITY_RUN_PATTERN's capitalized-run heuristic outside a sentence-initial position,
+# because only its first word is ever capitalized in ordinary Russian/English prose - unlike a
+# real proper-noun phrase ("Trip.com Group"), where every word is capitalized. Rather than
+# loosening the general capitalized-run heuristic (which would reopen the exact lone-Title-Case-
+# word false-positive class it exists to close), this is a separate, literal, case-insensitive
+# search for the small set of explicit multi-word alias phrases only - never a general noun-phrase
+# parser.
+_ENTITY_ALIAS_MULTIWORD_PATTERN = re.compile(
+    "|".join(re.escape(alias) for alias in sorted(_ENTITY_ALIAS_CANONICAL, key=len, reverse=True) if " " in alias),
+    re.IGNORECASE,
+)
 _QUOTE_EXTRACT_PATTERN = re.compile(r'"([^"\n]{3,200})"|«([^»\n]{3,200})»|“([^”\n]{3,200})”')
 # A quoted SINGLE word is, in both Russian and English news-writing convention, almost always a
 # brand/proper-noun styling choice («Медикейд», «Палантир», "the app") - never an attributed
@@ -341,10 +395,14 @@ _MULTI_WORD_PATTERN = re.compile(r"\S+\s+\S+")
 def _is_strong_single_token_entity(token: str) -> bool:
     """A lone capitalized word is kept only when it carries a signal stronger than "starts a
     sentence": ALL-CAPS shorthand (NASA, AI), an internal capital past the first letter
-    (OpenAI, iPhone), or an attached legal suffix (handled separately, before this is called)."""
+    (OpenAI, iPhone), an attached legal suffix (handled separately, before this is called), or an
+    explicit, hand-curated alias match (M5.3 - "China"/"China's", "Китай", never a generically
+    guessed acronym)."""
     if token.isupper() and len(token) >= 2:
         return True
-    return bool(_INTERNAL_CAPITAL_PATTERN.match(token[1:]))
+    if _INTERNAL_CAPITAL_PATTERN.match(token[1:]):
+        return True
+    return _normalize_entity(token) in _ENTITY_ALIAS_CANONICAL_VALUES
 
 
 def _extract_entities(text: str) -> list[str]:
@@ -363,6 +421,8 @@ def _extract_entities(text: str) -> list[str]:
         elif _is_strong_single_token_entity(core):
             candidates.append(value)
         # else: a lone ordinary Title-Case word - discarded, most common false-positive source
+    if _ENTITY_ALIAS_MULTIWORD_PATTERN.pattern:
+        candidates.extend(m.group(0) for m in _ENTITY_ALIAS_MULTIWORD_PATTERN.finditer(text))
     return candidates
 
 
@@ -428,7 +488,14 @@ def _claim_matches_any(claim_type: ClaimType, claim: str, evidence_claims: list[
 def _entity_severity(entity: str, draft_title: str, support: SupportLevel) -> Severity:
     if support == "uncertain":
         return _UNCERTAIN_SEVERITY["entity"]
-    is_central = _normalize_entity(entity) in _normalize_text(draft_title)
+    # M5.3 regression guard: centrality is a literal-substring check against the draft's own
+    # title text, which always contains the entity's ORIGINAL wording (e.g. "ИИ"), never its
+    # cross-language alias canonical form (e.g. "ai") - using the full `_normalize_entity()`
+    # pipeline here (which now also resolves aliases) would make a Cyrillic entity's Latin
+    # canonical form fail to substring-match a Cyrillic title even when the literal word is
+    # right there. `_normalize_text()` alone (casefold + NFKC, no alias/suffix mapping) is the
+    # correct comparison for this specific "does the title literally say this" check.
+    is_central = _normalize_text(entity) in _normalize_text(draft_title)
     return "high" if is_central else _UNSUPPORTED_SEVERITY["entity"]
 
 

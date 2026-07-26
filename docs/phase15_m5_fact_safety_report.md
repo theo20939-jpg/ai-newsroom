@@ -1135,4 +1135,153 @@ milestone before `enforce` can be safely activated.
 
 ---
 
+## M5.3 Deterministic calibration and enforcement decision
+
+Status: **CALIBRATED, TESTED, BACKTESTED, DEPLOYED IN SHADOW MODE. Enforcement remains
+deferred** (see §6 below) — `fact_safety_mode` unchanged at `"shadow"`.
+
+### 1. What was calibrated
+
+The three false-positive classes M5.2 §9 identified and explicitly deferred, all in
+`services/fact_safety.py`:
+
+1. **Missing currency vocabulary.** `_CURRENCY_SYMBOLS`/`_MONEY_CURRENCY_WORD` gained
+   Yuan/CNY/RMB (`yuan`, `yuans`, `renminbi`, `rmb`, `cny`, `юаней`, `юаня`, `юань`) — previously
+   only USD/EUR/GBP/RUB were recognized at all, so any Yuan-denominated claim could never
+   resolve to a currency and was a guaranteed false positive regardless of what the source said.
+   No conversion rate introduced — matching is still exact currency-code-and-amount equality.
+2. **Entity alias equivalence.** A new, small, hand-curated `_ENTITY_ALIAS_GROUPS`: `{ии,
+   искусственный интеллект, ai, artificial intelligence}` and `{кнр, китай, china, people's
+   republic of china, peoples republic of china}`. `_normalize_entity()` now maps every alias in
+   a group to one canonical form before comparison. Two supporting, narrowly-scoped extraction
+   changes were required for this to actually fire: (a) `_is_strong_single_token_entity()` now
+   also treats an explicit alias-list match as a strong signal (fixes "China's"/"Китай" never
+   being extracted as entity candidates at all, since a lone Title-Case word is otherwise
+   discarded by design); (b) a new literal, case-insensitive scan (`_ENTITY_ALIAS_MULTIWORD_
+   PATTERN`) for the curated multi-word aliases specifically, since a common-noun phrase like
+   "искусственный интеллект" never satisfies the capitalized-run heuristic outside a
+   sentence-initial position (only its first word is ever capitalized in ordinary prose, unlike
+   a real proper-noun phrase). Neither change is a general acronym-guesser or NLP parser — both
+   only ever fire against the fixed, explicit list.
+3. **Generic descriptive suffixes.** A narrow `_ENTITY_DESCRIPTIVE_SUFFIX_PATTERN` strips a
+   fixed list of hyphen-attached generic Russian nouns (система/технология/платформа/модель/
+   метод/алгоритм/инструмент) from an entity token before comparison — fixes "CRISPR-система"
+   (a compound of a real proper noun plus a generic descriptive suffix) failing to match a bare
+   "CRISPR" mention in the source.
+
+**Regression found and fixed during calibration**: `_entity_severity()`'s centrality check
+("does the draft's own title literally contain this entity") originally reused the same
+`_normalize_entity()` pipeline as claim matching. Once alias canonicalization was added, a
+Cyrillic entity like "ИИ" would normalize to its Latin canonical form "ai" for matching purposes
+— but a Russian title never literally contains the Latin string "ai", so the centrality check
+started failing for genuinely-central Cyrillic entities, silently downgrading real HIGH-severity
+unsupported findings to MEDIUM. Fixed by having `_entity_severity()` use `_normalize_text()`
+(casefold + NFKC only, no alias/suffix mapping) for the centrality substring check specifically
+— the literal-wording question it actually asks. Caught by re-running the historical backtest
+before/after (see §3) and confirmed with a dedicated new regression test
+(`test_8c_alias_canonicalization_does_not_break_centrality_for_a_still_genuinely_unsupported_
+entity`).
+
+### 2. Tests
+
+78 tests in `tests/test_fact_safety.py` (76 pre-existing + 2 new), all passing:
+
+- `test_8c_...` — the centrality regression guard above.
+- `test_real_four_step_content_generation_workflow_runs_fact_safety_from_copywriting_output` —
+  the strongest available production-shaped proof, requested explicitly for this milestone: the
+  REAL, unmodified `WorkflowType.CONTENT_GENERATION` definition, all four real steps in order
+  (research → intelligence → copywriting → quality), real `Capability` classes from
+  `capabilities.registry.build_registry()`, only the LLM Gateway faked (never a live provider
+  call). `fact_safety_mode` is pinned to `"shadow"` specifically to prove the real wiring:
+  Quality's own real output never carries `title`/`body`, so this test only passes if
+  `apply_fact_safety()` genuinely reads the draft text from the real Copywriting step's real
+  output — the exact seam whose breakage (M5.2 §5) went undetected for an entire shadow-mode
+  deployment. If that wiring regresses again, the test's own `quality_result["fact_safety"]`
+  dict lookup raises `KeyError`, failing immediately.
+- Two pre-existing tests (`test_off_mode_leaves_quality_step_result_completely_unchanged`,
+  `test_shadow_mode_enriches_quality_result_and_detects_unsupported_claim`, both already present
+  from M5.2) independently satisfy the same "fails if fact safety silently stops running"
+  property against a lighter-weight fake-capability harness — kept as a second, faster-running
+  proof at a different level of the stack.
+
+`mypy`/`ruff` clean on `services/fact_safety.py` and `tests/test_fact_safety.py`.
+
+### 3. Historical backtest, before vs. after
+
+Re-ran `scripts/phase15_m5_fact_safety_backtest.py` (queries every real `ContentDraft` in the
+database — 25 drafts at the time of this milestone, not merely the original 5-draft M5 sample)
+against the pre-calibration code (via `git stash`) and the post-calibration code:
+
+| | before | after |
+|---|---|---|
+| `pass` | 7 | 9 |
+| `review` | 7 | 7 |
+| `block` | 11 | 9 |
+| high-severity findings | 15 | 11 |
+
+**4 drafts changed, all improvements, zero false-negative regressions**:
+- The Trip.com/Yuan draft and the CRISPR/ИИ draft (M5.2's own two documented false positives):
+  both flip from `block` (4 and 5 claims checked, 3 unsupported each) to `pass` (5/5 supported
+  each) — the exact, intended fix.
+- Two further drafts gained additional correctly-`supported` claims that the old extraction
+  never even attempted to check (the alias/suffix extraction-strength fixes widening coverage,
+  not just fixing wrong verdicts) — one moved `block`→`review` (its own separate, unrelated
+  unsupported claim correctly remains flagged, same HIGH severity as before, confirming the
+  centrality-regression fix), one gained 2 new correctly-supported claims while staying `pass`.
+- **Every other draft's status, claims_checked, and unsupported count is byte-for-byte
+  identical before and after** — in particular, every previously-`block` draft with a genuine
+  unsupported claim (e.g. the OpenAI/Andreessen-Horowitz-shaped fixtures in `tests/test_fact_
+  safety.py` itself, and the real historical Phase 14.5 case) remains `block` at the same
+  severity — no true positive was weakened by this calibration.
+
+### 4. Deployment
+
+`docker compose build content_worker && docker compose up -d --no-deps content_worker`. No
+other service touched (fact safety only runs in `content_worker`'s `"quality"` step).
+`fact_safety_mode` confirmed still `"shadow"` inside the running container after redeploy;
+`editorial_scoring_version` confirmed still `"v1"` (this milestone does not touch scoring).
+
+### 5. Provider-call and runtime impact
+
+Zero new provider calls — the calibration is pure regex/dict-lookup normalization, no new I/O
+path. `.env` untouched. No threshold, cutoff, batch size, or poll interval changed. No historical
+row mutated (the backtest and its `git stash` before/after comparison are both read-only; the
+`git stash` itself only ever touched the two files being calibrated, on the local working tree,
+never a commit, never pushed).
+
+### 6. Enforcement decision
+
+**Enforcement remains deferred; `fact_safety_mode` stays `"shadow"`.** Evaluated against the
+task's own 8 activation criteria:
+
+1. *At least 20 natural post-calibration real drafts* — **not met**. Zero new natural drafts
+   were produced in the window between the calibrated `content_worker` redeploy and this
+   decision (the worker's own 30-minute poll interval, combined with the bounded live-wait
+   budget shared across this entire autonomous task, made reaching 20 new drafts infeasible
+   without an indefinite wait, which is explicitly disallowed). This alone is decisive regardless
+   of the other 7 criteria.
+2. *No HIGH false positives in that sample* — not evaluable (no sample exists yet), but the
+   25-draft historical backtest (§3) shows zero HIGH false positives surviving calibration.
+3. *Unsupported fixture detection still works* — confirmed: every true-positive-shaped fixture
+   and historical case remains correctly flagged (§3).
+4. *Production-shaped integration tests prove execution* — confirmed (§2).
+5. *Shadow mode has zero delivery regressions* — confirmed: shadow mode is delivery-neutral by
+   construction (`_fact_safety_delivery_decision()` only ever suppresses under `mode ==
+   "enforce"`), unchanged by this milestone.
+6. *No provider calls added* — confirmed (§5).
+7. *No major unresolved English Title-Case false-positive class* — **not met**: this
+   pre-existing, previously-documented limitation (base M5 report §17) is unchanged by this
+   milestone; it was out of this calibration's explicit scope (only the 3 M5.2-documented
+   classes were authorized for a fix).
+8. *BLOCK semantics don't permanently hide stories without audit visibility* — true by
+   construction in shadow mode (nothing is hidden; `enforce` mode's own designed behavior
+   already preserves `ContentDraft` rows and full `fact_safety` findings regardless of status —
+   unchanged, unexercised).
+
+Two of eight criteria fail outright (1 and 7), independent of each other. Recommended next step:
+revisit once (a) enough operating time has passed to naturally accumulate 20+ post-calibration
+drafts, and (b) the English Title-Case-entity limitation has its own dedicated calibration pass.
+
+---
+
 PHASE 15 M5 LIVE SHADOW VALIDATION COMPLETE — ENFORCEMENT REMAINS BLOCKED
