@@ -13,7 +13,7 @@ import worker.analysis_cycle
 from core.config import settings
 from worker.analysis_main import main
 
-_FAKE_AI_LAYER = SimpleNamespace(capability_registry=object())
+_FAKE_AI_LAYER = SimpleNamespace(capability_registry=object(), cost_tracker=object())
 
 
 @pytest.mark.asyncio

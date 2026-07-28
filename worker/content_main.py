@@ -16,7 +16,9 @@ from bot.loader import create_bot
 from core.config import settings
 from core.logging import setup_logging
 from integrations.llm_gateway.boot import assemble_ai_integration_layer
+from integrations.llm_gateway.models.catalog import build_model_registry
 from integrations.prompts.file_repository import FilePromptRepository
+from services.pricing_catalog import ModelRegistryPricingCatalog
 from worker.content_cycle import run_content_cycle
 
 logger = logging.getLogger(__name__)
@@ -32,10 +34,15 @@ async def _run_enabled_loop() -> None:
     prompt_repository = FilePromptRepository(_PROMPTS_ROOT)
     ai_layer = assemble_ai_integration_layer(settings, prompt_repository)  # constructed once
     bot = create_bot()  # constructed once, identically regardless of content_generation_dry_run
+    # API cost optimization: same pattern as worker/analysis_main.py.
+    pricing_catalog = ModelRegistryPricingCatalog(build_model_registry())
 
     while True:
         try:
-            await run_content_cycle(ai_layer.capability_registry, bot)
+            await run_content_cycle(
+                ai_layer.capability_registry, bot,
+                cost_tracker=ai_layer.cost_tracker, pricing_catalog=pricing_catalog,
+            )
         except Exception:
             logger.exception("content_cycle_failed")
         await asyncio.sleep(settings.content_generation_poll_interval_seconds)

@@ -17,7 +17,9 @@ from pathlib import Path
 from core.config import settings
 from core.logging import setup_logging
 from integrations.llm_gateway.boot import assemble_ai_integration_layer
+from integrations.llm_gateway.models.catalog import build_model_registry
 from integrations.prompts.file_repository import FilePromptRepository
+from services.pricing_catalog import ModelRegistryPricingCatalog
 from worker.analysis_cycle import run_analysis_cycle
 
 logger = logging.getLogger(__name__)
@@ -31,10 +33,20 @@ async def _run_enabled_loop() -> None:
     wall-clock-fixed), mirroring worker/main.py's own disclosed, accepted behavior exactly."""
     prompt_repository = FilePromptRepository(_PROMPTS_ROOT)
     ai_layer = assemble_ai_integration_layer(settings, prompt_repository)  # constructed once
+    # API cost optimization: real cost accounting, constructed once alongside the AI layer -
+    # ai_layer.cost_tracker is the same RedisCostTracker instance already backing the shared
+    # FallbackPolicy pre-flight ledger read (integrations/llm_gateway/boot.py), so both sides
+    # always agree. Cost recording only, never a call-blocking check - see this codebase's own
+    # Phase 13 decision that analysis-worker cost containment stays workload-based, not
+    # monetary (tests/test_settings_phase7.py's own regression guard for that decision).
+    pricing_catalog = ModelRegistryPricingCatalog(build_model_registry())
 
     while True:
         try:
-            await run_analysis_cycle(ai_layer.capability_registry)
+            await run_analysis_cycle(
+                ai_layer.capability_registry,
+                cost_tracker=ai_layer.cost_tracker, pricing_catalog=pricing_catalog,
+            )
         except Exception:
             logger.exception("analysis_cycle_failed")
         await asyncio.sleep(settings.news_analysis_poll_interval_seconds)

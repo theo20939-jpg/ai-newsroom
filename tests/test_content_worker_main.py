@@ -14,7 +14,7 @@ import worker.content_cycle
 from core.config import settings
 from worker.content_main import main
 
-_FAKE_AI_LAYER = SimpleNamespace(capability_registry=object())
+_FAKE_AI_LAYER = SimpleNamespace(capability_registry=object(), cost_tracker=object())
 _FAKE_BOT = object()
 
 

@@ -237,9 +237,11 @@ async def test_unmapped_capability_name_fails_permanently(
 async def test_successful_call_is_compatible_with_ai_execution_mapper_without_persisting(
     db_session: AsyncSession, real_news_event: NewsEvent
 ) -> None:
-    """Strengthens the Amendment B runtime proof: a real CapabilityResult
-    produced through the executor's full path maps cleanly through
-    AIExecutionMapper, and still zero rows are ever written."""
+    """A real CapabilityResult produced through the executor's full path maps cleanly through
+    AIExecutionMapper. API cost optimization reversed Amendment B's "never writes" rule, but
+    only when `cost_tracker`/`pricing_catalog` are explicitly supplied (tests/
+    test_cost_recording_integration.py covers that opt-in path) - the constructor call here
+    omits both, so zero rows are still written, exactly as before."""
     workflow_registry = _single_step_workflow_registry("research")
     task = await _created_task(db_session, real_news_event, workflow_registry)
     capability_registry = _capability_registry("research", AlwaysSucceedsWithOneCallCapability())
@@ -323,3 +325,40 @@ def test_build_context_respects_overridden_target_language(monkeypatch: pytest.M
     context = capability_executor._build_context(task, news_event, step, attempt=1)
 
     assert context.business.language == "en"
+
+
+@pytest.mark.parametrize(
+    ("capability_name", "expected_max_tokens", "expected_reasoning_effort"),
+    [
+        ("research", 450, "none"),
+        ("intelligence", 500, "low"),
+        ("engagement", 350, "low"),
+        ("scoring", 250, "low"),
+        ("copywriting", 600, "low"),
+        ("quality", 400, "low"),
+    ],
+)
+def test_build_context_sets_capability_specific_token_limit_and_reasoning_effort(
+    capability_name: str, expected_max_tokens: int, expected_reasoning_effort: str
+) -> None:
+    """API cost optimization (docs/api_cost_optimization_report.md): centralized, per-capability
+    output-token ceiling and reasoning effort, set once in _build_context() - every capability
+    file already reads context.execution.max_tokens/reasoning_effort generically."""
+    task = EditorialTask(
+        id=uuid4(),
+        event_id=uuid4(),
+        priority=TaskPriority.B,
+        status=TaskStatus.RUNNING,
+        workflow={"workflow_name": "CONTENT_GENERATION", "workflow_version": 1, "current_step": capability_name},
+    )
+    news_event = NewsEvent(
+        id=task.event_id, source_id=uuid4(), title="Headline", summary=None, content="Body",
+        url=None, category=EventCategory.AI, published_at=None,
+    )
+    step = WorkflowStepDefinition(name=capability_name, capability=capability_name, timeout_seconds=30)
+    capability_executor = CapabilityExecutor(session=None, task_id=task.id, registry=None)  # type: ignore[arg-type]
+
+    context = capability_executor._build_context(task, news_event, step, attempt=1)
+
+    assert context.execution.max_tokens == expected_max_tokens
+    assert context.execution.reasoning_effort == expected_reasoning_effort

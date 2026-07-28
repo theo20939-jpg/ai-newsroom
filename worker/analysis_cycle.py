@@ -15,6 +15,8 @@ from database.models.editorial_task import EditorialTask, TaskStatus
 from database.models.news_event import NewsEvent
 from database.session import async_session_factory
 from schemas.workflow import WorkflowType
+from services.cost_tracker import CostTracker
+from services.pricing_catalog import PricingCatalog
 from workflows.errors import TaskAlreadyCompletedError, TaskAlreadyRunningError, TaskNotFoundError
 from workflows.runner import WorkflowRunner
 
@@ -64,6 +66,9 @@ async def _select_eligible_task_ids(session: AsyncSession) -> list[UUID]:
 async def run_analysis_cycle(
     capability_registry: CapabilityRegistry,
     session_factory: async_sessionmaker[AsyncSession] = async_session_factory,
+    *,
+    cost_tracker: CostTracker | None = None,
+    pricing_catalog: PricingCatalog | None = None,
 ) -> AnalysisCycleResult:
     result = AnalysisCycleResult()
 
@@ -78,7 +83,10 @@ async def run_analysis_cycle(
     # actually succeed.
     for task_id in eligible_ids:
         async with session_factory() as session:
-            executor = CapabilityExecutor(session, task_id, capability_registry)
+            executor = CapabilityExecutor(
+                session, task_id, capability_registry,
+                cost_tracker=cost_tracker, pricing_catalog=pricing_catalog,
+            )
             runner = WorkflowRunner(executor)
             try:
                 run_result = await runner.run(session, task_id)

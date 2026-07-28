@@ -20,6 +20,8 @@ from database.models.news_event import NewsEvent
 from database.session import async_session_factory
 from schemas.workflow import WorkflowType
 from scripts.run_content_generation import run_content_generation_for_event
+from services.cost_tracker import CostTracker
+from services.pricing_catalog import PricingCatalog
 from services.telegram_notifier import send_editorial_card
 
 logger = logging.getLogger(__name__)
@@ -143,6 +145,9 @@ async def run_content_cycle(
     capability_registry: CapabilityRegistry,
     bot: Bot,
     session_factory: async_sessionmaker[AsyncSession] = async_session_factory,
+    *,
+    cost_tracker: CostTracker | None = None,
+    pricing_catalog: PricingCatalog | None = None,
 ) -> ContentCycleResult:
     result = ContentCycleResult()
 
@@ -157,6 +162,7 @@ async def run_content_cycle(
     for event_id in event_ids:
         outcome = await run_content_generation_for_event(
             event_id, capability_registry=capability_registry, session_factory=session_factory,
+            cost_tracker=cost_tracker, pricing_catalog=pricing_catalog,
         )  # scripts/run_content_generation.py - imported, not copied (Phase 15 M5 extends its
            # ContentGenerationOutcome with fact_safety_status; the call site here is unchanged)
         if outcome.content_draft is None:

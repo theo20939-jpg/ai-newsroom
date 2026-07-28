@@ -39,6 +39,8 @@ from schemas.editorial_task import EditorialTaskCreate
 from schemas.workflow import RunStatus, WorkflowRunResult, WorkflowType
 from services import workflow_service
 from services.content_draft_service import ContentDraftService
+from services.cost_tracker import CostTracker
+from services.pricing_catalog import PricingCatalog
 from workflows.runner import WorkflowRunner
 
 logger = logging.getLogger(__name__)
@@ -91,6 +93,8 @@ async def run_content_generation_for_event(
     priority: TaskPriority = TaskPriority.B,
     capability_registry: CapabilityRegistry | None = None,
     session_factory: async_sessionmaker[AsyncSession] = async_session_factory,
+    cost_tracker: CostTracker | None = None,
+    pricing_catalog: PricingCatalog | None = None,
 ) -> ContentGenerationOutcome:
     """Orchestrate one NewsEvent through research -> intelligence -> copywriting -> quality ->
     ContentDraft persistence, using only the already-implemented production abstractions.
@@ -124,7 +128,9 @@ async def run_content_generation_for_event(
             session,
             EditorialTaskCreate(event_id=event_id, workflow_type=WorkflowType.CONTENT_GENERATION, priority=priority),
         )
-        executor = CapabilityExecutor(session, task.id, registry)
+        executor = CapabilityExecutor(
+            session, task.id, registry, cost_tracker=cost_tracker, pricing_catalog=pricing_catalog
+        )
         runner = WorkflowRunner(executor)
         result = await runner.run(session, task.id)
 

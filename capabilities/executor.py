@@ -7,13 +7,18 @@ constructor injection, zero changes to workflows/runner.py, workflows/
 registry.py, or schemas/workflow.py (docs/phase6_architecture_contract.md
 §5, rule 1).
 
-Per Amendment B (§16): CapabilityExecutor MUST NOT persist any AIExecution
-row in Phase 6. It holds a live database session only to re-fetch the
-EditorialTask/NewsEvent (read-only) - it never calls CostTracker, BudgetGuard,
-or LLMGateway, and never writes to `ai_executions`.
+API cost optimization (docs/api_cost_optimization_report.md §8) deliberately reverses Amendment
+B (§16)'s original "CapabilityExecutor MUST NOT persist any AIExecution row" constraint - this
+task's own explicit requirement is real, auditable, per-capability cost accounting, which
+requires exactly this seam (the one place that already sees every successful CapabilityResult's
+`calls`, already holds the real `task_id`/`event_id`/workflow name). `cost_tracker`/
+`pricing_catalog` are optional constructor parameters (default `None` = no recording,
+byte-for-byte the old behavior) - every existing caller/test that never passes them keeps
+working unchanged; only the two real production call sites (worker/analysis_cycle.py,
+scripts/run_content_generation.py) pass real ones, from `AIIntegrationLayer.cost_tracker`.
 """
 import logging
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,13 +28,14 @@ from database.models.editorial_task import EditorialTask
 from database.models.news_event import NewsEvent
 from schemas.capability import (
     BusinessContext,
+    CapabilityCall,
     CapabilityContext,
     ExecutionContext,
     NewsEventSnapshot,
     RuntimeContext,
     WorkflowExecutionStateSnapshot,
 )
-from schemas.workflow import WorkflowExecutionState, WorkflowStepDefinition
+from schemas.workflow import WorkflowExecutionState, WorkflowStepDefinition, WorkflowType
 from capabilities.capability_mapping import resolve_ai_capability
 from capabilities.errors import (
     CapabilityConfigurationError,
@@ -40,11 +46,44 @@ from capabilities.errors import (
     ValidationCapabilityError,
 )
 from capabilities.registry import CapabilityRegistry
+from services.analysis_reuse import (
+    REUSABLE_CAPABILITIES,
+    find_source_news_analysis_task_id,
+    reuse_prior_result,
+)
+from services.cost_recording import record_ai_execution
+from services.cost_tracker import CostTracker
 from services.editorial_scoring import apply_editorial_scoring_v2
 from services.fact_safety import apply_fact_safety
+from services.pricing_catalog import PricingCatalog
 from workflows.errors import PermanentStepFailureError, StepExecutionError, TaskNotFoundError
 
 logger = logging.getLogger(__name__)
+
+# API cost optimization (docs/api_cost_optimization_report.md §4): centralized per-capability
+# output-token ceilings and reasoning effort - one place, not per-capability-file, since every
+# capabilities/*_capability.py already reads `context.execution.max_tokens` generically. Values
+# are informed by real historical output sizes measured from persisted `WorkflowStepResult.result`
+# JSON (never invented) - see the optimization report for the exact evidence and per-capability
+# margin reasoning. "none" reasoning effort for Research (deterministic extraction from source
+# text, not editorial judgment); "low" for every other capability (real, if modest, editorial
+# judgment - significance, tone, factual review, copy).
+_MAX_OUTPUT_TOKENS_BY_CAPABILITY: dict[str, int] = {
+    "research": 450,
+    "intelligence": 500,
+    "engagement": 350,
+    "scoring": 250,
+    "copywriting": 600,
+    "quality": 400,
+}
+_REASONING_EFFORT_BY_CAPABILITY: dict[str, Literal["none", "low", "medium", "high"]] = {
+    "research": "none",
+    "intelligence": "low",
+    "engagement": "low",
+    "scoring": "low",
+    "copywriting": "low",
+    "quality": "low",
+}
 
 
 class CapabilityExecutor:
@@ -53,11 +92,27 @@ class CapabilityExecutor:
     Framework - never called directly by a Capability, never calling one
     Capability from another (P4)."""
 
-    def __init__(self, session: AsyncSession, task_id: UUID, registry: CapabilityRegistry) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        task_id: UUID,
+        registry: CapabilityRegistry,
+        *,
+        cost_tracker: CostTracker | None = None,
+        pricing_catalog: PricingCatalog | None = None,
+    ) -> None:
         self._session = session
         self._task_id = task_id
         self._registry = registry
+        self._cost_tracker = cost_tracker
+        self._pricing_catalog = pricing_catalog
         self._attempts: dict[str, int] = {}
+        # API cost optimization: memoized per executor instance (one per workflow run) so a
+        # CONTENT_GENERATION task's "research" and "intelligence" steps both reuse the exact
+        # same source NEWS_ANALYSIS task's evidence, never two different source tasks even in
+        # the unlikely event more than one COMPLETED NEWS_ANALYSIS task exists for this event.
+        # `False` (not yet looked up) is distinct from `None` (looked up, none found).
+        self._source_news_analysis_task_id: UUID | None | Literal[False] = False
 
     async def execute(self, step: WorkflowStepDefinition) -> dict[str, Any]:
         """Run one Workflow step's capability once and return its structured output.
@@ -94,22 +149,39 @@ class CapabilityExecutor:
 
         context = self._build_context(task, news_event, step, attempt)
 
-        try:
-            result = await capability.execute(context)
-        except RetryableCapabilityError as error:
-            raise StepExecutionError(str(error)) from error
-        except CapabilityTimeoutError as error:
-            raise StepExecutionError(str(error)) from error
-        except (PermanentCapabilityError, ValidationCapabilityError, CapabilityConfigurationError) as error:
-            raise PermanentStepFailureError(str(error)) from error
-
-        if result.status != "SUCCESS":
-            raise PermanentStepFailureError(
-                f"Capability '{step.capability}' returned status={result.status} "
-                "without raising a CapabilityError - contract violation."
+        # API cost optimization (docs/api_cost_optimization_report.md): CONTENT_GENERATION's
+        # "research"/"intelligence" steps reuse the same event's already-COMPLETED
+        # NEWS_ANALYSIS task's own persisted results instead of paying for an identical call -
+        # same NewsEvent, same evidence, so a fresh call would (re)produce equivalent facts.
+        # Only attempted for these two capability names, only for CONTENT_GENERATION, only on
+        # attempt 1 (a retry always performs a real call - reusing a stale result across a retry
+        # would defeat the retry's own purpose). Falls back to a real call (unchanged behavior)
+        # whenever no valid prior result exists - never blocks, never raises.
+        reused_output = await self._try_reuse(task, step, attempt)
+        if reused_output is not None:
+            logger.info(
+                "capability_result_reused_from_news_analysis",
+                extra={"task_id": str(self._task_id), "event_id": str(task.event_id), "capability": step.capability},
             )
+            structured_output = reused_output
+        else:
+            try:
+                result = await capability.execute(context)
+            except RetryableCapabilityError as error:
+                raise StepExecutionError(str(error)) from error
+            except CapabilityTimeoutError as error:
+                raise StepExecutionError(str(error)) from error
+            except (PermanentCapabilityError, ValidationCapabilityError, CapabilityConfigurationError) as error:
+                raise PermanentStepFailureError(str(error)) from error
 
-        structured_output = result.structured_output or {}
+            if result.status != "SUCCESS":
+                raise PermanentStepFailureError(
+                    f"Capability '{step.capability}' returned status={result.status} "
+                    "without raising a CapabilityError - contract violation."
+                )
+
+            structured_output = result.structured_output or {}
+            await self._record_cost(task, step, result.calls)
 
         # Phase 15 M4: deterministic Editorial Score V2 post-processing, only for the "scoring"
         # step, only after its own LLM call already succeeded above - see
@@ -135,6 +207,52 @@ class CapabilityExecutor:
             )
 
         return structured_output
+
+    async def _record_cost(
+        self, task: EditorialTask, step: WorkflowStepDefinition, calls: list[CapabilityCall]
+    ) -> None:
+        """API cost optimization. No-op unless both `cost_tracker` and `pricing_catalog` were
+        supplied at construction (every existing test/caller that omits them keeps the old,
+        zero-recording behavior). Writes the durable AIExecution row (services.cost_recording)
+        and increments the fast Redis ledger BudgetGuard's pre-flight check already reads
+        (services.cost_tracker) - both from the exact same CapabilityCall data, never invented."""
+        if self._cost_tracker is None or self._pricing_catalog is None:
+            return
+        state = WorkflowExecutionState.model_validate(task.workflow)
+        for call in calls:
+            if call.status != "SUCCESS":
+                continue
+            await record_ai_execution(
+                self._session,
+                task_id=self._task_id,
+                event_id=task.event_id,
+                workflow_name=state.workflow_name.value,
+                capability_name=step.capability,
+                call=call,
+                pricing_catalog=self._pricing_catalog,
+            )
+            await self._cost_tracker.record(self._task_id, step.capability, call)
+
+    async def _try_reuse(
+        self, task: EditorialTask, step: WorkflowStepDefinition, attempt: int
+    ) -> dict[str, Any] | None:
+        """API cost optimization. Returns a reusable prior result, or `None` (meaning: perform
+        a real capability call - the unconditional, safe default). Never raises: any lookup
+        failure is treated exactly like "no reusable result found"."""
+        if step.capability not in REUSABLE_CAPABILITIES or attempt != 1:
+            return None
+        state = WorkflowExecutionState.model_validate(task.workflow)
+        if state.workflow_name != WorkflowType.CONTENT_GENERATION:
+            return None
+
+        if self._source_news_analysis_task_id is False:  # not yet looked up this run
+            self._source_news_analysis_task_id = await find_source_news_analysis_task_id(
+                self._session, task.event_id
+            )
+        source_task_id = self._source_news_analysis_task_id
+        if source_task_id is None:
+            return None
+        return await reuse_prior_result(self._session, source_task_id, step.capability)
 
     def _build_context(
         self, task: EditorialTask, news_event: NewsEvent, step: WorkflowStepDefinition, attempt: int
@@ -169,6 +287,10 @@ class CapabilityExecutor:
                 # - never left to BusinessContext.language's own implicit schema default.
                 language=settings.default_content_language,
             ),
+            execution=ExecutionContext(
+                max_tokens=_MAX_OUTPUT_TOKENS_BY_CAPABILITY.get(step.capability),
+                reasoning_effort=_REASONING_EFFORT_BY_CAPABILITY.get(step.capability),
+            ),
             runtime=RuntimeContext(
                 task_id=task.id,
                 event_id=task.event_id,
@@ -177,5 +299,4 @@ class CapabilityExecutor:
                 attempt=attempt,
                 iteration_count=state.iteration_count,
             ),
-            execution=ExecutionContext(),
         )
