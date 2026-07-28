@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import settings
 from database.models.editorial_task import EditorialTask
 from database.models.news_event import NewsEvent
+from database.models.news_source import NewsSource
 from schemas.capability import (
     BusinessContext,
     CapabilityCall,
@@ -55,6 +56,7 @@ from services.cost_recording import record_ai_execution
 from services.cost_tracker import CostTracker
 from services.editorial_scoring import apply_editorial_scoring_v2
 from services.fact_safety import apply_fact_safety
+from services.image_intelligence import consolidate_candidates, reconstruct_hints_from_content
 from services.pricing_catalog import PricingCatalog
 from workflows.errors import PermanentStepFailureError, StepExecutionError, TaskNotFoundError
 
@@ -206,7 +208,40 @@ class CapabilityExecutor:
                 research_output, copywriting_output, structured_output,
             )
 
+        # Phase 16 M1: deterministic, zero-download Image Intelligence shadow discovery (docs/
+        # phase16_m1_native_media_ingestion_report.md) - only for "copywriting" (the earliest step
+        # where the drafted event's persisted content/url are certain to exist) and only when
+        # image_intelligence_mode == "shadow" (default "off", byte-for-byte unchanged behavior).
+        # Reconstructs candidates from news_event.content/url only - the adapter-time native-media
+        # hints from services/collector.py never reach this later, separate worker process (no
+        # migration exists to carry them, discovery report §11/§21). Never allowed to fail the
+        # step: mirrors apply_fact_safety's own "must not affect delivery" discipline exactly.
+        if step.capability == "copywriting" and settings.image_intelligence_mode == "shadow":
+            structured_output = await self._attach_image_intelligence(news_event, structured_output)
+
         return structured_output
+
+    async def _attach_image_intelligence(
+        self, news_event: NewsEvent, structured_output: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Best-effort, non-blocking. Any failure - including being unable to resolve the event's
+        NewsSource - is logged and swallowed, returning `structured_output` completely unchanged
+        (copywriting's own fields are never touched, only a new "image_intelligence" key added)."""
+        try:
+            source = await self._session.get(NewsSource, news_event.source_id)
+            if source is None:
+                return structured_output
+            hints = reconstruct_hints_from_content(news_event.content, news_event.url)
+            result = consolidate_candidates(
+                hints, event_id=news_event.id, source_type=source.type, mode="shadow"
+            )
+            return {**structured_output, "image_intelligence": result.model_dump(mode="json")}
+        except Exception:
+            logger.warning(
+                "image_intelligence_workflow_attach_failed",
+                extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+            )
+            return structured_output
 
     async def _record_cost(
         self, task: EditorialTask, step: WorkflowStepDefinition, calls: list[CapabilityCall]
