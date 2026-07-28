@@ -1,7 +1,33 @@
 # Phase 16 — Image Intelligence — M0 Implementation Plan
 
-Status: PLAN ONLY. Nothing in this document has been implemented. See
-`docs/phase16_image_intelligence_discovery_report.md` for the evidence this plan is built on.
+Status: **M1 IMPLEMENTED** (docs/phase16_m1_native_media_ingestion_report.md). M2–M8 remain plan
+only. See `docs/phase16_image_intelligence_discovery_report.md` for the evidence this plan is
+built on.
+
+## M1 architecture corrections (discovered during implementation)
+
+- **`RawNewsItem` gained one additive field (`native_media_hints`), contradicting this plan's
+  original "no change to `RawNewsItem`... until M5's migration" statement below.** This is not a
+  migration: `RawNewsItem` is a plain Pydantic schema, never a DB model — extending it costs
+  nothing in schema-change terms, and every adapter that never sets the field (GitHub/HN/arXiv)
+  is byte-for-byte unchanged. `NewsEvent`/`ContentDraft` (the actual DB models the original
+  statement was really protecting) remain untouched, and no migration was added. The original
+  wording was imprecise; the intent (no migration) held.
+- **No per-`NewsEvent` metadata field exists reachable both at collection time and at
+  `CONTENT_GENERATION` time** (confirmed by reading every `database/models/*.py` file — zero JSON
+  columns on `NewsEvent`/`NewsSource`). M1 resolved this by splitting into two independent
+  deliverables (Collector-time structured-log audit trail vs. CONTENT_GENERATION-time
+  reconstruction from already-persisted `NewsEvent.content`/`url`) rather than adding a migration
+  - see the M1 report §3 for the full reasoning. This is a real scoping constraint the original
+  M0 plan's "Structured candidate contract... as an in-memory/`step_results` dict shape" language
+  under-specified; M1's report is now the authoritative description of how that dict shape is
+  actually populated.
+- **GitHub release-body markdown-image extraction, listed as an M1 "minor addition" below, was
+  deliberately NOT implemented** — out of scope for the milestone's actual delivery; GitHub/HN/
+  arXiv all correctly produce empty native candidate lists in M1.
+- **Open Graph/JSON-LD extraction was not built at all in M1**, not even as a disabled parser —
+  the M1 task brief explicitly deferred it, superseding this plan's "M1 may build the parser but
+  must not enable live fetching" language.
 
 Architectural constraints preserved throughout: existing Workflow Engine (`workflows/runner.py`,
 `workflows/registry.py`, `schemas/workflow.py` — unchanged), existing Capability Framework
@@ -36,35 +62,33 @@ database migration until the design is validated in shadow mode.
 
 ## 3. Milestones (M1–M8)
 
-### M1 — Candidate ingestion
+### M1 — Candidate ingestion — **IMPLEMENTED** (docs/phase16_m1_native_media_ingestion_report.md)
 
-- **Scope:** discover raw candidates from Telegram (Telethon media on already-fetched messages),
-  RSS (`feedparser`'s already-exposed `media_content`/`media_thumbnail`/`enclosures`/inline
-  `<img>`), NEWS_API-category sources (GitHub release markdown images as a minor addition; HN/
-  arXiv contribute effectively nothing per discovery §6), and Open Graph/JSON-LD metadata from the
-  source article page (new fetch, gated by the new SSRF-safe fetcher from M2 — M1 may build the
-  parser but must not enable live fetching before M2's safety boundary exists). Structured
-  candidate contract (discovery §11) as an in-memory/`step_results` dict shape, no DB model yet.
-- **Files likely affected:** `services/image_intelligence.py` (new), `integrations/sources/
-  telegram_source.py` (read `message.grouped_id`/media presence, still text-item-scoped — no
-  behavior change to existing `RawNewsItem` output), `integrations/sources/rss_source.py` (read
-  `media_content`/`media_thumbnail`/`enclosures`, no change to `RawNewsItem` shape — candidates
-  flow through the new service, not through `RawNewsItem`), new `services/og_metadata.py` (parse
-  og:image/twitter:image/JSON-LD from fetched HTML — parsing only, fetching arrives with M2).
-- **Tests:** Telegram photo/document/media-group presence detection (fixtures, no live Telethon
-  session); RSS `media:content`/`enclosure`/inline-`<img>` extraction (using the existing
-  `httpx.MockTransport` pattern from `tests/test_rss_source.py`); GitHub release markdown image
-  extraction; missing-image cases for HN/arXiv (assert empty candidate list, not an error).
-- **Migration impact:** none.
-- **Deployment impact:** none — `IMAGE_INTELLIGENCE_MODE` (or final name, discovery §19) defaults
-  to `off`; this milestone ships dormant code.
-- **Rollback:** delete/disable the new service call; zero effect on existing behavior since it's
-  gated off by default.
-- **Definition of Done:** for a batch of real, already-collected `NewsEvent` rows, the service
-  produces a correct, evidence-matching candidate list per source type, with zero live network
-  calls made yet (OG fetch stays disabled until M2).
-- **Non-goals:** no live HTTP fetch of any article page; no image bytes downloaded; no dedup/
-  ranking/quality gating yet.
+- **Scope actually delivered:** Telegram photo/document native metadata (Telethon, verified
+  against real type shapes), RSS `media_content`/`media_thumbnail`/enclosure/inline-`<img>`
+  (verified against real `feedparser` output), GitHub/HN/arXiv confirmed empty-and-correct. Open
+  Graph/JSON-LD extraction was **not** built at all in M1 (fully deferred to M2, not even a
+  disabled parser — see the architecture-corrections note above). GitHub release markdown-image
+  extraction was scoped out. Candidate contract lives in `schemas/image_candidate.py`
+  (`NativeMediaHint`/`ImageCandidate`/`ImageIntelligenceResult`) - two independent, non-migrated
+  transport surfaces (Collector-time structured log; CONTENT_GENERATION-time reconstruction from
+  persisted `NewsEvent.content`/`url`), not one unified in-memory/step_results pipeline as
+  originally imagined - see the M1 report §3 for why.
+- **Files actually changed:** `schemas/image_candidate.py` (new), `services/image_intelligence.py`
+  (new), `schemas/raw_news_item.py` (additive field), `services/cleaning.py`, `integrations/
+  sources/telegram_source.py`, `integrations/sources/rss_source.py`, `services/collector.py`,
+  `core/config.py`, `capabilities/executor.py`. No `services/og_metadata.py` was created.
+- **Tests actually delivered:** 47 tests in `tests/test_image_intelligence.py` plus adapter-level
+  wiring tests in all five source-adapter test files, Collector-level tests, and CapabilityExecutor
+  workflow-hook tests (real Postgres) — see the M1 report §16/§19 for exact totals.
+- **Migration impact:** none, as planned.
+- **Deployment impact:** none — `image_intelligence_mode` defaults to `"off"` (not `"shadow"` -
+  see the architecture-corrections note above for why M1 chose a stricter default than this plan
+  originally implied); shipped dormant, per plan.
+- **Rollback:** as planned — config flip only, no code surgery.
+- **Definition of Done:** met — see the M1 report's 400-event real-data backtest (§17) for
+  evidence-matching candidate lists per source type, zero live network calls.
+- **Non-goals:** held exactly as planned.
 
 ### M2 — Secure fetch and technical validation
 
