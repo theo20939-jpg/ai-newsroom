@@ -132,6 +132,20 @@ async def test_release_becomes_raw_news_item_with_expected_fields(monkeypatch: p
 
 
 @pytest.mark.asyncio
+async def test_github_releases_produce_no_native_image_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Phase 16 M1 (docs/phase16_m1_native_media_ingestion_report.md §8): GitHub's Releases API
+    has no dedicated image field - an empty native_media_hints list is the correct, non-error M1
+    behavior (in-scope markdown-image extraction from release bodies is deliberately out of M1
+    scope, per the M0 implementation plan)."""
+    handler = _repo_router({"openai/openai-python": [_release(1, "v1.0.0", body="![screenshot](https://x/y.png)")]})
+    _patch_httpx_client(monkeypatch, handler)
+
+    items = await GitHubSourceAdapter().fetch(_source(), _context(["openai/openai-python"]))
+    assert len(items) == 1
+    assert items[0].native_media_hints == []
+
+
+@pytest.mark.asyncio
 async def test_draft_releases_are_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
     handler = _repo_router(
         {"openai/openai-python": [_release(1, draft=True), _release(2, draft=False)]}

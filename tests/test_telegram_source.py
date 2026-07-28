@@ -38,6 +38,9 @@ class _FakeMessage:
     forwards: int | None = None
     replies: _FakeReplies | None = None
     reactions: _FakeReactions | None = None
+    grouped_id: int | None = None  # Phase 16 M1
+    photo: object | None = None  # Phase 16 M1
+    document: object | None = None  # Phase 16 M1
 
 
 # A. Telegram full metrics
@@ -152,3 +155,47 @@ def test_raw_news_item_engagement_fields_default_to_none() -> None:
     assert item.forwards_count is None
     assert item.replies_count is None
     assert item.reactions_count is None
+
+
+# Phase 16 M1 (docs/phase16_m1_native_media_ingestion_report.md): adapter-level wiring - proves
+# _to_raw_item() actually calls services.image_intelligence.extract_telegram_native_media() and
+# threads its result onto RawNewsItem.native_media_hints, not just that the extraction function
+# itself works in isolation (see tests/test_image_intelligence.py for that).
+@dataclass
+class _FakePhotoSize:
+    w: int | None = None
+    h: int | None = None
+
+
+@dataclass
+class _FakePhoto:
+    id: int | None = None
+    sizes: list = field(default_factory=list)
+
+
+def test_to_raw_item_populates_native_media_hints_for_a_photo_post() -> None:
+    message = _FakeMessage(id=20, text="caption", photo=_FakePhoto(id=1, sizes=[_FakePhotoSize(w=100, h=100)]))
+    item = TelegramSourceAdapter._to_raw_item(message, "channel")
+    assert item is not None
+    assert len(item.native_media_hints) == 1
+    assert item.native_media_hints[0].discovery_method.value == "telegram_photo"
+
+
+def test_to_raw_item_produces_no_hints_for_a_text_only_post() -> None:
+    message = _FakeMessage(id=21, text="just text")
+    item = TelegramSourceAdapter._to_raw_item(message, "channel")
+    assert item is not None
+    assert item.native_media_hints == []
+
+
+def test_to_raw_item_extraction_failure_never_breaks_text_collection() -> None:
+    class _BrokenPhoto:
+        @property
+        def sizes(self):
+            raise RuntimeError("boom")
+
+    message = _FakeMessage(id=22, text="still collected", photo=_BrokenPhoto())
+    item = TelegramSourceAdapter._to_raw_item(message, "channel")
+    assert item is not None
+    assert item.text == "still collected"
+    assert item.native_media_hints == []

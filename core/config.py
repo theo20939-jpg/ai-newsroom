@@ -189,6 +189,19 @@ class Settings(BaseSettings):
     # rollback-without-migration precedent.
     fact_safety_mode: Literal["off", "shadow", "enforce"] = "shadow"
 
+    # Phase 16 M1: Image Intelligence (docs/phase16_m1_native_media_ingestion_report.md). Two-state
+    # for M1 - "editorial" (the state that would actually change Telegram output) does not exist
+    # yet and is reserved for M6 (docs/phase16_image_intelligence_discovery_report.md §19's own
+    # recommendation to eventually match fact_safety_mode's off/shadow/enforce convention).
+    # "off" (default): zero processing, byte-identical to pre-Phase-16 behavior - the rollback
+    # path. "shadow": native candidates are discovered/recorded (Collector-time audit log,
+    # CONTENT_GENERATION step_results) - never downloads an image, never changes Telegram output,
+    # never changes ContentDraft text. Matches fact_safety_mode's own "off is the true no-op,
+    # shadow is safe-by-construction" precedent, except M1 defaults to "off" (not "shadow") since,
+    # unlike Fact Safety, this is a brand-new capability with zero live validation yet - M7's own
+    # live-validation milestone is the gate for even a shadow-by-default posture.
+    image_intelligence_mode: Literal["off", "shadow"] = "off"
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""

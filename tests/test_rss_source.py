@@ -129,6 +129,52 @@ async def test_fetch_returns_empty_list_for_missing_url() -> None:
     assert items == []
 
 
+# Phase 16 M1 (docs/phase16_m1_native_media_ingestion_report.md): adapter-level wiring - proves
+# _to_raw_item() actually calls services.image_intelligence.extract_rss_native_media() and
+# threads its result onto RawNewsItem.native_media_hints (see tests/test_image_intelligence.py
+# for the extraction logic itself).
+INLINE_IMAGE_BODY = b"""<?xml version="1.0"?>
+<rss version="2.0">
+  <channel>
+    <title>Example Feed</title>
+    <item>
+      <title>Post with an image</title>
+      <link>https://example.com/with-image</link>
+      <guid>https://example.com/with-image</guid>
+      <description>&lt;p&gt;Body &lt;img src="https://cdn.example.com/inline.jpg"/&gt;&lt;/p&gt;</description>
+      <pubDate>Mon, 01 Jan 2024 12:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
+"""
+
+
+@pytest.mark.asyncio
+async def test_fetch_populates_native_media_hints_for_inline_image(monkeypatch: pytest.MonkeyPatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=INLINE_IMAGE_BODY)
+
+    _patch_httpx_client(monkeypatch, handler)
+
+    items = await RSSSourceAdapter().fetch(_source("https://example.com/feed.rss"), CONTEXT)
+
+    assert len(items) == 1
+    assert len(items[0].native_media_hints) == 1
+    assert items[0].native_media_hints[0].remote_url == "https://cdn.example.com/inline.jpg"
+
+
+@pytest.mark.asyncio
+async def test_fetch_populates_no_hints_when_no_native_media_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=RSS_BODY)
+
+    _patch_httpx_client(monkeypatch, handler)
+
+    items = await RSSSourceAdapter().fetch(_source("https://example.com/feed.rss"), CONTEXT)
+
+    assert all(item.native_media_hints == [] for item in items)
+
+
 def _patch_httpx_client(monkeypatch: pytest.MonkeyPatch, handler) -> None:
     """Route httpx.AsyncClient through a MockTransport for the duration of a test."""
     original_init = httpx.AsyncClient.__init__

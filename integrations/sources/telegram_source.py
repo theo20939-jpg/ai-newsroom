@@ -15,6 +15,7 @@ from core.config import settings
 from database.models.news_source import NewsSource
 from integrations.sources.base import SourceAdapter, SourceFetchContext
 from schemas.raw_news_item import RawNewsItem
+from services.image_intelligence import extract_telegram_native_media
 
 logger = logging.getLogger(__name__)
 
@@ -86,4 +87,8 @@ class TelegramSourceAdapter(SourceAdapter):
             forwards_count=message.forwards,
             replies_count=message.replies.replies if message.replies is not None else None,
             reactions_count=_reactions_count(message),
+            # Phase 16 M1: native photo/document metadata only - never downloaded here (docs/
+            # phase16_m1_native_media_ingestion_report.md). Extraction failure must never break
+            # collection of the message's text, so this is never allowed to raise past this point.
+            native_media_hints=extract_telegram_native_media(message),
         )

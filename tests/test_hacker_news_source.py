@@ -56,6 +56,17 @@ async def test_story_with_external_url(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_hacker_news_produces_no_native_image_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Phase 16 M1 (docs/phase16_m1_native_media_ingestion_report.md §8): the HN Firebase API has
+    no image field for any item shape - an empty native_media_hints list is the correct, non-error
+    M1 behavior."""
+    _patch_httpx_client(monkeypatch, _item_router({1: STORY_WITH_URL}))
+    items = await HackerNewsSourceAdapter().fetch(_source(), CONTEXT)
+    assert len(items) == 1
+    assert items[0].native_media_hints == []
+
+
+@pytest.mark.asyncio
 async def test_self_post_falls_back_to_discussion_url(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_httpx_client(monkeypatch, _item_router({2: ASK_HN_STORY}))
     items = await HackerNewsSourceAdapter().fetch(_source(), CONTEXT)

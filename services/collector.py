@@ -23,15 +23,18 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from telethon.errors import FloodWaitError
 
+from core.config import settings
 from database.models.news_event import EventStatus, NewsEvent
-from database.models.news_source import NewsSource
+from database.models.news_source import NewsSource, SourceType
 from database.session import async_session_factory
 from integrations.sources.base import SourceAdapter, SourceFetchContext
+from schemas.image_candidate import NativeMediaHint
 from schemas.raw_news_item import RawNewsItem
 from schemas.source_definition import SourceDefinition
 from services import cleaning, deduplication
 from services.adapter_registry import AdapterResolution, build_registry
 from services.event_category import categorize_from_tags
+from services.image_intelligence import consolidate_candidates
 from services.source_registry import SourceRegistryReport, load_source_pack
 
 logger = logging.getLogger(__name__)
@@ -212,6 +215,36 @@ async def _process_item(
         return
 
     report.events_created += 1
+    _log_image_intelligence(event.id, source.type, cleaned.native_media_hints)
+
+
+def _log_image_intelligence(
+    event_id: uuid.UUID, source_type: SourceType, hints: list[NativeMediaHint]
+) -> None:
+    """Phase 16 M1 (docs/phase16_m1_native_media_ingestion_report.md): structured audit-trail log
+    only - the sole "safe preservation through the existing collection path" this milestone
+    provides. Never persisted to PostgreSQL (NewsEvent has no image/media column, M1 adds no
+    migration - discovery report §11/§21), and never allowed to affect NewsEvent creation, which
+    has already committed by the time this runs. `event.id` only exists after the flush above, so
+    this must run after it, not before."""
+    if settings.image_intelligence_mode == "off":
+        return
+    try:
+        result = consolidate_candidates(hints, event_id=event_id, source_type=source_type, mode="shadow")
+        logger.info(
+            "image_intelligence_candidates_discovered",
+            extra={
+                "event_id": str(event_id),
+                "source_type": source_type.value,
+                "mode": settings.image_intelligence_mode,
+                "candidates_discovered": result.candidates_discovered,
+                "candidates_accepted": result.candidates_accepted,
+                "candidates_rejected": result.candidates_rejected,
+                "discovery_methods": sorted({c.discovery_method.value for c in result.candidates}),
+            },
+        )
+    except Exception:
+        logger.warning("image_intelligence_collector_logging_failed", extra={"event_id": str(event_id)})
 
 
 def _compute_hash(source_id: uuid.UUID, external_id: str) -> str:

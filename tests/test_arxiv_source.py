@@ -41,6 +41,23 @@ def _patch_httpx_client(monkeypatch: pytest.MonkeyPatch, handler) -> None:
 
 
 @pytest.mark.asyncio
+async def test_arxiv_produces_no_native_image_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Phase 16 M1 (docs/phase16_m1_native_media_ingestion_report.md §8): arXiv's Atom feed has
+    no per-article image concept - an empty native_media_hints list is the correct, non-error
+    M1 behavior, not a gap in this adapter."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=ARXIV_BODY)
+
+    _patch_httpx_client(monkeypatch, handler)
+    items = await ArxivSourceAdapter().fetch(
+        _source("https://export.arxiv.org/api/query?search_query=cat:cs.AI"), CONTEXT
+    )
+    assert len(items) == 1
+    assert items[0].native_media_hints == []
+
+
+@pytest.mark.asyncio
 async def test_parses_entry_preferring_abstract_link_over_pdf(monkeypatch: pytest.MonkeyPatch) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, content=ARXIV_BODY)

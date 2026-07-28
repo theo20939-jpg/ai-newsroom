@@ -22,8 +22,9 @@ import logging
 import re
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from schemas.image_candidate import NativeMediaHint
 from schemas.raw_news_item import RawNewsItem
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ class CleanedItem(BaseModel):
     forwards_count: int | None
     replies_count: int | None
     reactions_count: int | None
+    native_media_hints: list[NativeMediaHint] = Field(default_factory=list)
 
 
 def clean_item(raw: RawNewsItem) -> CleanedItem | None:
@@ -76,6 +78,7 @@ def clean_item(raw: RawNewsItem) -> CleanedItem | None:
         forwards_count=raw.forwards_count,
         replies_count=raw.replies_count,
         reactions_count=raw.reactions_count,
+        native_media_hints=raw.native_media_hints,
     )
 
 
