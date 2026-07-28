@@ -207,6 +207,32 @@ async def test_request_translation_builds_correct_payload() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reasoning_effort_translates_to_reasoning_payload_field() -> None:
+    """API cost optimization: GenerateRequest.reasoning_effort -> OpenAI's `reasoning.effort`."""
+    client = _mock_client(_text_response("ok"))
+    adapter = OpenAIAdapter(_credential(), client=client)
+    request = GenerateRequest(
+        messages=[Message(role="user", content=[ContentPart(type="text", text="hello")])],
+        reasoning_effort="low",
+        metadata={"resolved_model_id": "gpt-5.6-luna"},
+    )
+
+    await adapter.generate(request)
+
+    assert client.responses.create.call_args.kwargs["reasoning"] == {"effort": "low"}
+
+
+@pytest.mark.asyncio
+async def test_reasoning_effort_omitted_when_not_set() -> None:
+    client = _mock_client(_text_response("ok"))
+    adapter = OpenAIAdapter(_credential(), client=client)
+
+    await adapter.generate(_request(resolved_model_id="gpt-5.6-luna"))
+
+    assert "reasoning" not in client.responses.create.call_args.kwargs
+
+
+@pytest.mark.asyncio
 async def test_response_translation_maps_tool_calls_and_finish_reason() -> None:
     client = _mock_client(_tool_call_response(name="search", arguments='{"query": "cats"}'))
     adapter = OpenAIAdapter(_credential(), client=client)
@@ -543,6 +569,8 @@ def test_no_openai_specific_fields_on_shared_schemas() -> None:
         "preferred_provider",
         "max_tokens",
         "temperature",
+        "reasoning_effort",  # API cost optimization - provider-neutral (a generic Responses-
+        # API-shaped concept, not an OpenAI-only one), same status as max_tokens/temperature.
         "tools",
         "tool_choice",
         "response_mode",

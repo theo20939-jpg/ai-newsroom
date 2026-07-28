@@ -120,6 +120,7 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
         preferred_model=context.execution.preferred_model,
         preferred_provider=context.execution.preferred_provider,
         max_tokens=context.execution.max_tokens,
+        reasoning_effort=context.execution.reasoning_effort,
         temperature=context.execution.temperature,
         response_mode="json_schema",
         response_schema=prompt.output_schema,

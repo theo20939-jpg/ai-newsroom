@@ -14,7 +14,17 @@ any real BudgetGuard invocation, and capabilities/executor.py confirms Capabilit
 calls it either) - this is a clean signature replacement, not a change to any exercised call
 site. `BudgetCheckRequest` is removed; only the Phase 6 shape-only test
 (tests/test_budget_guard_protocol.py) needed updating to match.
+
+API cost optimization (docs/api_cost_optimization_report.md §10): `RedisBudgetGuard` now reads
+`settings.llm_budget_mode`/`llm_daily_budget_usd` instead of the never-wired-up
+`max_daily_ai_cost` - the same Redis ledger, the same pre-flight call site (unchanged), just a
+real, enforceable three-state mode (off/shadow/enforce) instead of an optional ceiling nothing
+ever actually populated (the ledger was never written to at all until this same task wired
+CostTracker.record() into capabilities/executor.py - see that module's own docstring). "shadow"
+computes and logs the exact same allow/deny decision "enforce" would make, but never raises -
+the safe default until real spend data validates the accounting.
 """
+import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Literal, Protocol
@@ -26,6 +36,8 @@ from core.config import Settings
 from database.models.editorial_task import TaskPriority
 from integrations.llm_gateway.errors import MissingRedisFailurePolicyError
 from services.cost_tracker import global_ledger_key
+
+logger = logging.getLogger(__name__)
 
 
 class BudgetGuard(Protocol):
@@ -77,15 +89,17 @@ class RedisBudgetGuard:
             )
         self._redis = redis_client
         self._failure_policy: Literal["fail_open", "fail_closed"] = settings.redis_unavailable_policy
-        self._max_daily_ai_cost = settings.max_daily_ai_cost
+        self._mode: Literal["off", "shadow", "enforce"] = settings.llm_budget_mode
+        self._daily_budget_usd = Decimal(str(settings.llm_daily_budget_usd))
+        self._daily_warning_usd = Decimal(str(settings.llm_daily_warning_usd))
         self._ledger_namespace = ledger_namespace
 
     def _namespace(self) -> str:
         return self._ledger_namespace if self._ledger_namespace is not None else _today_namespace()
 
     async def check(self, capability_name: str, priority: TaskPriority, worst_case: Decimal) -> None:
-        if self._max_daily_ai_cost is None:
-            return  # no ceiling configured - always allow
+        if self._mode == "off":
+            return  # no blocking, no accounting - the explicit escape hatch
 
         key = global_ledger_key(self._namespace())
         try:
@@ -93,14 +107,50 @@ class RedisBudgetGuard:
         except Exception as exc:
             if self._failure_policy == "fail_open":
                 return
-            raise BudgetExceededError(
-                "BudgetGuard ledger unavailable and redis_unavailable_policy=fail_closed"
-            ) from exc
+            if self._mode == "enforce":
+                raise BudgetExceededError(
+                    "BudgetGuard ledger unavailable and redis_unavailable_policy=fail_closed"
+                ) from exc
+            return  # shadow mode never blocks, even on a ledger read failure
 
         spent_so_far = Decimal(str(raw_spent)) if raw_spent is not None else Decimal("0")
-        ceiling = Decimal(str(self._max_daily_ai_cost))
-        if spent_so_far + worst_case > ceiling:
-            raise BudgetExceededError(
-                f"Budget exceeded for capability '{capability_name}' (priority={priority.value}): "
-                f"today's spend {spent_so_far} + worst_case {worst_case} > ceiling {ceiling}"
+        projected = spent_so_far + worst_case
+        would_exceed = projected > self._daily_budget_usd
+
+        if spent_so_far >= self._daily_warning_usd:
+            logger.warning(
+                "llm_daily_spend_warning_threshold_crossed",
+                extra={
+                    "capability": capability_name, "priority": priority.value,
+                    "spent_so_far": str(spent_so_far), "warning_threshold": str(self._daily_warning_usd),
+                    "daily_budget": str(self._daily_budget_usd), "mode": self._mode,
+                },
             )
+
+        if not would_exceed:
+            return
+
+        if self._mode == "shadow":
+            logger.info(
+                "llm_daily_budget_would_be_exceeded_shadow_mode",
+                extra={
+                    "capability": capability_name, "priority": priority.value,
+                    "spent_so_far": str(spent_so_far), "worst_case": str(worst_case),
+                    "projected": str(projected), "daily_budget": str(self._daily_budget_usd),
+                },
+            )
+            return
+
+        # enforce
+        logger.warning(
+            "llm_daily_budget_exceeded_call_denied",
+            extra={
+                "capability": capability_name, "priority": priority.value,
+                "spent_so_far": str(spent_so_far), "worst_case": str(worst_case),
+                "projected": str(projected), "daily_budget": str(self._daily_budget_usd),
+            },
+        )
+        raise BudgetExceededError(
+            f"Daily LLM budget exceeded for capability '{capability_name}' (priority={priority.value}): "
+            f"today's spend {spent_so_far} + worst_case {worst_case} > daily budget {self._daily_budget_usd}"
+        )

@@ -65,6 +65,9 @@ class GenerateRequest(BaseModel):
     preferred_provider: str | None = None
     max_tokens: int | None = None
     temperature: float | None = None
+    # API cost optimization: OpenAI's Responses API `reasoning.effort` parameter. `None` (the
+    # default) omits the field entirely - unchanged behavior for every existing caller.
+    reasoning_effort: Literal["none", "low", "medium", "high"] | None = None
 
     tools: list[ToolDefinition] | None = None
     tool_choice: Literal["auto", "none", "required"] | None = None

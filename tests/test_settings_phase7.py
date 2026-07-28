@@ -206,11 +206,19 @@ def test_no_phase13_specific_cost_cap_setting_was_added() -> None:
     resolution.md Human Decision B): Phase 13 deliberately does not add a NEW,
     analysis-specific monetary cost-cap Settings field - cost containment for the analysis
     worker is entirely workload-based (freshness cutoff, batch cap, sequential execution, no
-    automatic retry), never monetary. The pre-existing, general `max_daily_ai_cost` field
-    (already present before Phase 13, tied to BudgetGuard, not analysis-specific) is untouched
-    by this Plan and is not itself the subject of this decision - proven separately not to be
-    newly wired to the analysis worker anywhere in worker/analysis_cycle.py or
-    worker/analysis_main.py."""
+    automatic retry), never monetary. Still true, unchanged by API cost optimization: no
+    analysis-specific cost field exists (the new `llm_budget_mode`/`llm_daily_budget_usd`/
+    `llm_daily_warning_usd` settings are global, shared by every capability across every
+    workflow, not analysis-specific), and BudgetGuard is still never wired directly into
+    worker/analysis_cycle.py or worker/analysis_main.py (it remains exclusively inside
+    FallbackPolicy's own shared pre-flight check, applying identically to every workflow).
+
+    API cost optimization (docs/api_cost_optimization_report.md §11) DOES deliberately add
+    `CostTracker` to both files - a narrower, explicitly authorized exception to this same
+    decision's letter (not its substance): CostTracker only *records* real post-hoc spend
+    (observability), it never blocks or caps a call the way BudgetGuard/`max_daily_ai_cost`
+    would - the "cost containment is workload-based, never monetary" decision is about
+    enforcement, which this task does not add to the analysis worker."""
     news_analysis_fields = [name for name in Settings.model_fields if name.startswith("news_analysis_")]
     assert news_analysis_fields == [
         "news_analysis_enabled",
@@ -225,7 +233,6 @@ def test_no_phase13_specific_cost_cap_setting_was_added() -> None:
     for module_path in ("worker/analysis_cycle.py", "worker/analysis_main.py"):
         source = Path(module_path).read_text(encoding="utf-8")
         assert "max_daily_ai_cost" not in source
-        assert "CostTracker" not in source
         assert "BudgetGuard" not in source
 
 

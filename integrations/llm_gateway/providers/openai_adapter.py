@@ -233,6 +233,8 @@ def _build_payload(request: GenerateRequest, model_id: str) -> dict[str, Any]:
         payload["max_output_tokens"] = request.max_tokens
     if request.temperature is not None:
         payload["temperature"] = request.temperature
+    if request.reasoning_effort is not None:
+        payload["reasoning"] = {"effort": request.reasoning_effort}
     if request.tools:
         payload["tools"] = [_translate_tool(tool) for tool in request.tools]
     if request.tool_choice is not None:
@@ -293,8 +295,21 @@ def _translate_response(response: Any, response_mode: str) -> GenerateResponse:
         usage=CapabilityUsage(
             input_tokens=usage.input_tokens if usage is not None else None,
             output_tokens=usage.output_tokens if usage is not None else None,
+            # API cost optimization: defensive getattr chains - never invented, only extracted
+            # when the real response actually reports them (some SDK/response shapes omit the
+            # nested *_details objects entirely, e.g. a non-reasoning-tier response).
+            cached_input_tokens=_get_nested(usage, "input_tokens_details", "cached_tokens"),
+            reasoning_tokens=_get_nested(usage, "output_tokens_details", "reasoning_tokens"),
         ),
     )
+
+
+def _get_nested(obj: Any, *attrs: str) -> int | None:
+    for attr in attrs:
+        if obj is None:
+            return None
+        obj = getattr(obj, attr, None)
+    return obj if isinstance(obj, int) else None
 
 
 class OpenAIAdapter:

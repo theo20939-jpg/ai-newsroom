@@ -93,6 +93,9 @@ class ExecutionContext(BaseModel):
     preferred_provider: str | None = None
     max_tokens: int | None = None
     temperature: float | None = None
+    # API cost optimization: capability-specific, set centrally by
+    # capabilities/executor.py::_build_context() (docs/api_cost_optimization_report.md).
+    reasoning_effort: Literal["none", "low", "medium", "high"] | None = None
 
 
 class CapabilityContext(BaseModel):
@@ -116,6 +119,11 @@ class CapabilityUsage(BaseModel):
     output_tokens: int | None = Field(default=None, ge=0)
     units: int | None = Field(default=None, ge=0)
     unit_type: str | None = None
+    # API cost optimization (docs/api_cost_optimization_report.md §8): populated only when the
+    # real provider response reports them (openai_adapter.py's own translation) - never
+    # invented. `cached_input_tokens` is a subset of `input_tokens`, not additional to it.
+    cached_input_tokens: int | None = Field(default=None, ge=0)
+    reasoning_tokens: int | None = Field(default=None, ge=0)
 
 
 class CapabilityCall(BaseModel):

@@ -47,6 +47,18 @@ class Settings(BaseSettings):
     max_daily_ai_cost: float | None = None
     max_monthly_ai_cost: float | None = None
 
+    # API cost optimization (docs/api_cost_optimization_report.md §10): the real, enforceable
+    # application-level daily cost cap, superseding the never-wired-up `max_daily_ai_cost`
+    # above (kept, unused, for backward compatibility - nothing reads it going forward).
+    # Three-state pattern matching this codebase's own established fact_safety_mode/
+    # editorial_scoring_version convention: "off" (RedisBudgetGuard always allows, no
+    # logging), "shadow" (the safe initial default - computes and logs the projected
+    # allow/deny decision, never blocks), "enforce" (actually raises BudgetExceededError once
+    # the daily budget is exhausted).
+    llm_budget_mode: Literal["off", "shadow", "enforce"] = "shadow"
+    llm_daily_warning_usd: float = 0.50
+    llm_daily_budget_usd: float = 1.00
+
     # Phase 7 AI Integration Layer (docs/phase7_architecture_contract.md).
     # `enabled_providers` gates which providers build_provider_registry() actually
     # constructs (§2 rule 2) - a provider_id absent here is never registered, even if
