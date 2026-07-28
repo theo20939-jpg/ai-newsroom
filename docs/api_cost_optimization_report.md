@@ -369,4 +369,142 @@ defaults, not yet written to `.env`). `RoutingCriteria.objective` default: `LOWE
 
 ---
 
+# LIVE LUNA AND BUDGET SHADOW VALIDATION
+
+**Run 2026-07-28, ~19 minutes post-deployment of commit `44edddb`. Result: BLOCKED at Step 1 -
+provider quota still unavailable. Steps 3-6, 8-9 (all of which require live provider traffic)
+were not performed - continuing would mean repeatedly probing an account that is deterministically
+rejecting every request, which this validation's own instructions explicitly forbid. Steps 2 and 7
+(both provable without a live call) were completed in full.**
+
+## 1. Provider recovery — BLOCKED
+
+One minimal existing smoke probe (`scripts/smoke_test_openai_adapter.py gpt-5.6-luna`, the
+only live call made during this validation) returned:
+
+```
+FAILURE: requested model 'gpt-5.6-luna' - ProviderTransientError: openai: RateLimitError
+(status=429): Error code: 429 - {'error': {'message': 'You exceeded your current quota,
+please check your plan and billing details. ...', 'type': 'insufficient_quota',
+'code': 'insufficient_quota'}}
+```
+
+This is the OpenAI SDK's `RateLimitError` (HTTP 429), but the account-reported error `code` is
+explicitly `insufficient_quota` - the same **billing-level** block already disclosed in §5/§12/
+§13 of the main report, not a short transient rate limit. It will not clear on its own; it
+requires the account holder to add funds/quota. A second probe against `gpt-5.6-terra` was
+deliberately not made - `insufficient_quota` is account-wide, not per-model, so a second call
+would add no new information while still counting as repeated probing of a rejecting account.
+
+Live worker logs corroborate the same finding continuously since redeployment (18+ minutes,
+every `NEWS_ANALYSIS` task in every cycle failing at the `research` step with the identical
+`429`) - this is not a one-off probe result, it is the account's steady state.
+
+**Latch/cooldown health check (safe, Redis-only, no live call)**: `phase7:health:openai:{gpt-5.6-
+sol,terra,luna}` all show `unhealthy_until_ms` timestamps already in the past at inspection
+time - confirming the bounded-cooldown mechanism (`provider_regional_unavailable_cooldown_
+seconds`) is working correctly (cooldowns expire and each model is retried fresh every cycle) and
+**no stale/permanent latch exists**. The repeated failures are the provider's own live,
+per-request answer, not a bug in this codebase's fallback/health logic.
+
+## 2. Active model routing — VERIFIED (static + live-log evidence, no live success required)
+
+| Capability | Ordinary route (1st) | Fallback | Excluded |
+|---|---|---|---|
+| Research | gpt-5.6-luna | gpt-5.6-terra | gpt-5.6-sol |
+| Intelligence | gpt-5.6-luna | gpt-5.6-terra | gpt-5.6-sol |
+| Engagement | gpt-5.6-luna | gpt-5.6-terra | gpt-5.6-sol |
+| Copywriting | gpt-5.6-luna | gpt-5.6-terra | gpt-5.6-sol |
+| Quality | gpt-5.6-luna | gpt-5.6-terra | gpt-5.6-sol |
+| Scoring | gpt-5.6-luna | gpt-5.6-terra | gpt-5.6-sol |
+
+`gpt-5.4-nano` still does not exist in the deployed model catalog (confirmed by inspecting the
+running container's `build_model_registry()` output: exactly 3 models - sol/terra/luna) - Nano is
+therefore correctly used nowhere, matching the "only where explicitly validated" requirement (it
+was never validated). Verified two independent ways: (a) `tests/test_api_cost_optimization_
+checklist.py::test_real_catalog_routes_luna_first_terra_fallback_sol_excluded` and all 18 routing/
+checklist tests re-run clean against the deployed code; (b) every live retry sequence observed in
+worker logs during this validation shows exactly 2 fallback stages (Luna attempt -> `fallback` ->
+Terra attempt -> `fallback` -> give up) - never a 3rd stage, so **no unexpected Sol calls
+occurred**. Model names in the running container match the committed catalog exactly (direct
+`docker exec` inspection).
+
+## 3-6, 8-9. Natural sample, call counts, token usage, cost accounting accuracy, quality review — NOT PERFORMED
+
+Blocked by §1. Zero successful capability calls occurred anywhere in the observation window (all
+observed `NEWS_ANALYSIS` tasks failed at `research`, before any usage/cost data could exist), so
+there is no live sample to measure calls-per-event, reuse behavior, token-ceiling adherence, cost-
+accounting accuracy, or Luna output quality against. `ai_executions` has 0 rows for 2026-07-28 at
+time of writing; the one pre-existing non-zero Redis ledger key
+(`phase7:cost_ledger:2026-07-28:research`, ~$0.007, first observed during initial deployment
+earlier the same day) predates this validation run and was not touched by it - not re-attributed
+here to avoid fabricating a "measured" sample size of one.
+
+## 7. Shadow budget behavior — VERIFIED (isolated tests + runtime inspection, no live spend needed)
+
+`tests/test_budget_guard_real.py` (13 tests) re-run clean against the deployed code, covering:
+shadow mode never raises even over budget, shadow logs the projected denial, the warning threshold
+fires once crossed, `off`/`enforce` mode behavior, fail-open vs fail-closed on a ledger-read
+failure in each mode. `tests/test_api_cost_optimization_checklist.py::test_ledger_namespace_is_
+utc_calendar_date_so_a_new_day_starts_empty` confirms the UTC-day reset design (a new calendar day
+is structurally a new, empty Redis key - no reset code to fail). Concurrent-safety remains the
+same disclosed, non-atomic approximation as the main report (§10) - unchanged, not newly
+invalidated.
+
+**Effective runtime settings, read directly from the deployed `news_analysis_worker` container**
+(not assumed from source): `llm_budget_mode=shadow`, `llm_daily_warning_usd=0.5`,
+`llm_daily_budget_usd=1.0`, `redis_unavailable_policy=fail_closed`. Protected settings confirmed
+unchanged in the same runtime: `editorial_scoring_version=v1`, `content_generation_min_score=65`,
+`fact_safety_mode=shadow`, `editorial_chat_id` still set, `news_analysis_poll_interval_seconds=
+300`, `content_generation_poll_interval_seconds=1800`, `news_analysis_batch_size=5`,
+`content_generation_batch_size=5`, `news_analysis_freshness_cutoff_hours=2.0`,
+`content_generation_freshness_cutoff_hours=24.0` - this deployment changed nothing it wasn't
+supposed to.
+
+## 10. Hard-cap decision
+
+**Kept in `shadow`.** Of the 10 required criteria, only #3 (concurrent budget checks - unchanged,
+previously assessed), #5 (UTC reset - tested, §7 above), and #6 (Collector unaffected - confirmed
+again in this window, still running and creating `NewsEvent`/`EditorialTask` rows normally
+throughout) are satisfiable without live spend and are satisfied. **#1, #2, #4, #7, #8, #9, #10
+all require real successful provider calls to observe** (real usage metadata recorded reliably;
+cost totals matching provider usage; shadow producing no task-state regression under real
+spend; budget exhaustion safely deferring paid work; deferred tasks not falsely completed/failed;
+no retry storm under real budget pressure; live Luna quality) - none of these can be proven while
+the account remains at `insufficient_quota` and zero real calls succeed. Per this task's own rule
+("use the safer evidence-based state" / "if any criterion remains unproven, keep budget mode in
+shadow"), `enforce` is not activated.
+
+## 13. Active settings (unchanged from main report, reconfirmed live)
+
+`llm_budget_mode=shadow`, `llm_daily_warning_usd=0.50`, `llm_daily_budget_usd=1.00`,
+`editorial_scoring_version=v1`, `content_generation_min_score=65`, `fact_safety_mode=shadow` - all
+reconfirmed directly from the running container, not merely from source.
+
+## 14. Remaining limitations
+
+- **The account's `insufficient_quota` state is the sole blocker** for every remaining validation
+  step (natural sample, call-count/reuse verification, token-limit adherence under real traffic,
+  cost-accounting accuracy against real provider usage, Luna quality review, and all 7 unproven
+  hard-cap criteria). Nothing in this codebase can resolve it - it requires action on the OpenAI
+  account itself (billing/quota).
+- Per this task's own instruction, the account was not repeatedly probed once the blocking state
+  was confirmed by a single minimal call - live validation should be re-run once billing/quota is
+  restored, budgeting the full 90-minute natural-sample window at that time.
+- All findings from the main report's §18 (Luna quality unverified, 60% target not met in the
+  expected case, non-atomic budget-guard concurrency, cached-token pricing overestimate) remain
+  exactly as disclosed - unchanged, not newly resolved or newly invalidated by this run.
+
+## 15. Rollback instructions
+
+No code or configuration was changed by this validation run (read-only diagnostics + one smoke
+probe only) - there is nothing to roll back. The main report's own rollback instructions (§17)
+remain current and unaffected.
+
+---
+
+**LIVE COST VALIDATION BLOCKED — PROVIDER QUOTA STILL UNAVAILABLE**
+
+---
+
 **API COST OPTIMIZATION COMPLETE — BUDGET SHADOW VALIDATION REQUIRED**
