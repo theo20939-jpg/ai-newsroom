@@ -46,6 +46,14 @@ class RoutingCriteria(BaseModel):
     preferred_provider: str | None = None
     excluded_providers: list[str] = Field(default_factory=list)
 
-    objective: RoutingObjective = RoutingObjective.BEST_QUALITY
+    # API cost optimization (docs/api_cost_model_routing_benchmark.md): every real capability
+    # in this codebase relies on this default (none overrides `objective` - confirmed by
+    # inspection of every capabilities/*_capability.py file and gateway.py's own
+    # _build_routing_criteria(), which never reads an objective from request.metadata).
+    # LOWEST_COST + the existing, unchanged 3.0x cost-ceiling eligibility filter
+    # (FallbackEligibility.max_cost_multiplier) together produce exactly the desired routing
+    # with zero further code: [gpt-5.6-luna, gpt-5.6-terra] for every capability, gpt-5.6-sol
+    # structurally excluded (its price is 5.0x Luna's, over the 3.0x ceiling).
+    objective: RoutingObjective = RoutingObjective.LOWEST_COST
     cost_ceiling: Decimal | None = None
     fallback: FallbackEligibility = Field(default_factory=FallbackEligibility)

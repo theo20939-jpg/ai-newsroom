@@ -52,7 +52,7 @@ from integrations.llm_gateway.protocol import (
     RerankResponse,
     UnsupportedGatewayCapabilityError,
 )
-from integrations.llm_gateway.routing.criteria import RoutingCriteria
+from integrations.llm_gateway.routing.criteria import RoutingCriteria, RoutingObjective
 from integrations.llm_gateway.routing.engine import RoutingEngine
 
 
@@ -107,14 +107,22 @@ class RoutingGateway:
         """Builds RoutingCriteria from GenerateRequest - capability_name/priority travel via
         `request.metadata` (no RoutingCriteria-shaped field exists on the frozen
         GenerateRequest), matching the same "extend via metadata" pattern already established
-        for observability ids and cache_policy."""
+        for observability ids and cache_policy.
+
+        `objective` (API cost optimization): optional, via the same metadata pattern - when
+        absent (every real capability today), RoutingCriteria's own default applies
+        (LOWEST_COST as of this change). No production caller sets this today; it exists so a
+        future capability - or a test proving cost-anchor-not-first-rank behavior independent
+        of whatever the global default is - can opt into a different objective without a new
+        RoutingCriteria-shaped field on the frozen GenerateRequest."""
         capability_name = str(request.metadata.get("capability_name", "unknown"))
         priority_raw = request.metadata.get("priority", TaskPriority.B.value)
         priority = priority_raw if isinstance(priority_raw, TaskPriority) else TaskPriority(priority_raw)
         excluded_providers_raw = request.metadata.get("excluded_providers", [])
         excluded_providers = list(excluded_providers_raw) if isinstance(excluded_providers_raw, list) else []
+        objective_raw = request.metadata.get("objective")
 
-        return RoutingCriteria(
+        criteria = RoutingCriteria(
             gateway_method="generate",
             capability_name=capability_name,
             priority=priority,
@@ -125,3 +133,6 @@ class RoutingGateway:
             preferred_provider=request.preferred_provider,
             excluded_providers=excluded_providers,
         )
+        if objective_raw:
+            criteria = criteria.model_copy(update={"objective": RoutingObjective(objective_raw)})
+        return criteria

@@ -21,10 +21,14 @@ def _criteria(**overrides: object) -> RoutingCriteria:
     return RoutingCriteria(**fields)  # type: ignore[arg-type]
 
 
-def test_default_objective_is_best_quality() -> None:
+def test_default_objective_is_lowest_cost() -> None:
+    """API cost optimization: the default flipped from BEST_QUALITY to LOWEST_COST - every
+    capability relies on this default (none overrides `objective`), so this one field change
+    routes every capability to gpt-5.6-luna first, gpt-5.6-terra as its only cost-eligible
+    fallback, with gpt-5.6-sol structurally excluded by the existing 3.0x cost ceiling."""
     criteria = _criteria()
 
-    assert criteria.objective == RoutingObjective.BEST_QUALITY
+    assert criteria.objective == RoutingObjective.LOWEST_COST
 
 
 def test_excluded_providers_defaults_to_empty_list() -> None:

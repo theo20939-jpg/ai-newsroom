@@ -129,9 +129,13 @@ async def test_cache_hit_skips_cost_and_budget_against_real_redis_cache_store(re
 # ---------------------------------------------------------------------------
 # 2. Fallback eligibility is anchored to the CHEAPEST candidate in the filtered set, never to
 #    whichever candidate the objective ranked first - proven through the full real
-#    gateway.generate() pipeline (RoutingGateway.generate() always routes under the default
-#    BEST_QUALITY objective, since no Capability yet threads a different one through
-#    RoutingCriteria.objective - the exact scenario §5.1's binding cost-anchor rule exists for).
+#    gateway.generate() pipeline. API cost optimization changed RoutingCriteria.objective's own
+#    default to LOWEST_COST (docs/api_cost_model_routing_benchmark.md) - under that objective,
+#    cheapest-ranked and first-ranked are the same candidate, so this scenario would no longer
+#    exercise the distinction. This test now explicitly requests BEST_QUALITY via
+#    `request.metadata["objective"]` (gateway.py's own "extend via metadata" pattern) to keep
+#    proving the real regression this test guards against, independent of whatever the global
+#    default is.
 # ---------------------------------------------------------------------------
 
 
@@ -161,7 +165,11 @@ async def test_fallback_cost_anchor_is_cheapest_not_first_ranked_end_to_end() ->
         cache_coordinator=CacheCoordinator(InMemoryCacheStore()),
     )
 
-    response = await gateway.generate(_request())
+    request = GenerateRequest(
+        messages=[Message(role="user", content=[ContentPart(type="text", text="hello")])],
+        metadata={"objective": "best_quality"},  # see this test's own comment block above
+    )
+    response = await gateway.generate(request)
 
     assert response.model_used == mid_model  # first ELIGIBLE candidate in rank order, not first-ranked
     assert expensive.call_count == 0  # excluded by eligibility filtering entirely - never attempted
