@@ -1,8 +1,29 @@
 # Phase 16 — Image Intelligence — M0 Implementation Plan
 
-Status: **M1 and M2 IMPLEMENTED** (docs/phase16_m1_native_media_ingestion_report.md, docs/
-phase16_m2_secure_fetch_and_validation_report.md). M3–M8 remain plan only. See
+Status: **M1, M2, and M3 IMPLEMENTED** (docs/phase16_m1_native_media_ingestion_report.md, docs/
+phase16_m2_secure_fetch_and_validation_report.md, docs/
+phase16_m3_quality_and_deduplication_report.md). M4–M8 remain plan only. See
 `docs/phase16_image_intelligence_discovery_report.md` for the evidence this plan is built on.
+
+## M3 architecture corrections (discovered during implementation)
+
+- **`possible_banner` was over-broad at first implementation.** The plan's own quality-signal
+  design intent (multiple independent signals before a strong penalty on ambiguous wide images) was
+  under-implemented initially: the aspect-ratio-alone `wide_banner` band (2.2–5.0) triggered the
+  signal with no URL/alt-text corroboration. Bounded real-network validation caught this in
+  practice (a real 1019×438 editorial hero image on ammoniaenergy.org, no ad/banner token, flagged
+  as `possible_banner`) - fixed to require either an explicit token match or the more pathological
+  `extreme_wide` band (>5.0). See the M3 report §14/§25 for the full before/after evidence.
+- **No representative-selection ordering assumption held across encodings.** An early version of
+  the offline calibration script assumed the original (PNG) fixture would always remain the
+  near-duplicate cluster's representative; a synthetic JPEG re-encode legitimately became the
+  representative instead (larger byte size for that specific high-frequency test pattern) under the
+  documented `-byte_size` tie-break. This was a test-script labeling assumption, not a clustering
+  bug - the calibration script was corrected to check cluster membership rather than assume a fixed
+  representative identity. See the M3 report §19.
+- **Zero additional production-code corrections were needed for the core dHash/clustering
+  algorithm** - the representative-based star-clustering design and the empirically-calibrated
+  distance thresholds (§17) both held up unchanged against real bounded-validation data.
 
 ## M2 architecture corrections (discovered during implementation)
 
@@ -155,26 +176,33 @@ database migration until the design is validated in shadow mode.
   (M4); M2 does add exact-duplicate-URL consolidation (an M1-scope mechanism, unchanged, not new
   M2 dedup logic).
 
-### M3 — Quality gate and deduplication
+### M3 — Quality gate and deduplication — **IMPLEMENTED** (docs/phase16_m3_quality_and_deduplication_report.md)
 
 - **Scope:** hard-rejection gates and soft signals from discovery §12–13 (icons/logos/placeholders/
-  ads, dimension/aspect-ratio gates); layered dedup from discovery §14 (canonicalized URL → Telethon
-  media identifier → exact content hash → perceptual hash → crop heuristics), scoped within-event.
-  Adds `imagehash` to `pyproject.toml`.
-- **Files likely affected:** `services/image_intelligence.py` (extends M1's candidate list with
-  `status`/`rejection_reasons`/hashes), `pyproject.toml` (`imagehash`).
+  ads, dimension/aspect-ratio gates); layered dedup from discovery §14, scoped within-event: exact
+  SHA-256 content hash (reusing M2's own hash) plus a self-implemented Pillow-only dHash for
+  near-duplicate/crop detection. **Did not add `imagehash` to `pyproject.toml`** as originally
+  planned — a ~15-line hand-written dHash (`services/image_quality.py::compute_dhash`) avoids the
+  new dependency entirely while remaining trivially testable and auditable; see the M3 report §16.
+- **Files affected:** `schemas/image_candidate.py` (quality/dedup contract), `services/
+  image_quality.py` (new), `services/image_deduplication.py` (new), `services/
+  image_intelligence.py` (orchestration wiring) — matches the plan's prediction closely, aside from
+  the `imagehash` dependency deviation above.
 - **Tests:** the quality matrix (small icon, tracking pixel, banner, valid landscape/portrait,
   corrupted image, placeholder) and the dedup matrix (identical URL, normalized CDN URL, exact
-  hash, resized copy, recompressed copy, near-duplicate crop, distinct images) from discovery §12.
-- **Migration impact:** none.
-- **Deployment impact:** none — still `off` by default; first milestone whose output is worth
-  reviewing in `shadow` mode on a sample of real events (manual/scripted review, not automated
-  Telegram delivery).
+  hash, resized copy, recompressed copy, near-duplicate crop, distinct images) from discovery §12 —
+  all implemented, 98 M3-specific tests passing (215 across M1+M2+M3 combined).
+- **Migration impact:** none — confirmed, `ImageCandidate` remains in-memory only, never persisted.
+- **Deployment impact:** none — still `off` by default; controlled shadow validation performed
+  against 8 real recent events (read-only, no persistence, no Telegram send) — see the M3 report
+  §28.
 - **Rollback:** same as M1/M2.
-- **Definition of Done:** on a sample of real drafted events, hard-rejected candidates are
-  manually spot-checked as correct rejections; no false-positive exact-duplicate merges of
-  editorially distinct images.
-- **Non-goals:** no relevance ranking yet (M4); no manual-review UI (that's M6's job, if ever).
+- **Definition of Done:** on the bounded real-network validation sample (20 real articles), 0 hard
+  rejections and 0 likely false exact/near-duplicate merges were found on manual review (M3 report
+  §25); one real false-warning pattern (`possible_banner` on legitimate wide hero images) was found
+  and fixed during this same review.
+- **Non-goals:** no relevance ranking yet (M4); no manual-review UI (that's M6's job, if ever). Held
+  exactly as planned.
 
 ### M4 — Deterministic relevance ranking
 
