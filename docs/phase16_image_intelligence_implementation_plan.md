@@ -1,8 +1,33 @@
 # Phase 16 — Image Intelligence — M0 Implementation Plan
 
-Status: **M1 IMPLEMENTED** (docs/phase16_m1_native_media_ingestion_report.md). M2–M8 remain plan
-only. See `docs/phase16_image_intelligence_discovery_report.md` for the evidence this plan is
-built on.
+Status: **M1 and M2 IMPLEMENTED** (docs/phase16_m1_native_media_ingestion_report.md, docs/
+phase16_m2_secure_fetch_and_validation_report.md). M3–M8 remain plan only. See
+`docs/phase16_image_intelligence_discovery_report.md` for the evidence this plan is built on.
+
+## M2 architecture corrections (discovered during implementation)
+
+- **The fetch module lives at `integrations/http/safe_fetch.py`, not `services/media_fetch.py`**
+  as this plan originally guessed. It drives `httpcore.AsyncConnectionPool` directly rather than
+  `httpx.Client`/`httpx.AsyncHTTPTransport`, because `httpx.AsyncHTTPTransport`'s public
+  constructor does not expose the `network_backend` parameter IP-pinning requires - discovered by
+  reading `httpx`'s actual installed source (0.28.1), not assumed. `httpcore.AsyncConnectionPool`
+  itself does expose this (a documented, public extension point), which is what makes the whole
+  mechanism possible without private-API reliance.
+- **No separate MIME-sniffing library was added.** A minimal, self-written magic-byte sniffer
+  (`services/image_validation.py::_sniff_signature`) covers every format M2 needs (JPEG/PNG/GIF/
+  WebP/SVG/HTML-disguised-as-image) without a new dependency - `Pillow` (already planned) provides
+  the second, decode-confirmed layer.
+- **Concurrency limiting is in-process only** (global + per-host `asyncio.Semaphore`s, constructed
+  fresh per `run_shadow_discovery()` call) - this plan's own "unless the current deployment has
+  multiple concurrent content workers" condition for a distributed limiter was checked and does
+  not currently hold (exactly one `content_worker` exists, and it processes events sequentially,
+  per `tests/test_content_worker_cycle.py`'s own test naming), so no Redis-backed limiter was
+  built. Documented as a limitation, not an oversight.
+- **A real orchestration bug was found and fixed during implementation**: `safe_fetch()` correctly
+  reports non-2xx HTTP statuses rather than raising, but the initial orchestration code didn't
+  check `status_code` before treating a response body as valid content - fixed by adding an
+  explicit check in both the article-metadata and image-fetch paths before any parsing/decoding.
+  Caught by the M2 test suite itself failing, then passing after the fix - see the M2 report §19.
 
 ## M1 architecture corrections (discovered during implementation)
 
@@ -90,30 +115,45 @@ database migration until the design is validated in shadow mode.
   evidence-matching candidate lists per source type, zero live network calls.
 - **Non-goals:** held exactly as planned.
 
-### M2 — Secure fetch and technical validation
+### M2 — Secure fetch and technical validation — **IMPLEMENTED** (docs/phase16_m2_secure_fetch_and_validation_report.md)
 
-- **Scope:** the SSRF-safe fetch module (discovery §10 in full): scheme allowlist, DNS/IP
-  validation before connect, redirect revalidation per hop, strict timeouts, byte-size and
-  decoded-pixel caps, MIME sniffing vs. declared `Content-Type`, format allowlist (excludes SVG),
-  bounded concurrency, per-domain rate limiting. Enables the M1 OG-fetch path for real. Adds
-  `Pillow` (image decode/dimension/pixel-cap checks) and a MIME-sniffing dependency to
-  `pyproject.toml` — the first new runtime dependencies this phase requires.
-- **Files likely affected:** new fetch module (`services/media_fetch.py`), `pyproject.toml`
-  (add `Pillow`, MIME-sniffing lib), `core/config.py` (new settings: byte caps, timeouts,
-  concurrency limits — following the existing `Field(default=..., gt=0)` convention).
-- **Tests:** the full security matrix from discovery §10 — private IP, localhost, cloud-metadata
-  IP, redirect-to-private-IP, unsupported scheme, oversized `Content-Length`, streaming-beyond-
-  limit, MIME spoof, decompression bomb, malformed image, unsafe SVG rejection, timeout, redirect
-  loop. All against a **local test HTTP server** (e.g. `pytest`-managed `http.server` or an
-  `httpx.MockTransport`/ASGI test app) — no test may make an uncontrolled external network call,
-  matching this repo's own `tests/test_rss_source.py` precedent.
-- **Migration impact:** none.
-- **Deployment impact:** none — still gated off by default; this milestone is pure library code
-  plus tests.
-- **Rollback:** the fetch module is inert unless called; disabling the mode flag fully reverts.
-- **Definition of Done:** every threat-model row from discovery §10 has a passing, deterministic
-  test; a genuine OG-image fetch against a local test server succeeds end-to-end.
-- **Non-goals:** no quality/logo/duplicate filtering yet (M3); no ranking yet (M4).
+- **Scope actually delivered:** exactly as planned, with two refinements discovered during
+  implementation. (1) No separate MIME-sniffing library was added - a minimal, self-written
+  magic-byte sniffer in `services/image_validation.py` covers JPEG/PNG/GIF/WebP/SVG/HTML detection
+  without a new dependency (only `Pillow` was added, as planned). (2) The fetch module lives at
+  `integrations/http/safe_fetch.py`, not `services/media_fetch.py` as originally guessed - it
+  drives `httpcore.AsyncConnectionPool` directly (a public API) rather than `httpx.Client`, because
+  `httpx.AsyncHTTPTransport` does not expose the `network_backend` extension point IP-pinning
+  requires (discovered by reading `httpx`'s actual source, not assumed - see the M2 report §3).
+  Concurrency is in-process only (global + per-host `asyncio.Semaphore`s, not a distributed
+  rate-limiter) - correct for the current single-`content_worker` deployment, documented as a
+  limitation, not built further per the M0 plan's own "unless necessary" instruction.
+- **Files actually changed:** `integrations/http/safe_fetch.py` (new), `services/
+  article_metadata.py` (new - OG/Twitter/JSON-LD extraction), `services/image_validation.py` (new -
+  Pillow decode/validation), `schemas/image_candidate.py` (additive `TechnicalValidation` + new
+  enum values), `core/config.py` (M2 limit settings), `services/image_intelligence.py` (M2
+  orchestration), `capabilities/executor.py` (one-line change: calls the new orchestration
+  function), `pyproject.toml` (`Pillow>=11.0`).
+- **Tests actually delivered:** 117 new tests (55 safe-fetch + 23 article-metadata + 25
+  image-validation + 14 workflow-integration), all against a local `ThreadingHTTPServer` (used
+  instead of `httpx.MockTransport` since M2 bypasses `httpx.Client` entirely - see the files-
+  changed note above) plus direct DNS-resolver mocking for the SSRF matrix. Zero uncontrolled
+  external network calls in the suite. Full repository suite: 1362 passed (up from M1's 1247 by
+  exactly the 117 new tests, plus 15 pre-existing environment failures already proven at `133a22c`
+  during M1, unrelated to M2).
+- **Migration impact:** none, as planned.
+- **Deployment impact:** **reproducible deployment succeeded** - `docker compose build` completed
+  cleanly this time (M1's registry/package-index restriction did not recur), both
+  `content_worker`/`automation_worker` images rebuilt with the new `Pillow` dependency and
+  recreated; still gated `off` by default, verified inert in the freshly deployed container.
+- **Rollback:** as planned - the fetch module is inert unless called; the mode flag stays `off`.
+- **Definition of Done:** met - every SSRF/redirect/byte-limit/decode threat-model row has a
+  passing, deterministic local-server test; a genuine end-to-end OG-image fetch, both against a
+  local server and (in a separately bounded, 20-article live validation) against real public
+  websites, succeeded.
+- **Non-goals:** held exactly as planned - no quality/logo/duplicate filtering (M3), no ranking
+  (M4); M2 does add exact-duplicate-URL consolidation (an M1-scope mechanism, unchanged, not new
+  M2 dedup logic).
 
 ### M3 — Quality gate and deduplication
 
