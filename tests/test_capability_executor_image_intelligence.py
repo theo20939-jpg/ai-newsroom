@@ -24,6 +24,22 @@ from workflows.registry import WorkflowRegistry
 from workflows.runner import WorkflowRunner
 
 
+@pytest.fixture(autouse=True)
+def _no_real_article_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Phase 16 M2: these tests predate M2's real article-page fetch and focus on the M1
+    reconstruction/workflow-integration behavior, not M2's network layer (that has its own
+    dedicated, local-server-backed tests in tests/test_image_intelligence_m2.py). Every test here
+    used a plausible-looking `article_url` (e.g. "https://example.com/article") before M2 existed,
+    which would now trigger a real outbound fetch - simulate "article fetch unavailable" instead,
+    so these tests stay offline and keep testing what they were written to test."""
+    from integrations.http.safe_fetch import FetchErrorCode, SafeFetchError
+
+    async def _always_unavailable(*args, **kwargs):
+        raise SafeFetchError(FetchErrorCode.DNS_FAILURE, "test-disabled")
+
+    monkeypatch.setattr("services.image_intelligence.safe_fetch", _always_unavailable)
+
+
 class _FakeCopywritingCapability:
     """Production-shaped copywriting output - title/body/hashtags, exactly what
     services/content_draft_service.py reads."""
@@ -175,10 +191,11 @@ async def test_image_intelligence_attach_failure_does_not_fail_the_step(
     monkeypatch: pytest.MonkeyPatch, db_session: AsyncSession
 ) -> None:
     monkeypatch.setattr(settings, "image_intelligence_mode", "shadow")
-    monkeypatch.setattr(
-        "capabilities.executor.reconstruct_hints_from_content",
-        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")),
-    )
+
+    async def _broken_run_shadow_discovery(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("capabilities.executor.run_shadow_discovery", _broken_run_shadow_discovery)
     event = await _event_with_content(db_session, '<img src="https://cdn.example.com/a.jpg"/>')
 
     step_results = await _run_copywriting(db_session, event)

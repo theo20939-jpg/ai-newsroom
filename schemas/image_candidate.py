@@ -39,15 +39,29 @@ class ImageDiscoveryMethod(str, enum.Enum):
     RSS_ENCLOSURE = "rss_enclosure"
     RSS_INLINE_IMAGE = "rss_inline_image"
     SOURCE_NATIVE_UNKNOWN = "source_native_unknown"
+    # Phase 16 M2 (docs/phase16_m2_secure_fetch_and_validation_report.md §10/§11): article-page
+    # metadata discovery methods, in the deterministic priority order services/article_metadata.py
+    # extracts them - og:image:secure_url > og:image > JSON-LD > twitter:image > image_src link.
+    OPEN_GRAPH_SECURE_IMAGE = "open_graph_secure_image"
+    OPEN_GRAPH_IMAGE = "open_graph_image"
+    JSONLD_ARTICLE_IMAGE = "jsonld_article_image"
+    TWITTER_IMAGE = "twitter_image"
+    IMAGE_SRC_LINK = "image_src_link"
 
 
 class ImageCandidateStatus(str, enum.Enum):
-    """M1 only has metadata-only states - no download/validation/selection state exists yet
-    (those belong to M2/M3/M6 respectively, per the implementation plan's milestone split)."""
+    """M1 states are metadata-only. M2 adds the technical-validation outcome states - a candidate
+    moves from `discovered` to exactly one of `validated`/`rejected_technical`/`fetch_failed` only
+    if it was actually selected for M2 byte-level validation (bounded by `image_intelligence_max_
+    image_downloads_per_event`); candidates beyond that cap simply stay `discovered`, never
+    touched by M2. No download/selection/editorial state exists yet (M3/M6)."""
 
     DISCOVERED = "discovered"
     REJECTED_METADATA = "rejected_metadata"
     UNAVAILABLE = "unavailable"
+    VALIDATED = "validated"
+    REJECTED_TECHNICAL = "rejected_technical"
+    FETCH_FAILED = "fetch_failed"
 
 
 class TelegramReference(BaseModel):
@@ -77,6 +91,7 @@ class NativeMediaHint(BaseModel):
 
     discovery_method: ImageDiscoveryMethod
     remote_url: str | None = None
+    source_url: str | None = None
     declared_width: int | None = None
     declared_height: int | None = None
     declared_mime_type: str | None = None
@@ -86,20 +101,51 @@ class NativeMediaHint(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class TechnicalValidation(BaseModel):
+    """Phase 16 M2: the outcome of actually fetching and decoding a candidate's image bytes -
+    transient only, bytes themselves are never part of this or any persisted shape. `error_code`
+    is one of `integrations.http.safe_fetch.FetchErrorCode`'s values, or an image-specific code
+    (`signature_mismatch`/`unsupported_format`/`svg_rejected`/`decode_failed`/`pixel_limit_
+    exceeded`/`animation_unsupported`), never a raw exception string (docs/phase16_m2_secure_
+    fetch_and_validation_report.md §16)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    version: Literal["m2"] = "m2"
+    final_url: str | None = None
+    http_status: int | None = None
+    redirect_count: int = 0
+    observed_mime: str | None = None
+    format: str | None = None
+    byte_size: int | None = None
+    width: int | None = None
+    height: int | None = None
+    pixel_count: int | None = None
+    aspect_ratio: float | None = None
+    animated: bool | None = None
+    frame_count: int | None = None
+    sha256: str | None = None
+    duration_ms: int | None = None
+    error_code: str | None = None
+
+
 class ImageCandidate(BaseModel):
     """One consolidated, identified candidate - the per-item shape inside `ImageIntelligenceResult.
     candidates`. `remote_url` is None for Telegram-native candidates (nothing HTTP-addressable
-    exists pre-download; `telegram` carries the retrieval coordinates instead)."""
+    exists pre-download; `telegram` carries the retrieval coordinates instead). `source_url` (M2)
+    is the article page a metadata-discovered candidate came from - None for native (Telegram/RSS)
+    candidates, which have no separate "source page" beyond the event itself."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     candidate_id: str
-    schema_version: Literal["m1"] = "m1"
+    schema_version: Literal["m1", "m2"] = "m1"
     event_id: UUID
     source_type: SourceType
     discovery_method: ImageDiscoveryMethod
     status: ImageCandidateStatus
     remote_url: str | None = None
+    source_url: str | None = None
     telegram: TelegramReference | None = None
     declared_width: int | None = None
     declared_height: int | None = None
@@ -110,17 +156,21 @@ class ImageCandidate(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     discovery_order: int = Field(ge=0)
     discovered_at: datetime
+    technical_validation: TechnicalValidation | None = None
 
 
 class ImageIntelligenceResult(BaseModel):
     """The exact shape attached at `structured_output["image_intelligence"]` (CONTENT_GENERATION
     "copywriting" step hook) and logged at Collector time - see docs/phase16_image_intelligence_
     discovery_report.md §11 for why this JSON shape, not a new table, is the correct M1 boundary.
+    M2 fields are additive and default to values that are exactly correct when M2 processing never
+    ran (mode="off", or an event with no article URL) - backward-compatible with every M1 result
+    already logged/recorded.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    version: Literal["m1"] = "m1"
+    version: Literal["m1", "m2"] = "m1"
     mode: Literal["off", "shadow"]
     event_id: UUID
     candidates_discovered: int = Field(ge=0)
@@ -129,3 +179,9 @@ class ImageIntelligenceResult(BaseModel):
     candidates: list[ImageCandidate] = Field(default_factory=list)
     generated_at: datetime
     errors: list[str] = Field(default_factory=list)
+    # Phase 16 M2 observability (docs/phase16_m2_secure_fetch_and_validation_report.md §17).
+    article_fetch_attempted: bool = False
+    article_fetch_error: str | None = None
+    candidates_validated: int = Field(default=0, ge=0)
+    candidates_rejected_technical: int = Field(default=0, ge=0)
+    candidates_fetch_failed: int = Field(default=0, ge=0)

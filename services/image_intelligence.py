@@ -1,23 +1,26 @@
-"""Phase 16 M1: Image Intelligence - zero-download, zero-LLM native media candidate discovery
-(docs/phase16_m1_native_media_ingestion_report.md).
+"""Phase 16 M1/M2: Image Intelligence - native media discovery (M1, docs/phase16_m1_native_media_
+ingestion_report.md) plus secure article-metadata discovery and technical image validation (M2,
+docs/phase16_m2_secure_fetch_and_validation_report.md).
 
-Two independent call sites share every function in this module (docs/phase16_image_intelligence_
-discovery_report.md §11, §20):
+Two independent M1 call sites share the extraction/consolidation functions in this module (docs/
+phase16_image_intelligence_discovery_report.md §11, §20):
 
 1. services/collector.py, after a NewsEvent is flushed (real `event.id` available) - consumes
    the full source-native hints an adapter produced at fetch time (`extract_telegram_native_media`/
    `extract_rss_native_media`) and logs a structured audit trail. Nothing here is persisted to
    PostgreSQL: NewsEvent has no image/media column and M1 adds no migration (discovery report
    §11/§21) - this is observability only, not durable storage.
-2. capabilities/executor.py, at the CONTENT_GENERATION "copywriting" step - best-effort
-   reconstruction using only what NewsEvent already durably persists (`reconstruct_hints_from_
-   content`), since the adapter-time hints from (1) never reach this later, separate worker
-   process. This intentionally recovers RSS inline-image candidates (real HTML already stored in
-   `NewsEvent.content`) and legitimately finds nothing for Telegram/GitHub/HN/arXiv events -
-   documented as a known M1 limitation, not a bug (see the M1 report §21).
+2. capabilities/executor.py, at the CONTENT_GENERATION "copywriting" step, calls
+   `run_shadow_discovery()` - the single M2 orchestration entry point. It reconstructs M1 hints
+   from already-persisted NewsEvent fields, optionally fetches the article page and candidate
+   image bytes through the SSRF-safe boundary (integrations/http/safe_fetch.py), technically
+   validates them (services/image_validation.py), and returns one `ImageIntelligenceResult`. No
+   low-level networking lives in capabilities/executor.py itself (Step 13 of the M2 task brief) -
+   it only calls this one function and preserves the result.
 
-No network access, no image byte download, no LLM/provider call anywhere in this module.
+Zero LLM/provider call anywhere in this module, in M1 or M2.
 """
+import asyncio
 import hashlib
 import logging
 from collections.abc import Mapping
@@ -27,15 +30,20 @@ from typing import Any, Literal
 from urllib.parse import urljoin, urlsplit
 from uuid import UUID
 
+from core.config import settings
 from database.models.news_source import SourceType
+from integrations.http.safe_fetch import SafeFetchError, SafeFetchPolicy, safe_fetch
 from schemas.image_candidate import (
     ImageCandidate,
     ImageCandidateStatus,
     ImageDiscoveryMethod,
     ImageIntelligenceResult,
     NativeMediaHint,
+    TechnicalValidation,
     TelegramReference,
 )
+from services.article_metadata import extract_article_image_metadata
+from services.image_validation import validate_image_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -322,6 +330,7 @@ def _extract_inline_images(html_text: str, *, base_url: str | None) -> list[Nati
             NativeMediaHint(
                 discovery_method=ImageDiscoveryMethod.RSS_INLINE_IMAGE,
                 remote_url=url,
+                source_url=base_url,
                 alt_text=(alt[:_MAX_ALT_TEXT_LENGTH] if alt else None),
                 warnings=warnings,
             )
@@ -490,6 +499,7 @@ def consolidate_candidates(
                 discovery_method=hint.discovery_method,
                 status=status,
                 remote_url=hint.remote_url,
+                source_url=hint.source_url,
                 telegram=hint.telegram,
                 declared_width=hint.declared_width,
                 declared_height=hint.declared_height,
@@ -514,4 +524,236 @@ def consolidate_candidates(
         candidates_rejected=rejected,
         candidates=candidates,
         generated_at=generated_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 16 M2: article-metadata fetch + technical image validation orchestration.
+# ---------------------------------------------------------------------------
+
+
+def _html_fetch_policy() -> SafeFetchPolicy:
+    return SafeFetchPolicy(
+        connect_timeout_seconds=settings.image_intelligence_connect_timeout_seconds,
+        read_timeout_seconds=settings.image_intelligence_read_timeout_seconds,
+        total_timeout_seconds=settings.image_intelligence_total_timeout_seconds,
+        max_redirects=settings.image_intelligence_max_redirects,
+        max_bytes=settings.image_intelligence_max_html_bytes,
+    )
+
+
+def _image_fetch_policy() -> SafeFetchPolicy:
+    return SafeFetchPolicy(
+        connect_timeout_seconds=settings.image_intelligence_connect_timeout_seconds,
+        read_timeout_seconds=settings.image_intelligence_read_timeout_seconds,
+        total_timeout_seconds=settings.image_intelligence_total_timeout_seconds,
+        max_redirects=settings.image_intelligence_max_redirects,
+        max_bytes=settings.image_intelligence_max_image_bytes,
+    )
+
+
+_HTML_CONTENT_TYPES = ("text/html", "application/xhtml+xml")
+
+
+async def _fetch_article_metadata_hints(
+    article_url: str, *, event_id: UUID
+) -> tuple[list[NativeMediaHint], str | None]:
+    """Returns (hints, error_code). Never raises - every failure mode is reported as an
+    `error_code` string, matching integrations.http.safe_fetch.FetchErrorCode's values plus
+    "unsupported_content_type" for a non-HTML response."""
+    try:
+        result = await safe_fetch(article_url, policy=_html_fetch_policy())
+    except SafeFetchError as error:
+        return [], error.code.value
+    except Exception:
+        logger.warning("article_metadata_fetch_unexpected_error", extra={"event_id": str(event_id)})
+        return [], "internal_fetch_error"
+
+    if result.status_code >= 400:
+        return [], "http_error"
+
+    declared_type = (result.declared_content_type or "").split(";")[0].strip().lower()
+    if declared_type and declared_type not in _HTML_CONTENT_TYPES:
+        return [], "unsupported_content_type"
+
+    html_text = result.body.decode("utf-8", errors="replace")
+    try:
+        hints = extract_article_image_metadata(html_text, base_url=result.final_url)
+    except Exception:
+        logger.warning("article_metadata_parse_unexpected_error", extra={"event_id": str(event_id)})
+        return [], "internal_fetch_error"
+    return hints, None
+
+
+async def _fetch_and_validate_candidate(candidate: ImageCandidate) -> ImageCandidate:
+    """Fetches one candidate's image bytes through the safe-fetch boundary and technically
+    validates them. Always returns a candidate (never raises) - `status` becomes exactly one of
+    VALIDATED/REJECTED_TECHNICAL/FETCH_FAILED, `technical_validation` is always populated."""
+    assert candidate.remote_url is not None  # only ever called for candidates that have one
+    try:
+        fetch_result = await safe_fetch(candidate.remote_url, policy=_image_fetch_policy())
+    except SafeFetchError as error:
+        technical = TechnicalValidation(error_code=error.code.value)
+        return candidate.model_copy(
+            update={"status": ImageCandidateStatus.FETCH_FAILED, "technical_validation": technical, "schema_version": "m2"}
+        )
+    except Exception:
+        logger.warning("image_fetch_unexpected_error", extra={"candidate_id": candidate.candidate_id})
+        technical = TechnicalValidation(error_code="internal_fetch_error")
+        return candidate.model_copy(
+            update={"status": ImageCandidateStatus.FETCH_FAILED, "technical_validation": technical, "schema_version": "m2"}
+        )
+
+    if fetch_result.status_code >= 400:
+        technical = TechnicalValidation(
+            final_url=fetch_result.final_url, http_status=fetch_result.status_code,
+            redirect_count=fetch_result.redirect_count, error_code="http_error",
+        )
+        return candidate.model_copy(
+            update={"status": ImageCandidateStatus.FETCH_FAILED, "technical_validation": technical, "schema_version": "m2"}
+        )
+
+    technical = validate_image_bytes(fetch_result.body, max_pixels=settings.image_intelligence_max_decoded_pixels)
+    technical = technical.model_copy(
+        update={
+            "final_url": fetch_result.final_url,
+            "http_status": fetch_result.status_code,
+            "redirect_count": fetch_result.redirect_count,
+            "duration_ms": (technical.duration_ms or 0) + int(fetch_result.duration_seconds * 1000),
+        }
+    )
+    status = ImageCandidateStatus.VALIDATED if technical.error_code is None else ImageCandidateStatus.REJECTED_TECHNICAL
+    return candidate.model_copy(
+        update={"status": status, "technical_validation": technical, "schema_version": "m2"}
+    )
+
+
+async def _validate_selected_candidates(candidates: list[ImageCandidate]) -> list[ImageCandidate]:
+    """Bounded, in-process-only concurrency (docs/phase16_m2_secure_fetch_and_validation_report.md
+    §17 - a single `content_worker` process exists today, so a distributed limiter is not
+    justified; this is documented as a known limitation, not an oversight, should that ever
+    change). Fresh semaphores per call: `content_worker` processes events sequentially (tests/
+    test_content_worker_cycle.py's own "sequential_no_gather" naming), so per-invocation limiting
+    already correctly bounds the only concurrency that can occur - the fan-out across one event's
+    own candidates."""
+    eligible = [c for c in candidates if c.status == ImageCandidateStatus.DISCOVERED and c.remote_url is not None]
+    selected_ids = {c.candidate_id for c in eligible[: settings.image_intelligence_max_image_downloads_per_event]}
+    if not selected_ids:
+        return candidates
+
+    global_semaphore = asyncio.Semaphore(settings.image_intelligence_global_concurrency)
+    host_semaphores: dict[str, asyncio.Semaphore] = {}
+
+    def _host_semaphore(url: str) -> asyncio.Semaphore:
+        host = urlsplit(url).hostname or ""
+        if host not in host_semaphores:
+            host_semaphores[host] = asyncio.Semaphore(settings.image_intelligence_per_host_concurrency)
+        return host_semaphores[host]
+
+    async def _bounded_validate(candidate: ImageCandidate) -> ImageCandidate:
+        assert candidate.remote_url is not None
+        async with global_semaphore, _host_semaphore(candidate.remote_url):
+            return await _fetch_and_validate_candidate(candidate)
+
+    async def _passthrough(candidate: ImageCandidate) -> ImageCandidate:
+        return candidate
+
+    tasks = [
+        _bounded_validate(candidate) if candidate.candidate_id in selected_ids else _passthrough(candidate)
+        for candidate in candidates
+    ]
+    return list(await asyncio.gather(*tasks))
+
+
+async def run_shadow_discovery(
+    *,
+    event_id: UUID,
+    source_type: SourceType,
+    content: str | None,
+    article_url: str | None,
+    mode: Literal["off", "shadow"],
+    now: datetime | None = None,
+) -> ImageIntelligenceResult:
+    """The single M2 orchestration entry point, called once per CONTENT_GENERATION "copywriting"
+    step (capabilities/executor.py). `mode="off"` is a zero-cost, zero-network no-op - delegates
+    straight to `consolidate_candidates`'s own off-mode short-circuit without inspecting anything.
+
+    Article-page fetching is attempted only when `source_type != TELEGRAM` (a Telegram NewsEvent's
+    `url` is an internal `t.me/...` link, not an external article page - fetching it would target
+    Telegram's own web interface, a different risk/scope than "the original article page
+    associated with the NewsEvent") and only up to `image_intelligence_max_articles_per_event`
+    (always 1 in this milestone's default config).
+    """
+    generated_at = now or datetime.now(timezone.utc)
+    native_hints = reconstruct_hints_from_content(content, article_url)
+
+    if mode == "off":
+        return consolidate_candidates([], event_id=event_id, source_type=source_type, mode="off", now=generated_at)
+
+    metadata_hints: list[NativeMediaHint] = []
+    article_fetch_attempted = False
+    article_fetch_error: str | None = None
+
+    should_fetch_article = (
+        source_type != SourceType.TELEGRAM
+        and bool(article_url)
+        and settings.image_intelligence_max_articles_per_event > 0
+    )
+    if should_fetch_article:
+        article_fetch_attempted = True
+        assert article_url is not None
+        try:
+            metadata_hints, article_fetch_error = await asyncio.wait_for(
+                _fetch_article_metadata_hints(article_url, event_id=event_id),
+                timeout=settings.image_intelligence_total_timeout_seconds + 1,
+            )
+        except asyncio.TimeoutError:
+            article_fetch_error = "total_timeout"
+        except Exception:
+            logger.warning("article_metadata_stage_unexpected_error", extra={"event_id": str(event_id)})
+            article_fetch_error = "internal_fetch_error"
+
+    combined_hints = (native_hints + metadata_hints)[: settings.image_intelligence_max_candidate_urls_per_event]
+    result = consolidate_candidates(
+        combined_hints, event_id=event_id, source_type=source_type, mode="shadow", now=generated_at
+    )
+
+    try:
+        validated_candidates = await _validate_selected_candidates(result.candidates)
+    except Exception:
+        logger.warning("image_validation_stage_unexpected_error", extra={"event_id": str(event_id)})
+        validated_candidates = result.candidates
+
+    validated_count = sum(1 for c in validated_candidates if c.status == ImageCandidateStatus.VALIDATED)
+    rejected_technical_count = sum(
+        1 for c in validated_candidates if c.status == ImageCandidateStatus.REJECTED_TECHNICAL
+    )
+    fetch_failed_count = sum(1 for c in validated_candidates if c.status == ImageCandidateStatus.FETCH_FAILED)
+    m2_ran = article_fetch_attempted or validated_count or rejected_technical_count or fetch_failed_count
+
+    logger.info(
+        "image_intelligence_m2_shadow_result",
+        extra={
+            "event_id": str(event_id),
+            "source_type": source_type.value,
+            "mode": mode,
+            "article_fetch_attempted": article_fetch_attempted,
+            "article_fetch_error": article_fetch_error,
+            "candidates_discovered": result.candidates_discovered,
+            "candidates_validated": validated_count,
+            "candidates_rejected_technical": rejected_technical_count,
+            "candidates_fetch_failed": fetch_failed_count,
+        },
+    )
+
+    return result.model_copy(
+        update={
+            "version": "m2" if m2_ran else result.version,
+            "candidates": validated_candidates,
+            "article_fetch_attempted": article_fetch_attempted,
+            "article_fetch_error": article_fetch_error,
+            "candidates_validated": validated_count,
+            "candidates_rejected_technical": rejected_technical_count,
+            "candidates_fetch_failed": fetch_failed_count,
+        }
     )

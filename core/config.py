@@ -202,6 +202,26 @@ class Settings(BaseSettings):
     # live-validation milestone is the gate for even a shadow-by-default posture.
     image_intelligence_mode: Literal["off", "shadow"] = "off"
 
+    # Phase 16 M2: secure fetch / technical validation limits (docs/phase16_m2_secure_fetch_and_
+    # validation_report.md §9). All positive-bounded, no unlimited fallback - every external fetch
+    # Image Intelligence makes (article HTML, candidate image bytes) is bounded by exactly these
+    # settings via integrations/http/safe_fetch.py::SafeFetchPolicy. Only consulted when
+    # image_intelligence_mode == "shadow" - "off" makes zero network calls regardless.
+    image_intelligence_connect_timeout_seconds: float = Field(default=3.0, gt=0)
+    image_intelligence_read_timeout_seconds: float = Field(default=7.0, gt=0)
+    image_intelligence_total_timeout_seconds: float = Field(default=12.0, gt=0)
+    image_intelligence_max_redirects: int = Field(default=3, gt=0)
+    image_intelligence_max_html_bytes: int = Field(default=2_000_000, gt=0)
+    image_intelligence_max_image_bytes: int = Field(default=10_000_000, gt=0)
+    image_intelligence_max_decoded_pixels: int = Field(default=40_000_000, gt=0)
+    # Technical safety/cost boundaries, not editorial judgment (mirrors content_generation_
+    # scan_limit's own established "cheap ops cap, not a quality decision" convention).
+    image_intelligence_max_articles_per_event: int = Field(default=1, gt=0)
+    image_intelligence_max_candidate_urls_per_event: int = Field(default=10, gt=0)
+    image_intelligence_max_image_downloads_per_event: int = Field(default=5, gt=0)
+    image_intelligence_global_concurrency: int = Field(default=4, gt=0)
+    image_intelligence_per_host_concurrency: int = Field(default=2, gt=0)
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""

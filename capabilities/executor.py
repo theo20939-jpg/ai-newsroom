@@ -56,7 +56,7 @@ from services.cost_recording import record_ai_execution
 from services.cost_tracker import CostTracker
 from services.editorial_scoring import apply_editorial_scoring_v2
 from services.fact_safety import apply_fact_safety
-from services.image_intelligence import consolidate_candidates, reconstruct_hints_from_content
+from services.image_intelligence import run_shadow_discovery
 from services.pricing_catalog import PricingCatalog
 from workflows.errors import PermanentStepFailureError, StepExecutionError, TaskNotFoundError
 
@@ -226,14 +226,23 @@ class CapabilityExecutor:
     ) -> dict[str, Any]:
         """Best-effort, non-blocking. Any failure - including being unable to resolve the event's
         NewsSource - is logged and swallowed, returning `structured_output` completely unchanged
-        (copywriting's own fields are never touched, only a new "image_intelligence" key added)."""
+        (copywriting's own fields are never touched, only a new "image_intelligence" key added).
+
+        Phase 16 M2 (docs/phase16_m2_secure_fetch_and_validation_report.md §13): all networking
+        (article-page fetch, image-byte fetch) and technical validation lives inside
+        `services.image_intelligence.run_shadow_discovery()` - this method only orchestrates the
+        one call and preserves its result, exactly as the M2 task brief requires ("The executor
+        should only orchestrate the service call and preserve results")."""
         try:
             source = await self._session.get(NewsSource, news_event.source_id)
             if source is None:
                 return structured_output
-            hints = reconstruct_hints_from_content(news_event.content, news_event.url)
-            result = consolidate_candidates(
-                hints, event_id=news_event.id, source_type=source.type, mode="shadow"
+            result = await run_shadow_discovery(
+                event_id=news_event.id,
+                source_type=source.type,
+                content=news_event.content,
+                article_url=news_event.url,
+                mode=settings.image_intelligence_mode,
             )
             return {**structured_output, "image_intelligence": result.model_dump(mode="json")}
         except Exception:
