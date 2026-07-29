@@ -243,6 +243,8 @@ class CapabilityExecutor:
                 content=news_event.content,
                 article_url=news_event.url,
                 mode=settings.image_intelligence_mode,
+                event_title=news_event.title,
+                source_name=source.name,
             )
             return {**structured_output, "image_intelligence": result.model_dump(mode="json")}
         except Exception:

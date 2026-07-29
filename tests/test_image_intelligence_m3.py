@@ -124,7 +124,10 @@ async def test_shadow_mode_records_m3_result(pinned) -> None:
         event_id=uuid4(), source_type=SourceType.RSS, content="text",
         article_url=_article_url(server), mode="shadow",
     )
-    assert result.version == "m3"
+    # Phase 16 M4 also runs on this same VALIDATED+ACCEPTED candidate (relevance ranking is now
+    # layered on top of M3), so the result version reflects the latest milestone that actually
+    # processed it - "m4", not "m3" - exactly as M3 itself bumped M2's "m2" results to "m3".
+    assert result.version == "m4"
     candidate = result.candidates[0]
     assert candidate.quality_validation is not None
     assert candidate.quality_validation.status == QualityStatus.ACCEPTED

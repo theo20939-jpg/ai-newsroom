@@ -42,12 +42,14 @@ from schemas.image_candidate import (
     NativeMediaHint,
     QualityStatus,
     QualityValidation,
+    RelevanceStatus,
     TechnicalValidation,
     TelegramReference,
 )
 from services.article_metadata import extract_article_image_metadata
 from services.image_deduplication import cluster_candidates
 from services.image_quality import QualityAnalysis, analyze_candidate
+from services.image_relevance import rank_candidates
 from services.image_validation import validate_image_bytes
 
 logger = logging.getLogger(__name__)
@@ -756,8 +758,10 @@ async def run_shadow_discovery(
     article_url: str | None,
     mode: Literal["off", "shadow"],
     now: datetime | None = None,
+    event_title: str | None = None,
+    source_name: str | None = None,
 ) -> ImageIntelligenceResult:
-    """The single M2 orchestration entry point, called once per CONTENT_GENERATION "copywriting"
+    """The single M2-M4 orchestration entry point, called once per CONTENT_GENERATION "copywriting"
     step (capabilities/executor.py). `mode="off"` is a zero-cost, zero-network no-op - delegates
     straight to `consolidate_candidates`'s own off-mode short-circuit without inspecting anything.
 
@@ -766,6 +770,11 @@ async def run_shadow_discovery(
     Telegram's own web interface, a different risk/scope than "the original article page
     associated with the NewsEvent") and only up to `image_intelligence_max_articles_per_event`
     (always 1 in this milestone's default config).
+
+    `event_title`/`source_name` (Phase 16 M4, docs/phase16_m4_relevance_ranking_report.md §3) are
+    additive, optional keyword-only parameters - callers that predate M4 (existing scripts/tests)
+    keep working unchanged with `None`, which `services.image_relevance` treats as "no evidence
+    available," never as an error.
     """
     generated_at = now or datetime.now(timezone.utc)
     native_hints = reconstruct_hints_from_content(content, article_url)
@@ -837,6 +846,30 @@ async def run_shadow_discovery(
     )
     m3_ran = bool(quality_accepted or rejected_quality or duplicate_exact or duplicate_near or review_count)
 
+    try:
+        ranked_candidates = rank_candidates(
+            finalized_candidates, event_title=event_title, event_content=content, event_url=article_url,
+            source_name=source_name, top_candidates=settings.image_intelligence_top_candidates,
+        )
+    except Exception:
+        logger.warning("relevance_ranking_stage_unexpected_error", extra={"event_id": str(event_id)})
+        ranked_candidates = finalized_candidates
+
+    quality_eligible = sum(
+        1 for c in ranked_candidates
+        if c.relevance_validation and c.relevance_validation.status != RelevanceStatus.INELIGIBLE
+    )
+    ranked_count = sum(
+        1 for c in ranked_candidates
+        if c.relevance_validation and c.relevance_validation.status == RelevanceStatus.RANKED
+    )
+    top_ranked_candidates = [
+        c for c in ranked_candidates if c.relevance_validation and c.relevance_validation.eligible_for_editorial
+    ]
+    top_ranked_candidates.sort(key=lambda c: c.relevance_validation.rank or 0)  # type: ignore[union-attr]
+    top_candidate_ids = [c.candidate_id for c in top_ranked_candidates]
+    m4_ran = any(c.relevance_validation is not None for c in ranked_candidates)
+
     logger.info(
         "image_intelligence_shadow_result",
         extra={
@@ -854,13 +887,16 @@ async def run_shadow_discovery(
             "candidates_duplicate_exact": duplicate_exact,
             "candidates_duplicate_near": duplicate_near,
             "candidates_review": review_count,
+            "candidates_quality_eligible": quality_eligible,
+            "candidates_ranked": ranked_count,
+            "top_candidate_count": len(top_candidate_ids),
         },
     )
 
     return result.model_copy(
         update={
-            "version": "m3" if m3_ran else ("m2" if m2_ran else result.version),
-            "candidates": finalized_candidates,
+            "version": "m4" if m4_ran else ("m3" if m3_ran else ("m2" if m2_ran else result.version)),
+            "candidates": ranked_candidates,
             "article_fetch_attempted": article_fetch_attempted,
             "article_fetch_error": article_fetch_error,
             "candidates_validated": validated_count,
@@ -871,5 +907,8 @@ async def run_shadow_discovery(
             "candidates_duplicate_exact": duplicate_exact,
             "candidates_duplicate_near": duplicate_near,
             "candidates_review": review_count,
+            "candidates_quality_eligible": quality_eligible,
+            "candidates_ranked": ranked_count,
+            "top_candidate_ids": top_candidate_ids,
         }
     )
