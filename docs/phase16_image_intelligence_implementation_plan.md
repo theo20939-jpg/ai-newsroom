@@ -1,9 +1,33 @@
 # Phase 16 — Image Intelligence — M0 Implementation Plan
 
-Status: **M1, M2, and M3 IMPLEMENTED** (docs/phase16_m1_native_media_ingestion_report.md, docs/
-phase16_m2_secure_fetch_and_validation_report.md, docs/
-phase16_m3_quality_and_deduplication_report.md). M4–M8 remain plan only. See
+Status: **M1, M2, M3, and M4 IMPLEMENTED** (docs/phase16_m1_native_media_ingestion_report.md, docs/
+phase16_m2_secure_fetch_and_validation_report.md, docs/phase16_m3_quality_and_deduplication_report.md,
+docs/phase16_m4_relevance_ranking_report.md). M5–M8 remain plan only. See
 `docs/phase16_image_intelligence_discovery_report.md` for the evidence this plan is built on.
+
+## M4 architecture corrections (discovered during implementation)
+
+- **`run_shadow_discovery()` needed two new parameters it did not have.** The plan implicitly
+  assumed relevance ranking could work from the candidate pool alone; in practice ranking is
+  structurally impossible without the story's own title, so `event_title`/`source_name` were added
+  as additive, optional keyword parameters, threaded through from `capabilities/executor.py` (both
+  values were already loaded there for other purposes - no new query).
+- **Weight selection was evidence-driven, not assumed.** Four component-weight variants were
+  compared against both a labeled synthetic scenario set and real bounded-network data; two of the
+  three rejected variants (provenance-heavy, text-overlap-heavy) tied the shipped "balanced" variant
+  on raw top-1 agreement and only failed under deliberately-added adversarial margin analysis - see
+  the M4 report §21 for the full comparison and why margin analysis, not just top-1 accuracy, was
+  needed to discriminate between otherwise-tied candidates.
+- **Real metadata coverage was far lower than assumed going in.** Only 15.2% of real candidates in
+  the 120-event backtest carried meaningful `alt_text`, and 0% carried a meaningful `caption` -
+  `filename_available` (92.8%) turned out to be the dominant, most reliable real text signal. This
+  directly shaped the metadata-confidence component's neutral-baseline design (§13 of the M4
+  report) - a naive zero-baseline would have unfairly punished the overwhelming majority of real
+  candidates.
+- **Average top-candidate count is close to 1, not close to the configured limit of 5.** M3's own
+  exact/near-duplicate clustering already collapses the extremely common og:image + twitter:image +
+  JSON-LD-image triplet into a single representative before M4 ever ranks anything - confirmed
+  empirically (1.04 average top-candidate count across 120 real events), not merely assumed.
 
 ## M3 architecture corrections (discovered during implementation)
 
@@ -204,28 +228,38 @@ database migration until the design is validated in shadow mode.
 - **Non-goals:** no relevance ranking yet (M4); no manual-review UI (that's M6's job, if ever). Held
   exactly as planned.
 
-### M4 — Deterministic relevance ranking
+### M4 — Deterministic relevance ranking — **IMPLEMENTED** (docs/phase16_m4_relevance_ranking_report.md)
 
-- **Scope:** the 0–100 bounded ranking formula from discovery §15 — provenance, technical quality,
-  textual relevance (token overlap against the drafted `ContentDraft.title`/`body`), duplicate
-  penalty, logo/banner penalty, discovery-method reliability, freshness. Configurable weights in
-  `core/config.py`, summing to 1.0, following the `editorial_scoring_weight_*` precedent exactly
-  (tested against defaults, not cross-field-validated, matching this Settings class's own
-  established convention).
-- **Files likely affected:** `services/image_intelligence.py`, `core/config.py` (new
-  `image_intelligence_weight_*` settings).
-- **Tests:** ranking matrix from discovery §15 — original-source-media priority, resolution
-  ordering, logo penalty, missing-data neutral-not-bonus behavior, deterministic tie-breaking,
-  source-type neutrality (no source type wins merely for having less metadata to evaluate).
-- **Migration impact:** none.
-- **Deployment impact:** none — output written into `EditorialTask.workflow.step_results` for the
-  `copywriting` step, per discovery §11/§20; still no Telegram-visible change.
+- **Scope:** the 0–100 bounded ranking formula from discovery §15 — provenance, source/article
+  relationship, textual relevance (token overlap against the NewsEvent's own title/content/source
+  name - **not** the drafted `ContentDraft.title`/`body` as this plan originally guessed, since
+  ranking happens at the same "copywriting" step that produces the draft, before its text exists),
+  M3 quality-score reuse, metadata-confidence coverage. Component budgets (not "weights summing to
+  1.0") centralized in `services/image_relevance.py`, selected via evidence-driven comparison of
+  four variants against labeled scenarios and real backtest data - see the M4 report §21.
+- **Files affected:** `services/image_relevance.py` (new), `services/image_intelligence.py`
+  (orchestration), `core/config.py` (`image_intelligence_top_candidates`, not
+  `image_intelligence_weight_*` as originally guessed - the shipped design uses fixed, evidence-
+  calibrated component budgets rather than a user-configurable weight vector, since no real
+  operational need for runtime-tunable weights was identified).
+- **Tests:** ranking matrix from discovery §15, fully implemented and exceeded — provenance,
+  source-relationship, text-normalization, textual-overlap, quality/penalty, missing-data, and
+  score/ranking matrices (94 tests total) — original-source-media priority, missing-data
+  neutral-not-bonus behavior (explicitly verified, M4 report §13), deterministic tie-breaking,
+  duplicate-cluster single-top-slot enforcement.
+- **Migration impact:** none — confirmed, nothing persisted.
+- **Deployment impact:** none — output attached to `structured_output["image_intelligence"]` for
+  the `copywriting` step exactly as M1-M3 already did; still no Telegram-visible change. Controlled
+  shadow validation performed against 15 real events via `docker exec` into the freshly rebuilt
+  container (M4 report §26).
 - **Rollback:** same as M1–M3.
-- **Definition of Done:** for a sample of real drafted events with ≥2 discovered candidates, the
-  top-ranked candidate is manually judged reasonable by an editor; component score breakdown is
-  inspectable in `step_results` JSON.
+- **Definition of Done:** on the 120-event real backtest, provenance/relationship/textual-overlap
+  ordering behaved as designed with zero observed false "logo above article imagery" or "thumbnail
+  above full image" cases (M4 report §23); component score breakdown is inspectable in each
+  candidate's `relevance_validation` JSON.
 - **Non-goals:** no image-content/semantic relevance claim beyond available metadata (explicit
-  discovery §15 rule) — this is not vision-based ranking.
+  discovery §15 rule) — confirmed held throughout; every generated `reason` string is template-based
+  and scanned by a dedicated test for banned visual-claim language ("shows", "depicts", "pictured").
 
 ### M5 — Persistence and retention
 
