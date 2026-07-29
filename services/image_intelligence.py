@@ -34,15 +34,20 @@ from core.config import settings
 from database.models.news_source import SourceType
 from integrations.http.safe_fetch import SafeFetchError, SafeFetchPolicy, safe_fetch
 from schemas.image_candidate import (
+    DeduplicationInfo,
     ImageCandidate,
     ImageCandidateStatus,
     ImageDiscoveryMethod,
     ImageIntelligenceResult,
     NativeMediaHint,
+    QualityStatus,
+    QualityValidation,
     TechnicalValidation,
     TelegramReference,
 )
 from services.article_metadata import extract_article_image_metadata
+from services.image_deduplication import cluster_candidates
+from services.image_quality import QualityAnalysis, analyze_candidate
 from services.image_validation import validate_image_bytes
 
 logger = logging.getLogger(__name__)
@@ -585,33 +590,42 @@ async def _fetch_article_metadata_hints(
     return hints, None
 
 
-async def _fetch_and_validate_candidate(candidate: ImageCandidate) -> ImageCandidate:
-    """Fetches one candidate's image bytes through the safe-fetch boundary and technically
-    validates them. Always returns a candidate (never raises) - `status` becomes exactly one of
-    VALIDATED/REJECTED_TECHNICAL/FETCH_FAILED, `technical_validation` is always populated."""
+async def _fetch_and_validate_candidate(candidate: ImageCandidate) -> tuple[ImageCandidate, QualityAnalysis | None]:
+    """Fetches one candidate's image bytes through the safe-fetch boundary, technically validates
+    them (M2), and - only when M2 accepts the bytes - runs M3 quality analysis on the *same*
+    in-memory bytes before they go out of scope (docs/phase16_m3_quality_and_deduplication_
+    report.md §3: "M3 must not refetch an image solely to calculate quality or perceptual
+    hashes" - `fetch_result.body` is fetched exactly once here and reused for both M2 and M3,
+    never a second network request). Always returns a candidate (never raises) - `status` becomes
+    exactly one of VALIDATED/REJECTED_TECHNICAL/FETCH_FAILED, `technical_validation` is always
+    populated. The second tuple element is the M3 `QualityAnalysis`, or `None` when M3 never ran
+    (M2 rejected/failed the candidate)."""
     assert candidate.remote_url is not None  # only ever called for candidates that have one
     try:
         fetch_result = await safe_fetch(candidate.remote_url, policy=_image_fetch_policy())
     except SafeFetchError as error:
         technical = TechnicalValidation(error_code=error.code.value)
-        return candidate.model_copy(
+        updated = candidate.model_copy(
             update={"status": ImageCandidateStatus.FETCH_FAILED, "technical_validation": technical, "schema_version": "m2"}
         )
+        return updated, None
     except Exception:
         logger.warning("image_fetch_unexpected_error", extra={"candidate_id": candidate.candidate_id})
         technical = TechnicalValidation(error_code="internal_fetch_error")
-        return candidate.model_copy(
+        updated = candidate.model_copy(
             update={"status": ImageCandidateStatus.FETCH_FAILED, "technical_validation": technical, "schema_version": "m2"}
         )
+        return updated, None
 
     if fetch_result.status_code >= 400:
         technical = TechnicalValidation(
             final_url=fetch_result.final_url, http_status=fetch_result.status_code,
             redirect_count=fetch_result.redirect_count, error_code="http_error",
         )
-        return candidate.model_copy(
+        updated = candidate.model_copy(
             update={"status": ImageCandidateStatus.FETCH_FAILED, "technical_validation": technical, "schema_version": "m2"}
         )
+        return updated, None
 
     technical = validate_image_bytes(fetch_result.body, max_pixels=settings.image_intelligence_max_decoded_pixels)
     technical = technical.model_copy(
@@ -623,12 +637,24 @@ async def _fetch_and_validate_candidate(candidate: ImageCandidate) -> ImageCandi
         }
     )
     status = ImageCandidateStatus.VALIDATED if technical.error_code is None else ImageCandidateStatus.REJECTED_TECHNICAL
-    return candidate.model_copy(
+    updated = candidate.model_copy(
         update={"status": status, "technical_validation": technical, "schema_version": "m2"}
     )
 
+    if status != ImageCandidateStatus.VALIDATED:
+        return updated, None
 
-async def _validate_selected_candidates(candidates: list[ImageCandidate]) -> list[ImageCandidate]:
+    try:
+        analysis = analyze_candidate(fetch_result.body, candidate=updated)
+    except Exception:
+        logger.warning("quality_analysis_stage_unexpected_error", extra={"candidate_id": candidate.candidate_id})
+        analysis = None
+    return updated, analysis
+
+
+async def _validate_selected_candidates(
+    candidates: list[ImageCandidate],
+) -> list[tuple[ImageCandidate, QualityAnalysis | None]]:
     """Bounded, in-process-only concurrency (docs/phase16_m2_secure_fetch_and_validation_report.md
     §17 - a single `content_worker` process exists today, so a distributed limiter is not
     justified; this is documented as a known limitation, not an oversight, should that ever
@@ -639,7 +665,7 @@ async def _validate_selected_candidates(candidates: list[ImageCandidate]) -> lis
     eligible = [c for c in candidates if c.status == ImageCandidateStatus.DISCOVERED and c.remote_url is not None]
     selected_ids = {c.candidate_id for c in eligible[: settings.image_intelligence_max_image_downloads_per_event]}
     if not selected_ids:
-        return candidates
+        return [(candidate, None) for candidate in candidates]
 
     global_semaphore = asyncio.Semaphore(settings.image_intelligence_global_concurrency)
     host_semaphores: dict[str, asyncio.Semaphore] = {}
@@ -650,19 +676,76 @@ async def _validate_selected_candidates(candidates: list[ImageCandidate]) -> lis
             host_semaphores[host] = asyncio.Semaphore(settings.image_intelligence_per_host_concurrency)
         return host_semaphores[host]
 
-    async def _bounded_validate(candidate: ImageCandidate) -> ImageCandidate:
+    async def _bounded_validate(candidate: ImageCandidate) -> tuple[ImageCandidate, QualityAnalysis | None]:
         assert candidate.remote_url is not None
         async with global_semaphore, _host_semaphore(candidate.remote_url):
             return await _fetch_and_validate_candidate(candidate)
 
-    async def _passthrough(candidate: ImageCandidate) -> ImageCandidate:
-        return candidate
+    async def _passthrough(candidate: ImageCandidate) -> tuple[ImageCandidate, QualityAnalysis | None]:
+        return candidate, None
 
     tasks = [
         _bounded_validate(candidate) if candidate.candidate_id in selected_ids else _passthrough(candidate)
         for candidate in candidates
     ]
     return list(await asyncio.gather(*tasks))
+
+
+def _decide_quality_status(analysis: QualityAnalysis, dedup: DeduplicationInfo) -> QualityStatus:
+    """Precedence exactly matches docs/phase16_m3_quality_and_deduplication_report.md §17: hard
+    rejection wins regardless of duplicate/ambiguity status; exact duplicate before near duplicate
+    (distinguished by `hamming_distance == 0`, the sentinel services.image_deduplication always
+    assigns to exact-cluster members); an unresolved-but-close near-duplicate or an ambiguous
+    logo/banner signal becomes `review`, never silently `accepted`."""
+    if analysis.decode_error is not None:
+        return QualityStatus.REVIEW
+    if analysis.hard_rejection_reasons:
+        return QualityStatus.REJECTED_QUALITY
+    if dedup.duplicate_of is not None:
+        return QualityStatus.DUPLICATE_EXACT if dedup.hamming_distance == 0 else QualityStatus.DUPLICATE_NEAR
+    if analysis.signals.possible_logo or analysis.signals.possible_banner:
+        return QualityStatus.REVIEW
+    if dedup.hamming_distance is not None:  # close to another cluster, but not close enough to auto-merge
+        return QualityStatus.REVIEW
+    return QualityStatus.ACCEPTED
+
+
+def _finalize_quality(
+    items: list[tuple[ImageCandidate, QualityAnalysis | None]],
+) -> list[ImageCandidate]:
+    """The M3 finalization step: clusters every successfully-analyzed candidate in this one event
+    (services.image_deduplication.cluster_candidates - never across events, per the M3 task
+    brief's own explicit scoping), then builds and attaches one `QualityValidation` per candidate.
+    Candidates M3 never analyzed (M2 didn't validate them, or analysis itself failed with no
+    result at all) keep `quality_validation=None` - M2's own status/technical_validation is never
+    touched (docs §2's "keep separate concerns" requirement)."""
+    analyzable = [(candidate, analysis) for candidate, analysis in items if analysis is not None and analysis.decode_error is None]
+    dedup_by_id = cluster_candidates(analyzable) if analyzable else {}
+
+    finalized: list[ImageCandidate] = []
+    for candidate, analysis in items:
+        if analysis is None:
+            finalized.append(candidate)
+            continue
+
+        dedup = dedup_by_id.get(
+            candidate.candidate_id,
+            DeduplicationInfo(perceptual_hash=analysis.perceptual_hash),
+        )
+        status = _decide_quality_status(analysis, dedup)
+        quality = QualityValidation(
+            status=status,
+            quality_score=analysis.quality_score,
+            quality_components=analysis.quality_components,
+            quality_penalties=analysis.quality_penalties,
+            hard_rejection_reasons=analysis.hard_rejection_reasons,
+            quality_warnings=analysis.quality_warnings + (["quality_analysis_failed"] if analysis.decode_error else []),
+            signals=analysis.signals,
+            deduplication=dedup,
+            duration_ms=analysis.duration_ms,
+        )
+        finalized.append(candidate.model_copy(update={"quality_validation": quality, "schema_version": "m3"}))
+    return finalized
 
 
 async def run_shadow_discovery(
@@ -719,20 +802,43 @@ async def run_shadow_discovery(
     )
 
     try:
-        validated_candidates = await _validate_selected_candidates(result.candidates)
+        validation_items = await _validate_selected_candidates(result.candidates)
     except Exception:
         logger.warning("image_validation_stage_unexpected_error", extra={"event_id": str(event_id)})
-        validated_candidates = result.candidates
+        validation_items = [(candidate, None) for candidate in result.candidates]
 
-    validated_count = sum(1 for c in validated_candidates if c.status == ImageCandidateStatus.VALIDATED)
+    validated_count = sum(1 for c, _ in validation_items if c.status == ImageCandidateStatus.VALIDATED)
     rejected_technical_count = sum(
-        1 for c in validated_candidates if c.status == ImageCandidateStatus.REJECTED_TECHNICAL
+        1 for c, _ in validation_items if c.status == ImageCandidateStatus.REJECTED_TECHNICAL
     )
-    fetch_failed_count = sum(1 for c in validated_candidates if c.status == ImageCandidateStatus.FETCH_FAILED)
+    fetch_failed_count = sum(1 for c, _ in validation_items if c.status == ImageCandidateStatus.FETCH_FAILED)
     m2_ran = article_fetch_attempted or validated_count or rejected_technical_count or fetch_failed_count
 
+    try:
+        finalized_candidates = _finalize_quality(validation_items)
+    except Exception:
+        logger.warning("quality_finalization_stage_unexpected_error", extra={"event_id": str(event_id)})
+        finalized_candidates = [candidate for candidate, _ in validation_items]
+
+    quality_accepted = sum(
+        1 for c in finalized_candidates if c.quality_validation and c.quality_validation.status == QualityStatus.ACCEPTED
+    )
+    rejected_quality = sum(
+        1 for c in finalized_candidates if c.quality_validation and c.quality_validation.status == QualityStatus.REJECTED_QUALITY
+    )
+    duplicate_exact = sum(
+        1 for c in finalized_candidates if c.quality_validation and c.quality_validation.status == QualityStatus.DUPLICATE_EXACT
+    )
+    duplicate_near = sum(
+        1 for c in finalized_candidates if c.quality_validation and c.quality_validation.status == QualityStatus.DUPLICATE_NEAR
+    )
+    review_count = sum(
+        1 for c in finalized_candidates if c.quality_validation and c.quality_validation.status == QualityStatus.REVIEW
+    )
+    m3_ran = bool(quality_accepted or rejected_quality or duplicate_exact or duplicate_near or review_count)
+
     logger.info(
-        "image_intelligence_m2_shadow_result",
+        "image_intelligence_shadow_result",
         extra={
             "event_id": str(event_id),
             "source_type": source_type.value,
@@ -743,17 +849,27 @@ async def run_shadow_discovery(
             "candidates_validated": validated_count,
             "candidates_rejected_technical": rejected_technical_count,
             "candidates_fetch_failed": fetch_failed_count,
+            "candidates_quality_accepted": quality_accepted,
+            "candidates_rejected_quality": rejected_quality,
+            "candidates_duplicate_exact": duplicate_exact,
+            "candidates_duplicate_near": duplicate_near,
+            "candidates_review": review_count,
         },
     )
 
     return result.model_copy(
         update={
-            "version": "m2" if m2_ran else result.version,
-            "candidates": validated_candidates,
+            "version": "m3" if m3_ran else ("m2" if m2_ran else result.version),
+            "candidates": finalized_candidates,
             "article_fetch_attempted": article_fetch_attempted,
             "article_fetch_error": article_fetch_error,
             "candidates_validated": validated_count,
             "candidates_rejected_technical": rejected_technical_count,
             "candidates_fetch_failed": fetch_failed_count,
+            "candidates_quality_accepted": quality_accepted,
+            "candidates_rejected_quality": rejected_quality,
+            "candidates_duplicate_exact": duplicate_exact,
+            "candidates_duplicate_near": duplicate_near,
+            "candidates_review": review_count,
         }
     )
