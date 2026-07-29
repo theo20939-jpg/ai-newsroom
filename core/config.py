@@ -222,6 +222,13 @@ class Settings(BaseSettings):
     image_intelligence_global_concurrency: int = Field(default=4, gt=0)
     image_intelligence_per_host_concurrency: int = Field(default=2, gt=0)
 
+    # Phase 16 M4: deterministic relevance ranking (docs/phase16_m4_relevance_ranking_report.md
+    # §17). Bounded positive integer - a safe maximum (20) prevents an accidental config typo from
+    # producing an unbounded/unreviewable top-candidate list; the default (5) matches the M4 task
+    # brief. Purely a result-shaping cap - never affects how many candidates are fetched/analyzed
+    # (that remains image_intelligence_max_image_downloads_per_event, unchanged).
+    image_intelligence_top_candidates: int = Field(default=5, gt=0, le=20)
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""

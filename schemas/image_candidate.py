@@ -218,6 +218,58 @@ class QualityValidation(BaseModel):
     duration_ms: int | None = None
 
 
+class RelevanceStatus(str, enum.Enum):
+    """Phase 16 M4 (docs/phase16_m4_relevance_ranking_report.md §5) - a candidate reaches exactly
+    one of these. `INELIGIBLE` never reached scoring at all (M2/M3 gate failure - see
+    `services.image_relevance.evaluate_eligibility`). `INSUFFICIENT_EVIDENCE` passed the M2/M3 gate
+    but has too little relevance-specific evidence (no text, weak/unknown provenance and
+    relationship) to be confidently ranked - reported, never silently dropped. `RANKED` was scored
+    and assigned a position in the deterministic ordering; only the top `image_intelligence_top_
+    candidates` of these are `eligible_for_editorial`."""
+
+    RANKED = "ranked"
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+    INELIGIBLE = "ineligible"
+
+
+class SourceRelationship(str, enum.Enum):
+    """Phase 16 M4 (docs/phase16_m4_relevance_ranking_report.md §7) - how a candidate's image URL
+    relates to the NewsEvent's own article/source. Ordered here from strongest to weakest
+    confidence; the numeric mapping lives in `services.image_relevance`, not on the enum itself."""
+
+    NATIVE_SAME_ITEM = "native_same_item"
+    SAME_ARTICLE = "same_article"
+    SAME_DOMAIN = "same_domain"
+    SOURCE_CDN_OR_RELATED = "source_cdn_or_related"
+    THIRD_PARTY_UNKNOWN = "third_party_unknown"
+    UNRELATED_OR_CONFLICTING = "unrelated_or_conflicting"
+
+
+class RelevanceValidation(BaseModel):
+    """Phase 16 M4: deterministic, metadata-only relevance-to-story ranking. Deliberately separate
+    from `TechnicalValidation` (M2) and `QualityValidation` (M3) - a candidate can be `QualityStatus.
+    ACCEPTED` (M3: technically/editorially usable) and still rank last here (M4: weak provenance, no
+    textual overlap with the story). Never claims visual/semantic understanding of image content -
+    `relevance_score` reflects only lexical/provenance/structural evidence (M4 task brief's own
+    explicit non-goal list). `eligibility_reason` is always set; `relevance_score`/`components`/
+    `penalties`/`coverage`/`rank`/`reason` are only meaningful once `status != ineligible`."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    version: Literal["m4"] = "m4"
+    status: RelevanceStatus
+    eligibility_reason: str
+    relevance_score: int = Field(default=0, ge=0, le=100)
+    rank: int | None = Field(default=None, ge=1)
+    eligible_for_editorial: bool = False
+    source_relationship: SourceRelationship | None = None
+    components: dict[str, int] = Field(default_factory=dict)
+    penalties: dict[str, int] = Field(default_factory=dict)
+    coverage: dict[str, bool] = Field(default_factory=dict)
+    reason: str | None = None
+    duration_ms: int | None = None
+
+
 class ImageCandidate(BaseModel):
     """One consolidated, identified candidate - the per-item shape inside `ImageIntelligenceResult.
     candidates`. `remote_url` is None for Telegram-native candidates (nothing HTTP-addressable
@@ -228,7 +280,7 @@ class ImageCandidate(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     candidate_id: str
-    schema_version: Literal["m1", "m2", "m3"] = "m1"
+    schema_version: Literal["m1", "m2", "m3", "m4"] = "m1"
     event_id: UUID
     source_type: SourceType
     discovery_method: ImageDiscoveryMethod
@@ -247,6 +299,7 @@ class ImageCandidate(BaseModel):
     discovered_at: datetime
     technical_validation: TechnicalValidation | None = None
     quality_validation: QualityValidation | None = None
+    relevance_validation: RelevanceValidation | None = None
 
 
 class ImageIntelligenceResult(BaseModel):
@@ -260,7 +313,7 @@ class ImageIntelligenceResult(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    version: Literal["m1", "m2", "m3"] = "m1"
+    version: Literal["m1", "m2", "m3", "m4"] = "m1"
     mode: Literal["off", "shadow"]
     event_id: UUID
     candidates_discovered: int = Field(ge=0)
@@ -281,3 +334,7 @@ class ImageIntelligenceResult(BaseModel):
     candidates_duplicate_exact: int = Field(default=0, ge=0)
     candidates_duplicate_near: int = Field(default=0, ge=0)
     candidates_review: int = Field(default=0, ge=0)
+    # Phase 16 M4 observability (docs/phase16_m4_relevance_ranking_report.md §18).
+    candidates_quality_eligible: int = Field(default=0, ge=0)
+    candidates_ranked: int = Field(default=0, ge=0)
+    top_candidate_ids: list[str] = Field(default_factory=list)
