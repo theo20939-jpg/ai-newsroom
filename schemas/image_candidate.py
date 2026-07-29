@@ -129,6 +129,95 @@ class TechnicalValidation(BaseModel):
     error_code: str | None = None
 
 
+class QualityStatus(str, enum.Enum):
+    """Phase 16 M3 (docs/phase16_m3_quality_and_deduplication_report.md §17) - a candidate reaches
+    exactly one of these only if it was `VALIDATED` by M2 and selected for M3 analysis. Distinct
+    from `ImageCandidateStatus`: that field is M1/M2's own technical/metadata lifecycle status and
+    is never overwritten by M3 (docs' own explicit "keep separate concerns" instruction) -
+    `QualityValidation.status` here is the M3-only editorial-usability/duplicate verdict."""
+
+    ACCEPTED = "accepted"
+    REJECTED_QUALITY = "rejected_quality"
+    DUPLICATE_EXACT = "duplicate_exact"
+    DUPLICATE_NEAR = "duplicate_near"
+    REVIEW = "review"
+
+
+class ResolutionBand(str, enum.Enum):
+    """Deterministic dimension band - see the M3 report §8 for the calibration evidence behind
+    each threshold."""
+
+    TRACKING = "tracking"
+    ICON = "icon"
+    WEAK = "weak"
+    ADEQUATE = "adequate"
+    GOOD = "good"
+
+
+class AspectRatioBand(str, enum.Enum):
+    """Deterministic aspect-ratio band - see the M3 report §9."""
+
+    EXTREME_TALL = "extreme_tall"
+    PORTRAIT = "portrait"
+    SQUARE = "square"
+    EDITORIAL_LANDSCAPE = "editorial_landscape"
+    WIDE_BANNER = "wide_banner"
+    EXTREME_WIDE = "extreme_wide"
+
+
+class QualitySignals(BaseModel):
+    """Conservative, deterministic signals only - every `possible_*` field is exactly that, a
+    possibility, never a `confirmed_*` claim (M3 task brief's own explicit requirement, §8)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    resolution_band: ResolutionBand
+    aspect_ratio_band: AspectRatioBand
+    possible_tracking_pixel: bool = False
+    possible_icon: bool = False
+    possible_logo: bool = False
+    possible_avatar: bool = False
+    possible_banner: bool = False
+    possible_placeholder: bool = False
+
+
+class DeduplicationInfo(BaseModel):
+    """Exact and perceptual duplicate-cluster membership - scoped to one event only (M3 does not
+    query across events or persist anything - discovery report §12/§14)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    exact_hash: str | None = None
+    perceptual_hash: str | None = None
+    exact_cluster_id: str | None = None
+    perceptual_cluster_id: str | None = None
+    duplicate_of: str | None = None  # candidate_id of the cluster representative, if not itself
+    hamming_distance: int | None = None
+    is_representative: bool = False
+
+
+class QualityValidation(BaseModel):
+    """Phase 16 M3: deterministic editorial-usability and duplicate-cluster verdict. Deliberately
+    separate from `TechnicalValidation` (M2) and any future relevance-ranking shape (M4) - a
+    candidate can be `TechnicalValidation.error_code is None` (M2: technically decodable) and
+    still `QualityStatus.REJECTED_QUALITY` (M3: a 1x1 tracking pixel) or `DUPLICATE_NEAR` (M3: a
+    resized copy of a better candidate). Never claims semantic/story relevance - `quality_score`
+    reflects technical/editorial usability only (M3 task brief §16's own explicit non-goal list)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    version: Literal["m3"] = "m3"
+    status: QualityStatus
+    quality_score: int = Field(ge=0, le=100)
+    quality_components: dict[str, int] = Field(default_factory=dict)
+    quality_penalties: dict[str, int] = Field(default_factory=dict)
+    hard_rejection_reasons: list[str] = Field(default_factory=list)
+    quality_warnings: list[str] = Field(default_factory=list)
+    signals: QualitySignals
+    deduplication: DeduplicationInfo
+    duration_ms: int | None = None
+
+
 class ImageCandidate(BaseModel):
     """One consolidated, identified candidate - the per-item shape inside `ImageIntelligenceResult.
     candidates`. `remote_url` is None for Telegram-native candidates (nothing HTTP-addressable
@@ -139,7 +228,7 @@ class ImageCandidate(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     candidate_id: str
-    schema_version: Literal["m1", "m2"] = "m1"
+    schema_version: Literal["m1", "m2", "m3"] = "m1"
     event_id: UUID
     source_type: SourceType
     discovery_method: ImageDiscoveryMethod
@@ -157,6 +246,7 @@ class ImageCandidate(BaseModel):
     discovery_order: int = Field(ge=0)
     discovered_at: datetime
     technical_validation: TechnicalValidation | None = None
+    quality_validation: QualityValidation | None = None
 
 
 class ImageIntelligenceResult(BaseModel):
@@ -170,7 +260,7 @@ class ImageIntelligenceResult(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    version: Literal["m1", "m2"] = "m1"
+    version: Literal["m1", "m2", "m3"] = "m1"
     mode: Literal["off", "shadow"]
     event_id: UUID
     candidates_discovered: int = Field(ge=0)
@@ -185,3 +275,9 @@ class ImageIntelligenceResult(BaseModel):
     candidates_validated: int = Field(default=0, ge=0)
     candidates_rejected_technical: int = Field(default=0, ge=0)
     candidates_fetch_failed: int = Field(default=0, ge=0)
+    # Phase 16 M3 observability (docs/phase16_m3_quality_and_deduplication_report.md §21).
+    candidates_quality_accepted: int = Field(default=0, ge=0)
+    candidates_rejected_quality: int = Field(default=0, ge=0)
+    candidates_duplicate_exact: int = Field(default=0, ge=0)
+    candidates_duplicate_near: int = Field(default=0, ge=0)
+    candidates_review: int = Field(default=0, ge=0)
