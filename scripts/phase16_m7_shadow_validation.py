@@ -29,14 +29,22 @@ M1-M6 report's own AST-based import-boundary test).
 
 Launch with:
     python -m scripts.phase16_m7_shadow_validation --phase coverage
+    python -m scripts.phase16_m7_shadow_validation --phase coverage --event-ids-file ids.json
     python -m scripts.phase16_m7_shadow_validation --phase finalists --storage-root ./scratchpad/m7_images
     python -m scripts.phase16_m7_shadow_validation --phase live-send --event-id <uuid> --storage-root ./scratchpad/m7_images
+
+Phase 16.5 (docs/phase16_5_image_calibration_report.md): the `coverage` phase now also reports
+`generic_aggregator_top_choice_count`/`rate` directly (the exact KPI M7 measured at 29%) and always
+prints its own `sampled_event_ids` so a later run can pin `--event-ids-file` to the identical real
+sample for a true before/after comparison - no need to re-derive "the same 100 events" from
+collection timestamps, which drift as the real system keeps collecting.
 """
 import argparse
 import asyncio
 import json
 from collections import Counter
 from collections.abc import Sequence
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from sqlalchemy import Row, select
@@ -55,7 +63,40 @@ SAMPLE_SIZE = 100
 FINALIST_SAMPLE_SIZE = 30
 
 
-async def _sample_recent_events(session: AsyncSession, limit: int) -> Sequence[Row]:
+def _registrable_domain(url: str | None) -> str | None:
+    if not url:
+        return None
+    try:
+        host = urlsplit(url).hostname
+    except ValueError:
+        return None
+    if not host:
+        return None
+    labels = host.lower().split(".")
+    return ".".join(labels[-2:]) if len(labels) >= 2 else host
+
+
+def _is_generic_google_asset(remote_url: str | None) -> bool:
+    """Mirrors services.image_relevance's own generic-asset domain set - kept as an independent,
+    duplicated check here (not imported) so this validation script measures the observable KPI
+    (does the chosen top image resolve to one of Google's own asset domains) rather than merely
+    asserting the production code agrees with itself."""
+    return _registrable_domain(remote_url) in {"google.com", "googleusercontent.com", "gstatic.com"}
+
+
+async def _sample_recent_events(
+    session: AsyncSession, limit: int, event_ids: list[str] | None = None,
+) -> Sequence[Row]:
+    if event_ids:
+        stmt = (
+            select(NewsEvent, NewsSource.type, NewsSource.name)
+            .join(NewsSource, NewsSource.id == NewsEvent.source_id)
+            .where(NewsEvent.id.in_([UUID(e) for e in event_ids]))
+        )
+        rows = (await session.execute(stmt)).all()
+        by_id = {str(row[0].id): row for row in rows}
+        return [by_id[e] for e in event_ids if e in by_id]
+
     stmt = (
         select(NewsEvent, NewsSource.type, NewsSource.name)
         .join(NewsSource, NewsSource.id == NewsEvent.source_id)
@@ -75,12 +116,13 @@ def _quality_bucket(score: int) -> str:
     return "below_50"
 
 
-async def run_coverage_phase() -> dict:
+async def run_coverage_phase(event_ids: list[str] | None = None) -> dict:
     async with async_session_factory() as session:
         settings.image_candidate_persistence_mode = "metadata"
-        rows = await _sample_recent_events(session, SAMPLE_SIZE)
+        rows = await _sample_recent_events(session, SAMPLE_SIZE, event_ids=event_ids)
 
         events_with_candidates = 0
+        events_with_zero_candidates_after_fix = 0
         source_type_counts: Counter = Counter()
         source_type_with_image_counts: Counter = Counter()
         discovery_method_counts: Counter = Counter()
@@ -95,8 +137,12 @@ async def run_coverage_phase() -> dict:
         relevance_scores: list[int] = []
         ranked_events = 0
         top_candidate_details = []
+        generic_aggregator_top_choice_events = 0
+        generic_aggregator_excluded_candidates = 0
+        sampled_event_ids: list[str] = []
 
         for event, source_type, source_name in rows:
+            sampled_event_ids.append(str(event.id))
             result = await run_shadow_discovery(
                 event_id=event.id, source_type=source_type, content=event.content,
                 article_url=event.url, mode="shadow", event_title=event.title, source_name=source_name,
@@ -109,6 +155,7 @@ async def run_coverage_phase() -> dict:
             if result.candidates_ranked > 0:
                 ranked_events += 1
 
+            event_has_generic_top_choice = False
             for candidate in result.candidates:
                 discovery_method_counts[candidate.discovery_method.value] += 1
                 quality = candidate.quality_validation
@@ -131,7 +178,11 @@ async def run_coverage_phase() -> dict:
                     relevance_status_counts[relevance.status.value] += 1
                     if relevance.status.value == "ranked":
                         relevance_scores.append(relevance.relevance_score)
+                    if relevance.eligibility_reason == "generic_aggregator_asset":
+                        generic_aggregator_excluded_candidates += 1
                     if relevance.eligible_for_editorial:
+                        if _is_generic_google_asset(candidate.remote_url):
+                            event_has_generic_top_choice = True
                         top_candidate_details.append({
                             "event_id": str(event.id), "title": event.title[:100],
                             "source_type": source_type.value, "candidate_id": candidate.candidate_id,
@@ -141,14 +192,25 @@ async def run_coverage_phase() -> dict:
                             "source_relationship": relevance.source_relationship.value if relevance.source_relationship else None,
                             "reason": relevance.reason,
                         })
+            if event_has_generic_top_choice:
+                generic_aggregator_top_choice_events += 1
+            if not result.top_candidate_ids:
+                events_with_zero_candidates_after_fix += 1
 
         await session.commit()
 
         summary = {
             "events_sampled": len(rows),
+            "sampled_event_ids": sampled_event_ids,
             "events_with_image_candidates": events_with_candidates,
             "events_without_image_candidates": len(rows) - events_with_candidates,
             "events_with_ranked_candidate": ranked_events,
+            "events_with_zero_eligible_top_candidate": events_with_zero_candidates_after_fix,
+            "generic_aggregator_top_choice_events": generic_aggregator_top_choice_events,
+            "generic_aggregator_top_choice_rate": (
+                round(generic_aggregator_top_choice_events / len(rows), 4) if rows else None
+            ),
+            "generic_aggregator_excluded_candidates": generic_aggregator_excluded_candidates,
             "source_type_distribution": dict(source_type_counts),
             "source_type_with_image_distribution": dict(source_type_with_image_counts),
             "discovery_method_distribution": dict(discovery_method_counts),
@@ -257,12 +319,16 @@ async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--phase", choices=["coverage", "finalists", "live-send"], required=True)
     parser.add_argument("--storage-root", default="./scratchpad/m7_images")
-    parser.add_argument("--event-ids-file", default=None, help="JSON file with a list of event_id strings (finalists phase)")
+    parser.add_argument("--event-ids-file", default=None, help="JSON file with a list of event_id strings (coverage/finalists phases)")
     parser.add_argument("--event-id", default=None, help="single event_id (live-send phase)")
     args = parser.parse_args()
 
     if args.phase == "coverage":
-        summary = await run_coverage_phase()
+        pinned_ids = None
+        if args.event_ids_file:
+            with open(args.event_ids_file, encoding="utf-8") as handle:
+                pinned_ids = json.load(handle)
+        summary = await run_coverage_phase(pinned_ids)
     elif args.phase == "finalists":
         with open(args.event_ids_file, encoding="utf-8") as handle:
             event_ids = json.load(handle)
