@@ -1,8 +1,9 @@
 # Phase 16 — Image Intelligence — M0 Implementation Plan
 
-Status: **M1, M2, M3, and M4 IMPLEMENTED** (docs/phase16_m1_native_media_ingestion_report.md, docs/
-phase16_m2_secure_fetch_and_validation_report.md, docs/phase16_m3_quality_and_deduplication_report.md,
-docs/phase16_m4_relevance_ranking_report.md). M5–M8 remain plan only. See
+Status: **M1, M2, M3, M4, M5, and M6 IMPLEMENTED** (docs/phase16_m1_native_media_ingestion_report.md,
+docs/phase16_m2_secure_fetch_and_validation_report.md, docs/phase16_m3_quality_and_deduplication_report.md,
+docs/phase16_m4_relevance_ranking_report.md, docs/phase16_m5_persistence_and_retention_report.md,
+docs/phase16_m6_telegram_editorial_preview_report.md). M7–M8 remain plan only. See
 `docs/phase16_image_intelligence_discovery_report.md` for the evidence this plan is built on.
 
 ## M4 architecture corrections (discovered during implementation)
@@ -261,7 +262,15 @@ database migration until the design is validated in shadow mode.
   discovery §15 rule) — confirmed held throughout; every generated `reason` string is template-based
   and scanned by a dedicated test for banned visual-claim language ("shows", "depicts", "pictured").
 
-### M5 — Persistence and retention
+### M5 — Persistence and retention — **IMPLEMENTED**, see docs/phase16_m5_persistence_and_retention_report.md
+
+Actual implementation deviated from this plan in two disclosed ways: (1) the retention/cleanup job
+is not a separate `worker/`or `scripts/` cron-style entry point - it runs inline inside
+`content_worker`'s own existing poll loop every N cycles (`image_cleanup_every_n_cycles`), per the
+M5 report's own "least coupled existing owner, no new worker/scheduler" reasoning (§15 of that
+report); (2) the model file is `database/models/image_candidate_record.py` (`ImageCandidateRecord`),
+not `image_candidate.py`, to avoid colliding with the already-existing in-memory Pydantic
+`ImageCandidate` name from `schemas/image_candidate.py`. Both are documented, not oversights.
 
 - **Scope:** the first schema change in this phase. New `ImageCandidate` table (discovery §11's
   field set) via a real Alembic migration; move from `step_results`-scoped storage to stable
@@ -288,7 +297,18 @@ database migration until the design is validated in shadow mode.
   milestone) — keep scope to "persistence exists and is correct," not "every consumer of it is
   built."
 
-### M6 — Telegram Editorial Preview
+### M6 — Telegram Editorial Preview — **IMPLEMENTED**, see docs/phase16_m6_telegram_editorial_preview_report.md
+
+Actual implementation deviated from this plan in several disclosed ways: (1) the callback router
+is `bot/handlers/image_preview.py`, not `image_selection.py`; (2) no new `schemas/` shape was
+added - `services/image_persistence.py::EditorialImageCandidate` (already established by M5)
+carries everything the renderer/keyboard need, avoiding a redundant transport shape; (3) gated by a
+single boolean (`image_editorial_preview_enabled`), not a three-state "mode" flag, since M6 has
+exactly one on/off behavior to gate, unlike `image_intelligence_mode`'s off/shadow distinction;
+(4) buttons are "✅ Use image"/"🚫 No image" (not "Reject"/"Use-no-image" as originally sketched) -
+same behavior, clearer labels; (5) no new docker-compose service was added for the interactive
+bot - `bot/main.py` remains a manually-run entry point exactly as it already was for `/news`
+(the M6 report's own §3 documents this as a deliberate, disclosed choice, not an oversight).
 
 - **Scope:** the UX from discovery §17 — existing text card unchanged; new follow-up `send_photo`
   message with an inline keyboard (Prev/Next/Reject/Use-no-image/Open-source) for the top-ranked
