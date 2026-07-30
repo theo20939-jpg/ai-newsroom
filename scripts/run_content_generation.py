@@ -40,6 +40,7 @@ from schemas.workflow import RunStatus, WorkflowRunResult, WorkflowType
 from services import workflow_service
 from services.content_draft_service import ContentDraftService
 from services.cost_tracker import CostTracker
+from services.image_persistence import link_candidates_to_content_draft
 from services.pricing_catalog import PricingCatalog
 from workflows.runner import WorkflowRunner
 
@@ -146,6 +147,21 @@ async def run_content_generation_for_event(
                 extra={"task_id": str(task.id)},
             )
             return ContentGenerationOutcome(task_id=task.id, workflow_status=result.status, content_draft=None)
+
+        # Phase 16 M6 (docs/phase16_m6_telegram_editorial_preview_report.md §7): links any image
+        # candidates M5 persisted during this same task's "copywriting" step to the ContentDraft
+        # that just now came to exist - the first point in the pipeline where both ids are
+        # simultaneously available. Best-effort: a linking failure must never undo or fail the
+        # ContentDraft that was already committed above, mirrors this module's own established
+        # "must not affect delivery" discipline for every Phase 15/16 post-processing hook.
+        try:
+            await link_candidates_to_content_draft(session, editorial_task_id=task.id, content_draft_id=draft.id)
+            await session.commit()
+        except Exception:
+            logger.warning(
+                "image_candidate_content_draft_link_failed",
+                extra={"task_id": str(task.id), "draft_id": str(draft.id)},
+            )
 
         logger.info(
             "content_generation_succeeded",

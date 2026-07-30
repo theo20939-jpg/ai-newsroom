@@ -21,6 +21,7 @@ from database.session import async_session_factory
 from schemas.workflow import WorkflowType
 from scripts.run_content_generation import run_content_generation_for_event
 from services.cost_tracker import CostTracker
+from services.image_preview_notifier import send_image_preview
 from services.pricing_catalog import PricingCatalog
 from services.telegram_notifier import send_editorial_card
 
@@ -41,6 +42,14 @@ class ContentCycleResult:
     # separately so a cycle's own logs distinguish "global dry-run" from "fact safety intervened".
     # Always 0 outside "enforce" mode.
     fact_safety_suppressed: int = 0
+    # Phase 16 M6 (docs/phase16_m6_telegram_editorial_preview_report.md §7): a strict subset of
+    # `completed` - counts drafts for which an internal image preview was actually sent. Always 0
+    # unless `image_editorial_preview_enabled` AND `image_candidate_persistence_mode != "off"`; a
+    # completed draft with zero eligible image candidates is not an error and is simply not
+    # counted here (image_preview_skipped_no_candidates in the per-cycle log distinguishes it from
+    # a genuine send failure).
+    image_preview_sent: int = 0
+    image_preview_failed: int = 0
     event_ids: list[UUID] = field(default_factory=list)
 
 
@@ -205,6 +214,30 @@ async def run_content_cycle(
             # never actively retried (no duplicate-notification protection for MVP; /news
             # remains the durable fallback for a lost push notification).
 
+        # Phase 16 M6 (docs/phase16_m6_telegram_editorial_preview_report.md §7): a second,
+        # independent, additive notification - never gates, delays, or replaces the
+        # send_editorial_card() call above, which has already completed by this point regardless
+        # of outcome. Disabled by default (image_editorial_preview_enabled=False) and inert
+        # whenever persistence never ran (image_candidate_persistence_mode == "off", the case in
+        # every currently-deployed environment) - a query against an always-empty result set.
+        if settings.image_editorial_preview_enabled and settings.image_candidate_persistence_mode != "off":
+            try:
+                async with session_factory() as preview_session:
+                    preview_outcome = await send_image_preview(
+                        bot, settings.editorial_chat_id, preview_session,
+                        content_draft_id=outcome.content_draft.id, draft_title=outcome.content_draft.title,
+                    )
+                if preview_outcome.attempted and preview_outcome.sent:
+                    result.image_preview_sent += 1
+                elif preview_outcome.attempted and not preview_outcome.sent:
+                    result.image_preview_failed += 1
+            except Exception:
+                logger.exception(
+                    "image_preview_cycle_stage_unexpected_error",
+                    extra={"event_id": str(event_id), "draft_id": str(outcome.content_draft.id)},
+                )
+                result.image_preview_failed += 1
+
     logger.info(
         "content_cycle_finished",
         extra={
@@ -215,6 +248,8 @@ async def run_content_cycle(
             "notification_failed": result.notification_failed,
             "dry_run_rendered": result.dry_run_rendered,
             "fact_safety_suppressed": result.fact_safety_suppressed,
+            "image_preview_sent": result.image_preview_sent,
+            "image_preview_failed": result.image_preview_failed,
         },
     )
     return result

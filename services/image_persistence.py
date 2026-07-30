@@ -1,13 +1,19 @@
-"""Phase 16 M5: durable persistence for Image Intelligence results (docs/
-phase16_m5_persistence_and_retention_report.md §16). The sole place SQLAlchemy writes for image
-candidates happen - `services/image_relevance.py`, `services/image_quality.py`, `services/
-image_deduplication.py`, and `integrations/http/safe_fetch.py` never touch the database.
+"""Phase 16 M5/M6: durable persistence for Image Intelligence results (docs/
+phase16_m5_persistence_and_retention_report.md §16, docs/phase16_m6_telegram_editorial_preview_
+report.md §7). The sole place SQLAlchemy writes for image candidates happen - `services/
+image_relevance.py`, `services/image_quality.py`, `services/image_deduplication.py`, and
+`integrations/http/safe_fetch.py` never touch the database; `bot/handlers/image_preview.py`
+never touches the database or the storage abstraction directly either - every read/write it
+needs goes through this module.
 
-Two responsibilities, kept in one module because they share the same row shape and idempotency
+Responsibilities, kept in one module because they share the same row shape and idempotency
 rules: (1) convert a finished `ImageIntelligenceResult` into durable `ImageCandidateRecord` rows
-(`persist_image_intelligence_result`), and (2) expose the bounded read query M6 will use
-(`get_editorial_image_candidates`). Retention/cleanup lives in the separate `services/
-image_retention.py` (a distinct concern - batch scanning and deletion, not per-event upsert).
+(`persist_image_intelligence_result`); (2) expose the bounded read query M6 uses
+(`get_editorial_image_candidates`); (3) M6's own link/decision/byte-resolution helpers
+(`link_candidates_to_content_draft`, `set_editor_decision`, `reject_all_candidates`,
+`read_candidate_bytes`, `record_telegram_file_id`). Retention/cleanup lives in the separate
+`services/image_retention.py` (a distinct concern - batch scanning and deletion, not per-event
+upsert or interactive editorial state).
 """
 import logging
 from dataclasses import dataclass
@@ -15,13 +21,14 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from database.models.image_candidate_record import (
     ImageCandidateRecord,
+    ImageEditorDecision,
     ImageQualityStatus,
     ImageRelevanceStatus,
     ImageStorageStatus,
@@ -325,10 +332,10 @@ async def persist_image_intelligence_result(
 
 @dataclass(frozen=True)
 class EditorialImageCandidate:
-    """The M6 retrieval contract (docs §19) - an internal storage reference (`storage_key`) is
-    exposed, never a filesystem path or public URL. M6's own future code is responsible for
-    resolving `storage_key` through `integrations.storage.image_storage` when it actually needs
-    the bytes (e.g. to build a Telegram upload) - this module never does that resolution itself."""
+    """The M6 retrieval contract (docs §19 of the M5 report, §7 of the M6 report) - an internal
+    storage reference (`storage_key`) is exposed, never a filesystem path or public URL. Bytes are
+    resolved only through `read_candidate_bytes()` below, never by the caller reaching into
+    `integrations.storage.image_storage` directly."""
 
     id: UUID
     candidate_id: str
@@ -337,12 +344,15 @@ class EditorialImageCandidate:
     quality_score: int | None
     discovery_method: str
     source_relationship: str | None
+    relevance_reason: str | None
     width: int | None
     height: int | None
     observed_mime: str | None
     image_format: str | None
     storage_status: str
     storage_key: str | None
+    telegram_file_id: str | None
+    editor_decision: str | None
     source_url: str | None
     article_url: str | None
     warnings: list | None
@@ -352,10 +362,11 @@ class EditorialImageCandidate:
 async def get_editorial_image_candidates(
     session: AsyncSession, *, news_event_id: UUID | None = None, content_draft_id: UUID | None = None, limit: int = 5,
 ) -> list[EditorialImageCandidate]:
-    """The M6 read contract (docs §19). Exactly one of `news_event_id`/`content_draft_id` should
-    be provided. Returns eligible-for-editorial rows ordered by rank, each flagged with whether its
-    metadata row has already passed `expires_at` (M6 should treat `is_expired=True` as unusable,
-    even if the row has not yet been physically cleaned up)."""
+    """The M6 read contract (docs §19 of the M5 report). Exactly one of
+    `news_event_id`/`content_draft_id` should be provided. Returns eligible-for-editorial rows
+    ordered by rank, each flagged with whether its metadata row has already passed `expires_at`
+    (M6 treats `is_expired=True` as unusable, even if the row has not yet been physically cleaned
+    up by the next scheduled retention cycle)."""
     stmt = select(ImageCandidateRecord).where(ImageCandidateRecord.eligible_for_editorial.is_(True))
     if news_event_id is not None:
         stmt = stmt.where(ImageCandidateRecord.news_event_id == news_event_id)
@@ -369,11 +380,127 @@ async def get_editorial_image_candidates(
         EditorialImageCandidate(
             id=row.id, candidate_id=row.candidate_id, rank=row.rank, relevance_score=row.relevance_score,
             quality_score=row.quality_score, discovery_method=row.discovery_method,
-            source_relationship=row.source_relationship, width=row.width, height=row.height,
+            source_relationship=row.source_relationship, relevance_reason=row.relevance_reason,
+            width=row.width, height=row.height,
             observed_mime=row.observed_mime, image_format=row.image_format,
             storage_status=row.storage_status.value, storage_key=row.storage_key,
+            telegram_file_id=row.telegram_file_id,
+            editor_decision=row.editor_decision.value if row.editor_decision else None,
             source_url=row.source_url, article_url=row.article_url, warnings=row.quality_warnings,
             is_expired=bool(row.expires_at and row.expires_at <= now),
         )
         for row in rows
     ]
+
+
+async def link_candidates_to_content_draft(
+    session: AsyncSession, *, editorial_task_id: UUID, content_draft_id: UUID,
+) -> int:
+    """Phase 16 M6 (docs/phase16_m6_telegram_editorial_preview_report.md §7): populates the
+    `content_draft_id` M5 always left `NULL` (M5 report §5 - "always NULL when written by M5's own
+    integration point... no ContentDraft exists yet at the copywriting step"). Called exactly once,
+    immediately after `ContentDraftService.create_from_result()` succeeds
+    (`scripts/run_content_generation.py`) - the first point in the pipeline where both a
+    `content_draft_id` and the originating `editorial_task_id` are simultaneously available.
+    A single bounded `UPDATE`, scoped to one task's own rows - never touches any other task's
+    candidates. Returns the number of rows linked (0 is a normal, frequent outcome: most events
+    have no image candidates at all, or Image Intelligence never ran for this task)."""
+    stmt = (
+        update(ImageCandidateRecord)
+        .where(ImageCandidateRecord.editorial_task_id == editorial_task_id)
+        .values(content_draft_id=content_draft_id)
+    )
+    result = await session.execute(stmt)
+    return result.rowcount or 0  # type: ignore[attr-defined]  # CursorResult at runtime for an UPDATE; Result[Any]'s stub doesn't expose it statically
+
+
+async def set_editor_decision(
+    session: AsyncSession, *, content_draft_id: UUID, candidate_row_id: UUID,
+) -> bool:
+    """Phase 16 M6 (docs §8): records "use this image" for one draft. At most one row per
+    `content_draft_id` is ever `SELECTED` - every sibling row for the same draft is set to
+    `REJECTED` in the same statement, never left in a stale `SELECTED` state from an earlier
+    decision (idempotent: pressing "Use image" again on the already-selected candidate is a safe
+    no-op). Returns `False` (no write performed) if `candidate_row_id` does not belong to
+    `content_draft_id` at all - callback data referencing a candidate from a different draft, or a
+    row that no longer exists, is never silently applied to the wrong draft."""
+    now = datetime.now(timezone.utc)
+    owns_candidate = (
+        await session.execute(
+            select(ImageCandidateRecord.id).where(
+                ImageCandidateRecord.id == candidate_row_id,
+                ImageCandidateRecord.content_draft_id == content_draft_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if owns_candidate is None:
+        return False
+
+    await session.execute(
+        update(ImageCandidateRecord)
+        .where(
+            ImageCandidateRecord.content_draft_id == content_draft_id,
+            ImageCandidateRecord.id != candidate_row_id,
+        )
+        .values(editor_decision=ImageEditorDecision.REJECTED, editor_decision_at=now)
+    )
+    await session.execute(
+        update(ImageCandidateRecord)
+        .where(ImageCandidateRecord.id == candidate_row_id)
+        .values(editor_decision=ImageEditorDecision.SELECTED, editor_decision_at=now)
+    )
+    return True
+
+
+async def reject_all_candidates(session: AsyncSession, *, content_draft_id: UUID) -> int:
+    """Phase 16 M6 (docs §8): records "no image" for one draft - every candidate row for
+    `content_draft_id` is set to `REJECTED`. Deliberately not a separate tri-state flag on
+    `ContentDraft` itself (no schema change to that table): "no image chosen" is represented
+    entirely as "zero rows for this draft are `SELECTED`", which this achieves directly.
+    Idempotent - pressing "No image" again re-applies the same, already-true state. Returns the
+    number of rows updated (0 is valid: a draft with zero image candidates at all)."""
+    now = datetime.now(timezone.utc)
+    result = await session.execute(
+        update(ImageCandidateRecord)
+        .where(ImageCandidateRecord.content_draft_id == content_draft_id)
+        .values(editor_decision=ImageEditorDecision.REJECTED, editor_decision_at=now)
+    )
+    return result.rowcount or 0  # type: ignore[attr-defined]  # CursorResult at runtime for an UPDATE; Result[Any]'s stub doesn't expose it statically
+
+
+def read_candidate_bytes(candidate: EditorialImageCandidate) -> bytes | None:
+    """Phase 16 M6 (docs §7): the sole place `bot/handlers/image_preview.py` ever resolves actual
+    image bytes - it never imports or calls `integrations.storage.image_storage` directly. Returns
+    `None` (never raises) whenever bytes are not available for any reason: `storage_status` is not
+    `"stored"`, no `storage_key`, or the file itself is missing/unreadable (`StorageError`, e.g.
+    after an out-of-band deletion or an already-expired-and-cleaned-up row) - the caller always
+    falls back to a text-only preview rather than crash."""
+    if candidate.storage_status != ImageStorageStatus.STORED.value or not candidate.storage_key:
+        return None
+    storage = _get_storage()
+    try:
+        return storage.read(candidate.storage_key)
+    except StorageError:
+        logger.warning(
+            "image_preview_storage_read_failed",
+            extra={"candidate_row_id": str(candidate.id), "storage_key": candidate.storage_key},
+        )
+        return None
+    except OSError:
+        logger.warning(
+            "image_preview_storage_read_os_error",
+            extra={"candidate_row_id": str(candidate.id)},
+        )
+        return None
+
+
+async def record_telegram_file_id(session: AsyncSession, *, candidate_row_id: UUID, file_id: str) -> None:
+    """Phase 16 M6 (docs §11): caches the Telegram-issued `file_id` after the first successful
+    upload of a candidate's bytes, so every subsequent view of the same candidate can be resent via
+    `bot.send_photo(chat_id, photo=file_id)` - a plain string, no local byte read at all. Never
+    itself a public URL; only ever resolvable by a bot holding this application's own bot token."""
+    await session.execute(
+        update(ImageCandidateRecord)
+        .where(ImageCandidateRecord.id == candidate_row_id)
+        .values(telegram_file_id=file_id)
+    )
