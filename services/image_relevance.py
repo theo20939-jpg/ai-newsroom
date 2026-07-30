@@ -287,12 +287,46 @@ _INELIGIBLE_QUALITY_STATUSES = frozenset(
     {QualityStatus.REJECTED_QUALITY, QualityStatus.DUPLICATE_EXACT, QualityStatus.DUPLICATE_NEAR}
 )
 
+# Phase 16.5 (docs/phase16_5_image_calibration_report.md) - M7's own real 100-event validation
+# found 29% of sampled events selected the exact same Google-hosted generic app icon as their
+# top-ranked "editorial" image. Root cause: a Google News RSS item's own article URL is a
+# news.google.com redirect/interstitial page, not the publisher's real article - that page's own
+# og:image is Google News' own generic branding, always served from one of Google's own generic
+# asset CDNs, never the publisher's own domain.
+#
+# Deliberately keys on BOTH signals together, never either alone (the brief's own explicit "ARTICLE
+# SOURCE vs IMAGE SOURCE" rule): a Google-News-sourced article whose *image* is hosted on the real
+# publisher's own domain must remain fully eligible (a Google News article can have a valid
+# publisher image); a normal, non-Google-News article that happens to embed a legitimate image
+# hosted on a Google-owned CDN (e.g. a Blogger/Google-Photos-hosted picture) must also remain
+# untouched - only the specific combination (Google-News-sourced article AND a Google-owned image
+# host) is excluded, since that combination is what M7 actually observed to be Google's own generic
+# branding, never a real per-article photo.
+_AGGREGATOR_ARTICLE_REGISTRABLE_DOMAIN = "google.com"
+_GENERIC_ASSET_IMAGE_REGISTRABLE_DOMAINS = frozenset({"google.com", "googleusercontent.com", "gstatic.com"})
+
+
+def _is_generic_aggregator_asset(candidate: ImageCandidate) -> bool:
+    """True only when the article page this candidate was discovered on is itself a Google News
+    aggregator page (`source_url`'s registrable domain is `google.com` - covers both the current
+    `news.google.com` subdomain and the legacy `google.com/news` path form) AND the candidate's own
+    image is hosted on one of Google's own generic asset domains - never based on the article
+    domain alone. Native (Telegram/RSS-entry-level) candidates have no `source_url` at all and are
+    structurally exempt (matches `classify_relationship`'s own "native candidates have no separate
+    article page" precedent)."""
+    if _registrable_domain(_hostname(candidate.source_url)) != _AGGREGATOR_ARTICLE_REGISTRABLE_DOMAIN:
+        return False
+    image_host = _hostname(candidate.remote_url)
+    if not image_host:
+        return False
+    return _registrable_domain(image_host) in _GENERIC_ASSET_IMAGE_REGISTRABLE_DOMAINS
+
 
 def evaluate_eligibility(candidate: ImageCandidate) -> tuple[bool, str]:
     """Docs §4. Only M3 `accepted`/`review` cluster representatives are potentially eligible -
-    everything else (M2 technical failure, M3 hard rejection, non-representative duplicate) is
-    ineligible but remains fully visible in the structured result with its reason (never silently
-    dropped)."""
+    everything else (M2 technical failure, M3 hard rejection, non-representative duplicate, or
+    Phase 16.5's own generic-aggregator-asset exclusion) is ineligible but remains fully visible in
+    the structured result with its reason (never silently dropped)."""
     if candidate.status != ImageCandidateStatus.VALIDATED:
         return False, f"not_technically_validated:{candidate.status.value}"
     quality = candidate.quality_validation
@@ -300,6 +334,8 @@ def evaluate_eligibility(candidate: ImageCandidate) -> tuple[bool, str]:
         return False, "not_quality_analyzed"
     if quality.status in _INELIGIBLE_QUALITY_STATUSES:
         return False, f"m3_status:{quality.status.value}"
+    if _is_generic_aggregator_asset(candidate):
+        return False, "generic_aggregator_asset"
     return True, "eligible"
 
 
