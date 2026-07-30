@@ -273,3 +273,52 @@ async def test_news_event_not_found_raises(factory: async_sessionmaker[AsyncSess
         await run_content_generation_for_event(
             uuid4(), capability_registry=_fake_registry_for_success(), session_factory=factory
         )
+
+
+# ---------------------------------------------------------------------------
+# 10. Phase 16 M6 (docs/phase16_m6_telegram_editorial_preview_report.md §7): a successful
+# ContentDraft creation links any of this task's own persisted image candidates to it.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_successful_draft_links_image_candidates_to_it(
+    factory: async_sessionmaker[AsyncSession], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[tuple] = []
+
+    async def _spy_link(session, *, editorial_task_id, content_draft_id):
+        calls.append((editorial_task_id, content_draft_id))
+        return 0
+
+    monkeypatch.setattr(run_content_generation_module, "link_candidates_to_content_draft", _spy_link)
+
+    async with real_committed_event(factory) as event_id:
+        outcome = await run_content_generation_for_event(
+            event_id, capability_registry=_fake_registry_for_success(), session_factory=factory
+        )
+        try:
+            assert outcome.content_draft is not None
+            assert calls == [(outcome.task_id, outcome.content_draft.id)]
+        finally:
+            await _cleanup_content_draft(factory, outcome.task_id)
+
+
+@pytest.mark.asyncio
+async def test_image_candidate_link_failure_does_not_affect_the_content_draft_outcome(
+    factory: async_sessionmaker[AsyncSession], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _broken_link(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("simulated link failure")
+
+    monkeypatch.setattr(run_content_generation_module, "link_candidates_to_content_draft", _broken_link)
+
+    async with real_committed_event(factory) as event_id:
+        outcome = await run_content_generation_for_event(
+            event_id, capability_registry=_fake_registry_for_success(), session_factory=factory
+        )
+        try:
+            assert outcome.workflow_status == "COMPLETED"
+            assert outcome.content_draft is not None  # the draft itself is unaffected
+        finally:
+            await _cleanup_content_draft(factory, outcome.task_id)
