@@ -30,6 +30,8 @@ from typing import Any, Literal
 from urllib.parse import urljoin, urlsplit
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from core.config import settings
 from database.models.news_source import SourceType
 from integrations.http.safe_fetch import SafeFetchError, SafeFetchPolicy, safe_fetch
@@ -48,6 +50,7 @@ from schemas.image_candidate import (
 )
 from services.article_metadata import extract_article_image_metadata
 from services.image_deduplication import cluster_candidates
+from services.image_persistence import persist_image_intelligence_result
 from services.image_quality import QualityAnalysis, analyze_candidate
 from services.image_relevance import rank_candidates
 from services.image_validation import validate_image_bytes
@@ -592,16 +595,22 @@ async def _fetch_article_metadata_hints(
     return hints, None
 
 
-async def _fetch_and_validate_candidate(candidate: ImageCandidate) -> tuple[ImageCandidate, QualityAnalysis | None]:
+async def _fetch_and_validate_candidate(
+    candidate: ImageCandidate,
+) -> tuple[ImageCandidate, QualityAnalysis | None, bytes | None]:
     """Fetches one candidate's image bytes through the safe-fetch boundary, technically validates
     them (M2), and - only when M2 accepts the bytes - runs M3 quality analysis on the *same*
     in-memory bytes before they go out of scope (docs/phase16_m3_quality_and_deduplication_
     report.md §3: "M3 must not refetch an image solely to calculate quality or perceptual
-    hashes" - `fetch_result.body` is fetched exactly once here and reused for both M2 and M3,
-    never a second network request). Always returns a candidate (never raises) - `status` becomes
-    exactly one of VALIDATED/REJECTED_TECHNICAL/FETCH_FAILED, `technical_validation` is always
-    populated. The second tuple element is the M3 `QualityAnalysis`, or `None` when M3 never ran
-    (M2 rejected/failed the candidate)."""
+    hashes" - `fetch_result.body` is fetched exactly once here and reused for M2, M3, and - as of
+    Phase 16 M5 - optionally M5's own finalist storage, docs/phase16_m5_persistence_and_retention_
+    report.md §11 - never a second network request). Always returns a candidate (never raises) -
+    `status` becomes exactly one of VALIDATED/REJECTED_TECHNICAL/FETCH_FAILED, `technical_
+    validation` is always populated. The third tuple element is the raw validated bytes (only when
+    `status == VALIDATED`, `None` otherwise) - the caller (`run_shadow_discovery`) is solely
+    responsible for keeping this bounded and discarding it once M5's finalist-storage stage (or the
+    end of the function, when persistence never runs) has used it; it is never attached to the
+    `ImageCandidate` model itself, never serialized, never logged."""
     assert candidate.remote_url is not None  # only ever called for candidates that have one
     try:
         fetch_result = await safe_fetch(candidate.remote_url, policy=_image_fetch_policy())
@@ -610,14 +619,14 @@ async def _fetch_and_validate_candidate(candidate: ImageCandidate) -> tuple[Imag
         updated = candidate.model_copy(
             update={"status": ImageCandidateStatus.FETCH_FAILED, "technical_validation": technical, "schema_version": "m2"}
         )
-        return updated, None
+        return updated, None, None
     except Exception:
         logger.warning("image_fetch_unexpected_error", extra={"candidate_id": candidate.candidate_id})
         technical = TechnicalValidation(error_code="internal_fetch_error")
         updated = candidate.model_copy(
             update={"status": ImageCandidateStatus.FETCH_FAILED, "technical_validation": technical, "schema_version": "m2"}
         )
-        return updated, None
+        return updated, None, None
 
     if fetch_result.status_code >= 400:
         technical = TechnicalValidation(
@@ -627,7 +636,7 @@ async def _fetch_and_validate_candidate(candidate: ImageCandidate) -> tuple[Imag
         updated = candidate.model_copy(
             update={"status": ImageCandidateStatus.FETCH_FAILED, "technical_validation": technical, "schema_version": "m2"}
         )
-        return updated, None
+        return updated, None, None
 
     technical = validate_image_bytes(fetch_result.body, max_pixels=settings.image_intelligence_max_decoded_pixels)
     technical = technical.model_copy(
@@ -644,19 +653,19 @@ async def _fetch_and_validate_candidate(candidate: ImageCandidate) -> tuple[Imag
     )
 
     if status != ImageCandidateStatus.VALIDATED:
-        return updated, None
+        return updated, None, None
 
     try:
         analysis = analyze_candidate(fetch_result.body, candidate=updated)
     except Exception:
         logger.warning("quality_analysis_stage_unexpected_error", extra={"candidate_id": candidate.candidate_id})
         analysis = None
-    return updated, analysis
+    return updated, analysis, fetch_result.body
 
 
 async def _validate_selected_candidates(
     candidates: list[ImageCandidate],
-) -> list[tuple[ImageCandidate, QualityAnalysis | None]]:
+) -> list[tuple[ImageCandidate, QualityAnalysis | None, bytes | None]]:
     """Bounded, in-process-only concurrency (docs/phase16_m2_secure_fetch_and_validation_report.md
     §17 - a single `content_worker` process exists today, so a distributed limiter is not
     justified; this is documented as a known limitation, not an oversight, should that ever
@@ -667,7 +676,7 @@ async def _validate_selected_candidates(
     eligible = [c for c in candidates if c.status == ImageCandidateStatus.DISCOVERED and c.remote_url is not None]
     selected_ids = {c.candidate_id for c in eligible[: settings.image_intelligence_max_image_downloads_per_event]}
     if not selected_ids:
-        return [(candidate, None) for candidate in candidates]
+        return [(candidate, None, None) for candidate in candidates]
 
     global_semaphore = asyncio.Semaphore(settings.image_intelligence_global_concurrency)
     host_semaphores: dict[str, asyncio.Semaphore] = {}
@@ -678,13 +687,13 @@ async def _validate_selected_candidates(
             host_semaphores[host] = asyncio.Semaphore(settings.image_intelligence_per_host_concurrency)
         return host_semaphores[host]
 
-    async def _bounded_validate(candidate: ImageCandidate) -> tuple[ImageCandidate, QualityAnalysis | None]:
+    async def _bounded_validate(candidate: ImageCandidate) -> tuple[ImageCandidate, QualityAnalysis | None, bytes | None]:
         assert candidate.remote_url is not None
         async with global_semaphore, _host_semaphore(candidate.remote_url):
             return await _fetch_and_validate_candidate(candidate)
 
-    async def _passthrough(candidate: ImageCandidate) -> tuple[ImageCandidate, QualityAnalysis | None]:
-        return candidate, None
+    async def _passthrough(candidate: ImageCandidate) -> tuple[ImageCandidate, QualityAnalysis | None, bytes | None]:
+        return candidate, None, None
 
     tasks = [
         _bounded_validate(candidate) if candidate.candidate_id in selected_ids else _passthrough(candidate)
@@ -760,6 +769,8 @@ async def run_shadow_discovery(
     now: datetime | None = None,
     event_title: str | None = None,
     source_name: str | None = None,
+    session: AsyncSession | None = None,
+    editorial_task_id: UUID | None = None,
 ) -> ImageIntelligenceResult:
     """The single M2-M4 orchestration entry point, called once per CONTENT_GENERATION "copywriting"
     step (capabilities/executor.py). `mode="off"` is a zero-cost, zero-network no-op - delegates
@@ -775,6 +786,14 @@ async def run_shadow_discovery(
     additive, optional keyword-only parameters - callers that predate M4 (existing scripts/tests)
     keep working unchanged with `None`, which `services.image_relevance` treats as "no evidence
     available," never as an error.
+
+    `session`/`editorial_task_id` (Phase 16 M5, docs/phase16_m5_persistence_and_retention_report.md
+    §19) are likewise additive and optional - persistence only ever runs when a caller explicitly
+    passes a real `session` (capabilities/executor.py does; every pre-M5 script/test does not, and
+    keeps behaving exactly as before). This keeps `run_shadow_discovery`'s own return type
+    unchanged (still just `ImageIntelligenceResult`) - the bounded, transient validated bytes this
+    function holds internally for M5's own finalist-storage stage are never returned, never
+    attached to any model, and go out of scope the moment this function returns.
     """
     generated_at = now or datetime.now(timezone.utc)
     native_hints = reconstruct_hints_from_content(content, article_url)
@@ -814,20 +833,28 @@ async def run_shadow_discovery(
         validation_items = await _validate_selected_candidates(result.candidates)
     except Exception:
         logger.warning("image_validation_stage_unexpected_error", extra={"event_id": str(event_id)})
-        validation_items = [(candidate, None) for candidate in result.candidates]
+        validation_items = [(candidate, None, None) for candidate in result.candidates]
 
-    validated_count = sum(1 for c, _ in validation_items if c.status == ImageCandidateStatus.VALIDATED)
+    # Phase 16 M5 (docs/phase16_m5_persistence_and_retention_report.md §10-11): the bounded,
+    # transient handle to each VALIDATED candidate's already-fetched bytes, kept only in this
+    # function's local scope - never attached to a model, never logged, discarded (falls out of
+    # scope, nothing to explicitly free) once the M5 persistence call below returns or is skipped.
+    image_bytes_by_candidate_id: dict[str, bytes] = {
+        candidate.candidate_id: data for candidate, _, data in validation_items if data is not None
+    }
+
+    validated_count = sum(1 for c, _, _ in validation_items if c.status == ImageCandidateStatus.VALIDATED)
     rejected_technical_count = sum(
-        1 for c, _ in validation_items if c.status == ImageCandidateStatus.REJECTED_TECHNICAL
+        1 for c, _, _ in validation_items if c.status == ImageCandidateStatus.REJECTED_TECHNICAL
     )
-    fetch_failed_count = sum(1 for c, _ in validation_items if c.status == ImageCandidateStatus.FETCH_FAILED)
+    fetch_failed_count = sum(1 for c, _, _ in validation_items if c.status == ImageCandidateStatus.FETCH_FAILED)
     m2_ran = article_fetch_attempted or validated_count or rejected_technical_count or fetch_failed_count
 
     try:
-        finalized_candidates = _finalize_quality(validation_items)
+        finalized_candidates = _finalize_quality([(c, a) for c, a, _ in validation_items])
     except Exception:
         logger.warning("quality_finalization_stage_unexpected_error", extra={"event_id": str(event_id)})
-        finalized_candidates = [candidate for candidate, _ in validation_items]
+        finalized_candidates = [candidate for candidate, _, _ in validation_items]
 
     quality_accepted = sum(
         1 for c in finalized_candidates if c.quality_validation and c.quality_validation.status == QualityStatus.ACCEPTED
@@ -893,7 +920,7 @@ async def run_shadow_discovery(
         },
     )
 
-    return result.model_copy(
+    final_result = result.model_copy(
         update={
             "version": "m4" if m4_ran else ("m3" if m3_ran else ("m2" if m2_ran else result.version)),
             "candidates": ranked_candidates,
@@ -912,3 +939,18 @@ async def run_shadow_discovery(
             "top_candidate_ids": top_candidate_ids,
         }
     )
+
+    # Phase 16 M5 (docs/phase16_m5_persistence_and_retention_report.md §19): only runs when a
+    # caller passed a real session (capabilities/executor.py does) AND persistence is not "off".
+    # A persistence failure is logged and swallowed - it never fails CONTENT_GENERATION and never
+    # changes the ImageIntelligenceResult already computed above.
+    if session is not None and settings.image_candidate_persistence_mode != "off":
+        try:
+            await persist_image_intelligence_result(
+                session, result=final_result, editorial_task_id=editorial_task_id,
+                image_bytes_by_candidate_id=image_bytes_by_candidate_id,
+            )
+        except Exception:
+            logger.warning("image_persistence_stage_unexpected_error", extra={"event_id": str(event_id)})
+
+    return final_result

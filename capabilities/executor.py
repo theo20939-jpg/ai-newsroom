@@ -232,7 +232,15 @@ class CapabilityExecutor:
         (article-page fetch, image-byte fetch) and technical validation lives inside
         `services.image_intelligence.run_shadow_discovery()` - this method only orchestrates the
         one call and preserves its result, exactly as the M2 task brief requires ("The executor
-        should only orchestrate the service call and preserve results")."""
+        should only orchestrate the service call and preserve results").
+
+        Phase 16 M5 (docs/phase16_m5_persistence_and_retention_report.md §19): passes this
+        executor's own already-open `self._session`/`self._task_id` through so
+        `run_shadow_discovery()` can persist - both additive, optional parameters that pre-M5
+        callers never pass. Persistence itself is gated inside `run_shadow_discovery()` by
+        `image_candidate_persistence_mode` (default "off") - this call site never branches on
+        that setting itself, identical in spirit to how M1-M4 never branch on `image_
+        intelligence_mode` here beyond the single top-level gate above."""
         try:
             source = await self._session.get(NewsSource, news_event.source_id)
             if source is None:
@@ -245,6 +253,8 @@ class CapabilityExecutor:
                 mode=settings.image_intelligence_mode,
                 event_title=news_event.title,
                 source_name=source.name,
+                session=self._session,
+                editorial_task_id=self._task_id,
             )
             return {**structured_output, "image_intelligence": result.model_dump(mode="json")}
         except Exception:

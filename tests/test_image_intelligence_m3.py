@@ -275,16 +275,21 @@ def test_no_telegram_image_send_in_m3_modules() -> None:
         assert "aiogram" not in source
 
 
-def test_no_database_migration_added() -> None:
-    import pathlib
+def test_m3_modules_never_touch_the_database() -> None:
+    """M3's own production modules (services/image_quality.py, services/image_deduplication.py)
+    remain pure, in-memory, DB-free code - unchanged since M3 shipped. Superseded by Phase 16 M5
+    (docs/phase16_m5_persistence_and_retention_report.md), which legitimately adds a durable
+    `image_candidates` table from a separate module (services/image_persistence.py) - this test
+    used to assert no migration existed anywhere in the repo, which stopped being a meaningful M3
+    invariant once a later milestone legitimately owns that table (exactly mirroring how M4's own
+    report updated an M3-era `version == "m3"` expectation for the same reason)."""
+    from services import image_deduplication, image_quality
 
-    versions_dir = pathlib.Path("database/migrations/versions")
-    # M3 adds no migration file - the directory's file count is unaffected by this milestone
-    # (a coarse but real structural check: no file mentions image_candidates/quality_validation).
-    for path in versions_dir.glob("*.py"):
-        content = path.read_text(encoding="utf-8")
-        assert "quality_validation" not in content
-        assert "image_candidates" not in content
+    for module in (image_quality, image_deduplication):
+        source = open(module.__file__, encoding="utf-8").read()
+        assert "sqlalchemy" not in source.lower()
+        assert "alembic" not in source.lower()
+        assert "image_candidates" not in source
 
 
 @pytest.mark.asyncio
