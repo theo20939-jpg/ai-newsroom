@@ -60,6 +60,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      # Phase 16 M5: internal image-candidate byte storage (docs/phase16_m5_persistence_and_
+      # retention_report.md §10) - a dedicated named volume, not bind-mounted into the repo, not
+      # committed to Git. Only content_worker mounts it (least privilege) - it is the only service
+      # that writes finalist bytes in M5. A future M6 preview-serving service will need its own
+      # mount added explicitly when that need is real, not preemptively here.
+      - image_storage_data:/data/image_storage
 
   postgres:
     image: postgres:16-alpine
@@ -97,3 +104,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  image_storage_data:

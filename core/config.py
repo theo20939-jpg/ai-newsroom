@@ -229,6 +229,33 @@ class Settings(BaseSettings):
     # (that remains image_intelligence_max_image_downloads_per_event, unchanged).
     image_intelligence_top_candidates: int = Field(default=5, gt=0, le=20)
 
+    # Phase 16 M5: candidate persistence and finalist storage (docs/phase16_m5_persistence_and_
+    # retention_report.md §13). Three-state, matching image_intelligence_mode's own off/shadow
+    # precedent: "off" (default) performs zero database writes and zero file writes - byte-
+    # identical to pre-M5 behavior, the rollback path. "metadata" persists bounded audit rows only
+    # (no image bytes). "finalists" additionally stores bytes for up to image_max_stored_per_event
+    # top-ranked candidates. Only consulted when image_intelligence_mode == "shadow" - M5 has
+    # nothing to persist when M1-M4 never ran.
+    image_candidate_persistence_mode: Literal["off", "metadata", "finalists"] = "off"
+    # Container-internal path only - the actual persistent location is the Docker named volume
+    # mounted at this path (docker-compose.yml), never a repo-relative bind mount.
+    image_storage_root: str = Field(default="/data/image_storage")
+    image_max_stored_per_event: int = Field(default=5, gt=0, le=20)
+    image_max_total_stored_bytes_per_event: int = Field(default=50_000_000, gt=0)
+    # Stored finalist bytes are reclaimed sooner than their own metadata row (§14) - an unselected
+    # finalist's bytes are speculative disk usage, while the audit trail (SHA-256, provenance,
+    # scores) is cheap to keep and useful long after the bytes are gone.
+    image_bytes_retention_days: int = Field(default=7, gt=0)
+    # Two-tier metadata retention: rejected/non-finalist rows (the overwhelming majority - M4's own
+    # backtest measured ~1 finalist per ~2-6 discovered candidates) are pruned sooner than finalist
+    # rows, which remain a materially more valuable audit record.
+    image_metadata_retention_days: int = Field(default=30, gt=0)
+    image_finalist_metadata_retention_days: int = Field(default=90, gt=0)
+    image_cleanup_batch_size: int = Field(default=200, gt=0, le=2000)
+    # Cleanup runs inline inside content_worker's existing poll loop (docs §15 - "least coupled
+    # existing owner", no new worker/scheduler) every N cycles rather than on its own timer.
+    image_cleanup_every_n_cycles: int = Field(default=20, gt=0)
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""
