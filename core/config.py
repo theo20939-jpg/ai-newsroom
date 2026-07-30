@@ -256,6 +256,13 @@ class Settings(BaseSettings):
     # existing owner", no new worker/scheduler) every N cycles rather than on its own timer.
     image_cleanup_every_n_cycles: int = Field(default=20, gt=0)
 
+    # Phase 16 M6: Telegram Editorial Preview (docs/phase16_m6_telegram_editorial_preview_
+    # report.md §9). Default False - zero Telegram sends beyond the existing, unchanged
+    # send_editorial_card() notification until an operator explicitly enables it. Only ever
+    # consulted when image_candidate_persistence_mode != "off" (nothing to preview otherwise) -
+    # M6 has no independent "off" no-op path of its own beyond this single flag.
+    image_editorial_preview_enabled: bool = False
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""

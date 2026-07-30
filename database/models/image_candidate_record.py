@@ -65,6 +65,20 @@ class ImageStorageStatus(str, enum.Enum):
     MISSING = "missing"
 
 
+class ImageEditorDecision(str, enum.Enum):
+    """Phase 16 M6 (docs/phase16_m6_telegram_editorial_preview_report.md §6): the durable human
+    decision on one candidate. `None` (the column default) means "undecided" - distinct from both
+    members here. Scoped per `(content_draft_id, candidate)`: at most one row per
+    `content_draft_id` is ever `SELECTED` at a time (enforced in application code by
+    `services.image_persistence.set_editor_decision()`, which clears every sibling row for the
+    same draft in the same statement) - "No image" is represented as every candidate for that
+    draft being `REJECTED`, never a separate tri-state flag on `ContentDraft` itself (no schema
+    change to that table)."""
+
+    SELECTED = "selected"
+    REJECTED = "rejected"
+
+
 def _enum_values(enum_cls: type[enum.Enum]) -> list[str]:
     """SQLAlchemy's `Enum(python_enum_cls)` stores each member's `.name` (e.g. "ACCEPTED") by
     default, not `.value` - but every M3/M4 Pydantic status enum this module mirrors uses
@@ -163,6 +177,18 @@ class ImageCandidateRecord(Base):
     stored_byte_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     stored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     storage_error_code: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Phase 16 M6: caches the file_id Telegram returns after the first successful upload of this
+    # candidate's bytes - a stable, long-lived reference the bot can resend via `bot.send_photo(
+    # chat_id, photo=file_id)` without ever re-reading local storage (report §11). NULL until the
+    # first successful send; never itself a public URL or filesystem path.
+    telegram_file_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # --- editorial decision (M6) ---
+    editor_decision: Mapped[ImageEditorDecision | None] = mapped_column(
+        Enum(ImageEditorDecision, name="image_editor_decision", values_callable=_enum_values),
+        nullable=True, index=True,
+    )
+    editor_decision_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # --- lifecycle ---
     created_at: Mapped[datetime] = mapped_column(
