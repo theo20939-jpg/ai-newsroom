@@ -249,3 +249,60 @@ def test_russian_content_with_html_metacharacters_still_escaped() -> None:
 
     assert "Заголовок &lt;b&gt;жирный&lt;/b&gt; &amp; опасный" in rendered
     assert "<b>жирный</b>" not in rendered
+
+
+# --- limit / include_url (Phase 16 UX fix, docs/phase16_ux_combined_preview_fix_report.md) ---
+# Both parameters default to the frozen Contract §14 behavior (SAFE_LIMIT, True) - every test
+# above this point exercises the default and is completely unaffected by these additions.
+
+
+def test_default_call_is_byte_identical_to_before_the_ux_fix() -> None:
+    card = _card(news_url="https://example.com/article")
+    assert render_editorial_card(card) == render_editorial_card(card, limit=SAFE_LIMIT, include_url=True)
+
+
+def test_include_url_false_omits_the_url_line() -> None:
+    card = _card(news_url="https://example.com/article")
+    with_url = render_editorial_card(card)
+    without_url = render_editorial_card(card, include_url=False)
+    assert "https://example.com/article" in with_url
+    assert "https://example.com/article" not in without_url
+
+
+def test_include_url_false_is_a_no_op_when_there_is_no_url_anyway() -> None:
+    card = _card(news_url=None)
+    assert render_editorial_card(card) == render_editorial_card(card, include_url=False)
+
+
+def test_smaller_limit_truncates_more_aggressively_than_the_default() -> None:
+    """The combined image-preview flow passes Telegram's own, much smaller photo-caption limit
+    (1024 UTF-16 code units) - the exact same shrink-to-fit algorithm, just a tighter ceiling."""
+    long_body = " ".join(f"word{i}" for i in range(2000))
+    card = _card(draft_body=long_body)
+
+    full = render_editorial_card(card, include_url=False)
+    capped = render_editorial_card(card, limit=1024, include_url=False)
+
+    assert _telegram_utf16_length(full) <= SAFE_LIMIT
+    assert _telegram_utf16_length(capped) <= 1024
+    assert len(capped) < len(full)
+
+
+def test_smaller_limit_still_raises_card_too_long_error_when_unavoidable() -> None:
+    """Mirrors the existing terminal-fallback test below for SAFE_LIMIT, at a much tighter limit -
+    proves the raised-not-silently-truncated invariant holds regardless of which limit is passed."""
+    card = _card(
+        draft_title="x" * 2000, draft_body=None, news_title="y" * 2000, hashtags=None, news_url=None,
+    )
+    with pytest.raises(CardTooLongError):
+        render_editorial_card(card, limit=50, include_url=False)
+
+
+def test_limit_and_include_url_compose_together() -> None:
+    long_body = " ".join(f"word{i}" for i in range(2000))
+    card = _card(draft_body=long_body, news_url="https://example.com/article")
+
+    rendered = render_editorial_card(card, limit=1024, include_url=False)
+
+    assert "https://example.com/article" not in rendered
+    assert _telegram_utf16_length(rendered) <= 1024

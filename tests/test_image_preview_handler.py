@@ -1,9 +1,15 @@
-"""Tests for bot.handlers.image_preview's Phase 16 M6 callback handler (docs/
-phase16_m6_telegram_editorial_preview_report.md §6/§8/§9). Same technique as
-tests/test_news_handler.py: a `Bot` bound to a fake, in-memory `BaseSession` subclass overriding
-`make_request()` - no real Telegram API call, no live network access. Real Postgres (db_session
-fixture, rolled back per test) for candidate rows + a tmp_path-backed LocalImageStorage for
-resolvable bytes - no test in this file sends a real Telegram message or calls any external API.
+"""Tests for bot.handlers.image_preview's Phase 16 M6 + UX-fixed callback handler (docs/
+phase16_m6_telegram_editorial_preview_report.md §6/§8/§9, docs/phase16_ux_combined_preview_fix_
+report.md). Same technique as tests/test_news_handler.py: a `Bot` bound to a fake, in-memory
+`BaseSession` subclass overriding `make_request()` - no real Telegram API call, no live network
+access. Real Postgres (db_session fixture, rolled back per test) for candidate rows + a
+tmp_path-backed LocalImageStorage for resolvable bytes - no test in this file sends a real
+Telegram message or calls any external API.
+
+UX fix: every caption/text this handler renders is now the *actual* news card content (the same
+`bot/formatting.py::render_editorial_card()` used everywhere else), never candidate-specific
+metadata and never a separate "Image selected"/"No image" confirmation string - "one message = one
+news item" throughout Previous/Next navigation and after a decision.
 """
 import hashlib
 import uuid
@@ -41,6 +47,8 @@ from services import image_persistence
 _FAKE_TOKEN = "123456:FAKE-TEST-TOKEN-AAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 _DATA = b"fake-stored-bytes-for-handler-tests"
 _SHA256 = hashlib.sha256(_DATA).hexdigest()
+_DRAFT_TITLE = "Draft Title"
+_DRAFT_BODY = "Distinctive draft body text for the combined preview."
 
 
 class FakeSession(BaseSession):
@@ -118,12 +126,15 @@ def _make_callback(
 
 
 async def _make_task_draft_and_candidates(
-    db_session: AsyncSession, real_news_event: NewsEvent, *, n: int = 2, storage_root=None,
+    db_session: AsyncSession, real_news_event: NewsEvent, *, n: int = 2, event_url: str | None = None,
 ) -> tuple[ContentDraft, list[ImageCandidateRecord]]:
+    if event_url is not None:
+        real_news_event.url = event_url
+        await db_session.flush()
     task = EditorialTask(event_id=real_news_event.id, priority=TaskPriority.B)
     db_session.add(task)
     await db_session.flush()
-    draft = ContentDraft(task_id=task.id, type=ContentType.POST, title="Draft Title", body="b", hashtags=[])
+    draft = ContentDraft(task_id=task.id, type=ContentType.POST, title=_DRAFT_TITLE, body=_DRAFT_BODY, hashtags=[])
     db_session.add(draft)
     await db_session.flush()
 
@@ -201,7 +212,7 @@ async def test_no_candidates_answers_with_alert(
 
 
 @pytest.mark.asyncio
-async def test_next_navigation_edits_text_message_when_no_bytes_available(
+async def test_next_navigation_shows_the_real_news_content_not_candidate_metadata(
     db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("bot.handlers.image_preview.async_session_factory", _fake_session_factory(db_session))
@@ -214,10 +225,34 @@ async def test_next_navigation_edits_text_message_when_no_bytes_available(
 
     edits = [m for m in session.sent if isinstance(m, EditMessageText)]
     assert len(edits) == 1
-    assert "Image 2/2" in edits[0].text
+    assert _DRAFT_TITLE in edits[0].text
+    assert _DRAFT_BODY in edits[0].text
+    assert "Image 2/2" not in edits[0].text  # no candidate-metadata readout in the UX-fixed design
     answer = session.sent[-1]
     assert isinstance(answer, AnswerCallbackQuery)
     assert answer.show_alert is not True
+
+
+@pytest.mark.asyncio
+async def test_navigation_keyboard_still_offers_use_no_image_and_source(
+    db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("bot.handlers.image_preview.async_session_factory", _fake_session_factory(db_session))
+    draft, rows = await _make_task_draft_and_candidates(
+        db_session, real_news_event, n=2, event_url="https://example.com/source-article",
+    )
+
+    session = FakeSession()
+    callback = _make_callback(session, data=encode_callback_data("next", draft.id, 1), has_photo=False)
+
+    await handle_image_preview_callback(callback)
+
+    edits = [m for m in session.sent if isinstance(m, EditMessageText)]
+    buttons = [b for row in edits[0].reply_markup.inline_keyboard for b in row]
+    labels = {b.text for b in buttons}
+    assert "✅ Use image" in labels
+    assert "🚫 No image" in labels
+    assert any(b.url == "https://example.com/1" for b in buttons)  # candidate 1's own source
 
 
 @pytest.mark.asyncio
@@ -241,6 +276,7 @@ async def test_next_navigation_switches_to_photo_and_deletes_old_text_message(
     assert any(isinstance(m, DeleteMessage) for m in session.sent)
     photo_sends = [m for m in session.sent if isinstance(m, SendPhoto)]
     assert len(photo_sends) == 1
+    assert _DRAFT_TITLE in (photo_sends[0].caption or "")
 
     await db_session.refresh(rows[1])
     assert rows[1].telegram_file_id is not None  # newly-uploaded file_id cached
@@ -267,11 +303,13 @@ async def test_expired_candidate_blocks_navigation_with_alert(
 
 
 @pytest.mark.asyncio
-async def test_use_image_selects_candidate_and_confirms(
+async def test_use_image_keeps_real_news_text_and_reduces_keyboard_to_source_only(
     db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("bot.handlers.image_preview.async_session_factory", _fake_session_factory(db_session))
-    draft, rows = await _make_task_draft_and_candidates(db_session, real_news_event, n=2)
+    draft, rows = await _make_task_draft_and_candidates(
+        db_session, real_news_event, n=2, event_url="https://example.com/source-article",
+    )
 
     session = FakeSession()
     callback = _make_callback(session, data=encode_callback_data("use", draft.id, 0), has_photo=False)
@@ -285,8 +323,34 @@ async def test_use_image_selects_candidate_and_confirms(
 
     edits = [m for m in session.sent if isinstance(m, EditMessageText)]
     assert len(edits) == 1
-    assert "selected" in edits[0].text.lower()
-    assert edits[0].reply_markup is None  # keyboard removed
+    assert _DRAFT_TITLE in edits[0].text
+    assert _DRAFT_BODY in edits[0].text
+    assert "selected" not in edits[0].text.lower()  # no technical confirmation string (UX fix)
+    assert "https://example.com/source-article" not in edits[0].text  # never a raw URL in body
+
+    keyboard = edits[0].reply_markup
+    assert keyboard is not None
+    buttons = [b for row in keyboard.inline_keyboard for b in row]
+    assert len(buttons) == 1
+    assert buttons[0].url == "https://example.com/source-article"
+
+
+@pytest.mark.asyncio
+async def test_use_image_with_a_photo_message_keeps_the_photo_and_edits_caption_only(
+    db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("bot.handlers.image_preview.async_session_factory", _fake_session_factory(db_session))
+    draft, rows = await _make_task_draft_and_candidates(db_session, real_news_event, n=1)
+
+    session = FakeSession()
+    callback = _make_callback(session, data=encode_callback_data("use", draft.id, 0), has_photo=True)
+
+    await handle_image_preview_callback(callback)
+
+    assert not any(isinstance(m, DeleteMessage) for m in session.sent)  # photo message stays as-is
+    captions = [m for m in session.sent if isinstance(m, EditMessageCaption)]
+    assert len(captions) == 1
+    assert _DRAFT_TITLE in captions[0].caption
 
 
 @pytest.mark.asyncio
@@ -311,11 +375,13 @@ async def test_use_image_on_expired_candidate_is_rejected(
 
 
 @pytest.mark.asyncio
-async def test_no_image_rejects_every_candidate_and_confirms(
+async def test_no_image_rejects_every_candidate_shows_real_news_text_no_url_in_body(
     db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("bot.handlers.image_preview.async_session_factory", _fake_session_factory(db_session))
-    draft, rows = await _make_task_draft_and_candidates(db_session, real_news_event, n=2)
+    draft, rows = await _make_task_draft_and_candidates(
+        db_session, real_news_event, n=2, event_url="https://example.com/source-article",
+    )
 
     session = FakeSession()
     callback = _make_callback(session, data=encode_callback_data("none", draft.id, 0), has_photo=False)
@@ -329,7 +395,36 @@ async def test_no_image_rejects_every_candidate_and_confirms(
 
     edits = [m for m in session.sent if isinstance(m, EditMessageText)]
     assert len(edits) == 1
-    assert "no image" in edits[0].text.lower()
+    assert _DRAFT_TITLE in edits[0].text
+    assert "no image" not in edits[0].text.lower()  # no technical confirmation string (UX fix)
+    assert "https://example.com/source-article" not in edits[0].text
+
+    keyboard = edits[0].reply_markup
+    assert keyboard is not None
+    buttons = [b for row in keyboard.inline_keyboard for b in row]
+    assert len(buttons) == 1 and buttons[0].url == "https://example.com/source-article"
+
+
+@pytest.mark.asyncio
+async def test_no_image_on_a_photo_message_deletes_it_and_sends_a_text_only_replacement(
+    db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Telegram cannot edit a photo message into a text-only one - "No image" must delete the
+    photo message and send a fresh text-only message, the same delete+resend technique navigation
+    already uses for a media-type change. Still exactly one resulting message, never two."""
+    monkeypatch.setattr("bot.handlers.image_preview.async_session_factory", _fake_session_factory(db_session))
+    draft, rows = await _make_task_draft_and_candidates(db_session, real_news_event, n=1)
+
+    session = FakeSession()
+    callback = _make_callback(session, data=encode_callback_data("none", draft.id, 0), has_photo=True)
+
+    await handle_image_preview_callback(callback)
+
+    assert any(isinstance(m, DeleteMessage) for m in session.sent)
+    text_sends = [m for m in session.sent if isinstance(m, SendMessage)]
+    assert len(text_sends) == 1
+    assert _DRAFT_TITLE in text_sends[0].text
+    assert not any(isinstance(m, SendPhoto) for m in session.sent)
 
 
 @pytest.mark.asyncio
