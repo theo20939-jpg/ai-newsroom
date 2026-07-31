@@ -234,6 +234,236 @@ After cleaning up the FK rows, `-k image` (the full, authoritative scope for thi
 **422 passed, 1 failed** - only the one environment-dependent failure above. Zero new regressions
 from this fix's own code.
 
+## 12. Final live acceptance (product validation, 2026-07-31)
+
+Requested separately from the fix itself (§9 disclosed this had not yet been done): live,
+end-to-end acceptance of the real user journey - NewsEvent arrives naturally -> content generation
+-> Image Intelligence -> Telegram delivery - with no code or configuration changes.
+
+**Starting state**: nothing was running. Docker daemon down, no Postgres/Redis service, no worker
+process, no `docs/phase16_production_cutover_report.md` in the repo despite being referenced by
+`.env` and §1 of this report - the "production cutover" was not live on this machine. Confirmed
+with the user before taking any action; user chose to start the stack now. Docker Desktop was
+started, then `docker compose up -d` brought up all six services (`postgres`, `redis`, `backend`,
+`automation_worker`, `news_analysis_worker`, `content_worker`) from the existing, unmodified
+`docker-compose.yml` and `.env` - no file edited. `content_worker`'s container already existed
+(created ~18h earlier) and reused the same named `postgres_data` volume; pre-existing rows
+(content drafts, editorial tasks from 2026-07-31 11:08/11:28) were confirmed still present after
+startup, so no data was lost.
+
+**Transient issue observed at first startup, not reproduced afterward**: buffered logs replayed
+from an earlier run (2026-07-31 ~16:10, before this session, container clock) showed 5 consecutive
+`copywriting` capability failures - `HTTP/1.1 403 Forbidden` from `https://api.openai.com/v1/responses`,
+`provider_marked_runtime_unavailable`, fallback exhausted (only `openai` is in `ENABLED_PROVIDERS`).
+This was not this session's own doing and was not touched (no key rotated, no config changed) - the
+very next real cycle, moments after this session's `docker compose up`, succeeded cleanly (5/5
+`HTTP/1.1 200 OK`), so it read as transient/upstream, not a Phase 16 regression. Flagged here for
+visibility, not fixed under this task's no-code-changes scope.
+
+**Natural event -> full pipeline, one real batch (2026-07-31 19:12-19:13 UTC)**: `automation_worker`
+collected real Telegram-channel messages (`@habr_com`, `@vcnews`, `@rozetked`, etc.) via the
+existing Telethon session; `news_analysis_worker` scored/analyzed them; `content_worker` picked up
+5 eligible events (`CONTENT_GENERATION_BATCH_SIZE=5`) and ran all 5 through `CONTENT_GENERATION`
+end-to-end - all 5 completed (`Workflow CONTENT_GENERATION completed` / `content_generation_succeeded`),
+zero `copywriting` failures, zero exceptions, zero restarts on any of the three workers
+(`docker inspect` RestartCount=0 across `content_worker`/`automation_worker`/`news_analysis_worker`).
+Image Intelligence ran for every draft: 4 of 5 found eligible, ranked candidates (`image_candidates`
+rows with `relevance_status='ranked'`, `quality_status='accepted'`); 1 of 5 (Tesla/China-business
+item) found zero candidates - both scenarios occurred naturally in the same batch, not staged.
+
+**SCENARIO A - use image (4 real drafts: Kioxia flash-memory forecast, Xbox-on-TV, EA acquisition
+close, EU AI-content labeling)**: for each, `image_candidates.telegram_file_id` is populated with a
+real Telegram-issued file ID (e.g. `AgACAgIAAxkDAAIBCmps86...`) - only ever written by
+`record_telegram_file_id()` immediately after a successful `bot.send_photo()` call (§ code, `services/
+image_preview_notifier.py`), so this is Telegram's own API response confirming photo delivery, not
+an inference. Reproduced the exact caption via the real, unmodified `_to_card()` +
+`render_editorial_card(limit=1024, include_url=False)` call for the Kioxia draft: real title/body/
+hashtags, zero technical metadata (no score, no "Image N/Total", no discovery reason), source URL
+(`https://3dnews.ru/1146060`) confirmed absent from the caption body. Exactly one send call site
+per draft (`worker/content_cycle.py`'s single `if/else` branch, unchanged since §6) - confirmed no
+second message: grepped the full cycle's `content_worker` logs for `telegram_notifier`,
+`send_editorial_card`, `content_notification_failed`, `content_notification_render_failed`,
+`image_preview_cycle_stage_unexpected_error`, `Traceback` - zero matches. `editor_decision` is
+still null on all 4 rows (expected - no human had pressed a button during this automated validation
+window; see limitations below).
+
+**SCENARIO B - no image (1 real draft: Tesla considering a sale of its China business)**: zero
+`image_candidates` rows for this draft - the same combined function's text-only branch. Reproduced
+the exact message via the same real code path: real title/body/hashtags, source URL
+(`https://t.me/vcnews/62678`) confirmed absent from the message body, keyboard is exactly one
+button - `🔗 Open source` linking to that URL (`build_source_only_keyboard()`, unchanged since §6).
+No render/notification failure logged for this draft either.
+
+**Duplicate-message check**: each of the 5 news events has exactly 2 `editorial_tasks` rows total -
+verified by inspecting `workflow->>'workflow_name'` on each - one `NEWS_ANALYSIS` task (created
+~11:08, an earlier pipeline stage, pre-dating this session) and exactly one `CONTENT_GENERATION`
+task (created in this session's 19:12 batch). Not a duplicate-send bug - confirms exactly one
+content-generation attempt, hence one Telegram send, per event.
+
+**Worker stability**: all three workers (`content_worker`, `automation_worker`,
+`news_analysis_worker`) stayed up throughout, `RestartCount=0`, no crash loop, no unhandled
+exception in any log for the observed cycle.
+
+**Not exercised in this session (disclosed limitation)**: no human pressed a Telegram inline button
+(Use image / No image / Previous / Next / Open source) during this validation window, so the
+callback/decision half of the flow (`bot/handlers/image_preview.py`) was not re-observed live here -
+`editor_decision` remained null on every candidate throughout. That half was covered by the 422
+passing tests in §7 and by the prior cutover session's own human acceptance test (§1); this session
+intentionally did not simulate button clicks via the Telethon user session, since driving the
+live bot programmatically as if it were the human operator was out of scope for a passive
+observation task. The send path (both scenarios, one message each, real content, no raw URL,
+correct keyboard) is now live-confirmed end-to-end; the edit/decision path is confirmed only by
+the existing automated test suite, not by a fresh live click in this session.
+
+## 13. Callback runtime fix — persistent polling service (2026-07-31)
+
+**Recurring symptom**: after a Docker/project restart, inline buttons on the combined preview
+message (Previous/Next/Use image/No image/Open source) stopped responding, even though
+`content_worker` kept sending the messages themselves successfully. §12's own live acceptance had
+silently depended on this: the send path was proven live, but no button was pressed, and the
+decision/callback half was disclosed there as "not re-exercised."
+
+**Exact root cause (proven, not assumed)**:
+- No `python.exe` process was running on the host at all.
+- `docker-compose.yml` defined six services (`backend`, `automation_worker`,
+  `news_analysis_worker`, `content_worker`, `postgres`, `redis`) - **none** of them ran
+  `python -m bot.main`. `docker compose up -d` therefore never started anything that calls
+  `aiogram`'s `Dispatcher.start_polling()`.
+- `bot/main.py`'s docstring itself says "polling mode (development)" - it was only ever intended to
+  be run by a developer typing the command manually, which is exactly what the prior live-success
+  session had done and this session's restart did not repeat.
+- Confirmed via the Telegram Bot API directly, not inferred: `getWebhookInfo` returned `url: ""`
+  (no webhook, ruling out a webhook/polling mismatch) and a direct `getUpdates` call returned a
+  plain `200 {"ok":true,"result":[]}` (not a `409 Conflict`), proving zero active long-poll
+  consumers existed before this fix.
+- Grepped every container's full logs for `callback`/`image_preview`/`TelegramConflictError`:
+  zero hits anywhere - no container had ever processed a callback_query, consistent with the
+  M6 router (`bot/handlers/__init__.py::router.include_router(image_preview_router)`) existing in
+  code and being correctly registered, but never having a running consumer to dispatch through.
+
+**Why a manual `python -m bot.main` launch is not a fix**: it is not tracked by
+`docker-compose.yml`, has no restart policy, is not part of `docker compose up -d`, and dies the
+moment the terminal session or the machine restarts - which is exactly the "worked once, then
+stopped after restart" symptom being fixed here. Re-running it manually again would only reproduce
+the same non-persistent state, not resolve it.
+
+**Persistent runtime solution**: added one new Compose service, `telegram_bot`, following the exact
+pattern already used by `content_worker`/`automation_worker`/`news_analysis_worker` (same
+`build: .`, same `env_file: .env`, same `POSTGRES_HOST`/`REDIS_HOST` overrides, same
+`depends_on: {postgres: service_healthy, redis: service_healthy}`, same `restart: unless-stopped`).
+No new bot implementation - `command: ["python", "-m", "bot.main"]` runs the existing,
+byte-for-byte-unmodified entry point. Mounts the same `image_storage_data` named volume
+`content_worker` uses, at the same `/data/image_storage` path, **read-only** (`:ro`) - this service
+never writes image bytes (only `content_worker`'s M5 persistence path does), it only reads them via
+`bot/image_preview_media.py::resolve_photo_input()`'s fallback for candidates with no cached
+`telegram_file_id` yet. No code in `bot/`, `services/`, or `worker/` was changed - only
+`docker-compose.yml` gained this one service block.
+
+**Polling/webhook state, confirmed live**: exactly one polling consumer. Starting the stack logs
+`Run polling for bot @nnj_newsroombot ...` from `telegram_bot` alone. A direct external
+`getUpdates` probe against the same bot token immediately produced a real
+`TelegramConflictError: ... terminated by other getUpdates request` **inside the container's own
+logs** - proof the container was the sole active long-poller at that moment (a conflict can only
+happen when a second consumer contends for the same token). `aiogram`'s built-in resiliency
+recovered on its own one second later (`Connection established (tryings = 1, ...)`), with no crash
+and no restart. No webhook is set (`getWebhookInfo` still returns `url: ""`) and no compose service
+configures one - polling and webhook are never both active, by construction (webhook code doesn't
+exist anywhere in this codebase).
+
+**Restart validation, all performed live**:
+1. `docker compose up -d` (stack already running, service newly added) - `telegram_bot` built and
+   started automatically, no manual step.
+2. `docker compose restart telegram_bot` - clean `SIGTERM` → `Polling stopped` → immediate
+   `Bot started` / `Run polling for bot` on the same container, `RestartCount` stayed `0` (a normal
+   restart, not a crash-restart).
+3. `docker compose down` (full stack teardown, named volumes preserved) then `docker compose up -d`
+   (full stack, cold start) - `telegram_bot` came up alongside all five other services with zero
+   manual intervention, immediately reached `Run polling for bot @nnj_newsroombot ...`.
+4. Exactly one polling process confirmed at every step above (single `Run polling for bot` line per
+   start, the self-inflicted `TelegramConflictError` from step above, and
+   `tests/test_docker_compose_telegram_bot.py::test_exactly_one_service_runs_bot_main` statically
+   guarding that only one service's `command` is `["python", "-m", "bot.main"]`).
+5. Database reachable from the new container (`select count(*) from image_candidates` returned 688,
+   the same live table `content_worker` writes) and the shared image-storage volume readable
+   (`images/` directory with the same content `content_worker` produced visible; a write attempt
+   correctly failed with `Read-only file system`, confirming the `:ro` mount).
+6. All six containers - `backend`, `automation_worker`, `news_analysis_worker`, `content_worker`,
+   `telegram_bot`, plus `postgres`/`redis` - showed `RestartCount=0` after all of the above, no
+   crash loop anywhere.
+
+**Live human button-test status - PASS, human-confirmed**: after the persistent polling service was
+proven up and stable (all restart checks above), the operator pressed "Use image" on real, live
+preview messages from their own Telegram client - not simulated by this session (this session's
+only Bot API calls were the read-only `getWebhookInfo`/`getUpdates` diagnostic probes above, which
+cannot originate a message or callback). `telegram_bot`'s logs show 7 real updates handled between
+19:48:29 and 19:49:07 UTC with zero errors/exceptions during that window (the one unrelated
+`TelegramNetworkError` in the full log is a transient network timeout at 19:51:18, after this
+activity, auto-recovered in 1s per aiogram's built-in retry - not a callback-handling failure).
+Cross-checked against `image_candidates`: 4 distinct drafts (`c6f0fd4f...`, `dc9d71c4...`,
+`d7d82035...`, `3b9a0936...`) each received exactly one atomic decision - the rank-1 candidate
+`selected`, every other candidate on that same draft `rejected`, a single `editor_decision_at`
+timestamp per draft (proving one transaction, not partial/duplicate writes). No corresponding
+`content_notification_failed`/`Traceback` in `content_worker`'s logs for any of these drafts.
+The operator directly confirmed (asked live, mid-session) that this activity was their own real
+button presses. This satisfies the callback requirements end-to-end on real traffic: the message
+was edited in place (not duplicated), the decision was persisted, no error surfaced to the user,
+and no other container logged a second, competing send for any of these four drafts.
+
+**Targeted tests** (new, this fix): `tests/test_bot_router_registration.py` (3 tests - M6 router is
+on the root router by name and by identity, `bot.main` wires `include_router`/`start_polling`) and
+`tests/test_docker_compose_telegram_bot.py` (8 tests - service exists, exact entry-point command,
+existing image/env-file reuse, DB/Redis health `depends_on`, shared volume mount, restart policy
+matches the other three workers, exactly one service runs `bot.main`, no service configures a
+webhook). All 11 new tests pass. The pre-existing `-k image` suite (which also matches several of
+these new test names) re-run at 427 passed, 1 failed - the same single pre-existing,
+already-documented environment-dependent failure from §7/§11 (asserts the *default* of
+`image_editorial_preview_enabled` is `False`, but the live `.env` cutover setting is `True` - not
+caused by this fix).
+
+**Full regression result**: `python -m pytest -q` (full suite, real Postgres, live stack running
+concurrently): **22 failed, 1680 passed** in 1981s. Every failure traced to the exact same,
+already-documented pre-existing categories from §11/§7 - none caused by this fix (which touched
+only `docker-compose.yml` + 2 new, additive test files, zero shared/production code):
+- The same 15 pre-existing failures (`test_capability_executor.py` ×8,
+  `test_content_generation_integration.py` ×1, `test_content_worker_cycle.py` ×2,
+  `test_editorial_scoring.py` ×2, `test_fact_safety.py` ×2).
+- The same 1 environment-dependent failure (`test_content_worker_cycle_image_preview.py::
+  test_image_preview_disabled_by_default_uses_the_text_only_card` - live `.env` cutover has
+  `image_editorial_preview_enabled=True`).
+- The same 2 recurring FK-conflict failures (`test_editorial_inbox_service.py`,
+  `test_news_handler.py`).
+- The same 1 deterministic out-of-scope failure (`test_phase10_workflow_integration.py`).
+- 3 failures in the triage-orchestrator family - this run landed on
+  `test_triage_orchestrator_claims.py` ×2 (`test_fresh_processing_event_is_not_a_recovery_candidate`,
+  `test_exact_threshold_age_is_not_yet_stale`) plus `test_triage_orchestrator_cycle.py` ×1
+  (`test_create_task_duplicate_active_task_outcome_is_not_a_failure`) - a different specific trio
+  than §11's run landed on, which is itself the expected signature of the same already-documented
+  "test-isolation gap against the live, continuously-growing real database" (M7 report §13 item 6):
+  `automation_worker`/`news_analysis_worker` were actively writing real rows into the same Postgres
+  instance for the full ~33 minutes this suite ran. Verified non-deterministic, not a regression,
+  by re-running all 3 in isolation immediately after: all 3 passed cleanly.
+- 1680 passed = the previously documented 1669 + exactly the 11 new tests this fix added
+  (`test_bot_router_registration.py` ×3, `test_docker_compose_telegram_bot.py` ×8) - zero other
+  count drift, zero new regressions.
+
+**Rollback method**: remove the `telegram_bot:` service block from `docker-compose.yml` (or
+`docker compose rm -sf telegram_bot`) and `docker compose up -d` - every other service is
+byte-for-byte unaffected (no shared code was changed, only an additive Compose service), so this
+reverts cleanly to the pre-fix state (buttons stop responding again, exactly as before).
+
 ## Phase 16 UX fix verdict
 
 **PHASE 16 UX FIX COMPLETE — PASS**
+
+**PHASE 16 FINAL LIVE ACCEPTANCE — PASS (send path), with one disclosed gap (decision-path not
+re-clicked live this session)** — see §12.
+
+**PHASE 16 CALLBACK RUNTIME FIX COMPLETE — PERSISTENT POLLING ACTIVE** (§13): root cause proven
+(no service ran `bot.main`), smallest fix implemented (one additive `telegram_bot` Compose service,
+no new bot implementation, no shared code changed), restart-safety proven across service-restart
+and full-stack-teardown-and-up cycles, exactly one polling consumer confirmed live (self-inflicted
+`TelegramConflictError` proved it), targeted + full regression clean (22 failed/1680 passed, zero
+new regressions, all traced to pre-existing documented categories), and live human button-test
+passed on real traffic, human-confirmed. Phase 16 is now restart-safe end-to-end - both the send
+path (§12) and the callback/decision path (§13) survive a normal `docker compose down && docker
+compose up -d` with no manual step.
