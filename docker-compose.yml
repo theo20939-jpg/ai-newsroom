@@ -68,6 +68,28 @@ services:
       # mount added explicitly when that need is real, not preemptively here.
       - image_storage_data:/data/image_storage
 
+  telegram_bot:
+    build: .
+    container_name: ai_newsroom_telegram_bot
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+    command: ["python", "-m", "bot.main"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      # Same image-candidate byte storage content_worker writes to (docs/phase16_m5_persistence_
+      # and_retention_report.md §10) - bot/image_preview_media.py::resolve_photo_input() falls back
+      # to services.image_persistence.read_candidate_bytes() (local disk) whenever a candidate has
+      # no cached telegram_file_id yet. Read-only: this service never writes image bytes, only
+      # content_worker's M5 persistence path does.
+      - image_storage_data:/data/image_storage:ro
+
   postgres:
     image: postgres:16-alpine
     container_name: ai_newsroom_postgres
