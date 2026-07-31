@@ -79,3 +79,15 @@ def build_image_preview_keyboard(
         rows.append([InlineKeyboardButton(text="🔗 Open source", url=source_url)])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def build_source_only_keyboard(source_url: str | None) -> InlineKeyboardMarkup | None:
+    """Phase 16 UX fix (docs/phase16_ux_combined_preview_fix_report.md §5): the terminal state for
+    every combined-preview message - no candidates at all, "No image" was chosen, or "Use image"
+    was chosen (only a single source-of-truth link remains useful once the interactive
+    Previous/Next/Use/No-image controls are no longer meaningful). Returns `None` (never an empty
+    `InlineKeyboardMarkup`) when there is no URL at all, so the caller can pass it straight through
+    as `reply_markup=` and Telegram simply shows no keyboard."""
+    if not source_url:
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔗 Open source", url=source_url)]])

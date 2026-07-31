@@ -60,12 +60,17 @@ def _truncate_at_word_boundary(text: str, budget: int) -> str:
     return prefix  # no word boundary available - hard cut, still valid Unicode
 
 
-def _render_once(card: EditorialInboxCard, body: str | None) -> str:
+def _render_once(card: EditorialInboxCard, body: str | None, *, include_url: bool) -> str:
     """Render the full card (Contract §12's frozen template) with every field HTML-escaped.
 
     `body`: the raw (pre-escape) body text to render - `None` means "use the placeholder"
     (card.draft_body was never generated), any other string (including just the truncation marker
     alone) is escaped and rendered as-is (used by the shrink loop below).
+
+    `include_url`: Phase 16 UX fix (docs/phase16_ux_combined_preview_fix_report.md) - the combined
+    image-preview flow shows the article source via an inline button instead of plain body text,
+    so it never wants the URL line. Every pre-existing caller keeps passing the implicit default
+    (`True`) via `render_editorial_card()`'s own default, so this is purely additive.
     """
     published_suffix = ""
     if card.news_published_at is not None:
@@ -75,7 +80,7 @@ def _render_once(card: EditorialInboxCard, body: str | None) -> str:
         f"\U0001F4F0 <b>{_escape(card.news_category)}</b>{published_suffix}",
         _escape(card.news_title),
     ]
-    if card.news_url is not None:
+    if include_url and card.news_url is not None:
         header_lines.append(_escape(card.news_url))
     header_block = "\n".join(header_lines)
 
@@ -92,19 +97,27 @@ def _render_once(card: EditorialInboxCard, body: str | None) -> str:
     return "\n\n".join(blocks)
 
 
-def render_editorial_card(card: EditorialInboxCard) -> str:
+def render_editorial_card(card: EditorialInboxCard, *, limit: int = SAFE_LIMIT, include_url: bool = True) -> str:
     """Render one EditorialInboxCard to a fully-escaped, ready-to-send HTML string, truncating
-    `draft_body` (and only `draft_body`) as needed to stay within SAFE_LIMIT (Contract §14).
+    `draft_body` (and only `draft_body`) as needed to stay within `limit` (Contract §14).
 
     Algorithm: render -> measure (UTF-16 code units) -> if oversized, shrink the raw draft_body ->
     re-render -> re-measure -> repeat until it fits or draft_body is fully exhausted. Truncation
     always operates on the raw, pre-escape body, never on already-escaped HTML, so an HTML entity
     can never be split. Raises CardTooLongError (-> Contract §16 Case E) if the card still exceeds
-    SAFE_LIMIT even with draft_body reduced to nothing - a defensive last resort, not an
-    anticipated path.
+    `limit` even with draft_body reduced to nothing - a defensive last resort, not an anticipated
+    path.
+
+    `limit`/`include_url` (Phase 16 UX fix): both default to the frozen Contract §14 behavior
+    (`SAFE_LIMIT`, `True`) - every existing caller (`bot/handlers/news.py`,
+    `services/telegram_notifier.py`) is completely unaffected. The combined image-preview flow
+    passes `limit=CAPTION_SAFE_LIMIT, include_url=False` when the card is being sent as a photo
+    caption (Telegram's own, much smaller 1024-code-unit photo-caption limit), or
+    `include_url=False` alone for its text-only paths - the source is shown as an inline button
+    there instead of plain text.
     """
-    rendered = _render_once(card, card.draft_body)
-    if _telegram_utf16_length(rendered) <= SAFE_LIMIT:
+    rendered = _render_once(card, card.draft_body, include_url=include_url)
+    if _telegram_utf16_length(rendered) <= limit:
         return rendered
 
     raw_body = card.draft_body or ""
@@ -113,17 +126,17 @@ def render_editorial_card(card: EditorialInboxCard) -> str:
         budget = max(0, budget - _SHRINK_STEP)
         truncated = _truncate_at_word_boundary(raw_body, budget)
         candidate_body = (truncated + _TRUNCATION_MARKER) if truncated else _TRUNCATION_MARKER
-        rendered = _render_once(card, candidate_body)
-        if _telegram_utf16_length(rendered) <= SAFE_LIMIT:
+        rendered = _render_once(card, candidate_body, include_url=include_url)
+        if _telegram_utf16_length(rendered) <= limit:
             return rendered
 
     # draft_body fully exhausted (or was already None) - one final attempt with just the
     # truncation marker alone, then the terminal fallback.
-    rendered = _render_once(card, _TRUNCATION_MARKER)
-    if _telegram_utf16_length(rendered) <= SAFE_LIMIT:
+    rendered = _render_once(card, _TRUNCATION_MARKER, include_url=include_url)
+    if _telegram_utf16_length(rendered) <= limit:
         return rendered
 
     raise CardTooLongError(
-        f"draft_id={card.draft_id} exceeds SAFE_LIMIT ({SAFE_LIMIT} UTF-16 code units) even with "
+        f"draft_id={card.draft_id} exceeds limit ({limit} UTF-16 code units) even with "
         "draft_body fully exhausted"
     )

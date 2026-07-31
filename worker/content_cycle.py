@@ -21,7 +21,7 @@ from database.session import async_session_factory
 from schemas.workflow import WorkflowType
 from scripts.run_content_generation import run_content_generation_for_event
 from services.cost_tracker import CostTracker
-from services.image_preview_notifier import send_image_preview
+from services.image_preview_notifier import send_news_with_image_preview
 from services.pricing_catalog import PricingCatalog
 from services.telegram_notifier import send_editorial_card
 
@@ -42,14 +42,13 @@ class ContentCycleResult:
     # separately so a cycle's own logs distinguish "global dry-run" from "fact safety intervened".
     # Always 0 outside "enforce" mode.
     fact_safety_suppressed: int = 0
-    # Phase 16 M6 (docs/phase16_m6_telegram_editorial_preview_report.md §7): a strict subset of
-    # `completed` - counts drafts for which an internal image preview was actually sent. Always 0
-    # unless `image_editorial_preview_enabled` AND `image_candidate_persistence_mode != "off"`; a
-    # completed draft with zero eligible image candidates is not an error and is simply not
-    # counted here (image_preview_skipped_no_candidates in the per-cycle log distinguishes it from
-    # a genuine send failure).
+    # Phase 16 M6 + UX fix (docs/phase16_m6_telegram_editorial_preview_report.md §7, docs/
+    # phase16_ux_combined_preview_fix_report.md): a strict subset of `notified` - counts drafts
+    # whose single delivered message actually had a photo attached (image_editorial_preview_
+    # enabled AND image_candidate_persistence_mode != "off" AND at least one eligible candidate
+    # existed). A completed draft with zero eligible image candidates still counts in `notified`
+    # (its one message was still sent, just text-only) - not counted here, and not an error.
     image_preview_sent: int = 0
-    image_preview_failed: int = 0
     event_ids: list[UUID] = field(default_factory=list)
 
 
@@ -200,43 +199,49 @@ async def run_content_cycle(
                 },
             )
 
-        notification = await send_editorial_card(
-            bot, settings.editorial_chat_id, outcome.content_draft, event,
-            dry_run=effective_dry_run,
-        )  # never raises - always returns a NotificationOutcome, dry-run or live
-        if effective_dry_run:
-            result.dry_run_rendered += 1  # expected outcome in dry-run mode, not a failure
-        elif notification.sent:
-            result.notified += 1
-        else:
-            result.notification_failed += 1
-            # ContentDraft already committed - a failed notification is never rolled back and
-            # never actively retried (no duplicate-notification protection for MVP; /news
-            # remains the durable fallback for a lost push notification).
-
-        # Phase 16 M6 (docs/phase16_m6_telegram_editorial_preview_report.md §7): a second,
-        # independent, additive notification - never gates, delays, or replaces the
-        # send_editorial_card() call above, which has already completed by this point regardless
-        # of outcome. Disabled by default (image_editorial_preview_enabled=False) and inert
-        # whenever persistence never ran (image_candidate_persistence_mode == "off", the case in
-        # every currently-deployed environment) - a query against an always-empty result set.
+        # Phase 16 UX fix (docs/phase16_ux_combined_preview_fix_report.md): exactly one message is
+        # ever sent per draft - never both. Live validation of the original M6 design (a second,
+        # additive image-preview message) found operators saw two separate messages for one news
+        # item; this now branches to the single delivery path appropriate for the current
+        # settings, instead of always sending the text card and then conditionally adding a
+        # second one. `send_editorial_card()` itself is completely unchanged and remains the exact
+        # path used whenever the image-preview flow is inactive (every currently-deployed
+        # environment other than this one).
         if settings.image_editorial_preview_enabled and settings.image_candidate_persistence_mode != "off":
             try:
                 async with session_factory() as preview_session:
-                    preview_outcome = await send_image_preview(
+                    combined_outcome = await send_news_with_image_preview(
                         bot, settings.editorial_chat_id, preview_session,
-                        content_draft_id=outcome.content_draft.id, draft_title=outcome.content_draft.title,
+                        draft=outcome.content_draft, event=event, dry_run=effective_dry_run,
                     )
-                if preview_outcome.attempted and preview_outcome.sent:
-                    result.image_preview_sent += 1
-                elif preview_outcome.attempted and not preview_outcome.sent:
-                    result.image_preview_failed += 1
+                if effective_dry_run:
+                    result.dry_run_rendered += 1  # expected outcome in dry-run mode, not a failure
+                elif combined_outcome.sent:
+                    result.notified += 1
+                    if combined_outcome.has_image:
+                        result.image_preview_sent += 1
+                else:
+                    result.notification_failed += 1
             except Exception:
                 logger.exception(
                     "image_preview_cycle_stage_unexpected_error",
                     extra={"event_id": str(event_id), "draft_id": str(outcome.content_draft.id)},
                 )
-                result.image_preview_failed += 1
+                result.notification_failed += 1
+        else:
+            notification = await send_editorial_card(
+                bot, settings.editorial_chat_id, outcome.content_draft, event,
+                dry_run=effective_dry_run,
+            )  # never raises - always returns a NotificationOutcome, dry-run or live
+            if effective_dry_run:
+                result.dry_run_rendered += 1  # expected outcome in dry-run mode, not a failure
+            elif notification.sent:
+                result.notified += 1
+            else:
+                result.notification_failed += 1
+                # ContentDraft already committed - a failed notification is never rolled back and
+                # never actively retried (no duplicate-notification protection for MVP; /news
+                # remains the durable fallback for a lost push notification).
 
     logger.info(
         "content_cycle_finished",
@@ -249,7 +254,6 @@ async def run_content_cycle(
             "dry_run_rendered": result.dry_run_rendered,
             "fact_safety_suppressed": result.fact_safety_suppressed,
             "image_preview_sent": result.image_preview_sent,
-            "image_preview_failed": result.image_preview_failed,
         },
     )
     return result
