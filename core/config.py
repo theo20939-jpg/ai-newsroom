@@ -274,6 +274,18 @@ class Settings(BaseSettings):
     # validated, mirroring image_intelligence_mode's own M1-to-M6 staging precedent.
     editorial_brief_mode: Literal["off", "shadow"] = "off"
 
+    # Phase 17 M2: Channel/Topic Relevance (docs/
+    # phase17_m2_channel_topic_relevance_shadow_report.md). Two-state, matching editorial_
+    # brief_mode's/image_intelligence_mode's own convention: "off" (default) performs zero
+    # processing, byte-identical to pre-M2 behavior - the rollback path. "shadow": a
+    # deterministic (zero-new-LLM-call) ArticleTopicAssessment/ChannelFitAssessment/
+    # ShadowEditorialDecision is built and persisted into EditorialTask.workflow's existing
+    # step_results["intelligence"]["channel_relevance"] JSON - never read by
+    # CopywritingCapability, never changes ContentDraft, never blocks a task. A future
+    # enforcement mode does not exist yet - reserved for a milestone after this shadow data is
+    # validated, mirroring image_intelligence_mode's own M1-to-M6 staging precedent.
+    channel_relevance_mode: Literal["off", "shadow"] = "off"
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""

@@ -52,6 +52,7 @@ from services.analysis_reuse import (
     find_source_news_analysis_task_id,
     reuse_prior_result,
 )
+from services.channel_relevance import apply_channel_relevance_shadow
 from services.cost_recording import record_ai_execution
 from services.cost_tracker import CostTracker
 from services.editorial_brief import apply_editorial_brief_shadow
@@ -219,6 +220,16 @@ class CapabilityExecutor:
         if step.capability == "intelligence" and settings.editorial_brief_mode == "shadow":
             structured_output = self._attach_editorial_brief(news_event, context, structured_output)
 
+        # Phase 17 M2: deterministic, zero-new-LLM-call Channel/Topic Relevance shadow assessment
+        # (docs/phase17_m2_channel_topic_relevance_shadow_report.md) - same seam as M1's own
+        # Editorial Brief hook above (also "intelligence", also gated on its own mode flag,
+        # independent of editorial_brief_mode - this classifier calls services.editorial_brief.
+        # classify_source_sufficiency() directly rather than depending on the Brief actually
+        # having been attached). Never read by CopywritingCapability, never changes ContentDraft,
+        # never blocks a task - REJECT is only ever a persisted shadow recommendation.
+        if step.capability == "intelligence" and settings.channel_relevance_mode == "shadow":
+            structured_output = self._attach_channel_relevance(news_event, context, structured_output)
+
         # Phase 16 M1: deterministic, zero-download Image Intelligence shadow discovery (docs/
         # phase16_m1_native_media_ingestion_report.md) - only for "copywriting" (the earliest step
         # where the drafted event's persisted content/url are certain to exist) and only when
@@ -283,6 +294,64 @@ class CapabilityExecutor:
                         if brief.get(name)
                     ),
                     "reason_codes": brief.get("source_sufficiency_reason_codes"),
+                },
+            )
+        return result
+
+    def _attach_channel_relevance(
+        self, news_event: NewsEvent, context: CapabilityContext, structured_output: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Best-effort, non-blocking (Phase 17 M2's own "classifier failure must not fail
+        CONTENT_GENERATION, must not cause a retry, must not duplicate the task" requirement).
+        Purely synchronous/deterministic. Any failure is logged (`article_topic_assessment_
+        failed`) and swallowed, returning `structured_output` completely unchanged - the same
+        discipline `_attach_editorial_brief`/`_attach_image_intelligence` already established.
+        No raw content, the full assessment payload, or secrets are logged - only classification
+        metadata (Phase 17 M2's own observability requirement)."""
+        logger.info(
+            "article_topic_assessment_started",
+            extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+        )
+        try:
+            research_output = context.business.workflow_state.step_results.get("research", {})
+            result = apply_channel_relevance_shadow(
+                news_event.title, news_event.content, news_event.category, research_output, structured_output,
+            )
+        except Exception:
+            logger.warning(
+                "article_topic_assessment_failed",
+                extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+            )
+            return structured_output
+
+        payload = result.get("channel_relevance")
+        if isinstance(payload, dict):
+            topic = payload.get("article_topic_assessment", {})
+            fit = payload.get("channel_fit_assessment", {})
+            decision = payload.get("shadow_decision", {})
+            logger.info(
+                "article_topic_assessment_completed",
+                extra={
+                    "task_id": str(self._task_id),
+                    "event_id": str(news_event.id),
+                    "topic": topic.get("primary_topic"),
+                    "normalized_category": topic.get("normalized_category"),
+                    "source_category_match": topic.get("category_match"),
+                    "reason_codes": topic.get("reason_codes"),
+                },
+            )
+            logger.info(
+                "channel_fit_assessment_completed",
+                extra={
+                    "task_id": str(self._task_id),
+                    "event_id": str(news_event.id),
+                    "fit_decision": fit.get("fit_decision"),
+                    "fit_score": fit.get("fit_score"),
+                    "confidence": fit.get("confidence"),
+                    "human_review_required": fit.get("human_review_required"),
+                    "reason_codes": fit.get("reason_codes"),
+                    "classifier_version": decision.get("classifier_version"),
+                    "channel_profile_id": fit.get("channel_profile_id"),
                 },
             )
         return result
