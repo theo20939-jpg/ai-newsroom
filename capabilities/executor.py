@@ -53,6 +53,7 @@ from services.analysis_reuse import (
     reuse_prior_result,
 )
 from services.adaptive_length import apply_adaptive_length_shadow
+from services.beginner_friendly import apply_beginner_friendly_shadow
 from services.channel_relevance import apply_channel_relevance_shadow
 from services.cost_recording import record_ai_execution
 from services.cost_tracker import CostTracker
@@ -253,6 +254,15 @@ class CapabilityExecutor:
         # already completed for this step - never changes ContentDraft.
         if step.capability == "copywriting" and settings.adaptive_length_mode != "off":
             structured_output = self._attach_adaptive_length_plan(news_event, context, structured_output)
+
+        # Phase 17 M4: deterministic, zero-new-LLM-call Beginner-Friendly plan (docs/
+        # phase17_m4_beginner_friendly_copywriting_report.md) - same "copywriting" step, after
+        # Adaptive Length's own attach immediately above (both run at the same step; ordering
+        # between them does not matter since each builds its own inputs independently). Only when
+        # beginner_copywriting_mode != "off" (default "off", byte-for-byte unchanged behavior).
+        # Never read by CopywritingCapability, never changes ContentDraft.
+        if step.capability == "copywriting" and settings.beginner_copywriting_mode != "off":
+            structured_output = self._attach_beginner_friendly_plan(news_event, context, structured_output)
 
         return structured_output
 
@@ -462,6 +472,59 @@ class CapabilityExecutor:
                     "hard_character_limit": plan.get("hard_character_limit"),
                     "paragraph_target": plan.get("paragraph_target"),
                     "detail_target": plan.get("detail_target"),
+                    "reason_codes": plan.get("reason_codes"),
+                },
+            )
+        return result
+
+    def _attach_beginner_friendly_plan(
+        self, news_event: NewsEvent, context: CapabilityContext, structured_output: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Best-effort, non-blocking (Phase 17 M4's own "plan builder failure must not fail the
+        workflow, must not cause a retry" requirement). Purely synchronous/deterministic. Any
+        failure is logged (`beginner_friendly_plan_failed`) and swallowed, returning
+        `structured_output` completely unchanged - the same discipline `_attach_adaptive_
+        length_plan` already established. No raw content or the full plan text in ordinary logs -
+        only schema/classification metadata."""
+        logger.info(
+            "beginner_friendly_plan_started",
+            extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+        )
+        try:
+            research_output = context.business.workflow_state.step_results.get("research", {})
+            intelligence_output = context.business.workflow_state.step_results.get("intelligence", {})
+            image_intelligence = structured_output.get("image_intelligence")
+            has_image_candidate = (
+                image_intelligence.get("candidates_accepted", 0) > 0
+                if isinstance(image_intelligence, dict) else None
+            )
+            result = apply_beginner_friendly_shadow(
+                news_event.title, news_event.content, research_output, intelligence_output,
+                has_image_candidate, structured_output,
+            )
+        except Exception:
+            logger.warning(
+                "beginner_friendly_plan_failed",
+                extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+            )
+            return structured_output
+
+        plan = result.get("beginner_friendly_plan")
+        if isinstance(plan, dict):
+            logger.info(
+                "beginner_friendly_plan_completed",
+                extra={
+                    "task_id": str(self._task_id),
+                    "event_id": str(news_event.id),
+                    "policy_version": plan.get("policy_version"),
+                    "audience_level": plan.get("audience_level"),
+                    "explanation_required": plan.get("explanation_required"),
+                    "subjects_to_explain_count": len(plan.get("subjects_to_explain") or []),
+                    "terms_to_explain_count": len(plan.get("terms_to_explain") or []),
+                    "ideal_target_words": (plan.get("ideal_range") or {}).get("target_words"),
+                    "safe_target_words": (plan.get("safe_range") or {}).get("target_words"),
+                    "paragraph_target": plan.get("paragraph_target"),
+                    "jargon_risk": plan.get("jargon_risk"),
                     "reason_codes": plan.get("reason_codes"),
                 },
             )

@@ -301,6 +301,17 @@ class Settings(BaseSettings):
     # real API spend, never triggered automatically by a worker or by this setting alone.
     adaptive_length_mode: Literal["off", "shadow", "comparison"] = "off"
 
+    # Phase 17 M4: Beginner-Friendly Copywriting (docs/
+    # phase17_m4_beginner_friendly_copywriting_report.md). Same three-state convention as
+    # adaptive_length_mode: "off" (default) zero processing. "shadow": a deterministic
+    # (zero-new-LLM-call) BeginnerFriendlyPlan is built and persisted into EditorialTask.
+    # workflow's existing step_results["copywriting"]["beginner_friendly_plan"] JSON - never read
+    # by CopywritingCapability, never changes ContentDraft. "comparison": same shadow computation
+    # inside the worker/executor path, but ALSO the required precondition
+    # scripts/phase17_m4_beginner_copywriting_comparison.py checks, on top of its own separate
+    # --confirm-paid-calls flag and --dry-run defaulting on, before any real paid call.
+    beginner_copywriting_mode: Literal["off", "shadow", "comparison"] = "off"
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""
