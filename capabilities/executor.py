@@ -52,6 +52,7 @@ from services.analysis_reuse import (
     find_source_news_analysis_task_id,
     reuse_prior_result,
 )
+from services.adaptive_length import apply_adaptive_length_shadow
 from services.channel_relevance import apply_channel_relevance_shadow
 from services.cost_recording import record_ai_execution
 from services.cost_tracker import CostTracker
@@ -241,6 +242,18 @@ class CapabilityExecutor:
         if step.capability == "copywriting" and settings.image_intelligence_mode == "shadow":
             structured_output = await self._attach_image_intelligence(news_event, structured_output)
 
+        # Phase 17 M3: deterministic, zero-new-LLM-call Adaptive Length shadow plan (docs/
+        # phase17_m3_adaptive_length_shadow_comparison_report.md) - only for "copywriting", after
+        # Image Intelligence's own attach immediately above (so real candidates_accepted data is
+        # available for an accurate photo-caption-vs-text-message delivery recommendation - unlike
+        # M1's Editorial Brief and M2's Channel Relevance, both of which run earlier at
+        # "intelligence" and therefore cannot see image-candidate data). Only when
+        # adaptive_length_mode != "off" (default "off", byte-for-byte unchanged behavior). Never
+        # read by CopywritingCapability - this hook runs strictly after Copywriting's own call
+        # already completed for this step - never changes ContentDraft.
+        if step.capability == "copywriting" and settings.adaptive_length_mode != "off":
+            structured_output = self._attach_adaptive_length_plan(news_event, context, structured_output)
+
         return structured_output
 
     def _attach_editorial_brief(
@@ -398,6 +411,61 @@ class CapabilityExecutor:
                 extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
             )
             return structured_output
+
+    def _attach_adaptive_length_plan(
+        self, news_event: NewsEvent, context: CapabilityContext, structured_output: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Best-effort, non-blocking (Phase 17 M3's own "policy builder failure must not fail
+        the workflow, must not cause a retry" requirement). Purely synchronous/deterministic - no
+        `await`. Any failure is logged (`adaptive_length_plan_failed`) and swallowed, returning
+        `structured_output` completely unchanged - the same discipline `_attach_editorial_brief`/
+        `_attach_channel_relevance` already established. No raw content or the full plan text in
+        ordinary logs - only schema/classification metadata."""
+        logger.info(
+            "adaptive_length_plan_started",
+            extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+        )
+        try:
+            research_output = context.business.workflow_state.step_results.get("research", {})
+            intelligence_output = context.business.workflow_state.step_results.get("intelligence", {})
+            image_intelligence = structured_output.get("image_intelligence")
+            has_image_candidate = (
+                image_intelligence.get("candidates_accepted", 0) > 0
+                if isinstance(image_intelligence, dict) else None
+            )
+            result = apply_adaptive_length_shadow(
+                news_event.title, news_event.content, research_output, intelligence_output,
+                has_image_candidate, structured_output,
+            )
+        except Exception:
+            logger.warning(
+                "adaptive_length_plan_failed",
+                extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+            )
+            return structured_output
+
+        plan = result.get("adaptive_length_plan")
+        if isinstance(plan, dict):
+            logger.info(
+                "adaptive_length_plan_completed",
+                extra={
+                    "task_id": str(self._task_id),
+                    "event_id": str(news_event.id),
+                    "policy_version": plan.get("policy_version"),
+                    "complexity": plan.get("complexity"),
+                    "source_sufficiency": plan.get("source_sufficiency"),
+                    "recommended_format": plan.get("recommended_format"),
+                    "min_words": plan.get("min_words"),
+                    "target_words": plan.get("target_words"),
+                    "max_words": plan.get("max_words"),
+                    "delivery_mode": plan.get("delivery_mode"),
+                    "hard_character_limit": plan.get("hard_character_limit"),
+                    "paragraph_target": plan.get("paragraph_target"),
+                    "detail_target": plan.get("detail_target"),
+                    "reason_codes": plan.get("reason_codes"),
+                },
+            )
+        return result
 
     async def _record_cost(
         self, task: EditorialTask, step: WorkflowStepDefinition, calls: list[CapabilityCall]

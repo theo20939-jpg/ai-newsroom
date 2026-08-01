@@ -286,6 +286,21 @@ class Settings(BaseSettings):
     # validated, mirroring image_intelligence_mode's own M1-to-M6 staging precedent.
     channel_relevance_mode: Literal["off", "shadow"] = "off"
 
+    # Phase 17 M3: Adaptive Length (docs/
+    # phase17_m3_adaptive_length_shadow_comparison_report.md). Three-state, not the usual
+    # off/shadow pair: "off" (default) performs zero processing, byte-identical to pre-M3
+    # behavior - the rollback path. "shadow": a deterministic (zero-new-LLM-call)
+    # AdaptiveLengthPlan is built and persisted into EditorialTask.workflow's existing
+    # step_results["copywriting"]["adaptive_length_plan"] JSON - never read by
+    # CopywritingCapability, never changes ContentDraft, never blocks a task. "comparison": same
+    # shadow computation inside the worker/executor path (no different from "shadow" there - it
+    # never triggers an LLM call by itself), but ALSO the precondition
+    # scripts/phase17_m3_adaptive_length_comparison.py requires, on top of its own separate
+    # --confirm-paid-calls CLI flag and --dry-run defaulting on, before it will make any real
+    # paid candidate-generation call - two independent, deliberate confirmations required for any
+    # real API spend, never triggered automatically by a worker or by this setting alone.
+    adaptive_length_mode: Literal["off", "shadow", "comparison"] = "off"
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""
