@@ -54,6 +54,7 @@ from services.analysis_reuse import (
 )
 from services.cost_recording import record_ai_execution
 from services.cost_tracker import CostTracker
+from services.editorial_brief import apply_editorial_brief_shadow
 from services.editorial_scoring import apply_editorial_scoring_v2
 from services.fact_safety import apply_fact_safety
 from services.image_intelligence import run_shadow_discovery
@@ -208,6 +209,16 @@ class CapabilityExecutor:
                 research_output, copywriting_output, structured_output,
             )
 
+        # Phase 17 M1: deterministic, zero-new-LLM-call Editorial Brief shadow build (docs/
+        # phase17_m1_editorial_brief_shadow_report.md) - only for "intelligence" (the earliest
+        # step where both Research's facts and Intelligence's own just-computed judgment exist)
+        # and only when editorial_brief_mode == "shadow" (default "off", byte-for-byte unchanged
+        # behavior). Never read by CopywritingCapability, never changes ContentDraft - mirrors
+        # apply_fact_safety's/_attach_image_intelligence's own "must not affect delivery"
+        # discipline exactly: any failure here is logged and swallowed, never fails the step.
+        if step.capability == "intelligence" and settings.editorial_brief_mode == "shadow":
+            structured_output = self._attach_editorial_brief(news_event, context, structured_output)
+
         # Phase 16 M1: deterministic, zero-download Image Intelligence shadow discovery (docs/
         # phase16_m1_native_media_ingestion_report.md) - only for "copywriting" (the earliest step
         # where the drafted event's persisted content/url are certain to exist) and only when
@@ -220,6 +231,61 @@ class CapabilityExecutor:
             structured_output = await self._attach_image_intelligence(news_event, structured_output)
 
         return structured_output
+
+    def _attach_editorial_brief(
+        self, news_event: NewsEvent, context: CapabilityContext, structured_output: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Best-effort, non-blocking (Phase 17 M1's own "brief failure must not fail the step,
+        must not cause a retry" requirement). Purely synchronous/deterministic - no I/O, so no
+        `await` here unlike `_attach_image_intelligence` - but still wrapped in `try/except`
+        since `apply_editorial_brief_shadow()`/`build_editorial_brief()` are ordinary Python
+        code, not guaranteed exception-free for a genuinely malformed `research`/`intelligence`
+        payload. Any failure is logged (`editorial_brief_failed`) and swallowed, returning
+        `structured_output` completely unchanged - the same discipline `_attach_image_
+        intelligence` already established. No raw news content, secrets, or the full brief text
+        are logged - only schema/classification metadata (Phase 17 M1's own observability
+        requirement)."""
+        logger.info(
+            "editorial_brief_started",
+            extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+        )
+        try:
+            research_output = context.business.workflow_state.step_results.get("research", {})
+            result = apply_editorial_brief_shadow(
+                news_event.title, news_event.content, research_output, structured_output,
+            )
+        except Exception:
+            logger.warning(
+                "editorial_brief_failed",
+                extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+            )
+            return structured_output
+
+        brief = result.get("editorial_brief")
+        if isinstance(brief, dict):
+            target_range = brief.get("target_word_range") or {}
+            logger.info(
+                "editorial_brief_completed",
+                extra={
+                    "task_id": str(self._task_id),
+                    "event_id": str(news_event.id),
+                    "schema_version": brief.get("schema_version"),
+                    "source_sufficiency": brief.get("source_sufficiency"),
+                    "recommended_format": brief.get("recommended_format"),
+                    "target_min_words": target_range.get("min_words"),
+                    "target_max_words": target_range.get("max_words"),
+                    "populated_field_count": sum(
+                        1 for name in (
+                            "headline_fact", "subject_explanation", "event_details",
+                            "background_context", "difference_or_change", "why_it_matters",
+                            "what_next", "uncertainties",
+                        )
+                        if brief.get(name)
+                    ),
+                    "reason_codes": brief.get("source_sufficiency_reason_codes"),
+                },
+            )
+        return result
 
     async def _attach_image_intelligence(
         self, news_event: NewsEvent, structured_output: dict[str, Any]

@@ -263,6 +263,17 @@ class Settings(BaseSettings):
     # M6 has no independent "off" no-op path of its own beyond this single flag.
     image_editorial_preview_enabled: bool = False
 
+    # Phase 17 M1: Editorial Brief (docs/phase17_m1_editorial_brief_shadow_report.md). Two-state,
+    # matching image_intelligence_mode's own convention: "off" (default) performs zero processing,
+    # byte-identical to pre-M1 behavior - the rollback path. "shadow": a deterministic
+    # (zero-new-LLM-call) EditorialBrief is built from already-available NewsEvent/Research/
+    # Intelligence data and persisted into EditorialTask.workflow's existing
+    # step_results["intelligence"]["editorial_brief"] JSON - never read by CopywritingCapability,
+    # never changes ContentDraft. "enforce"/"editorial" (an eventual mode that would actually feed
+    # Copywriting) does not exist yet - reserved for a future milestone once M1's shadow data is
+    # validated, mirroring image_intelligence_mode's own M1-to-M6 staging precedent.
+    editorial_brief_mode: Literal["off", "shadow"] = "off"
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""
