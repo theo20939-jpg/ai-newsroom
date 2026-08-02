@@ -312,6 +312,16 @@ class Settings(BaseSettings):
     # --confirm-paid-calls flag and --dry-run defaulting on, before any real paid call.
     beginner_copywriting_mode: Literal["off", "shadow", "comparison"] = "off"
 
+    # Phase 17 M5: Editorial Completeness Gate (docs/
+    # phase17_m5_editorial_completeness_gate_shadow_report.md). Two-state only - unlike M3/M4
+    # there is no "comparison" state: M5 never generates a candidate and never makes an LLM call
+    # of any kind, so there is nothing for a paid comparison mode to gate. "off" (default): zero
+    # processing. "shadow": a deterministic (zero-new-LLM-call) EditorialCompletenessAssessment +
+    # CalibratedFactSafetyAssessment are built and persisted into EditorialTask.workflow's
+    # existing step_results["quality"] JSON - never read by any Capability, never changes
+    # ContentDraft, never blocks a task or changes Telegram delivery.
+    editorial_completeness_mode: Literal["off", "shadow"] = "off"
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""

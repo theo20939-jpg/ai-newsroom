@@ -27,6 +27,7 @@ from core.config import settings
 from database.models.editorial_task import EditorialTask
 from database.models.news_event import NewsEvent
 from database.models.news_source import NewsSource
+from schemas.beginner_friendly import BeginnerFriendlyPlan
 from schemas.capability import (
     BusinessContext,
     CapabilityCall,
@@ -54,12 +55,15 @@ from services.analysis_reuse import (
 )
 from services.adaptive_length import apply_adaptive_length_shadow
 from services.beginner_friendly import apply_beginner_friendly_shadow
+from services.candidate_fact_safety import evaluate_candidate_fact_safety
 from services.channel_relevance import apply_channel_relevance_shadow
 from services.cost_recording import record_ai_execution
 from services.cost_tracker import CostTracker
 from services.editorial_brief import apply_editorial_brief_shadow
+from services.editorial_completeness import apply_editorial_completeness_shadow
 from services.editorial_scoring import apply_editorial_scoring_v2
 from services.fact_safety import apply_fact_safety
+from services.fact_safety_calibration import calibrate_fact_safety
 from services.image_intelligence import run_shadow_discovery
 from services.pricing_catalog import PricingCatalog
 from workflows.errors import PermanentStepFailureError, StepExecutionError, TaskNotFoundError
@@ -211,6 +215,16 @@ class CapabilityExecutor:
                 news_event.title, news_event.content, news_event.url,
                 research_output, copywriting_output, structured_output,
             )
+
+        # Phase 17 M5: deterministic, zero-new-LLM-call Editorial Completeness Gate + Fact Safety
+        # calibration (docs/phase17_m5_editorial_completeness_gate_shadow_report.md) - same
+        # "quality" step as apply_fact_safety() immediately above, run after it (independent of
+        # fact_safety_mode - M5 builds its own CandidateFactSafetyAudit + calibration layer
+        # directly, never reads apply_fact_safety()'s own baseline-level "fact_safety" key). Only
+        # when editorial_completeness_mode == "shadow" (default "off", byte-for-byte unchanged
+        # behavior). Never read by any Capability, never changes ContentDraft.
+        if step.capability == "quality" and settings.editorial_completeness_mode == "shadow":
+            structured_output = self._attach_editorial_completeness(news_event, context, structured_output)
 
         # Phase 17 M1: deterministic, zero-new-LLM-call Editorial Brief shadow build (docs/
         # phase17_m1_editorial_brief_shadow_report.md) - only for "intelligence" (the earliest
@@ -528,6 +542,93 @@ class CapabilityExecutor:
                     "reason_codes": plan.get("reason_codes"),
                 },
             )
+        return result
+
+    def _attach_editorial_completeness(
+        self, news_event: NewsEvent, context: CapabilityContext, structured_output: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Best-effort, non-blocking (Phase 17 M5's own "gate failure must not fail the step,
+        must not cause a retry, must not create a retry loop" requirement). Runs after
+        `apply_fact_safety()`'s own baseline check, same "quality" step - reads the real
+        Copywriting `title`/`body` and every upstream shadow artifact M1/M3/M4 already attached
+        (`editorial_brief` at "intelligence", `adaptive_length_plan`/`beginner_friendly_plan` at
+        "copywriting") - never recomputes any of them, never generates text, never calls the LLM
+        Gateway. Builds its own fresh `CandidateFactSafetyAudit` (M4's own unmodified builder) +
+        `CalibratedFactSafetyAssessment` (M5's own calibration layer) directly from
+        `research`/`copywriting` step_results already on `CapabilityContext` at zero extra DB
+        query - independent of `fact_safety_mode`/`apply_fact_safety()`'s own baseline-level
+        result, a deliberately separate dimension (module docstring, "не смешивай"). Any failure
+        is logged (`completeness_assessment_failed`) and swallowed, returning `structured_output`
+        completely unchanged - the same discipline every prior M1-M4 attach method already
+        established. No raw content, full draft text, or full EditorialBrief in ordinary logs -
+        only schema/classification metadata (this milestone's own explicit observability
+        requirement)."""
+        logger.info(
+            "completeness_assessment_started",
+            extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+        )
+        try:
+            research_output = context.business.workflow_state.step_results.get("research", {})
+            intelligence_output = context.business.workflow_state.step_results.get("intelligence", {})
+            copywriting_output = context.business.workflow_state.step_results.get("copywriting", {})
+            title = copywriting_output.get("title")
+            body = copywriting_output.get("body")
+            if not isinstance(title, str) or not isinstance(body, str):
+                return structured_output
+
+            research_facts = (
+                list(research_output.get("facts", []))
+                if isinstance(research_output.get("facts"), list) else []
+            )
+            beginner_plan_data = copywriting_output.get("beginner_friendly_plan")
+            beginner_plan = (
+                BeginnerFriendlyPlan.model_validate(beginner_plan_data)
+                if isinstance(beginner_plan_data, dict) else None
+            )
+
+            raw_audit = evaluate_candidate_fact_safety(
+                title, body, news_event.title, news_event.content, research_facts, beginner_plan,
+            )
+            calibrated = calibrate_fact_safety(
+                raw_audit, draft_title=title, news_event_title=news_event.title,
+                news_event_content=news_event.content, research_facts=research_facts,
+            )
+            result = apply_editorial_completeness_shadow(
+                intelligence_output, copywriting_output, calibrated, structured_output,
+            )
+        except Exception:
+            logger.warning(
+                "completeness_assessment_failed",
+                extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+            )
+            return structured_output
+
+        assessment = result.get("editorial_completeness")
+        if isinstance(assessment, dict):
+            logger.info(
+                "completeness_assessment_completed",
+                extra={
+                    "task_id": str(self._task_id),
+                    "event_id": str(news_event.id),
+                    "policy_version": assessment.get("policy_version"),
+                    "draft_kind": assessment.get("draft_kind"),
+                    "source_sufficiency": assessment.get("source_sufficiency"),
+                    "completeness_score": assessment.get("completeness_score"),
+                    "required_count": assessment.get("required_criteria_count"),
+                    "passed_count": assessment.get("passed_required_count"),
+                    "partial_count": assessment.get("partial_required_count"),
+                    "failed_count": assessment.get("failed_required_count"),
+                    "headline_rewrite_risk": assessment.get("headline_rewrite_risk"),
+                    "safe_length_status": assessment.get("safe_length_status"),
+                    "editorial_recommendation": assessment.get("editorial_recommendation"),
+                    "fact_safety_raw_status": calibrated.raw_audit_status.value,
+                    "fact_safety_calibrated_status": calibrated.calibrated_status.value,
+                    "suppressed_flag_count": len(calibrated.suppressed_false_positive_flags),
+                    "unresolved_flag_count": len(calibrated.unresolved_flags),
+                    "reason_codes": assessment.get("reason_codes"),
+                },
+            )
+            result = {**result, "calibrated_fact_safety": calibrated.model_dump(mode="json")}
         return result
 
     async def _record_cost(
