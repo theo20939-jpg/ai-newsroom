@@ -163,10 +163,37 @@ M7 (Storyline Memory) was **not started** — it requires its own separate persi
 (explicitly out of scope for this session per the user's own instruction) and is not referenced by
 any M0-M6.1 code path.
 
+## Appendix — Stage 1 shadow canary result (post-report)
+
+Full detail in `docs/phase17_stage1_shadow_canary_report.md`. **Attempt 1** ran against a stale
+Docker image (built 2026-07-31, predating all Phase 17 code) - production ran safely, but zero
+Phase 17 shadow hooks ever executed; root-caused and disclosed, not masked. **Attempt 2** rebuilt
+the 4 application images from current `HEAD`, proved Phase 17 code presence inside the new image
+before touching any real event, proved a live shadow-hook execution from a real event before
+letting the canary proceed, then processed exactly 5 fresh real events with **5/5 complete Phase
+17 shadow results** (`EditorialBrief`, `ChannelRelevance`, `AdaptiveLengthPlan`,
+`BeginnerFriendlyPlan`, `EditorialCompleteness`, `CalibratedFactSafety` - 30/30 individual hook
+executions, 0 failures). Zero incremental Phase 17 LLM calls, zero incremental cost, zero
+`ContentDraft`/task-state mutation, zero duplicate drafts/messages, `postgres`/`redis` container
+IDs unchanged throughout both attempts. Stage 2 was not started, per this session's own scope.
+An unrelated architecture-contract violation introduced during the security-rotation work
+(`scripts/security_preflight_safe.py` importing the `openai` SDK directly) was caught by
+`scripts/validate_architecture.py` during this retry and fixed in its own focused commit (switched
+to the plain REST API via `httpx`, matching the existing Telegram-check pattern).
+
+An earlier separate incident during this session (unrelated to the canary itself): a diagnostic
+`docker compose config` command printed real secret values into the conversation transcript. The
+user rotated all affected credentials before any Stage 1 work resumed; a new `scripts/
+security_preflight_safe.py` tool (SET/MISSING and PASS/FAIL output only, never a value) was built
+specifically to make every subsequent credential/config check safe by construction.
+
 ## 23. Final engineering verdict
 
-**PHASE 17 ENGINEERING COMPLETE — HUMAN CUTOVER REQUIRED.** M5 and M6 both close with an honestly-
-disclosed tuning gap rather than a false "fully validated" claim, consistent with this project's
-own established M0/M3/M4 precedent. No technical blocker exists to Stage 1 shadow authorization;
-no component is ready for enforcement (Stage 5) without further calibration work. Nothing was
-activated, nothing was pushed, no production data was touched, no secrets were committed.
+**PHASE 17 ENGINEERING COMPLETE — HUMAN CUTOVER REQUIRED, STAGE 1 SHADOW VALIDATED ON REAL DATA.**
+M5 and M6 both close with an honestly-disclosed tuning gap rather than a false "fully validated"
+claim, consistent with this project's own established M0/M3/M4 precedent. Stage 1 itself is now
+empirically proven safe and functional on 5 real events (Attempt 2, above) - no technical blocker
+exists to continued Stage 1 use; no component is ready for enforcement (Stage 5) without further
+calibration work, and Stage 2 requires its own separate future authorization. Nothing was pushed,
+no production data was touched beyond the normal production pipeline's own pre-existing behavior,
+no secrets remain exposed (rotated), and M7 was not started.

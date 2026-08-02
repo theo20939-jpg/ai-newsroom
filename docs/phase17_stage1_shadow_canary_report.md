@@ -1,5 +1,12 @@
 # Phase 17 Stage 1 — Shadow Canary Report
 
+Overall status: **Attempt 1 BLOCKED (stale image, root-caused) → Attempt 2 VALIDATED (real shadow
+canary, rebuilt image, 5/5 events with full Phase 17 shadow data)**. Attempt 1's own failed result
+is preserved below unchanged, per this project's own "never hide a failed experiment" discipline;
+Attempt 2 follows as its own separate section.
+
+## Attempt 1 — Original Canary (Stale Image)
+
 Status: **BLOCKED — CANARY DID NOT EXERCISE PHASE 17 CODE (stale Docker image)**. Production
 itself ran safely and normally throughout (0 crashes, 0 duplicate drafts/messages, 0 incremental
 Phase 17 cost) — but the actual objective of Stage 1 (observing real `EditorialBrief`/`Channel
@@ -187,3 +194,179 @@ purpose - observing real Phase 17 shadow output - was not achieved, because the 
 containers used a Docker image built 2026-07-31, before any Phase 17 code existed. This is
 disclosed in full, not minimized. Recommended immediate next step: rebuild the image, then repeat
 this exact canary procedure.
+
+---
+
+## Attempt 2 — Rebuilt Current Image
+
+Status: **VALIDATED — 5/5 real events with full Phase 17 shadow output, zero incremental cost,
+zero invariant violations.**
+
+### 1. Old-image root cause
+
+Restated from Attempt 1 (§11 above): `docker compose up -d` never rebuilds an image on its own;
+the 4 application services (`automation_worker`, `news_analysis_worker`, `content_worker`,
+`telegram_bot`) each have their **own separately-tagged image** (`ai-newsroom-<service>`, built
+via `build: .`, no shared name, no bind mounts) - all four were stale (2026-07-28 through
+2026-07-31), each individually predating `checkpoint/phase17-m0` (2026-08-01).
+
+### 2. Controlled rebuild procedure
+
+`docker compose build automation_worker news_analysis_worker content_worker telegram_bot` -
+**only** these 4 application images, never `postgres`/`redis` (pulled, not built) and never
+`backend` (out of scope - has live `app`/`core`/`database` bind mounts, doesn't execute the
+`CONTENT_GENERATION`/`NEWS_ANALYSIS` workflow, user-scoped out unless required). No
+`docker compose down -v`, no volume touched, no destructive command used at any point.
+
+### 3. Image identity proof
+
+| Service | Old image ID | Old build time | New image ID | New build time |
+|---|---|---|---|---|
+| automation_worker | `4d875338f0ef` | 2026-07-29 13:48 | `186c64d16d09` | 2026-08-02 23:33 |
+| news_analysis_worker | `2973c9d59dab` | 2026-07-28 14:15 | `35f78034b495` | 2026-08-02 23:33 |
+| content_worker | `d85703b183c3` | 2026-07-31 04:00 | `b4305b8b4fff` | 2026-08-02 23:33 |
+| telegram_bot | `22b1308172695` | 2026-07-31 22:41 | `369eee92481f` | 2026-08-02 23:33 |
+
+### 4. Phase 17 code presence proof
+
+Before touching any real event, a one-off `docker compose run --rm --no-deps content_worker
+python -c "..."` (auto-removed after exit, never left a stray container) confirmed, inside the
+**new** image itself: `EditorialBrief import: PASS`, `ChannelRelevance import: PASS`,
+`AdaptiveLength import: PASS`, `BeginnerFriendly import: PASS`, `EditorialCompleteness import:
+PASS`, `CalibratedFactSafety import: PASS`, `config_fields_present: PASS`, `executor_hooks_present:
+PASS`, `editorial_completeness_schema_version: v1`, `security_preflight_safe_present: PASS` (this
+session's own newest file, proving the image reflects current `HEAD`, not just "some" later
+commit).
+
+### 5. Service recreation scope
+
+`docker compose up -d --no-deps automation_worker news_analysis_worker content_worker
+telegram_bot` - confirmed via `docker inspect` that **only these 4 containers were recreated**;
+`postgres`/`redis` container IDs were compared before and after (§6) and found byte-identical, both
+on the first recreation (proving the image) and again after the real canary run.
+
+### 6. Postgres/Redis preservation
+
+`postgres` ID `10defff4287d...`, `redis` ID `331d207fcc33...` - identical before build, after the
+first `--no-deps` recreate, and after the full ~32-minute canary run (checked every 60s by the
+monitoring loop itself, which was configured to immediately abort on any mismatch - never
+triggered). Real DB row counts only ever grew, never reset.
+
+### 7. Effective shadow modes
+
+Untracked `docker-compose.override.yml`, scoped precisely to which service actually reaches each
+attach hook (avoiding unnecessary duplication): `news_analysis_worker` got
+`EDITORIAL_BRIEF_MODE=shadow` + `CHANNEL_RELEVANCE_MODE=shadow` only (its own `NEWS_ANALYSIS`
+workflow never reaches the "copywriting"/"quality" steps); `content_worker` got all 5
+(`EDITORIAL_BRIEF_MODE`, `CHANNEL_RELEVANCE_MODE`, `ADAPTIVE_LENGTH_MODE`,
+`BEGINNER_COPYWRITING_MODE`, `EDITORIAL_COMPLETENESS_MODE`, all `shadow`). Validated via
+`scripts/security_preflight_safe.py`'s own static YAML-only parser (never `docker compose
+config`): `PASS`, 0 secret-like key names, 5 total mode keys.
+
+### 8. Runtime hook proof
+
+Before letting the canary run to full completion, real log lines were confirmed from the live
+`news_analysis_worker` container for a genuinely fresh event:
+`editorial_brief_started` → `editorial_brief_completed` → `article_topic_assessment_started` →
+`article_topic_assessment_completed` (20:36:32, task `72a60c23...`). Only after this real,
+positive proof did the canary continue toward its 5-event cap.
+
+### 9. Five-event sample
+
+Monitored via the same bounded, read-only polling design as Attempt 1 (60s interval, 40-minute
+cap, plus a `postgres`/`redis` container-ID check on every single iteration). Target (baseline+5)
+reached at 00:08:46, ~32 minutes after container start - all 5 `ContentDraft`s created in a single
+final content-generation cycle burst (00:07:19-00:07:48).
+
+### 10. Per-event results
+
+| event (short) | category | source sufficiency | channel fit | adaptive length format | completeness recommendation | calibrated Fact Safety |
+|---|---|---|---|---|---|---|
+| `2d35bad8` | AI | partial | REVIEW | short_update | NOT_READY | pass |
+| `12ce8e52` | STARTUPS | headline_only | REVIEW | insufficient_source | INSUFFICIENT_SOURCE | review |
+| `17389223` | AI | sufficient | ACCEPT | explainer | REVIEW | pass |
+| `847618cd` | SOFTWARE | sufficient | ACCEPT | explainer | REVIEW | review |
+| `ac1f1ff5` | AI | partial | ACCEPT | short_update | REVIEW | review |
+
+**5/5 events produced complete Phase 17 shadow output** - `EditorialBrief`, `ChannelRelevance`,
+`AdaptiveLengthPlan`, `BeginnerFriendlyPlan` (all 5 resolved `audience_level: tech_interested`),
+`EditorialCompleteness`, and `CalibratedFactSafety` all present for every event, zero missing keys,
+zero shadow exceptions logged. Consistent with M5's own already-disclosed finding (docs/
+phase17_m5_editorial_completeness_gate_shadow_report.md §27): 0/5 reached `READY` - all REVIEW/
+NOT_READY/INSUFFICIENT_SOURCE, the same known, disclosed calibration-conservatism gap, not a new
+defect. (Separately, the real production `QualityCapability` LLM judge itself returned
+`passed: false` for all 5 of these events - the pre-existing production judge's own independent
+opinion, unrelated to and uninfluenced by any Phase 17 shadow component.)
+
+### 11. Shadow execution metrics
+
+Hook execution count: 5/5 for every one of the 5 required hooks (`editorial_brief`,
+`channel_relevance`, `adaptive_length_plan`, `beginner_friendly_plan`, `editorial_completeness` +
+`calibrated_fact_safety`) = **30/30 individual hook executions succeeded, 0 failures, 0 missing
+keys, 0 reason-code-less silent gaps.**
+
+### 12. Cost separation
+
+`AIExecution` rows scoped exactly to these 5 `ContentDraft`-producing tasks (via `task_id`, not a
+time window): **COPYWRITING ×5 ($0.007401), QUALITY ×5 ($0.009012) = 10 calls, $0.016413** - the
+real, normal production cost of finishing these 5 drafts (their `research`/`intelligence` steps
+were reused from prior `NEWS_ANALYSIS` tasks, per the pre-existing cost-optimization reuse
+mechanism, `services/analysis_reuse.py`, unrelated to Phase 17). Broader window total (all
+analysis-cycle activity across the full ~32-minute run, most of which never became a `ContentDraft`):
+105 calls, $0.184743 across RESEARCH/INTELLIGENCE/SCORING/COPYWRITING/QUALITY - the normal
+capability set, nothing else. **Phase 17 incremental LLM calls: 0** (verified both structurally -
+every Phase 17 attach function is provably free of any Gateway import, per each milestone's own
+static test - and empirically, by capability-name enumeration containing only the 5 expected
+production names).
+
+### 13. Production invariants
+
+Production text changed: **no**. `ContentDraft` mutated by shadow: **no**. Task state mutated by
+shadow: **no**. Duplicate `ContentDraft`s: **0** (checked directly, `task_id` grouped, 0 groups
+with >1 row). Automatic `REJECT`: **no** (Phase 17 `channel_relevance` shadow never blocks
+anything; the one `REVIEW`-decision event still produced a normal `ContentDraft`).
+
+### 14. Telegram invariants
+
+`telegram_bot` polled cleanly throughout (no webhook, no conflict). 5 real cards were sent via the
+pre-existing, unmodified `content_worker` → `settings.editorial_chat_id` path. Duplicate Telegram
+messages: **0**. Phase 17 never touched caption/body/buttons (purely additive `step_results`
+JSON, never read by the Telegram formatting/send path). Any pending approve/reject decision on
+these 5 cards is **PENDING HUMAN REVIEW** - not simulated.
+
+### 15. Stop-condition audit
+
+None triggered: no `ContentDraft`/task-state mutation, no duplicate draft/message, no extra Phase
+17 LLM call, no worker crash loop, no Telegram error, no `postgres`/`redis` recreate during the
+canary window itself, no DB count anomaly, no secret leakage, no automatic `REJECT`, no production
+prompt change, rollback remained trivially available throughout (nothing persistent to roll back).
+
+### 16. Rollback verification
+
+`docker-compose.override.yml` removed after the run. All 4 application services stopped
+(`RestartCount=0` throughout, clean exit). `postgres`/`redis` never stopped, never recreated
+during or after this attempt. `.env` untouched. No migration touched. No data deleted.
+
+### 17. Human review requirements
+
+1. Review the 5 real preview cards now sitting in the editorial chat (2 from Attempt 1 + 5 from
+   Attempt 2 = 7 total awaiting normal human approve/reject - unrelated to Phase 17's own
+   validation, the pre-existing production review workflow).
+2. No Phase 17-specific human action is blocking - shadow metadata is already fully persisted.
+
+### 18. Stage 2 recommendation
+
+**Not recommended yet, and not authorized regardless** - per this session's own explicit scope,
+Stage 1 is the ceiling for this engagement. Should a future session consider Stage 2, the M5
+completeness-gate calibration gap (0/5 `READY` here, matching the 0/96 gold-set backtest) should
+be addressed first, since Stage 2 is closer to using these signals for real candidate delivery
+decisions.
+
+### 19. Final verdict
+
+**PHASE 17 STAGE 1 COMPLETE — HUMAN REVIEW REQUIRED.** The rebuilt-image retry fully validates the
+Stage 1 shadow mechanism on 5 real, fresh events: real `EditorialBrief`/`ChannelRelevance`/
+`AdaptiveLengthPlan`/`BeginnerFriendlyPlan`/`EditorialCompletenessAssessment`/
+`CalibratedFactSafetyAssessment` output persisted for every event, zero production impact, zero
+incremental cost, zero invariant violations, zero stop conditions triggered. Stage 2 was not
+started.
