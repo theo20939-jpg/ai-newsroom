@@ -1,0 +1,113 @@
+"""Small, controlled text-normalization helpers for Phase 17 M5's Editorial Completeness Gate and
+Fact Safety calibration layer (docs/phase17_m5_editorial_completeness_gate_shadow_report.md) -
+shared by both, never duplicated.
+
+Deliberately NOT a general NLP engine (M5's own explicit "не создавай universal NLP engine"
+instruction): a fixed, small, explicit set of narrow rules only - quote/guillemet stripping, dash
+normalization, casefold, and a conservative Russian case-suffix stripper for the specific
+declension mismatch class already observed in real Phase 17 M4.1 output ("Ходячих мертвецов"
+genitive vs. source "Ходячие мертвецы" nominative,
+docs/phase17_m4_1_reasoning_budget_fix_report.md §11). Money/percentage/date matching already has
+its own dedicated, more precise parser in `services/fact_safety.py` and is never re-implemented
+here - this module is for entity/phrase-level matching only.
+"""
+from __future__ import annotations
+
+import re
+import unicodedata
+
+_QUOTE_CHARS = "«»“”‘’\"'`"
+_DASH_RE = re.compile(r"[‐-―−]")  # unicode dash variants -> ascii hyphen
+_WHITESPACE_RE = re.compile(r"\s+")
+_WORD_RE = re.compile(r"[\w-]+", re.UNICODE)
+
+# Conservative Russian case-suffix list: only endings that matter for the declension mismatch
+# class actually observed (docs/phase17_m4_1_reasoning_budget_fix_report.md §11). Ordered longest
+# first so a longer, more specific ending is tried before a shorter one it would otherwise shadow.
+# Never applied to a token <= 4 characters or an ALL-CAPS token (acronyms) - guarded in
+# `strip_ru_case_suffix()` - to avoid truncating a short real word or a real acronym.
+_RU_CASE_SUFFIXES: tuple[str, ...] = (
+    "иями", "ями", "ами", "ого", "его", "ому", "ему", "ыми", "ими",
+    "ой", "ей", "ый", "ий", "ая", "яя", "ое", "ее", "ых", "их", "ие", "ые", "ов", "ев",
+    "у", "ю", "а", "я", "ы", "и", "е", "о",
+)
+
+
+def strip_quotes(text: str) -> str:
+    """Removes guillemets and curly/straight quote characters only - never touches apostrophes
+    inside a word (M5's own "не создавай universal NLP" scope: this is a fixed character strip,
+    not a grammar-aware quote parser)."""
+    return "".join(ch for ch in text if ch not in _QUOTE_CHARS)
+
+
+def normalize_dashes(text: str) -> str:
+    return _DASH_RE.sub("-", text)
+
+
+def normalize_loose(text: str) -> str:
+    """NFKC + casefold + guillemet/quote stripping + dash normalization + collapsed whitespace -
+    the base normalization both the completeness gate and the calibration layer apply before any
+    comparison. Never strips digits or numeric punctuation - those have their own dedicated
+    parsers in `services/fact_safety.py`."""
+    text = unicodedata.normalize("NFKC", text)
+    text = strip_quotes(text)
+    text = normalize_dashes(text)
+    return _WHITESPACE_RE.sub(" ", text).strip().casefold()
+
+
+def strip_ru_case_suffix(token: str) -> str:
+    """Conservative single-pass suffix stripping - a small, explicit, hand-curated ending list,
+    never a general morphological analyzer. Skipped entirely for short tokens (<=4 chars) and
+    ALL-CAPS tokens (acronyms), and never allowed to strip a token down to fewer than 3
+    characters - both guards exist because blind suffix removal is more likely to damage a short
+    real word or a real acronym than to fix a real declension mismatch."""
+    if len(token) <= 4 or token.isupper():
+        return token
+    lower = token.lower()
+    for suffix in _RU_CASE_SUFFIXES:
+        if lower.endswith(suffix) and len(lower) - len(suffix) >= 3:
+            return lower[: -len(suffix)]
+    return lower
+
+
+def normalize_for_entity_match(text: str) -> str:
+    """`normalize_loose()` plus, per word, `strip_ru_case_suffix()` - used only for entity/name/
+    phrase comparison (never for numeric/date/quote matching, which must stay exact after their
+    own dedicated normalization in `services/fact_safety.py`)."""
+    loose = normalize_loose(text)
+    words = _WORD_RE.findall(loose)
+    return " ".join(strip_ru_case_suffix(w) for w in words)
+
+
+def fuzzy_phrase_contains(needle: str, haystack: str) -> bool:
+    """Whole-word-normalized containment check: True when `needle`'s own case-stripped, quote-
+    stripped normalized form appears as a contiguous word sequence inside `haystack`'s equally
+    normalized form. Never a short raw-substring match (M5's own explicit "не считать слова
+    совпавшими только по короткому substring" instruction) - both sides go through the same
+    word-boundary tokenization first, and an empty/whitespace-only needle never matches."""
+    needle_norm = normalize_for_entity_match(needle)
+    haystack_norm = normalize_for_entity_match(haystack)
+    if not needle_norm.strip():
+        return False
+    return f" {needle_norm} " in f" {haystack_norm} "
+
+
+def token_overlap_ratio(a: str, b: str, *, min_token_len: int = 3) -> float:
+    """Fraction of `a`'s own distinct, length-filtered tokens that also appear in `b` - the same
+    style of vocabulary-overlap signal M0's own headline-rewrite proxy used
+    (docs/phase17_m0_output_quality_discovery_report.md §6), kept here only as one input signal
+    among several inside `services/editorial_completeness.py`, never the sole basis for a rewrite
+    verdict - relying on it alone was M0's own disclosed, measured mistake (0% vs. 18.75-21.9%)."""
+    tokens_a = {t for t in _WORD_RE.findall(normalize_loose(a)) if len(t) >= min_token_len}
+    tokens_b = {t for t in _WORD_RE.findall(normalize_loose(b)) if len(t) >= min_token_len}
+    if not tokens_a:
+        return 0.0
+    return len(tokens_a & tokens_b) / len(tokens_a)
+
+
+def count_paragraphs(text: str) -> int:
+    """Splits on any blank line (one or more consecutive `\\n\\n+`) - matches how every prior
+    Phase 17 milestone's own `paragraph_target` field is produced (`services/adaptive_length.py`/
+    `services/beginner_friendly.py`), so the two stay directly comparable."""
+    parts = [p for p in re.split(r"\n\s*\n", text.strip()) if p.strip()]
+    return max(1, len(parts)) if text.strip() else 0
