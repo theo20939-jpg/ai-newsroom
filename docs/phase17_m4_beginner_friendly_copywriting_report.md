@@ -648,3 +648,77 @@ self-inflicted, root-caused consequence of raising `reasoning_effort` to `"mediu
 matching token headroom — which must be fixed and re-measured (without consuming additional paid
 calls beyond what a future milestone explicitly budgets) before any production activation decision
 can be revisited.
+
+## 33. M4.1 closure appendix — truncation fix, real replay results
+
+Added after this report's own original publication, without rewriting any result above. Full
+detail in `docs/phase17_m4_1_reasoning_budget_fix_report.md`; this appendix records only the
+numbers needed to close the §22/§32 gap this report itself disclosed.
+
+**Fix**: `reasoning_effort` reverted `"medium"` → `"low"` (M3's own proven-safe value) for the
+exact 7 cases this report's §22 identified as truncated, with a controlled, at-most-once retry at
+`"none"` reserved only for a still-empty primary attempt. No prompt, `safe_range`, or routing
+change. Implementation commit `170730a813bbd4bb8105f96f3f90391301aabd30`.
+
+**Real replay result (7 calls, live, paid)**: **7/7 valid, non-empty candidates** — 0 retries
+needed, 0 still-empty. Cost: **$0.026632** (initial 7 calls only; well under the $0.08
+worst-case/14-call estimate presented for confirmation). Merged into the original 25 successful M4
+candidates (never regenerated) for a complete 32-case result set.
+
+**Merged 32-case metrics** (25 original + 7 replayed):
+
+| Metric | M4 original (as measured, §21/§22) | Merged post-M4.1 |
+|---|---|---|
+| Empty/truncated | 7/32 (21.9%) | **0/32 (0%)** |
+| Mean words | 97.5 (25 successful only) | 94.5 (all 32) |
+| Median words | 92.0 (25 successful only) | 90.5 (all 32) |
+| Safe-range compliance | 15/32 (46.9%, truncated counted non-compliant) | **19/32 (59.4%)** |
+| Ideal-range compliance | 5/25 successful (20.0%) | 7/32 (21.9%) |
+| Preferred-or-tied vs M3 | 24/25 (96.0%) | 31/32 (96.9%) |
+| Strictly preferred vs M3 | 18/25 (72.0%) | 20/32 (62.5%) |
+| Quality: GOOD / ACCEPTABLE / WEAK / MISLEADING | 22 / 3 / 0 / 0 (of 25) | 29 / 3 / 0 / 0 (of 32) |
+| Fact Safety pass / review / fail | 11 / 20 / 1 (of 32, 7 truncated trivially `pass`) | 4 / 25 / 3 (of 32) |
+
+The Fact Safety `fail` count rising from 1 to 3 is not a quality regression: the 7 previously-empty
+cases could not be evaluated for real (an empty candidate trivially scores `pass` — no claims to
+flag), so replacing them with real, substantive text exposes them to the same audit for the first
+time. Manual read of both new `fail` cases (§ below) found each to be the same class of false
+positive already disclosed in §26 for M4's own one `fail` case — no new extractor limitation.
+
+**Manual review of all 7 replayed candidates** (same rubric as §23): **0/7 WEAK, 0/7 MISLEADING,
+0/7 contain a fabricated/unsupported specific fact**; 2/7 (`7352db1a` UMC, `073437a9` OpenAI
+prototype) preferred over their own M3 candidate (added honest hedges M3 lacked — the "frenzied
+demand" quantifier check and an explicit "unverified claim" framing, respectively); the remaining
+5/7 rated TIE with M3 (comparable accuracy and hedging quality, no case worse than M3). Filler rate
+0/7 and repetition rate 0/7 (`services/candidate_fact_safety.py`'s own deterministic
+`detect_filler_phrases()`/`detect_repetition()`, run directly against all 7 new candidate bodies).
+2/7 (`d9c0b32c`, `073437a9`) are headline-only/thin-source (`Complexity.INSUFFICIENT`, same class
+as §27) — headline-only fabrication rate **0/2**, consistent with §27's original finding.
+
+The 2 automated Fact Safety `fail` flags among the 7 new cases, read manually:
+- `fa60525c` (Netflix/AMC+): flagged on declined Russian forms of "Ходячие мертвецы" ("The Walking
+  Dead") not matching the extractor's expected form, plus a market-commentary sentence — the same
+  cross-language/declension and market-claim pattern already present (and already `fail`) on this
+  identical case's own M3 candidate. Not a new issue.
+- `7352db1a` (UMC): flagged on `"Corporation"` (part of the company's own full legal name, "United
+  Microelectronics Corporation") misread as an undefined term, plus an honest hedge sentence about
+  the headline's own "frenzied demand" wording misclassified as an unhedged forecast — the same
+  definition/causal-hedge false-positive classes §26 already disclosed for M4's own one `fail` case.
+  Not a new issue.
+
+**Regression scope**: only new files were added for M4.1 (`services/candidate_generation_policy.py`,
+`scripts/phase17_m4_1_failed_case_replay.py`, 2 test files) — no existing tracked file was modified,
+so no shared production code path was touched. Full regression suite was not re-run; the targeted
+36-test suite, Ruff, Mypy, and `validate_architecture.py` were all re-confirmed clean instead
+(`docs/phase17_m4_1_reasoning_budget_fix_report.md`).
+
+**Production impact verified**: `ContentDraft.updated_at == created_at` for all 7 replayed rows,
+checked directly against the database after the live run — confirming no mutation occurred. Zero
+Telegram messages sent (script never imports `bot`/aiogram). No production prompt, routing, or
+worker config changed.
+
+**Revised final status: the §22/§32 truncation gap this report disclosed is now closed on real,
+measured data — 7/7 valid outputs, 0% truncation, no fabrication introduced.** `beginner_friendly`
+copywriting remains shadow-only; production activation is a separate decision not made by M4.1
+(scope was limited to fixing and re-measuring the one disclosed defect). See
+`docs/phase17_m4_1_reasoning_budget_fix_report.md` for full detail and `checkpoint/phase17-m4-1`.
