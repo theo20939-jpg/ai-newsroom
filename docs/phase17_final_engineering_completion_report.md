@@ -113,11 +113,13 @@ substantially (§9 above) while preserving 100% true-positive retention and 0 fa
 
 Real, actual pre-Phase-17-M5 full-suite baseline (confirmed by a real run at the start of this
 session, not assumed): **19 failed / 1873 passed**. Targeted M5/M6/M6.1 suites: 76 + 22 + 9 = 107
-tests, all passing. Full-suite regression after all of M5+M6+M6.1: **[pending - full suite run in
-progress; this report will be updated with the exact final count before being treated as final]**.
-No new regression is expected or was found in any targeted cross-milestone check performed during
-this session (M1-M4.1 suites re-run individually: 230 passed, 2 pre-existing failures, both
-present in the confirmed pre-M5 baseline).
+tests, all passing. **Full-suite regression after all of M5+M6+M6.1 (confirmed, real run, 1389.5s):
+19 failed / 1949 passed.** The 19 failures are the exact same 19 test names as the pre-M5
+baseline, byte-for-byte (`test_capability_executor.py` ×8, `test_content_generation_integration.py`
+×1, `test_content_worker_cycle.py` ×2, `test_content_worker_cycle_image_preview.py` ×1,
+`test_editorial_inbox_service.py` ×1, `test_editorial_scoring.py` ×2, `test_fact_safety.py` ×2,
+`test_news_handler.py` ×1, `test_phase10_workflow_integration.py` ×1) — **zero new regressions**
+introduced by M5, M6, or M6.1.
 
 ## 18. Known limitations
 
