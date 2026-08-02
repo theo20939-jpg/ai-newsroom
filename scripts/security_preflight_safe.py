@@ -39,15 +39,23 @@ def check_presence() -> dict[str, str]:
 
 
 async def check_openai_auth() -> str:
-    """`models.list()` is a free metadata endpoint - never a generation call, never billed."""
+    """`GET /v1/models` is a free metadata endpoint - never a generation call, never billed.
+    Called directly via `httpx` (never the `openai` SDK) - this project's own architecture
+    contract (Phase 7 §1 row 1 / P11) forbids importing a provider SDK anywhere outside
+    `integrations/llm_gateway/providers/<provider>_adapter.py`; this script lives outside that
+    boundary, so it speaks the provider's plain REST API instead, exactly like
+    `check_telegram_bot_auth()` already does for the Telegram Bot API."""
     if settings.openai_api_key is None:
         return "SKIPPED"
     try:
-        from openai import AsyncOpenAI
+        import httpx
 
-        client = AsyncOpenAI(api_key=settings.openai_api_key.get_secret_value())
-        await client.models.list()
-        return "PASS"
+        api_key = settings.openai_api_key.get_secret_value()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                "https://api.openai.com/v1/models", headers={"Authorization": f"Bearer {api_key}"},
+            )
+        return "PASS" if response.status_code == 200 else "FAIL"
     except Exception:  # noqa: BLE001 - never leak exception detail, which may echo the credential
         return "FAIL"
 
