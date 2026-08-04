@@ -152,3 +152,27 @@ def test_real_backtest_false_positive_active_verb_hedge_now_fixed() -> None:
     project's own "never merge a known false positive" discipline."""
     text = "Данные не подтверждают, что кампания стала причиной финансового результата."
     assert _scan_qualitative_flags(text) == []
+
+
+def test_real_stage2_validation_negated_causal_claim_not_flagged() -> None:
+    """Real false positive found during Phase 17's own final Stage 2 validation (docs/
+    phase17_final_completion_report.md), on the real recorded `847618cd` candidate text:
+    "привлеченные пользователи не привели к зафиксированному заработку" ("the acquired users did
+    NOT lead to recorded earnings") - a NEGATED causal claim (explicitly asserting the ABSENCE of
+    a causal link) matched the same verb trigger as an unhedged positive assertion would. Fixed
+    with a negative lookbehind on "не"/"not" immediately before each verb-based trigger (the
+    connector words are unaffected - they do not have this ambiguity in idiomatic use)."""
+    assert _scan_qualitative_flags(
+        "Привлеченные пользователи не привели к зафиксированному заработку."
+    ) == []
+
+
+def test_negation_guard_does_not_suppress_the_positive_form() -> None:
+    """False-negative safety for the fix above: the exact same verb, without negation, must still
+    be flagged - the guard is narrowly scoped to "не"/"not" immediately before the trigger, not a
+    general suppression of the verb."""
+    assert _scan_qualitative_flags(
+        "Привлеченные пользователи привели к зафиксированному заработку."
+    ) != []
+    assert _scan_qualitative_flags("X did not cause the decline.") == []
+    assert _scan_qualitative_flags("X caused the decline.") != []

@@ -35,10 +35,18 @@ _CAUSAL_RE = re.compile(
     # (M7.4 discovery's own explicit sequencing requirement). Grammatical siblings of each
     # requested form are included (all genders/numbers of the same past-tense verb) - narrow,
     # explicit, hand-curated, never a general verb-conjugation rule.
-    r"привел[оаи]\s+к|привёл\s+к|приводит\s+к|приводят\s+к|"
-    r"вызвал[оаи]?|"
-    r"стал[оаи]?\s+причиной|"
-    r"caused|led\s+to|resulted\s+in)\b",
+    # Found during Phase 17 Stage 2 final validation (docs/phase17_final_completion_report.md):
+    # "привлеченные пользователи НЕ привели к заработку" ("the acquired users did NOT lead to
+    # earnings") matched the verb triggers below unconditionally - a negated causal claim (an
+    # explicit assertion that X did NOT cause Y) is not an unverified positive causal assertion,
+    # and must not be flagged the same way. A negative lookbehind on "не"/"not" immediately before
+    # each verb-based trigger (not the older connector words above, which do not have this
+    # ambiguity in idiomatic use) excludes exactly this pattern, narrow and hand-curated like every
+    # other rule here - not a general negation parser.
+    r"(?<!не\s)(?:привел[оаи]\s+к|привёл\s+к|приводит\s+к|приводят\s+к)|"
+    r"(?<!не\s)вызвал[оаи]?|"
+    r"(?<!не\s)стал[оаи]?\s+причиной|"
+    r"(?<!not\s)caused|(?<!not\s)led\s+to|(?<!not\s)resulted\s+in)\b",
     re.IGNORECASE,
 )
 _SUPERLATIVE_RE = re.compile(

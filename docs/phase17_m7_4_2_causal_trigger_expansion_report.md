@@ -78,6 +78,29 @@ Per this project's own "never merge a known false positive" discipline, this was
 immediately, not deferred to a follow-up milestone, and is pinned with its own dedicated regression
 test (`test_real_backtest_false_positive_active_verb_hedge_now_fixed`).
 
+## Addendum — a second false positive found during Phase 17's final Stage 2 validation
+
+After this milestone was committed (`300c042`) and checkpointed (`checkpoint/phase17-m7-4`), the
+final Phase 17 Stage 2 validation pass (`docs/phase17_final_completion_report.md`) surfaced one
+more real false positive on the actual, already-recorded `847618cd` candidate text — not caught by
+the 281-draft backtest above because that backtest samples real *production baseline* drafts, and
+this sentence only exists in Stage 2's own AI-generated *candidate* text:
+**`"привлеченные пользователи не привели к зафиксированному заработку"`** ("the acquired users did
+NOT lead to recorded earnings") — a **negated** causal claim (explicitly asserting the *absence* of
+a causal link), which matched the new `привел[оаи]\s+к` trigger exactly like an unhedged positive
+assertion would.
+
+**Fixed immediately, in the same discipline as the fix above**: added a negative lookbehind
+(`(?<!не\s)` / `(?<!not\s)`) directly on each verb-based trigger (`привел[оаи] к`/`вызвал[оаи]?`/
+`стал[оаи]? причиной`/`caused`/`led to`/`resulted in`) — scoped only to these new verb triggers,
+not the original connector words, which do not have this negation ambiguity in idiomatic use.
+Verified: the negated form is now correctly excluded, the positive (non-negated) form of the exact
+same verb remains correctly flagged (false-negative safety confirmed), the full test suite (223
+passed / 2 pre-existing baseline failures) and the 281-draft backtest (0 new / 0 removed, re-run
+after this fix) both remain clean. Pinned with two new tests
+(`test_real_stage2_validation_negated_causal_claim_not_flagged`,
+`test_negation_guard_does_not_suppress_the_positive_form`).
+
 ## False-negative safety (verified)
 
 `test_end_to_end_genuine_unsupported_causal_claim_now_caught` confirms the exact classification-A
