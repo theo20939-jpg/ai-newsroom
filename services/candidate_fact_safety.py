@@ -145,7 +145,12 @@ def evaluate_candidate_fact_safety(
     entity_flags: list[str] = []
     for finding in fact_safety_result["findings"]:
         label = f"{finding['support']}:{finding['claim']}"
-        if finding["type"] in ("money", "percentage", "date"):
+        # M7.2: metric_quantity (a resolved unit+amount - tokens/parameters/users/requests/calls/
+        # operations) is fundamentally numeric, same bucket as money/percentage/date.
+        # generic_quantity (an unresolvable magnitude - M7 discovery's own class #1 root cause,
+        # now severity-capped at medium instead of forced into "money") is also numeric in kind,
+        # just lower-confidence - bucketed here too rather than with entity/quote.
+        if finding["type"] in ("money", "percentage", "date", "metric_quantity", "generic_quantity"):
             numeric_flags.append(label)
         else:  # entity, quote
             entity_flags.append(label)
@@ -157,7 +162,8 @@ def evaluate_candidate_fact_safety(
 
     reason_codes = []
     high_severity_unsupported = any(
-        f["type"] in ("money", "percentage", "date", "quote") and f["support"] == "unsupported" and f["severity"] == "high"
+        f["type"] in ("money", "percentage", "date", "quote", "metric_quantity")
+        and f["support"] == "unsupported" and f["severity"] == "high"
         for f in fact_safety_result["findings"]
     )
     any_unsupported = any(f["support"] == "unsupported" for f in fact_safety_result["findings"])

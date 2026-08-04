@@ -44,19 +44,29 @@ def test_trillion_scale_quantities_with_currency_are_detected(text: str, expecte
 
 def test_trillion_claim_is_extracted_where_it_previously_was_not() -> None:
     """Before M7.1, "2,8 трлн параметров" was invisible to extract_claims() entirely (docs/
-    phase17_m7_fact_safety_calibration_discovery.md §1b) - now it is extracted (as a `money`-typed
-    claim, matching how million/billion claims are already typed)."""
+    phase17_m7_fact_safety_calibration_discovery.md §1b) - M7.1 alone would have extracted it as
+    a `money`-typed claim (forced to fail normalization for want of a currency, M7 discovery's own
+    class #1 bug). M7.2 (docs/phase17_m7_2_quantity_classification_report.md) fixes the
+    classification itself: "параметров" is a recognized metric unit, so this now resolves as
+    `metric_quantity`, not `money` - this test is UPDATED, not a new one, to reflect that
+    intentional, superseding change; see `tests/test_phase17_m7_2_quantity_classification.py` for
+    the full M7.2 test suite."""
     claims = extract_claims("Модель содержит 2,8 трлн параметров.")
-    assert claims["money"] == ["2,8 трлн"]
+    assert claims["money"] == []
+    assert claims["metric_quantity"] == ["2,8 трлн параметров"]
 
 
-def test_trillion_claim_without_currency_still_fails_to_normalize_known_disclosed_gap() -> None:
-    """Disclosed, not silently left broken: a bare trillion-scale quantity with no currency word
-    still cannot resolve via `_normalize_money()`, for the exact same reason a bare million-scale
-    quantity ("320,7 млн") could not (M7 discovery class #1) - that root-cause fix is explicitly
-    OUT OF SCOPE for M7.1. This test exists so a future reader sees this is a known limitation,
-    not an oversight, and so any future fix to the currency-requirement logic has an explicit
-    regression pin to update rather than silently changing behavior here."""
+def test_trillion_claim_without_any_unit_or_currency_is_generic_not_money() -> None:
+    """UPDATED for M7.2: a bare trillion-scale quantity with no currency word and no recognized
+    metric unit ("2,8 трлн" alone, nothing following) is no longer typed `money` at all (that
+    misclassification was M7 discovery's own class #1 root cause) - it is `generic_quantity`,
+    severity-capped at medium, never escalating to FAIL by itself. `_normalize_money()` itself
+    correctly still returns None for it (it was never money), but that is no longer the whole
+    story the way it was in M7.1 - the type system itself now says so, not just a failed lookup."""
+    claims = extract_claims("Стоимость оценивается в 2,8 трлн.")
+    assert claims["money"] == []
+    assert claims["metric_quantity"] == []
+    assert claims["generic_quantity"] == ["2,8 трлн."]  # trailing sentence period included, harmless
     assert _normalize_money("2,8 трлн") is None
 
 
@@ -150,23 +160,30 @@ _847618CD_EVENT_CONTENT = (
 )
 
 
-def test_847618cd_raw_audit_still_fail_high_unchanged() -> None:
-    """The raw, uncalibrated audit result must be byte-for-byte identical to what M7 discovery
-    already found and disclosed - M7.1 must never change raw detection behavior, only add a
-    separate calibrated view alongside it."""
+def test_847618cd_raw_audit_improves_directly_under_m7_2() -> None:
+    """UPDATED for M7.2 (docs/phase17_m7_2_quantity_classification_report.md): this test pinned
+    M7.1-era behavior (raw stays FAIL/high; only calibration rescues it). M7.2 fixes the root
+    cause directly - "320,7 млн входных токенов" is now classified `metric_quantity`, matches the
+    verbatim research-facts phrasing exactly, and is `supported` - it no longer appears as a
+    numeric_flag at all. Raw status improves from FAIL/high to REVIEW/medium on its own, without
+    calibration's rescue rule ever needing to run. The two entity flags (M7 discovery class #2,
+    still out of scope) are what keeps this at REVIEW rather than PASS - see the next test."""
     raw = evaluate_candidate_fact_safety(
         _847618CD_CANDIDATE_TITLE, _847618CD_CANDIDATE_BODY, _847618CD_EVENT_TITLE,
         _847618CD_EVENT_CONTENT, _847618CD_RESEARCH_FACTS,
     )
-    assert raw.status.value == "fail"
-    assert raw.severity.value == "high"
-    assert any(f.startswith("unsupported:320,7") for f in raw.numeric_flags)
+    assert raw.status.value == "review"
+    assert raw.severity.value == "medium"
+    assert raw.numeric_flags == []
+    assert not any(f.startswith("unsupported:320,7") for f in raw.numeric_flags)
 
 
-def test_847618cd_calibrated_status_improves_via_existing_suppression_rule() -> None:
-    """The numeric false positive (320.7 million tokens, verbatim in research_facts) is suppressed
-    by calibration's own already-existing `russian_inflection_or_quote_match` rule - status
-    improves from FAIL/high to REVIEW, without any new suppression rule being written in M7.1."""
+def test_847618cd_calibration_has_nothing_left_to_suppress() -> None:
+    """UPDATED for M7.2: since the numeric flag no longer exists in the raw audit at all (previous
+    test), calibration's `russian_inflection_or_quote_match` rule has nothing to suppress for this
+    case anymore - calibrated status equals raw status, unchanged by calibration. This is the
+    correct outcome, not a regression: M7.1's wiring is still in place and still correct, it simply
+    has less work to do now that M7.2 fixed the claim's classification at the source."""
     raw = evaluate_candidate_fact_safety(
         _847618CD_CANDIDATE_TITLE, _847618CD_CANDIDATE_BODY, _847618CD_EVENT_TITLE,
         _847618CD_EVENT_CONTENT, _847618CD_RESEARCH_FACTS,
@@ -177,10 +194,7 @@ def test_847618cd_calibrated_status_improves_via_existing_suppression_rule() -> 
     )
     assert calibrated.raw_audit_status == raw.status
     assert calibrated.calibrated_status.value == "review"
-    assert any(
-        s.flag.startswith("unsupported:320,7") and s.reason_code == "russian_inflection_or_quote_match"
-        for s in calibrated.suppressed_false_positive_flags
-    )
+    assert calibrated.suppressed_false_positive_flags == []
 
 
 def test_847618cd_entity_and_causal_flags_survive_calibration_known_remaining_issue() -> None:

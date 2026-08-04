@@ -35,7 +35,9 @@ from core.config import settings
 
 FACT_SAFETY_VERSION = "v1"
 
-ClaimType = Literal["money", "percentage", "date", "entity", "quote"]
+ClaimType = Literal[
+    "money", "percentage", "date", "entity", "quote", "metric_quantity", "generic_quantity",
+]
 SupportLevel = Literal["supported", "uncertain", "unsupported"]
 Severity = Literal["low", "medium", "high"]
 DraftStatus = Literal["pass", "review", "block"]
@@ -45,13 +47,27 @@ DraftStatus = Literal["pass", "review", "block"]
 # severity is decided per-finding (centrality-dependent, see _entity_severity) rather than a
 # fixed table value - a secondary/background company name is a materially different risk than
 # the story's own named subject (M5.5's own explicit HIGH vs. MEDIUM entity examples).
+#
+# M7.2 (docs/phase17_m7_2_quantity_classification_report.md): a number is not one claim type.
+# "metric_quantity" (a resolved unit+amount - tokens, parameters, users, requests, calls,
+# operations) is just as specific and fabricatable as a money amount once resolved, so it stays
+# HIGH when genuinely unsupported - the fix is in classification, not in lowering the bar for a
+# real fabrication. "generic_quantity" (a magnitude word with no resolvable currency AND no
+# recognized metric unit - what M7 discovery's own class #1 bug used to force into "money") is
+# capped at MEDIUM: we genuinely do not know what is being counted, so an unresolved claim of
+# this kind must read as "worth a second look" (REVIEW), never "confirmed high-risk fabrication"
+# (FAIL) - approved decision: "unknown quantity -> REVIEW, not FAIL".
 _UNSUPPORTED_SEVERITY: dict[ClaimType, Severity] = {
-    "money": "high", "percentage": "high", "date": "high", "quote": "high", "entity": "medium",
+    "money": "high", "percentage": "high", "date": "high", "quote": "high",
+    "metric_quantity": "high",
+    "entity": "medium", "generic_quantity": "medium",
 }
 # UNCERTAIN findings are always one tier below their UNSUPPORTED equivalent - a real gap worth
 # surfacing for editorial review, never treated as equally alarming as a confirmed contradiction.
 _UNCERTAIN_SEVERITY: dict[ClaimType, Severity] = {
-    "money": "medium", "percentage": "medium", "date": "medium", "quote": "medium", "entity": "low",
+    "money": "medium", "percentage": "medium", "date": "medium", "quote": "medium",
+    "metric_quantity": "medium",
+    "entity": "low", "generic_quantity": "low",
 }
 
 
@@ -106,10 +122,13 @@ def _normalize_text(text: str) -> str:
 
 
 _MONEY_MAGNITUDE: dict[str, float] = {
-    "trillion": 1e12, "трлн": 1e12,
+    "trillion": 1e12, "трлн": 1e12, "триллион": 1e12, "триллиона": 1e12, "триллионов": 1e12,
     "b": 1e9, "bn": 1e9, "billion": 1e9, "млрд": 1e9,
+    "миллиард": 1e9, "миллиарда": 1e9, "миллиардов": 1e9,
     "m": 1e6, "mn": 1e6, "million": 1e6, "млн": 1e6,
+    "миллион": 1e6, "миллиона": 1e6, "миллионов": 1e6,
     "k": 1e3, "thousand": 1e3, "тыс": 1e3,
+    "тысяча": 1e3, "тысячи": 1e3, "тысяч": 1e3,
 }
 # M5.3 calibration: added Yuan/CNY/RMB - the pipeline covers Chinese-market news routinely (the
 # live Trip.com/$770M fine draft, docs/phase15_m5_fact_safety_report.md M5.2 §9) and previously
@@ -142,7 +161,15 @@ _MONEY_NUMBER = r"\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?"
 # Safety unchecked. Scoped narrowly to exactly these two words, per M7.1's own explicit scope (no
 # single-letter "T" shorthand added - not requested, and "t"/"tn" collide far more with ordinary
 # words than "b"/"m"/"k" already do).
-_MONEY_MAGNITUDE_WORD = r"(?:trillion|billion|bn|million|mn|thousand|трлн|млрд|млн|тыс)\b"
+# M7.2: added full Russian word forms (триллион(а|ов)?/миллиард(а|ов)?/миллион(а|ов)?/
+# тысяч(а|и)?) alongside the existing abbreviations - required so a claim like "10 миллионов
+# долларов" (no abbreviation used) resolves at all; genitive forms only (the number-anchored
+# grammatical form), never the nominative plural "тысячи" alone (see `_VAGUE_MAGNITUDE_WORD`'s own
+# comment on why that word is deliberately excluded here to avoid a homograph collision).
+_MONEY_MAGNITUDE_WORD = (
+    r"(?:trillion|billion|bn|million|mn|thousand|"
+    r"трлн|триллион(?:а|ов)?|млрд|миллиард(?:а|ов)?|млн|миллион(?:а|ов)?|тыс|тысяч(?:а|и)?)\b"
+)
 _MONEY_MAGNITUDE_LETTER = r"[bmk]\b"
 _MONEY_CURRENCY_WORD = (
     r"(?:dollars?|euros?|pounds?|rubles?|yuans?|renminbi|"
@@ -212,6 +239,224 @@ def _money_matches(a: tuple[str, float], b: tuple[str, float]) -> bool:
     if a[1] == 0 and b[1] == 0:
         return True
     return abs(a[1] - b[1]) <= max(abs(a[1]), abs(b[1])) * 1e-6
+
+
+# ---------------------------------------------------------------------------
+# M7.2 - quantity claim classification (docs/phase17_m7_2_quantity_classification_report.md)
+#
+# Root cause fixed here (M7 discovery class #1): the ONLY thing that used to distinguish a real
+# money claim ("320,7 млн долларов") from a bare quantity ("320,7 млн токенов") was whether
+# `_normalize_money()` happened to find a resolvable currency - and a bare quantity, having none,
+# was silently typed "money" anyway (via the old, now-removed `_MONEY_EXTRACT_PATTERN` middle
+# branch) and therefore ALWAYS classified `unsupported`/HIGH once the currency lookup failed,
+# regardless of whether it matched evidence perfectly. Numbers are not one claim type - a
+# currency amount, a technology metric (tokens/parameters/users/requests/calls/operations), and
+# an unresolvable vague magnitude ("billions of users") are three different kinds of claim with
+# three different risk profiles, decided here by what immediately follows the number+magnitude,
+# never by NLP or semantic judgment - the same narrow, explicit, hand-curated-list discipline
+# every other rule in this module already follows.
+# ---------------------------------------------------------------------------
+
+# Narrow, explicit, hand-curated (matching _CURRENCY_SYMBOLS'/_ENTITY_ALIAS_GROUPS' own established
+# style) - exactly the six metric families named in M7.2's own approved scope. Deliberately not a
+# general "any noun that could quantify something" list.
+_METRIC_UNIT_WORD = (
+    r"(?:tokens?|parameters?|users?|requests?|calls?|operations?|"
+    r"токен(?:ов|а)?|токен|параметр(?:ов|а)?|параметр|"
+    r"пользовател(?:ей|я)|пользователь|запрос(?:ов|а)?|запрос|"
+    r"вызов(?:ов|а)?|вызов|операци(?:й|и)|операция)"
+)
+_METRIC_UNIT_WORD_RE = re.compile(rf"^{_METRIC_UNIT_WORD}$", re.IGNORECASE)
+_MONEY_CURRENCY_WORD_RE = re.compile(_MONEY_CURRENCY_WORD, re.IGNORECASE)
+# Collapses every inflected form to one canonical key per unit family - explicit and hand-curated,
+# never a stemmer/lemmatizer (this module's own repeated "no general NLP" instruction).
+_METRIC_UNIT_CANONICAL: dict[str, str] = {
+    "token": "tokens", "tokens": "tokens", "токен": "tokens", "токена": "tokens", "токенов": "tokens",
+    "parameter": "parameters", "parameters": "parameters",
+    "параметр": "parameters", "параметра": "parameters", "параметров": "parameters",
+    "user": "users", "users": "users",
+    "пользователь": "users", "пользователя": "users", "пользователей": "users",
+    "request": "requests", "requests": "requests",
+    "запрос": "requests", "запроса": "requests", "запросов": "requests",
+    "call": "calls", "calls": "calls", "вызов": "calls", "вызова": "calls", "вызовов": "calls",
+    "operation": "operations", "operations": "operations",
+    "операция": "operations", "операции": "operations", "операций": "operations",
+}
+# A short, explicit stopword list - only used to keep an ordinary connective word from being
+# mistaken for an unrecognized currency-like term (§ below). Never a general stopword filter for
+# any other purpose in this module.
+_QUANTITY_STOPWORDS = frozenset({
+    "и", "или", "в", "на", "с", "по", "за", "для", "не", "что", "как", "это", "после", "до", "от",
+    "and", "or", "in", "on", "at", "for", "not", "that", "this", "of", "to", "a", "an", "after", "before",
+})
+
+_QUANTITY_TRAILING_WORD = r"[A-Za-zА-Яа-яЁё]+"
+# One word (or two, for a compound term like "Korean Won") of alphabetic text immediately after a
+# number+magnitude match. The negative lookbehind guards the number's own start position against
+# ever starting mid-number: `(?<![\d,.\$€£₽])` excludes a digit, a decimal separator, or a
+# currency symbol immediately before. Without the digit/separator guard, "$10 million" lets the
+# pattern re-match starting at the "0" in "10" (a spurious "0 million" claim); without the comma/
+# period guard, "$1,7 млрд" (Russian decimal-comma) lets it re-match starting at the "7" after the
+# comma (a spurious "7 млрд ..." claim pulling in whatever word follows) - BOTH found and fixed via
+# direct testing against the existing test suite, not assumed safe. The currency-symbol guard
+# separately stops this from re-matching a substring `_MONEY_EXTRACT_PATTERN`'s own
+# currency-symbol branch already consumed, e.g. "$1.7 billion" -> "1.7 billion". What the trailing
+# text turns out to be (a currency word, a metric unit, an unrecognized term, or nothing at all) is
+# decided in Python afterward, in `_extract_quantity_claims()` - the regex itself makes no
+# judgment.
+_QUANTITY_EXTRACT_PATTERN = re.compile(
+    rf"(?<![\d,.\$€£₽])"
+    rf"(?P<prefix>(?P<number>{_MONEY_NUMBER})\s*"
+    rf"(?:(?P<magnitude>{_MONEY_MAGNITUDE_WORD})|(?P<magnitude_letter>{_MONEY_MAGNITUDE_LETTER}))\.?)"
+    # [^\S\n]+ (whitespace-but-not-newline), matching `_ENTITY_RUN_PATTERN`'s own established
+    # discipline exactly - a trailing capture must never span a newline, so a claim can never
+    # accidentally pull in the first word of an unrelated following paragraph/line.
+    rf"(?:[^\S\n]+(?P<trailing>{_QUANTITY_TRAILING_WORD}(?:[^\S\n]+{_QUANTITY_TRAILING_WORD})?))?",
+    re.IGNORECASE,
+)
+# A bare number (no magnitude word at all) immediately followed by a recognized metric unit -
+# "1129 вызовов"/"1,129 tool calls". Safe to always trust without further disambiguation
+# (unlike an arbitrary bare-number+word pair, which is NOT extracted at all) because the metric
+# unit list itself is the narrow, curated signal - this can never fire on "50 people" or
+# "12 photos".
+_BARE_METRIC_EXTRACT_PATTERN = re.compile(
+    rf"(?<![\d,.\$€£₽])(?:{_MONEY_NUMBER})\s+{_METRIC_UNIT_WORD}\b", re.IGNORECASE,
+)
+_METRIC_QUANTITY_PATTERN = re.compile(
+    rf"(?P<number>{_MONEY_NUMBER})\s*"
+    rf"(?:(?:(?P<magnitude>{_MONEY_MAGNITUDE_WORD})|(?P<magnitude_letter>{_MONEY_MAGNITUDE_LETTER}))\.?)?"
+    rf"\s+(?P<unit>{_METRIC_UNIT_WORD})\b",
+    re.IGNORECASE,
+)
+# The vague, numberless magnitude form ("billions of users", "миллиарды пользователей") - always
+# generic_quantity, never money or metric, because there is no specific number to resolve at all.
+# Deliberately uses only the PLURAL/nominative magnitude words (millions/миллионы, not
+# million/млн) - grammatically distinct from the singular forms used directly after an exact
+# number in Russian and English alike, so this can never overlap with `_QUANTITY_EXTRACT_PATTERN`.
+# "тысячи" is deliberately excluded from the Russian set: unlike миллионы/миллиарды/триллионы, it
+# is a genuine homograph with the genitive-singular form Russian grammar requires after 2/3/4
+# ("3 тысячи пользователей" = "3 thousand users", NUMBER-anchored) - including it here would
+# double-extract that case. English "thousands" has no such collision ("thousand"/"thousands" are
+# spelled differently) and is kept.
+_VAGUE_MAGNITUDE_WORD = r"(?:millions|billions|trillions|thousands|миллионы|миллиарды|триллионы)"
+_VAGUE_QUANTITY_PATTERN = re.compile(
+    rf"\b{_VAGUE_MAGNITUDE_WORD}\s+(?:of\s+)?(?P<followed_by>[a-zа-яё]{{3,}})\b", re.IGNORECASE,
+)
+
+
+def _normalize_metric_quantity(raw_text: str) -> tuple[str, float] | None:
+    """Returns (unit_canonical, amount) - e.g. "320,7 млн токенов" -> ("tokens", 320_700_000.0),
+    "1129 вызовов" -> ("calls", 1129.0). No currency lookup at all - a metric quantity is never
+    money, by construction (the unit word itself is the whole signal)."""
+    match = _METRIC_QUANTITY_PATTERN.fullmatch(raw_text.strip())
+    if match is None:
+        return None
+    number = _parse_money_number(match.group("number"))
+    if number is None:
+        return None
+    magnitude_key = (match.group("magnitude") or match.group("magnitude_letter") or "").lower()
+    amount = number * _MONEY_MAGNITUDE.get(magnitude_key, 1.0)
+    unit = _METRIC_UNIT_CANONICAL.get(match.group("unit").lower())
+    if unit is None:
+        return None
+    return unit, amount
+
+
+def _metric_matches(a: tuple[str, float], b: tuple[str, float]) -> bool:
+    """Structurally identical to `_money_matches()` - same unit family, amount equal within the
+    same relative tolerance."""
+    if a[0] != b[0]:
+        return False
+    if a[1] == 0 and b[1] == 0:
+        return True
+    return abs(a[1] - b[1]) <= max(abs(a[1]), abs(b[1])) * 1e-6
+
+
+def _normalize_ad_hoc_currency(raw_text: str) -> tuple[str, float] | None:
+    """M7.2 - "Support currency-like patterns... do not rely only on hardcoded currency names":
+    for a quantity claim whose trailing word is neither a known currency word nor a recognized
+    metric unit - e.g. "0.7 trillion Korean Won"/"0,7 трлн вон" (a real production example, docs/
+    phase17_m7_2_quantity_classification_plan.md §"Failure examples" #3). Never guesses a
+    real-world currency code or conversion rate - the trailing word itself becomes the ad hoc
+    "currency" code, so two claims naming the SAME unrecognized term can still be compared for
+    equal amount via the existing `_money_matches()`, unchanged. This is what lets a genuinely-
+    sourced foreign-currency figure not in `_CURRENCY_SYMBOLS` still resolve as supported, without
+    a new hardcoded currency-list entry per country."""
+    match = _QUANTITY_EXTRACT_PATTERN.fullmatch(raw_text.strip())
+    if match is None or not match.group("trailing"):
+        return None
+    number = _parse_money_number(match.group("number"))
+    if number is None:
+        return None
+    magnitude_key = (match.group("magnitude") or match.group("magnitude_letter") or "").lower()
+    amount = number * _MONEY_MAGNITUDE.get(magnitude_key, 1.0)
+    ad_hoc_currency = _normalize_text(match.group("trailing"))
+    return ad_hoc_currency, amount
+
+
+def _classify_quantity_trailing(trailing_word: str) -> Literal["money", "metric_quantity", "generic_quantity"]:
+    """Decides what a number+magnitude match's trailing text represents - narrow, explicit,
+    ordered checks against hand-curated lists, never NLP or semantic inference (M7.2's own
+    explicit design). Only the FIRST trailing word decides the type; a second captured word
+    (e.g. "Won" in "Korean Won") is content, not a second decision point."""
+    first_word = trailing_word.strip().split()[0] if trailing_word.strip() else ""
+    if not first_word:
+        return "generic_quantity"
+    if _MONEY_CURRENCY_WORD_RE.fullmatch(first_word):
+        return "money"
+    if _METRIC_UNIT_WORD_RE.fullmatch(first_word):
+        return "metric_quantity"
+    if first_word.lower() in _QUANTITY_STOPWORDS or not first_word.isalpha() or len(first_word) < 2:
+        return "generic_quantity"
+    return "money"  # unrecognized currency-like term - resolved via _normalize_ad_hoc_currency()
+
+
+def _extract_quantity_claims(text: str) -> dict[str, list[str]]:
+    """Disambiguates every bare number+magnitude match into money / metric_quantity /
+    generic_quantity, based only on what immediately follows it - replaces the old, single
+    "always money" extraction (`_MONEY_EXTRACT_PATTERN`'s now-removed middle branch)."""
+    money: list[str] = []
+    metric: list[str] = []
+    generic: list[str] = []
+
+    for m in _QUANTITY_EXTRACT_PATTERN.finditer(text):
+        prefix = m.group("prefix").strip()
+        trailing = (m.group("trailing") or "").strip()
+        if not trailing:
+            generic.append(prefix)
+            continue
+        claim_type = _classify_quantity_trailing(trailing)
+        first_word = trailing.split()[0]
+        if claim_type == "generic_quantity":
+            generic.append(prefix)
+        elif claim_type == "metric_quantity":
+            metric.append(f"{prefix} {first_word}")
+        elif _MONEY_CURRENCY_WORD_RE.fullmatch(first_word):
+            # Known currency word: use ONLY that word - a real bug, found via the 281-draft
+            # production backtest (docs/phase17_m7_2_quantity_classification_report.md), let a
+            # spurious second captured word (e.g. the first word of the NEXT sentence, or an
+            # unrelated preposition later in the same sentence) ride along into the claim string
+            # and break normalization, turning a real, matchable currency claim into a spurious
+            # HIGH-severity false positive.
+            money.append(f"{prefix} {first_word}")
+        else:
+            # Unrecognized/ad hoc currency-like term - here (and only here) a second word is
+            # legitimately part of the term itself (e.g. "Korean Won").
+            money.append(f"{prefix} {trailing}")
+
+    for m in _BARE_METRIC_EXTRACT_PATTERN.finditer(text):
+        metric.append(m.group(0).strip())
+
+    for m in _VAGUE_QUANTITY_PATTERN.finditer(text):
+        # A real false positive found via the 281-draft production backtest: "миллионы после"
+        # ("millions after [an injury]") is not "millions of X" - "после" is a preposition
+        # continuing an unrelated clause, not the counted noun. Skip when the word immediately
+        # following the vague magnitude is a stopword/preposition rather than a genuine noun.
+        if m.group("followed_by").lower() in _QUANTITY_STOPWORDS:
+            continue
+        generic.append(m.group(0).strip())
+
+    return {"money": money, "metric_quantity": metric, "generic_quantity": generic}
 
 
 _PERCENTAGE_PATTERN = re.compile(
@@ -347,12 +592,16 @@ def _normalize_entity(raw_text: str) -> str:
 _MONEY_EXTRACT_PATTERN = re.compile(
     # Currency-symbol-anchored: "$1.7 billion", "$1,7 млрд", "$2 billion", "$1.7B", "$50".
     rf"(?:\$|€|£|₽)\s*(?:{_MONEY_NUMBER})(?:\s*{_MONEY_MAGNITUDE_WORD}|{_MONEY_MAGNITUDE_LETTER})?\.?"
-    # Magnitude-word-anchored, no currency symbol required: "1.7 billion dollars", "1,7 млрд долларов".
-    rf"|(?:{_MONEY_NUMBER})\s*{_MONEY_MAGNITUDE_WORD}\.?\s*(?:{_MONEY_CURRENCY_WORD})?"
     # Currency-word-anchored, no symbol and no magnitude word: "50 dollars", "50 долларов".
     rf"|(?:{_MONEY_NUMBER})\s*{_MONEY_CURRENCY_WORD}",
     re.IGNORECASE,
 )
+# M7.2: the old third branch here - "magnitude-word-anchored, no currency symbol required"
+# ("1.7 billion dollars", but also, incorrectly, "320.7 million tokens") - is REMOVED. Every
+# number+magnitude match with no currency SYMBOL is now disambiguated by
+# `_extract_quantity_claims()` below (money-with-known-or-ad-hoc-currency-word / metric_quantity /
+# generic_quantity), never assumed to be money by default. `_normalize_money()` itself is
+# unchanged - this only changes what extract_claims() feeds into it.
 _PERCENTAGE_EXTRACT_PATTERN = re.compile(
     rf"(?:{_MONEY_NUMBER})\s*(?:%|percent|процент(?:а|ов)?)", re.IGNORECASE
 )
@@ -438,8 +687,12 @@ def extract_claims(text: str) -> dict[ClaimType, list[str]]:
     """Deterministic. Returns raw (un-normalized) claim substrings grouped by type - purely
     regex-based (M5.2: "do not build a general natural-language parser... do not add a new NLP
     service"), using only the stdlib `re` module already used throughout this codebase."""
+    quantity = _extract_quantity_claims(text)
+    money_claims = [
+        m.group(0).strip() for m in _MONEY_EXTRACT_PATTERN.finditer(text) if m.group(0).strip()
+    ] + quantity["money"]
     return {
-        "money": [m.group(0).strip() for m in _MONEY_EXTRACT_PATTERN.finditer(text) if m.group(0).strip()],
+        "money": money_claims,
         "percentage": [m.group(0).strip() for m in _PERCENTAGE_EXTRACT_PATTERN.finditer(text)],
         "date": [m.group(0).strip() for m in _DATE_EXTRACT_PATTERN.finditer(text)],
         "entity": _extract_entities(text),
@@ -448,6 +701,8 @@ def extract_claims(text: str) -> dict[ClaimType, list[str]]:
             for m in _QUOTE_EXTRACT_PATTERN.finditer(text)
             if _MULTI_WORD_PATTERN.search(quoted := next(g for g in m.groups() if g is not None).strip())
         ],
+        "metric_quantity": quantity["metric_quantity"],
+        "generic_quantity": quantity["generic_quantity"],
     }
 
 
@@ -456,15 +711,39 @@ def extract_claims(text: str) -> dict[ClaimType, list[str]]:
 # ---------------------------------------------------------------------------
 
 
+def _resolve_money(claim: str) -> tuple[str, float] | None:
+    """Known currency first (unchanged, existing `_normalize_money()`); only when that fails,
+    fall back to the M7.2 ad hoc/unrecognized-currency-term path. Tried in this order so a real,
+    recognized currency is never accidentally reinterpreted via the ad hoc fallback."""
+    return _normalize_money(claim) or _normalize_ad_hoc_currency(claim)
+
+
 def _claim_matches_any(claim_type: ClaimType, claim: str, evidence_claims: list[str]) -> bool:
     if claim_type == "money":
-        normalized_money = _normalize_money(claim)
+        normalized_money = _resolve_money(claim)
         if normalized_money is None:
             return False
         return any(
-            (parsed := _normalize_money(candidate)) is not None and _money_matches(normalized_money, parsed)
+            (parsed := _resolve_money(candidate)) is not None and _money_matches(normalized_money, parsed)
             for candidate in evidence_claims
         )
+    if claim_type == "metric_quantity":
+        normalized_metric = _normalize_metric_quantity(claim)
+        if normalized_metric is None:
+            return False
+        return any(
+            (parsed := _normalize_metric_quantity(candidate)) is not None
+            and _metric_matches(normalized_metric, parsed)
+            for candidate in evidence_claims
+        )
+    if claim_type == "generic_quantity":
+        # No specific number to resolve - the same normalized-substring-containment rule "quote"
+        # already uses (never fuzzy). A generic_quantity claim can still be "supported" if the
+        # same vague phrase is literally echoed in evidence; otherwise it falls through to
+        # `_classify_claim()`'s own uncertain/unsupported logic, capped at MEDIUM severity either
+        # way (never escalates to FAIL by itself - the actual fix for M7 discovery's class #1).
+        normalized_generic = _normalize_text(claim)
+        return any(normalized_generic in _normalize_text(candidate) for candidate in evidence_claims)
     if claim_type == "percentage":
         normalized_percentage = _normalize_percentage(claim)
         if normalized_percentage is None:

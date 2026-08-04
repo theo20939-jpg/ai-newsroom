@@ -132,7 +132,11 @@ def _suppress_hedge_language(flag: str) -> SuppressedFlag | None:
 
 def _sentence_claims(sentence: str) -> list[str]:
     claims = extract_claims(sentence)
-    return [c for key in ("money", "percentage", "date", "entity", "quote") for c in claims[key]]
+    return [
+        c
+        for key in ("money", "percentage", "date", "entity", "quote", "metric_quantity", "generic_quantity")
+        for c in claims[key]
+    ]
 
 
 def _suppress_qualitative_synthesis(flag: str, source_text: str) -> SuppressedFlag | None:
