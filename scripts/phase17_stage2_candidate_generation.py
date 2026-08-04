@@ -99,10 +99,19 @@ _DEFAULT_OUTPUT_PATH = "scripts/_phase17_stage2_candidate_results.json"
 VALID_EDITORIAL_PREFERENCES = {"not_yet_reviewed", "baseline", "candidate", "neither"}
 
 
+_TERMINAL_GENERATION_STATUSES = {
+    "valid", "still_empty", "error", "skipped_insufficient_source", "skipped_max_cases_reached",
+}
+
+
 def _load_existing_output(output_path: str) -> dict[str, dict[str, Any]]:
-    """Resume support: a prior run's already-resolved records (generation_status set to anything
-    other than "not_attempted") are kept, never regenerated - this is also what protects a human's
-    already-recorded editorial_preference/editorial_notes/failure_reasons across a re-run."""
+    """Resume support: a prior run's already-*terminally* resolved records are kept, never
+    regenerated - this is also what protects a human's already-recorded editorial_preference/
+    editorial_notes/failure_reasons across a re-run. Deliberately excludes "dry_run" and
+    "live_not_allowed": those are placeholder outcomes from a run that made no generation attempt
+    at all (by design - see the dry-run-first workflow this script's own docstring documents), not
+    a resolved case - a case must never get stuck at "dry_run" forever just because a dry-run was
+    performed before the real live run."""
     path = Path(output_path)
     if not path.exists():
         return {}
@@ -113,7 +122,7 @@ def _load_existing_output(output_path: str) -> dict[str, dict[str, Any]]:
     return {
         r["draft_id"]: r
         for r in data.get("records", [])
-        if r.get("generation_status") and r["generation_status"] != "not_attempted"
+        if r.get("generation_status") in _TERMINAL_GENERATION_STATUSES
     }
 
 

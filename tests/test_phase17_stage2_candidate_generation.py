@@ -86,14 +86,19 @@ def test_load_existing_output_keeps_only_resolved_generation_status(tmp_path: Pa
     path.write_text(
         json.dumps({"records": [
             {"draft_id": "resolved-valid", "generation_status": "valid", "editorial_preference": "candidate"},
-            {"draft_id": "resolved-dry-run", "generation_status": "dry_run"},
+            {"draft_id": "resolved-still-empty", "generation_status": "still_empty"},
+            {"draft_id": "resolved-error", "generation_status": "error"},
+            {"draft_id": "placeholder-dry-run", "generation_status": "dry_run"},
+            {"draft_id": "placeholder-live-not-allowed", "generation_status": "live_not_allowed"},
             {"draft_id": "unresolved", "generation_status": "not_attempted"},
             {"draft_id": "missing-status"},
         ]}),
         encoding="utf-8",
     )
     existing = stage2._load_existing_output(str(path))
-    assert set(existing) == {"resolved-valid", "resolved-dry-run"}
+    # "dry_run"/"live_not_allowed" are placeholder outcomes from a run that made no generation
+    # attempt at all - a case must never get stuck there forever just because a dry-run ran first.
+    assert set(existing) == {"resolved-valid", "resolved-still-empty", "resolved-error"}
     # The human's own recorded preference on a resumed record must survive untouched.
     assert existing["resolved-valid"]["editorial_preference"] == "candidate"
 
