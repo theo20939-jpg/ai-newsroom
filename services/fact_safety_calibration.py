@@ -61,12 +61,16 @@ FACT_SAFETY_CALIBRATION_POLICY_VERSION = "v1"
 # (a second, independent copy on purpose: this module's own suppression rule must keep working for
 # a `causal_flags` list constructed directly, not only one produced by the raw detector - see that
 # module's own docstring for why both copies exist).
+#
+# M7.4.2 (docs/phase17_m7_4_2_causal_trigger_expansion_report.md): added "не подтвержда\w*" (active
+# verb, "[данные] не подтверждают") alongside the existing "не подтвержден\w*" (passive participle
+# only) - a real false positive found via the 281-draft production backtest, not assumed safe.
 _EPISTEMIC_LIMITATION_RE = re.compile(
     r"\b(нельзя(?:\s+\w+){0,2}\s+(?:утвержда\w*|сказать|сделать\s+вывод|счита\w*\s+установленн\w*)|"
     r"неясно|непонятно|неизвестно|"
     r"нет\s+(?:доказательств|оснований|подтверждени\w*)|"
     r"основани\w*\s+нет|"
-    r"не\s+подтвержден\w*|пока\s+не\s+установлен\w*|нет\s+подтвержден\w*|"
+    r"не\s+подтвержден\w*|не\s+подтвержда\w*|пока\s+не\s+установлен\w*|нет\s+подтвержден\w*|"
     r"остаётся\s+неподтвержд\w*|остается\s+неподтвержд\w*|"
     r"cannot\s+be\s+considered\s+established|no\s+grounds\s+to\s+consider|"
     r"no\s+evidence\s+(?:that|for)|unclear\s+whether|it\s+is\s+unclear|"

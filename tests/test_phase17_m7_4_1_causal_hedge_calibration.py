@@ -56,22 +56,18 @@ def test_must_not_flag_poetomu_nelzya_sdelat_vyvod() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_privelo_k_not_yet_detectable_m7_4_2_scope() -> None:
-    """"X привело к Y" uses no current `_CAUSAL_RE` trigger word - M7.4.1 deliberately does not
-    add causal vocabulary (that is M7.4.2). This test pins the CURRENT, correct-for-this-milestone
-    behavior and must be updated (not silently left) once M7.4.2 adds the trigger."""
-    assert _CAUSAL_RE.search("X привело к Y.") is None
-    assert _scan_qualitative_flags("X привело к Y.") == []
-
-
-def test_vyzvalo_not_yet_detectable_m7_4_2_scope() -> None:
-    assert _CAUSAL_RE.search("X вызвало снижение.") is None
-    assert _scan_qualitative_flags("X вызвало снижение.") == []
-
-
-def test_stalo_prichinoi_not_yet_detectable_m7_4_2_scope() -> None:
-    assert _CAUSAL_RE.search("Это стало причиной роста.") is None
-    assert _scan_qualitative_flags("Это стало причиной роста.") == []
+def test_privelo_vyzvalo_stalo_prichinoi_now_detectable_see_m7_4_2() -> None:
+    """UPDATED for M7.4.2 (docs/phase17_m7_4_2_causal_trigger_expansion_report.md): this test
+    originally pinned "X привело к Y"/"X вызвало снижение"/"Это стало причиной роста" as NOT
+    detectable, since M7.4.1 deliberately added no causal vocabulary. M7.4.2 has since added
+    exactly these triggers (sequenced strictly after M7.4.1's hedge-awareness fix, per M7.4
+    discovery's own explicit requirement) - see `tests/test_phase17_m7_4_2_causal_trigger_
+    expansion.py` for the full, now-passing positive detection tests. This placeholder is kept
+    only so a reader following this file's own history does not need to guess where the
+    "not yet detectable" claim went."""
+    assert _CAUSAL_RE.search("X привело к Y.") is not None
+    assert _CAUSAL_RE.search("X вызвало снижение.") is not None
+    assert _CAUSAL_RE.search("Это стало причиной роста.") is not None
 
 
 # ---------------------------------------------------------------------------

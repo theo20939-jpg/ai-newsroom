@@ -26,7 +26,19 @@ from services.fact_safety import FactEvidence, evaluate_fact_safety
 _SENTENCE_SPLIT_RE = re.compile(r"[.!?…]+(?:\s|$)")
 
 _CAUSAL_RE = re.compile(
-    r"\b(поэтому|это означает|в результате|следовательно|as a result|this means|that's why)\b",
+    r"\b(поэтому|это означает|в результате|следовательно|as a result|this means|that's why|"
+    # M7.4.2 (docs/phase17_m7_4_2_causal_trigger_expansion_report.md): the connector-word triggers
+    # above never covered the single most common Russian causal-VERB construction ("X led to Y"),
+    # confirmed as a real false-negative gap in M7 discovery. Added only after M7.4.1's
+    # hedge-awareness fix landed and was backtested - shipping this without that guard first would
+    # have created large-scale new false positives on hedged sentences using this construction
+    # (M7.4 discovery's own explicit sequencing requirement). Grammatical siblings of each
+    # requested form are included (all genders/numbers of the same past-tense verb) - narrow,
+    # explicit, hand-curated, never a general verb-conjugation rule.
+    r"привел[оаи]\s+к|привёл\s+к|приводит\s+к|приводят\s+к|"
+    r"вызвал[оаи]?|"
+    r"стал[оаи]?\s+причиной|"
+    r"caused|led\s+to|resulted\s+in)\b",
     re.IGNORECASE,
 )
 _SUPERLATIVE_RE = re.compile(
@@ -56,12 +68,18 @@ _HEDGE_RE = re.compile(
 # version this supersedes (docs/phase17_m7_2_quantity_classification_plan.md's own "Fix D",
 # docs/phase17_m7_4_causal_calibration_discovery.md), found live on the real `847618cd` production
 # case and never fixed until now.
+#
+# M7.4.2 (docs/phase17_m7_4_2_causal_trigger_expansion_report.md): added "не подтвержда\w*" (the
+# ACTIVE verb form, "[данные] не подтверждают" - "[the data] does not confirm") alongside the
+# existing "не подтвержден\w*" (PASSIVE participle only, "не подтверждено"/"не подтверждена") - a
+# real false positive found via the 281-draft production backtest this milestone's own report
+# requires ("Данные не подтверждают, что кампания стала причиной результата"), not assumed safe.
 _EPISTEMIC_LIMITATION_RE = re.compile(
     r"\b(нельзя(?:\s+\w+){0,2}\s+(?:утвержда\w*|сказать|сделать\s+вывод|счита\w*\s+установленн\w*)|"
     r"неясно|непонятно|неизвестно|"
     r"нет\s+(?:доказательств|оснований|подтверждени\w*)|"
     r"основани\w*\s+нет|"
-    r"не\s+подтвержден\w*|пока\s+не\s+установлен\w*|нет\s+подтвержден\w*|"
+    r"не\s+подтвержден\w*|не\s+подтвержда\w*|пока\s+не\s+установлен\w*|нет\s+подтвержден\w*|"
     r"остаётся\s+неподтвержд\w*|остается\s+неподтвержд\w*|"
     r"cannot\s+be\s+considered\s+established|no\s+grounds\s+to\s+consider|"
     r"no\s+evidence\s+(?:that|for)|unclear\s+whether|it\s+is\s+unclear|"
