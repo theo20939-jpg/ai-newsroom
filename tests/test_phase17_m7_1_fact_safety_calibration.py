@@ -165,16 +165,24 @@ def test_847618cd_raw_audit_improves_directly_under_m7_2() -> None:
     M7.1-era behavior (raw stays FAIL/high; only calibration rescues it). M7.2 fixes the root
     cause directly - "320,7 млн входных токенов" is now classified `metric_quantity`, matches the
     verbatim research-facts phrasing exactly, and is `supported` - it no longer appears as a
-    numeric_flag at all. Raw status improves from FAIL/high to REVIEW/medium on its own, without
-    calibration's rescue rule ever needing to run. The two entity flags (M7 discovery class #2,
-    still out of scope) are what keeps this at REVIEW rather than PASS - see the next test."""
+    numeric_flag at all. Raw status improves from FAIL/high to REVIEW on its own, without
+    calibration's rescue rule ever needing to run.
+
+    Severity note (UPDATED again for M7.3, docs/phase17_m7_3_entity_calibration_report.md): this
+    test originally pinned `severity == "medium"` here, because the two entity flags (M7 discovery
+    class #2) still survived at that point. M7.3's generic-prefix stripping now also removes both
+    entity flags from THIS specific case ("Автономный ИИ-агент"/"Агент Saul" both strip down to
+    nothing or to a bare word that fails the single-token check - see the next test) - severity
+    drops to "low", driven only by the remaining causal flag. This is a real, intentional
+    improvement from M7.3, not a fluke."""
     raw = evaluate_candidate_fact_safety(
         _847618CD_CANDIDATE_TITLE, _847618CD_CANDIDATE_BODY, _847618CD_EVENT_TITLE,
         _847618CD_EVENT_CONTENT, _847618CD_RESEARCH_FACTS,
     )
     assert raw.status.value == "review"
-    assert raw.severity.value == "medium"
+    assert raw.severity.value == "low"
     assert raw.numeric_flags == []
+    assert raw.entity_flags == []
     assert not any(f.startswith("unsupported:320,7") for f in raw.numeric_flags)
 
 
@@ -197,11 +205,16 @@ def test_847618cd_calibration_has_nothing_left_to_suppress() -> None:
     assert calibrated.suppressed_false_positive_flags == []
 
 
-def test_847618cd_entity_and_causal_flags_survive_calibration_known_remaining_issue() -> None:
-    """Documents, with a real regression pin, that calibration alone does NOT fully resolve
-    847618cd: the two entity flags (M7 discovery class #2 - out of scope for M7.1) remain
-    true_positive, and the causal flag (class #3 - also out of scope) remains unresolved. This is
-    the exact "known remaining issue" M7.1's own report discloses, not an unexpected result."""
+def test_847618cd_only_causal_flag_survives_after_m7_3_known_remaining_issue() -> None:
+    """UPDATED for M7.3 (docs/phase17_m7_3_entity_calibration_report.md): this test originally
+    documented that BOTH entity flags ("Автономный ИИ-агент"/"Агент Saul") survived calibration as
+    true_positive - the exact "known remaining issue" M7.1's/M7.2's own reports disclosed. M7.3's
+    generic-prefix stripping (Option A) now removes both: "Автономный ИИ-агент" strips down to
+    nothing (both words are generic) and "Агент Saul" strips down to bare "Saul", which does not
+    independently pass the single-token strong-entity check - a disclosed, accepted M7.3
+    limitation (docs/phase17_m7_3_entity_calibration_report.md's own "remaining recall
+    limitations"), not a new regression. Only the causal flag (M7 discovery class #3, still out of
+    scope) remains."""
     raw = evaluate_candidate_fact_safety(
         _847618CD_CANDIDATE_TITLE, _847618CD_CANDIDATE_BODY, _847618CD_EVENT_TITLE,
         _847618CD_EVENT_CONTENT, _847618CD_RESEARCH_FACTS,
@@ -210,8 +223,7 @@ def test_847618cd_entity_and_causal_flags_survive_calibration_known_remaining_is
         raw, draft_title=_847618CD_CANDIDATE_TITLE, news_event_title=_847618CD_EVENT_TITLE,
         news_event_content=_847618CD_EVENT_CONTENT, research_facts=_847618CD_RESEARCH_FACTS,
     )
-    assert any(f.startswith("unsupported:Автономный") for f in calibrated.true_positive_flags)
-    assert any(f.startswith("unsupported:Агент") for f in calibrated.true_positive_flags)
+    assert calibrated.true_positive_flags == []
     assert any(f.startswith("causal_connector:") for f in calibrated.unresolved_flags)
 
 

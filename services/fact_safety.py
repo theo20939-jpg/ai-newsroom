@@ -659,7 +659,92 @@ def _is_strong_single_token_entity(token: str) -> bool:
         return True
     if _INTERNAL_CAPITAL_PATTERN.match(token[1:]):
         return True
-    return _normalize_entity(token) in _ENTITY_ALIAS_CANONICAL_VALUES
+    # M7.3: checks the bare alias form directly - deliberately does NOT route through
+    # `_normalize_entity()`'s own descriptive-suffix stripping (-система/-платформа/-модель/etc).
+    # That stripping exists to compare two ALREADY-confirmed entity strings to each other (the
+    # original M5.3 purpose); using it here let a hyphenated technology descriptor like
+    # "ИИ-модель" collapse to bare "ии", which then matched the "ИИ"/"AI" alias and made a purely
+    # generic compound look like a strong entity signal - a real, pre-existing false positive
+    # found while verifying this milestone's own examples (docs/
+    # phase17_m7_3_entity_calibration_report.md), not introduced by it. "ИИ" alone (no hyphenated
+    # suffix) is unaffected - it already returns True via the ALL-CAPS branch above.
+    bare = _normalize_text(token)
+    bare = _ENTITY_PREFIX_PATTERN.sub("", bare)
+    bare = _ENTITY_SUFFIX_PATTERN.sub("", bare).strip()
+    bare = _POSSESSIVE_SUFFIX_PATTERN.sub("", bare).strip()
+    bare = bare.strip(" .,’'\"")
+    return bare in _ENTITY_ALIAS_CANONICAL
+
+
+# M7.3 (docs/phase17_m7_3_entity_calibration_report.md) - Option A, generic-prefix stripping.
+# Root cause: a multi-word capitalized run was trusted unconditionally as a real proper-noun
+# phrase, with no per-word check the way the single-token path already has - so "Автономный
+# ИИ-агент" (a generic adjective + a technology-descriptor noun, both capitalized only from
+# sentence-initial position) was indistinguishable from a genuine multi-word name like "Kimi K3".
+# Narrow, explicit, hand-curated word lists only - never a morphological/stemming rule, matching
+# every other calibration already in this module. The role-noun vocabulary intentionally overlaps
+# with services/candidate_fact_safety.py's own `_DESCRIPTIVE_NOUN_RE` (a different purpose -
+# flagging an unlisted explained term) - kept in sync by hand, not imported, to avoid a new
+# cross-module coupling neither file currently has.
+_ENTITY_GENERIC_ADJECTIVE_WORDS = frozenset({
+    "автономный", "автономная", "автономное", "автономные",
+    "китайский", "китайская", "китайское", "китайские",
+    "российский", "российская", "российское", "российские",
+    "американский", "американская", "американское", "американские",
+})
+_ENTITY_GENERIC_ROLE_NOUN_WORDS = frozenset({
+    "агент", "компания", "модель", "платформа", "стартап", "разработчик", "производитель",
+    "agent", "company", "model", "platform", "startup", "developer", "manufacturer",
+})
+# A hyphenated compound whose own suffix names a generic technology-descriptor category (mirrors
+# `_ENTITY_DESCRIPTIVE_SUFFIX_PATTERN`'s own word list, used for a different purpose - matching,
+# not extraction - kept in sync by hand) - e.g. "ИИ-модель"/"ИИ-агент"/"ИИ-платформа" is stripped
+# as one whole leading word, never decomposed further.
+_ENTITY_GENERIC_HYPHENATED_RE = re.compile(
+    r"^\w+-(?:система|технология|платформа|модель|метод|алгоритм|инструмент|агент)$", re.IGNORECASE,
+)
+
+
+def _is_unconditionally_generic_word(word: str) -> bool:
+    """Role/category nouns and hyphenated technology descriptors - generic regardless of context,
+    safe to strip unconditionally. Nationality/generic ADJECTIVES are deliberately NOT included
+    here - see `_strip_generic_entity_prefix()`'s own docstring for why they need a look-ahead
+    instead."""
+    normalized = word.casefold()
+    if normalized in _ENTITY_GENERIC_ROLE_NOUN_WORDS:
+        return True
+    return bool(_ENTITY_GENERIC_HYPHENATED_RE.match(word))
+
+
+def _strip_generic_entity_prefix(value: str) -> str:
+    """Iteratively strips LEADING generic words from an otherwise-qualifying multi-word
+    capitalized run, before the remainder is trusted as a real proper-noun phrase. Two
+    deliberately asymmetric rules:
+    - A role/category noun or hyphenated technology descriptor is stripped unconditionally -
+      these are generic regardless of context.
+    - A nationality/generic ADJECTIVE is stripped ONLY when the word immediately following it is
+      ALSO unconditionally generic - otherwise it is left in place. This is what distinguishes
+      "Китайская ИИ-модель Kimi K3" (strip "Китайская" - the next word is a generic descriptor,
+      continue stripping) from "Российская Федерация" (keep "Российская" - "Федерация" is not a
+      recognized generic word, so this reads as a genuine official proper name, not a generic-
+      adjective-plus-descriptor phrase - found and fixed via direct testing, not assumed safe).
+    Only ever strips from the front, never the middle or end, never guessed beyond these exact
+    hand-curated lists. Returns the (possibly empty, possibly unchanged) remainder as a string."""
+    words = value.split()
+    while words:
+        first = words[0]
+        if _is_unconditionally_generic_word(first):
+            words = words[1:]
+            continue
+        if (
+            first.casefold() in _ENTITY_GENERIC_ADJECTIVE_WORDS
+            and len(words) >= 2
+            and _is_unconditionally_generic_word(words[1])
+        ):
+            words = words[1:]  # strip only the adjective - next iteration strips the descriptor
+            continue
+        break
+    return " ".join(words)
 
 
 def _extract_entities(text: str) -> list[str]:
@@ -671,10 +756,22 @@ def _extract_entities(text: str) -> list[str]:
         has_suffix = bool(_LEGAL_SUFFIX_PATTERN.search(value))
         core = _LEGAL_SUFFIX_PATTERN.sub("", value).strip()
         token_count = len(core.split())
-        if token_count >= 2:
-            candidates.append(value)  # multi-word run - a real proper-noun-phrase signal
-        elif has_suffix:
-            candidates.append(value)  # "Acme Inc" even if "Acme" alone would not qualify
+        if has_suffix:
+            candidates.append(value)  # "Acme Inc" even if "Acme" alone would not qualify -
+            # generic-prefix stripping is not applied alongside a legal suffix (an untested
+            # combination in this pipeline's real data, out of scope for M7.3's own narrow fix).
+        elif token_count >= 2:
+            stripped = _strip_generic_entity_prefix(core)
+            stripped_tokens = stripped.split()
+            if len(stripped_tokens) >= 2:
+                candidates.append(stripped)  # e.g. "Китайская ИИ-модель Kimi K3" -> "Kimi K3"
+            elif len(stripped_tokens) == 1 and _is_strong_single_token_entity(stripped_tokens[0]):
+                candidates.append(stripped_tokens[0])
+            # else: stripped to nothing, or the one remaining word fails the existing
+            # single-token check (e.g. "Агент Saul" -> "Saul", which does not independently
+            # qualify) - discarded. Disclosed, accepted M7.3 limitation, not a new regression:
+            # the pre-existing single-token rule was already this conservative; this milestone
+            # does not loosen it (that is Option B, explicitly out of scope here).
         elif _is_strong_single_token_entity(core):
             candidates.append(value)
         # else: a lone ordinary Title-Case word - discarded, most common false-positive source
