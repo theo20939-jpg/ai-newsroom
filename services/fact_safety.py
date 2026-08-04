@@ -106,6 +106,7 @@ def _normalize_text(text: str) -> str:
 
 
 _MONEY_MAGNITUDE: dict[str, float] = {
+    "trillion": 1e12, "трлн": 1e12,
     "b": 1e9, "bn": 1e9, "billion": 1e9, "млрд": 1e9,
     "m": 1e6, "mn": 1e6, "million": 1e6, "млн": 1e6,
     "k": 1e3, "thousand": 1e3, "тыс": 1e3,
@@ -134,7 +135,14 @@ _MONEY_NUMBER = r"\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?"
 # real, required format (M5.3); "5 b..." (any word starting with "b") must not be treated as a
 # magnitude - a trailing \b word-boundary on every alternative prevents matching only a prefix of
 # an unrelated longer word (e.g. "bears" -> "b").
-_MONEY_MAGNITUDE_WORD = r"(?:billion|bn|million|mn|thousand|млрд|млн|тыс)\b"
+# M7.1 calibration: added trillion/трлн - discovered as a coverage gap during Phase 17 M7 (docs/
+# phase17_m7_fact_safety_calibration_discovery.md §1b): a trillion-scale claim (e.g. "2.8 trillion
+# parameters") was previously invisible to extract_claims() entirely, since neither the English nor
+# Russian word was in this magnitude table - a fabricated trillion-scale figure would pass Fact
+# Safety unchecked. Scoped narrowly to exactly these two words, per M7.1's own explicit scope (no
+# single-letter "T" shorthand added - not requested, and "t"/"tn" collide far more with ordinary
+# words than "b"/"m"/"k" already do).
+_MONEY_MAGNITUDE_WORD = r"(?:trillion|billion|bn|million|mn|thousand|трлн|млрд|млн|тыс)\b"
 _MONEY_MAGNITUDE_LETTER = r"[bmk]\b"
 _MONEY_CURRENCY_WORD = (
     r"(?:dollars?|euros?|pounds?|rubles?|yuans?|renminbi|"

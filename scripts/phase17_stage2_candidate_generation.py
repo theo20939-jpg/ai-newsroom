@@ -45,6 +45,15 @@ Safety, matching the M3/M4/M4.1 scripts' own established discipline exactly:
 - `editorial_preference` can ONLY be set via the separate `record-preference` command below, which
   only ever edits the local JSON artifact - it has no database access at all.
 
+M7.1 addition (docs/phase17_m7_1_fact_safety_calibration_report.md): `baseline_fact_safety`/
+`candidate_fact_safety` remain the raw, uncalibrated `CandidateFactSafetyAudit` exactly as before -
+never overwritten. `baseline_calibrated_fact_safety`/`candidate_calibrated_fact_safety` are new,
+separate fields holding `services.fact_safety_calibration.calibrate_fact_safety()`'s own output for
+the same text, mirroring the same calibration path production's own shadow pipeline already applies
+(`capabilities/executor.py`) - Phase 17 M7's own discovery found Stage 2 never routed through this
+existing, already-tested layer at all. Purely additive, zero new LLM call (calibration is
+deterministic), zero change to when/whether a candidate call happens.
+
 Launch (dry-run, default, zero cost, builds baseline text + plan for every sampled case):
     python -m scripts.phase17_stage2_candidate_generation generate --sample-ids-file <path>
 
@@ -84,6 +93,7 @@ from integrations.prompts.file_repository import FilePromptRepository
 from services.beginner_friendly import build_beginner_friendly_plan
 from services.candidate_fact_safety import evaluate_candidate_fact_safety
 from services.editorial_brief import SourceSufficiency, build_editorial_brief
+from services.fact_safety_calibration import calibrate_fact_safety
 from services.pricing_catalog import ModelRegistryPricingCatalog
 
 import scripts.phase17_m4_1_failed_case_replay as candidate_generation
@@ -138,7 +148,9 @@ def _new_record(draft: ContentDraft, event: NewsEvent, plan_dump: dict[str, Any]
         "failure_reasons": [],
         "beginner_friendly_plan": plan_dump,
         "baseline_fact_safety": None,
+        "baseline_calibrated_fact_safety": None,
         "candidate_fact_safety": None,
+        "candidate_calibrated_fact_safety": None,
         "editorial_preference": "not_yet_reviewed",
         "editorial_notes": "",
     }
@@ -230,8 +242,13 @@ async def run_stage2_candidate_generation(
                 continue
 
             record = _new_record(draft, event, plan.model_dump(mode="json"))
-            record["baseline_fact_safety"] = evaluate_candidate_fact_safety(
+            raw_baseline_audit = evaluate_candidate_fact_safety(
                 draft.title or "", draft.body or "", event.title, event.content, research_facts,
+            )
+            record["baseline_fact_safety"] = raw_baseline_audit.model_dump(mode="json")
+            record["baseline_calibrated_fact_safety"] = calibrate_fact_safety(
+                raw_baseline_audit, draft_title=draft.title or "", news_event_title=event.title,
+                news_event_content=event.content, research_facts=research_facts,
             ).model_dump(mode="json")
 
             if brief.source_sufficiency == SourceSufficiency.EMPTY:
@@ -276,9 +293,15 @@ async def run_stage2_candidate_generation(
                     record["candidate_text"] = {
                         "title": candidate.get("title", ""), "body": candidate.get("body", ""),
                     }
-                    record["candidate_fact_safety"] = evaluate_candidate_fact_safety(
+                    raw_candidate_audit = evaluate_candidate_fact_safety(
                         candidate.get("title", ""), candidate.get("body", ""),
                         event.title, event.content, research_facts, plan,
+                    )
+                    record["candidate_fact_safety"] = raw_candidate_audit.model_dump(mode="json")
+                    record["candidate_calibrated_fact_safety"] = calibrate_fact_safety(
+                        raw_candidate_audit, draft_title=candidate.get("title", ""),
+                        news_event_title=event.title, news_event_content=event.content,
+                        research_facts=research_facts,
                     ).model_dump(mode="json")
                 else:
                     record["generation_status"] = "still_empty"
