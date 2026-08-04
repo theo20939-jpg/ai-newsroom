@@ -52,11 +52,25 @@ FACT_SAFETY_CALIBRATION_POLICY_VERSION = "v1"
 # OPPOSITE of an unhedged claim but do not contain any of that module's own hedge words
 # ("может"/"возможно"/etc). A fixed, small, explicit phrase list - never a general hedge
 # classifier (this milestone's own "не создавай universal NLP engine" instruction).
+#
+# M7.4.1 (docs/phase17_m7_4_1_causal_hedge_calibration_report.md): widened to tolerate 0-2
+# intervening words between a trigger and its verb (e.g. "нельзя ОДНОЗНАЧНО утверждать" - the real,
+# disclosed `847618cd` false positive, never fixed until now) and to add "неясно"/"непонятно"/
+# "неизвестно"/"нет доказательств"/"unclear whether"/"no evidence that" as their own standalone
+# triggers - kept in sync by hand with `services/candidate_fact_safety.py`'s own identical pattern
+# (a second, independent copy on purpose: this module's own suppression rule must keep working for
+# a `causal_flags` list constructed directly, not only one produced by the raw detector - see that
+# module's own docstring for why both copies exist).
 _EPISTEMIC_LIMITATION_RE = re.compile(
-    r"\b(нет оснований|основани\w*\s+нет|нельзя утвержда\w*|нельзя счита\w* установленн\w*|"
-    r"не подтвержден\w*|пока не установлен\w*|нет подтвержден\w*|остаётся неподтвержд\w*|"
-    r"остается неподтвержд\w*|cannot be considered established|no grounds to consider|"
-    r"remains unconfirmed|has not been (?:confirmed|established))\b",
+    r"\b(нельзя(?:\s+\w+){0,2}\s+(?:утвержда\w*|сказать|сделать\s+вывод|счита\w*\s+установленн\w*)|"
+    r"неясно|непонятно|неизвестно|"
+    r"нет\s+(?:доказательств|оснований|подтверждени\w*)|"
+    r"основани\w*\s+нет|"
+    r"не\s+подтвержден\w*|пока\s+не\s+установлен\w*|нет\s+подтвержден\w*|"
+    r"остаётся\s+неподтвержд\w*|остается\s+неподтвержд\w*|"
+    r"cannot\s+be\s+considered\s+established|no\s+grounds\s+to\s+consider|"
+    r"no\s+evidence\s+(?:that|for)|unclear\s+whether|it\s+is\s+unclear|"
+    r"remains\s+unconfirmed|has\s+not\s+been\s+(?:confirmed|established))\b",
     re.IGNORECASE,
 )
 # Company/legal-entity suffixes - the exact fragment class observed on `7352db1a` ("Corporation"

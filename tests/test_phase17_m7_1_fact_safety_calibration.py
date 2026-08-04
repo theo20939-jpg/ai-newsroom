@@ -168,21 +168,24 @@ def test_847618cd_raw_audit_improves_directly_under_m7_2() -> None:
     numeric_flag at all. Raw status improves from FAIL/high to REVIEW on its own, without
     calibration's rescue rule ever needing to run.
 
-    Severity note (UPDATED again for M7.3, docs/phase17_m7_3_entity_calibration_report.md): this
-    test originally pinned `severity == "medium"` here, because the two entity flags (M7 discovery
-    class #2) still survived at that point. M7.3's generic-prefix stripping now also removes both
-    entity flags from THIS specific case ("Автономный ИИ-агент"/"Агент Saul" both strip down to
-    nothing or to a bare word that fails the single-token check - see the next test) - severity
-    drops to "low", driven only by the remaining causal flag. This is a real, intentional
-    improvement from M7.3, not a fluke."""
+    UPDATED again for M7.3 (docs/phase17_m7_3_entity_calibration_report.md): the two entity flags
+    are also gone (generic-prefix stripping), dropping severity to "low".
+
+    UPDATED again for M7.4.1 (docs/phase17_m7_4_1_causal_hedge_calibration_report.md): the one
+    remaining flag - the causal_connector on "Поэтому по этим данным нельзя однозначно
+    утверждать..." - is itself a hedge, not an unhedged causal assertion. The widened
+    epistemic-limitation check (now applied directly in the raw detector, not just calibration)
+    correctly excludes it. This candidate now reaches a full, unqualified PASS - the complete
+    resolution of the case this whole M7 arc has tracked from Stage 2's original FAIL/high."""
     raw = evaluate_candidate_fact_safety(
         _847618CD_CANDIDATE_TITLE, _847618CD_CANDIDATE_BODY, _847618CD_EVENT_TITLE,
         _847618CD_EVENT_CONTENT, _847618CD_RESEARCH_FACTS,
     )
-    assert raw.status.value == "review"
-    assert raw.severity.value == "low"
+    assert raw.status.value == "pass"
+    assert raw.severity is None
     assert raw.numeric_flags == []
     assert raw.entity_flags == []
+    assert raw.causal_flags == []
     assert not any(f.startswith("unsupported:320,7") for f in raw.numeric_flags)
 
 
@@ -191,7 +194,10 @@ def test_847618cd_calibration_has_nothing_left_to_suppress() -> None:
     test), calibration's `russian_inflection_or_quote_match` rule has nothing to suppress for this
     case anymore - calibrated status equals raw status, unchanged by calibration. This is the
     correct outcome, not a regression: M7.1's wiring is still in place and still correct, it simply
-    has less work to do now that M7.2 fixed the claim's classification at the source."""
+    has less work to do now that M7.2/M7.3/M7.4.1 fixed the claims' classification at the source.
+
+    UPDATED again for M7.4.1: calibrated status is now "pass" (was "review"), since the raw audit
+    itself has zero flags of any kind left."""
     raw = evaluate_candidate_fact_safety(
         _847618CD_CANDIDATE_TITLE, _847618CD_CANDIDATE_BODY, _847618CD_EVENT_TITLE,
         _847618CD_EVENT_CONTENT, _847618CD_RESEARCH_FACTS,
@@ -201,20 +207,19 @@ def test_847618cd_calibration_has_nothing_left_to_suppress() -> None:
         news_event_content=_847618CD_EVENT_CONTENT, research_facts=_847618CD_RESEARCH_FACTS,
     )
     assert calibrated.raw_audit_status == raw.status
-    assert calibrated.calibrated_status.value == "review"
+    assert calibrated.calibrated_status.value == "pass"
     assert calibrated.suppressed_false_positive_flags == []
 
 
-def test_847618cd_only_causal_flag_survives_after_m7_3_known_remaining_issue() -> None:
-    """UPDATED for M7.3 (docs/phase17_m7_3_entity_calibration_report.md): this test originally
-    documented that BOTH entity flags ("Автономный ИИ-агент"/"Агент Saul") survived calibration as
-    true_positive - the exact "known remaining issue" M7.1's/M7.2's own reports disclosed. M7.3's
-    generic-prefix stripping (Option A) now removes both: "Автономный ИИ-агент" strips down to
-    nothing (both words are generic) and "Агент Saul" strips down to bare "Saul", which does not
-    independently pass the single-token strong-entity check - a disclosed, accepted M7.3
-    limitation (docs/phase17_m7_3_entity_calibration_report.md's own "remaining recall
-    limitations"), not a new regression. Only the causal flag (M7 discovery class #3, still out of
-    scope) remains."""
+def test_847618cd_fully_resolved_after_m7_4_1_no_flags_of_any_kind() -> None:
+    """UPDATED for M7.4.1 (docs/phase17_m7_4_1_causal_hedge_calibration_report.md): this test
+    originally documented that the causal flag (M7 discovery class #3) was the one remaining,
+    accepted "known remaining issue" after M7.3. M7.4.1's hedge-aware causal detection now
+    recognizes "нельзя однозначно утверждать" as an epistemic-limitation hedge, not an unhedged
+    causal assertion - the flag no longer exists at all, at either the raw or calibrated level.
+    This is the full, real resolution of the `847618cd` case this entire M7 arc has tracked -
+    not a new regression, the intended outcome of the last of three sequential, narrowly-scoped
+    fixes (M7.2 numeric, M7.3 entity, M7.4.1 causal/hedge)."""
     raw = evaluate_candidate_fact_safety(
         _847618CD_CANDIDATE_TITLE, _847618CD_CANDIDATE_BODY, _847618CD_EVENT_TITLE,
         _847618CD_EVENT_CONTENT, _847618CD_RESEARCH_FACTS,
@@ -224,7 +229,8 @@ def test_847618cd_only_causal_flag_survives_after_m7_3_known_remaining_issue() -
         news_event_content=_847618CD_EVENT_CONTENT, research_facts=_847618CD_RESEARCH_FACTS,
     )
     assert calibrated.true_positive_flags == []
-    assert any(f.startswith("causal_connector:") for f in calibrated.unresolved_flags)
+    assert calibrated.unresolved_flags == []
+    assert calibrated.calibrated_status.value == "pass"
 
 
 def test_raw_and_calibrated_are_independently_computed_never_one_derived_by_mutating_the_other() -> None:

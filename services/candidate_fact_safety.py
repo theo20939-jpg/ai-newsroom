@@ -45,6 +45,29 @@ _HEDGE_RE = re.compile(
     r"\b(может|возможно|вероятно|по прогнозам|may|might|could|possibly|likely|потенциально)\b",
     re.IGNORECASE,
 )
+# M7.4.1 (docs/phase17_m7_4_1_causal_hedge_calibration_report.md): epistemic-limitation phrases
+# that mark a sentence as expressing UNCERTAINTY about a claim, not asserting one - broader than
+# `_HEDGE_RE` above (which only covers "may/might/possibly"-style probabilistic hedges). This also
+# covers explicit "cannot be established"/"no evidence that"/"unclear whether" constructions that
+# state the OPPOSITE of an unhedged claim without using any probabilistic hedge word at all. A
+# fixed, small, explicit phrase list - never a general hedge classifier (this module's own
+# repeated "no general NLP" instruction). Tolerates 0-2 intervening words between a trigger and its
+# verb (e.g. "нельзя ОДНОЗНАЧНО утверждать") - a real, disclosed gap in the tighter, adjacency-only
+# version this supersedes (docs/phase17_m7_2_quantity_classification_plan.md's own "Fix D",
+# docs/phase17_m7_4_causal_calibration_discovery.md), found live on the real `847618cd` production
+# case and never fixed until now.
+_EPISTEMIC_LIMITATION_RE = re.compile(
+    r"\b(нельзя(?:\s+\w+){0,2}\s+(?:утвержда\w*|сказать|сделать\s+вывод|счита\w*\s+установленн\w*)|"
+    r"неясно|непонятно|неизвестно|"
+    r"нет\s+(?:доказательств|оснований|подтверждени\w*)|"
+    r"основани\w*\s+нет|"
+    r"не\s+подтвержден\w*|пока\s+не\s+установлен\w*|нет\s+подтвержден\w*|"
+    r"остаётся\s+неподтвержд\w*|остается\s+неподтвержд\w*|"
+    r"cannot\s+be\s+considered\s+established|no\s+grounds\s+to\s+consider|"
+    r"no\s+evidence\s+(?:that|for)|unclear\s+whether|it\s+is\s+unclear|"
+    r"remains\s+unconfirmed|has\s+not\s+been\s+(?:confirmed|established))\b",
+    re.IGNORECASE,
+)
 _DESCRIPTIVE_NOUN_RE = re.compile(
     r"\b(стартап|производитель|компания|разработчик|платформа|издатель|студия|фонд|"
     r"startup|maker|developer|publisher|manufacturer|platform)\w*\b", re.IGNORECASE,
@@ -97,7 +120,15 @@ def _scan_qualitative_flags(candidate_body: str) -> list[str]:
     it uses a pattern this audit cannot itself verify and a human should look at."""
     flags: list[str] = []
     for sentence in _split_sentences(candidate_body):
-        if _CAUSAL_RE.search(sentence):
+        # M7.4.1: a causal-connector sentence that also expresses epistemic uncertainty
+        # ("нельзя утверждать", "неясно", "нет доказательств"...) is a hedge, not an unhedged
+        # causal assertion - excluded here, at the raw-detector level, mirroring
+        # `_FORECAST_RE`'s own existing "and not _HEDGE_RE.search(sentence)" pattern below, which
+        # the causal check never had until now (docs/phase17_m7_4_1_causal_hedge_calibration_
+        # report.md). The calibration layer's own `_suppress_hedge_language()` (services/
+        # fact_safety_calibration.py) remains as a second, independent safety net for any
+        # causal_flags list constructed directly rather than produced by this function.
+        if _CAUSAL_RE.search(sentence) and not _EPISTEMIC_LIMITATION_RE.search(sentence):
             flags.append(f"causal_connector: {sentence[:80]}")
         if _SUPERLATIVE_RE.search(sentence):
             flags.append(f"superlative_claim: {sentence[:80]}")
