@@ -26,6 +26,13 @@ class WorkflowType(str, Enum):
     NEWS_ANALYSIS = "NEWS_ANALYSIS"
     CONTENT_GENERATION = "CONTENT_GENERATION"
     DAILY_DIGEST = "DAILY_DIGEST"
+    # Phase 18 (docs/phase18_m0_meme_discovery_report.md §4.3): declared here for the same
+    # forward-compatibility reason DAILY_DIGEST is - not yet registered in WorkflowRegistry.
+    # Registration is deferred until enough steps exist for a coherent end-to-end run (tracked
+    # milestone-by-milestone in docs/phase18_*.md); until then this value exists only so
+    # `MemeConceptCapability` and `services.meme_candidate_service` have a real, typed workflow
+    # identity to build/test against.
+    MEME_GENERATION = "MEME_GENERATION"
 
 
 class WorkflowRetryPolicy(BaseModel):

@@ -24,6 +24,10 @@ _CAPABILITY_NAME_TO_AI_CAPABILITY: dict[str, AICapability] = {
     "quality": AICapability.QUALITY,
     # Amendment A: temporary persistence alias only - see module docstring.
     "engagement": AICapability.INTELLIGENCE,
+    # Phase 18 M2 (docs/phase18_m0_meme_discovery_report.md §4.3): CREATIVE has existed in
+    # AICapability, unused, since before this phase - reused here rather than adding a new enum
+    # value/migration, exactly as the M0 report's architecture decision recorded.
+    "meme_concept": AICapability.CREATIVE,
 }
 
 

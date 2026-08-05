@@ -50,6 +50,7 @@ from services.budget_guard import BudgetGuard
 from capabilities.copywriting_capability import COPYWRITING_CAPABILITY_DEFINITION, CopywritingCapability
 from capabilities.engagement_capability import ENGAGEMENT_CAPABILITY_DEFINITION, EngagementCapability
 from capabilities.intelligence_capability import INTELLIGENCE_CAPABILITY_DEFINITION, IntelligenceCapability
+from capabilities.meme_concept_capability import MEME_CONCEPT_CAPABILITY_DEFINITION, MemeConceptCapability
 from capabilities.quality_capability import QUALITY_CAPABILITY_DEFINITION, QualityCapability
 from capabilities.research_capability import RESEARCH_CAPABILITY_DEFINITION, ResearchCapability
 from capabilities.scoring_capability import SCORING_CAPABILITY_DEFINITION, ScoringCapability
@@ -139,5 +140,13 @@ def build_registry(
     registry.register(INTELLIGENCE_CAPABILITY_DEFINITION, IntelligenceCapability(gateway, prompt_repository))
     registry.register(COPYWRITING_CAPABILITY_DEFINITION, CopywritingCapability(gateway, prompt_repository))
     registry.register(ENGAGEMENT_CAPABILITY_DEFINITION, EngagementCapability(gateway, prompt_repository))
+    # Phase 18 M2: registered like every other capability (real, resolvable, cost-tracked via
+    # capability_mapping.py's "meme_concept" -> AICapability.CREATIVE entry) even though no
+    # WorkflowDefinition references it yet - WorkflowType.MEME_GENERATION itself stays
+    # unregistered in WorkflowRegistry until enough steps exist for a coherent run (docs/
+    # phase18_m0_meme_discovery_report.md §4.3), exactly mirroring how CONTENT_GENERATION's own
+    # "copywriting" capability could in principle have been registered before Phase 10 M2
+    # registered the workflow that actually uses it.
+    registry.register(MEME_CONCEPT_CAPABILITY_DEFINITION, MemeConceptCapability(gateway, prompt_repository))
     registry.seal()
     return registry

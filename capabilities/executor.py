@@ -730,7 +730,11 @@ class CapabilityExecutor:
         if step.capability not in REUSABLE_CAPABILITIES or attempt != 1:
             return None
         state = WorkflowExecutionState.model_validate(task.workflow)
-        if state.workflow_name != WorkflowType.CONTENT_GENERATION:
+        # Phase 18 M2 (docs/phase18_m2_meme_concept_report.md): MEME_GENERATION's own "research"/
+        # "intelligence" steps reuse the same source NEWS_ANALYSIS task's results for identical
+        # reasons CONTENT_GENERATION already does (module docstring) - a meme concept is built
+        # from the exact same evidence a normal draft would be, for the same NewsEvent.
+        if state.workflow_name not in (WorkflowType.CONTENT_GENERATION, WorkflowType.MEME_GENERATION):
             return None
 
         if self._source_news_analysis_task_id is False:  # not yet looked up this run
