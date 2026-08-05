@@ -357,6 +357,17 @@ class Settings(BaseSettings):
     # value is even added.
     meme_telegram_preview_mode: Literal["off", "dry_run"] = "off"
 
+    # Phase 18.7: Meme Intelligence Calibration Update (docs/phase18_7_calibration_results.md).
+    # "v1" (default): the original Phase 18 M1/M3 classifiers run unmodified, exactly as accepted.
+    # "v2": `services.meme_calibration_rules` wraps them with additive score/context calibration
+    # (research-paper penalty, missing positive-signal scoring, safety context exceptions) -
+    # `services.meme_opportunity.assess_meme_opportunity()`/`detect_sensitive_categories()`
+    # themselves are never modified. Not consumed by `CapabilityExecutor` or any live call site in
+    # this phase - the flag exists so a future phase can wire v2 in without adding a new setting,
+    # not to activate anything now (Phase 18.7 is calibration/replay tooling only).
+    meme_opportunity_calibration_version: Literal["v1", "v2"] = "v1"
+    meme_safety_calibration_version: Literal["v1", "v2"] = "v1"
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""
