@@ -309,6 +309,34 @@ def test_no_forbidden_imports(module_path: str) -> None:
             assert forbidden not in module, f"{module_path} must never import {module!r}"
 
 
+def test_human_review_packet_has_at_least_50_items_and_every_decision_field_is_blank() -> None:
+    """Regression guard for the brief's own explicit "не заполнять автоматически" requirement -
+    checks the actual, committed docs/phase18_5_human_review_packet.md file, not merely the
+    generator script's intent. Fails if any `human_decision` line ever contains a real
+    MemeHumanReviewDecision value instead of the blank placeholder - i.e. if someone (human or
+    automated) fills the packet in without updating this guard, the test suite catches it."""
+    from pathlib import Path
+
+    from schemas.meme_shadow_analytics import MemeHumanReviewDecision
+
+    packet_path = Path("docs/phase18_5_human_review_packet.md")
+    assert packet_path.exists(), "docs/phase18_5_human_review_packet.md must exist for M3"
+    text = packet_path.read_text(encoding="utf-8")
+
+    item_count = text.count("**human_decision**")
+    assert item_count >= 50, f"expected at least 50 reviewable items, found {item_count}"
+    assert text.count("**human_notes**") == item_count
+
+    for line in text.splitlines():
+        if not line.startswith("**human_decision**"):
+            continue
+        assert "not yet reviewed" in line, f"a human_decision line is not blank: {line!r}"
+        for value in MemeHumanReviewDecision:
+            assert f"`{value.value}`:" not in line and not line.endswith(f": {value.value}"), (
+                f"a human_decision line appears pre-filled with {value.value!r}: {line!r}"
+            )
+
+
 def test_no_insert_update_delete_statements_in_collection_script() -> None:
     """Textual guard (in addition to the import-boundary check) - the collection script must
     never construct a write statement of any kind."""
