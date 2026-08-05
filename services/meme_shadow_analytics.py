@@ -173,3 +173,53 @@ def decision_counts(records: list[MemeShadowRecord]) -> dict[str, int]:
     for record in records:
         counts[record.opportunity_label.value] += 1
     return counts
+
+
+def all_category_distribution(records: list[MemeShadowRecord]) -> dict[str, float]:
+    """Share of ALL scanned records per category - distinct from `category_distribution()`
+    (which is scoped to potential-meme records only) - gives the denominator context needed to
+    tell "AI dominates meme potential" apart from "AI simply dominates raw volume.\""""
+    if not records:
+        return {}
+    counts: dict[str, int] = {}
+    for r in records:
+        counts[r.category] = counts.get(r.category, 0) + 1
+    total = len(records)
+    return {category: count / total for category, count in sorted(counts.items(), key=lambda kv: -kv[1])}
+
+
+def blocked_sensitivity_distribution(records: list[MemeShadowRecord]) -> dict[str, int]:
+    """Counts how often each sensitivity category (`services.meme_opportunity`'s own lexicon)
+    appears among BLOCKED records - answers "what kind of content is the safety net actually
+    catching," real evidence for the safety analysis section of the M4 report."""
+    counts: dict[str, int] = {}
+    for r in records:
+        if r.opportunity_label != MemeOpportunityLabel.BLOCKED:
+            continue
+        for category in r.sensitivity_categories:
+            counts[category] = counts.get(category, 0) + 1
+    return dict(sorted(counts.items(), key=lambda kv: -kv[1]))
+
+
+def source_sufficiency_distribution(records: list[MemeShadowRecord]) -> dict[str, float]:
+    """Share of ALL scanned records per `source_sufficiency` value - a real signal for how much
+    of the "LOW" volume is driven by thin source content vs. a genuinely low composite score."""
+    if not records:
+        return {}
+    counts: dict[str, int] = {}
+    for r in records:
+        counts[r.source_sufficiency] = counts.get(r.source_sufficiency, 0) + 1
+    total = len(records)
+    return {value: count / total for value, count in sorted(counts.items(), key=lambda kv: -kv[1])}
+
+
+def composite_score_histogram(records: list[MemeShadowRecord], *, bucket_size: int = 10) -> dict[str, int]:
+    """Buckets every record's `composite_score` into `bucket_size`-wide bins - real evidence for
+    whether the M1 decision thresholds (calibrated against a small hand-built gold set, docs/
+    phase18_m1_meme_opportunity_report.md) are well-matched to real production score
+    distribution, or need recalibration."""
+    counts: dict[int, int] = {}
+    for r in records:
+        bucket = (r.composite_score // bucket_size) * bucket_size
+        counts[bucket] = counts.get(bucket, 0) + 1
+    return {f"{bucket}-{bucket + bucket_size - 1}": count for bucket, count in sorted(counts.items())}

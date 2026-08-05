@@ -51,6 +51,19 @@ class MemeShadowRecord(BaseModel):
     collected_at: datetime
 
 
+class MemeHumanReviewDecision(str, Enum):
+    """Phase 18.5 M2's own "false positive tracking foundation" requirement: a real, versioned
+    taxonomy a human reviewer will use in M3's packet - not yet populated anywhere (M3's packet
+    leaves every `human_decision` field genuinely blank; M2 only prepares the schema itself).
+    Mirrors `schemas.meme_feedback.MemeRejectionReason`'s own established "small, closed,
+    brief-specified taxonomy" shape from Phase 18 M9."""
+
+    GOOD_MEME_CANDIDATE = "good_meme_candidate"
+    WEAK_CANDIDATE = "weak_candidate"
+    NOT_A_MEME = "not_a_meme"
+    UNSAFE = "unsafe"
+
+
 class MemeShadowCollectionResult(BaseModel):
     """The full output of one collection run - a header plus every record. Written verbatim to
     `scripts/_phase18_5_shadow_collection_results.json` by the collection script."""

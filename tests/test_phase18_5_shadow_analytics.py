@@ -20,14 +20,18 @@ from schemas.meme_opportunity import (
 from schemas.meme_shadow_analytics import MemeOpportunityLabel, MemeShadowRecord
 from services.meme_shadow_analytics import (
     LABEL_BY_DECISION,
+    all_category_distribution,
+    blocked_sensitivity_distribution,
     build_shadow_record,
     category_distribution,
+    composite_score_histogram,
     decision_counts,
     evaluate_event_shadow,
     label_for_decision,
     opportunity_rate,
     pattern_performance,
     safety_block_rate,
+    source_sufficiency_distribution,
 )
 
 _NOW = datetime(2026, 8, 5, tzinfo=timezone.utc)
@@ -154,13 +158,16 @@ def test_evaluate_event_shadow_handles_missing_content() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _record(label: MemeOpportunityLabel, category: str = "AI", evidence=None) -> MemeShadowRecord:
+def _record(
+    label: MemeOpportunityLabel, category: str = "AI", evidence=None, sensitivity=None,
+    source_sufficiency: str = "sufficient", composite_score: int = 50,
+) -> MemeShadowRecord:
     decision = next(d for d, lbl in LABEL_BY_DECISION.items() if lbl == label)
     return MemeShadowRecord(
         event_id=str(uuid4()), category=category, source_name="s",
-        opportunity_decision=decision.value, opportunity_label=label, composite_score=50,
-        reason_codes=[], sensitivity_categories=[], evidence_patterns=evidence or [],
-        source_sufficiency="sufficient", collected_at=_NOW,
+        opportunity_decision=decision.value, opportunity_label=label, composite_score=composite_score,
+        reason_codes=[], sensitivity_categories=sensitivity or [], evidence_patterns=evidence or [],
+        source_sufficiency=source_sufficiency, collected_at=_NOW,
     )
 
 
@@ -224,6 +231,53 @@ def test_decision_counts_includes_every_label_even_if_zero() -> None:
     assert counts["MEDIUM"] == 0
     assert counts["LOW"] == 0
     assert counts["BLOCKED"] == 0
+
+
+def test_all_category_distribution_includes_every_record() -> None:
+    records = [
+        _record(MemeOpportunityLabel.LOW, category="AI"), _record(MemeOpportunityLabel.LOW, category="AI"),
+        _record(MemeOpportunityLabel.BLOCKED, category="STARTUPS"),
+    ]
+    dist = all_category_distribution(records)
+    assert dist["AI"] == pytest.approx(2 / 3)
+    assert dist["STARTUPS"] == pytest.approx(1 / 3)
+
+
+def test_all_category_distribution_empty_input() -> None:
+    assert all_category_distribution([]) == {}
+
+
+def test_blocked_sensitivity_distribution_counts_only_blocked() -> None:
+    records = [
+        _record(MemeOpportunityLabel.BLOCKED, sensitivity=["war", "disaster"]),
+        _record(MemeOpportunityLabel.BLOCKED, sensitivity=["war"]),
+        _record(MemeOpportunityLabel.HIGH, sensitivity=["war"]),  # excluded - not BLOCKED
+    ]
+    dist = blocked_sensitivity_distribution(records)
+    assert dist["war"] == 2
+    assert dist["disaster"] == 1
+
+
+def test_source_sufficiency_distribution() -> None:
+    records = [
+        _record(MemeOpportunityLabel.LOW, source_sufficiency="headline_only"),
+        _record(MemeOpportunityLabel.LOW, source_sufficiency="headline_only"),
+        _record(MemeOpportunityLabel.HIGH, source_sufficiency="sufficient"),
+    ]
+    dist = source_sufficiency_distribution(records)
+    assert dist["headline_only"] == pytest.approx(2 / 3)
+    assert dist["sufficient"] == pytest.approx(1 / 3)
+
+
+def test_composite_score_histogram_buckets_correctly() -> None:
+    records = [
+        _record(MemeOpportunityLabel.LOW, composite_score=12),
+        _record(MemeOpportunityLabel.LOW, composite_score=15),
+        _record(MemeOpportunityLabel.LOW, composite_score=27),
+    ]
+    hist = composite_score_histogram(records)
+    assert hist["10-19"] == 2
+    assert hist["20-29"] == 1
 
 
 # ---------------------------------------------------------------------------
