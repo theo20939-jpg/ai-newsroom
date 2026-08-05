@@ -22,7 +22,7 @@ from integrations.llm_gateway.routing.registry import RoutingPolicyRegistry
 from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, Message
 from schemas.capability import CapabilityCall, CapabilityUsage
 from services.cost_estimator import CostEstimator
-from services.cost_tracker import RedisCostTracker, compute_call_cost, global_ledger_key
+from services.cost_tracker import RedisCostTracker, capability_ledger_key, compute_call_cost, global_ledger_key
 from services.pricing_catalog import ModelRegistryPricingCatalog
 from tests.fakes.fake_infra import EmptyLatencyTracker, PermissiveProviderHealthStore
 from tests.fakes.fake_provider_adapter import FakeProviderAdapter
@@ -142,26 +142,57 @@ def test_collector_module_has_no_llm_gateway_or_budget_dependency() -> None:
 
 # Checklist 18: the Redis ledger namespace is the real UTC calendar date - a new day is
 # structurally a brand-new, empty ledger key, with no explicit reset code needed.
+#
+# Phase 18.9-R M5 fix (docs/phase18_9r_test_provider_path_audit.md sec4): this test's own purpose
+# requires exercising the *real*, no-fixed-namespace code path (`_today_namespace()`'s own
+# calendar-date derivation) - it cannot simply switch to an injected UUID namespace like every
+# other cost-tracker test without testing something else entirely. Fixed two ways instead,
+# defense-in-depth: (1) `redis_client` (tests/conftest.py) now connects to a dedicated, isolated
+# test Redis database index (15), structurally separate from production's real index 0, so even an
+# imperfect cleanup here can never touch real production keys; (2) `datetime.now` is monkeypatched
+# so `_today_namespace()` computes an obviously-fake, real-calendar-format date
+# ("1999-12-31") that can never collide with any real date this project has ever run on, and BOTH
+# the global and capability-specific keys it writes are deleted in `finally` (the original bug:
+# only the global key was ever deleted, leaking the capability-specific one indefinitely).
 @pytest.mark.asyncio
-async def test_ledger_namespace_is_utc_calendar_date_so_a_new_day_starts_empty(redis_client: Redis) -> None:
+async def test_ledger_namespace_is_utc_calendar_date_so_a_new_day_starts_empty(
+    redis_client: Redis, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import services.cost_tracker as cost_tracker_module
+
+    fake_now = datetime(1999, 12, 31, 12, 0, 0, tzinfo=timezone.utc)
+
+    class _FixedNow:
+        """Not a `datetime` subclass - `services.cost_tracker._today_namespace()` only ever calls
+        `datetime.now(tz)`, so a minimal stand-in exposing just that one method is sufficient and
+        avoids mypy's Liskov-substitution complaint about overriding `datetime.now`'s own return
+        type."""
+
+        @staticmethod
+        def now(tz: object = None) -> datetime:  # noqa: ARG004
+            return fake_now
+
+    monkeypatch.setattr(cost_tracker_module, "datetime", _FixedNow)
+
     pricing_catalog = ModelRegistryPricingCatalog(build_model_registry())
     tracker = RedisCostTracker(redis_client, pricing_catalog)  # production default: no fixed namespace
-    now = datetime.now(timezone.utc)
     call = CapabilityCall(
         call_id=uuid.uuid4(), sequence=0, gateway_method="generate", status="SUCCESS",
         model_used="gpt-5.6-luna", usage=CapabilityUsage(input_tokens=1000, output_tokens=1000),
-        started_at=now, finished_at=now, duration_seconds=0.01,
+        started_at=fake_now, finished_at=fake_now, duration_seconds=0.01,
     )
-    today_key = global_ledger_key(now.strftime("%Y-%m-%d"))
-    yesterday_key = global_ledger_key((now.replace(day=1)).strftime("%Y-%m-%d")) if now.day != 1 else None
+    fake_date_key = fake_now.strftime("%Y-%m-%d")
+    today_key = global_ledger_key(fake_date_key)
+    research_key = capability_ledger_key(fake_date_key, "research")
     try:
         await tracker.record(uuid.uuid4(), "research", call)
         raw = await redis_client.get(today_key)
         assert raw is not None and float(raw) > 0
+        raw_research = await redis_client.get(research_key)
+        assert raw_research is not None and float(raw_research) > 0
     finally:
         await redis_client.delete(today_key)
-        if yesterday_key:
-            await redis_client.delete(yesterday_key)
+        await redis_client.delete(research_key)
 
 
 # Checklist 20 (partial, structural): resolve_ai_capability still accepts every real workflow

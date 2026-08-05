@@ -412,7 +412,14 @@ def test_build_openai_credential_assembles_api_key_from_settings() -> None:
 
 
 def test_build_openai_credential_with_no_key_configured() -> None:
-    settings = _settings()
+    # Phase 18.9-R Barrier 2 (tests/conftest.py): OPENAI_API_KEY is unconditionally present in
+    # this process's real os.environ (a deliberate, session-wide sentinel preventing the real
+    # .env's own key from ever being read) - _settings()'s own `_env_file=None` alone no longer
+    # produces a "nothing configured" state for this one field, since env vars still apply.
+    # openai_api_key=None is passed explicitly (a constructor kwarg, pydantic-settings' own
+    # highest-precedence source) to restore this test's real intent - verifying the field's true
+    # default resolution, not merely the absence of a value nothing here actually controls anymore.
+    settings = _settings(openai_api_key=None)
 
     credential = build_openai_credential(settings)
 
