@@ -129,3 +129,22 @@ global aggregate against the per-capability entries)
 | Suspected unauthorized executions | **2** (both `test_task_refused_when_conservative_estimate_would_exceed_remaining_budget` and `test_cumulative_prior_spend_counts_toward_the_same_budget` showed `status="completed"` in the same buggy run, each against its own independent `real_news_event` fixture instance - each independently capable of a full real execution) |
 | Exact execution count | **Unresolved** - cannot be determined from available evidence (no task/event IDs recovered, `AIExecution` rows rolled back, no request IDs captured) |
 | Provider-authoritative cost | **Pending independent OpenAI usage-dashboard verification** - not checked from this environment, no access available |
+
+## Appendix A (added 2026-08-05, Phase 18.9-R M0) — re-verification, no facts changed
+
+Re-checked at the start of Phase 18.9-R, before any remediation code was written. No edit was made
+to any fact above. Confirmed unchanged:
+
+- `git log`/`git diff HEAD` on this file and `docs/phase18_9_paid_pipeline_audit.md` against commit
+  `85fa828`: zero drift - both files are byte-identical to what was committed.
+- Confirmed incident-attributable minimum, computed directly from §1/§10's own already-recorded
+  values: `$0.002432 + $0.00246 + $0.000846 = $0.005738` exactly (arithmetic re-verified here, not
+  a new figure).
+- The separate `research` +$0.007000 observation remains documented as **unrelated** (§7/§10) -
+  root-caused to the pre-existing `tests/test_api_cost_optimization_checklist.py` leak, zero real
+  provider calls, unrelated to the genuine incident.
+- No claim of a confirmed *second* real Phase 18.9 execution exists anywhere in this file or in
+  `docs/phase18_9_paid_pipeline_audit.md` - §10's own table already correctly scoped this to
+  **suspected** (2), not confirmed, with the exact execution count marked **unresolved**. This
+  appendix does not change that classification; it confirms the wording already matches the
+  evidence and needed no correction.
