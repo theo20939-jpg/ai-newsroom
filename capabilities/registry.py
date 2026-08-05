@@ -51,6 +51,10 @@ from capabilities.copywriting_capability import COPYWRITING_CAPABILITY_DEFINITIO
 from capabilities.engagement_capability import ENGAGEMENT_CAPABILITY_DEFINITION, EngagementCapability
 from capabilities.intelligence_capability import INTELLIGENCE_CAPABILITY_DEFINITION, IntelligenceCapability
 from capabilities.meme_concept_capability import MEME_CONCEPT_CAPABILITY_DEFINITION, MemeConceptCapability
+from capabilities.meme_copywriting_capability import (
+    MEME_COPYWRITING_CAPABILITY_DEFINITION,
+    MemeCopywritingCapability,
+)
 from capabilities.quality_capability import QUALITY_CAPABILITY_DEFINITION, QualityCapability
 from capabilities.research_capability import RESEARCH_CAPABILITY_DEFINITION, ResearchCapability
 from capabilities.scoring_capability import SCORING_CAPABILITY_DEFINITION, ScoringCapability
@@ -148,5 +152,8 @@ def build_registry(
     # "copywriting" capability could in principle have been registered before Phase 10 M2
     # registered the workflow that actually uses it.
     registry.register(MEME_CONCEPT_CAPABILITY_DEFINITION, MemeConceptCapability(gateway, prompt_repository))
+    # Phase 18 M4: registered alongside meme_concept, same rationale (real, resolvable,
+    # cost-tracked via "meme_copywriting" -> AICapability.COPYWRITING).
+    registry.register(MEME_COPYWRITING_CAPABILITY_DEFINITION, MemeCopywritingCapability(gateway, prompt_repository))
     registry.seal()
     return registry

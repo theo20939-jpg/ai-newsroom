@@ -60,23 +60,25 @@ def test_workflow_type_meme_generation_declared() -> None:
     assert WorkflowType.MEME_GENERATION.value == "MEME_GENERATION"
 
 
-def test_workflow_type_meme_generation_not_yet_registered() -> None:
-    """docs/phase18_m0_meme_discovery_report.md §4.3: declared-but-unregistered, mirroring
-    DAILY_DIGEST's own precedent, until enough steps exist for a coherent run."""
-    from workflows.errors import UnknownWorkflowTypeError
+def test_workflow_type_meme_generation_registered_as_of_m4() -> None:
+    """Registered in workflows/registry.py as of Phase 18 M4 (docs/
+    phase18_m4_meme_copywriting_report.md) - concept+safety+copy is a coherent, independently
+    useful chain. Superseded the M2-era "declared but unregistered, mirrors DAILY_DIGEST"
+    expectation once M4 landed - see workflows/definitions/meme_generation.py's own docstring."""
     from workflows.registry import build_registry as build_workflow_registry
 
     registry = build_workflow_registry()
-    with pytest.raises(UnknownWorkflowTypeError):
-        registry.resolve(WorkflowType.MEME_GENERATION)
+    definition = registry.resolve(WorkflowType.MEME_GENERATION)
+    assert definition.name == WorkflowType.MEME_GENERATION
 
 
 def test_meme_generation_workflow_definition_steps() -> None:
     from workflows.definitions.meme_generation import DEFINITION
 
     assert DEFINITION.name == WorkflowType.MEME_GENERATION
-    assert [s.name for s in DEFINITION.steps] == ["research", "intelligence", "meme_concept"]
-    assert [s.capability for s in DEFINITION.steps] == ["research", "intelligence", "meme_concept"]
+    expected = ["research", "intelligence", "meme_concept", "meme_copywriting"]
+    assert [s.name for s in DEFINITION.steps] == expected
+    assert [s.capability for s in DEFINITION.steps] == expected
 
 
 def test_meme_candidate_model_default_status_is_concept_generated() -> None:

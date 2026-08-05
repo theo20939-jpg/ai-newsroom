@@ -28,6 +28,10 @@ _CAPABILITY_NAME_TO_AI_CAPABILITY: dict[str, AICapability] = {
     # AICapability, unused, since before this phase - reused here rather than adding a new enum
     # value/migration, exactly as the M0 report's architecture decision recorded.
     "meme_concept": AICapability.CREATIVE,
+    # Phase 18 M4: a real copywriting call (top/bottom text, caption, alt text) - maps to the
+    # existing COPYWRITING value, not CREATIVE, since that is semantically what this step does
+    # (docs/phase18_m4_meme_copywriting_report.md).
+    "meme_copywriting": AICapability.COPYWRITING,
 }
 
 

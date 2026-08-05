@@ -12,7 +12,7 @@ instead of source adapters.
 import logging
 
 from schemas.workflow import WorkflowDefinition, WorkflowType
-from workflows.definitions import content_generation, news_analysis
+from workflows.definitions import content_generation, meme_generation, news_analysis
 from workflows.errors import (
     DuplicateWorkflowRegistrationError,
     RegistryAlreadySealedError,
@@ -72,14 +72,17 @@ class WorkflowRegistry:
 
 
 def build_registry() -> WorkflowRegistry:
-    """Build and seal the Phase 5 WorkflowRegistry from the two registered definitions.
+    """Build and seal the WorkflowRegistry from the registered definitions.
 
     DAILY_DIGEST is intentionally not registered - see the
-    workflows.definitions package docstring.
+    workflows.definitions package docstring. MEME_GENERATION is registered as of Phase 18 M4
+    (docs/phase18_m4_meme_copywriting_report.md) - see workflows/definitions/meme_generation.py's
+    own docstring for why registering it is safe (no automatic caller creates a task for it yet).
     """
     registry = WorkflowRegistry()
     registry.register(news_analysis.DEFINITION)
     registry.register(content_generation.DEFINITION)
+    registry.register(meme_generation.DEFINITION)
     registry.seal()
     return registry
 
