@@ -1,7 +1,7 @@
-"""Phase 18 M8: Telegram Meme Editorial Preview callback handler (docs/
-phase18_m8_telegram_editorial_preview_report.md). Thin orchestration only, mirroring
-`bot/handlers/image_preview.py`'s own "no query construction, no AI/workflow call, no mutation
-logic of its own" discipline - every DB read/write goes through
+"""Phase 18 M8/M9: Telegram Meme Editorial Preview callback handler (docs/
+phase18_m8_telegram_editorial_preview_report.md, docs/phase18_m9_human_feedback_report.md). Thin
+orchestration only, mirroring `bot/handlers/image_preview.py`'s own "no query construction, no
+AI/workflow call, no mutation logic of its own" discipline - every DB read/write goes through
 `services/meme_candidate_service.py::MemeCandidateService`.
 
 State is re-queried fresh from the database on every single callback - never cached, never
@@ -9,14 +9,18 @@ trusted from an earlier render, so a stale/deleted candidate is always detected 
 state (mirrors `bot/handlers/image_preview.py`'s identical discipline).
 
 Not exercised against a live Telegram Bot or database in this session (the local Postgres/Redis
-stack is unavailable - same disclosed constraint as every DB-dependent piece of Phases 18 M1-M7).
+stack is unavailable - same disclosed constraint as every DB-dependent piece of Phases 18 M1-M8).
 Written to mirror `bot/handlers/image_preview.py`'s already-proven shape as closely as possible,
 so the risk of a structural mistake is minimized even without a live run.
 
 "Regenerate concept/image/text" and "fallback to normal news" are recognized and acknowledged
 (`callback.answer(...)`) but do NOT yet re-run any generation step - no live MEME_GENERATION
-task-spawning/regeneration orchestrator exists as of M8 (disclosed in the M8 report §6; building
-one is future work, not silently faked here).
+task-spawning/regeneration orchestrator exists (disclosed in the M8 report §6; building one is
+future work, not silently faked here).
+
+"Reject" (Phase 18 M9) no longer finalizes immediately - it swaps the keyboard for a one-tap
+reason picker (`bot/keyboards/meme_feedback.py`); the actual decision is only recorded once a
+reason (or an explicit "skip") is chosen, via the second `memereason:` callback handler below.
 """
 import logging
 from uuid import UUID
@@ -26,6 +30,7 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.types import CallbackQuery, InaccessibleMessage, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.keyboards.meme_feedback import build_reject_reason_keyboard, parse_reason_callback_data
 from bot.keyboards.meme_preview import build_decided_keyboard, parse_callback_data
 from bot.meme_preview_formatting import (
     MemePreviewCaptionTooLongError,
@@ -106,15 +111,69 @@ async def handle_meme_preview_callback(callback: CallbackQuery) -> None:
             await callback.answer(f"Recorded: {action.replace('_', ' ')}. Regeneration is not yet automated.")
             return
 
-        decision = "approved" if action == "approve" else "rejected"
+        if action == "reject":
+            # Phase 18 M9: swap to the reason picker instead of finalizing immediately - the
+            # candidate stays in its current (non-terminal) status until a reason/skip is chosen.
+            try:
+                await callback.message.edit_reply_markup(  # type: ignore[union-attr]
+                    reply_markup=build_reject_reason_keyboard(candidate_id),
+                )
+            except TelegramAPIError:
+                logger.exception("meme_preview_reason_prompt_failed", extra={"candidate_id": str(candidate_id)})
+                return
+            await callback.answer("Why? (optional)")
+            return
+
+        # action == "approve"
         service = MemeCandidateService(session)
-        updated = await service.record_editor_decision(candidate_id, decision)
+        updated = await service.record_editor_decision(candidate_id, "approved")
         if updated is None:
             await callback.answer(render_unavailable_candidate_alert_text(), show_alert=True)
             return
 
         await _finalize_decision(message, card=card, source_url=event.url)
-        await callback.answer("Approved." if decision == "approved" else "Rejected.")
+        await callback.answer("Approved.")
+
+
+@router.callback_query(F.data.startswith("memereason:"))
+async def handle_meme_reject_reason_callback(callback: CallbackQuery) -> None:
+    """Phase 18 M9: finalizes a rejection with the chosen reason (or none, if "skip" was
+    tapped) - the second step of the reject flow `handle_meme_preview_callback` starts above."""
+    parsed = parse_reason_callback_data(callback.data or "")
+    if parsed is None:
+        await callback.answer()
+        return
+    reason, candidate_id = parsed
+
+    message = callback.message
+    if message is None or isinstance(message, InaccessibleMessage):
+        await callback.answer(render_unavailable_candidate_alert_text(), show_alert=True)
+        return
+
+    async with async_session_factory() as session:
+        candidate, event = await _load_candidate_and_event(session, candidate_id)
+        if candidate is None or event is None:
+            await callback.answer(render_unavailable_candidate_alert_text(), show_alert=True)
+            return
+        if candidate.status in _TERMINAL_STATUSES:
+            await callback.answer(render_expired_candidate_alert_text(), show_alert=True)
+            return
+
+        card = _card_from_candidate(candidate, event)
+        if card is None:
+            await callback.answer(render_unavailable_candidate_alert_text(), show_alert=True)
+            return
+
+        service = MemeCandidateService(session)
+        updated = await service.record_editor_decision(
+            candidate_id, "rejected", reasons=[reason] if reason else None,
+        )
+        if updated is None:
+            await callback.answer(render_unavailable_candidate_alert_text(), show_alert=True)
+            return
+
+        await _finalize_decision(message, card=card, source_url=event.url)
+        await callback.answer("Rejected.")
 
 
 async def _load_candidate_and_event(
