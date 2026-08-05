@@ -1,9 +1,16 @@
 # Phase 18 — Meme Intelligence & Generation: Final Completion Report
 
 **Branch:** `feature/phase18-meme-intelligence` (from `feature/phase17-editorial-intelligence` @
-`8872624`) · **Commits:** 10 · **Checkpoint tags:** `checkpoint/phase18-m0-discovery` through
-`checkpoint/phase18-m9-human-feedback` · **Status: engineering scope 100% complete (M0–M9). No
-live/paid activity of any kind occurred.**
+`8872624`) · **Commits:** 11 (M0–M9 + this report) · **Checkpoint tags:**
+`checkpoint/phase18-m0-discovery` through `checkpoint/phase18-final-complete` · **Status:
+engineering scope 100% complete (M0–M9). No live/paid activity of any kind occurred.**
+
+> **Corrected at final acceptance** (`docs/phase18_final_acceptance_report.md`): this report's
+> commit count, tag list, and DB/migration status below were updated to match reality as of the
+> acceptance pass — see that report for the full, evidence-backed audit, including a real schema
+> defect found and fixed, and the migration/DB-integration validation this report originally
+> listed as outstanding. Nothing in §1–§4 or §6/§9's own engineering findings changed; only the
+> validation-status claims in §5/§8/§10/Appendix were corrected.
 
 ## 1. Executive summary
 
@@ -17,10 +24,14 @@ front: **no image-generation capability existed anywhere in this codebase before
 (Phase 16 "Image Intelligence" is discovery/validation of *existing* media, not generation), and
 `AICapability.CREATIVE` plus `ContentType.MEME` had existed, unused, since before this phase —
 both consumed with zero migration. Only **one migration** was needed for the entire phase (a
-`meme_candidates` table), introduced early (M2) exactly as M0 planned, and it has not been applied
-to any database — no Postgres/Redis instance was reachable in this development environment at any
-point in this work (docker was not running), which is disclosed in every milestone report that
-touches DB-backed code, not glossed over.
+`meme_candidates` table), introduced early (M2) exactly as M0 planned. It was written during
+M0–M9 development but **could not be runtime-validated then** — no Postgres/Redis instance was
+reachable in that development environment (docker was not running), disclosed in every milestone
+report that touched DB-backed code. **At final acceptance, Docker was started and the migration
+was applied, downgraded, and re-applied against a dedicated disposable validation database**
+(`docs/phase18_final_acceptance_migration_report.md`) — this found and fixed one real schema
+defect (a missing index) before it could ever reach a real environment. The migration has still
+never been applied to the project's actual `ai_newsroom` database.
 
 **No live LLM call, no live image-generation call, and no live Telegram send occurred at any
 point in this phase.** Every new mode flag defaults to `"off"`; the ones that concern paid/live
@@ -60,10 +71,14 @@ merely by inspection).
   judged insufficient for the same reason it was judged insufficient for image candidates in
   Phase 16 M5 — a multi-stage business record needs to be durable and queryable independent of
   transient workflow execution-state bookkeeping.
-- **Eight new mode flags**, all following the exact `Literal["off", ...]`, default-`"off"`
-  convention established in Phases 15–17: `meme_opportunity_mode`, `meme_safety_gate_mode`,
-  `meme_image_generation_mode`, `meme_telegram_preview_mode` (plus supporting settings
-  `meme_image_max_bytes`). No existing flag was repurposed.
+- **Five new settings** (corrected from an earlier, inaccurate "eight" — see `docs/
+  phase18_final_acceptance_inertness_audit.md` §1): four mode flags, all following the exact
+  `Literal["off", ...]`, default-`"off"` convention established in Phases 15–17
+  (`meme_opportunity_mode`, `meme_safety_gate_mode`, `meme_image_generation_mode`,
+  `meme_telegram_preview_mode`), plus one numeric byte limit (`meme_image_max_bytes`). No existing
+  flag was repurposed. Three additional code-level constants (`MAX_CONCEPT_REGENERATIONS`,
+  `MAX_IMAGE_REGENERATIONS`, `_MAX_GENERATION_ATTEMPTS`) bound regeneration/retries and are not
+  `Settings` fields.
 
 ## 3. Milestone history (M0–M9)
 
@@ -121,20 +136,31 @@ when they happened:
 
 ## 5. Quantitative results
 
-- **59 files changed** since the Phase 17 branch point: **51 new**, **8 modified** (all 8 are
-  additive: new registry/hook entries, new enum values, new settings — none rewrites existing
-  logic).
-- **+7,027 / −4 lines** (the 4 deletions are import-list formatting only).
-- **10 commits**, one per milestone, each tagged (`checkpoint/phase18-m{N}-*`).
-- **156 new tests**, all passing; **2,299 tests collect cleanly** across the entire repository
-  (up from 2,160 immediately before this phase began), confirming zero import/collection
-  regressions introduced anywhere.
-- **2 real bugs found and fixed** by this phase's own tests before merge (§3).
-- **1 migration** (`21177d5b859e_add_meme_candidates_table.py`) — written, syntax- and
-  chain-validated (`alembic heads`), **not applied to any database**.
-- **2 LLM Capabilities** added (`meme_concept`, `meme_copywriting`) — **0 live calls made**.
+*(Updated at final acceptance — see `docs/phase18_final_acceptance_report.md` for full detail.)*
+
+- **59 files changed** during M0–M9 development: **51 new**, **8 modified** (all 8 additive). The
+  acceptance pass added a further ~9 files (5 new audit docs, 2 new test files, 1 migration fix,
+  1 service extension) — see the acceptance report's own git section for the final count.
+- **11 commits** through M0–M9 + the original completion report, plus further acceptance-pass
+  commits (git audit report has the authoritative table).
+- **174 tests** (156 from M0–M9 + 15 new DB-integration + 3 new offline-E2E), all passing
+  **against a real PostgreSQL database** (`phase18_validation_db`) — not merely `FakeLLMGateway`-
+  isolated as before acceptance. **2,317 tests collect cleanly** across the entire repository.
+- **3 real bugs found and fixed** by this phase's own tests: 2 during M0–M9 development (§3), plus
+  1 real schema-parity defect (a missing database index) found only once a live database
+  validation became possible at acceptance (`docs/phase18_final_acceptance_migration_report.md`
+  §4) — a category of bug offline testing structurally cannot catch.
+- **1 migration** (`21177d5b859e_add_meme_candidates_table.py`) — written, chain-validated, and
+  **now runtime-validated**: applied, downgraded, and re-applied cleanly against a dedicated,
+  disposable database. Still never applied to the real `ai_newsroom` database.
+- **2 LLM Capabilities** added (`meme_concept`, `meme_copywriting`) — **0 live calls made**, now
+  proven correct against a real `FakeLLMGateway`-backed, real-database-persisted execution too.
 - **1 image-generation adapter** shipped (`MockImageAdapter`) — deterministic, zero-network,
   zero-cost. **0 real provider adapters exist or were attempted.**
+- **Full-suite regression**: 7 pre-existing failures (0 Phase 18 regressions), each proven — not
+  assumed — to predate Phase 18 by reproduction at the exact Phase 17 branch point.
+- **Static analysis**: 5 Ruff findings + 2 mypy findings in Phase 18 files, all real, all fixed;
+  0 remaining in either tool across Phase 18's own files.
 
 ## 6. Safety analysis
 
@@ -168,29 +194,43 @@ when they happened:
 - **Image generation cost today is $0** — the only wired adapter (`MockImageAdapter`) is free and
   local. `MemeImageGenerationResult.cost_usd`/`provider`/`model_used` fields already exist and are
   exercised by tests, ready for a real provider's pricing the moment one is authorized and built.
-- **Cost visibility exists at two levels**: (1) the two LLM Capabilities are registered exactly
-  like every other Capability, so `RedisCostTracker`/`AIExecution` recording applies to them
-  automatically the moment a real `MEME_GENERATION` task runs; (2) `MemeCandidate.
+- **Cost visibility exists at two levels, each now proven independently against a real database**:
+  (1) the two LLM Capabilities are registered exactly like every other Capability, so
+  `RedisCostTracker`/`AIExecution` recording applies to them automatically the moment a real
+  `MEME_GENERATION` task runs (unmodified Phase 17 mechanism); (2) `MemeCandidate.
   cumulative_cost_usd` (M9's `add_cost()`) accumulates per-candidate total spend across
-  concept/copy/image attempts, including regenerations — not yet wired to a live call site, but
-  real and tested.
+  concept/copy/image attempts, including regenerations — proven via real Postgres transactions at
+  acceptance (exact accumulation, negative-value rejection). **These two systems are not yet wired
+  to fire together automatically** — confirmed and explicitly classified as deferred
+  live-orchestrator work, not an acceptance blocker, in `docs/
+  phase18_final_acceptance_db_integration_report.md` §4 (no code triggers a real capability call
+  today, so there is no live call site this wiring could attach to yet).
 - **No budget enforcement gap**: `RedisBudgetGuard`/`llm_budget_mode` are capability-name-agnostic
   and apply to `meme_concept`/`meme_copywriting` automatically once real calls occur.
 
 ## 8. Production readiness
 
-**Not production-active, by design — every new mode flag defaults to `"off"`.** What would be
-required to move any single piece toward production, in order of increasing risk:
+**Not production-active, by design — every new mode flag defaults to `"off"`.** As of final
+acceptance, step 1 below is complete (against a disposable validation database; the real
+`ai_newsroom` database still awaits it) and step 2 is validated as safe to flip (executor-hook
+DB integration now proven). What remains, in order of increasing risk:
 
-1. **Apply the migration** (`alembic upgrade head`) — mechanical, no design question remains.
+1. ~~Apply the migration~~ — **done against a disposable validation database**
+   (`docs/phase18_final_acceptance_migration_report.md`); applying it to the real `ai_newsroom`
+   database remains a mechanical, no-design-question-remaining step.
 2. **Flip `meme_opportunity_mode`/`meme_safety_gate_mode` to `"shadow"`** — zero cost, zero risk;
-   lets real production shadow data validate M1's/M3's thresholds (both disclosed as v1,
-   calibrated against small hand-built gold sets, not production volume) before anything further.
+   now validated end-to-end against a real database (`docs/
+   phase18_final_acceptance_db_integration_report.md` §1), not merely by code inspection. Lets
+   real production shadow data validate M1's/M3's thresholds (both disclosed as v1, calibrated
+   against small hand-built gold sets, not production volume) before anything further.
 3. **Build a task-spawning orchestrator** — nothing in this phase creates a `MEME_GENERATION`
    `EditorialTask` automatically; this is a genuinely new piece of work, not merely a flag flip.
-4. **Human-authorize and build a real image-generation provider adapter** — `ImageGenerationRequest`/
+4. **Close the M8 live-Bot-dispatch test gap** — `bot/handlers/meme_preview.py`'s own callback
+   routing remains untested against a real Telegram `Bot`/`Dispatcher` (every piece it depends on
+   is independently validated) — recommended before step 6.
+5. **Human-authorize and build a real image-generation provider adapter** — `ImageGenerationRequest`/
    `Response` are already stable and provider-agnostic; this is a contained, additive change.
-5. **Human-authorize a live Telegram send** — requires `meme_telegram_preview_mode` to gain a
+6. **Human-authorize a live Telegram send** — requires `meme_telegram_preview_mode` to gain a
    `"live"` value in code first (does not exist), plus a real `editorial_chat_id` for memes.
 
 ## 9. Known limitations (consolidated from every milestone report)
@@ -209,50 +249,62 @@ required to move any single piece toward production, in order of increasing risk
 - Regenerate/fallback preview actions (M8) are recognized and acknowledged but do not yet
   re-trigger any generation step — no live orchestrator exists to re-run a pipeline step for an
   existing candidate.
-- Cost/decision persistence methods (M2–M9) have no live call site — every one is real and
-  independently tested, but none has been exercised end-to-end against a running pipeline, since
-  no such pipeline runs live anywhere in this phase.
-- **Environment constraint carried through every milestone**: the local Postgres/Redis stack was
-  unreachable in this development session (docker not running) — every DB-backed piece
-  (executor hooks' live integration, `MemeCandidateService`'s DB methods, the bot handler against
-  a real database) was written to mirror an already-proven pattern as closely as possible and
-  unit-tested wherever the logic could be isolated from the database, but has not been exercised
-  against a live database. This should be the first thing validated once infrastructure is
-  available, before any shadow-mode flag is flipped.
+- Cost/decision persistence methods (M2–M9) have no live call site — every one is real and now
+  DB-integration-tested (`docs/phase18_final_acceptance_db_integration_report.md`), but none has
+  been exercised end-to-end against a running, automatically-triggered pipeline, since no such
+  pipeline runs live anywhere in this phase (§8's own remaining step 3).
+- ~~Environment constraint: local Postgres/Redis stack unreachable~~ — **resolved at final
+  acceptance**: Docker was started, a dedicated disposable database was created, and every
+  DB-backed piece except one was validated against it (`docs/
+  phase18_final_acceptance_db_integration_report.md`). The one remaining gap:
+  `bot/handlers/meme_preview.py`'s own callback-dispatch logic still has not been exercised
+  against a real Telegram `Bot`/`Dispatcher` object (no Telegram network connection was made or
+  attempted, per the operating rules) — every piece it depends on (keyboards, formatting,
+  `MemeCandidateService`, the dry-run-proven `send_meme_preview()`) is independently validated.
+- **New, found during final acceptance**: `record_editor_decision()` does not merge `reasons`/
+  `notes` across repeated calls (consistent with its own documented contract, flagged for a future
+  caller's awareness); `MemeCandidateStatus` needed an explicit, documented mapping for M7's
+  `REGENERATE_CONCEPT`/`REGENERATE_IMAGE` decisions (no dedicated status value existed for either -
+  resolved, not a blocker). Full detail: `docs/phase18_final_acceptance_db_integration_report.md`.
 
 ## 10. Recommendation: GO / NO-GO
 
-**GO for the engineering merge** (M0–M9 as built) into the main development line, **NO-GO for any
-live/paid/production activation** until:
+**Updated at final acceptance** — see `docs/phase18_final_acceptance_report.md` §17 for the full,
+per-capability GO/NO-GO matrix. Summary: **GO for the engineering merge** (now DB-validated, not
+merely offline-tested), **GO for enabling `meme_opportunity_mode`/`meme_safety_gate_mode` shadow
+modes** (zero cost/risk, now DB-integration-proven), **NO-GO for any paid or live-send activation**
+until a human explicitly authorizes it — nothing in this phase attempted a paid or live call at
+any point, during development or during acceptance.
 
-1. The migration is applied and validated against a real database (mechanical).
-2. `_attach_meme_opportunity`/`_attach_meme_safety_originality` are exercised at least once
-   against a real `CapabilityExecutor`/database run, to confirm the DB-integration shape matches
-   the already-proven Phase 17 pattern in practice, not merely by code inspection.
-3. A human reviews and explicitly authorizes: (a) building a real image-generation provider
-   adapter and making the first paid call, and (b) configuring a real editorial chat and making
-   the first live Telegram send. Neither has been built, attempted, or requested in this phase.
-
-Everything else the brief asked for — schemas, services, capabilities, prompts, tests, offline
-validation, shadow-safe integration, safety checks, docs, commits, checkpoints — is complete.
+Everything the brief asked for — schemas, services, capabilities, prompts, tests, offline
+validation, shadow-safe integration, safety checks, docs, commits, checkpoints, **and now real
+database validation** — is complete.
 
 ## Appendix — Final validation summary
 
-- `python -m pytest tests/ -k "phase18 or meme" -q` → **156 passed**.
-- `python -m pytest --collect-only -q` → **2,299 tests collected**, 0 collection errors.
+**Superseded by `docs/phase18_final_acceptance_report.md`'s own Appendix/§10-§13** — retained here
+for historical record of what was verifiable during M0–M9 development, before Docker was
+available:
+
+- `python -m pytest tests/ -k "phase18 or meme" -q` → 156 passed (development-time; **174 passed**
+  as of acceptance, against a real database).
+- `python -m pytest --collect-only -q` → 2,299 tests collected (development-time; **2,317** as of
+  acceptance).
 - `python -m pytest tests/test_capability_registry.py tests/test_registry_consistency.py
   tests/test_workflow_registry.py -q` → **20 passed** (confirms `NEWS_ANALYSIS`/
   `CONTENT_GENERATION`/`MEME_GENERATION` registration and every existing capability-registry
-  invariant are unaffected).
+  invariant are unaffected) — re-verified unchanged at acceptance.
 - `python -m pytest tests/test_bot_router_registration.py -q` → **3 passed** (confirms the bot's
-  root-router/dispatcher wiring is unaffected by the two new, inert routers).
-- `python -m alembic heads` → single head `21177d5b859e`, confirming a linear, unbranched
-  migration chain.
+  root-router/dispatcher wiring is unaffected by the two new, inert routers) — re-verified
+  unchanged at acceptance.
+- `python -m alembic heads` → single head `21177d5b859e` (development-time, syntax-only; **runtime
+  upgrade/downgrade/re-upgrade validated** at acceptance).
 - Visual spot-check of the rendering pipeline (M6): a sample meme was rendered end-to-end (mock
   image → text overlay) and visually inspected during development — correct top/bottom text
   placement, high-contrast white-on-color text with black stroke, center "key object" zone
   completely untouched. The temporary output file was not committed.
 - No `.env` file was read, modified, or committed. No secret value was printed at any point. No
-  `docker compose config` or equivalent secret-revealing command was run.
+  `docker compose config` or equivalent secret-revealing command was run — true throughout
+  development and acceptance.
 - No live LLM call, no live image-generation call, no live Telegram send occurred at any point
-  during this phase's development.
+  during this phase's development **or its acceptance validation**.
