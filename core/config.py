@@ -330,6 +330,13 @@ class Settings(BaseSettings):
     # step - this flag governs only whether the shadow assessment itself is computed).
     meme_opportunity_mode: Literal["off", "shadow"] = "off"
 
+    # Phase 18 M3: Meme Safety & Originality Gate (docs/
+    # phase18_m3_meme_safety_originality_report.md). "off" (default): zero processing. "shadow":
+    # a deterministic (zero-LLM-call) MemeSafetyOriginalityGateResult is attached to the
+    # "meme_concept" step's own structured output - never blocks, never mutates the concept
+    # itself, never publishes anything.
+    meme_safety_gate_mode: Literal["off", "shadow"] = "off"
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""

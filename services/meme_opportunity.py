@@ -204,9 +204,14 @@ def _normalize(text: str) -> str:
     return " ".join(unicodedata.normalize("NFKC", text).split())
 
 
-def _detect_sensitivity(text: str) -> tuple[list[str], list[str]]:
+def detect_sensitive_categories(text: str) -> tuple[list[str], list[str]]:
     """Returns (matched_categories, evidence). Evidence-only match phrases, never the surrounding
-    sentence (no raw news content beyond the matched phrase itself is ever logged downstream)."""
+    sentence (no raw news content beyond the matched phrase itself is ever logged downstream).
+
+    Public (no leading underscore) and imported directly by `services/meme_safety.py` (Phase 18
+    M3) - a safety-relevant lexicon must have exactly one copy, never two independently-
+    maintained ones that could silently drift apart between M1 (opportunity detection, scans the
+    source NewsEvent) and M3 (safety gate, scans the generated MemeConcept's own text)."""
     categories: list[str] = []
     evidence: list[str] = []
     for category, pattern in _SENSITIVE_COMPILED.items():
@@ -311,7 +316,7 @@ def assess_meme_opportunity(
 
     text = _normalize(f"{news_event_title} {news_event_content or ''} {' '.join(research_facts)}").lower()
 
-    sensitivity_categories, sensitivity_evidence = _detect_sensitivity(text)
+    sensitivity_categories, sensitivity_evidence = detect_sensitive_categories(text)
 
     irony_score, irony_evidence = _score_irony_contrast(text)
     relatability_score, relatability_evidence = _score_audience_relatability(text)

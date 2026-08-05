@@ -66,6 +66,7 @@ from services.fact_safety import apply_fact_safety
 from services.fact_safety_calibration import calibrate_fact_safety
 from services.image_intelligence import run_shadow_discovery
 from services.meme_opportunity import apply_meme_opportunity_shadow
+from services.meme_safety import apply_meme_safety_originality_shadow
 from services.pricing_catalog import PricingCatalog
 from workflows.errors import PermanentStepFailureError, StepExecutionError, TaskNotFoundError
 
@@ -289,6 +290,14 @@ class CapabilityExecutor:
         # Never read by CopywritingCapability, never changes ContentDraft.
         if step.capability == "copywriting" and settings.beginner_copywriting_mode != "off":
             structured_output = self._attach_beginner_friendly_plan(news_event, context, structured_output)
+
+        # Phase 18 M3: deterministic, zero-LLM-call Meme Safety & Originality Gate (docs/
+        # phase18_m3_meme_safety_originality_report.md) - only for "meme_concept" (the step whose
+        # own just-succeeded structured_output is a real MemeConcept), only when
+        # meme_safety_gate_mode == "shadow" (default "off", byte-for-byte unchanged behavior).
+        # Never blocks, never mutates the concept itself.
+        if step.capability == "meme_concept" and settings.meme_safety_gate_mode == "shadow":
+            structured_output = self._attach_meme_safety_originality(news_event, context, structured_output)
 
         return structured_output
 
@@ -692,6 +701,50 @@ class CapabilityExecutor:
                     "sensitivity_categories": assessment.get("sensitivity_categories"),
                     "source_sufficiency": assessment.get("source_sufficiency"),
                     "reason_codes": assessment.get("reason_codes"),
+                },
+            )
+        return result
+
+    def _attach_meme_safety_originality(
+        self, news_event: NewsEvent, context: CapabilityContext, structured_output: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Best-effort, non-blocking (same discipline every prior hook establishes: a gate
+        failure must not fail the step, must not cause a retry). `structured_output` at this
+        point is `MemeConceptCapability`'s own just-succeeded result - passed to `MemeConcept.
+        model_validate()` inside `apply_meme_safety_originality_shadow()`; a malformed concept
+        (should not happen, `MemeConceptCapability` already floor-validates it) degrades to the
+        same logged-and-swallowed failure path as any other exception here. No `calibrated_fact_
+        safety_status` is available yet - MEME_GENERATION has no "quality" step of its own as of
+        M3 (workflows/definitions/meme_generation.py's own current step list) - `None` is passed,
+        the documented, safe default `services.meme_safety.assess_meme_safety()` already handles
+        explicitly."""
+        logger.info(
+            "meme_safety_originality_assessment_started",
+            extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+        )
+        try:
+            result = apply_meme_safety_originality_shadow(
+                structured_output, news_event.title, structured_output,
+            )
+        except Exception:
+            logger.warning(
+                "meme_safety_originality_assessment_failed",
+                extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+            )
+            return structured_output
+
+        assessment = result.get("meme_safety_originality")
+        if isinstance(assessment, dict):
+            logger.info(
+                "meme_safety_originality_assessment_completed",
+                extra={
+                    "task_id": str(self._task_id),
+                    "event_id": str(news_event.id),
+                    "policy_version": assessment.get("policy_version"),
+                    "gate_decision": assessment.get("gate_decision"),
+                    "safety_decision": (assessment.get("safety") or {}).get("decision"),
+                    "originality_decision": (assessment.get("originality") or {}).get("decision"),
+                    "sensitivity_categories": (assessment.get("safety") or {}).get("sensitivity_categories"),
                 },
             )
         return result
