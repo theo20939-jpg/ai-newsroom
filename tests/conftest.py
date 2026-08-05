@@ -17,20 +17,177 @@ intermittently hand a test a connection opened on a different test's loop
 (sqlalchemy.exc.MissingGreenlet). NullPool opens a fresh physical connection
 per checkout and never pools it, sidestepping that entirely without touching
 the production engine.
+
+Phase 18.9-R: this file also installs three independent, suite-wide barriers
+against a real paid provider call ever being reachable from a pytest process
+(docs/phase18_9r_test_provider_path_audit.md, docs/phase18_9_incident_snapshot.md -
+a real, confirmed incident happened without them). All three are applied at module
+import time - the earliest point pytest reaches, before any test or fixture runs, and
+(critically for Barrier 2) before core.config.get_settings()'s own @lru_cache
+construction can read the real .env. None of them depend on any individual test
+remembering to opt in.
 """
-import uuid
-from collections.abc import AsyncGenerator
+import os
 
-import pytest_asyncio
-from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.pool import NullPool
+# ---------------------------------------------------------------------------
+# Phase 18.9-R Barrier 2 (API credential isolation) - MUST be the first executable lines in
+# this file, before ANY import (including stdlib-adjacent ones below) that could transitively
+# import core.config and trigger its @lru_cache'd get_settings() singleton construction, which
+# reads the real .env file. pydantic-settings' own precedence is constructor kwargs > os.environ
+# > .env file, so setting this here guarantees the real OPENAI_API_KEY is never read into this
+# process's Settings singleton at all - not merely overwritten after construction (an
+# importlib.reload-based "fix after the fact" approach was tried and rejected during Phase 18.8's
+# own test-authoring: it corrupted other modules' already-bound references to the settings
+# singleton). This does not touch the real .env file on disk, and has no effect on already-running
+# Docker containers (each reads its own env_file: .env once, at container start, entirely outside
+# this process).
+# ---------------------------------------------------------------------------
+TEST_OPENAI_API_KEY_SENTINEL = "test-disabled-no-real-provider-access"
+os.environ["OPENAI_API_KEY"] = TEST_OPENAI_API_KEY_SENTINEL
 
-from core.config import settings
-from database.models.news_event import EventCategory, NewsEvent
-from database.models.news_source import NewsSource, SourceType
+import uuid  # noqa: E402
+from collections.abc import AsyncGenerator  # noqa: E402
+
+import httpx  # noqa: E402
+import pytest_asyncio  # noqa: E402
+from redis.asyncio import Redis  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: E402
+from sqlalchemy.pool import NullPool  # noqa: E402
+
+from core.config import settings  # noqa: E402
+from database.models.news_event import EventCategory, NewsEvent  # noqa: E402
+from database.models.news_source import NewsSource, SourceType  # noqa: E402
+from integrations.llm_gateway.providers.openai_adapter import OpenAIAdapter  # noqa: E402
 
 _test_engine = create_async_engine(settings.database_url, poolclass=NullPool)
+
+# Phase 18.9-R M5 (Redis isolation): a dedicated Redis logical database index for the entire test
+# suite, structurally separate from production's index 0 (settings.redis_db) - real keyspace
+# isolation via Redis's own native multi-database feature, not merely a per-test naming
+# convention (the convention alone is exactly what tests/test_api_cost_optimization_checklist.py
+# violated - docs/phase18_9r_test_provider_path_audit.md sec4). No test in this suite may still
+# reach production's real index 0 through this fixture.
+TEST_REDIS_DB_INDEX = 15
+
+
+# ---------------------------------------------------------------------------
+# Phase 18.9-R Barrier 1 (provider construction poison pill) - OpenAIAdapter.__init__ constructs
+# a REAL, functional AsyncOpenAI client whenever client=None (its own default, `integrations/
+# llm_gateway/providers/openai_adapter.py`). Patched once, here, for the entire pytest session,
+# regardless of which test/fixture/module reaches it - never dependent on an individual test
+# injecting a poison-pill registry itself (that discipline already failed once - the original
+# Phase 18.9 incident). Tests that inject their own fake/mock client (client=...) are entirely
+# unaffected - only the client=None (real construction) branch is intercepted.
+# ---------------------------------------------------------------------------
+
+
+class RealProviderConstructionBlockedError(RuntimeError):
+    """Raised instead of constructing a real AsyncOpenAI client during pytest (Phase 18.9-R
+    Barrier 1). If you see this, inject a fake/mock client explicitly, or use
+    FakeProviderAdapter/FakeLLMGateway (tests/fakes/) instead of the real provider stack."""
+
+
+_ORIGINAL_OPENAI_ADAPTER_INIT = OpenAIAdapter.__init__
+
+# Pre-existing, already-established SAFE_FAKE convention across this codebase's own tests
+# (docs/phase18_9r_test_provider_path_audit.md sec1): several already-audited, already-safe tests
+# (tests/test_boot_assembly.py, tests/test_capability_boot_wiring_e2e.py, tests/
+# test_phase8/9_cross_cutting_regression.py, tests/test_openai_adapter.py) deliberately construct
+# a REAL (but never-called - `.generate()` is never invoked) AsyncOpenAI client with an
+# obviously-fake key, specifically to test the boot/construction sequence itself. Blocking those
+# unconditionally, on first attempt, broke 6 pre-existing tests - fixed by allowing construction
+# through when the key is recognizably one of this codebase's own established fake-key patterns
+# (contains "test" or "fake") rather than blocking every client=None construction unconditionally.
+# A real OpenAI key (`sk-proj-...`/`sk-...`, real .env value, or Barrier 2's own sentinel string
+# swapped in for it) does not match this pattern and is still blocked. This does not weaken the
+# barrier's real guarantee - Barrier 2 already ensures the real settings singleton's own key is
+# never anything but the sentinel (which itself contains "test" and is therefore also allowed
+# through here, safely, since it is not a real key either).
+_KNOWN_SAFE_TEST_KEY_MARKERS = ("test", "fake")
+
+
+def _looks_like_a_known_safe_test_key(credential: object) -> bool:
+    """Deliberately excludes an exact match against `TEST_OPENAI_API_KEY_SENTINEL` itself -
+    that value means "this credential came from the real `core.config.settings` singleton"
+    (Barrier 2), which is exactly the original incident's own shape and must always still be
+    blocked here, never treated as a known-safe pattern merely because it happens to contain
+    "test" too."""
+    api_key = getattr(credential, "api_key", None)
+    if api_key is None:
+        return False
+    value = api_key.get_secret_value()
+    if value == TEST_OPENAI_API_KEY_SENTINEL:
+        return False
+    return any(marker in value.lower() for marker in _KNOWN_SAFE_TEST_KEY_MARKERS)
+
+
+def _guarded_openai_adapter_init(self: OpenAIAdapter, credential, *, client: object = None) -> None:
+    if client is None and not _looks_like_a_known_safe_test_key(credential):
+        raise RealProviderConstructionBlockedError(
+            f"Blocked: OpenAIAdapter attempted to construct a REAL AsyncOpenAI client "
+            f"(base_url={credential.base_url!r}) during pytest, with a credential that does not "
+            "match any known-safe test-key pattern. Inject a fake/mock client explicitly, or use "
+            "FakeProviderAdapter/FakeLLMGateway instead. "
+            "(Phase 18.9-R Barrier 1 - docs/phase18_9r_test_provider_path_audit.md)"
+        )
+    _ORIGINAL_OPENAI_ADAPTER_INIT(self, credential, client=client)  # type: ignore[arg-type]
+
+
+OpenAIAdapter.__init__ = _guarded_openai_adapter_init  # type: ignore[method-assign]
+
+
+# ---------------------------------------------------------------------------
+# Phase 18.9-R Barrier 3 (network egress denial, below the application/provider layer) - even if
+# Barriers 1/2 were somehow both bypassed, no httpx-based HTTP request to a real external host can
+# leave this process during pytest. Requests already routed through httpx.MockTransport (the
+# established pattern tests/test_{arxiv,github,hacker_news,rss}_source.py already use) are always
+# allowed through unconditionally - checked by the client's configured transport TYPE, not by
+# hostname, so a fake target URL like "https://example.com/feed.rss" (a real-looking host, but a
+# fake transport) is never blocked by mistake (docs/phase18_9r_test_provider_path_audit.md sec7).
+# Local Postgres/Redis access is unaffected - neither uses httpx (asyncpg/redis-py speak their own
+# TCP protocols directly, never routed through httpx.AsyncClient/Client at all).
+# ---------------------------------------------------------------------------
+
+
+class NetworkEgressBlockedTestError(RuntimeError):
+    """Raised instead of letting an httpx request leave this process during pytest (Phase 18.9-R
+    Barrier 3). Use httpx.MockTransport instead of a real request."""
+
+
+_ALLOWED_TEST_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+_ORIGINAL_ASYNC_CLIENT_SEND = httpx.AsyncClient.send
+_ORIGINAL_CLIENT_SEND = httpx.Client.send
+
+
+def _is_mock_transport(client: httpx.AsyncClient | httpx.Client) -> bool:
+    return isinstance(getattr(client, "_transport", None), httpx.MockTransport)
+
+
+async def _guarded_async_send(
+    self: httpx.AsyncClient, request: httpx.Request, **kwargs: object
+) -> httpx.Response:
+    if _is_mock_transport(self) or request.url.host in _ALLOWED_TEST_HOSTS:
+        return await _ORIGINAL_ASYNC_CLIENT_SEND(self, request, **kwargs)  # type: ignore[arg-type]
+    raise NetworkEgressBlockedTestError(
+        f"Blocked outbound HTTP request to {request.url.host!r} ({request.method} {request.url}) "
+        "during pytest - real network egress is not permitted. Use httpx.MockTransport instead. "
+        "(Phase 18.9-R Barrier 3 - docs/phase18_9r_test_provider_path_audit.md)"
+    )
+
+
+def _guarded_sync_send(self: httpx.Client, request: httpx.Request, **kwargs: object) -> httpx.Response:
+    if _is_mock_transport(self) or request.url.host in _ALLOWED_TEST_HOSTS:
+        return _ORIGINAL_CLIENT_SEND(self, request, **kwargs)  # type: ignore[arg-type]
+    raise NetworkEgressBlockedTestError(
+        f"Blocked outbound HTTP request to {request.url.host!r} ({request.method} {request.url}) "
+        "during pytest - real network egress is not permitted. Use httpx.MockTransport instead. "
+        "(Phase 18.9-R Barrier 3 - docs/phase18_9r_test_provider_path_audit.md)"
+    )
+
+
+httpx.AsyncClient.send = _guarded_async_send  # type: ignore[method-assign]
+httpx.Client.send = _guarded_sync_send  # type: ignore[method-assign]
 
 
 @pytest_asyncio.fixture
@@ -43,13 +200,14 @@ async def redis_client() -> AsyncGenerator[Redis, None]:
     Event loop is closed) when reused from a later test's loop. A fresh client per test
     sidesteps this entirely.
 
-    Phase 7's Redis-backed components (CacheStore, RateLimiter, ProviderHealthStore,
-    LatencyTracker, the real CostTracker ledger) are tested against this directly - every
-    test using it MUST write only uniquely namespaced keys and delete them in its own
-    teardown, since this fixture does not wrap Redis in a transaction the way `db_session`
-    wraps Postgres (Redis has no equivalent rollback-on-teardown mechanism here).
-    """
-    client = Redis.from_url(settings.redis_url, decode_responses=True)
+    Phase 18.9-R M5: connects to `TEST_REDIS_DB_INDEX` (15), never production's real index 0
+    (`settings.redis_db`) - structural isolation, not merely the per-test unique-namespace
+    convention every test using this fixture must still additionally follow for keys *within*
+    this test database (Phase 7's Redis-backed components - CacheStore, RateLimiter,
+    ProviderHealthStore, LatencyTracker, the real CostTracker ledger shape - are exercised
+    against this same, now-isolated instance)."""
+    test_redis_url = f"redis://{settings.redis_host}:{settings.redis_port}/{TEST_REDIS_DB_INDEX}"
+    client = Redis.from_url(test_redis_url, decode_responses=True)
     try:
         yield client
     finally:
