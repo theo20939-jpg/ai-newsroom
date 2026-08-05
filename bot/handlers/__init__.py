@@ -3,6 +3,7 @@ from aiogram import Router
 
 from bot.handlers.digest import router as digest_router
 from bot.handlers.image_preview import router as image_preview_router
+from bot.handlers.meme_preview import router as meme_preview_router
 from bot.handlers.news import router as news_router
 from bot.handlers.settings import router as settings_router
 from bot.handlers.start import router as start_router
@@ -15,5 +16,8 @@ router.include_router(digest_router)
 router.include_router(status_router)
 router.include_router(settings_router)
 router.include_router(image_preview_router)
+# Phase 18 M8: inert until something actually sends a "memeprev:" message - no production code
+# path calls services/meme_preview_notifier.py yet (meme_telegram_preview_mode defaults "off").
+router.include_router(meme_preview_router)
 
 __all__ = ["router"]

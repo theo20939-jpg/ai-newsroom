@@ -348,6 +348,15 @@ class Settings(BaseSettings):
     meme_image_generation_mode: Literal["off", "dry_run"] = "off"
     meme_image_max_bytes: int = Field(default=10_000_000, gt=0)
 
+    # Phase 18 M8: Telegram Meme Editorial Preview (docs/
+    # phase18_m8_telegram_editorial_preview_report.md). "off" (default): the preview is never
+    # built or sent. "dry_run": services.meme_preview_notifier.send_meme_preview() renders and
+    # logs the exact payload, but never calls the Telegram API - mirrors content_generation_
+    # dry_run's own established discipline. There is deliberately no "live" value yet - a real
+    # Telegram send requires separate, explicit human authorization (operating rule) before that
+    # value is even added.
+    meme_telegram_preview_mode: Literal["off", "dry_run"] = "off"
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""
