@@ -65,6 +65,7 @@ from services.editorial_scoring import apply_editorial_scoring_v2
 from services.fact_safety import apply_fact_safety
 from services.fact_safety_calibration import calibrate_fact_safety
 from services.image_intelligence import run_shadow_discovery
+from services.meme_opportunity import apply_meme_opportunity_shadow
 from services.pricing_catalog import PricingCatalog
 from workflows.errors import PermanentStepFailureError, StepExecutionError, TaskNotFoundError
 
@@ -225,6 +226,17 @@ class CapabilityExecutor:
         # behavior). Never read by any Capability, never changes ContentDraft.
         if step.capability == "quality" and settings.editorial_completeness_mode == "shadow":
             structured_output = self._attach_editorial_completeness(news_event, context, structured_output)
+
+        # Phase 18 M1: deterministic, zero-LLM-call Meme Opportunity Detection (docs/
+        # phase18_m1_meme_opportunity_report.md) - same "quality" step, after every Phase 15/17
+        # quality/completeness hook above (so a story Fact Safety/Editorial Completeness already
+        # flagged as thin/unresolved is visible to this hook too, via context/step_results - it
+        # re-derives source sufficiency itself rather than depending on either prior hook having
+        # actually run). Only when meme_opportunity_mode == "shadow" (default "off", byte-for-byte
+        # unchanged behavior). Never read by any Capability, never changes ContentDraft, never
+        # creates a MEME_GENERATION task - purely a persisted shadow recommendation.
+        if step.capability == "quality" and settings.meme_opportunity_mode == "shadow":
+            structured_output = self._attach_meme_opportunity(news_event, context, structured_output)
 
         # Phase 17 M1: deterministic, zero-new-LLM-call Editorial Brief shadow build (docs/
         # phase17_m1_editorial_brief_shadow_report.md) - only for "intelligence" (the earliest
@@ -629,6 +641,59 @@ class CapabilityExecutor:
                 },
             )
             result = {**result, "calibrated_fact_safety": calibrated.model_dump(mode="json")}
+        return result
+
+    def _attach_meme_opportunity(
+        self, news_event: NewsEvent, context: CapabilityContext, structured_output: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Best-effort, non-blocking (same discipline every M1-M5 Phase 17 hook above already
+        established: a classifier failure must not fail the step, must not cause a retry, must
+        not duplicate the task). Purely synchronous/deterministic - no `await`. Reads only
+        `research` (facts/gaps) and, when present, the "copywriting" step's own already-attached
+        `image_intelligence.candidates_accepted` (Phase 16) as a visual-potential signal - never
+        recomputes either, never calls the LLM Gateway. Any failure is logged
+        (`meme_opportunity_assessment_failed`) and swallowed, returning `structured_output`
+        completely unchanged. No raw content or the full assessment payload in ordinary logs -
+        only schema/classification metadata, matching every prior hook's own observability
+        discipline."""
+        logger.info(
+            "meme_opportunity_assessment_started",
+            extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+        )
+        try:
+            research_output = context.business.workflow_state.step_results.get("research", {})
+            copywriting_output = context.business.workflow_state.step_results.get("copywriting", {})
+            image_intelligence = copywriting_output.get("image_intelligence")
+            has_image_candidate = (
+                image_intelligence.get("candidates_accepted", 0) > 0
+                if isinstance(image_intelligence, dict) else None
+            )
+            result = apply_meme_opportunity_shadow(
+                news_event.title, news_event.content, news_event.category, news_event.published_at,
+                research_output, structured_output, has_image_candidate=has_image_candidate,
+            )
+        except Exception:
+            logger.warning(
+                "meme_opportunity_assessment_failed",
+                extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+            )
+            return structured_output
+
+        assessment = result.get("meme_opportunity")
+        if isinstance(assessment, dict):
+            logger.info(
+                "meme_opportunity_assessment_completed",
+                extra={
+                    "task_id": str(self._task_id),
+                    "event_id": str(news_event.id),
+                    "policy_version": assessment.get("policy_version"),
+                    "decision": assessment.get("decision"),
+                    "composite_score": (assessment.get("signals") or {}).get("composite_score"),
+                    "sensitivity_categories": assessment.get("sensitivity_categories"),
+                    "source_sufficiency": assessment.get("source_sufficiency"),
+                    "reason_codes": assessment.get("reason_codes"),
+                },
+            )
         return result
 
     async def _record_cost(

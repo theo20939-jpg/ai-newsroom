@@ -322,6 +322,14 @@ class Settings(BaseSettings):
     # ContentDraft, never blocks a task or changes Telegram delivery.
     editorial_completeness_mode: Literal["off", "shadow"] = "off"
 
+    # Phase 18 M1: Meme Opportunity Detection (docs/phase18_m1_meme_opportunity_report.md). "off"
+    # (default): zero processing. "shadow": a deterministic (zero-LLM-call) MemeOpportunity
+    # Assessment is built and persisted into EditorialTask.workflow's existing step_results
+    # ["quality"] JSON - never read by any Capability, never changes ContentDraft, never blocks a
+    # task, never creates a MEME_GENERATION task on its own (that remains a separate, explicit
+    # step - this flag governs only whether the shadow assessment itself is computed).
+    meme_opportunity_mode: Literal["off", "shadow"] = "off"
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""
