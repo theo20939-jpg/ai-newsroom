@@ -34,7 +34,6 @@ from typing import Any
 from core.config import settings
 from database.models.news_event import EventCategory
 from schemas.meme_opportunity import (
-    MEME_OPPORTUNITY_SCHEMA_VERSION,
     MemeOpportunityAssessment,
     MemeOpportunityDecision,
     MemeOpportunitySignals,

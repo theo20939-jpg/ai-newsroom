@@ -46,7 +46,12 @@ _STROKE_WIDTH = 4
 _MIN_CONTRAST_RATIO = 3.0
 
 
-def _load_font(size: int) -> ImageFont.FreeTypeFont:
+def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    """Return type is a real union, not just `FreeTypeFont` - the fallback branch (only reachable
+    on a Pillow build predating the `size=` kwarg) returns Pillow's own base `ImageFont` type
+    instead. Both are accepted transparently by every `ImageDraw` method this module calls
+    (`textbbox`/`text`), so callers never need to distinguish them (found by mypy during Phase 18
+    final acceptance - the original narrower annotation was simply inaccurate, not a real bug)."""
     try:
         return ImageFont.load_default(size=size)
     except TypeError:  # pragma: no cover - only reachable on a Pillow build predating `size=`
@@ -91,7 +96,9 @@ def _choose_text_colors(background_luminance: float) -> tuple[tuple[int, int, in
     return black, white, ratio_black
 
 
-def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
+def _wrap_text(
+    draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont, max_width: int,
+) -> list[str]:
     words = text.split()
     if not words:
         return []
@@ -111,7 +118,7 @@ def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFon
 
 def _fit_text_to_band(
     draw: ImageDraw.ImageDraw, text: str, *, max_width: int, max_height: int,
-) -> tuple[ImageFont.FreeTypeFont, list[str], bool]:
+) -> tuple[ImageFont.FreeTypeFont | ImageFont.ImageFont, list[str], bool]:
     """Shrinks font size through `_FONT_SIZES_DESCENDING` until the wrapped text fits within
     `max_width`/`max_height` (capped at `_MAX_LINES_PER_BAND` lines). If even the smallest size
     still doesn't fit, truncates to the lines that DO fit and reports a violation - text is never

@@ -77,9 +77,16 @@ def upgrade() -> None:
     )
     op.create_index("ix_meme_candidates_status", "meme_candidates", ["status"])
     op.create_index("ix_meme_candidates_editor_decision", "meme_candidates", ["editor_decision"])
+    # Phase 18 final acceptance audit: database/models/meme_candidate.py declares
+    # `safety_status` with `index=True` - this index was missing from the original migration
+    # (caught by a real schema-parity check against a live database, not by inspection alone).
+    # Safe to fix in place: this migration had not been applied to any real database before this
+    # fix (docs/phase18_final_acceptance_migration_report.md).
+    op.create_index("ix_meme_candidates_safety_status", "meme_candidates", ["safety_status"])
 
 
 def downgrade() -> None:
+    op.drop_index("ix_meme_candidates_safety_status", table_name="meme_candidates")
     op.drop_index("ix_meme_candidates_editor_decision", table_name="meme_candidates")
     op.drop_index("ix_meme_candidates_status", table_name="meme_candidates")
     op.drop_table("meme_candidates")

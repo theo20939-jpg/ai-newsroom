@@ -3,10 +3,12 @@
 shape - class-based, constructor-injected with the caller's own already-open `AsyncSession`).
 
 `create_from_concept()` (M2), `record_editor_decision()` (M8, extended M9 with the reason
-taxonomy/notes), `add_cost()` and `build_feedback_summary()` (M9) exist so far - later milestones
-(M3 safety/originality persistence, M4 copy persistence, M5/M6 image/render persistence) each add
-their own single, narrow method here when that milestone actually lands, never speculative stub
-methods ahead of the milestone that needs them (docs/phase18_m2_meme_concept_report.md).
+taxonomy/notes), `add_cost()` and `build_feedback_summary()` (M9), plus `attach_safety_assessment`/
+`attach_copy`/`attach_image_result`/`attach_render_result`/`attach_quality_assessment` (added at
+Phase 18 final acceptance, docs/phase18_final_acceptance_db_integration_report.md - closing the
+disclosed "no persistence method yet" gap each of M3-M7's own reports flagged, using exactly the
+columns M2's migration already reserved for them) - no orchestrator calls these in a live run yet
+(same disclosed deferral as ever), but they are now real, tested, and ready for one.
 """
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -17,11 +19,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models.meme_candidate import MemeCandidate, MemeCandidateStatus
 from schemas.meme_concept import MemeConcept
+from schemas.meme_copy import MemeCopy
 from schemas.meme_feedback import MemeFeedbackSummary, MemeRejectionReason
+from schemas.meme_image import MemeImageGenerationResult, MemeImageStatus
+from schemas.meme_quality import MemeQualityAssessment, MemeQualityDecision
+from schemas.meme_render import MemeRenderResult, MemeRenderStatus
+from schemas.meme_safety import MemeGateDecision, MemeSafetyOriginalityGateResult
 
 _DECISION_TO_STATUS: dict[str, MemeCandidateStatus] = {
     "approved": MemeCandidateStatus.APPROVED,
     "rejected": MemeCandidateStatus.REJECTED,
+}
+
+# MemeQualityDecision (M7) has 5 values; MemeCandidateStatus (M2, designed before M7 existed) has
+# only 3 quality-stage values plus PENDING_EDITOR - there is no dedicated status for "needs a new
+# concept" or "needs a new image." This documented mapping (found and resolved during Phase 18
+# final acceptance, docs/phase18_final_acceptance_db_integration_report.md) sends a regenerate
+# recommendation back to the status of the stage that must actually be redone, rather than
+# inventing a new enum value/migration for a distinction the status column was never meant to
+# carry in this much granularity.
+_QUALITY_DECISION_TO_STATUS: dict[MemeQualityDecision, MemeCandidateStatus] = {
+    MemeQualityDecision.READY_FOR_EDITOR: MemeCandidateStatus.PENDING_EDITOR,
+    MemeQualityDecision.REVIEW: MemeCandidateStatus.QUALITY_REVIEW,
+    MemeQualityDecision.REJECT: MemeCandidateStatus.QUALITY_REJECTED,
+    MemeQualityDecision.REGENERATE_CONCEPT: MemeCandidateStatus.CONCEPT_GENERATED,
+    MemeQualityDecision.REGENERATE_IMAGE: MemeCandidateStatus.COPY_GENERATED,
 }
 
 
@@ -52,6 +74,102 @@ class MemeCandidateService:
             concept_regeneration_count=0,
         )
         self._session.add(candidate)
+        await self._session.commit()
+        await self._session.refresh(candidate)
+        return candidate
+
+    async def attach_safety_assessment(
+        self, candidate_id: UUID, result: MemeSafetyOriginalityGateResult,
+    ) -> MemeCandidate | None:
+        """Persists M3's `MemeSafetyOriginalityGateResult` onto its owning row. Only advances
+        `status` for the two outcomes that actually warrant a distinct milestone
+        (`SAFETY_BLOCKED`/`SAFETY_REVIEW`) - a clean `PASS` leaves `status` at
+        `CONCEPT_GENERATED`, since `MemeCandidateStatus` (M2) has no dedicated "safety passed"
+        value of its own; processing simply continues to whatever `attach_copy()` sets next.
+        Returns `None` if `candidate_id` does not exist, never raises."""
+        candidate = await self._session.get(MemeCandidate, candidate_id)
+        if candidate is None:
+            return None
+        candidate.safety_status = result.safety.decision.value
+        candidate.safety_reason_codes = result.safety.reason_codes
+        candidate.originality_status = result.originality.decision.value
+        candidate.originality_reason_codes = result.originality.reason_codes
+        if result.gate_decision == MemeGateDecision.BLOCK:
+            candidate.status = MemeCandidateStatus.SAFETY_BLOCKED
+        elif result.gate_decision == MemeGateDecision.REVIEW:
+            candidate.status = MemeCandidateStatus.SAFETY_REVIEW
+        await self._session.commit()
+        await self._session.refresh(candidate)
+        return candidate
+
+    async def attach_copy(self, candidate_id: UUID, copy: MemeCopy) -> MemeCandidate | None:
+        """Persists M4's `MemeCopy` onto its owning row and advances `status` to
+        `COPY_GENERATED`. Does not itself check `safety_status` first - records what the caller
+        supplies, mirroring `record_editor_decision()`'s identical "record, don't second-guess
+        call order" convention."""
+        candidate = await self._session.get(MemeCandidate, candidate_id)
+        if candidate is None:
+            return None
+        candidate.copy_schema_version = copy.schema_version
+        candidate.copy_data = copy.model_dump(mode="json")
+        candidate.status = MemeCandidateStatus.COPY_GENERATED
+        await self._session.commit()
+        await self._session.refresh(candidate)
+        return candidate
+
+    async def attach_image_result(
+        self, candidate_id: UUID, result: MemeImageGenerationResult,
+    ) -> MemeCandidate | None:
+        """Persists M5's `MemeImageGenerationResult` onto its owning row - never the raw image
+        bytes, only the storage reference already inside `result` (mirrors every Phase 18 result
+        schema's own "storage_key is an internal reference only" discipline). `mode="off"`
+        results (`MemeImageStatus.OFF`) are recorded but do not advance `status` - nothing was
+        actually attempted."""
+        candidate = await self._session.get(MemeCandidate, candidate_id)
+        if candidate is None:
+            return None
+        candidate.image_status = result.status.value
+        candidate.image_storage_key = result.storage_key
+        candidate.image_provider = result.provider
+        candidate.image_model = result.model_used
+        if result.status == MemeImageStatus.GENERATED:
+            candidate.status = MemeCandidateStatus.IMAGE_GENERATED
+        elif result.status == MemeImageStatus.FAILED:
+            candidate.status = MemeCandidateStatus.IMAGE_FAILED
+        await self._session.commit()
+        await self._session.refresh(candidate)
+        return candidate
+
+    async def attach_render_result(self, candidate_id: UUID, result: MemeRenderResult) -> MemeCandidate | None:
+        """Persists M6's `MemeRenderResult` onto its owning row. Only advances `status` to
+        `RENDERED` on success - a render failure leaves `status` at whatever M5's own
+        `attach_image_result()` last set (typically `IMAGE_GENERATED`), since the underlying
+        image itself was fine; only rendering needs to be retried."""
+        candidate = await self._session.get(MemeCandidate, candidate_id)
+        if candidate is None:
+            return None
+        candidate.render_storage_key = result.storage_key
+        if result.status == MemeRenderStatus.RENDERED:
+            candidate.status = MemeCandidateStatus.RENDERED
+        await self._session.commit()
+        await self._session.refresh(candidate)
+        return candidate
+
+    async def attach_quality_assessment(
+        self, candidate_id: UUID, assessment: MemeQualityAssessment,
+    ) -> MemeCandidate | None:
+        """Persists M7's `MemeQualityAssessment` onto its owning row. `quality_score` (a column
+        reserved since M2) is never set here - `services.meme_quality.assess_meme_quality()` does
+        not compute a numeric score, only the `MemeQualityChecks` boolean breakdown already
+        captured in `quality_reason_codes`' sibling `reason_codes` list; the column remains
+        genuinely unpopulated by this phase's own logic, not a bug. See this module's own
+        `_QUALITY_DECISION_TO_STATUS` docstring for the status-mapping rationale."""
+        candidate = await self._session.get(MemeCandidate, candidate_id)
+        if candidate is None:
+            return None
+        candidate.quality_decision = assessment.decision.value
+        candidate.quality_reason_codes = assessment.reason_codes
+        candidate.status = _QUALITY_DECISION_TO_STATUS[assessment.decision]
         await self._session.commit()
         await self._session.refresh(candidate)
         return candidate
