@@ -337,6 +337,17 @@ class Settings(BaseSettings):
     # itself, never publishes anything.
     meme_safety_gate_mode: Literal["off", "shadow"] = "off"
 
+    # Phase 18 M5: Meme Image Generation (docs/phase18_m5_meme_image_generation_report.md). "off"
+    # (default): zero calls, zero cost. "dry_run": generates via whichever ImageGenerationGateway
+    # was injected - in every call site this codebase wires up today, that is
+    # `integrations.llm_gateway.providers.mock_image_adapter.MockImageAdapter`, a deterministic,
+    # zero-network, zero-cost placeholder generator. There is deliberately no "live" value yet -
+    # wiring a real, paid provider adapter is a separate, explicitly-authorized future step (per
+    # the operating rule: no live/paid image-generation call without separate human
+    # authorization) - the mode flag cannot even express "live" until that milestone adds it.
+    meme_image_generation_mode: Literal["off", "dry_run"] = "off"
+    meme_image_max_bytes: int = Field(default=10_000_000, gt=0)
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""
