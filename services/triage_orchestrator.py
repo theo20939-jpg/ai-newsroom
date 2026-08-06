@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -24,10 +24,20 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from core.config import settings
 from database.models.news_event import EventStatus, NewsEvent
 from database.models.news_source import NewsSource
+from database.models.story import Story
+from database.models.story_link import NewsEventStoryLink
 from database.session import async_session_factory
 from schemas.editorial_task import EditorialTaskCreate
 from schemas.workflow import WorkflowType
 from services.cleaning import is_valid_title
+from services.story_memory import (
+    NEW_STORY,
+    SEMANTIC_DUPLICATE,
+    STORY_UPDATE,
+    SUPPORTING_SOURCE,
+    UNCERTAIN_MATCH,
+    match_story,
+)
 from services.triage import decide_triage
 from services.workflow_service import _find_active_task, create_task
 from workflows.errors import DuplicateActiveTaskError
@@ -155,6 +165,92 @@ class TriageCycleReport:
     duplicate_active_task_outcomes: int = 0
     events_rejected_invalid_title: int = 0
     other_failures: int = 0
+    # Phase 18.10 M1/M2 (Story Memory, story_memory_mode != "off" only - all zero when "off").
+    # `received_events` is a derived property, not a separate counter (see below).
+    # `exact_duplicates` is intentionally NOT tracked here - it already exists, unchanged, as
+    # services/collector.py::CollectionReport.duplicates_skipped (exact-hash dedup happens at
+    # collection time, before an event ever reaches Triage) - cross-module composition, not
+    # duplicated. `ignored_events` aliases events_rejected_invalid_title (also unchanged).
+    story_new: int = 0
+    story_updates: int = 0
+    story_supporting_sources: int = 0
+    story_semantic_duplicates: int = 0
+    story_uncertain_matches: int = 0
+
+    @property
+    def received_events(self) -> int:
+        return self.events_claimed + self.events_recovered
+
+
+async def _apply_story_memory(session: AsyncSession, event: NewsEvent, report: TriageCycleReport) -> None:
+    """Phase 18.10 M1/M2: match `event` against recent same-category stories
+    (services/story_memory.py), persist the result as a NewsEventStoryLink row (never as columns
+    on `event` itself - see database/models/news_event.py's own comment on why), and create/
+    update the `stories` row as needed. Never raises for a well-formed event (mirrors
+    decide_triage()'s own "MUST NOT raise for well-formed input" contract) - any failure here is
+    a bug to fix, not a reason to fall back silently, so this deliberately does not have its own
+    try/except; a real failure (including "table does not exist" if story_memory_mode is enabled
+    before the Phase 18.10 migration has been applied) surfaces via `_run_phase_b()`'s own outer
+    `except Exception` handler, exactly like a Triage or create_task() failure would - the event
+    is left PROCESSING with no task, automatically eligible for recovery once the migration
+    lands, never silently corrupted.
+
+    Owns no commit of its own - all mutations here (the new/updated Story row, the new
+    NewsEventStoryLink row) are committed atomically together with create_task()'s own
+    EditorialTask insert, in the same transaction `_run_phase_b()` already manages."""
+    signature, result = await match_story(session, title=event.title, category=event.category)
+
+    if result.outcome == NEW_STORY:
+        story = Story(
+            id=uuid4(),
+            title=event.title,
+            category=event.category,
+            entities=signature.entities,
+            keywords=signature.keywords,
+            topic_bucket=signature.topic_bucket,
+            first_event_id=event.id,
+            event_count=1,
+        )
+        session.add(story)
+        story_id = story.id
+        report.story_new += 1
+    else:
+        # STORY_UPDATE, SEMANTIC_DUPLICATE, or UNCERTAIN_MATCH - all three link the event to the
+        # matched story for observability; only story_update/semantic_duplicate bump event_count
+        # (an uncertain match is, definitionally, not confident enough to count as confirmed
+        # continuation of that story's own event history).
+        assert result.matched_story_id is not None  # guaranteed whenever outcome != NEW_STORY
+        story_id = result.matched_story_id
+        matched_story = await session.get(Story, result.matched_story_id)
+        assert matched_story is not None  # match_story() only returns an id it just queried
+        if result.outcome in (STORY_UPDATE, SUPPORTING_SOURCE, SEMANTIC_DUPLICATE):
+            matched_story.event_count += 1
+
+        if result.outcome == STORY_UPDATE:
+            report.story_updates += 1
+        elif result.outcome == SUPPORTING_SOURCE:
+            report.story_supporting_sources += 1
+        elif result.outcome == SEMANTIC_DUPLICATE:
+            report.story_semantic_duplicates += 1
+        elif result.outcome == UNCERTAIN_MATCH:
+            report.story_uncertain_matches += 1
+
+    session.add(
+        NewsEventStoryLink(
+            news_event_id=event.id, story_id=story_id, match_type=result.outcome, match_score=result.confidence,
+        )
+    )
+
+    logger.info(
+        "phase18_10_story_memory_match",
+        extra={
+            "event_id": str(event.id),
+            "outcome": result.outcome,
+            "matched_story_id": str(story_id) if story_id else None,
+            "confidence": result.confidence,
+            "reason": result.similarity_reason,
+        },
+    )
 
 
 async def _run_phase_b(session: AsyncSession, event_id: UUID, report: TriageCycleReport) -> None:
@@ -195,6 +291,17 @@ async def _run_phase_b(session: AsyncSession, event_id: UUID, report: TriageCycl
                 extra={"event_id": str(event_id), "source_id": str(event.source_id)},
             )
             return
+
+        # Phase 18.10 M1/M2: Story Memory, immediately after the title gate above - the same
+        # "cheap deterministic check before any paid work" seam, since this too is fully
+        # deterministic (no LLM call, services/story_memory.py's own module docstring). A no-op
+        # when story_memory_mode == "off" (the default) - zero extra queries, byte-identical to
+        # pre-18.10 behavior. In "shadow" (the only enabled mode this phase ships), the match
+        # result is persisted for observability but NEVER suppresses create_task() below -
+        # publication behavior is completely unchanged; "enforce"'s suppression path is not
+        # implemented in this phase.
+        if settings.story_memory_mode != "off":
+            await _apply_story_memory(session, event, report)
 
         source = await session.get(NewsSource, event.source_id)
         reliability_score = source.reliability_score if source is not None else None
@@ -320,6 +427,12 @@ async def run_triage_cycle(
             "duplicate_active_task_outcomes": report.duplicate_active_task_outcomes,
             "events_rejected_invalid_title": report.events_rejected_invalid_title,
             "other_failures": report.other_failures,
+            "received_events": report.received_events,
+            "story_new": report.story_new,
+            "story_updates": report.story_updates,
+            "story_supporting_sources": report.story_supporting_sources,
+            "story_semantic_duplicates": report.story_semantic_duplicates,
+            "story_uncertain_matches": report.story_uncertain_matches,
         },
     )
     return report

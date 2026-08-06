@@ -202,6 +202,20 @@ class Settings(BaseSettings):
     # live-validation milestone is the gate for even a shadow-by-default posture.
     image_intelligence_mode: Literal["off", "shadow"] = "off"
 
+    # Phase 18.10 M1/M2: Story Memory (docs/phase18_10_editorial_intelligence_report.md).
+    # Three-state, matching fact_safety_mode's own convention exactly. "off" (default): zero
+    # processing, byte-identical to pre-18.10 behavior - the rollback path. "shadow": every
+    # NewsEvent is matched against recent same-category stories (services/story_memory.py) and
+    # the result (story_id/story_match_type/story_match_score) is persisted for observability -
+    # never suppresses NEWS_ANALYSIS task creation, so publication behavior is completely
+    # unchanged. "enforce" (skip task creation for a semantic_duplicate match) is NOT implemented
+    # in this phase - selecting it currently has no additional effect beyond "shadow" behavior
+    # until a future milestone adds the suppression path; do not rely on it to change behavior
+    # yet. Defaults to "off", not "shadow" - mirrors image_intelligence_mode's own reasoning: a
+    # brand-new signal with zero live validation yet, not something safe to default to shadow
+    # before this phase's own shadow-mode bake period produces real calibration data.
+    story_memory_mode: Literal["off", "shadow", "enforce"] = "off"
+
     # Phase 16 M2: secure fetch / technical validation limits (docs/phase16_m2_secure_fetch_and_
     # validation_report.md §9). All positive-bounded, no unlimited fallback - every external fetch
     # Image Intelligence makes (article HTML, candidate image bytes) is bounded by exactly these

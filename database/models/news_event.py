@@ -67,6 +67,16 @@ class NewsEvent(Base):
     forwards_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     replies_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     reactions_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Phase 18.10 M1/M2 (Story Memory): deliberately NOT a column on this model - see
+    # database/models/story_link.py::NewsEventStoryLink. SQLAlchemy includes every mapped column
+    # of a table in every generated INSERT (even with a None value), so a nullable column here
+    # would make the *existing*, always-run NewsEvent insert (services/collector.py) fail against
+    # a database that hasn't had the Phase 18.10 migration applied yet, regardless of
+    # story_memory_mode. A separate, standalone table (only ever touched when
+    # story_memory_mode != "off" explicitly creates a row) keeps this model's own schema, and
+    # every existing insert into it, byte-identical to before Phase 18.10 - exactly how the
+    # pre-existing, still-unapplied meme_candidates table (Phase 18 M2) has always safely
+    # coexisted unapplied without breaking anything outside the meme pipeline.
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

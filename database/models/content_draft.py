@@ -37,9 +37,16 @@ class ContentDraft(Base):
     type: Mapped[ContentType] = mapped_column(Enum(ContentType, name="content_type"), nullable=False)
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Phase 18.10 M4: no longer populated on new drafts (kept, nullable, for backward
+    # compatibility with historical rows - see services/content_draft_service.py).
     hashtags: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Phase 18.10 M3 (Telegram reply context): deliberately NOT added as a column on this model
+    # yet - see database/models/news_event.py's own comment on the identical reasoning
+    # (database/models/story_link.py::NewsEventStoryLink). Stage 6 introduces its own standalone
+    # content_draft_story_links table when this is actually needed, rather than adding an unused
+    # column now that would make every ContentDraft insert depend on an unapplied migration.
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

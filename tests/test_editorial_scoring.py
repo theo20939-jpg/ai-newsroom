@@ -68,6 +68,8 @@ def _compute(
     event_metrics: dict[str, int | None] | None = None,
     baseline_samples: list[int] | None = None,
     weights: dict[str, float] | None = None,
+    story_match: tuple[str, float] | None = None,
+    novelty_scoring_enabled: bool = False,
 ):
     return compute_editorial_score_v2(
         legacy_llm_score=legacy_llm_score,
@@ -78,6 +80,8 @@ def _compute(
         event_metrics=_EMPTY_METRICS if event_metrics is None else event_metrics,
         baseline_samples=[] if baseline_samples is None else baseline_samples,
         weights=weights,
+        story_match=story_match,
+        novelty_scoring_enabled=novelty_scoring_enabled,
     )
 
 
@@ -287,9 +291,115 @@ def test_missing_reliability_score_falls_back_to_triage_default() -> None:
 
 
 def test_novelty_is_always_neutral_fallback_and_flagged_unavailable() -> None:
+    """No story_match at all (story_memory_mode == "off", the default, or this event predates
+    story memory) - byte-identical to pre-Phase-18.10 behavior."""
     result = _compute()
     assert result["components"]["novelty"] == NEUTRAL_COMPONENT_VALUE
     assert result["coverage"]["novelty_available"] is False
+
+
+# ---------------------------------------------------------------------------
+# H.2 Phase 18.10 M7: novelty connected to the story-memory signal
+# ---------------------------------------------------------------------------
+
+
+def test_semantic_duplicate_does_not_gain_novelty() -> None:
+    """A rehash of an existing story must score exactly zero novelty - never a positive value,
+    regardless of match confidence."""
+    result = _compute(story_match=("semantic_duplicate", 0.90))
+    assert result["components"]["novelty"] == 0.0
+    assert result["coverage"]["novelty_available"] is True
+
+
+def test_genuine_update_gains_positive_novelty() -> None:
+    """A real development on an existing story must score strictly more novelty than a
+    duplicate (0.0) and strictly less than a brand-new story (1.0) - a positive, bounded signal."""
+    result = _compute(story_match=("story_update", 0.68))
+    novelty = result["components"]["novelty"]
+    assert 0.0 < novelty < 1.0
+    assert result["coverage"]["novelty_available"] is True
+
+
+def test_new_story_scores_full_novelty() -> None:
+    """False-positive-protection worked example (docs/phase18_10_editorial_intelligence_report.
+    md): "OpenAI releases GPT-X" vs. "OpenAI CEO comments on regulation" - same company, unrelated
+    action - services/story_memory.py's topic-bucket gate classifies this as a new_story, and it
+    must score full (1.0) novelty here, not some partial/uncertain value."""
+    result = _compute(story_match=("new_story", 1.0))
+    assert result["components"]["novelty"] == 1.0
+    assert result["coverage"]["novelty_available"] is True
+
+
+def test_supporting_source_scores_low_but_nonzero_novelty() -> None:
+    result = _compute(story_match=("supporting_source", 0.70))
+    novelty = result["components"]["novelty"]
+    assert 0.0 < novelty < 0.5  # low, but distinct from a duplicate's exact zero
+
+
+def test_uncertain_match_never_becomes_a_confident_duplicate_or_confident_new_story() -> None:
+    """Uncertainty must never silently resolve to either extreme - a conservative, neutral
+    signal, distinct from both semantic_duplicate's 0.0 and new_story's 1.0."""
+    result = _compute(story_match=("uncertain_match", 0.50))
+    novelty = result["components"]["novelty"]
+    assert novelty != 0.0
+    assert novelty != 1.0
+    assert novelty == NEUTRAL_COMPONENT_VALUE
+    assert result["coverage"]["novelty_available"] is True
+
+
+def test_novelty_ordering_across_all_outcomes() -> None:
+    """The full ordering the recommended behavior describes: duplicate < supporting_source <
+    uncertain <= update-ish region < new_story. Checked directly rather than assumed."""
+    duplicate = _compute(story_match=("semantic_duplicate", 0.90))["components"]["novelty"]
+    supporting = _compute(story_match=("supporting_source", 0.70))["components"]["novelty"]
+    uncertain = _compute(story_match=("uncertain_match", 0.50))["components"]["novelty"]
+    update = _compute(story_match=("story_update", 0.66))["components"]["novelty"]
+    new = _compute(story_match=("new_story", 1.0))["components"]["novelty"]
+
+    assert duplicate < supporting < new
+    assert duplicate < uncertain < new
+    assert duplicate < update <= new
+
+
+def test_shadow_mode_data_never_moves_the_score_or_gets_real_weight() -> None:
+    """Post-review safety property: a real story_match being available (story_memory_mode ==
+    "shadow") must NOT by itself move `score` or give novelty a nonzero weight - only
+    `novelty_scoring_enabled=True` (story_memory_mode == "enforce") may do that. This is what
+    makes shadow mode provably unable to influence task selection, publication eligibility,
+    Telegram delivery, or ranking - the exact property requested in the post-implementation design
+    review. `components`/`coverage` still report the real per-event value (proven separately in
+    the H.2 tests above) - only the score/weight stay frozen here."""
+    without = _compute(legacy_llm_score=50, story_match=None)
+    shadow_new_story = _compute(legacy_llm_score=50, story_match=("new_story", 1.0), novelty_scoring_enabled=False)
+    shadow_duplicate = _compute(legacy_llm_score=50, story_match=("semantic_duplicate", 0.9), novelty_scoring_enabled=False)
+
+    assert shadow_new_story["score"] == without["score"]
+    assert shadow_duplicate["score"] == without["score"]
+    assert shadow_new_story["weights"]["novelty"] == 0.0
+    assert shadow_duplicate["weights"]["novelty"] == 0.0
+    assert without["weights"]["novelty"] == 0.0
+    # The real per-event value is still computed and reported (calibration visibility), even
+    # though it carries zero weight.
+    assert shadow_new_story["components"]["novelty"] == 1.0
+    assert shadow_new_story["coverage"]["novelty_available"] is True
+
+
+def test_enforce_mode_lets_novelty_actually_move_the_score() -> None:
+    """Once story_memory_mode == "enforce" (novelty_scoring_enabled=True), novelty must actually
+    move the final score and carry its own nonzero weight - proven by comparing the same inputs
+    with and without story_match, both under enforce."""
+    without = _compute(legacy_llm_score=50, story_match=None, novelty_scoring_enabled=True)
+    with_new_story = _compute(legacy_llm_score=50, story_match=("new_story", 1.0), novelty_scoring_enabled=True)
+    with_duplicate = _compute(legacy_llm_score=50, story_match=("semantic_duplicate", 0.9), novelty_scoring_enabled=True)
+
+    assert with_new_story["score"] != without["score"]
+    assert with_duplicate["score"] != without["score"]
+    assert with_new_story["score"] > with_duplicate["score"]
+    assert with_new_story["weights"]["novelty"] > 0.0
+    assert with_duplicate["weights"]["novelty"] > 0.0
+    # novelty_scoring_enabled alone (no story_match) must not fabricate a signal - still the
+    # permanent "off"-style fallback, byte-identical to the no-signal-at-all case.
+    assert without["weights"]["novelty"] == 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -621,6 +731,68 @@ async def test_apply_editorial_scoring_v2_is_a_noop_passthrough_when_not_v2(
     output = await apply_editorial_scoring_v2(db_session, event, original, task_id=uuid4())
 
     assert output is original  # identity, not just equality - proves zero processing occurred
+
+
+@pytest.mark.skip(
+    reason=(
+        "Requires Alembic migration c2bc6affb100 (adds the 'stories'/'news_event_story_links' "
+        "tables) to be applied first - unapplied by explicit instruction this phase. Remove this "
+        "skip once the migration has been applied to the target database."
+    )
+)
+@pytest.mark.asyncio
+async def test_apply_editorial_scoring_v2_shadow_mode_produces_identical_score_with_or_without_a_story_link(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """End-to-end proof of the post-implementation-review safety property, through the real
+    apply_editorial_scoring_v2() orchestration layer (not just the pure calculator, which
+    tests/test_editorial_scoring.py's own H.2 tests already cover): with
+    story_memory_mode == "shadow", a real NewsEventStoryLink row must not change `score` at all
+    compared to an otherwise-identical event with no link - shadow mode is provably unable to
+    influence task selection, publication eligibility, Telegram delivery, or ranking."""
+    from database.models.story import Story
+    from database.models.story_link import NewsEventStoryLink
+
+    monkeypatch.setattr(settings, "editorial_scoring_version", "v2")
+    monkeypatch.setattr(settings, "story_memory_mode", "shadow")
+
+    source = NewsSource(name="Shadow Source", type=SourceType.RSS, active=True)
+    db_session.add(source)
+    await db_session.flush()
+
+    event_without_link = NewsEvent(
+        source_id=source.id, title="No link", content="c", category=EventCategory.UNKNOWN, hash=f"h-{uuid4()}"
+    )
+    event_with_link = NewsEvent(
+        source_id=source.id, title="Has link", content="c", category=EventCategory.UNKNOWN, hash=f"h-{uuid4()}"
+    )
+    db_session.add_all([event_without_link, event_with_link])
+    await db_session.flush()
+
+    story = Story(
+        title="Seed story", category=EventCategory.UNKNOWN, entities=[], keywords=[],
+        topic_bucket="other", first_event_id=event_with_link.id, event_count=1,
+    )
+    db_session.add(story)
+    await db_session.flush()
+    db_session.add(
+        NewsEventStoryLink(
+            news_event_id=event_with_link.id, story_id=story.id, match_type="new_story", match_score=1.0,
+        )
+    )
+    await db_session.flush()
+
+    output_without = await apply_editorial_scoring_v2(
+        db_session, event_without_link, {"score": 55, "rationale": "x"}, task_id=uuid4()
+    )
+    output_with = await apply_editorial_scoring_v2(
+        db_session, event_with_link, {"score": 55, "rationale": "x"}, task_id=uuid4()
+    )
+
+    assert output_with["score"] == output_without["score"]
+    assert output_with["weights"]["novelty"] == 0.0
+    assert output_with["coverage"]["novelty_available"] is True  # visible for calibration
+    assert output_with["components"]["novelty"] == 1.0  # real value, just zero-weighted
 
 
 # ---------------------------------------------------------------------------

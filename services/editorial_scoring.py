@@ -52,7 +52,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import settings
 from database.models.news_event import NewsEvent
 from database.models.news_source import NewsSource
+from database.models.story_link import NewsEventStoryLink
 from services.freshness import compute_freshness
+from services.story_memory import (
+    NEW_STORY,
+    SEMANTIC_DUPLICATE,
+    STORY_UPDATE,
+    SUPPORTING_SOURCE,
+    UNCERTAIN_MATCH,
+)
 from services.triage import DEFAULT_RELIABILITY_SCORE
 
 logger = logging.getLogger(__name__)
@@ -69,6 +77,12 @@ NEUTRAL_COMPONENT_VALUE = 0.5
 # before it is trusted for a percentile comparison - below this, one or two data points could
 # swing the result arbitrarily. Below the minimum, engagement falls back to neutral and
 # `coverage.source_baseline_available` is reported False, never silently computed anyway.
+# Phase 18.10 M7: SUPPORTING_SOURCE's fixed low-novelty value - a corroborating source adds
+# little new information, but isn't literally zero the way a rehash (SEMANTIC_DUPLICATE) is.
+# Reasoned, not fit to historical data (none exists yet - same disclosed-limitation convention
+# as this module's own weight comments).
+SUPPORTING_SOURCE_NOVELTY = 0.15
+
 MIN_ENGAGEMENT_BASELINE_SAMPLE = 3
 # Phase 15 M4.1: below this sample size, the engagement percentile is shrunk toward neutral
 # proportionally (confidence = baseline_n / this constant, capped at 1.0) rather than trusted at
@@ -146,6 +160,44 @@ def _compute_engagement_component(
     return _clamp01(shrunk), True, True
 
 
+def _compute_novelty_component(story_match: tuple[str, float] | None) -> tuple[float, bool]:
+    """Phase 18.10 M7: returns (component_value, novelty_available). `story_match` is
+    `(outcome, match_score)` from a NewsEventStoryLink row (services/story_memory.py's own
+    outcome constants), or None when no story-memory data exists for this event (story_memory_
+    mode == "off", or the event predates story memory being enabled at all).
+
+    `None` -> (NEUTRAL_COMPONENT_VALUE, False) - the exact same permanent fallback this component
+    has always used; `compute_editorial_score_v2()` below still treats this specific case with
+    the old, byte-identical-to-pre-18.10 permanent weight redistribution (see its own comment) -
+    this function does not decide that, only the per-outcome value when data does exist.
+
+    NEW_STORY -> full novelty (1.0). STORY_UPDATE -> positive but bounded below full novelty,
+    scaled by how different the update's title was from the base story (1 - match_score, since
+    match_score for an update sits in [_HIGH_THRESHOLD, _SUPPORTING_SOURCE_TITLE_OVERLAP-derived
+    range) - services/story_memory.py). SUPPORTING_SOURCE -> a small fixed value (corroborating
+    coverage, not new substance). SEMANTIC_DUPLICATE -> exactly zero (a rehash adds nothing).
+    UNCERTAIN_MATCH -> neutral, same conservative value as "no data" - a deliberate "do not
+    confidently push the score in either direction" signal, never treated as confidently novel or
+    confidently duplicate (mirrors this module's own NEUTRAL_COMPONENT_VALUE convention)."""
+    if story_match is None:
+        return NEUTRAL_COMPONENT_VALUE, False
+
+    outcome, match_score = story_match
+    if outcome == NEW_STORY:
+        return 1.0, True
+    if outcome == STORY_UPDATE:
+        return _clamp01(1.0 - match_score), True
+    if outcome == SUPPORTING_SOURCE:
+        return SUPPORTING_SOURCE_NOVELTY, True
+    if outcome == SEMANTIC_DUPLICATE:
+        return 0.0, True
+    if outcome == UNCERTAIN_MATCH:
+        return NEUTRAL_COMPONENT_VALUE, True
+    # Unknown/future outcome string - fail safe to the permanent-unavailable fallback rather than
+    # guess or crash (mirrors this module's own "never fabricate a signal" discipline).
+    return NEUTRAL_COMPONENT_VALUE, False
+
+
 def _band(value: float) -> str:
     if value >= 0.66:
         return "high"
@@ -195,6 +247,8 @@ def compute_editorial_score_v2(
     event_metrics: dict[str, int | None],
     baseline_samples: list[int],
     weights: dict[str, float] | None = None,
+    story_match: tuple[str, float] | None = None,
+    novelty_scoring_enabled: bool = False,
 ) -> dict[str, Any]:
     """Pure. No I/O, no LLM call, no system-clock read (reference_now is always an explicit
     argument - mirrors services/freshness.py's own contract). Deterministic: identical inputs
@@ -202,6 +256,25 @@ def compute_editorial_score_v2(
 
     `event_metrics` is the four M3-persisted fields keyed by name (views_count/forwards_count/
     replies_count/reactions_count) - None means unavailable, exactly as persisted.
+
+    `story_match` (Phase 18.10 M7): `(outcome, match_score)` from a NewsEventStoryLink row
+    (services/story_memory.py), or None. Connects the existing, previously-permanently-empty
+    novelty slot to the new story-memory signal - this function's own formula/weights/other four
+    components are otherwise completely unchanged (no redesign of editorial scoring, per
+    explicit instruction).
+
+    `novelty_scoring_enabled` (added post-review, before any live activation): whether novelty is
+    allowed to actually move `score`/`weights` - independent of whether `story_match` was
+    supplied. When `story_match` is given but this is False (the `story_memory_mode == "shadow"`
+    case), `components["novelty"]` and `coverage["novelty_available"]` still report the real,
+    per-event computed value - shadow mode's whole purpose is to produce real calibration data -
+    but `weights["novelty"]` stays exactly 0.0 and `score` is computed with the novelty component
+    fully excluded, mirroring `fact_safety_mode`'s own established "shadow records but does not
+    block" precedent (core/config.py). Only when `novelty_scoring_enabled=True` (the caller only
+    ever sets this from `story_memory_mode == "enforce"`) does novelty get its own nominal weight
+    and actually change the score. This is what makes `story_memory_mode="shadow"` provably unable
+    to change task selection, publication eligibility, Telegram delivery, or ranking - the same
+    score is produced whether or not a story_match exists, until enforce is explicitly chosen.
     """
     active_weights = DEFAULT_WEIGHTS if weights is None else weights
 
@@ -215,15 +288,7 @@ def compute_editorial_score_v2(
         event_metrics, baseline_samples
     )
 
-    # Novelty: no reliable signal exists anywhere in the current architecture (confirmed:
-    # services/deduplication.py is an exact-hash gate at collection time, not a similarity
-    # measure, and no Research/Intelligence/Engagement Capability output carries a
-    # novelty/duplicate field - docs/phase15_m4_editorial_scoring_v2_report.md §7). A precise
-    # novelty score is never fabricated; this is a permanent, honestly-labeled fallback for M4,
-    # not a placeholder awaiting silent replacement. Still computed and shown for transparency
-    # (components dict) even though its weight is always 0 in practice - see below.
-    novelty = NEUTRAL_COMPONENT_VALUE
-    novelty_available = False
+    novelty, novelty_available = _compute_novelty_component(story_match)
 
     components = {
         "semantic_editorial": semantic,
@@ -233,14 +298,31 @@ def compute_editorial_score_v2(
         "novelty": novelty,
     }
 
-    # Phase 15 M4.1: novelty's nominal weight is permanently redistributed across the other four
-    # - a constant reweighting (identical for every event), not a per-event decision. See this
-    # module's own docstring for why engagement/source_reliability do NOT get the same treatment
-    # when unavailable for one particular event.
-    scored_keys = ("semantic_editorial", "freshness", "engagement", "source_reliability")
-    scored_weight_total = sum(active_weights[key] for key in scored_keys)
-    effective_weights = {key: active_weights[key] / scored_weight_total for key in scored_keys}
-    effective_weights["novelty"] = 0.0
+    if novelty_available and novelty_scoring_enabled:
+        # Phase 18.10 M7, enforce path only: a real, per-event novelty signal exists AND the
+        # caller has explicitly enabled novelty scoring (story_memory_mode == "enforce") -
+        # novelty now participates with its own nominal configured weight, exactly like
+        # engagement/source_reliability already do when available (this module's own docstring
+        # explains why: the original "redistribute novelty's weight away" treatment was justified
+        # specifically by novelty's unavailability being *permanent and universal*, not a
+        # per-event fact - now that a real per-event signal exists, that justification no longer
+        # applies for this component's *value*, but the score is only allowed to actually move
+        # once enforce is explicitly chosen, never merely because shadow-mode data exists).
+        scored_keys: tuple[str, ...] = (
+            "semantic_editorial", "freshness", "engagement", "source_reliability", "novelty",
+        )
+        scored_weight_total = sum(active_weights[key] for key in scored_keys)
+        effective_weights = {key: active_weights[key] / scored_weight_total for key in scored_keys}
+    else:
+        # Either no story-memory data at all (story_memory_mode == "off", the default, or this
+        # event predates it - byte-identical to pre-Phase-18.10 behavior), or shadow mode (real
+        # data exists and is reported in components/coverage for observability, but is not yet
+        # trusted to move the score) - novelty's nominal weight is permanently redistributed
+        # across the other four (Phase 15 M4.1's own original reasoning, unchanged either way).
+        scored_keys = ("semantic_editorial", "freshness", "engagement", "source_reliability")
+        scored_weight_total = sum(active_weights[key] for key in scored_keys)
+        effective_weights = {key: active_weights[key] / scored_weight_total for key in scored_keys}
+        effective_weights["novelty"] = 0.0
 
     weighted_sum = sum(components[key] * effective_weights[key] for key in scored_keys)
     score = round(_clamp01(weighted_sum) * 100)
@@ -339,6 +421,20 @@ async def apply_editorial_scoring_v2(
 
     baseline_samples = await fetch_engagement_baseline(session, news_event.source_id, news_event.id)
 
+    # Phase 18.10 M7: cheap, indexed primary-key lookup (news_event_story_links.news_event_id is
+    # its own primary key) - but only ever attempted when story_memory_mode != "off". This is
+    # deliberate, not an optimization: editorial_scoring_version == "v2" and story_memory_mode ==
+    # "off" is a valid, already-tested, currently-working combination (story_memory_mode's own
+    # default) - unconditionally querying news_event_story_links here would make that combination
+    # depend on the Phase 18.10 migration too, repeating the exact hot-path-dependency mistake
+    # already fixed once for NewsEvent/ContentDraft themselves. Gating on the setting (which
+    # story_memory_mode == "off" guarantees is never populated anyway) keeps this byte-identical
+    # to pre-18.10 behavior for every caller that hasn't opted into story memory.
+    story_match: tuple[str, float] | None = None
+    if settings.story_memory_mode != "off":
+        story_link = await session.get(NewsEventStoryLink, news_event.id)
+        story_match = (story_link.match_type, story_link.match_score) if story_link is not None else None
+
     result = compute_editorial_score_v2(
         legacy_llm_score=legacy_score,
         published_at=news_event.published_at,
@@ -353,6 +449,13 @@ async def apply_editorial_scoring_v2(
         },
         baseline_samples=baseline_samples,
         weights=_settings_weights(),
+        story_match=story_match,
+        # Post-review safety property: "shadow" must be provably unable to change score/ranking/
+        # publication/delivery. Novelty is only allowed to carry real weight once
+        # story_memory_mode == "enforce" (not implemented/reachable this phase) - "shadow" still
+        # computes and logs the real per-event novelty value below for calibration visibility, it
+        # just never lets that value move the score.
+        novelty_scoring_enabled=(settings.story_memory_mode == "enforce"),
     )
 
     logger.info(
