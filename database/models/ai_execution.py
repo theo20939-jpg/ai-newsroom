@@ -21,6 +21,11 @@ class AICapability(str, enum.Enum):
     COPYWRITING = "COPYWRITING"
     CREATIVE = "CREATIVE"
     QUALITY = "QUALITY"
+    # Phase 18.10 M9 (database/migrations/versions/8b9d649bc69b_*): closes the cost-attribution
+    # gap where engagement-capability spend was persisted under INTELLIGENCE via a temporary
+    # alias (capabilities/capability_mapping.py). Requires that migration to be applied before
+    # any row using this value can be written - see capability_mapping.py's own docstring.
+    ENGAGEMENT = "ENGAGEMENT"
 
 
 class AIExecution(Base):

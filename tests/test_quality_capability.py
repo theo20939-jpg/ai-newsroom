@@ -217,7 +217,8 @@ async def test_built_request_includes_copywriting_draft_when_present() -> None:
     )
     assert "Example draft title" in request_text
     assert "Example draft body text." in request_text
-    assert "#example" in request_text
+    # Phase 18.10 M4: hashtags dropped from the Quality review context entirely.
+    assert "#example" not in request_text
 
 
 @pytest.mark.asyncio

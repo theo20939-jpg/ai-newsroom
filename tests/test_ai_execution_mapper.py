@@ -42,12 +42,14 @@ def test_maps_a_successful_call_to_the_execution_row_shape() -> None:
     assert row.cost is None  # Phase 6 never invokes CostTracker's price table
 
 
-def test_resolves_the_engagement_alias_through_the_centralized_mapping() -> None:
+def test_resolves_engagement_to_its_own_capability_through_the_centralized_mapping() -> None:
+    """Phase 18.10 M9: engagement no longer aliases to INTELLIGENCE (the resolved Amendment A
+    persistence gap) - it resolves to its own AICapability.ENGAGEMENT value."""
     mapper = DefaultAIExecutionMapper()
 
     row = mapper.to_execution_row(uuid4(), "engagement", _call())
 
-    assert row.capability == AICapability.INTELLIGENCE.value
+    assert row.capability == AICapability.ENGAGEMENT.value
 
 
 def test_non_success_call_is_rejected_not_silently_mapped() -> None:

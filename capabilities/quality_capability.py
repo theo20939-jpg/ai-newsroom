@@ -93,8 +93,9 @@ def _format_copywriting_draft(copywriting_output: dict[str, Any]) -> str:
         return "(Copywriting did not run, or produced no output - assess the raw event alone.)"
     title = copywriting_output.get("title")
     body = copywriting_output.get("body")
-    hashtags = copywriting_output.get("hashtags")
-    return f"Title: {title}\nBody: {body}\nHashtags: {hashtags}"
+    # Phase 18.10 M4: hashtags dropped from the Quality review context - no longer generated or
+    # persisted downstream, so there is nothing useful for Quality to review here anymore.
+    return f"Title: {title}\nBody: {body}"
 
 
 def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> GenerateRequest:

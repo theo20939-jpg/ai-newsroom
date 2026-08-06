@@ -1,15 +1,19 @@
 """Single centralized mapping from a Workflow step's `capability` name to its
-`AICapability` enum value (docs/phase6_architecture_contract.md §10, Amendment A).
+`AICapability` enum value (docs/phase6_architecture_contract.md §10; Amendment A resolved by
+Phase 18.10 M9, docs/phase18_10_editorial_intelligence_report.md).
 
-This is the ONLY place the `"engagement" -> AICapability.INTELLIGENCE` alias
-may be written. No adapter, CapabilityExecutor, or Capability implementation
-may hardcode this mapping independently - every lookup MUST go through
-resolve_ai_capability() below.
+This is the single place a Workflow step's capability name is mapped to its persistence-target
+`AICapability` enum value. No adapter, CapabilityExecutor, or Capability implementation may
+hardcode this mapping independently - every lookup MUST go through resolve_ai_capability() below.
 
-The alias is a temporary persistence stopgap only, not a redefinition of
-Engagement as Intelligence - it exists solely because the current, already-
-migrated AICapability enum has no ENGAGEMENT value. It MUST be reconsidered
-before any real Engagement Capability is implemented (Amendment A, §15).
+History: from Phase 6 through Phase 18.9, "engagement" was aliased to AICapability.INTELLIGENCE
+here as a temporary persistence stopgap, because the AICapability enum had no ENGAGEMENT value.
+Phase 18.9's live test quantified the real cost of that gap (a real capability's spend silently
+mislabeled), and Phase 18.10 M9 resolved it: AICapability.ENGAGEMENT now exists
+(database/migrations/versions/8b9d649bc69b_*), and "engagement" maps to it directly below. The
+Redis cost ledger (services/cost_tracker.py) was never affected by this alias - it always used
+the raw capability-name string - so this change only corrects the Postgres label; total spend was
+always accurate.
 """
 from database.models.ai_execution import AICapability
 from capabilities.errors import CapabilityConfigurationError
@@ -22,8 +26,7 @@ _CAPABILITY_NAME_TO_AI_CAPABILITY: dict[str, AICapability] = {
     "copywriting": AICapability.COPYWRITING,
     "creative": AICapability.CREATIVE,
     "quality": AICapability.QUALITY,
-    # Amendment A: temporary persistence alias only - see module docstring.
-    "engagement": AICapability.INTELLIGENCE,
+    "engagement": AICapability.ENGAGEMENT,
     # Phase 18 M2 (docs/phase18_m0_meme_discovery_report.md §4.3): CREATIVE has existed in
     # AICapability, unused, since before this phase - reused here rather than adding a new enum
     # value/migration, exactly as the M0 report's architecture decision recorded.

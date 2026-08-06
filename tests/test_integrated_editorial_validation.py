@@ -155,7 +155,11 @@ def test_html_tags_valid_no_crash_on_special_chars() -> None:
     assert dv.fits_text_message is True
 
 
-def test_hashtags_reserve_counted_in_formatted_length() -> None:
+def test_hashtags_parameter_no_longer_affects_formatted_length() -> None:
+    """Phase 18.10 M4: bot/formatting.py no longer renders a hashtag block at all, so a legacy
+    `hashtags` value (still accepted for backward compatibility with historical draft rows) has
+    no effect on the rendered length anymore - a behavior change from this test's pre-M4 name/
+    assertion, which this rewrite documents explicitly rather than silently deleting."""
     without_tags = validate_delivery(
         draft_id=uuid.uuid4(), draft_title="Title", draft_body="Body text.", hashtags=None,
         news_title="Event", news_category="AI", news_url=None, has_image_candidate=False,
@@ -164,7 +168,7 @@ def test_hashtags_reserve_counted_in_formatted_length() -> None:
         draft_id=uuid.uuid4(), draft_title="Title", draft_body="Body text.", hashtags=["#one", "#two", "#three"],
         news_title="Event", news_category="AI", news_url=None, has_image_candidate=False,
     )
-    assert with_tags.formatted_utf16_length > without_tags.formatted_utf16_length
+    assert with_tags.formatted_utf16_length == without_tags.formatted_utf16_length
 
 
 # ---------------------------------------------------------------------------

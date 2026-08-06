@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from capabilities.executor import CapabilityExecutor
 from capabilities.registry import CapabilityRegistry
-from database.models.ai_execution import AIExecution
+from database.models.ai_execution import AICapability, AIExecution
 from database.models.editorial_task import TaskPriority
 from database.models.news_event import EventCategory, NewsEvent
 from database.models.news_source import NewsSource, SourceType
@@ -143,6 +143,95 @@ async def test_successful_call_persists_ai_execution_row_when_cost_tracker_provi
     finally:
         await redis_client.delete(global_ledger_key(namespace))
         await redis_client.delete(capability_ledger_key(namespace, "research"))
+
+
+def _engagement_workflow_registry() -> WorkflowRegistry:
+    registry = WorkflowRegistry()
+    registry.register(
+        WorkflowDefinition(
+            name=WorkflowType.NEWS_ANALYSIS, version=1,
+            steps=[WorkflowStepDefinition(name="engagement", capability="engagement", timeout_seconds=10)],
+            max_iterations=3,
+            retry_policy=WorkflowRetryPolicy(max_attempts=3, retryable_error_types=["StepExecutionError"]),
+            timeout_seconds=60, required_input=["event_id"], expected_output=["result"],
+        )
+    )
+    registry.seal()
+    return registry
+
+
+def _engagement_capability_registry(capability: _RealModelCapability) -> CapabilityRegistry:
+    registry = CapabilityRegistry()
+    registry.register(
+        CapabilityDefinition(
+            name="engagement", version=1, config=CapabilityConfig(timeout_seconds=10),
+            required_context=["news_event"], expected_output_keys=["facts", "confidence", "gaps"],
+        ),
+        capability,
+    )
+    registry.seal()
+    return registry
+
+
+@pytest.mark.skip(
+    reason=(
+        "Requires Alembic migration 8b9d649bc69b (adds ENGAGEMENT to the ai_capability Postgres "
+        "enum) to be applied first - Phase 18.10 M9 ships this migration unapplied by explicit "
+        "instruction (design-only; the user applies it separately). Remove this skip once the "
+        "migration has been applied to the target database - until then this test would fail "
+        "with 'invalid input value for enum ai_capability: \"ENGAGEMENT\"', not because the code "
+        "is wrong, but because the schema hasn't been migrated yet."
+    )
+)
+@pytest.mark.asyncio
+async def test_engagement_capability_recorded_under_its_own_label_in_both_ledgers(
+    db_session: AsyncSession, redis_client: Redis
+) -> None:
+    """Phase 18.10 M9 cross-validation: closes the exact gap Phase 18.9's live test quantified -
+    proves an engagement-capability call is now attributed consistently in both cost records.
+    Before this fix, this same call would have persisted AIExecution.capability == INTELLIGENCE
+    (the resolved "Amendment A" alias) while the Redis ledger already correctly bucketed it under
+    "engagement" - the two ledgers disagreed on the label despite agreeing on the dollar amount.
+    Now both agree the call belongs to engagement."""
+    event = await _make_event(db_session)
+    workflow_registry = _engagement_workflow_registry()
+    task = await workflow_service.create_task(
+        db_session,
+        EditorialTaskCreate(event_id=event.id, workflow_type=WorkflowType.NEWS_ANALYSIS, priority=TaskPriority.B),
+        registry=workflow_registry,
+    )
+    pricing_catalog = ModelRegistryPricingCatalog(build_model_registry())
+    namespace = f"test-{uuid4()}"
+    cost_tracker = RedisCostTracker(redis_client, pricing_catalog, ledger_namespace=namespace)
+    capability_registry = _engagement_capability_registry(
+        _RealModelCapability(input_tokens=1000, output_tokens=1000)
+    )
+    executor = CapabilityExecutor(
+        db_session, task.id, capability_registry, cost_tracker=cost_tracker, pricing_catalog=pricing_catalog
+    )
+
+    try:
+        result = await WorkflowRunner(executor=executor, registry=workflow_registry).run(db_session, task.id)
+        assert result.status == "COMPLETED"
+
+        rows = (await db_session.execute(select(AIExecution).where(AIExecution.task_id == task.id))).scalars().all()
+        assert len(rows) == 1
+        row = rows[0]
+        # Postgres side: no longer mislabeled as INTELLIGENCE.
+        assert row.capability == AICapability.ENGAGEMENT
+        assert row.cost == Decimal("0.007000")
+
+        # Redis side: unchanged behavior (it was always correct) - same raw capability-name key.
+        capability_ledger_raw = await redis_client.get(capability_ledger_key(namespace, "engagement"))
+        assert capability_ledger_raw is not None
+        assert float(capability_ledger_raw) == pytest.approx(0.007)
+
+        # Both sources agree on the dollar amount for this capability, and both now agree it is
+        # "engagement" - Postgres via the enum value's name, Redis via the raw key it always used.
+        assert row.capability.value.lower() == "engagement"
+    finally:
+        await redis_client.delete(global_ledger_key(namespace))
+        await redis_client.delete(capability_ledger_key(namespace, "engagement"))
 
 
 @pytest.mark.asyncio
