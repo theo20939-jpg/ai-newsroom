@@ -91,12 +91,22 @@ def test_meme_candidate_model_default_status_is_concept_generated() -> None:
 
 
 def test_alembic_migration_chain_has_a_single_head_including_meme_candidates() -> None:
-    """Confirms the new migration file is a valid, linear extension of the existing chain (no
-    branch created) - runnable offline, alembic only reads migration files for `heads`/`history`,
-    no DB connection required."""
-    result = subprocess.run(
+    """Confirms the meme_candidates migration is a valid, linear link in the chain (no branch
+    created there) - runnable offline, alembic only reads migration files for `heads`/`history`,
+    no DB connection required.
+
+    Phase 18.10 extended the chain past meme_candidates (M9's ai_capability enum fix, M1/M2's
+    story-memory tables) - meme_candidates is therefore an ancestor revision, not the current
+    head, checked via `alembic history` instead of `alembic heads`. The single-head assertion
+    (no branch, anywhere in the chain) still holds and is still checked directly."""
+    heads_result = subprocess.run(
         [sys.executable, "-m", "alembic", "heads"], capture_output=True, text=True, cwd=".",
     )
-    assert result.returncode == 0, result.stderr
-    assert "21177d5b859e" in result.stdout
-    assert result.stdout.count("(head)") == 1  # exactly one head - no branch
+    assert heads_result.returncode == 0, heads_result.stderr
+    assert heads_result.stdout.count("(head)") == 1  # exactly one head - no branch, ever
+
+    history_result = subprocess.run(
+        [sys.executable, "-m", "alembic", "history"], capture_output=True, text=True, cwd=".",
+    )
+    assert history_result.returncode == 0, history_result.stderr
+    assert "21177d5b859e" in history_result.stdout  # meme_candidates is still in the chain
