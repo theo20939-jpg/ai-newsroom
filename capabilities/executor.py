@@ -38,6 +38,7 @@ from schemas.capability import (
     WorkflowExecutionStateSnapshot,
 )
 from schemas.workflow import WorkflowExecutionState, WorkflowStepDefinition, WorkflowType
+from services.evidence_package import build_evidence_package
 from capabilities.capability_mapping import resolve_ai_capability
 from capabilities.errors import (
     CapabilityConfigurationError,
@@ -159,7 +160,36 @@ class CapabilityExecutor:
                 f"Cannot resolve capability '{step.capability}': {error}"
             ) from error
 
-        context = self._build_context(task, news_event, step, attempt)
+        # Phase 19 M1/M2: only the "research" step ever reads full-article evidence (Contract §8
+        # - Research is the sole factual-extraction seam); a DB query here for every other step
+        # would be pure waste. Only attempted when article_acquisition_mode == "enforce" - byte-
+        # identical to today whenever it is "off"/"shadow". Wrapped in try/except: setting
+        # "enforce" before the Phase 19 M1 migration has been applied must degrade to the
+        # rss_excerpt fallback (byte-identical to "off"), never crash the step - mirrors
+        # services/story_memory.py's own established "caller catches the missing-table case"
+        # convention (tests/test_triage_orchestrator_story_memory.py::
+        # test_shadow_mode_without_migration_degrades_gracefully_not_crash).
+        evidence_text: str | None = None
+        evidence_completeness: str | None = None
+        if step.capability == "research" and settings.article_acquisition_mode == "enforce":
+            try:
+                # SAVEPOINT (begin_nested), not the outer transaction - a failure here (e.g. the
+                # migration not yet applied) must only unwind this one attempt, never invalidate
+                # `task`/`news_event`, already loaded above and read again later in this method.
+                async with self._session.begin_nested():
+                    evidence = await build_evidence_package(self._session, news_event)
+                evidence_text = evidence.selected_editorial_text
+                evidence_completeness = evidence.completeness_level
+            except Exception:
+                logger.warning(
+                    "article_evidence_package_unavailable_falling_back",
+                    extra={"task_id": str(task.id), "event_id": str(task.event_id)},
+                )
+
+        context = self._build_context(
+            task, news_event, step, attempt,
+            evidence_text=evidence_text, evidence_completeness=evidence_completeness,
+        )
 
         # API cost optimization (docs/api_cost_optimization_report.md): CONTENT_GENERATION's
         # "research"/"intelligence" steps reuse the same event's already-COMPLETED
@@ -800,7 +830,8 @@ class CapabilityExecutor:
         return await reuse_prior_result(self._session, source_task_id, step.capability)
 
     def _build_context(
-        self, task: EditorialTask, news_event: NewsEvent, step: WorkflowStepDefinition, attempt: int
+        self, task: EditorialTask, news_event: NewsEvent, step: WorkflowStepDefinition, attempt: int,
+        *, evidence_text: str | None = None, evidence_completeness: str | None = None,
     ) -> CapabilityContext:
         state = WorkflowExecutionState.model_validate(task.workflow)
 
@@ -831,6 +862,8 @@ class CapabilityExecutor:
                 # Explicit injection (docs/content_generation_language_final_implementation_plan.md)
                 # - never left to BusinessContext.language's own implicit schema default.
                 language=settings.default_content_language,
+                article_evidence_text=evidence_text,
+                article_evidence_completeness=evidence_completeness,
             ),
             execution=ExecutionContext(
                 max_tokens=_MAX_OUTPUT_TOKENS_BY_CAPABILITY.get(step.capability),

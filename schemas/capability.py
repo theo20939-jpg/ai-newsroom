@@ -69,6 +69,14 @@ class BusinessContext(BaseModel):
     language: str = "en"
     audience: str | None = None
     brand_voice: dict[str, Any] | None = None
+    # Phase 19 M1/M2 (services/evidence_package.py): the full, cleaned article text - only ever
+    # non-None when article_acquisition_mode == "enforce" AND a usable acquisition exists;
+    # capabilities.executor.CapabilityExecutor._build_context() is the sole place this is
+    # populated. A narrow, purpose-built read model (not the full EvidencePackage - "no ORM
+    # object crosses into a Capability" extends to "no internal-service-shaped object either",
+    # matching this schema's own established snapshot convention).
+    article_evidence_text: str | None = None
+    article_evidence_completeness: str | None = None
 
 
 class RuntimeContext(BaseModel):

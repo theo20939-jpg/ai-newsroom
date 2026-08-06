@@ -28,6 +28,7 @@ from database.models.story_link import NewsEventStoryLink
 from schemas.content_draft import ContentDraftRead
 from schemas.workflow import WorkflowRunResult
 from services.content_quality_gates import evaluate_content_quality_gates
+from services.evidence_package import build_evidence_package
 from services.quote_verification import verify_quote
 from services.story_memory import NEW_STORY, UNCERTAIN_MATCH
 
@@ -177,6 +178,25 @@ class ContentDraftService:
 
         news_event = await self._session.get(NewsEvent, event_id) if event_id is not None else None
 
+        # Phase 19 M1/M2 (services/evidence_package.py): source_content is only ever upgraded to
+        # the full, cleaned article when article_acquisition_mode == "enforce" - byte-identical
+        # to news_event.content (the original source) in every other case, including when
+        # article_acquisition_mode == "shadow" (persists evidence for observability, changes
+        # nothing here). SAVEPOINT-isolated (begin_nested): "enforce" set before the Phase 19 M1
+        # migration has been applied must degrade to news_event.content, never crash draft
+        # creation - mirrors capabilities/executor.py's identical guard.
+        source_content = news_event.content if news_event is not None else None
+        if news_event is not None and settings.article_acquisition_mode == "enforce":
+            try:
+                async with self._session.begin_nested():
+                    evidence = await build_evidence_package(self._session, news_event)
+                source_content = evidence.selected_editorial_text
+            except Exception:
+                logger.warning(
+                    "article_evidence_package_unavailable_falling_back",
+                    extra={"task_id": str(result.task_id), "event_id": str(event_id)},
+                )
+
         # Phase 18.10 M5: verify any claimed quote against the source before it can ever be
         # persisted or rendered - fail closed (drop, never fabricate), per
         # services/quote_verification.py's own contract. A dropped quote never blocks the draft
@@ -184,7 +204,7 @@ class ContentDraftService:
         verified_quote: dict[str, Any] | None = None
         if isinstance(quote, dict):
             quote_text = quote.get("text")
-            if isinstance(quote_text, str) and verify_quote(quote_text, news_event.content if news_event else None):
+            if isinstance(quote_text, str) and verify_quote(quote_text, source_content):
                 verified_quote = quote
             else:
                 logger.warning(
@@ -204,7 +224,7 @@ class ContentDraftService:
             source_title=news_event.title if news_event else None,
             quote_text=verified_quote.get("text") if verified_quote else None,
             quote_speaker=verified_quote.get("speaker") if verified_quote else None,
-            source_content=news_event.content if news_event else None,
+            source_content=source_content,
         )
         if not quality_report.passed:
             logger.warning(

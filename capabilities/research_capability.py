@@ -88,10 +88,14 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
     first step to run in this phase, so there is nothing upstream to read yet."""
     news_event = context.business.news_event
     system_text = prompt.system + "\n\nRULES:\n" + "\n".join(f"- {rule}" for rule in prompt.rules)
+    # Phase 19 M1/M2 (services/evidence_package.py): article_evidence_text is only ever non-None
+    # when article_acquisition_mode == "enforce" and a usable acquisition exists - byte-identical
+    # to the original news_event.content read in every other case (off/shadow, or no evidence).
+    content_text = context.business.article_evidence_text or news_event.content or "(none)"
     context_text = (
         f"Title: {news_event.title}\n"
         f"Category: {news_event.category}\n"
-        f"Content: {news_event.content or '(none)'}\n"
+        f"Content: {content_text}\n"
         f"Target output language: {context.business.language}"
     )
     task_text = "Extract the structured factual content actually present in the text above."
