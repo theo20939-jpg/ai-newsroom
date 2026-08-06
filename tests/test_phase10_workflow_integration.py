@@ -59,7 +59,10 @@ _INTELLIGENCE_OUTPUT: dict[str, object] = {
 _COPYWRITING_OUTPUT: dict[str, object] = {
     "title": "Example draft title",
     "body": "Example draft body text.",
-    "hashtags": ["#example", "#news"],
+    "what_happened": "Example event happened.",
+    "why_it_matters": "Example editorial interpretation of the impact.",
+    "what_remains_unknown": None,
+    "quote": None,
 }
 
 _QUALITY_OUTPUT: dict[str, object] = {"passed": True, "issues": []}

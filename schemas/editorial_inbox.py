@@ -29,3 +29,9 @@ class EditorialInboxCard(BaseModel):
     news_category: str
     news_url: str | None
     news_published_at: datetime | None
+    # Phase 18.10 M5: optional, verified-only quote (services/quote_verification.py) - both
+    # default to None, so every pre-18.10 caller of this frozen, extra="forbid" model is
+    # completely unaffected (Pydantic model construction, unlike a SQLAlchemy table INSERT, is
+    # never broken by an unset field that has a default).
+    quote_text: str | None = None
+    quote_speaker: str | None = None

@@ -55,10 +55,15 @@ def test_news_title_and_category_are_escaped() -> None:
     assert "TECH&lt;X&gt;" in rendered
 
 
-def test_hashtags_are_escaped() -> None:
+def test_hashtags_are_never_rendered_even_with_legacy_card_data() -> None:
+    """Phase 18.10 M4: the hashtag block is removed unconditionally - a historical
+    EditorialInboxCard carrying legacy hashtag data (from a pre-M4 draft) still never renders
+    one, not just newly-generated cards with hashtags=None."""
     rendered = render_editorial_card(_card(hashtags=["#a&b", "#<tag>"]))
-    assert "#a&amp;b" in rendered
-    assert "#&lt;tag&gt;" in rendered
+    assert "#a&b" not in rendered
+    assert "#a&amp;b" not in rendered
+    assert "#<tag>" not in rendered
+    assert "#&lt;tag&gt;" not in rendered
 
 
 def test_news_url_is_escaped_including_literal_ampersand() -> None:
@@ -72,16 +77,13 @@ def test_news_url_is_never_rendered_as_clickable_anchor() -> None:
     assert "<a " not in rendered
 
 
-def test_hashtags_joined_space_separated() -> None:
-    rendered = render_editorial_card(_card(hashtags=["#one", "#two", "#three"]))
-    assert "#one #two #three" in rendered
-
-
-def test_empty_hashtags_omit_line_entirely() -> None:
-    with_tags = render_editorial_card(_card(hashtags=["#x"]))
+def test_hashtags_never_add_a_line_regardless_of_legacy_data() -> None:
+    """Phase 18.10 M4: rendering is now identical whether or not the card carries legacy
+    hashtag data - the block is gone entirely, not merely conditionally shown."""
+    with_tags = render_editorial_card(_card(hashtags=["#one", "#two", "#three"]))
     without_tags = render_editorial_card(_card(hashtags=None))
-    assert "#x" not in without_tags
-    assert len(without_tags.splitlines()) < len(with_tags.splitlines())
+    assert "#one" not in with_tags
+    assert with_tags == without_tags
 
 
 def test_none_hashtags_and_empty_list_both_omit_line() -> None:
@@ -226,7 +228,7 @@ def test_russian_content_renders_verbatim_no_translation() -> None:
     card = _card(
         draft_title="Заголовок новости",
         draft_body="Полный текст редакционного поста на русском языке.",
-        hashtags=["#новости", "#технологии"],
+        hashtags=["#новости", "#технологии"],  # legacy field - never rendered (Phase 18.10 M4)
         news_title="Оригинальное событие на русском",
         news_category="AI",
     )
@@ -235,7 +237,7 @@ def test_russian_content_renders_verbatim_no_translation() -> None:
 
     assert "Заголовок новости" in rendered
     assert "Полный текст редакционного поста на русском языке." in rendered
-    assert "#новости #технологии" in rendered
+    assert "#новости" not in rendered
     assert "Оригинальное событие на русском" in rendered
     assert _telegram_utf16_length(rendered) <= SAFE_LIMIT
 
@@ -296,6 +298,33 @@ def test_smaller_limit_still_raises_card_too_long_error_when_unavoidable() -> No
     )
     with pytest.raises(CardTooLongError):
         render_editorial_card(card, limit=50, include_url=False)
+
+
+# --- Phase 18.10 M5: quote blockquote rendering ----------------------------------------------
+
+
+def test_quote_renders_as_telegram_blockquote() -> None:
+    rendered = render_editorial_card(
+        _card(quote_text="We are shipping this next quarter", quote_speaker="Jane Smith, CEO")
+    )
+    assert "<blockquote>We are shipping this next quarter</blockquote>" in rendered
+    assert "Jane Smith, CEO" in rendered
+
+
+def test_quote_is_escaped() -> None:
+    rendered = render_editorial_card(_card(quote_text="We <will> ship & deliver", quote_speaker="CEO"))
+    assert "<blockquote>We &lt;will&gt; ship &amp; deliver</blockquote>" in rendered
+    assert "<will>" not in rendered
+
+
+def test_no_quote_omits_blockquote_entirely() -> None:
+    rendered = render_editorial_card(_card())
+    assert "<blockquote>" not in rendered
+
+
+def test_quote_without_speaker_still_renders_the_quote_text() -> None:
+    rendered = render_editorial_card(_card(quote_text="A verified quote with no speaker given"))
+    assert "<blockquote>A verified quote with no speaker given</blockquote>" in rendered
 
 
 def test_limit_and_include_url_compose_together() -> None:

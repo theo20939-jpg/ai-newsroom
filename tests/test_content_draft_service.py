@@ -56,7 +56,10 @@ _INTELLIGENCE_OUTPUT: dict[str, object] = {
 _COPYWRITING_OUTPUT: dict[str, object] = {
     "title": "Example draft title",
     "body": "Example draft body text.",
-    "hashtags": ["#example", "#news"],
+    "what_happened": "Example event happened.",
+    "why_it_matters": "Example editorial interpretation of the impact.",
+    "what_remains_unknown": None,
+    "quote": None,
 }
 
 _QUALITY_OUTPUT: dict[str, object] = {"passed": True, "issues": []}
@@ -129,7 +132,9 @@ async def test_create_from_result_persists_expected_fields(db_session: AsyncSess
     assert draft.type == ContentType.POST
     assert draft.title == _COPYWRITING_OUTPUT["title"]
     assert draft.body == _COPYWRITING_OUTPUT["body"]
-    assert draft.hashtags == _COPYWRITING_OUTPUT["hashtags"]
+    # Phase 18.10 M4: hashtags are no longer persisted on new drafts, even though the (frozen,
+    # unmodified) v3 copywriting output still contains the key.
+    assert draft.hashtags is None
     assert draft.version == 1
     assert draft.status == "draft"
     assert draft.id is not None
@@ -317,7 +322,8 @@ async def test_content_draft_is_durable_to_a_genuinely_independent_connection(
             assert persisted.task_id == task_id
             assert persisted.title == _COPYWRITING_OUTPUT["title"]
             assert persisted.body == _COPYWRITING_OUTPUT["body"]
-            assert persisted.hashtags == _COPYWRITING_OUTPUT["hashtags"]
+            # Phase 18.10 M4: hashtags are no longer persisted on new drafts.
+            assert persisted.hashtags is None
 
         # Explicit cleanup before real_committed_event's own teardown deletes the EditorialTask -
         # ContentDraft.task_id has no ON DELETE CASCADE, so the draft must go first.

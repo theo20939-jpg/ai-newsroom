@@ -51,7 +51,10 @@ _INTELLIGENCE_OUTPUT: dict[str, object] = {
 _COPYWRITING_OUTPUT: dict[str, object] = {
     "title": "Example draft title",
     "body": "Example draft body text.",
-    "hashtags": ["#example", "#news"],
+    "what_happened": "Example event happened.",
+    "why_it_matters": "Example editorial interpretation of the impact.",
+    "what_remains_unknown": None,
+    "quote": None,
 }
 _QUALITY_OUTPUT: dict[str, object] = {"passed": True, "issues": []}
 
@@ -182,7 +185,9 @@ async def test_content_generation_end_to_end_persists_exactly_one_content_draft(
             assert draft.task_id == outcome.task_id
             assert draft.title == _COPYWRITING_OUTPUT["title"]
             assert draft.body == _COPYWRITING_OUTPUT["body"]
-            assert draft.hashtags == _COPYWRITING_OUTPUT["hashtags"]
+            # Phase 18.10 M4: hashtags are no longer persisted on new drafts, even though the
+            # (frozen, unmodified) v3 copywriting output still contains the key.
+            assert draft.hashtags is None
             assert draft.version == 1
             assert draft.status == "draft"
 

@@ -89,10 +89,18 @@ def _render_once(card: EditorialInboxCard, body: str | None, *, include_url: boo
 
     body_text = _BODY_PLACEHOLDER if body is None else _escape(body)
 
+    # Phase 18.10 M4: hashtag block removed unconditionally - modern Telegram media channels
+    # don't use hashtag blocks. Applies even to a legacy `card.hashtags` value from a historical
+    # draft row (the field is never read here anymore), not just to newly-generated drafts.
     blocks = [header_block, title_block, body_text]
 
-    if card.hashtags:
-        blocks.append(" ".join(_escape(tag) for tag in card.hashtags))
+    # Phase 18.10 M5: an optional, already-verified quote (services/quote_verification.py) -
+    # Telegram-native <blockquote> formatting, exempted from the truncation-squeeze loop below
+    # exactly like header_block/title_block already are (only body_text is ever shrunk) - a
+    # verified quote is never partially cut.
+    if card.quote_text:
+        speaker_suffix = f"\n— {_escape(card.quote_speaker)}" if card.quote_speaker else ""
+        blocks.append(f"\U0001F4AC <blockquote>{_escape(card.quote_text)}</blockquote>{speaker_suffix}")
 
     return "\n\n".join(blocks)
 

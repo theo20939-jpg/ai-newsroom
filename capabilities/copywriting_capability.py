@@ -35,17 +35,29 @@ from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
 logger = logging.getLogger(__name__)
 
 CAPABILITY_NAME = "copywriting"
-# v3 (docs/content_generation_language_final_implementation_plan.md): adds a governed rule
-# requiring output to match the target editorial language given in context - prompts/copywriting/
-# v2.yaml is left in place, unmodified, per Phase 6 §8's prompt-immutability rule.
-PROMPT_VERSION = "3"
+# v4 (Phase 18.10 M5/M6, docs/phase18_10_editorial_intelligence_report.md): drops hashtags from
+# the schema at the source, adds a structured what_happened/why_it_matters/what_remains_unknown
+# shape and an optional, narrowly-verified quote field. prompts/copywriting/v{1,2,3}.yaml are
+# left in place, unmodified, per Phase 6 §8's prompt-immutability rule.
+PROMPT_VERSION = "4"
+
+# Phase 18.10 M5 "Amendment B" (mirrors capabilities/capability_mapping.py's own "Amendment A"
+# precedent for a narrow, disclosed, deliberate exception): Copywriting is otherwise forbidden
+# from reading news_event.content directly (Contract §5's "MUST NOT re-extract" discipline,
+# unchanged) - this one field is the sole, explicit exception, scoped to quote-sourcing only (see
+# the v4 prompt's own rules), never to extracting additional facts beyond what Research/
+# Intelligence already established. Bounded to keep prompt size/cost predictable - long enough to
+# contain a realistic quote, never the full article.
+_QUOTE_SOURCE_EXCERPT_CHARS = 3000
 
 COPYWRITING_CAPABILITY_DEFINITION = CapabilityDefinition(
     name=CAPABILITY_NAME,
     version=1,
     config=CapabilityConfig(timeout_seconds=30),
     required_context=["news_event"],
-    expected_output_keys=["title", "body", "hashtags"],
+    expected_output_keys=[
+        "title", "body", "what_happened", "why_it_matters", "what_remains_unknown", "quote",
+    ],
 )
 
 _SCHEMA_TYPE_TO_PYTHON_TYPE: dict[str, type | tuple[type, ...]] = {
@@ -60,7 +72,12 @@ _SCHEMA_TYPE_TO_PYTHON_TYPE: dict[str, type | tuple[type, ...]] = {
 
 def _floor_validate(structured_output: dict[str, Any] | None, output_schema: dict[str, Any]) -> str | None:
     """Contract §9.1's floor - see scoring_capability._floor_validate's identical docstring
-    for the full rationale. Duplicated intentionally (module docstring)."""
+    for the full rationale. Duplicated intentionally (module docstring). A declared union type
+    (e.g. `["string", "null"]`, used here for the genuinely-optional what_remains_unknown/quote
+    fields) is not present as a key in `_SCHEMA_TYPE_TO_PYTHON_TYPE` and is therefore skipped for
+    the type check, same as any other unrecognized declared type - presence of the required key
+    is still enforced (mirrors capabilities/meme_copywriting_capability.py's own identical fix
+    for its own nullable fields)."""
     if structured_output is None:
         return "structured_output is missing; the §9.1 floor requires an object."
 
@@ -74,7 +91,7 @@ def _floor_validate(structured_output: dict[str, Any] | None, output_schema: dic
         if key not in structured_output:
             continue
         declared_type = declared.get("type")
-        expected_python_type = _SCHEMA_TYPE_TO_PYTHON_TYPE.get(declared_type)
+        expected_python_type = _SCHEMA_TYPE_TO_PYTHON_TYPE.get(declared_type) if isinstance(declared_type, str) else None
         if expected_python_type is None:
             continue
         value = structured_output[key]
@@ -108,11 +125,24 @@ def _format_intelligence_context(intelligence_output: dict[str, Any]) -> str:
     )
 
 
+def _format_quote_source_excerpt(news_event: Any) -> str:
+    """Phase 18.10 M5 "Amendment B" (see PROMPT_VERSION's own comment above): the sole, narrow,
+    disclosed exception to Copywriting's "never reads news_event.content" rule - bounded, and
+    labeled for quote-sourcing only, never for extracting additional facts."""
+    content = getattr(news_event, "content", None)
+    if not content:
+        return "(No source excerpt available - no quote can be sourced; leave quote null.)"
+    excerpt = content[:_QUOTE_SOURCE_EXCERPT_CHARS]
+    return excerpt
+
+
 def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> GenerateRequest:
     """Contract §5's Input row: title/category only from `context.business.news_event` (never
-    `content`, mirroring `IntelligenceCapability`'s own "MUST NOT re-extract" discipline), plus
-    `context.business.workflow_state.step_results["research"]`/`["intelligence"]` (§5's exact,
-    already-frozen field paths - never a direct import or call of either upstream Capability)."""
+    `content`, mirroring `IntelligenceCapability`'s own "MUST NOT re-extract" discipline - Phase
+    18.10 M5's own "Amendment B" is the sole, narrow exception, scoped to quote-sourcing only, see
+    `_format_quote_source_excerpt()`), plus `context.business.workflow_state.step_results
+    ["research"]`/`["intelligence"]` (§5's exact, already-frozen field paths - never a direct
+    import or call of either upstream Capability)."""
     news_event = context.business.news_event
     research_output = context.business.workflow_state.step_results.get("research", {})
     intelligence_output = context.business.workflow_state.step_results.get("intelligence", {})
@@ -122,11 +152,15 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
         f"Category: {news_event.category}\n"
         f"Target output language: {context.business.language}\n\n"
         f"Research output:\n{_format_research_context(research_output)}\n\n"
-        f"Intelligence output:\n{_format_intelligence_context(intelligence_output)}"
+        f"Intelligence output:\n{_format_intelligence_context(intelligence_output)}\n\n"
+        f"Source excerpt (for quote-sourcing only - never for additional facts):\n"
+        f"{_format_quote_source_excerpt(news_event)}"
     )
     task_text = (
-        "Write a short, social-ready post (title, body, hashtags) for the event above, based "
-        "only on the given title/category and Research's/Intelligence's output."
+        "Write a short, editorially-interpreted post (title, body, what_happened, why_it_matters, "
+        "optional what_remains_unknown, optional verified quote) for the event above, based only "
+        "on the given title/category, Research's/Intelligence's output, and (for quote-sourcing "
+        "only) the source excerpt."
     )
 
     return GenerateRequest(

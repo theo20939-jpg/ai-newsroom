@@ -765,7 +765,11 @@ async def test_real_four_step_content_generation_workflow_runs_fact_safety_from_
     # The draft's own body states a materially different, unsupported amount ($50 million, not
     # the $5 million Research actually found) - a deliberate, precisely-fabricatable HIGH-severity
     # money claim, so a correctly-wired Fact Safety must flag it.
-    copywriting_output = {"title": "Startup raises $50 million", "body": "The round totaled $50 million.", "hashtags": []}
+    copywriting_output = {
+        "title": "Startup raises $50 million", "body": "The round totaled $50 million.",
+        "what_happened": "The round totaled $50 million.", "why_it_matters": "A large funding round for the sector.",
+        "what_remains_unknown": None, "quote": None,
+    }
     quality_output = {"passed": True, "issues": []}  # QualityCapability's real, unmodified shape
 
     def _response(structured_output: dict[str, object]) -> object:

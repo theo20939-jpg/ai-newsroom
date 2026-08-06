@@ -49,15 +49,21 @@ _COPYWRITING_OUTPUT_SCHEMA = {
     "properties": {
         "title": {"type": "string"},
         "body": {"type": "string"},
-        "hashtags": {"type": "array"},
+        "what_happened": {"type": "string"},
+        "why_it_matters": {"type": "string"},
+        "what_remains_unknown": {"type": ["string", "null"]},
+        "quote": {"type": ["object", "null"]},
     },
-    "required": ["title", "body", "hashtags"],
+    "required": ["title", "body", "what_happened", "why_it_matters", "what_remains_unknown", "quote"],
 }
 
 _VALID_OUTPUT = {
     "title": "Example draft title",
     "body": "Example draft body text.",
-    "hashtags": ["#example", "#news"],
+    "what_happened": "Company X launched product Y.",
+    "why_it_matters": "This changes the competitive landscape for Z.",
+    "what_remains_unknown": None,
+    "quote": None,
 }
 
 _INTELLIGENCE_OUTPUT: dict[str, object] = {
@@ -69,8 +75,8 @@ _INTELLIGENCE_OUTPUT: dict[str, object] = {
 
 
 _LANGUAGE_RULE = (
-    'Always write the title, body, and hashtags entirely in the language given by "Target '
-    'output language" in the CONTEXT block below.'
+    'Always write the title, body, what_happened, and why_it_matters entirely in the language '
+    'given by "Target output language" in the CONTEXT block below.'
 )
 
 
@@ -79,7 +85,7 @@ def _prompt_repository(*, rules: list[str] | None = None) -> FakePromptRepositor
     repository.register(
         RenderedPrompt(
             name=CAPABILITY_NAME,
-            version="3",
+            version="4",
             system="You are a fake copywriting assistant for tests.",
             rules=rules if rules is not None else ["Do not fabricate facts.", _LANGUAGE_RULE],
             output_schema=_COPYWRITING_OUTPUT_SCHEMA,
@@ -93,6 +99,7 @@ def _context(
     title: str = "Example headline",
     category: str = "technology",
     language: str = "ru",
+    content: str | None = "Example body text.",
     step_results: dict[str, dict[str, object]] | None = None,
 ) -> CapabilityContext:
     return CapabilityContext(
@@ -101,7 +108,7 @@ def _context(
                 id=uuid4(),
                 title=title,
                 summary=None,
-                content="Example body text.",
+                content=content,
                 url=None,
                 category=category,
                 published_at=None,
@@ -191,7 +198,7 @@ async def test_validation_failure_raises_validation_capability_error_not_silent_
     gateway = FakeLLMGateway(
         generate_response=GenerateResponse(
             text=None,
-            structured_output={"title": "only a title"},  # missing required "body"/"hashtags"
+            structured_output={"title": "only a title"},  # missing required "body"/etc.
             finish_reason="stop",
             model_used="fake-model-v1",
             usage=CapabilityUsage(input_tokens=20, output_tokens=8),
@@ -289,10 +296,10 @@ def test_non_coupling_never_imports_research_or_intelligence_capability() -> Non
 # --- Russian output remediation (docs/content_generation_language_final_implementation_plan.md) --
 
 
-def test_prompt_version_resolves_to_3() -> None:
+def test_prompt_version_resolves_to_4() -> None:
     from capabilities.copywriting_capability import PROMPT_VERSION
 
-    assert PROMPT_VERSION == "3"
+    assert PROMPT_VERSION == "4"
 
 
 @pytest.mark.asyncio
@@ -398,3 +405,54 @@ def test_real_v3_prompt_file_contains_the_governed_language_rule() -> None:
         "Hashtags must be relevant to the event's category and content, no more than a handful.",
     ]
     assert not any("target output language" in rule.lower() for rule in v2.rules)
+
+
+# --- Phase 18.10 M5: quote-sourcing excerpt ("Amendment B") ----------------------------------
+
+
+def test_real_v4_prompt_file_has_no_hashtags_in_its_schema() -> None:
+    from integrations.prompts.file_repository import FilePromptRepository
+
+    prompts_root = Path(__file__).resolve().parent.parent / "prompts"
+    repository = FilePromptRepository(prompts_root)
+
+    v4 = repository.resolve(CAPABILITY_NAME, "4")
+    assert "hashtags" not in v4.output_schema.get("properties", {})
+    assert "quote" in v4.output_schema.get("properties", {})
+    assert "what_happened" in v4.output_schema.get("required", [])
+
+
+@pytest.mark.asyncio
+async def test_source_excerpt_appears_in_request_labeled_for_quote_sourcing_only() -> None:
+    """Phase 18.10 M5 "Amendment B": the one, narrow, disclosed exception to Copywriting's
+    "never reads news_event.content" rule - proves the excerpt reaches the real request, and is
+    explicitly labeled so the model understands its scope."""
+    gateway = FakeLLMGateway(generate_response=_valid_response())
+    capability = CopywritingCapability(gateway, _prompt_repository())
+    context = _context(step_results={"research": CANONICAL_RESEARCH_OUTPUT})
+
+    await capability.execute(context)
+
+    request_text = "\n".join(
+        part.text for message in gateway.received_requests[0].messages for part in message.content if part.text
+    )
+    assert "Example body text." in request_text  # the NewsEventSnapshot's own content field
+    assert "quote-sourcing only" in request_text.lower()
+
+
+@pytest.mark.asyncio
+async def test_missing_content_still_succeeds_with_no_source_excerpt() -> None:
+    """A NewsEvent with no content (content=None) must not raise - the excerpt gracefully
+    degrades to an explicit "no excerpt available" note, mirroring _format_research_context()'s/
+    _format_intelligence_context()'s own established "did not run" degradation style."""
+    gateway = FakeLLMGateway(generate_response=_valid_response())
+    capability = CopywritingCapability(gateway, _prompt_repository())
+    context = _context(content=None, step_results={"research": CANONICAL_RESEARCH_OUTPUT})
+
+    result = await capability.execute(context)
+
+    assert result.status == "SUCCESS"
+    request_text = "\n".join(
+        part.text for message in gateway.received_requests[0].messages for part in message.content if part.text
+    )
+    assert "no source excerpt available" in request_text.lower()
