@@ -35,11 +35,20 @@ class NotificationOutcome:
     chat_id: int | None  # None only possible in dry-run mode (not yet configured)
     rendered_html: str
     sent: bool  # False in dry-run mode, or if the live send itself failed
+    # Phase 18.10 M3: captured from the real aiogram Message the live send returns - previously
+    # discarded entirely. None whenever `sent` is False (dry-run or a failed send) - never
+    # fabricated. The caller (worker/content_cycle.py) is responsible for treating "sent" as
+    # provisional until this value is durably persisted (services/story_telegram_delivery.py's
+    # own "not successful unless telegram_message_id is persisted" contract).
+    message_id: int | None = None
 
 
-def _to_card(draft: ContentDraftRead, event: NewsEvent) -> EditorialInboxCard:
+def _to_card(
+    draft: ContentDraftRead, event: NewsEvent, *, quote_text: str | None = None, quote_speaker: str | None = None,
+) -> EditorialInboxCard:
     """Byte-for-byte the same field mapping services/editorial_inbox_service.py::_to_card()
-    already uses for /news - not a new card shape."""
+    already uses for /news - not a new card shape (Phase 18.10 M5 adds the optional quote_text/
+    quote_speaker pair, both defaulting to None - every pre-18.10 caller unaffected)."""
     return EditorialInboxCard(
         draft_id=draft.id,
         draft_title=draft.title,
@@ -50,11 +59,15 @@ def _to_card(draft: ContentDraftRead, event: NewsEvent) -> EditorialInboxCard:
         news_category=event.category.value,
         news_url=event.url,
         news_published_at=event.published_at,
+        quote_text=quote_text,
+        quote_speaker=quote_speaker,
     )
 
 
 async def send_editorial_card(
-    bot: Bot, chat_id: int | None, draft: ContentDraftRead, event: NewsEvent, *, dry_run: bool
+    bot: Bot, chat_id: int | None, draft: ContentDraftRead, event: NewsEvent, *,
+    dry_run: bool, reply_to_message_id: int | None = None,
+    quote_text: str | None = None, quote_speaker: str | None = None,
 ) -> NotificationOutcome:
     """dry_run=True: renders and returns the exact payload that WOULD be sent - bot.send_message()
     is never called, no Telegram API contact of any kind. Logged at INFO for human inspection
@@ -73,7 +86,7 @@ async def send_editorial_card(
     to be). In live mode (dry_run=False), chat_id=None is a configuration error, not a silent
     no-op - fails loud via the assertion below, mirroring bot/loader.py::create_bot()'s own
     fail-fast convention for missing required Telegram configuration."""
-    card = _to_card(draft, event)
+    card = _to_card(draft, event, quote_text=quote_text, quote_speaker=quote_speaker)
     try:
         html = render_editorial_card(card)  # bot/formatting.py - unmodified
     except CardTooLongError:
@@ -92,9 +105,11 @@ async def send_editorial_card(
         "must be configured before content_generation_dry_run may be set to False"
     )
     try:
-        await bot.send_message(chat_id, html, parse_mode=ParseMode.HTML)
+        message = await bot.send_message(
+            chat_id, html, parse_mode=ParseMode.HTML, reply_to_message_id=reply_to_message_id,
+        )
     except TelegramAPIError:
         logger.exception("content_notification_failed", extra={"draft_id": str(draft.id)})
         return NotificationOutcome(chat_id=chat_id, rendered_html=html, sent=False)
 
-    return NotificationOutcome(chat_id=chat_id, rendered_html=html, sent=True)
+    return NotificationOutcome(chat_id=chat_id, rendered_html=html, sent=True, message_id=message.message_id)

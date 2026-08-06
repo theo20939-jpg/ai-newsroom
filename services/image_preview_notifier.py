@@ -65,11 +65,14 @@ class CombinedCardOutcome:
     sent: bool  # False in dry-run mode, or if the live send itself failed
     has_image: bool
     candidate_count: int
+    # Phase 18.10 M3: captured from the real aiogram Message the live send returns - see
+    # services.telegram_notifier.NotificationOutcome's own identical field for the full contract.
+    message_id: int | None = None
 
 
 async def send_news_with_image_preview(
     bot: Bot, chat_id: int | None, session: AsyncSession, *,
-    draft: ContentDraftRead, event: NewsEvent, dry_run: bool,
+    draft: ContentDraftRead, event: NewsEvent, dry_run: bool, reply_to_message_id: int | None = None,
 ) -> CombinedCardOutcome:
     """The sole delivery function whenever the image-preview flow is active - always sends exactly
     one message (text-only if there is no eligible candidate at all, a photo otherwise), never two.
@@ -101,11 +104,15 @@ async def send_news_with_image_preview(
             "must be configured before image_editorial_preview_enabled may be set to True"
         )
         try:
-            await bot.send_message(chat_id, text, reply_markup=keyboard)
+            message = await bot.send_message(
+                chat_id, text, reply_markup=keyboard, reply_to_message_id=reply_to_message_id,
+            )
         except TelegramAPIError:
             logger.exception("content_notification_failed", extra={"draft_id": str(draft.id)})
             return CombinedCardOutcome(chat_id=chat_id, sent=False, has_image=False, candidate_count=0)
-        return CombinedCardOutcome(chat_id=chat_id, sent=True, has_image=False, candidate_count=0)
+        return CombinedCardOutcome(
+            chat_id=chat_id, sent=True, has_image=False, candidate_count=0, message_id=message.message_id,
+        )
 
     candidate = candidates[0]
     photo_input = resolve_photo_input(candidate)
@@ -138,12 +145,17 @@ async def send_news_with_image_preview(
     )
     try:
         if photo_input is not None:
-            message = await bot.send_photo(chat_id, photo=photo_input, caption=caption, reply_markup=keyboard)
+            message = await bot.send_photo(
+                chat_id, photo=photo_input, caption=caption, reply_markup=keyboard,
+                reply_to_message_id=reply_to_message_id,
+            )
             if not candidate.telegram_file_id and message.photo:
                 await record_telegram_file_id(session, candidate_row_id=candidate.id, file_id=message.photo[-1].file_id)
                 await session.commit()
         else:
-            await bot.send_message(chat_id, caption, reply_markup=keyboard)
+            message = await bot.send_message(
+                chat_id, caption, reply_markup=keyboard, reply_to_message_id=reply_to_message_id,
+            )
     except TelegramAPIError:
         logger.exception("content_notification_failed", extra={"draft_id": str(draft.id)})
         return CombinedCardOutcome(
@@ -152,4 +164,5 @@ async def send_news_with_image_preview(
 
     return CombinedCardOutcome(
         chat_id=chat_id, sent=True, has_image=photo_input is not None, candidate_count=len(candidates),
+        message_id=message.message_id,
     )

@@ -15,14 +15,22 @@ from sqlalchemy.orm import aliased
 
 from capabilities.registry import CapabilityRegistry
 from core.config import settings
+from database.models.content_draft_story_link import ContentDraftStoryLink
 from database.models.editorial_task import EditorialTask, TaskStatus
 from database.models.news_event import NewsEvent
+from database.models.story_telegram_delivery import DeliveryStatus, DeliveryType
 from database.session import async_session_factory
 from schemas.workflow import WorkflowType
 from scripts.run_content_generation import run_content_generation_for_event
 from services.cost_tracker import CostTracker
 from services.image_preview_notifier import send_news_with_image_preview
 from services.pricing_catalog import PricingCatalog
+from services.story_telegram_delivery import (
+    FAIL_CLOSED_ROUTE_TO_REVIEW,
+    determine_reply_target,
+    get_root_delivery,
+    record_delivery,
+)
 from services.telegram_notifier import send_editorial_card
 
 logger = logging.getLogger(__name__)
@@ -50,6 +58,15 @@ class ContentCycleResult:
     # (its one message was still sent, just text-only) - not counted here, and not an error.
     image_preview_sent: int = 0
     event_ids: list[UUID] = field(default_factory=list)
+    # Phase 18.10 M3 (Telegram reply context, story_memory_mode != "off" only - all zero
+    # otherwise). `story_fail_closed_review`: an update whose story had no discoverable root
+    # message - never sent as a standalone post, routed to review instead (see
+    # services/story_telegram_delivery.py::determine_reply_target()'s own fail-closed contract).
+    # `story_delivery_persistence_failed`: the live Telegram send itself succeeded, but durably
+    # recording that fact failed immediately after - a real, physically-sent message this system
+    # could not fully account for; logged at CRITICAL, never silently dropped.
+    story_fail_closed_review: int = 0
+    story_delivery_persistence_failed: int = 0
 
 
 def _fact_safety_delivery_decision(
@@ -199,6 +216,34 @@ async def run_content_cycle(
                 },
             )
 
+        # Phase 18.10 M3: resolve this draft's story context (if any) and, for a confirmed
+        # update, the reply target - before any Telegram call. A no-op (story_link=None,
+        # reply_to_message_id=None) whenever story_memory_mode == "off" (the default) or this
+        # draft's source event was never story-linked - byte-identical to pre-18.10 behavior.
+        story_link: ContentDraftStoryLink | None = None
+        reply_to_message_id: int | None = None
+        if settings.story_memory_mode != "off":
+            async with session_factory() as story_session:
+                story_link = await story_session.get(ContentDraftStoryLink, outcome.content_draft.id)
+                if story_link is not None:
+                    root_delivery = await get_root_delivery(story_session, story_link.story_id)
+                    root_message_id = root_delivery.telegram_message_id if root_delivery is not None else None
+            if story_link is not None:
+                reply_decision = determine_reply_target(
+                    is_story_update=story_link.is_story_update, root_message_id=root_message_id,
+                )
+                if reply_decision.action == FAIL_CLOSED_ROUTE_TO_REVIEW:
+                    result.story_fail_closed_review += 1
+                    logger.warning(
+                        "story_update_fail_closed_no_root_message_routed_to_review",
+                        extra={
+                            "event_id": str(event_id), "draft_id": str(outcome.content_draft.id),
+                            "story_id": str(story_link.story_id),
+                        },
+                    )
+                    continue  # never sent as a standalone post - explicit, non-negotiable requirement
+                reply_to_message_id = reply_decision.reply_to_message_id
+
         # Phase 16 UX fix (docs/phase16_ux_combined_preview_fix_report.md): exactly one message is
         # ever sent per draft - never both. Live validation of the original M6 design (a second,
         # additive image-preview message) found operators saw two separate messages for one news
@@ -207,17 +252,20 @@ async def run_content_cycle(
         # second one. `send_editorial_card()` itself is completely unchanged and remains the exact
         # path used whenever the image-preview flow is inactive (every currently-deployed
         # environment other than this one).
+        sent_message_id: int | None = None
         if settings.image_editorial_preview_enabled and settings.image_candidate_persistence_mode != "off":
             try:
                 async with session_factory() as preview_session:
                     combined_outcome = await send_news_with_image_preview(
                         bot, settings.editorial_chat_id, preview_session,
                         draft=outcome.content_draft, event=event, dry_run=effective_dry_run,
+                        reply_to_message_id=reply_to_message_id,
                     )
                 if effective_dry_run:
                     result.dry_run_rendered += 1  # expected outcome in dry-run mode, not a failure
                 elif combined_outcome.sent:
                     result.notified += 1
+                    sent_message_id = combined_outcome.message_id
                     if combined_outcome.has_image:
                         result.image_preview_sent += 1
                 else:
@@ -231,17 +279,51 @@ async def run_content_cycle(
         else:
             notification = await send_editorial_card(
                 bot, settings.editorial_chat_id, outcome.content_draft, event,
-                dry_run=effective_dry_run,
+                dry_run=effective_dry_run, reply_to_message_id=reply_to_message_id,
             )  # never raises - always returns a NotificationOutcome, dry-run or live
             if effective_dry_run:
                 result.dry_run_rendered += 1  # expected outcome in dry-run mode, not a failure
             elif notification.sent:
                 result.notified += 1
+                sent_message_id = notification.message_id
             else:
                 result.notification_failed += 1
                 # ContentDraft already committed - a failed notification is never rolled back and
                 # never actively retried (no duplicate-notification protection for MVP; /news
                 # remains the durable fallback for a lost push notification).
+
+        # Phase 18.10 M3: durably record this send for a story-linked draft - "a send is not
+        # successful unless telegram_message_id is persisted" (explicit requirement). Only
+        # attempted for a real, non-dry-run send that actually returned a message_id; a dry-run
+        # or failed send has nothing to record here (dry_run_rendered/notification_failed above
+        # already account for those). The persistence attempt itself failing after a real,
+        # physically-sent message is a distinct, honestly-logged case - never silently dropped,
+        # never allowed to crash the cycle.
+        if story_link is not None and sent_message_id is not None:
+            try:
+                async with session_factory() as delivery_session:
+                    await record_delivery(
+                        delivery_session,
+                        story_id=story_link.story_id,
+                        content_draft_id=outcome.content_draft.id,
+                        telegram_chat_id=settings.editorial_chat_id,
+                        telegram_message_id=sent_message_id,
+                        reply_to_message_id=reply_to_message_id,
+                        delivery_type=DeliveryType.REPLY if reply_to_message_id is not None else DeliveryType.ROOT,
+                        delivery_status=DeliveryStatus.SENT,
+                        sent_at=datetime.now(timezone.utc),
+                    )
+                    await delivery_session.commit()
+            except Exception:
+                result.story_delivery_persistence_failed += 1
+                logger.critical(
+                    "story_telegram_delivery_persistence_failed_after_real_send",
+                    extra={
+                        "event_id": str(event_id), "draft_id": str(outcome.content_draft.id),
+                        "story_id": str(story_link.story_id), "telegram_message_id": sent_message_id,
+                        "telegram_chat_id": settings.editorial_chat_id,
+                    },
+                )
 
     logger.info(
         "content_cycle_finished",
@@ -254,6 +336,8 @@ async def run_content_cycle(
             "dry_run_rendered": result.dry_run_rendered,
             "fact_safety_suppressed": result.fact_safety_suppressed,
             "image_preview_sent": result.image_preview_sent,
+            "story_fail_closed_review": result.story_fail_closed_review,
+            "story_delivery_persistence_failed": result.story_delivery_persistence_failed,
         },
     )
     return result

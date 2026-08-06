@@ -116,6 +116,70 @@ async def test_live_mode_calls_send_message_with_correct_arguments() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reply_to_message_id_is_passed_through_to_the_live_send() -> None:
+    """Phase 18.10 M3: a story-update send must pass reply_to_message_id straight through to
+    aiogram's Bot.send_message - the mechanism Telegram itself uses to thread a reply."""
+    bot = AsyncMock()
+    draft = _draft()
+    event = _event()
+
+    await send_editorial_card(bot, 123456789, draft, event, dry_run=False, reply_to_message_id=555)
+
+    bot.send_message.assert_called_once()
+    assert bot.send_message.call_args.kwargs["reply_to_message_id"] == 555
+
+
+@pytest.mark.asyncio
+async def test_reply_to_message_id_defaults_to_none_for_a_root_post() -> None:
+    bot = AsyncMock()
+    draft = _draft()
+    event = _event()
+
+    await send_editorial_card(bot, 123456789, draft, event, dry_run=False)
+
+    assert bot.send_message.call_args.kwargs["reply_to_message_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_message_id_is_captured_from_the_live_send_response() -> None:
+    """Phase 18.10 M3: previously discarded entirely - now captured onto NotificationOutcome so
+    the caller can persist it (services.story_telegram_delivery's own "not successful unless
+    telegram_message_id is persisted" contract)."""
+    bot = AsyncMock()
+    bot.send_message.return_value.message_id = 987654321
+    draft = _draft()
+    event = _event()
+
+    outcome = await send_editorial_card(bot, 123456789, draft, event, dry_run=False)
+
+    assert outcome.message_id == 987654321
+
+
+@pytest.mark.asyncio
+async def test_message_id_is_none_in_dry_run() -> None:
+    bot = AsyncMock()
+    draft = _draft()
+    event = _event()
+
+    outcome = await send_editorial_card(bot, 123456789, draft, event, dry_run=True)
+
+    assert outcome.message_id is None
+
+
+@pytest.mark.asyncio
+async def test_message_id_is_none_when_the_live_send_fails() -> None:
+    bot = AsyncMock()
+    bot.send_message.side_effect = TelegramAPIError(method=None, message="boom")  # type: ignore[arg-type]
+    draft = _draft()
+    event = _event()
+
+    outcome = await send_editorial_card(bot, 123456789, draft, event, dry_run=False)
+
+    assert outcome.sent is False
+    assert outcome.message_id is None
+
+
+@pytest.mark.asyncio
 async def test_live_mode_requires_chat_id_configured() -> None:
     bot = AsyncMock()
     draft = _draft()

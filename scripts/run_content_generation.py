@@ -140,7 +140,7 @@ async def run_content_generation_for_event(
             return ContentGenerationOutcome(task_id=task.id, workflow_status=result.status, content_draft=None)
 
         try:
-            draft = await ContentDraftService(session).create_from_result(task.id, result)
+            draft = await ContentDraftService(session).create_from_result(task.id, result, event_id=event_id)
         except Exception:
             logger.exception(
                 "content_generation_completed_but_draft_persistence_failed",
