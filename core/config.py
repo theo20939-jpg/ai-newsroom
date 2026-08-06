@@ -216,6 +216,46 @@ class Settings(BaseSettings):
     # before this phase's own shadow-mode bake period produces real calibration data.
     story_memory_mode: Literal["off", "shadow", "enforce"] = "off"
 
+    # Phase 19 M7 (docs/phase19 plan, Correction 1): a real, previously-undisclosed shadow-mode
+    # gap was found in the block above's own downstream consumer (worker/content_cycle.py) - it
+    # unconditionally computed and applied a Telegram reply_to_message_id, and could skip a send
+    # entirely, the moment story_memory_mode != "off". This setting is the fix: Telegram
+    # delivery behavior is now independently gated, never coupled to story_memory_mode or
+    # story_context_mode alone. "off" (default): no reply computation at all for delivery
+    # purposes, byte-identical to pre-Phase-18.10 behavior. "shadow": the reply decision is
+    # computed and persisted (database.models.content_draft_reply_routing_proposal) for review,
+    # but the real send always proceeds as a standalone post - reply_to_message_id stays None and
+    # a fail-closed case is never skipped. "enforce": applies the decision to the real send,
+    # preserving the original fail-closed skip-and-route-to-review guarantee - reaching enforce
+    # requires both a separate human authorization and the Phase 19 M6 Story Memory calibration
+    # gate being passed (a documented precondition, not a code-level check, since the calibration
+    # report is a human-reviewed artifact).
+    telegram_story_reply_mode: Literal["off", "shadow", "enforce"] = "off"
+
+    # Phase 19 M1: post-selection full-article acquisition (docs/phase19_m0_audit.md). Three-state,
+    # matching story_memory_mode's own convention. "off" (default): zero network calls, zero
+    # processing - byte-identical to pre-Phase-19 behavior. "shadow": for an event that has
+    # already passed the existing selection pipeline (scripts/run_content_generation.py::
+    # run_content_generation_for_event(), between task creation and WorkflowRunner.run() - never
+    # for the mass NEWS_ANALYSIS population), the canonical article is fetched once and its
+    # cleaned text persisted (database.models.news_event_article_acquisition), but Research/
+    # Copywriting still read news_event.content unchanged - byte-identical delivery. "enforce":
+    # Research/quote-verification read the persisted evidence via services.evidence_package
+    # instead. Never blocks or fails the calling function - every failure mode is a persisted
+    # status string, never a raised exception.
+    article_acquisition_mode: Literal["off", "shadow", "enforce"] = "off"
+    # Second, later-selected event resolving to the same canonical_url within this window reuses
+    # the first event's already-fetched text (reused_from_news_event_id) instead of fetching
+    # again - a fresh fetch happens automatically once the window has elapsed (staleness
+    # protection), never an unbounded cache.
+    article_acquisition_reuse_window_hours: int = Field(default=48, gt=0)
+    article_acquisition_connect_timeout_seconds: float = Field(default=3.0, gt=0)
+    article_acquisition_read_timeout_seconds: float = Field(default=7.0, gt=0)
+    article_acquisition_total_timeout_seconds: float = Field(default=12.0, gt=0)
+    article_acquisition_max_redirects: int = Field(default=3, gt=0)
+    article_acquisition_max_html_bytes: int = Field(default=2_000_000, gt=0)
+    article_acquisition_max_extracted_chars: int = Field(default=20_000, gt=0)
+
     # Phase 16 M2: secure fetch / technical validation limits (docs/phase16_m2_secure_fetch_and_
     # validation_report.md §9). All positive-bounded, no unlimited fallback - every external fetch
     # Image Intelligence makes (article HTML, candidate image bytes) is bounded by exactly these

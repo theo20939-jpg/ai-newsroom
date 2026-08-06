@@ -31,6 +31,9 @@ from capabilities.registry import CapabilityRegistry
 from core.config import settings
 from core.logging import setup_logging
 from database.models.editorial_task import TaskPriority
+from database.models.news_event import NewsEvent
+from database.models.news_event_article_acquisition import TRIGGERED_BY_CONTENT_GENERATION_SELECTED
+from database.models.news_source import NewsSource, SourceType
 from database.session import async_session_factory
 from integrations.llm_gateway.boot import assemble_ai_integration_layer
 from integrations.prompts.file_repository import FilePromptRepository
@@ -38,6 +41,7 @@ from schemas.content_draft import ContentDraftRead
 from schemas.editorial_task import EditorialTaskCreate
 from schemas.workflow import RunStatus, WorkflowRunResult, WorkflowType
 from services import workflow_service
+from services.article_acquisition import get_or_acquire
 from services.content_draft_service import ContentDraftService
 from services.cost_tracker import CostTracker
 from services.image_persistence import link_candidates_to_content_draft
@@ -63,6 +67,27 @@ def _fact_safety_status(result: WorkflowRunResult) -> str | None:
                 if isinstance(status, str):
                     return status
     return None
+
+
+async def _run_article_acquisition(session: AsyncSession, event_id: UUID) -> None:
+    """Phase 19 M1. Gated by settings.article_acquisition_mode != "off" (checked by the caller).
+    Resolves the NewsEvent/NewsSource needed for the source_type != TELEGRAM gate, then delegates
+    to services.article_acquisition.get_or_acquire(). Wrapped in try/except: an unapplied
+    migration or any other persistence failure here must never prevent Copywriting from starting -
+    the concrete enforcement of "never blocks or fails the calling function," not just a
+    docstring claim."""
+    try:
+        event = await session.get(NewsEvent, event_id)
+        if event is None:
+            return
+        source = await session.get(NewsSource, event.source_id)
+        if source is not None and source.type == SourceType.TELEGRAM:
+            return
+        await get_or_acquire(session, event, triggered_by=TRIGGERED_BY_CONTENT_GENERATION_SELECTED)
+        await session.commit()
+    except Exception:
+        logger.warning("article_acquisition_stage_unexpected_error", extra={"event_id": str(event_id)})
+        await session.rollback()
 
 
 @dataclass(frozen=True)
@@ -129,6 +154,19 @@ async def run_content_generation_for_event(
             session,
             EditorialTaskCreate(event_id=event_id, workflow_type=WorkflowType.CONTENT_GENERATION, priority=priority),
         )
+
+        # Phase 19 M1 (docs/phase19_m0_audit.md): the verified, post-selection-only wiring
+        # point - this event has already passed worker/content_cycle.py::_select_eligible_events()
+        # and the CONTENT_GENERATION task above already exists, but WorkflowRunner has not started
+        # yet (Copywriting is a later step inside it). Never runs for the mass NEWS_ANALYSIS
+        # population, never touches collector/analysis/scoring/selection. Best-effort: a failure
+        # here must never prevent the workflow from running - it is not even awaited under a
+        # try/except that could mask a real bug, it is structurally impossible for
+        # get_or_acquire() to raise (see its own docstring), so this call is a plain await, not a
+        # defensive wrapper duplicating that guarantee.
+        if settings.article_acquisition_mode != "off":
+            await _run_article_acquisition(session, event_id)
+
         executor = CapabilityExecutor(
             session, task.id, registry, cost_tracker=cost_tracker, pricing_catalog=pricing_catalog
         )
