@@ -17,11 +17,15 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.config import settings
+from database.models.content_draft import ContentDraft, ContentType
+from database.models.editorial_task import EditorialTask, TaskPriority, TaskStatus
 from database.models.news_event import EventCategory, NewsEvent
 from database.models.story import Story
+from database.models.content_draft_reply_routing_proposal import ContentDraftReplyRoutingProposal
 from database.models.story_telegram_delivery import DeliveryStatus, DeliveryType, StoryTelegramDelivery
 from services.telegram_notifier import NotificationOutcome
 from tests.test_content_worker_cycle import (  # noqa: F401,F811 - fixtures reused via import
@@ -36,10 +40,17 @@ from worker.content_cycle import run_content_cycle
 
 _MIGRATION_SKIP_REASON = (
     "Requires Alembic migrations c2bc6affb100/0fac25b59455 (stories/news_event_story_links/"
-    "content_draft_story_links/story_telegram_deliveries tables) to be applied first - Phase "
-    "18.10 ships these unapplied by explicit instruction (design-only). Remove this skip once "
-    "applied."
+    "content_draft_story_links/story_telegram_deliveries tables, Phase 18.10) and 280fa1e7d6d2 "
+    "(content_draft_reply_routing_proposals table, Phase 19 M7) to be applied first - both ship "
+    "unapplied by explicit instruction (design-only). Remove this skip once applied."
 )
+
+
+async def _table_exists(session: AsyncSession, table_name: str) -> bool:
+    def _check(sync_session: object) -> bool:
+        return inspect(sync_session.connection()).has_table(table_name)  # type: ignore[attr-defined]
+
+    return await session.run_sync(_check)
 
 
 async def _make_story_linked_draft(
@@ -73,11 +84,11 @@ async def test_off_mode_never_queries_story_link_or_records_delivery(
     factory: async_sessionmaker[AsyncSession], test_source, _isolated_freshness_window: None,  # noqa: F811
     _deterministic_delivery_settings: None,
 ) -> None:
-    """The default, byte-identical-to-pre-18.10 path - story_memory_mode == "off" must never
-    attempt a ContentDraftStoryLink lookup or a delivery record, and must behave exactly as
-    before (send happens, notified counts as usual). Does not need the Phase 18.10 migration at
-    all, since the new code path is never entered."""
-    assert settings.story_memory_mode == "off"  # this test's own precondition, not just an assumption
+    """The default, byte-identical-to-pre-18.10 path - telegram_story_reply_mode == "off" must
+    never attempt a ContentDraftStoryLink lookup or a delivery record, and must behave exactly as
+    before (send happens, notified counts as usual). Does not need the Phase 18.10/19 migrations
+    at all, since the new code path is never entered."""
+    assert settings.telegram_story_reply_mode == "off"  # this test's own precondition
 
     async with factory() as session:
         event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
@@ -103,27 +114,98 @@ async def test_off_mode_never_queries_story_link_or_records_delivery(
     assert result.story_delivery_persistence_failed == 0
 
 
-@pytest.mark.skip(reason=_MIGRATION_SKIP_REASON)
 @pytest.mark.asyncio
-async def test_story_update_with_existing_root_replies_to_it(
+async def test_story_memory_shadow_alone_never_affects_telegram_delivery(
     factory: async_sessionmaker[AsyncSession], test_source, _isolated_freshness_window: None,  # noqa: F811
     _deterministic_delivery_settings: None, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An update whose story already has a SENT root delivery must be sent as a reply to that
-    root message's telegram_message_id - end to end, through the real create_from_result() ->
-    ContentDraftStoryLink creation -> determine_reply_target() -> send_editorial_card() chain."""
+    """Phase 19 M7 regression test for the disclosed defect (docs/phase19_m0_audit.md sec7,
+    docs/phase19_m6_story_memory_calibration_report.md sec3.1): a real, already-committed
+    Phase 18.10 bug gated reply-threading (including a fail-closed skip) directly on
+    story_memory_mode != "off", so story_memory_mode == "shadow" could itself change Telegram
+    delivery behavior - contradicting "shadow never changes production behavior". This proves the
+    fix: with story_memory_mode == "shadow" AND a real story_update link AND NO root delivery
+    (a case that, before the fix, would have skipped the send entirely via the fail-closed route),
+    the send must still happen as a normal standalone post, because telegram_story_reply_mode
+    stays at its default ("off")."""
     monkeypatch.setattr(settings, "story_memory_mode", "shadow")
+    assert settings.telegram_story_reply_mode == "off"  # this test's own precondition
     from database.models.story_link import NewsEventStoryLink
     from services.story_memory import STORY_UPDATE
+
+    async with factory() as probe_session:
+        if not await _table_exists(probe_session, "stories"):
+            pytest.skip(_MIGRATION_SKIP_REASON)
 
     story, event = await _make_story_linked_draft(factory, test_source, is_story_update=True)
     async with factory() as session:
         session.add(
             NewsEventStoryLink(news_event_id=event.id, story_id=story.id, match_type=STORY_UPDATE, match_score=0.7)
         )
+        await session.commit()
+
+    _gateway, registry = _real_capability_registry()
+    fake_bot = AsyncMock()
+    with patch(
+        "worker.content_cycle.send_editorial_card",
+        new=AsyncMock(return_value=NotificationOutcome(chat_id=1, rendered_html="<html>", sent=True, message_id=1001)),
+    ) as mock_notify:
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    mock_notify.assert_called_once()  # NOT skipped - this is the exact case the old code would have skipped
+    assert mock_notify.call_args.kwargs["reply_to_message_id"] is None
+    assert result.story_fail_closed_review == 0
+    assert result.story_reply_would_fail_closed_shadow == 0  # shadow itself is also off here
+    assert result.notified == 1
+
+
+@pytest.mark.asyncio
+async def test_enforce_mode_story_update_with_existing_root_replies_to_it(
+    factory: async_sessionmaker[AsyncSession], test_source, _isolated_freshness_window: None,  # noqa: F811
+    _deterministic_delivery_settings: None, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An update whose story already has a SENT root delivery must be sent as a reply to that
+    root message's telegram_message_id - end to end, through the real create_from_result() ->
+    ContentDraftStoryLink creation -> determine_reply_target() -> send_editorial_card() chain.
+    Only reachable under telegram_story_reply_mode == "enforce" (not story_memory_mode alone -
+    see the regression test above)."""
+    monkeypatch.setattr(settings, "story_memory_mode", "shadow")
+    monkeypatch.setattr(settings, "telegram_story_reply_mode", "enforce")
+    from database.models.story_link import NewsEventStoryLink
+    from services.story_memory import STORY_UPDATE
+
+    async with factory() as probe_session:
+        if not await _table_exists(probe_session, "content_draft_reply_routing_proposals"):
+            pytest.skip(_MIGRATION_SKIP_REASON)
+
+    story, event = await _make_story_linked_draft(factory, test_source, is_story_update=True)
+    async with factory() as session:
+        session.add(
+            NewsEventStoryLink(news_event_id=event.id, story_id=story.id, match_type=STORY_UPDATE, match_score=0.7)
+        )
+        # A real "root" ContentDraft (representing an earlier, already-sent post for this story) -
+        # story_telegram_deliveries.content_draft_id genuinely FK-references content_drafts.id,
+        # so a fake/random UUID here would fail once the migration is applied (a real,
+        # previously-undiscovered gap in this fixture, found during Phase 19 M7 validation).
+        # Deliberately its own, separate NewsEvent (never `event` itself) - worker/content_cycle.
+        # py::_select_eligible_events() excludes any event that already has a CONTENT_GENERATION
+        # task, so reusing `event.id` here would make the test's own real event ineligible.
+        root_event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
+        root_task = EditorialTask(
+            id=uuid4(), event_id=root_event.id, status=TaskStatus.COMPLETED, priority=TaskPriority.B,
+            workflow={"workflow_name": "CONTENT_GENERATION", "step_results": []},
+        )
+        session.add(root_task)
+        await session.flush()
+        root_draft = ContentDraft(
+            id=uuid4(), task_id=root_task.id, type=ContentType.POST, title="root", body="root body",
+            version=1, status="draft",
+        )
+        session.add(root_draft)
+        await session.flush()
         session.add(
             StoryTelegramDelivery(
-                id=uuid4(), story_id=story.id, content_draft_id=uuid4(), telegram_chat_id=123456789,
+                id=uuid4(), story_id=story.id, content_draft_id=root_draft.id, telegram_chat_id=123456789,
                 telegram_message_id=999, reply_to_message_id=None, delivery_type=DeliveryType.ROOT,
                 delivery_status=DeliveryStatus.SENT, idempotency_key=f"root-{uuid4()}",
                 sent_at=datetime.now(timezone.utc),
@@ -143,18 +225,31 @@ async def test_story_update_with_existing_root_replies_to_it(
     assert mock_notify.call_args.kwargs["reply_to_message_id"] == 999
     assert result.story_fail_closed_review == 0
 
+    async with factory() as session:
+        proposal = (
+            await session.execute(select(ContentDraftReplyRoutingProposal))
+        ).scalars().first()
+        assert proposal is not None
+        assert proposal.applied is True
+        assert proposal.action == "send_as_reply"
 
-@pytest.mark.skip(reason=_MIGRATION_SKIP_REASON)
+
 @pytest.mark.asyncio
-async def test_story_update_with_no_root_fails_closed_never_sends(
+async def test_enforce_mode_story_update_with_no_root_fails_closed_never_sends(
     factory: async_sessionmaker[AsyncSession], test_source, _isolated_freshness_window: None,  # noqa: F811
     _deterministic_delivery_settings: None, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An update whose story has NO root delivery must never be sent as a standalone post - the
-    explicit, non-negotiable fail-closed requirement."""
+    explicit, non-negotiable fail-closed requirement - under telegram_story_reply_mode ==
+    "enforce"."""
     monkeypatch.setattr(settings, "story_memory_mode", "shadow")
+    monkeypatch.setattr(settings, "telegram_story_reply_mode", "enforce")
     from database.models.story_link import NewsEventStoryLink
     from services.story_memory import STORY_UPDATE
+
+    async with factory() as probe_session:
+        if not await _table_exists(probe_session, "content_draft_reply_routing_proposals"):
+            pytest.skip(_MIGRATION_SKIP_REASON)
 
     story, event = await _make_story_linked_draft(factory, test_source, is_story_update=True)
     async with factory() as session:
@@ -171,3 +266,51 @@ async def test_story_update_with_no_root_fails_closed_never_sends(
     mock_notify.assert_not_called()
     assert result.story_fail_closed_review == 1
     assert result.notified == 0
+
+
+@pytest.mark.asyncio
+async def test_shadow_mode_persists_proposal_but_never_skips_or_changes_the_real_send(
+    factory: async_sessionmaker[AsyncSession], test_source, _isolated_freshness_window: None,  # noqa: F811
+    _deterministic_delivery_settings: None, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """telegram_story_reply_mode == "shadow": the same no-root story_update case as the enforce
+    fail-closed test above must still send as a standalone post (never skipped), while a
+    ContentDraftReplyRoutingProposal row records what WOULD have happened
+    (action="fail_closed_route_to_review", applied=False)."""
+    monkeypatch.setattr(settings, "story_memory_mode", "shadow")
+    monkeypatch.setattr(settings, "telegram_story_reply_mode", "shadow")
+    from database.models.story_link import NewsEventStoryLink
+    from services.story_memory import STORY_UPDATE
+
+    async with factory() as probe_session:
+        if not await _table_exists(probe_session, "content_draft_reply_routing_proposals"):
+            pytest.skip(_MIGRATION_SKIP_REASON)
+
+    story, event = await _make_story_linked_draft(factory, test_source, is_story_update=True)
+    async with factory() as session:
+        session.add(
+            NewsEventStoryLink(news_event_id=event.id, story_id=story.id, match_type=STORY_UPDATE, match_score=0.7)
+        )
+        await session.commit()
+
+    _gateway, registry = _real_capability_registry()
+    fake_bot = AsyncMock()
+    with patch(
+        "worker.content_cycle.send_editorial_card",
+        new=AsyncMock(return_value=NotificationOutcome(chat_id=1, rendered_html="<html>", sent=True, message_id=2002)),
+    ) as mock_notify:
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    mock_notify.assert_called_once()
+    assert mock_notify.call_args.kwargs["reply_to_message_id"] is None
+    assert result.story_fail_closed_review == 0
+    assert result.story_reply_would_fail_closed_shadow == 1
+    assert result.notified == 1
+
+    async with factory() as session:
+        proposal = (
+            await session.execute(select(ContentDraftReplyRoutingProposal))
+        ).scalars().first()
+        assert proposal is not None
+        assert proposal.applied is False
+        assert proposal.action == "fail_closed_route_to_review"

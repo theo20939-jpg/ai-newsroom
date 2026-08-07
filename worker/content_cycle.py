@@ -30,6 +30,7 @@ from services.story_telegram_delivery import (
     FAIL_CLOSED_ROUTE_TO_REVIEW,
     determine_reply_target,
     get_root_delivery,
+    persist_reply_routing_proposal,
     record_delivery,
 )
 from services.telegram_notifier import send_editorial_card
@@ -68,6 +69,11 @@ class ContentCycleResult:
     # could not fully account for; logged at CRITICAL, never silently dropped.
     story_fail_closed_review: int = 0
     story_delivery_persistence_failed: int = 0
+    # Phase 19 M7: counts a "would have been fail-closed" case under
+    # telegram_story_reply_mode == "shadow" - the reply-routing proposal is persisted for review,
+    # but (unlike story_fail_closed_review) the send still proceeds as a standalone post; this
+    # counter is purely observational and never reflects a skipped send. Always 0 outside "shadow".
+    story_reply_would_fail_closed_shadow: int = 0
 
 
 def _fact_safety_delivery_decision(
@@ -217,13 +223,24 @@ async def run_content_cycle(
                 },
             )
 
-        # Phase 18.10 M3: resolve this draft's story context (if any) and, for a confirmed
-        # update, the reply target - before any Telegram call. A no-op (story_link=None,
-        # reply_to_message_id=None) whenever story_memory_mode == "off" (the default) or this
-        # draft's source event was never story-linked - byte-identical to pre-18.10 behavior.
+        # Phase 19 M7 (docs/phase19_m7_story_timeline_and_reply_routing.md, "Correction 1" fix):
+        # resolve this draft's story context (if any) and, for a confirmed update, the reply
+        # target - before any Telegram call. Gated on telegram_story_reply_mode alone, never on
+        # story_memory_mode - the Phase 18.10 M3 code this replaces was gated on
+        # `story_memory_mode != "off"` directly, which meant story_memory_mode == "shadow" could
+        # itself change Telegram delivery behavior (reply target, or a fail-closed skip),
+        # contradicting "shadow never changes production behavior" (docs/phase19_m0_audit.md §7,
+        # docs/phase19_m6_story_memory_calibration_report.md §3.1). "off" (default): no story_link
+        # query at all, reply_to_message_id stays None - byte-identical to pre-18.10 behavior,
+        # regardless of story_memory_mode. "shadow": the decision is computed and persisted
+        # (services.story_telegram_delivery.persist_reply_routing_proposal) for review, but the
+        # real send always proceeds as a standalone post - reply_to_message_id stays None and a
+        # fail-closed case is never skipped (only counted, via story_reply_would_fail_closed_
+        # shadow). "enforce": applies the decision to the real send, preserving the original
+        # fail-closed skip-and-route-to-review guarantee.
         story_link: ContentDraftStoryLink | None = None
         reply_to_message_id: int | None = None
-        if settings.story_memory_mode != "off":
+        if settings.telegram_story_reply_mode != "off":
             async with session_factory() as story_session:
                 story_link = await story_session.get(ContentDraftStoryLink, outcome.content_draft.id)
                 if story_link is not None:
@@ -233,17 +250,42 @@ async def run_content_cycle(
                 reply_decision = determine_reply_target(
                     is_story_update=story_link.is_story_update, root_message_id=root_message_id,
                 )
-                if reply_decision.action == FAIL_CLOSED_ROUTE_TO_REVIEW:
-                    result.story_fail_closed_review += 1
+                is_enforce = settings.telegram_story_reply_mode == "enforce"
+
+                try:
+                    async with session_factory() as proposal_session:
+                        await persist_reply_routing_proposal(
+                            proposal_session, content_draft_id=outcome.content_draft.id,
+                            story_id=story_link.story_id, decision=reply_decision, applied=is_enforce,
+                        )
+                        await proposal_session.commit()
+                except Exception:
                     logger.warning(
-                        "story_update_fail_closed_no_root_message_routed_to_review",
+                        "story_reply_routing_proposal_persistence_failed",
+                        extra={"event_id": str(event_id), "draft_id": str(outcome.content_draft.id)},
+                    )
+
+                if reply_decision.action == FAIL_CLOSED_ROUTE_TO_REVIEW:
+                    if is_enforce:
+                        result.story_fail_closed_review += 1
+                        logger.warning(
+                            "story_update_fail_closed_no_root_message_routed_to_review",
+                            extra={
+                                "event_id": str(event_id), "draft_id": str(outcome.content_draft.id),
+                                "story_id": str(story_link.story_id),
+                            },
+                        )
+                        continue  # never sent as a standalone post - explicit, non-negotiable requirement
+                    result.story_reply_would_fail_closed_shadow += 1
+                    logger.info(
+                        "story_update_would_fail_closed_shadow_still_sending_as_standalone",
                         extra={
                             "event_id": str(event_id), "draft_id": str(outcome.content_draft.id),
                             "story_id": str(story_link.story_id),
                         },
                     )
-                    continue  # never sent as a standalone post - explicit, non-negotiable requirement
-                reply_to_message_id = reply_decision.reply_to_message_id
+                elif is_enforce:
+                    reply_to_message_id = reply_decision.reply_to_message_id
 
         # Phase 19 M5 (docs/phase19_m0_audit.md): resolve any persisted, verified quote before
         # either Telegram call - byte-identical to today (neither call site received a quote

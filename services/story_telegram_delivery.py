@@ -23,6 +23,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from database.models.content_draft_reply_routing_proposal import ContentDraftReplyRoutingProposal
 from database.models.story_telegram_delivery import DeliveryStatus, DeliveryType, StoryTelegramDelivery
 
 
@@ -113,3 +114,26 @@ async def record_delivery(
     )
     session.add(delivery)
     return delivery
+
+
+async def persist_reply_routing_proposal(
+    session: AsyncSession,
+    *,
+    content_draft_id: UUID,
+    story_id: UUID,
+    decision: ReplyDecision,
+    applied: bool,
+) -> ContentDraftReplyRoutingProposal:
+    """Phase 19 M7: persists the ReplyDecision itself for review, independent of whether it was
+    actually applied to the real send - `applied` is True only under
+    `telegram_story_reply_mode == "enforce"`; under "shadow" a row is still written here (so a
+    human can review what the system WOULD have done), but the real send/StoryTelegramDelivery
+    are never affected (worker/content_cycle.py is the only caller, and never threads this
+    proposal's fields into the real Telegram call unless applied=True was also the mode in
+    effect)."""
+    proposal = ContentDraftReplyRoutingProposal(
+        content_draft_id=content_draft_id, story_id=story_id, action=decision.action,
+        proposed_reply_to_message_id=decision.reply_to_message_id, applied=applied,
+    )
+    session.add(proposal)
+    return proposal

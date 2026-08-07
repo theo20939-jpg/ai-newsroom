@@ -232,6 +232,28 @@ class Settings(BaseSettings):
     # report is a human-reviewed artifact).
     telegram_story_reply_mode: Literal["off", "shadow", "enforce"] = "off"
 
+    # Phase 19 M7: Story Timeline + Editorial Memory (docs/phase19_m7_story_timeline_and_reply_
+    # routing.md). Two-state, matching image_intelligence_mode's own convention - no "enforce"
+    # value exists at all, since this milestone never proposes to change Copywriting output.
+    # "off" (default): the "intelligence" step's own shadow hook never runs, zero processing.
+    # "shadow": services/story_context.py::build_story_timeline() (a deterministic, evidence-only
+    # reconstruction - no LLM call, no embeddings) is computed and persisted (database.models.
+    # story_context_snapshot) for review whenever this event's underlying NewsEvent is
+    # story-linked (requires story_memory_mode != "off" too) - Copywriting never reads it,
+    # ContentDraft output is unchanged. Independent of telegram_story_reply_mode - a snapshot can
+    # be computed even if reply-threading itself stays off.
+    story_context_mode: Literal["off", "shadow"] = "off"
+
+    # Phase 19 M8: Source Intelligence (docs/phase19_m8_source_intelligence.md). Two-state, no
+    # "enforce" value - services/source_intelligence.py only ever produces hedged
+    # POSSIBLE_ORIGINAL/POSSIBLE_CONFIRMATION/POSSIBLE_AGGREGATION/POSSIBLE_ANALYSIS/UNKNOWN
+    # labels for human review, never a definitive attribution claim, and is never wired into
+    # Copywriting's prompt/output at any mode. "off" (default): zero processing. "shadow": a
+    # label is computed and persisted (database.models.news_event_source_intelligence) whenever
+    # this event is story-linked (requires story_memory_mode != "off" too) - Copywriting never
+    # reads it, ContentDraft output is unchanged.
+    source_intelligence_mode: Literal["off", "shadow"] = "off"
+
     # Phase 19 M1: post-selection full-article acquisition (docs/phase19_m0_audit.md). Three-state,
     # matching story_memory_mode's own convention. "off" (default): zero network calls, zero
     # processing - byte-identical to pre-Phase-19 behavior. "shadow": for an event that has

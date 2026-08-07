@@ -21,7 +21,7 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, select
+from sqlalchemy import delete, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from capabilities.registry import build_registry
@@ -95,6 +95,13 @@ async def factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     await engine.dispose()
 
 
+async def _table_exists(session: AsyncSession, table_name: str) -> bool:
+    def _check(sync_session: object) -> bool:
+        return inspect(sync_session.connection()).has_table(table_name)  # type: ignore[attr-defined]
+
+    return await session.run_sync(_check)
+
+
 @pytest_asyncio.fixture
 async def test_source(factory: async_sessionmaker[AsyncSession]) -> AsyncIterator[NewsSource]:
     unique_name = f"phase14-content-cycle-test-{uuid4()}"
@@ -111,10 +118,80 @@ async def test_source(factory: async_sessionmaker[AsyncSession]) -> AsyncIterato
                 await session.execute(select(NewsEvent.id).where(NewsEvent.source_id == source.id))
             ).scalars().all()
             if event_ids:
-                await session.execute(delete(ContentDraft).where(ContentDraft.task_id.in_(
-                    select(EditorialTask.id).where(EditorialTask.event_id.in_(event_ids))
-                )))
+                content_draft_ids = (
+                    await session.execute(select(ContentDraft.id).where(ContentDraft.task_id.in_(
+                        select(EditorialTask.id).where(EditorialTask.event_id.in_(event_ids))
+                    )))
+                ).scalars().all()
+
+                # Phase 18.10/19: these child tables (story_context_snapshots, content_draft_
+                # reply_routing_proposals, story_telegram_deliveries, content_draft_story_links,
+                # stories, news_event_story_links) FK-reference content_drafts/news_events and
+                # ship with their migrations unapplied to the real dev DB by explicit instruction
+                # - deleted here, guarded by a runtime table-existence check (mirrors tests/
+                # test_editorial_planning_persistence_integration.py's own established pattern),
+                # so this fixture's cleanup neither breaks against the real unmigrated DB nor
+                # leaves FK-referenced rows behind (which would otherwise make this DELETE of
+                # ContentDraft/NewsEvent fail entirely, silently leaking a stale COMPLETED
+                # NEWS_ANALYSIS task that a LATER test's run_content_cycle() could then pick up -
+                # a real, confirmed failure mode discovered during Phase 19 M7 validation).
+                story_ids: list = []
+                if content_draft_ids and await _table_exists(session, "content_draft_story_links"):
+                    from database.models.content_draft_story_link import ContentDraftStoryLink
+
+                    story_ids = (
+                        await session.execute(
+                            select(ContentDraftStoryLink.story_id)
+                            .where(ContentDraftStoryLink.source_event_id.in_(event_ids))
+                            .distinct()
+                        )
+                    ).scalars().all()
+
+                if content_draft_ids and await _table_exists(session, "story_context_snapshots"):
+                    from database.models.story_context_snapshot import StoryContextSnapshot
+
+                    await session.execute(
+                        delete(StoryContextSnapshot).where(StoryContextSnapshot.event_id.in_(event_ids))
+                    )
+                if content_draft_ids and await _table_exists(session, "content_draft_reply_routing_proposals"):
+                    from database.models.content_draft_reply_routing_proposal import (
+                        ContentDraftReplyRoutingProposal,
+                    )
+
+                    await session.execute(
+                        delete(ContentDraftReplyRoutingProposal).where(
+                            ContentDraftReplyRoutingProposal.content_draft_id.in_(content_draft_ids)
+                        )
+                    )
+                if content_draft_ids and await _table_exists(session, "story_telegram_deliveries"):
+                    from database.models.story_telegram_delivery import StoryTelegramDelivery
+
+                    await session.execute(
+                        delete(StoryTelegramDelivery).where(
+                            StoryTelegramDelivery.content_draft_id.in_(content_draft_ids)
+                        )
+                    )
+                if content_draft_ids and await _table_exists(session, "content_draft_story_links"):
+                    from database.models.content_draft_story_link import ContentDraftStoryLink
+
+                    await session.execute(
+                        delete(ContentDraftStoryLink).where(ContentDraftStoryLink.source_event_id.in_(event_ids))
+                    )
+                if await _table_exists(session, "news_event_story_links"):
+                    from database.models.story_link import NewsEventStoryLink
+
+                    await session.execute(
+                        delete(NewsEventStoryLink).where(NewsEventStoryLink.news_event_id.in_(event_ids))
+                    )
+
+                await session.execute(delete(ContentDraft).where(ContentDraft.id.in_(content_draft_ids)))
                 await session.execute(delete(EditorialTask).where(EditorialTask.event_id.in_(event_ids)))
+
+                if story_ids and await _table_exists(session, "stories"):
+                    from database.models.story import Story
+
+                    await session.execute(delete(Story).where(Story.id.in_(story_ids)))
+
                 await session.execute(delete(NewsEvent).where(NewsEvent.id.in_(event_ids)))
             await session.execute(delete(NewsSource).where(NewsSource.id == source.id))
             await session.commit()

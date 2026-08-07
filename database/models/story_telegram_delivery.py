@@ -17,6 +17,18 @@ from sqlalchemy.orm import Mapped, mapped_column
 from database.base import Base
 
 
+def _enum_values(enum_cls: type[enum.Enum]) -> list[str]:
+    """SQLAlchemy's `Enum(python_enum_cls)` stores each member's `.name` (e.g. "ROOT") by
+    default, not `.value` ("root") - but the native Postgres enum types this table's own
+    migration (0fac25b859455) created use the lowercase `.value` labels. `values_callable` makes
+    the DB-stored/compared string match `.value`, exactly mirroring database/models/
+    image_candidate_record.py's own established fix for the identical class of bug (a real,
+    previously-undiscovered instance of it: story_telegram_deliveries.delivery_type/
+    delivery_status were never exercised against a real migrated database until Phase 19 M7,
+    since the integration tests that would have caught it were skipped pending this migration)."""
+    return [member.value for member in enum_cls]
+
+
 class DeliveryType(str, enum.Enum):
     """ROOT: the first message posted about a story (nothing to reply to yet). REPLY: a
     story-update message sent as a reply to that story's own root message."""
@@ -53,10 +65,10 @@ class StoryTelegramDelivery(Base):
     telegram_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     reply_to_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     delivery_type: Mapped[DeliveryType] = mapped_column(
-        Enum(DeliveryType, name="telegram_delivery_type"), nullable=False
+        Enum(DeliveryType, name="telegram_delivery_type", values_callable=_enum_values), nullable=False
     )
     delivery_status: Mapped[DeliveryStatus] = mapped_column(
-        Enum(DeliveryStatus, name="telegram_delivery_status"), nullable=False
+        Enum(DeliveryStatus, name="telegram_delivery_status", values_callable=_enum_values), nullable=False
     )
     # Deterministic, derived from content_draft_id (services/story_telegram_delivery.py) - a
     # unique constraint enforces "at most one delivery attempt is ever recorded as authoritative

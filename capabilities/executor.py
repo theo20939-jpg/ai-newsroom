@@ -30,6 +30,10 @@ from database.models.news_source import NewsSource
 from schemas.beginner_friendly import BeginnerFriendlyPlan
 from services.editorial_plan_persistence import persist_shadow_plan
 from services.editorial_planning_deterministic import build_deterministic_plan
+from services.source_intelligence import classify_source_role
+from services.source_intelligence_persistence import persist_source_intelligence
+from services.story_context import build_story_timeline
+from services.story_context_persistence import persist_story_context_snapshot
 from schemas.capability import (
     BusinessContext,
     CapabilityCall,
@@ -303,6 +307,20 @@ class CapabilityExecutor:
         if step.capability == "intelligence" and settings.editorial_planning_mode == "shadow":
             await self._attach_editorial_plan(news_event, context, structured_output)
 
+        # Phase 19 M7: Story Timeline + Editorial Memory shadow scaffold - same seam as Editorial
+        # Planning above (also "intelligence", also gated on its own mode flag, also deliberately
+        # never attached to structured_output). Only meaningful when this event is story-linked
+        # (story_memory_mode != "off" AND a NewsEventStoryLink actually exists) - a no-op
+        # otherwise. SAVEPOINT-guarded exactly like _attach_editorial_plan's own established
+        # pattern: a missing migration must degrade to a logged no-op, never crash the step.
+        if step.capability == "intelligence" and settings.story_context_mode == "shadow":
+            await self._attach_story_context(news_event)
+
+        # Phase 19 M8: Source Intelligence shadow scaffold - same seam/pattern as Story Context
+        # above. Only meaningful when this event is story-linked - a no-op otherwise.
+        if step.capability == "intelligence" and settings.source_intelligence_mode == "shadow":
+            await self._attach_source_intelligence(news_event)
+
         # Phase 16 M1: deterministic, zero-download Image Intelligence shadow discovery (docs/
         # phase16_m1_native_media_ingestion_report.md) - only for "copywriting" (the earliest step
         # where the drafted event's persisted content/url are certain to exist) and only when
@@ -506,6 +524,66 @@ class CapabilityExecutor:
         except Exception:
             logger.warning(
                 "editorial_plan_shadow_scaffold_failed",
+                extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+            )
+
+    async def _attach_story_context(self, news_event: NewsEvent) -> None:
+        """Phase 19 M7, shadow mode. Deliberately returns None and never touches
+        structured_output - same structural "Copywriting has no code path to read this" guarantee
+        as _attach_editorial_plan(). A no-op whenever this event has no NewsEventStoryLink (i.e.
+        story_memory_mode was "off" at Triage time, or this event predates story linking) -
+        Editorial Memory only ever describes a story that Story Memory itself already recognized.
+        SAVEPOINT-guarded exactly like _attach_editorial_plan()."""
+        try:
+            async with self._session.begin_nested():
+                from database.models.story_link import NewsEventStoryLink
+
+                link = await self._session.get(NewsEventStoryLink, news_event.id)
+                if link is None:
+                    return
+
+                timeline = await build_story_timeline(self._session, link.story_id)
+                await persist_story_context_snapshot(
+                    self._session, event_id=news_event.id, story_id=link.story_id, timeline=timeline,
+                )
+        except Exception:
+            logger.warning(
+                "story_context_shadow_scaffold_failed",
+                extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+            )
+
+    async def _attach_source_intelligence(self, news_event: NewsEvent) -> None:
+        """Phase 19 M8, shadow mode. Deliberately returns None and never touches
+        structured_output - same structural guarantee as _attach_editorial_plan()/
+        _attach_story_context(). A no-op whenever this event has no NewsEventStoryLink.
+        `is_first_in_story` reuses Story.first_event_id directly (no dependency on services.
+        story_context's timeline builder - M7 and M8 stay independently shadow-only, per the
+        overnight authorization's own requirement that both be provably isolated from each
+        other and from Copywriting). SAVEPOINT-guarded exactly like its siblings."""
+        try:
+            async with self._session.begin_nested():
+                from database.models.story import Story
+                from database.models.story_link import NewsEventStoryLink
+
+                link = await self._session.get(NewsEventStoryLink, news_event.id)
+                if link is None:
+                    return
+
+                story = await self._session.get(Story, link.story_id)
+                is_first_in_story = story is not None and story.first_event_id == news_event.id
+
+                role = classify_source_role(
+                    is_first_in_story=is_first_in_story, match_type=link.match_type,
+                    title=news_event.title,
+                )
+                await persist_source_intelligence(
+                    self._session, news_event_id=news_event.id, role=role,
+                    is_first_in_story=is_first_in_story, match_type=link.match_type,
+                    reliability_score=None,
+                )
+        except Exception:
+            logger.warning(
+                "source_intelligence_shadow_scaffold_failed",
                 extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
             )
 
