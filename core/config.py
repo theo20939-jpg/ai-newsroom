@@ -278,6 +278,24 @@ class Settings(BaseSettings):
     article_acquisition_max_html_bytes: int = Field(default=2_000_000, gt=0)
     article_acquisition_max_extracted_chars: int = Field(default=20_000, gt=0)
 
+    # Phase 19 M10: bounded, source-local video discovery (docs/phase19_m10_video_discovery.md).
+    # Three-state, matching article_acquisition_mode's own convention. "off" (default): zero
+    # processing. "shadow": video hints already present in RSS/article HTML (never an open web
+    # search, never a YouTube/Vimeo API call) are extracted and, for direct-hosted candidates
+    # only, bounded-validated via safe_fetch() + magic-byte sniffing; results are persisted
+    # (database.models.content_draft_media_item) for review only - Copywriting/Telegram delivery
+    # are unaffected. "enforce": discovered/validated video candidates become eligible for M11
+    # ranking and M12 delivery.
+    video_discovery_mode: Literal["off", "shadow", "enforce"] = "off"
+    video_discovery_connect_timeout_seconds: float = Field(default=3.0, gt=0)
+    video_discovery_read_timeout_seconds: float = Field(default=8.0, gt=0)
+    video_discovery_total_timeout_seconds: float = Field(default=15.0, gt=0)
+    video_discovery_max_redirects: int = Field(default=3, gt=0)
+    # A direct-hosted video file is legitimately much larger than an image - bounded well below
+    # an unlimited download, but large enough that only the leading bytes needed for magic-byte
+    # sniffing plus a reasonable short-clip cap are ever pulled over the wire.
+    video_discovery_max_bytes: int = Field(default=20_000_000, gt=0)
+
     # Phase 19 M3: Editorial Planning foundation (docs/phase19_m0_audit.md). NOT the usual
     # off/shadow/enforce triplet - "comparison" replaces "enforce" deliberately, matching this
     # codebase's own established adaptive_length_mode/beginner_copywriting_mode precedent for a

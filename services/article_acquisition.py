@@ -28,7 +28,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 from urllib.parse import urljoin
@@ -56,6 +56,7 @@ from integrations.http.safe_fetch import (
     _validate_url,
     safe_fetch,
 )
+from services.video_discovery import extract_article_video_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,12 @@ class AcquisitionOutcome:
     source_html_bytes: int | None
     fetch_duration_ms: int | None
     error_code: str | None
+    # Phase 19 M10: raw discovery only (services.video_discovery.extract_article_video_metadata()
+    # against this same already-fetched HTML - zero additional network request), never validated
+    # here - a new, additive, defaulted field so every existing call site above is unaffected.
+    # The caller (services/content_draft_service.py, gated on video_discovery_mode) decides
+    # whether/how to validate and persist these.
+    discovered_video_hints: list = field(default_factory=list)
 
 
 class _ArticleTextCollector(HTMLParser):
@@ -243,10 +250,21 @@ async def acquire_article(url: str, *, event_id: UUID) -> AcquisitionOutcome:
     canonical_url = resolve_canonical_url(html, base_url=result.final_url)
     char_count = len(raw_text)
 
+    # Phase 19 M10: zero additional network request - extracted from this same already-fetched
+    # HTML. Best-effort: an extraction failure must never affect article acquisition's own
+    # result, mirrors this module's own "never raises" discipline throughout.
+    video_hints: list = []
+    if settings.video_discovery_mode != "off":
+        try:
+            video_hints = extract_article_video_metadata(html, base_url=result.final_url)
+        except Exception:
+            logger.warning("article_video_discovery_failed", extra={"event_id": str(event_id)})
+
     return AcquisitionOutcome(
         status=classify_acquisition_status(char_count), raw_extracted_text=raw_text or None,
         extracted_char_count=char_count, canonical_url=canonical_url,
         source_html_bytes=result.received_byte_count, fetch_duration_ms=duration_ms, error_code=None,
+        discovered_video_hints=video_hints,
     )
 
 
@@ -316,7 +334,35 @@ async def get_or_acquire(
         error_code=outcome.error_code, triggered_by=triggered_by,
     )
     session.add(row)
+
+    if outcome.discovered_video_hints:
+        await _persist_discovered_video_hints(session, event_id=news_event.id, hints=outcome.discovered_video_hints)
+
     return row
+
+
+async def _persist_discovered_video_hints(session: AsyncSession, *, event_id: UUID, hints: list) -> None:
+    """Phase 19 M10: best-effort, never allowed to affect article acquisition's own row above -
+    an unapplied migration or any other persistence failure here degrades to a logged no-op,
+    mirrors every other Phase 19 shadow-persistence call site's SAVEPOINT-guarded discipline."""
+    from schemas.video_candidate import VideoPlatform
+    from services.video_discovery import validate_direct_hosted_video, video_discovery_fetch_policy
+    from services.video_discovery_persistence import persist_video_hint, unvalidated_hosted_platform_result
+
+    try:
+        async with session.begin_nested():
+            for hint in hints:
+                if hint.platform == VideoPlatform.UNKNOWN:
+                    continue  # not a usable candidate - nothing gained by persisting it
+                if hint.platform == VideoPlatform.DIRECT_HOSTED:
+                    validation = await validate_direct_hosted_video(
+                        hint.remote_url, policy=video_discovery_fetch_policy()
+                    )
+                else:
+                    validation = unvalidated_hosted_platform_result()
+                await persist_video_hint(session, event_id=event_id, hint=hint, validation=validation)
+    except Exception:
+        logger.warning("video_discovery_persistence_failed", extra={"event_id": str(event_id)})
 
 
 async def get_effective_acquisition(

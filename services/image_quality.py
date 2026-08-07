@@ -87,6 +87,10 @@ _BANNER_TOKENS = ("banner", "ad", "ads", "advert", "advertisement", "sponsor", "
 _PLACEHOLDER_TOKENS = ("placeholder", "default", "no-image", "noimage", "no_image", "blank", "stub", "заглушка")
 _TRACKING_TOKENS = ("pixel", "tracking", "beacon", "spacer")
 _THUMBNAIL_TOKENS = ("thumbnail", "thumb")
+# Phase 19 M9: watermark-token / screenshot-token evidence - same word-boundary-aware, case-
+# insensitive convention as every token set above.
+_WATERMARK_TOKENS = ("watermark", "watermarked", "wm-overlay", "водяной", "копирайт")
+_SCREENSHOT_TOKENS = ("screenshot", "screen-shot", "scrnshot", "screengrab", "скриншот")
 
 
 def _compile_token_pattern(tokens: tuple[str, ...]) -> re.Pattern[str]:
@@ -104,6 +108,8 @@ _BANNER_PATTERN = _compile_token_pattern(_BANNER_TOKENS)
 _PLACEHOLDER_PATTERN = _compile_token_pattern(_PLACEHOLDER_TOKENS)
 _TRACKING_PATTERN = _compile_token_pattern(_TRACKING_TOKENS)
 _THUMBNAIL_PATTERN = _compile_token_pattern(_THUMBNAIL_TOKENS)
+_WATERMARK_PATTERN = _compile_token_pattern(_WATERMARK_TOKENS)
+_SCREENSHOT_PATTERN = _compile_token_pattern(_SCREENSHOT_TOKENS)
 
 
 def _searchable_text(url: str | None, alt_text: str | None) -> str:
@@ -130,6 +136,8 @@ class _TokenMatches:
     placeholder: bool = False
     tracking: bool = False
     thumbnail: bool = False
+    watermark: bool = False
+    screenshot: bool = False
 
 
 def _match_tokens(text: str) -> _TokenMatches:
@@ -141,6 +149,8 @@ def _match_tokens(text: str) -> _TokenMatches:
         placeholder=bool(_PLACEHOLDER_PATTERN.search(text)),
         tracking=bool(_TRACKING_PATTERN.search(text)),
         thumbnail=bool(_THUMBNAIL_PATTERN.search(text)),
+        watermark=bool(_WATERMARK_PATTERN.search(text)),
+        screenshot=bool(_SCREENSHOT_PATTERN.search(text)),
     )
 
 
@@ -162,6 +172,92 @@ def _dominant_color_ratio(image: Image.Image) -> float | None:
         return dominant / total if total else None
     except Exception:
         return None
+
+
+# ---------------------------------------------------------------------------
+# Phase 19 M9: two more cheap, deterministic, Pillow-only pixel heuristics - same "one input
+# among several combined signals, never sufficient alone" discipline as _dominant_color_ratio
+# above. Explicitly disclosed scope (docs/phase19_m9_media_prefilter_notes.md): a cheap
+# deterministic obvious-case filter, not a general watermark/UI detector - M13's future vision
+# review is where a real refinement would live.
+# ---------------------------------------------------------------------------
+
+_TV_ASPECT_RATIO_LOW = 1.7
+_TV_ASPECT_RATIO_HIGH = 1.85
+_LOWER_THIRD_BAND_FRACTION = 0.22
+_LOWER_THIRD_VARIANCE_RATIO_MAX = 0.35
+
+_SCREENSHOT_FLAT_ROW_FRACTION_THRESHOLD = 0.25
+_SCREENSHOT_FLAT_ROW_FRACTION_WITH_TOKEN = 0.15
+_FLAT_ROW_VARIANCE_MAX = 30.0
+
+
+def _band_variance(image: Image.Image, y0_frac: float, y1_frac: float) -> float | None:
+    """Mean grayscale variance of a horizontal band of the image - a flat, low-variance band is
+    consistent with a solid/gradient graphic bar (a TV lower-third, a UI toolbar), never proof of
+    one (a plain sky or wall crop looks identical to this cheap statistic - conservative by
+    design, only ever combined with other signals as a soft possible_* warning)."""
+    try:
+        gray = image.convert("L")
+        width, height = gray.size
+        y0 = int(height * y0_frac)
+        y1 = max(y0 + 1, int(height * y1_frac))
+        band = gray.crop((0, y0, width, y1)).resize((32, 8), Image.Resampling.NEAREST)
+        pixels = list(band.getdata())
+        if not pixels:
+            return None
+        mean = sum(pixels) / len(pixels)
+        return sum((p - mean) ** 2 for p in pixels) / len(pixels)
+    except Exception:
+        return None
+
+
+def _looks_like_tv_lower_third(image: Image.Image, ratio: float) -> bool:
+    """Conservative TV/lower-third heuristic: a 16:9-ish frame whose bottom band is markedly
+    flatter than the frame's middle - the shape of a text/graphic bar overlaid on broadcast
+    footage. Ambiguous by nature (a legitimate photo with a plain-colored bottom crop scores the
+    same) - always a soft possible_* signal, never a hard rejection."""
+    if not (_TV_ASPECT_RATIO_LOW <= ratio <= _TV_ASPECT_RATIO_HIGH):
+        return False
+    bottom_variance = _band_variance(image, 1 - _LOWER_THIRD_BAND_FRACTION, 1.0)
+    middle_variance = _band_variance(image, 0.35, 0.65)
+    if bottom_variance is None or middle_variance is None or middle_variance <= 0:
+        return False
+    return bottom_variance < middle_variance * _LOWER_THIRD_VARIANCE_RATIO_MAX
+
+
+def _flat_row_fraction(image: Image.Image) -> float | None:
+    """Fraction of sampled rows (on a downsampled 64x64 grayscale canvas) whose pixel variance is
+    near-zero - UI chrome (toolbars, scrollbars, flat-color panels) produces far more of these
+    than typical editorial photography, but so does a plain sky/studio backdrop - again, always
+    combined with other evidence, never a hard rejection on its own."""
+    try:
+        gray = image.convert("L").resize((64, 64), Image.Resampling.NEAREST)
+        width, height = gray.size
+        pixels = list(gray.getdata())
+        flat_rows = 0
+        for row in range(height):
+            row_pixels = pixels[row * width:(row + 1) * width]
+            mean = sum(row_pixels) / len(row_pixels)
+            variance = sum((p - mean) ** 2 for p in row_pixels) / len(row_pixels)
+            if variance < _FLAT_ROW_VARIANCE_MAX:
+                flat_rows += 1
+        return flat_rows / height
+    except Exception:
+        return None
+
+
+def _looks_like_branded_screenshot(flat_row_fraction: float | None, has_screenshot_token: bool) -> bool:
+    """Requires a lower flat-row bar when corroborated by URL/alt-text evidence (`screenshot`
+    etc.), a higher bar when relying on the pixel signal alone - conservative, ambiguous-by-
+    design, always REVIEW-worthy rather than a hard rejection."""
+    if flat_row_fraction is None:
+        return False
+    threshold = (
+        _SCREENSHOT_FLAT_ROW_FRACTION_WITH_TOKEN if has_screenshot_token
+        else _SCREENSHOT_FLAT_ROW_FRACTION_THRESHOLD
+    )
+    return flat_row_fraction >= threshold
 
 
 # ---------------------------------------------------------------------------
@@ -267,10 +363,15 @@ def analyze_candidate(data: bytes, *, candidate: ImageCandidate) -> QualityAnaly
         tokens = _match_tokens(text)
         dominant_ratio = _dominant_color_ratio(image)
         phash = compute_dhash(image)
+        ratio = width / height if height else 1.0
+        tv_lower_third = _looks_like_tv_lower_third(image, ratio)
+        flat_row_fraction = _flat_row_fraction(image)
+        branded_screenshot = _looks_like_branded_screenshot(flat_row_fraction, tokens.screenshot)
 
         return _assemble_analysis(
             candidate=candidate, width=width, height=height, tokens=tokens,
             dominant_ratio=dominant_ratio, perceptual_hash=phash, start=start,
+            tv_lower_third=tv_lower_third, branded_screenshot=branded_screenshot,
         )
     except (UnidentifiedImageError, OSError) as error:
         logger.warning("quality_analysis_decode_failed", extra={"candidate_id": candidate.candidate_id})
@@ -295,6 +396,7 @@ def _neutral_analysis(candidate: ImageCandidate, *, start: float, decode_error: 
 def _assemble_analysis(
     *, candidate: ImageCandidate, width: int, height: int, tokens: _TokenMatches,
     dominant_ratio: float | None, perceptual_hash: str, start: float,
+    tv_lower_third: bool = False, branded_screenshot: bool = False,
 ) -> QualityAnalysis:
     res_band = resolution_band(width, height)
     ratio = width / height if height else 1.0
@@ -333,6 +435,12 @@ def _assemble_analysis(
     possible_banner = tokens.banner or ar_band == AspectRatioBand.EXTREME_WIDE
     possible_placeholder = tokens.placeholder and not strong_placeholder
     possible_tracking_pixel = res_band == ResolutionBand.TRACKING
+    # Phase 19 M9: watermark is token-evidence-only (no reliable cheap pixel signal for an
+    # overlay that could be anywhere in the frame, any color, any opacity) - deliberately
+    # conservative, corroborating URL/alt-text evidence required.
+    possible_watermark = tokens.watermark
+    possible_tv_lower_third = tv_lower_third
+    possible_branded_screenshot = branded_screenshot
 
     if possible_logo:
         warnings.append("possible_logo")
@@ -346,12 +454,20 @@ def _assemble_analysis(
         warnings.append("possible_placeholder")
     if tokens.thumbnail:
         warnings.append("possible_thumbnail")
+    if possible_watermark:
+        warnings.append("possible_watermark")
+    if possible_tv_lower_third:
+        warnings.append("possible_tv_lower_third")
+    if possible_branded_screenshot:
+        warnings.append("possible_branded_screenshot")
 
     signals = QualitySignals(
         resolution_band=res_band, aspect_ratio_band=ar_band,
         possible_tracking_pixel=possible_tracking_pixel, possible_icon=possible_icon,
         possible_logo=possible_logo, possible_avatar=possible_avatar,
         possible_banner=possible_banner, possible_placeholder=possible_placeholder,
+        possible_watermark=possible_watermark, possible_tv_lower_third=possible_tv_lower_third,
+        possible_branded_screenshot=possible_branded_screenshot,
     )
 
     components = {
@@ -373,6 +489,12 @@ def _assemble_analysis(
         penalties["possible_placeholder"] = -20
     if tokens.thumbnail:
         penalties["possible_thumbnail"] = -5
+    if possible_watermark:
+        penalties["possible_watermark"] = -12
+    if possible_tv_lower_third:
+        penalties["possible_tv_lower_third"] = -10
+    if possible_branded_screenshot:
+        penalties["possible_branded_screenshot"] = -15
 
     raw_score = sum(components.values()) + sum(penalties.values())
     score = max(0, min(100, raw_score))

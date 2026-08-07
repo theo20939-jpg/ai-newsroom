@@ -179,6 +179,12 @@ class QualitySignals(BaseModel):
     possible_avatar: bool = False
     possible_banner: bool = False
     possible_placeholder: bool = False
+    # Phase 19 M9 (docs/phase19_m9_media_prefilter_notes.md): cheap deterministic obvious-case
+    # signals only - REVIEW-worthy, never a hard rejection, exactly like every other `possible_*`
+    # field above. Additive/optional so existing persisted rows and callers are unaffected.
+    possible_watermark: bool = False
+    possible_tv_lower_third: bool = False
+    possible_branded_screenshot: bool = False
 
 
 class DeduplicationInfo(BaseModel):
