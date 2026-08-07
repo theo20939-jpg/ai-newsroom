@@ -6,7 +6,7 @@ test_capabilities_never_import_content_draft() mechanically enforces that nothin
 capabilities/ imports a "content_draft"-named module (Contract §7: Capabilities/their
 orchestration layer MUST NOT create, update, or hold any reference to a ContentDraft row).
 capabilities/executor.py calls persist_shadow_plan() below instead - the exact same delegation
-shape it already uses for services.evidence_package.build_evidence_package().
+shape it already uses for services.evidence_package's own article-evidence builder function.
 
 Always runs the plan through services.editorial_planning_safety.evaluate_plan_safety() before
 persisting - the persisted safety_passed/safety_failed_checks columns must reflect a real
