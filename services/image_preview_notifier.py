@@ -36,12 +36,19 @@ from services.image_persistence import get_editorial_image_candidates, record_te
 logger = logging.getLogger(__name__)
 
 
-def _to_card(draft: ContentDraftRead, event: NewsEvent) -> EditorialInboxCard:
+def _to_card(
+    draft: ContentDraftRead, event: NewsEvent, *, quote_text: str | None = None, quote_speaker: str | None = None,
+) -> EditorialInboxCard:
     """Byte-for-byte the same field mapping services/telegram_notifier.py's own `_to_card()`
     already uses - duplicated intentionally rather than imported, per this codebase's own
     established convention for small, single-purpose mappings (mirrors e.g.
     `worker/content_cycle.py::_extract_scoring_result()`'s own documented rationale for the same
-    choice) - keeps `services/telegram_notifier.py` completely untouched."""
+    choice) - keeps `services/telegram_notifier.py` completely untouched.
+
+    Phase 19 M5: `quote_text`/`quote_speaker` mirror `services.telegram_notifier._to_card()`'s
+    own Phase 18.10 addition - both default to None, so every pre-M5 caller is unaffected. This
+    closes the confirmed gap where the image-preview delivery path never rendered a quote at all,
+    even when one existed."""
     return EditorialInboxCard(
         draft_id=draft.id,
         draft_title=draft.title,
@@ -52,6 +59,8 @@ def _to_card(draft: ContentDraftRead, event: NewsEvent) -> EditorialInboxCard:
         news_category=event.category.value,
         news_url=event.url,
         news_published_at=event.published_at,
+        quote_text=quote_text,
+        quote_speaker=quote_speaker,
     )
 
 
@@ -73,6 +82,7 @@ class CombinedCardOutcome:
 async def send_news_with_image_preview(
     bot: Bot, chat_id: int | None, session: AsyncSession, *,
     draft: ContentDraftRead, event: NewsEvent, dry_run: bool, reply_to_message_id: int | None = None,
+    quote_text: str | None = None, quote_speaker: str | None = None,
 ) -> CombinedCardOutcome:
     """The sole delivery function whenever the image-preview flow is active - always sends exactly
     one message (text-only if there is no eligible candidate at all, a photo otherwise), never two.
@@ -80,8 +90,10 @@ async def send_news_with_image_preview(
     `dry_run` mirrors `services.telegram_notifier.send_editorial_card()`'s own established
     contract exactly (Phase 15 M5.8 fact-safety suppression / the global `content_generation_
     dry_run` flag both flow through this same parameter) - renders and logs, never calls the
-    Telegram API, when `True`."""
-    card = _to_card(draft, event)
+    Telegram API, when `True`. `quote_text`/`quote_speaker` (Phase 19 M5) both default to None -
+    every pre-M5 caller is unaffected; the caller (worker/content_cycle.py) is responsible for
+    the quote_telegram_rendering_mode gate."""
+    card = _to_card(draft, event, quote_text=quote_text, quote_speaker=quote_speaker)
     candidates = await get_editorial_image_candidates(session, content_draft_id=draft.id)
 
     if not candidates:

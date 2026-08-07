@@ -12,8 +12,12 @@ card's own static newspaper emoji below is itself such a character, so this is n
 concern, it is triggered on every card).
 """
 import html
+import logging
 
 from schemas.editorial_inbox import EditorialInboxCard
+from services.quote_budget import fits_within_budget, select_quote_or_omit
+
+logger = logging.getLogger(__name__)
 
 SAFE_LIMIT = 4096  # Telegram's own hard limit, in UTF-16 code units (Contract §14).
 
@@ -99,10 +103,48 @@ def _render_once(card: EditorialInboxCard, body: str | None, *, include_url: boo
     # exactly like header_block/title_block already are (only body_text is ever shrunk) - a
     # verified quote is never partially cut.
     if card.quote_text:
-        speaker_suffix = f"\n— {_escape(card.quote_speaker)}" if card.quote_speaker else ""
-        blocks.append(f"\U0001F4AC <blockquote>{_escape(card.quote_text)}</blockquote>{speaker_suffix}")
+        blocks.append(_quote_block_text(card.quote_text, card.quote_speaker))
 
     return "\n\n".join(blocks)
+
+
+def _quote_block_text(quote_text: str, quote_speaker: str | None) -> str:
+    """The exact quote block shape _render_once() appends - factored out so both the real render
+    and the budget pre-check measure the identical string, never two divergent constructions."""
+    speaker_suffix = f"\n— {_escape(quote_speaker)}" if quote_speaker else ""
+    return f"\U0001F4AC <blockquote>{_escape(quote_text)}</blockquote>{speaker_suffix}"
+
+
+def _resolve_quote_budget(card: EditorialInboxCard, *, limit: int, include_url: bool) -> EditorialInboxCard:
+    """Phase 19 M5 (docs/phase19_m0_audit.md): computed once, before the truncation-squeeze loop
+    ever starts (Correction 5's explicit requirement) - never inside the loop, never re-decided
+    per iteration. Measures the tightest feasible non-quote footprint (header+title+quote+body
+    reduced to empty, its minimum) against `limit`; if the quote cannot fit even then, it is
+    omitted entirely from the card used for the rest of rendering - the quote itself is still
+    persisted (ContentDraftQuote, services/content_draft_service.py) and remains visible in
+    editorial metadata, only the Telegram render drops it. A quote is never partially rendered:
+    either the exact block returned by _quote_block_text() appears whole, or it does not appear
+    at all."""
+    if not card.quote_text:
+        return card
+
+    non_quote_card = card.model_copy(update={"quote_text": None, "quote_speaker": None})
+    non_quote_rendered = _render_once(non_quote_card, "", include_url=include_url)
+    non_quote_length = _telegram_utf16_length(non_quote_rendered)
+
+    # "\n\n" is _render_once()'s own block-join separator - included here so the arithmetic
+    # matches exactly what a real render would add, not an approximation.
+    quote_block_length = _telegram_utf16_length("\n\n" + _quote_block_text(card.quote_text, card.quote_speaker))
+
+    fits = fits_within_budget(
+        non_quote_blocks_length=non_quote_length, quote_block_length=quote_block_length, limit=limit
+    )
+    selected_text, selected_speaker = select_quote_or_omit(card.quote_text, card.quote_speaker, fits=fits)
+
+    if selected_text is None:
+        logger.info("quote_omitted_length_budget", extra={"draft_id": str(card.draft_id), "limit": limit})
+        return non_quote_card
+    return card
 
 
 def render_editorial_card(card: EditorialInboxCard, *, limit: int = SAFE_LIMIT, include_url: bool = True) -> str:
@@ -124,6 +166,7 @@ def render_editorial_card(card: EditorialInboxCard, *, limit: int = SAFE_LIMIT, 
     `include_url=False` alone for its text-only paths - the source is shown as an inline button
     there instead of plain text.
     """
+    card = _resolve_quote_budget(card, limit=limit, include_url=include_url)
     rendered = _render_once(card, card.draft_body, include_url=include_url)
     if _telegram_utf16_length(rendered) <= limit:
         return rendered

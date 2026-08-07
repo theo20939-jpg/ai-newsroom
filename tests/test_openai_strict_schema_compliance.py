@@ -22,6 +22,8 @@ import pytest
 
 from capabilities.copywriting_capability import CAPABILITY_NAME as COPYWRITING_CAPABILITY_NAME
 from capabilities.copywriting_capability import COPYWRITING_CAPABILITY_DEFINITION
+from capabilities.editorial_planning_capability import CAPABILITY_NAME as EDITORIAL_PLANNING_CAPABILITY_NAME
+from capabilities.editorial_planning_capability import EDITORIAL_PLANNING_CAPABILITY_DEFINITION
 from capabilities.engagement_capability import CAPABILITY_NAME as ENGAGEMENT_CAPABILITY_NAME
 from capabilities.engagement_capability import ENGAGEMENT_CAPABILITY_DEFINITION
 from capabilities.intelligence_capability import CAPABILITY_NAME as INTELLIGENCE_CAPABILITY_NAME
@@ -37,6 +39,23 @@ from schemas.capability_definition import CapabilityDefinition
 
 _PROMPTS_ROOT = Path(__file__).resolve().parent.parent / "prompts"
 
+# Phase 19 M4: v5 (prompts/copywriting/v5.yaml) has a materially different required-keys shape
+# than v4 (COPYWRITING_CAPABILITY_DEFINITION, which still reflects v4 - the default version) - a
+# fresh, minimal CapabilityDefinition here, independent of the registry's own single, default-
+# version definition object, is exactly what Contract §6's "required == expected_output_keys"
+# check needs to validate v5's own schema, without implying v5 is the currently-registered
+# default (it is not - copywriting_prompt_version defaults to "4").
+_COPYWRITING_V5_DEFINITION = CapabilityDefinition(
+    name=COPYWRITING_CAPABILITY_NAME,
+    version=1,
+    config=COPYWRITING_CAPABILITY_DEFINITION.config,
+    required_context=COPYWRITING_CAPABILITY_DEFINITION.required_context,
+    expected_output_keys=[
+        "title", "opening", "context", "why_it_matters", "what_changed", "what_happens_next",
+        "conclusion", "what_remains_unknown", "quote",
+    ],
+)
+
 # The exact 5 (capability_name, PROMPT_VERSION, CapabilityDefinition) triples every registered,
 # live-default Capability currently resolves - mirrors capabilities/registry.py::build_registry()'s
 # own hardcoded registration list (this repository's established "no dynamic discovery"
@@ -49,7 +68,18 @@ _ACTIVE_STRUCTURED_OUTPUT_CAPABILITIES: list[tuple[str, str, CapabilityDefinitio
     (RESEARCH_CAPABILITY_NAME, "2", RESEARCH_CAPABILITY_DEFINITION),
     (INTELLIGENCE_CAPABILITY_NAME, "2", INTELLIGENCE_CAPABILITY_DEFINITION),
     (COPYWRITING_CAPABILITY_NAME, "4", COPYWRITING_CAPABILITY_DEFINITION),
+    # Phase 19 M4: v5 is opt-in (copywriting_prompt_version defaults to "4"), but still schema-
+    # compliance-tested here since it is fully selectable and will make real LLM calls the moment
+    # it is. Uses _COPYWRITING_V5_DEFINITION (above), not COPYWRITING_CAPABILITY_DEFINITION -
+    # v5's required-keys shape differs from v4's.
+    (COPYWRITING_CAPABILITY_NAME, "5", _COPYWRITING_V5_DEFINITION),
     (ENGAGEMENT_CAPABILITY_NAME, "1", ENGAGEMENT_CAPABILITY_DEFINITION),
+    # Phase 19 M3: registered in build_registry() (capabilities/registry.py) like every other
+    # capability, even though no live WorkflowDefinition step references it yet - see that
+    # module's own comment for the precedent (meme_concept/meme_copywriting). Still schema-
+    # compliance-tested here since it does make real structured-output LLM calls, via the
+    # manually-invoked comparison script.
+    (EDITORIAL_PLANNING_CAPABILITY_NAME, "1", EDITORIAL_PLANNING_CAPABILITY_DEFINITION),
 ]
 
 
@@ -220,7 +250,7 @@ def test_pre_remediation_prompt_versions_fail_the_invariant(name: str, version: 
 @pytest.mark.parametrize(
     ("capability_name", "prompt_version", "definition"),
     _ACTIVE_STRUCTURED_OUTPUT_CAPABILITIES,
-    ids=[c[0] for c in _ACTIVE_STRUCTURED_OUTPUT_CAPABILITIES],
+    ids=[f"{c[0]}-v{c[1]}" for c in _ACTIVE_STRUCTURED_OUTPUT_CAPABILITIES],
 )
 def test_active_capability_prompt_is_strict_schema_compliant(
     capability_name: str, prompt_version: str, definition: CapabilityDefinition

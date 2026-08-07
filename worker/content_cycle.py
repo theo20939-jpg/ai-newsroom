@@ -25,6 +25,7 @@ from scripts.run_content_generation import run_content_generation_for_event
 from services.cost_tracker import CostTracker
 from services.image_preview_notifier import send_news_with_image_preview
 from services.pricing_catalog import PricingCatalog
+from services.quote_lookup import get_quote_for_draft, resolve_display_text
 from services.story_telegram_delivery import (
     FAIL_CLOSED_ROUTE_TO_REVIEW,
     determine_reply_target,
@@ -244,6 +245,26 @@ async def run_content_cycle(
                     continue  # never sent as a standalone post - explicit, non-negotiable requirement
                 reply_to_message_id = reply_decision.reply_to_message_id
 
+        # Phase 19 M5 (docs/phase19_m0_audit.md): resolve any persisted, verified quote before
+        # either Telegram call - byte-identical to today (neither call site received a quote
+        # before this milestone, despite one being persisted) unless quote_telegram_rendering_
+        # mode == "enforce". "shadow" looks up and logs what would be sent, without passing it
+        # through - proves the lookup/logging path works before ever changing real output.
+        quote_text: str | None = None
+        quote_speaker: str | None = None
+        if settings.quote_telegram_rendering_mode != "off":
+            async with session_factory() as quote_session:
+                quote_row = await get_quote_for_draft(quote_session, outcome.content_draft.id)
+            if quote_row is not None:
+                resolved_text, resolved_speaker = resolve_display_text(quote_row)
+                if settings.quote_telegram_rendering_mode == "shadow":
+                    logger.info(
+                        "quote_would_render",
+                        extra={"event_id": str(event_id), "draft_id": str(outcome.content_draft.id)},
+                    )
+                else:  # "enforce"
+                    quote_text, quote_speaker = resolved_text, resolved_speaker
+
         # Phase 16 UX fix (docs/phase16_ux_combined_preview_fix_report.md): exactly one message is
         # ever sent per draft - never both. Live validation of the original M6 design (a second,
         # additive image-preview message) found operators saw two separate messages for one news
@@ -260,6 +281,7 @@ async def run_content_cycle(
                         bot, settings.editorial_chat_id, preview_session,
                         draft=outcome.content_draft, event=event, dry_run=effective_dry_run,
                         reply_to_message_id=reply_to_message_id,
+                        quote_text=quote_text, quote_speaker=quote_speaker,
                     )
                 if effective_dry_run:
                     result.dry_run_rendered += 1  # expected outcome in dry-run mode, not a failure
@@ -280,6 +302,7 @@ async def run_content_cycle(
             notification = await send_editorial_card(
                 bot, settings.editorial_chat_id, outcome.content_draft, event,
                 dry_run=effective_dry_run, reply_to_message_id=reply_to_message_id,
+                quote_text=quote_text, quote_speaker=quote_speaker,
             )  # never raises - always returns a NotificationOutcome, dry-run or live
             if effective_dry_run:
                 result.dry_run_rendered += 1  # expected outcome in dry-run mode, not a failure

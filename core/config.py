@@ -256,6 +256,41 @@ class Settings(BaseSettings):
     article_acquisition_max_html_bytes: int = Field(default=2_000_000, gt=0)
     article_acquisition_max_extracted_chars: int = Field(default=20_000, gt=0)
 
+    # Phase 19 M3: Editorial Planning foundation (docs/phase19_m0_audit.md). NOT the usual
+    # off/shadow/enforce triplet - "comparison" replaces "enforce" deliberately, matching this
+    # codebase's own established adaptive_length_mode/beginner_copywriting_mode precedent for a
+    # milestone that wants A/B-style side-by-side generation without ever mutating the live
+    # artifact. "off" (default): the "intelligence" step's own hook never runs, zero processing.
+    # "shadow": a zero-cost, zero-LLM-call deterministic scaffold (services/editorial_planning_
+    # deterministic.py) is built and persisted (database.models.content_draft_editorial_plan) for
+    # review - Copywriting never reads it, ContentDraft output is unchanged. "comparison": enables
+    # the separately-invoked, never-auto-run scripts/phase19_m3_editorial_plan_comparison.py to
+    # make a real, LLM-backed editorial_planning call (capabilities/editorial_planning_capability.py)
+    # producing a baseline-vs-candidate pair for human review - never mutates a real ContentDraft,
+    # requires its own separate, explicit paid-call authorization to actually run. There is no
+    # "enforce"/live-production-use value in this type at all - Correction 3's own explicit
+    # requirement that Editorial Planning may not influence production Copywriting without a
+    # controlled human comparison first.
+    editorial_planning_mode: Literal["off", "shadow", "comparison"] = "off"
+
+    # Phase 19 M4: Editorial Writer V5 (docs/phase19_m0_audit.md). A version cutover, not an
+    # off/shadow/enforce risk tier - v4 (prompts/copywriting/v4.yaml) stays the default and
+    # remains frozen/unmodified/fully selectable; v5 (prompts/copywriting/v5.yaml) is a genuinely
+    # editorial long-form structure, opt-in only. capabilities/copywriting_capability.py reads
+    # this at call time (never a fixed constant), so switching versions needs no code deploy.
+    copywriting_prompt_version: Literal["4", "5"] = "4"
+
+    # Phase 19 M5: quote delivery wiring and length safety (docs/phase19_m0_audit.md). Three-
+    # state, matching article_acquisition_mode's own convention. "off" (default): worker/
+    # content_cycle.py's two Telegram send call sites pass no quote at all - byte-identical to
+    # today's actual (if unintended) behavior, where a persisted ContentDraftQuote never reaches
+    # Telegram. "shadow": the quote is looked up and logged (what would be sent) but still not
+    # passed to either send call. "enforce": the verified quote is threaded through to
+    # bot.formatting.render_editorial_card() via services.telegram_notifier/
+    # services.image_preview_notifier - length-budget-safe (services/quote_budget.py): rendered
+    # whole or omitted entirely, never partially truncated.
+    quote_telegram_rendering_mode: Literal["off", "shadow", "enforce"] = "off"
+
     # Phase 16 M2: secure fetch / technical validation limits (docs/phase16_m2_secure_fetch_and_
     # validation_report.md §9). All positive-bounded, no unlimited fallback - every external fetch
     # Image Intelligence makes (article HTML, candidate image bytes) is bounded by exactly these

@@ -27,6 +27,7 @@ from typing import Any
 
 from capabilities.errors import ValidationCapabilityError
 from capabilities.gateway_call import call_generate
+from core.config import settings
 from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, LLMGateway, Message
 from integrations.prompts.protocol import PromptRepository, RenderedPrompt
 from schemas.capability import CapabilityContext, CapabilityResult
@@ -37,8 +38,14 @@ logger = logging.getLogger(__name__)
 CAPABILITY_NAME = "copywriting"
 # v4 (Phase 18.10 M5/M6, docs/phase18_10_editorial_intelligence_report.md): drops hashtags from
 # the schema at the source, adds a structured what_happened/why_it_matters/what_remains_unknown
-# shape and an optional, narrowly-verified quote field. prompts/copywriting/v{1,2,3}.yaml are
-# left in place, unmodified, per Phase 6 §8's prompt-immutability rule.
+# shape and an optional, narrowly-verified quote field.
+# v5 (Phase 19 M4, docs/phase19_m0_audit.md): genuinely editorial long-form structure (opening/
+# context/why_it_matters/what_changed/what_happens_next/conclusion), selectable via
+# core/config.py's copywriting_prompt_version setting - defaults "4" (v5 is opt-in, not yet the
+# default). prompts/copywriting/v{1,2,3,4}.yaml are left in place, unmodified, per Phase 6 §8's
+# prompt-immutability rule - PROMPT_VERSION below is the fallback/default only; execute() reads
+# settings.copywriting_prompt_version at call time, never a fixed constant, so the active version
+# can change without a code deploy.
 PROMPT_VERSION = "4"
 
 # Phase 18.10 M5 "Amendment B" (mirrors capabilities/capability_mapping.py's own "Amendment A"
@@ -157,10 +164,9 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
         f"{_format_quote_source_excerpt(news_event)}"
     )
     task_text = (
-        "Write a short, editorially-interpreted post (title, body, what_happened, why_it_matters, "
-        "optional what_remains_unknown, optional verified quote) for the event above, based only "
-        "on the given title/category, Research's/Intelligence's output, and (for quote-sourcing "
-        "only) the source excerpt."
+        "Write the post for the event above, following the system prompt's required structure "
+        "exactly, based only on the given title/category, Research's/Intelligence's output, and "
+        "(for quote-sourcing only) the source excerpt."
     )
 
     return GenerateRequest(
@@ -194,7 +200,10 @@ class CopywritingCapability:
     async def execute(self, context: CapabilityContext) -> CapabilityResult:
         started_at = datetime.now(timezone.utc)
 
-        prompt = self._prompt_repository.resolve(CAPABILITY_NAME, PROMPT_VERSION)
+        # Phase 19 M4: read at call time, not a fixed constant - settings.copywriting_prompt_
+        # version defaults to "4" (byte-identical to pre-Phase-19 behavior); v5 is opt-in.
+        prompt_version = settings.copywriting_prompt_version
+        prompt = self._prompt_repository.resolve(CAPABILITY_NAME, prompt_version)
         request = _build_request(context, prompt)
 
         # §6.4/§6.5/§6.7 via the centralized M1 mechanism (§6.8) - never reimplemented here.

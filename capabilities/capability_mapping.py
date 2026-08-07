@@ -35,6 +35,10 @@ _CAPABILITY_NAME_TO_AI_CAPABILITY: dict[str, AICapability] = {
     # existing COPYWRITING value, not CREATIVE, since that is semantically what this step does
     # (docs/phase18_m4_meme_copywriting_report.md).
     "meme_copywriting": AICapability.COPYWRITING,
+    # Phase 19 M3: an analytical/planning step, semantically closest to INTELLIGENCE - reused
+    # rather than adding a new enum value/migration, exactly mirroring the meme_concept ->
+    # CREATIVE reuse decision above.
+    "editorial_planning": AICapability.INTELLIGENCE,
 }
 
 

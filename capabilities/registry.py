@@ -48,6 +48,10 @@ from integrations.prompts.protocol import PromptRepository
 from services.budget_guard import BudgetGuard
 
 from capabilities.copywriting_capability import COPYWRITING_CAPABILITY_DEFINITION, CopywritingCapability
+from capabilities.editorial_planning_capability import (
+    EDITORIAL_PLANNING_CAPABILITY_DEFINITION,
+    EditorialPlanningCapability,
+)
 from capabilities.engagement_capability import ENGAGEMENT_CAPABILITY_DEFINITION, EngagementCapability
 from capabilities.intelligence_capability import INTELLIGENCE_CAPABILITY_DEFINITION, IntelligenceCapability
 from capabilities.meme_concept_capability import MEME_CONCEPT_CAPABILITY_DEFINITION, MemeConceptCapability
@@ -144,6 +148,15 @@ def build_registry(
     registry.register(INTELLIGENCE_CAPABILITY_DEFINITION, IntelligenceCapability(gateway, prompt_repository))
     registry.register(COPYWRITING_CAPABILITY_DEFINITION, CopywritingCapability(gateway, prompt_repository))
     registry.register(ENGAGEMENT_CAPABILITY_DEFINITION, EngagementCapability(gateway, prompt_repository))
+    # Phase 19 M3: registered like every other capability (real, resolvable, cost-tracked via
+    # capability_mapping.py's "editorial_planning" -> AICapability.INTELLIGENCE entry) even
+    # though no live WorkflowDefinition step references it yet - exactly mirroring the
+    # meme_concept/meme_copywriting precedent immediately below. The only caller of its real,
+    # LLM-backed execute() in this phase is the manually-invoked comparison script
+    # (scripts/phase19_m3_editorial_plan_comparison.py) - the live CONTENT_GENERATION path's own
+    # "shadow" behavior never reaches this Capability at all (see
+    # capabilities/executor.py::_attach_editorial_plan()).
+    registry.register(EDITORIAL_PLANNING_CAPABILITY_DEFINITION, EditorialPlanningCapability(gateway, prompt_repository))
     # Phase 18 M2: registered like every other capability (real, resolvable, cost-tracked via
     # capability_mapping.py's "meme_concept" -> AICapability.CREATIVE entry) even though no
     # WorkflowDefinition references it yet - WorkflowType.MEME_GENERATION itself stays

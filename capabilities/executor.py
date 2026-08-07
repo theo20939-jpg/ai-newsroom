@@ -28,6 +28,8 @@ from database.models.editorial_task import EditorialTask
 from database.models.news_event import NewsEvent
 from database.models.news_source import NewsSource
 from schemas.beginner_friendly import BeginnerFriendlyPlan
+from services.editorial_plan_persistence import persist_shadow_plan
+from services.editorial_planning_deterministic import build_deterministic_plan
 from schemas.capability import (
     BusinessContext,
     CapabilityCall,
@@ -289,6 +291,18 @@ class CapabilityExecutor:
         if step.capability == "intelligence" and settings.channel_relevance_mode == "shadow":
             structured_output = self._attach_channel_relevance(news_event, context, structured_output)
 
+        # Phase 19 M3: zero-cost, zero-LLM-call deterministic Editorial Plan scaffold (docs/
+        # phase19_m0_audit.md) - same seam as Editorial Brief/Channel Relevance above (also
+        # "intelligence", also gated on its own mode flag). Persists a row for review
+        # (database.models.content_draft_editorial_plan) but never reads/writes ContentDraft and
+        # is never attached to structured_output that Copywriting reads - Copywriting has no code
+        # path to this data at all in this phase, which is what makes "shadow must not alter
+        # Copywriting output" a structural guarantee, not just a convention. SAVEPOINT-guarded
+        # exactly like _attach_article_evidence's own established pattern (Phase 19 M1/M2): a
+        # missing migration must degrade to "no-op," never crash the step.
+        if step.capability == "intelligence" and settings.editorial_planning_mode == "shadow":
+            await self._attach_editorial_plan(news_event, context, structured_output)
+
         # Phase 16 M1: deterministic, zero-download Image Intelligence shadow discovery (docs/
         # phase16_m1_native_media_ingestion_report.md) - only for "copywriting" (the earliest step
         # where the drafted event's persisted content/url are certain to exist) and only when
@@ -443,6 +457,57 @@ class CapabilityExecutor:
                 },
             )
         return result
+
+    async def _attach_editorial_plan(
+        self, news_event: NewsEvent, context: CapabilityContext, structured_output: dict[str, Any]
+    ) -> None:
+        """Phase 19 M3, shadow mode. Deliberately returns None, not `structured_output` - unlike
+        every sibling `_attach_*` hook above, this one's whole point is that Copywriting has NO
+        code path to read what it computes (Correction 3's explicit "shadow must not alter
+        Copywriting output" requirement, enforced structurally, not just by convention). Builds
+        the zero-cost, zero-LLM-call deterministic scaffold (services/editorial_planning_
+        deterministic.py - never the real, LLM-backed EditorialPlanningCapability, which only the
+        offline comparison script ever invokes) and persists one row for later human review.
+        SAVEPOINT-guarded exactly like the evidence-package fetch earlier in this same method
+        (Phase 19 M1/M2): a missing migration must degrade to a logged no-op, never crash the
+        "intelligence" step."""
+        try:
+            async with self._session.begin_nested():
+                research_output = context.business.workflow_state.step_results.get("research", {})
+                story_match_type: str | None = None
+                known_evidence_gaps: list[str] = []
+                evidence_text = ""
+                quote_candidates: list[str] = []
+                selected_editorial_text_hash: str | None = None
+                if settings.story_memory_mode != "off":
+                    from database.models.story_link import NewsEventStoryLink
+
+                    link = await self._session.get(NewsEventStoryLink, news_event.id)
+                    if link is not None:
+                        story_match_type = link.match_type
+                if settings.article_acquisition_mode != "off":
+                    from services.evidence_package import build_evidence_package
+
+                    evidence = await build_evidence_package(self._session, news_event)
+                    known_evidence_gaps = evidence.known_evidence_gaps
+                    evidence_text = evidence.selected_editorial_text
+                    quote_candidates = evidence.quote_candidates
+                    selected_editorial_text_hash = evidence.selected_editorial_text_hash
+
+                plan = build_deterministic_plan(
+                    title=news_event.title, research_facts=research_output.get("facts"),
+                    story_match_type=story_match_type, known_evidence_gaps=known_evidence_gaps,
+                )
+                await persist_shadow_plan(
+                    self._session, event_id=news_event.id, plan=plan,
+                    evidence_text=evidence_text, quote_candidates=quote_candidates,
+                    selected_editorial_text_hash=selected_editorial_text_hash,
+                )
+        except Exception:
+            logger.warning(
+                "editorial_plan_shadow_scaffold_failed",
+                extra={"task_id": str(self._task_id), "event_id": str(news_event.id)},
+            )
 
     async def _attach_image_intelligence(
         self, news_event: NewsEvent, structured_output: dict[str, Any]
