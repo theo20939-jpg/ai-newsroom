@@ -140,6 +140,48 @@ async def test_observability_metadata_matches_phase7_16_1_formula() -> None:
 
 
 @pytest.mark.asyncio
+async def test_no_objective_override_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Phase 19 M14: capability_routing_objective_overrides defaults empty - metadata["objective"]
+    must never appear unless explicitly configured."""
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "capability_routing_objective_overrides", {})
+    gateway = _StubGateway(response=_success_response())
+
+    await call_generate(gateway, _request(), runtime=_runtime(), sequence=0)
+
+    assert "objective" not in gateway.received_requests[0].metadata
+
+
+@pytest.mark.asyncio
+async def test_objective_override_is_injected_when_configured_for_this_capability(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "capability_routing_objective_overrides", {"test_capability": "best_quality"})
+    gateway = _StubGateway(response=_success_response())
+
+    await call_generate(gateway, _request(), runtime=_runtime(), sequence=0)
+
+    assert gateway.received_requests[0].metadata["objective"] == "best_quality"
+
+
+@pytest.mark.asyncio
+async def test_objective_override_only_applies_to_the_matching_capability_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "capability_routing_objective_overrides", {"some_other_capability": "fastest"})
+    gateway = _StubGateway(response=_success_response())
+
+    await call_generate(gateway, _request(), runtime=_runtime(), sequence=0)
+
+    assert "objective" not in gateway.received_requests[0].metadata
+
+
+@pytest.mark.asyncio
 async def test_no_routable_candidate_error_maps_to_configuration_error() -> None:
     gateway = _StubGateway(raises=NoRoutableCandidateError("no candidates"))
 

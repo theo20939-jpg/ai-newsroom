@@ -318,6 +318,19 @@ class Settings(BaseSettings):
     # is defined now so a future milestone can add that hook without a new settings migration.
     media_vision_review_mode: Literal["off", "shadow"] = "off"
 
+    # Phase 19 M14: capability-level routing-objective overrides (docs/phase19_m14_cost_quality_
+    # analysis.md). Empty by default - every real capability in this codebase relies on the
+    # RoutingCriteria default (LOWEST_COST, see integrations/llm_gateway/routing/criteria.py's own
+    # comment confirming no capability currently overrides it). A per-capability entry here
+    # (capability_name -> one of RoutingObjective's values: "best_quality"/"lowest_cost"/
+    # "fastest"/"reasoning") is injected into that capability's own GenerateRequest.metadata
+    # ("objective") by capabilities/gateway_call.py::call_generate() - the gateway itself already
+    # knows how to honor this via its own established request.metadata["objective"] convention;
+    # no change to RoutingEngine/RoutingCriteria/the gateway was needed. Must stay empty in this
+    # phase - populating it is a live routing-behavior change requiring its own, separate,
+    # explicit authorization, never made as part of this implementation.
+    capability_routing_objective_overrides: dict[str, str] = Field(default_factory=dict)
+
     # Phase 19 M3: Editorial Planning foundation (docs/phase19_m0_audit.md). NOT the usual
     # off/shadow/enforce triplet - "comparison" replaces "enforce" deliberately, matching this
     # codebase's own established adaptive_length_mode/beginner_copywriting_mode precedent for a

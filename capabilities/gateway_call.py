@@ -59,6 +59,7 @@ from integrations.llm_gateway.protocol import (
     LLMGateway,
     UnsupportedGatewayCapabilityError,
 )
+from core.config import settings
 from schemas.capability import CapabilityCall, CapabilityUsage, RuntimeContext
 
 
@@ -83,17 +84,23 @@ def _capability_execution_id(runtime: RuntimeContext) -> str:
 def _stamp_observability_metadata(
     request: GenerateRequest, *, runtime: RuntimeContext, request_id: str
 ) -> GenerateRequest:
-    """§6.5/§12.2: stamp trace_id/capability_execution_id/request_id onto the outgoing request."""
-    return request.model_copy(
-        update={
-            "metadata": {
-                **request.metadata,
-                "trace_id": str(runtime.task_id),
-                "capability_execution_id": _capability_execution_id(runtime),
-                "request_id": request_id,
-            }
-        }
-    )
+    """§6.5/§12.2: stamp trace_id/capability_execution_id/request_id onto the outgoing request.
+
+    Phase 19 M14: also injects a per-capability routing-objective override, if one exists in
+    `settings.capability_routing_objective_overrides` (empty by default - a no-op for every
+    caller until that dict is explicitly populated, which is not done as part of this
+    implementation). The gateway already knows how to honor `request.metadata["objective"]` -
+    no change to RoutingEngine/RoutingCriteria/the gateway itself was needed."""
+    metadata = {
+        **request.metadata,
+        "trace_id": str(runtime.task_id),
+        "capability_execution_id": _capability_execution_id(runtime),
+        "request_id": request_id,
+    }
+    objective_override = settings.capability_routing_objective_overrides.get(runtime.capability_name)
+    if objective_override is not None:
+        metadata["objective"] = objective_override
+    return request.model_copy(update={"metadata": metadata})
 
 
 def _classify_gateway_error(error: Exception) -> CapabilityError:
