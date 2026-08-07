@@ -77,6 +77,17 @@ class BusinessContext(BaseModel):
     # matching this schema's own established snapshot convention).
     article_evidence_text: str | None = None
     article_evidence_completeness: str | None = None
+    # Phase 19 M13 (capabilities/media_vision_review_capability.py): a data: URI for the one
+    # candidate image being reviewed, plus a short text summary of the story it would accompany.
+    # Both always None in every live production path - capabilities.executor.CapabilityExecutor.
+    # _build_context() never populates either field, structurally preventing any automatic/
+    # scheduled call from ever reaching the real vision capability (media_vision_review_mode has
+    # no "enforce" value at all - see that capability's own module docstring). Only
+    # scripts/phase19_m13_vision_review_manual.py (a manually-invoked, never-auto-run harness,
+    # mirrors scripts/phase19_m3_editorial_plan_comparison.py's own established pattern)
+    # constructs a CapabilityContext with these populated.
+    media_review_image_data_uri: str | None = None
+    media_review_story_summary: str | None = None
 
 
 class RuntimeContext(BaseModel):

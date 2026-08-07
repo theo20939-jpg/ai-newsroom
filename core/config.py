@@ -308,6 +308,16 @@ class Settings(BaseSettings):
     # separately-reviewed milestone.
     rich_media_mode: Literal["off", "shadow", "enforce"] = "off"
 
+    # Phase 19 M13: final-candidate vision review foundation (docs/phase19_m13_vision_review.md).
+    # Two-state, no "enforce" value at all - reaching a real vision call always requires the
+    # manually-invoked harness script (scripts/phase19_m13_vision_review_manual.py), never an
+    # automatic/scheduled worker path, regardless of this setting's value. "off" (default): no
+    # shadow persistence hook runs. "shadow": reserved for a future, narrowly-scoped deterministic
+    # pre-check hook (e.g. persisting "this candidate is queued for vision review") - no such hook
+    # exists yet in this milestone, so "shadow" is currently a no-op identical to "off"; the value
+    # is defined now so a future milestone can add that hook without a new settings migration.
+    media_vision_review_mode: Literal["off", "shadow"] = "off"
+
     # Phase 19 M3: Editorial Planning foundation (docs/phase19_m0_audit.md). NOT the usual
     # off/shadow/enforce triplet - "comparison" replaces "enforce" deliberately, matching this
     # codebase's own established adaptive_length_mode/beginner_copywriting_mode precedent for a

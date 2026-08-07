@@ -39,6 +39,10 @@ _CAPABILITY_NAME_TO_AI_CAPABILITY: dict[str, AICapability] = {
     # rather than adding a new enum value/migration, exactly mirroring the meme_concept ->
     # CREATIVE reuse decision above.
     "editorial_planning": AICapability.INTELLIGENCE,
+    # Phase 19 M13: a review/validation step, semantically closest to QUALITY - reused rather
+    # than adding a new enum value/migration, mirroring the editorial_planning -> INTELLIGENCE
+    # reuse decision above.
+    "media_vision_review": AICapability.QUALITY,
 }
 
 

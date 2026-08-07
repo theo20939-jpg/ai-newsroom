@@ -52,6 +52,10 @@ from capabilities.editorial_planning_capability import (
     EDITORIAL_PLANNING_CAPABILITY_DEFINITION,
     EditorialPlanningCapability,
 )
+from capabilities.media_vision_review_capability import (
+    MEDIA_VISION_REVIEW_CAPABILITY_DEFINITION,
+    MediaVisionReviewCapability,
+)
 from capabilities.engagement_capability import ENGAGEMENT_CAPABILITY_DEFINITION, EngagementCapability
 from capabilities.intelligence_capability import INTELLIGENCE_CAPABILITY_DEFINITION, IntelligenceCapability
 from capabilities.meme_concept_capability import MEME_CONCEPT_CAPABILITY_DEFINITION, MemeConceptCapability
@@ -157,6 +161,13 @@ def build_registry(
     # "shadow" behavior never reaches this Capability at all (see
     # capabilities/executor.py::_attach_editorial_plan()).
     registry.register(EDITORIAL_PLANNING_CAPABILITY_DEFINITION, EditorialPlanningCapability(gateway, prompt_repository))
+    # Phase 19 M13: registered like every other capability (real, resolvable, cost-tracked via
+    # capability_mapping.py's "media_vision_review" -> AICapability.QUALITY entry) even though no
+    # live WorkflowDefinition step references it - same "meme_concept"/"editorial_planning"
+    # precedent. The only caller of its real, LLM-backed execute() is the manually-invoked,
+    # never-auto-run harness script (scripts/phase19_m13_vision_review_manual.py) - there is no
+    # scheduled/automatic live-worker path to this capability at all.
+    registry.register(MEDIA_VISION_REVIEW_CAPABILITY_DEFINITION, MediaVisionReviewCapability(gateway, prompt_repository))
     # Phase 18 M2: registered like every other capability (real, resolvable, cost-tracked via
     # capability_mapping.py's "meme_concept" -> AICapability.CREATIVE entry) even though no
     # WorkflowDefinition references it yet - WorkflowType.MEME_GENERATION itself stays

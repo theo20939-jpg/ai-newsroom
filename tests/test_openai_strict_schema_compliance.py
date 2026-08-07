@@ -28,6 +28,8 @@ from capabilities.engagement_capability import CAPABILITY_NAME as ENGAGEMENT_CAP
 from capabilities.engagement_capability import ENGAGEMENT_CAPABILITY_DEFINITION
 from capabilities.intelligence_capability import CAPABILITY_NAME as INTELLIGENCE_CAPABILITY_NAME
 from capabilities.intelligence_capability import INTELLIGENCE_CAPABILITY_DEFINITION
+from capabilities.media_vision_review_capability import CAPABILITY_NAME as MEDIA_VISION_REVIEW_CAPABILITY_NAME
+from capabilities.media_vision_review_capability import MEDIA_VISION_REVIEW_CAPABILITY_DEFINITION
 from capabilities.quality_capability import CAPABILITY_NAME as QUALITY_CAPABILITY_NAME
 from capabilities.quality_capability import QUALITY_CAPABILITY_DEFINITION
 from capabilities.research_capability import CAPABILITY_NAME as RESEARCH_CAPABILITY_NAME
@@ -80,6 +82,10 @@ _ACTIVE_STRUCTURED_OUTPUT_CAPABILITIES: list[tuple[str, str, CapabilityDefinitio
     # compliance-tested here since it does make real structured-output LLM calls, via the
     # manually-invoked comparison script.
     (EDITORIAL_PLANNING_CAPABILITY_NAME, "1", EDITORIAL_PLANNING_CAPABILITY_DEFINITION),
+    # Phase 19 M13: same "registered but not referenced by a live WorkflowDefinition step, still
+    # schema-compliance-tested since it makes a real structured-output LLM call via a manually-
+    # invoked harness" precedent as editorial_planning above.
+    (MEDIA_VISION_REVIEW_CAPABILITY_NAME, "1", MEDIA_VISION_REVIEW_CAPABILITY_DEFINITION),
 ]
 
 

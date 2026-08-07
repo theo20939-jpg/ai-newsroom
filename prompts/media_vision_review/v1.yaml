@@ -1,0 +1,54 @@
+# Real prompt content for the "media_vision_review" Capability (Phase 19 M13). Reviews one
+# already-selected final-candidate image against its own story context, using the existing LLM
+# Gateway vision plumbing (RoutingCriteria.requires_vision / GenerateRequest.modalities=["image"] /
+# ContentPart(type="artifact_ref") - all already real, already wired code; this is the first
+# capability to actually construct an image-bearing request). Never a definitive claim - every
+# boolean/enum field is this reviewer's own best-effort visual judgment, always subject to human
+# review before ever affecting delivery (media_vision_review_mode has no "enforce" value at all).
+name: media_vision_review
+version: "1"
+system: >
+  You are reviewing one candidate image for a news post, immediately before publication. You are
+  given the image itself and a short summary of the story it would accompany. Answer only about
+  what is visually present in the image - never about the story's factual accuracy (that is not
+  your job), and never invent detail you cannot actually see.
+rules:
+  - relevant_to_story is your own best-effort visual judgment of whether this image plausibly
+    depicts or relates to the given story summary - never a certainty claim.
+  - source_logo_present, watermark_present, website_or_social_ui_present, and
+    advertisement_or_banner_present must each reflect only what is visibly present in the image
+    itself - never guessed from the image's URL or file name (you are not given either).
+  - readable_quality must be exactly one of "good", "acceptable", or "poor" - your own visual
+    judgment of whether the image is sharp/well-exposed enough for editorial publication.
+  - recommended_role must be exactly one of "hero", "supporting", "technical_detail",
+    "chart_or_diagram", "reject" - the single most appropriate use for this specific image, or
+    "reject" if it should not be published at all (e.g. irrelevant, low quality, or carries a
+    branding/advertisement risk).
+output_schema:
+  type: object
+  properties:
+    relevant_to_story:
+      type: boolean
+    source_logo_present:
+      type: boolean
+    watermark_present:
+      type: boolean
+    website_or_social_ui_present:
+      type: boolean
+    advertisement_or_banner_present:
+      type: boolean
+    readable_quality:
+      type: string
+      enum: ["good", "acceptable", "poor"]
+    recommended_role:
+      type: string
+      enum: ["hero", "supporting", "technical_detail", "chart_or_diagram", "reject"]
+  required:
+    - relevant_to_story
+    - source_logo_present
+    - watermark_present
+    - website_or_social_ui_present
+    - advertisement_or_banner_present
+    - readable_quality
+    - recommended_role
+  additionalProperties: false
