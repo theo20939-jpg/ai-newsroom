@@ -22,6 +22,7 @@ from dataclasses import dataclass
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
+from aiogram.types import InputMediaPhoto, InputMediaVideo, MediaUnion
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.formatting import SAFE_LIMIT, CardTooLongError, render_editorial_card
@@ -31,9 +32,18 @@ from bot.keyboards.image_preview import build_image_preview_keyboard, build_sour
 from database.models.news_event import NewsEvent
 from schemas.content_draft import ContentDraftRead
 from schemas.editorial_inbox import EditorialInboxCard
-from services.image_persistence import get_editorial_image_candidates, record_telegram_file_id
+from schemas.video_candidate import NativeVideoHint, VideoPlatform
+from services.image_persistence import (
+    EditorialImageCandidate,
+    get_editorial_image_candidates,
+    record_telegram_file_id,
+)
 
 logger = logging.getLogger(__name__)
+
+# Telegram's own hard constraint on bot.send_media_group() - between 2 and 10 items.
+_MEDIA_GROUP_MAX_ITEMS = 10
+_MEDIA_GROUP_MIN_ITEMS = 2
 
 
 def _to_card(
@@ -177,4 +187,134 @@ async def send_news_with_image_preview(
     return CombinedCardOutcome(
         chat_id=chat_id, sent=True, has_image=photo_input is not None, candidate_count=len(candidates),
         message_id=message.message_id,
+    )
+
+
+def _hosted_platform_link_line(hint: NativeVideoHint) -> str:
+    """YouTube/Vimeo candidates are never downloaded/re-uploaded (per Phase 19 M10's own scope) -
+    delivered as a plain link line appended to the caption instead."""
+    label = "Video" if hint.platform == VideoPlatform.YOUTUBE else "Video (Vimeo)"
+    return f"\n\n{label}: {hint.remote_url}"
+
+
+@dataclass(frozen=True)
+class RichMediaPlan:
+    """What send_news_with_rich_media() would send - always computed, even in "shadow"/dry-run,
+    so the same plan can be logged (shadow) or actually sent (enforce) from one code path."""
+
+    media_group_items: list[MediaUnion]
+    hosted_platform_link: str | None  # appended to the caption when a YouTube/Vimeo hint exists
+    fallback_single_photo: EditorialImageCandidate | None  # used when < 2 total media items
+
+
+def build_rich_media_plan(
+    image_candidates: list[EditorialImageCandidate], video_hint: NativeVideoHint | None, *, caption: str,
+) -> RichMediaPlan:
+    """Pure (aside from resolve_photo_input()'s local storage read - never a network call).
+    Images first, direct-hosted video last (Phase 19 M12's own explicit ordering requirement).
+    Bounded to Telegram's own 10-item media-group cap - one slot reserved for the video, if any.
+
+    `InputMediaPhoto`/`InputMediaVideo` are frozen (Pydantic) - the caption (Telegram's real
+    behavior: only the first item's caption is shown as the group's caption) must be passed at
+    construction time, never assigned afterward, so photo/video URLs are resolved first and the
+    actual `InputMedia*` objects are built last, in final order."""
+    max_photos = _MEDIA_GROUP_MAX_ITEMS - (1 if video_hint is not None and video_hint.platform == VideoPlatform.DIRECT_HOSTED else 0)
+    photo_inputs = []
+    for candidate in image_candidates[:max_photos]:
+        photo_input = resolve_photo_input(candidate)
+        if photo_input is not None:
+            photo_inputs.append(photo_input)
+
+    direct_video_url: str | None = None
+    hosted_platform_link: str | None = None
+    if video_hint is not None:
+        if video_hint.platform == VideoPlatform.DIRECT_HOSTED:
+            direct_video_url = video_hint.remote_url
+        elif video_hint.platform in (VideoPlatform.YOUTUBE, VideoPlatform.VIMEO):
+            hosted_platform_link = _hosted_platform_link_line(video_hint)
+
+    media_group_items: list[MediaUnion] = []
+    is_first = True
+    for photo_input in photo_inputs:
+        media_group_items.append(InputMediaPhoto(media=photo_input, caption=caption if is_first else None))
+        is_first = False
+    if direct_video_url is not None:
+        media_group_items.append(InputMediaVideo(media=direct_video_url, caption=caption if is_first else None))
+
+    fallback_single_photo = image_candidates[0] if len(media_group_items) < _MEDIA_GROUP_MIN_ITEMS and image_candidates else None
+
+    return RichMediaPlan(
+        media_group_items=media_group_items, hosted_platform_link=hosted_platform_link,
+        fallback_single_photo=fallback_single_photo,
+    )
+
+
+async def send_news_with_rich_media(
+    bot: Bot, chat_id: int | None, session: AsyncSession, *,
+    draft: ContentDraftRead, event: NewsEvent, dry_run: bool,
+    image_candidates: list[EditorialImageCandidate], video_hint: NativeVideoHint | None = None,
+    reply_to_message_id: int | None = None, quote_text: str | None = None, quote_speaker: str | None = None,
+) -> CombinedCardOutcome:
+    """Phase 19 M12: multi-photo/mixed-media delivery, built on the same architecture as
+    send_news_with_image_preview() above (never a parallel notifier) - reuses bot/formatting.py's
+    rendering and M5's quote-budget-aware caption limit exactly.
+
+    Falls back to the existing single-photo path when fewer than 2 total media items are
+    available (Telegram's send_media_group() requires 2-10 items) - the caller is responsible for
+    only invoking this function when rich_media_mode != "off"; this function itself never checks
+    the setting.
+
+    KNOWN UX LIMITATION (documented, not solved, per the milestone's own explicit allowance):
+    Telegram's Bot API does not support an inline keyboard on a media group at all
+    (`reply_markup` is not a valid send_media_group() parameter) - unlike the single-photo path,
+    a rich-media send carries no interactive keyboard. The source link is included in the caption
+    text instead (never a second follow-up message - that would reintroduce the exact two-message
+    UX defect the Phase 16 M6 fix eliminated)."""
+    card = _to_card(draft, event, quote_text=quote_text, quote_speaker=quote_speaker)
+    try:
+        caption = render_editorial_card(card, limit=CAPTION_SAFE_LIMIT, include_url=False)
+    except CardTooLongError:
+        logger.error("rich_media_notification_render_failed", extra={"draft_id": str(draft.id)})
+        return CombinedCardOutcome(chat_id=chat_id, sent=False, has_image=False, candidate_count=len(image_candidates))
+
+    if video_hint is not None and video_hint.platform in (VideoPlatform.YOUTUBE, VideoPlatform.VIMEO):
+        caption = caption + _hosted_platform_link_line(video_hint)
+
+    plan = build_rich_media_plan(image_candidates, video_hint, caption=caption)
+
+    if plan.fallback_single_photo is not None or not plan.media_group_items:
+        return await send_news_with_image_preview(
+            bot, chat_id, session, draft=draft, event=event, dry_run=dry_run,
+            reply_to_message_id=reply_to_message_id, quote_text=quote_text, quote_speaker=quote_speaker,
+        )
+
+    if dry_run:
+        logger.info(
+            "rich_media_notification_dry_run",
+            extra={
+                "draft_id": str(draft.id), "chat_id": chat_id, "item_count": len(plan.media_group_items),
+                "has_hosted_platform_link": plan.hosted_platform_link is not None,
+            },
+        )
+        return CombinedCardOutcome(
+            chat_id=chat_id, sent=False, has_image=True, candidate_count=len(image_candidates),
+        )
+
+    assert chat_id is not None, (
+        "send_news_with_rich_media() called with no chat_id - settings.editorial_chat_id must be "
+        "configured before rich_media_mode may be set to \"enforce\""
+    )
+    try:
+        messages = await bot.send_media_group(
+            chat_id, media=plan.media_group_items, reply_to_message_id=reply_to_message_id,
+        )
+    except TelegramAPIError:
+        logger.exception("rich_media_notification_failed", extra={"draft_id": str(draft.id)})
+        return CombinedCardOutcome(
+            chat_id=chat_id, sent=False, has_image=True, candidate_count=len(image_candidates),
+        )
+
+    return CombinedCardOutcome(
+        chat_id=chat_id, sent=True, has_image=True, candidate_count=len(image_candidates),
+        message_id=messages[0].message_id if messages else None,
     )

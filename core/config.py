@@ -296,6 +296,18 @@ class Settings(BaseSettings):
     # sniffing plus a reasonable short-clip cap are ever pulled over the wire.
     video_discovery_max_bytes: int = Field(default=20_000_000, gt=0)
 
+    # Phase 19 M12: multi-photo/mixed-media Telegram delivery (docs/phase19_m12_rich_media_
+    # delivery.md). "off" (default): services.image_preview_notifier.send_news_with_rich_media()
+    # is never called - byte-identical to today's single-photo/text-only delivery. "shadow":
+    # renders and logs what a media-group send would contain (item count/order/caption), never
+    # calls bot.send_media_group(). "enforce": sends the real media group. Built and tested this
+    # milestone but deliberately NOT wired into worker/content_cycle.py's live loop yet - doing
+    # so safely requires M11's ranking to actually run and persist a specific draft's ranked
+    # candidates first, which M11 deliberately does not do (see docs/phase19_m11_media_ranking.md
+    # §1's own "no new persistence table" scope decision) - live wiring is left for a future,
+    # separately-reviewed milestone.
+    rich_media_mode: Literal["off", "shadow", "enforce"] = "off"
+
     # Phase 19 M3: Editorial Planning foundation (docs/phase19_m0_audit.md). NOT the usual
     # off/shadow/enforce triplet - "comparison" replaces "enforce" deliberately, matching this
     # codebase's own established adaptive_length_mode/beginner_copywriting_mode precedent for a
