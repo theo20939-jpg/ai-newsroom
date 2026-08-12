@@ -357,6 +357,23 @@ class EditorialImageCandidate:
     article_url: str | None
     warnings: list | None
     is_expired: bool
+    # Phase 23.1Q (media-quality corrective phase): already-persisted, already-computed dedup
+    # signals (Phase 16 M3), exposed through this existing read contract for the first time - no
+    # new column, no migration. Enables within-event near-duplicate detection at ranking time
+    # (services/media_ranking.py's own hamming_distance()-based check, reused, not reimplemented).
+    # Defaulted to None so every pre-existing direct construction site (tests) is unaffected.
+    sha256: str | None = None
+    perceptual_hash: str | None = None
+    # NEWS Output Stability Fix (Case E, docs/news_output_stability_forensic_report.md §6): the
+    # image's own actually-fetched URL (post-redirect) - already persisted (Phase 16 M2), never
+    # exposed through this read contract before. Distinct from `source_url` (the ARTICLE page the
+    # image was found on) - needed to detect the real Honor Robot Phone case: the same underlying
+    # image served once directly (9to5google.com/.../honor-robot-phone-2.jpg) and once through
+    # WordPress/Jetpack's Photon CDN proxy (i0.wp.com/9to5google.com/.../honor-robot-phone-2.jpg),
+    # which a perceptual-hash comparison alone did not reliably catch (real measured Hamming
+    # distance 9, above the existing calibrated <=4 threshold). Defaulted to None so every
+    # pre-existing direct construction site (tests) is unaffected.
+    final_url: str | None = None
 
 
 async def get_editorial_image_candidates(
@@ -388,9 +405,41 @@ async def get_editorial_image_candidates(
             editor_decision=row.editor_decision.value if row.editor_decision else None,
             source_url=row.source_url, article_url=row.article_url, warnings=row.quality_warnings,
             is_expired=bool(row.expires_at and row.expires_at <= now),
+            sha256=row.sha256, perceptual_hash=row.perceptual_hash, final_url=row.final_url,
         )
         for row in rows
     ]
+
+
+async def get_recently_attached_image_source_urls(
+    session: AsyncSession, *, exclude_news_event_id: UUID, lookback_count: int = 10,
+) -> set[str]:
+    """Phase 23.1N Part J - a narrow, migration-free cross-event duplicate-image guard. Exact
+    normalized-URL matching only (via `sanitize_url()`, already used for the same asset-identity
+    purpose elsewhere in this module) - no perceptual hashing, per the phase brief's own explicit
+    "exact normalized URL duplication may be sufficient for MVP" instruction.
+
+    `services/image_deduplication.py::cluster_candidates()` already deduplicates candidates
+    *within* one event (its own docstring: "items must already be scoped to one event") - this is
+    the first check that looks *across* events, using the one signal that already exists for
+    "this candidate was actually attached to a real draft" (`content_draft_id IS NOT NULL`) rather
+    than adding any new persistence. `rank == 1` narrows this to the specific candidate the router
+    would actually have sent (worker/content_cycle.py always resolves `image_candidates[0]`), not
+    every candidate that was merely discovered for a past draft."""
+    stmt = (
+        select(ImageCandidateRecord.source_url)
+        .where(
+            ImageCandidateRecord.content_draft_id.is_not(None),
+            ImageCandidateRecord.news_event_id != exclude_news_event_id,
+            ImageCandidateRecord.rank == 1,
+            ImageCandidateRecord.source_url.is_not(None),
+        )
+        .order_by(ImageCandidateRecord.created_at.desc())
+        .limit(lookback_count)
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+    normalized = (sanitize_url(url) for url in rows if url)
+    return {url for url in normalized if url is not None}
 
 
 async def link_candidates_to_content_draft(

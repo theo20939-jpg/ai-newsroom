@@ -9,10 +9,12 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models.news_event import EventCategory
+from database.models.news_event import EventCategory, NewsEvent
+from database.models.news_source import NewsSource, SourceType
 from database.models.story import Story
 from services.story_memory import (
     NEW_STORY,
+    RELATED_STORY,
     SEMANTIC_DUPLICATE,
     STORY_UPDATE,
     SUPPORTING_SOURCE,
@@ -22,24 +24,35 @@ from services.story_memory import (
     match_story,
 )
 
-pytestmark = pytest.mark.skip(
-    reason=(
-        "Requires Alembic migration c2bc6affb100 (adds the 'stories' table and "
-        "news_events.story_id/story_match_type/story_match_score columns) to be applied first - "
-        "Phase 18.10 M1/M2 ships this migration unapplied by explicit instruction (design-only; "
-        "the user applies it separately). Remove this skip once the migration has been applied "
-        "to the target database - until then every test in this file would fail with "
-        "'relation \"stories\" does not exist' or a missing-column error, not because the code "
-        "is wrong, but because the schema hasn't been migrated yet."
-    )
-)
+# Phase 20 M3: un-skipped - migration c2bc6affb100 (adds the 'stories' table etc.) was applied to
+# the real DB during the Phase 19 Activation Stage 1 pass (docs/phase19_activation_review.md);
+# confirmed directly via `alembic current` this session. The original skip reason no longer
+# applies - this file now runs for real, against the real DB, via db_session's own
+# SAVEPOINT-rollback isolation (read-only-effective, exactly like every other integration test in
+# this suite).
 
 
 async def _seed_story(session: AsyncSession, title: str, *, category: EventCategory = EventCategory.AI) -> Story:
+    """Pre-existing test-fixture bug fixed here (Phase 20 M3): `stories.first_event_id` is, and
+    always has been, FK-constrained to `news_events.id` (database/models/story.py) - this helper
+    previously used a bare `uuid4()`, which only ever went undetected because this whole file was
+    skipped (migration not yet applied) until this milestone un-skipped it. A real NewsSource +
+    NewsEvent is created first, mirroring tests/test_triage_orchestrator_claims.py's own
+    established real_committed_event() pattern - cleaned up automatically by db_session's own
+    SAVEPOINT rollback, no manual teardown needed."""
+    source = NewsSource(name=f"story-memory-test-{uuid4()}", type=SourceType.RSS, active=True)
+    session.add(source)
+    await session.flush()
+    event = NewsEvent(
+        source_id=source.id, title=title, category=category, hash=f"story-memory-test-{uuid4()}",
+    )
+    session.add(event)
+    await session.flush()
+
     signature = extract_story_signature(title, category)
     story = Story(
         id=uuid4(), title=title, category=category, entities=signature.entities,
-        keywords=signature.keywords, topic_bucket=signature.topic_bucket, first_event_id=uuid4(),
+        keywords=signature.keywords, topic_bucket=signature.topic_bucket, first_event_id=event.id,
         event_count=1,
     )
     session.add(story)
@@ -75,8 +88,13 @@ async def test_should_merge_example_openai_release_then_benchmarks(db_session: A
 @pytest.mark.asyncio
 async def test_should_not_merge_example_release_vs_regulation_commentary(db_session: AsyncSession) -> None:
     """docs/phase18_10_editorial_intelligence_report.md worked example: "OpenAI releases GPT-X"
-    and "OpenAI CEO comments on regulation" share the company entity but must NOT merge - the
-    topic-bucket gate must reject the candidate before any entity-overlap scoring happens."""
+    and "OpenAI CEO comments on regulation" share the company entity but must NOT SAME-STORY
+    merge. Phase 20 M5 update: topic_bucket is no longer a hard gate (it's a soft scoring bonus),
+    so this pair is now scored, not silently excluded - the real entity overlap ("OpenAI") is
+    exactly what RELATED_STORY exists to surface instead of a silent, uninformative NEW_STORY
+    (see docs/phase20_story_memory_calibration_dataset.md's own "gta_negative_control" /
+    "openai_two_unrelated_announcements" cases for the same pattern). Never SAME_STORY - that
+    remains the one non-negotiable assertion."""
     unique = uuid4().hex[:8]
     await _seed_story(db_session, f"OpenAI-{unique} releases GPT-X")
 
@@ -85,8 +103,8 @@ async def test_should_not_merge_example_release_vs_regulation_commentary(db_sess
     )
 
     assert signature.topic_bucket == TOPIC_LEGAL_REGULATORY
-    assert result.outcome == NEW_STORY
-    assert result.matched_story_id is None
+    assert result.outcome in (NEW_STORY, RELATED_STORY)  # never a same-story outcome
+    assert result.outcome not in (STORY_UPDATE, SUPPORTING_SOURCE, SEMANTIC_DUPLICATE)
 
 
 @pytest.mark.asyncio
@@ -120,18 +138,23 @@ async def test_near_identical_title_is_a_semantic_duplicate(db_session: AsyncSes
 
 
 @pytest.mark.asyncio
-async def test_different_category_never_matches(db_session: AsyncSession) -> None:
-    """Category is a hard partition, evaluated before topic_bucket - a story in a different
-    NewsEvent category is never even fetched as a candidate."""
+async def test_different_category_can_still_match_same_story(db_session: AsyncSession) -> None:
+    """Phase 20 M3: category is now a soft scoring bonus, never a hard retrieval gate - the real
+    Phase 19 overnight validation's "kitesurf" case (docs/phase20_story_memory_calibration_
+    dataset.md) proved the original hard category gate silently excluded a real same-story match
+    (Cloudflare Kitesurf, covered under both STARTUPS and TECH). A near-identical title in a
+    different category must still be found as a real match, not a NEW_STORY - this test replaces
+    the old `test_different_category_never_matches`, which asserted the very bug this milestone
+    fixes."""
     unique = uuid4().hex[:8]
-    await _seed_story(db_session, f"OpenAI-{unique} releases GPT-X", category=EventCategory.AI)
+    original = await _seed_story(db_session, f"OpenAI-{unique} releases GPT-X", category=EventCategory.AI)
 
     _signature, result = await match_story(
         db_session, title=f"OpenAI-{unique} releases GPT-X", category=EventCategory.STARTUPS
     )
 
-    assert result.outcome == NEW_STORY
-    assert result.matched_story_id is None
+    assert result.outcome == SEMANTIC_DUPLICATE  # identical title -> near-identical-title band
+    assert result.matched_story_id == original.id
 
 
 @pytest.mark.asyncio

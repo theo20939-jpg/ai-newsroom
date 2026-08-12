@@ -27,11 +27,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 from uuid import UUID
 
 from sqlalchemy import select
@@ -56,6 +57,7 @@ from integrations.http.safe_fetch import (
     _validate_url,
     safe_fetch,
 )
+from services.text_normalization import normalize_loose
 from services.video_discovery import extract_article_video_metadata
 
 logger = logging.getLogger(__name__)
@@ -101,6 +103,10 @@ class _ArticleTextCollector(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.link_tags: list[dict[str, str]] = []
+        # NEWS Output Stability Fix (Case A): meta tags, collected the same way link_tags always
+        # have been - added so resolve_meta_refresh_url() below can find a <meta http-equiv=
+        # "refresh"> signal without a second HTML parser class (never a new scraper).
+        self.meta_tags: list[dict[str, str]] = []
         self._text_parts: list[str] = []
         self._skip_depth = 0
 
@@ -108,12 +114,17 @@ class _ArticleTextCollector(HTMLParser):
         lowered = tag.lower()
         if lowered == "link":
             self.link_tags.append({name.lower(): value for name, value in attrs if value is not None})
+        elif lowered == "meta":
+            self.meta_tags.append({name.lower(): value for name, value in attrs if value is not None})
         elif lowered in _SKIP_TEXT_TAGS:
             self._skip_depth += 1
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag.lower() == "link":
+        lowered = tag.lower()
+        if lowered == "link":
             self.link_tags.append({name.lower(): value for name, value in attrs if value is not None})
+        elif lowered == "meta":
+            self.meta_tags.append({name.lower(): value for name, value in attrs if value is not None})
 
     def handle_endtag(self, tag: str) -> None:
         if tag.lower() in _SKIP_TEXT_TAGS and self._skip_depth > 0:
@@ -144,6 +155,55 @@ def extract_raw_text(html: str) -> str:
     return collector.text
 
 
+# NEWS Output Stability Fix (Case H, docs/news_output_stability_forensic_report.md §9): a hand-
+# curated, narrow, deterministic lexicon (English-focused - interstitial/consent/sign-in-wall
+# pages from Western platforms are overwhelmingly served in English regardless of the article's
+# own language) covering the categories the corrective phase named: cookie consent, sign-in wall,
+# access denied, challenge page, navigation-only shell. Mirrors services/content_quality_gates.py's
+# own _GENERIC_FILLER_PHRASES/_UNSUPPORTED_SUPERLATIVES convention exactly - a fixed list, never a
+# general classifier, matched per-LINE (not against the whole text) so a genuine article that
+# merely has a cookie-consent banner mixed in alongside abundant real prose is never penalized -
+# only the matching banner/wall lines themselves are excluded from the substantive-content count.
+_INTERSTITIAL_LINE_MARKERS: tuple[str, ...] = (
+    # cookie consent
+    "we use cookies", "uses cookies", "cookie policy", "accept all cookies", "manage cookies",
+    "respects your privacy", "essential and non-essential cookies", "reject non-essential",
+    # sign-in / registration / subscription wall
+    "sign in to view", "sign in to continue", "create your free account", "join now to view",
+    "log in to continue", "subscribe to continue reading", "subscribe to read", "become a member to",
+    "sign in with email", "new to linkedin", "agree & join", "you've reached your limit",
+    "sign in to view more content", "create your free account or sign in",
+    # access denied / bot-challenge page
+    "access denied", "you have been blocked", "checking your browser", "verify you are human",
+    "enable javascript to continue", "are you a robot", "attention required", "just a moment",
+    "please enable cookies",
+    # navigation-only shell chrome
+    "skip to main content",
+)
+
+
+def _is_interstitial_boilerplate_line(line: str) -> bool:
+    normalized = normalize_loose(line)
+    return any(marker in normalized for marker in _INTERSTITIAL_LINE_MARKERS)
+
+
+def estimate_substantive_char_count(raw_text: str) -> int:
+    """Pure. Excludes lines matching `_INTERSTITIAL_LINE_MARKERS` before counting - a page that IS
+    substantially a cookie-consent/sign-in-wall/access-denied/challenge/navigation-only shell (most
+    or all of its extracted lines match) is correctly measured as thin; a normal article that
+    merely has a cookie banner mixed in alongside abundant real prose is unaffected, since only the
+    matched lines are excluded, never the whole text merely for containing a recognized phrase
+    somewhere. Used only to choose the acquisition STATUS (classify_acquisition_status()) - never
+    changes what is persisted as raw_extracted_text/extracted_char_count, which remain the true,
+    complete, verbatim extraction for audit purposes (database/models/news_event_article_
+    acquisition.py's own documented "verbatim extraction, pre-cleaning" contract)."""
+    if not raw_text:
+        return 0
+    lines = raw_text.split("\n")
+    substantive_lines = [line for line in lines if not _is_interstitial_boilerplate_line(line)]
+    return len("\n".join(substantive_lines))
+
+
 def resolve_canonical_url(html: str, *, base_url: str) -> str | None:
     """Pure. Prefers `<link rel="canonical">` if present and structurally valid (scheme/hostname,
     via the exact same integrations.http.safe_fetch._validate_url() check every other fetch in
@@ -172,6 +232,63 @@ def resolve_canonical_url(html: str, *, base_url: str) -> str | None:
     return base_url or None
 
 
+# NEWS Output Stability Fix (Case A, docs/news_output_stability_forensic_report.md §2): a Google
+# News RSS "articles" URL (https://news.google.com/rss/articles/CBMi...) never itself contains the
+# destination article - fetching it (confirmed empirically, single diagnostic fetch against a real
+# affected URL) returns Google's own ~580KB Angular application shell (visible text: literally
+# "Google News", no destination URL embedded anywhere in the static HTML - the real article
+# requires Google's own undocumented internal batchexecute API to resolve, which this codebase
+# deliberately does not implement, matching the "no second scraper" instruction). Host-suffix
+# matching only (never payload decoding, which is unreliable and fragile against Google's own
+# encoding changes, and was empirically confirmed NOT to contain a readable destination URL for
+# the current format) - the same convention services/video_discovery.py::classify_video_url()
+# already established for YouTube/Vimeo host matching.
+_GOOGLE_NEWS_HOST_RE = re.compile(r"(^|\.)news\.google\.[a-z]{2,3}(\.[a-z]{2})?$", re.IGNORECASE)
+
+_META_REFRESH_URL_RE = re.compile(r"url\s*=\s*['\"]?([^'\";]+)", re.IGNORECASE)
+
+
+def is_google_news_redirect_host(url: str) -> bool:
+    """Pure, hostname-only, no network call. True for news.google.com and its known locale
+    variants (news.google.co.uk, news.google.de, etc.)."""
+    try:
+        host = urlsplit(url).hostname or ""
+    except ValueError:
+        return False
+    return bool(_GOOGLE_NEWS_HOST_RE.search(host))
+
+
+def resolve_meta_refresh_url(html: str, *, base_url: str) -> str | None:
+    """Pure. A general, non-Google-specific redirect signal: `<meta http-equiv="refresh"
+    content="N;url=...">` - a standard HTML mechanism some redirect/interstitial pages provide for
+    non-JS clients (the real Google News shell page this fix was built against does NOT include
+    one, confirmed empirically - this remains a real, general mechanism worth checking for other
+    redirect-shell pages that do). Never itself triggers a fetch (mirrors resolve_canonical_url()'s
+    own "extraction only" contract) - the caller decides whether/how to follow the result."""
+    if not html:
+        return None
+    collector = _ArticleTextCollector()
+    try:
+        collector.feed(html)
+    except Exception:
+        return None
+
+    for tag in collector.meta_tags:
+        if (tag.get("http-equiv") or "").strip().lower() != "refresh":
+            continue
+        match = _META_REFRESH_URL_RE.search(tag.get("content") or "")
+        if not match:
+            continue
+        resolved = urljoin(base_url, match.group(1).strip())
+        try:
+            _validate_url(resolved)
+        except SafeFetchError:
+            logger.warning("article_acquisition_meta_refresh_url_rejected", extra={"base_url": base_url})
+            continue
+        return resolved
+    return None
+
+
 def classify_acquisition_status(char_count: int) -> str:
     """Pure. Deterministic thresholds only - never a judgment call."""
     if char_count >= _FULL_TEXT_MIN_CHARS:
@@ -193,10 +310,17 @@ def _fetch_policy() -> SafeFetchPolicy:
     )
 
 
-async def acquire_article(url: str, *, event_id: UUID) -> AcquisitionOutcome:
+async def acquire_article(url: str, *, event_id: UUID, _google_news_hop: bool = False) -> AcquisitionOutcome:
     """The one real fetch. Never raises - every failure mode is a status/error_code pair. Bounded
     by settings.article_acquisition_max_extracted_chars regardless of how much raw text the page
-    contained (a hard cap, not a classification input)."""
+    contained (a hard cap, not a classification input).
+
+    `_google_news_hop` (NEWS Output Stability Fix, Case A, internal use only - never passed by an
+    external caller): set True on the one, bounded recursive re-fetch this function makes when a
+    Google News redirect-shell URL's own canonical-link/meta-refresh resolves to a real, off-Google
+    destination - guarantees at most one extra hop, never a chain, mirroring safe_fetch()'s own
+    `max_redirects` bound in spirit (a distinct mechanism, since Google's redirect is not a real
+    HTTP 3xx safe_fetch() can already follow - see is_google_news_redirect_host()'s own docstring)."""
     start = time.monotonic()
     try:
         result = await safe_fetch(url, policy=_fetch_policy())
@@ -250,6 +374,31 @@ async def acquire_article(url: str, *, event_id: UUID) -> AcquisitionOutcome:
     canonical_url = resolve_canonical_url(html, base_url=result.final_url)
     char_count = len(raw_text)
 
+    # NEWS Output Stability Fix (Case A): a Google News redirect-shell URL's own extracted text
+    # (Google's application shell, not the real article) must never be silently classified as if
+    # it were real HEADLINE_ONLY/PARTIAL_TEXT article content - two general, non-Google-specific
+    # resolution signals are tried first (an off-Google canonical link, a meta-refresh tag); if
+    # neither resolves a real destination, this honestly reports REDIRECT_UNRESOLVED instead of
+    # running the normal char-count classifier on the shell's own incidental visible text.
+    if not _google_news_hop and is_google_news_redirect_host(url):
+        redirect_target: str | None = None
+        if canonical_url and not is_google_news_redirect_host(canonical_url):
+            redirect_target = canonical_url
+        else:
+            meta_refresh_url = resolve_meta_refresh_url(html, base_url=result.final_url)
+            if meta_refresh_url and not is_google_news_redirect_host(meta_refresh_url):
+                redirect_target = meta_refresh_url
+
+        if redirect_target is not None:
+            return await acquire_article(redirect_target, event_id=event_id, _google_news_hop=True)
+
+        return AcquisitionOutcome(
+            status=ACQUISITION_STATUS_REDIRECT_UNRESOLVED, raw_extracted_text=None,
+            extracted_char_count=None, canonical_url=canonical_url,
+            source_html_bytes=result.received_byte_count, fetch_duration_ms=duration_ms,
+            error_code="google_news_redirect_unresolved",
+        )
+
     # Phase 19 M10: zero additional network request - extracted from this same already-fetched
     # HTML. Best-effort: an extraction failure must never affect article acquisition's own
     # result, mirrors this module's own "never raises" discipline throughout.
@@ -260,9 +409,16 @@ async def acquire_article(url: str, *, event_id: UUID) -> AcquisitionOutcome:
         except Exception:
             logger.warning("article_video_discovery_failed", extra={"event_id": str(event_id)})
 
+    # NEWS Output Stability Fix (Case H): the STATUS is classified from the substantive char
+    # count (interstitial/consent-wall/sign-in-wall/access-denied/challenge-page/navigation-shell
+    # lines excluded) rather than the raw extraction length - a page that is substantially just
+    # such a shell must never be classified FULL_TEXT/SUBSTANTIAL_TEXT/PARTIAL_TEXT as if it were
+    # real article content (the required invariant). `extracted_char_count`/`raw_extracted_text`
+    # themselves are untouched - both remain the true, complete, verbatim extraction, exactly as
+    # documented on NewsEventArticleAcquisition; only the classification decision changes.
     return AcquisitionOutcome(
-        status=classify_acquisition_status(char_count), raw_extracted_text=raw_text or None,
-        extracted_char_count=char_count, canonical_url=canonical_url,
+        status=classify_acquisition_status(estimate_substantive_char_count(raw_text)),
+        raw_extracted_text=raw_text or None, extracted_char_count=char_count, canonical_url=canonical_url,
         source_html_bytes=result.received_byte_count, fetch_duration_ms=duration_ms, error_code=None,
         discovered_video_hints=video_hints,
     )

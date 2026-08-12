@@ -27,10 +27,11 @@ from database.models.news_event import NewsEvent
 from database.models.story_link import NewsEventStoryLink
 from schemas.content_draft import ContentDraftRead
 from schemas.workflow import WorkflowRunResult
-from services.content_quality_gates import evaluate_content_quality_gates
+from services.content_quality_gates import check_quote_is_self_contained, evaluate_content_quality_gates
 from services.evidence_package import build_evidence_package
 from services.quote_verification import verify_quote
 from services.story_memory import NEW_STORY, UNCERTAIN_MATCH
+from services.story_telegram_delivery import get_root_delivery
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,88 @@ def _copywriting_output(result: WorkflowRunResult) -> dict[str, Any]:
     raise ValueError(
         f"WorkflowRunResult for task {result.task_id} has no successful 'copywriting' step "
         "result - create_from_result() MUST only be called on a COMPLETED result."
+    )
+
+
+# Phase 23.1C: Copywriting schema versions this module knows how to reduce to the single
+# (title, body) shape ContentDraft.title/.body has always expected - mirrors services/
+# fact_safety.py::_extract_draft_text()'s own identical pattern (Phase 21), the smallest safe
+# adapter for the same underlying problem: Fact Safety validates a draft's semantic content
+# regardless of presentation schema, and this service persists it regardless of presentation
+# schema - neither needed to be taught a second, separate notion of "what counts as a draft"
+# beyond this one small extraction seam. V6 (`prompts/copywriting/v6.yaml`, verified directly
+# against the real prompt file) has no `body` key at all - its long-form structure is `opening/
+# context/why_it_matters/what_changed/what_happens_next/conclusion/what_remains_unknown/quote`.
+# Natural prompt-declaration order (prompts/copywriting/v6.yaml's own field order) - the two
+# optional fields are interleaved in their real narrative position (what_happens_next between
+# what_changed and conclusion; what_remains_unknown after conclusion), not grouped separately, so
+# the concatenated body reads in the same order a human editor encounters the sections.
+_V6_REQUIRED_TEXT_KEYS = frozenset({"opening", "context", "why_it_matters", "what_changed", "conclusion"})
+_V6_TEXT_KEYS_IN_ORDER: tuple[str, ...] = (
+    "opening", "context", "why_it_matters", "what_changed", "what_happens_next", "conclusion",
+    "what_remains_unknown",
+)
+
+# Phase 23.1J: V8 (`prompts/copywriting/v8.yaml`) - a deliberately smaller shape than V6/V7's
+# seven/eight narrative sections. `main_body` is the only required text field beyond `title`;
+# `ending`/`expandable_details` are optional, included here (for persistence/Fact-Safety
+# completeness) only when actually populated - the Telegram presentation layer (services/
+# news_telegram_presentation.py) is what decides whether `expandable_details` is visually hidden
+# behind an expandable blockquote, never this persistence layer, which must see every claim
+# regardless of how it will eventually be displayed.
+_V8_REQUIRED_TEXT_KEYS = frozenset({"main_body"})
+_V8_TEXT_KEYS_IN_ORDER: tuple[str, ...] = ("main_body", "ending", "expandable_details")
+
+
+def _extract_title_and_body(copywriting_output: dict[str, Any]) -> tuple[str, str]:
+    """Reduces any *known* Copywriting output schema to `(title, body)` - the exact shape this
+    module has always persisted onto `ContentDraft.title`/`.body`. Raises `ValueError` (this
+    module's own established "MUST NOT swallow" convention - see `_copywriting_output()`'s
+    identical philosophy immediately below) for a schema this function does not recognize -
+    never a silent skip, never an uninformative raw `KeyError`.
+
+    V4 (and any future schema that still carries a plain `body` field): `body` used as-is,
+    byte-identical to this module's pre-Phase-23.1C behavior for every existing V4 case.
+
+    V6: every one of its required non-null narrative sections (`opening`, `context`,
+    `why_it_matters`, `what_changed`, `conclusion`) must be present as a string, or this is not
+    recognized as V6 either; the two genuinely optional sections (`what_happens_next`,
+    `what_remains_unknown`) are included only when actually populated (V6's own prompt sets them
+    to `null`, not `""`, when there is nothing genuine to say - Phase 23.1B's own live sample
+    draft had `what_happens_next=None`, confirming this is the common, not the edge, case).
+    Concatenated in the prompt's own declared section order, joined with blank lines so claim/
+    quality-gate text processing downstream never fuses two sections' words together - preserves
+    ordering exactly as the phase brief requires."""
+    title = copywriting_output.get("title")
+    if not isinstance(title, str):
+        raise ValueError(
+            f"copywriting_output has no valid 'title' string (got keys "
+            f"{sorted(copywriting_output.keys())}) - cannot create a ContentDraft."
+        )
+
+    body = copywriting_output.get("body")
+    if isinstance(body, str):
+        return title, body
+
+    if all(isinstance(copywriting_output.get(key), str) for key in _V6_REQUIRED_TEXT_KEYS):
+        sections = [
+            copywriting_output[key] for key in _V6_TEXT_KEYS_IN_ORDER
+            if isinstance(copywriting_output.get(key), str)
+        ]
+        return title, "\n\n".join(sections)
+
+    if all(isinstance(copywriting_output.get(key), str) for key in _V8_REQUIRED_TEXT_KEYS):
+        sections = [
+            copywriting_output[key] for key in _V8_TEXT_KEYS_IN_ORDER
+            if isinstance(copywriting_output.get(key), str)
+        ]
+        return title, "\n\n".join(sections)
+
+    raise ValueError(
+        f"copywriting_output matches no known Copywriting schema (has keys "
+        f"{sorted(copywriting_output.keys())}) - expected V4's 'body' field or V6's "
+        f"opening/context/why_it_matters/what_changed/conclusion fields. Cannot create a "
+        f"ContentDraft without an explicit, recognized schema."
     )
 
 
@@ -156,8 +239,7 @@ class ContentDraftService:
         (every pre-18.10 caller) is byte-identical to before: no lookup, no new row, ever.
         """
         copywriting_output = _copywriting_output(result)
-        title = copywriting_output["title"]
-        body = copywriting_output["body"]
+        title, body = _extract_title_and_body(copywriting_output)
         # v4-only fields (Phase 18.10 M5/M6) - .get(), not [...], since a historical result
         # produced by a frozen earlier prompt version (v1/v2/v3) never has these keys at all;
         # None/absent degrades gracefully rather than raising.
@@ -201,10 +283,18 @@ class ContentDraftService:
         # persisted or rendered - fail closed (drop, never fabricate), per
         # services/quote_verification.py's own contract. A dropped quote never blocks the draft
         # itself; only the quote is discarded.
+        # NEWS Output Stability Fix (Case D): reuses this exact same fail-closed mechanism -
+        # check_quote_is_self_contained() is a second, independent required condition, never a
+        # separate enforcement path. "No quote is better than a contextless/meaningless quote" -
+        # the real BBC/Discord case ("thoughtfully reviewing") was verbatim AND correctly
+        # attributed, so verify_quote() alone was never going to catch it.
         verified_quote: dict[str, Any] | None = None
         if isinstance(quote, dict):
             quote_text = quote.get("text")
-            if isinstance(quote_text, str) and verify_quote(quote_text, source_content):
+            if (
+                isinstance(quote_text, str) and verify_quote(quote_text, source_content)
+                and check_quote_is_self_contained(quote_text)
+            ):
                 verified_quote = quote
             else:
                 logger.warning(
@@ -212,10 +302,43 @@ class ContentDraftService:
                     extra={"task_id": str(result.task_id), "quote_text": quote_text},
                 )
 
+        # NEWS Output Stability Fix (Case C): the story_link lookup (previously only performed
+        # AFTER quality-gate evaluation, purely to drive Telegram reply-routing) now happens
+        # here, before evaluate_content_quality_gates(), so check_update_not_repeating_root() can
+        # actually receive is_update/root_body instead of always defaulting to is_update=False -
+        # its previous, silent no-op state (services/content_quality_gates.py's own check already
+        # existed; only this call site was missing the two arguments and the ordering they need).
+        # `is_update` is computed once here and reused below for ContentDraftStoryLink.is_story_
+        # update - a single source of truth, never two divergent computations of the same fact.
+        story_link: NewsEventStoryLink | None = None
+        is_update = False
+        root_body: str | None = None
+        if event_id is not None and settings.story_memory_mode != "off":
+            story_link = await self._session.get(NewsEventStoryLink, event_id)
+            if story_link is not None:
+                # uncertain_match is deliberately never treated as a confirmed update
+                # (services/story_memory.py's own conservative design) - only a confident match
+                # type marks this draft as an update, for both reply-routing and this quality
+                # gate.
+                is_update = story_link.match_type not in (NEW_STORY, UNCERTAIN_MATCH)
+                if is_update:
+                    # Reuses services/story_telegram_delivery.py::get_root_delivery() verbatim -
+                    # the same, already-established definition of "the story's root" used for
+                    # reply-threading (a SENT root only; an unsent/failed root has no publicly
+                    # visible text to be "repeating"). root_body stays None (the existing, safe
+                    # default check_update_not_repeating_root() already handles - see its own
+                    # docstring) when no root was ever successfully delivered.
+                    root_delivery = await get_root_delivery(self._session, story_link.story_id)
+                    if root_delivery is not None:
+                        root_draft = await self._session.get(ContentDraft, root_delivery.content_draft_id)
+                        root_body = root_draft.body if root_draft is not None else None
+
         # Phase 18.10 M6/M7: deterministic quality gates - computed and logged for visibility,
         # never blocking persistence (these are heuristic editorial-quality signals, not the
         # hard, zero-false-positive hashtag requirement above) - matches
         # services/fact_safety.py's own "assess and record, don't silently reject" philosophy.
+        # This non-blocking policy is preserved unchanged for update_not_repeating_root too - this
+        # fix wires the gate's real inputs, it does not change what happens when it fails.
         quality_report = evaluate_content_quality_gates(
             title=title,
             body=body,
@@ -225,6 +348,8 @@ class ContentDraftService:
             quote_text=verified_quote.get("text") if verified_quote else None,
             quote_speaker=verified_quote.get("speaker") if verified_quote else None,
             source_content=source_content,
+            is_update=is_update,
+            root_body=root_body,
         )
         if not quality_report.passed:
             logger.warning(
@@ -247,25 +372,22 @@ class ContentDraftService:
         )
         self._session.add(draft)
 
-        # Gated on story_memory_mode, not merely on event_id being provided (every real caller
+        # `story_link`/`is_update` already resolved above (needed earlier for the quality-gate
+        # call) - reused here rather than looked up a second time. Gating remains identical:
+        # gated on story_memory_mode, not merely on event_id being provided (every real caller
         # always provides a real event_id) - mirrors services/editorial_scoring.py's own
         # apply_editorial_scoring_v2() identical fix: editorial_scoring_version == "v2"/normal
         # draft creation with story_memory_mode == "off" (the default) is a valid, already-
         # working combination that must never depend on this phase's migration being applied.
-        if event_id is not None and settings.story_memory_mode != "off":
-            story_link = await self._session.get(NewsEventStoryLink, event_id)
-            if story_link is not None:
-                self._session.add(
-                    ContentDraftStoryLink(
-                        content_draft_id=draft.id,
-                        story_id=story_link.story_id,
-                        # uncertain_match is deliberately never treated as a confirmed update
-                        # (services/story_memory.py's own conservative design) - only a
-                        # confident match type marks this draft for reply-context delivery.
-                        is_story_update=story_link.match_type not in (NEW_STORY, UNCERTAIN_MATCH),
-                        source_event_id=event_id,
-                    )
+        if story_link is not None:
+            self._session.add(
+                ContentDraftStoryLink(
+                    content_draft_id=draft.id,
+                    story_id=story_link.story_id,
+                    is_story_update=is_update,
+                    source_event_id=event_id,
                 )
+            )
 
         await self._session.commit()
         await self._session.refresh(draft)

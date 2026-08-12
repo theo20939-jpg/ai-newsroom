@@ -32,12 +32,17 @@ from schemas.workflow import WorkflowType
 from services.cleaning import is_valid_title
 from services.story_memory import (
     NEW_STORY,
+    RELATED_STORY,
     SEMANTIC_DUPLICATE,
     STORY_UPDATE,
     SUPPORTING_SOURCE,
     UNCERTAIN_MATCH,
     match_story,
 )
+from services.story_memory import _RELATED_STORY_ENTITY_FLOOR as _OWN_STORY_ENTITY_FLOOR
+from services.story_confidence import compute_confidence_band
+from services.story_delta_engine import compute_story_delta, gate_delta_by_identity
+from services.story_suppression import compute_would_suppress
 from services.triage import decide_triage
 from services.workflow_service import _find_active_task, create_task
 from workflows.errors import DuplicateActiveTaskError
@@ -176,6 +181,11 @@ class TriageCycleReport:
     story_supporting_sources: int = 0
     story_semantic_duplicates: int = 0
     story_uncertain_matches: int = 0
+    # Phase 20 M8: RELATED_STORY (services/story_memory.py) existed since M5 but was never wired
+    # into this report - a real, narrow observability gap found and fixed during M8's own
+    # verification pass, not a new feature. story_memory_mode stays "off" in the real .env, so
+    # this had zero live effect; it only matters once shadow mode is later enabled.
+    story_related: int = 0
 
     @property
     def received_events(self) -> int:
@@ -197,10 +207,37 @@ async def _apply_story_memory(session: AsyncSession, event: NewsEvent, report: T
 
     Owns no commit of its own - all mutations here (the new/updated Story row, the new
     NewsEventStoryLink row) are committed atomically together with create_task()'s own
-    EditorialTask insert, in the same transaction `_run_phase_b()` already manages."""
+    EditorialTask insert, in the same transaction `_run_phase_b()` already manages.
+
+    Phase 20 M11.1 (Story Identity Invariant, docs/phase20_m11_1_story_identity_investigation.md):
+    a real NewsEvent must not permanently lose the ability to become the root/anchor of its own
+    Story merely because its first comparison against older Stories is uncertain or only loosely
+    related. `NEW_STORY` always creates its own Story, as before. `RELATED_STORY` now ALSO always
+    creates its own Story - it is already, by construction in services/story_memory.py, a
+    confident signal that this is a DIFFERENT story (combined score below even the low threshold);
+    the only bug was never actually creating that different story. `UNCERTAIN_MATCH` is genuinely
+    ambiguous, so it is split by `entity_overlap` (a value services/story_memory.py's
+    score_candidate() already computes for every match, not a new signal) against the same
+    `_RELATED_STORY_ENTITY_FLOOR` constant RELATED_STORY itself already uses (not a new,
+    uncalibrated threshold): real entity signal (>= the floor, e.g. the Moscow pair's 0.4) keeps
+    today's attach-without-bumping behavior, since the candidate genuinely might be the same
+    story; weak/coincidental overlap (< the floor, e.g. a genuinely new story's root event
+    crossing the low bar by chance against something unrelated) creates its own Story instead.
+    `STORY_UPDATE`/`SUPPORTING_SOURCE`/`SEMANTIC_DUPLICATE` are unchanged - confirmed same-story
+    outcomes always attach and bump `event_count`.
+
+    No explicit merge/convergence machinery is added - a later, more decisive event scored
+    against a fragmented provisional Story (which participates in candidate retrieval exactly
+    like any other Story) can still attach to it normally via the confirmed-outcome path above,
+    naturally converging the cluster's future growth without retroactively re-parenting already-
+    linked events (out of scope as more than "the smallest fix")."""
     signature, result = await match_story(session, title=event.title, category=event.category)
 
-    if result.outcome == NEW_STORY:
+    creates_own_story = result.outcome in (NEW_STORY, RELATED_STORY) or (
+        result.outcome == UNCERTAIN_MATCH and result.entity_overlap < _OWN_STORY_ENTITY_FLOOR
+    )
+
+    if creates_own_story:
         story = Story(
             id=uuid4(),
             title=event.title,
@@ -213,27 +250,31 @@ async def _apply_story_memory(session: AsyncSession, event: NewsEvent, report: T
         )
         session.add(story)
         story_id = story.id
-        report.story_new += 1
     else:
-        # STORY_UPDATE, SEMANTIC_DUPLICATE, or UNCERTAIN_MATCH - all three link the event to the
-        # matched story for observability; only story_update/semantic_duplicate bump event_count
-        # (an uncertain match is, definitionally, not confident enough to count as confirmed
-        # continuation of that story's own event history).
-        assert result.matched_story_id is not None  # guaranteed whenever outcome != NEW_STORY
+        # STORY_UPDATE, SUPPORTING_SOURCE, SEMANTIC_DUPLICATE, or a strong-entity-overlap
+        # UNCERTAIN_MATCH - link the event to the matched story for observability; only the three
+        # confirmed-same-story outcomes bump event_count (an uncertain match, even a strong one,
+        # is, definitionally, not confident enough to count as a confirmed continuation of that
+        # story's own event history).
+        assert result.matched_story_id is not None  # guaranteed whenever outcome != NEW_STORY/RELATED_STORY
         story_id = result.matched_story_id
         matched_story = await session.get(Story, result.matched_story_id)
         assert matched_story is not None  # match_story() only returns an id it just queried
         if result.outcome in (STORY_UPDATE, SUPPORTING_SOURCE, SEMANTIC_DUPLICATE):
             matched_story.event_count += 1
 
-        if result.outcome == STORY_UPDATE:
-            report.story_updates += 1
-        elif result.outcome == SUPPORTING_SOURCE:
-            report.story_supporting_sources += 1
-        elif result.outcome == SEMANTIC_DUPLICATE:
-            report.story_semantic_duplicates += 1
-        elif result.outcome == UNCERTAIN_MATCH:
-            report.story_uncertain_matches += 1
+    if result.outcome == NEW_STORY:
+        report.story_new += 1
+    elif result.outcome == STORY_UPDATE:
+        report.story_updates += 1
+    elif result.outcome == SUPPORTING_SOURCE:
+        report.story_supporting_sources += 1
+    elif result.outcome == SEMANTIC_DUPLICATE:
+        report.story_semantic_duplicates += 1
+    elif result.outcome == UNCERTAIN_MATCH:
+        report.story_uncertain_matches += 1
+    elif result.outcome == RELATED_STORY:
+        report.story_related += 1
 
     session.add(
         NewsEventStoryLink(
@@ -251,6 +292,47 @@ async def _apply_story_memory(session: AsyncSession, event: NewsEvent, report: T
             "reason": result.similarity_reason,
         },
     )
+
+    # Phase 23.1P (docs/phase23_1p_story_memory_quotes_gate_report.md): Story Memory V2 diagnostics
+    # (services/story_delta_engine.py + story_confidence.py + story_suppression.py, Phase 20 M6/M7,
+    # never wired into any real code path before this phase - their own migration, database/
+    # migrations/versions/3c22be05f4e5_add_story_memory_v2_shadow_columns.py, was never applied to
+    # any real database and is NOT applied by this phase either, per this phase's own explicit "do
+    # not run migrations against the real dev DB" instruction). LOGGED ONLY, never persisted -
+    # satisfies Part A4's "every candidate must produce observable diagnostics" requirement without
+    # a schema change. Computed only for the four outcomes story_confidence.py's own docstring
+    # documents as meaningful (`not creates_own_story` is exactly that same set here - see the
+    # branch above). `gate_delta_by_identity()` applies the same "identity before delta" protection
+    # match_story() itself already established (Phase 20 Checkpoint 6) - a MATERIAL_UPDATE claim is
+    # never trusted without a distinctive shared entity backing the match it rides on.
+    if not creates_own_story:
+        try:
+            delta = await compute_story_delta(
+                session, new_title=event.title, story_id=story_id, exclude_event_id=event.id,
+            )
+            delta = gate_delta_by_identity(delta, has_distinctive_shared_entity=result.has_distinctive_shared_entity)
+            confidence_band = compute_confidence_band(result.confidence)
+            would_suppress = compute_would_suppress(
+                match_type=result.outcome, confidence_band=confidence_band, delta_classification=delta.classification,
+            )
+            logger.info(
+                "phase23_1p_story_memory_v2_diagnostics",
+                extra={
+                    "event_id": str(event.id),
+                    "story_id": str(story_id),
+                    "match_type": result.outcome,
+                    "confidence_band": confidence_band,
+                    "delta_classification": delta.classification,
+                    "delta_reason": delta.reason,
+                    "new_material_claims": delta.new_material_claims,
+                    "would_suppress": would_suppress,
+                },
+            )
+        except Exception:
+            logger.warning(
+                "phase23_1p_story_memory_v2_diagnostics_failed",
+                extra={"event_id": str(event.id), "story_id": str(story_id)},
+            )
 
 
 async def _run_phase_b(session: AsyncSession, event_id: UUID, report: TriageCycleReport) -> None:
@@ -433,6 +515,7 @@ async def run_triage_cycle(
             "story_supporting_sources": report.story_supporting_sources,
             "story_semantic_duplicates": report.story_semantic_duplicates,
             "story_uncertain_matches": report.story_uncertain_matches,
+            "story_related": report.story_related,
         },
     )
     return report

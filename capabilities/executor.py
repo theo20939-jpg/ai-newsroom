@@ -26,7 +26,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import settings
 from database.models.editorial_task import EditorialTask
 from database.models.news_event import NewsEvent
+from database.models.news_event_article_acquisition import NewsEventArticleAcquisition
 from database.models.news_source import NewsSource
+from services.article_cleaning import clean_extracted_text
 from schemas.beginner_friendly import BeginnerFriendlyPlan
 from services.editorial_plan_persistence import persist_shadow_plan
 from services.editorial_planning_deterministic import build_deterministic_plan
@@ -192,9 +194,45 @@ class CapabilityExecutor:
                     extra={"task_id": str(task.id), "event_id": str(task.event_id)},
                 )
 
+        # Phase 23.1P (docs/phase23_1p_story_memory_quotes_gate_report.md): quote-sourcing root-
+        # cause fix. Copywriting's OWN quote excerpt (capabilities/copywriting_capability.py::
+        # _format_quote_source_excerpt()) previously read only `news_event.content` - the thin
+        # RSS-teaser field - even when a far richer full article was already acquired for real
+        # under article_acquisition_mode=shadow (confirmed directly: the real Research Gold story,
+        # Phase 23.1O, had a 130-char news_event.content with zero quotes vs. an 11,289-char
+        # acquired article containing several genuinely useful ones). Deliberately NOT
+        # build_evidence_package() (that call above is enforce-gated and, separately, its own
+        # `cleaned_text`-required branch never fires in this environment since the cleaning step
+        # does not populate that column here - confirmed directly) - a narrow, direct read of the
+        # already-acquired `raw_extracted_text`, cleaned on the fly with the already-existing,
+        # zero-cost `services/article_cleaning.py::clean_extracted_text()` (never a new capability,
+        # never an LLM call). Scoped to "copywriting" only - Research/Intelligence/`article_
+        # evidence_text`'s own enforce gate above are completely untouched. `!= "off"` (not
+        # enforce-only) since this reads already-persisted shadow-mode data for a narrower,
+        # lower-stakes purpose (quote-sourcing only, still verified against source text before use -
+        # services/quote_verification.py - never "additional facts").
+        quote_source_text: str | None = None
+        if step.capability == "copywriting" and settings.article_acquisition_mode != "off":
+            try:
+                async with self._session.begin_nested():
+                    acquisition = await self._session.get(NewsEventArticleAcquisition, task.event_id)
+                    if (
+                        acquisition is not None
+                        and acquisition.effective_completeness_status in ("FULL_TEXT", "PARTIAL_TEXT")
+                        and acquisition.raw_extracted_text
+                    ):
+                        cleaning = clean_extracted_text(acquisition.raw_extracted_text, title=news_event.title)
+                        quote_source_text = cleaning.cleaned_text
+            except Exception:
+                logger.warning(
+                    "quote_source_text_unavailable_falling_back",
+                    extra={"task_id": str(task.id), "event_id": str(task.event_id)},
+                )
+
         context = self._build_context(
             task, news_event, step, attempt,
             evidence_text=evidence_text, evidence_completeness=evidence_completeness,
+            quote_source_text=quote_source_text,
         )
 
         # API cost optimization (docs/api_cost_optimization_report.md): CONTENT_GENERATION's
@@ -975,6 +1013,7 @@ class CapabilityExecutor:
     def _build_context(
         self, task: EditorialTask, news_event: NewsEvent, step: WorkflowStepDefinition, attempt: int,
         *, evidence_text: str | None = None, evidence_completeness: str | None = None,
+        quote_source_text: str | None = None,
     ) -> CapabilityContext:
         state = WorkflowExecutionState.model_validate(task.workflow)
 
@@ -1007,6 +1046,7 @@ class CapabilityExecutor:
                 language=settings.default_content_language,
                 article_evidence_text=evidence_text,
                 article_evidence_completeness=evidence_completeness,
+                quote_source_text=quote_source_text,
             ),
             execution=ExecutionContext(
                 max_tokens=_MAX_OUTPUT_TOKENS_BY_CAPABILITY.get(step.capability),

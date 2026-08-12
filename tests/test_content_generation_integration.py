@@ -22,7 +22,7 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, select
+from sqlalchemy import delete, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from capabilities.registry import build_registry
@@ -93,6 +93,13 @@ async def factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     await engine.dispose()
 
 
+async def _table_exists(session: AsyncSession, table_name: str) -> bool:
+    def _check(sync_session: object) -> bool:
+        return inspect(sync_session.connection()).has_table(table_name)  # type: ignore[attr-defined]
+
+    return await session.run_sync(_check)
+
+
 @pytest_asyncio.fixture
 async def test_source(factory: async_sessionmaker[AsyncSession]) -> AsyncIterator[NewsSource]:
     unique_name = f"phase14-m5-integration-test-{uuid4()}"
@@ -113,6 +120,25 @@ async def test_source(factory: async_sessionmaker[AsyncSession]) -> AsyncIterato
                     select(EditorialTask.id).where(EditorialTask.event_id.in_(event_ids))
                 )))
                 await session.execute(delete(EditorialTask).where(EditorialTask.event_id.in_(event_ids)))
+
+                # Phase 19 M1/M2: news_event_article_acquisitions FK-references news_events.id
+                # directly (its PK *is* news_event_id). Table-existence-guarded so this fixture
+                # still works against the unmigrated real DB (mirrors tests/test_content_worker_
+                # cycle.py::test_source's own identical convention) - added once
+                # article_acquisition_mode=shadow started writing real rows here during these
+                # tests, which otherwise made the NewsEvent delete below fail with a FK
+                # violation at teardown, after the test body itself had already passed.
+                if await _table_exists(session, "news_event_article_acquisitions"):
+                    from database.models.news_event_article_acquisition import (
+                        NewsEventArticleAcquisition,
+                    )
+
+                    await session.execute(
+                        delete(NewsEventArticleAcquisition).where(
+                            NewsEventArticleAcquisition.news_event_id.in_(event_ids)
+                        )
+                    )
+
                 await session.execute(delete(NewsEvent).where(NewsEvent.id.in_(event_ids)))
             await session.execute(delete(NewsSource).where(NewsSource.id == source.id))
             await session.commit()

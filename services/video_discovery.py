@@ -20,7 +20,7 @@ import re
 from collections.abc import Mapping
 from html.parser import HTMLParser
 from typing import Any
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import parse_qs, urljoin, urlsplit
 
 from core.config import settings
 from integrations.http.safe_fetch import SafeFetchError, SafeFetchPolicy, safe_fetch
@@ -43,18 +43,60 @@ _YOUTUBE_HOST_RE = re.compile(r"(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\
 _VIMEO_HOST_RE = re.compile(r"(^|\.)(vimeo\.com|player\.vimeo\.com)$", re.IGNORECASE)
 _DIRECT_VIDEO_EXTENSIONS = (".mp4", ".webm", ".mov", ".m4v", ".ogv")
 
+# Video Shadow Checkpoint follow-up (real live evidence: 14/19 = 74% of "hosted-platform" hints in
+# a ~75-minute shadow sample were channel/user/handle/subscribe links, not actual videos - see
+# docs/video_shadow_checkpoint.md §8). A YouTube/Vimeo HOSTNAME match alone is no longer
+# sufficient evidence of an actual playable video - the path/query shape must also identify one of
+# a small, explicitly bounded set of known real video-URL forms. Deliberately conservative: an
+# unrecognized path on a real YouTube/Vimeo host now classifies as UNKNOWN rather than guessing.
+_YOUTUBE_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _is_youtube_video_path(path: str, query: str) -> bool:
+    """Accepts only: /watch?v=<id>, youtu.be's own /<id> (handled by the caller via host check),
+    /shorts/<id>, /embed/<id>. Rejects everything else (channel/user/@handle/c/feed/results/
+    playlist/subscribe/bare-host/other navigation paths) - the exact bounded list the corrective
+    phase specified, not broadened beyond it."""
+    normalized = path.rstrip("/") or "/"
+    if normalized == "/watch":
+        video_id = (parse_qs(query).get("v") or [""])[0]
+        return bool(_YOUTUBE_ID_RE.match(video_id))
+    segments = [s for s in path.split("/") if s]
+    if len(segments) >= 2 and segments[0] in ("shorts", "embed"):
+        return bool(_YOUTUBE_ID_RE.match(segments[1]))
+    return False
+
+
+def _is_youtu_be_video_path(path: str) -> bool:
+    segments = [s for s in path.split("/") if s]
+    return len(segments) >= 1 and bool(_YOUTUBE_ID_RE.match(segments[0]))
+
+
+def _is_vimeo_video_path(host: str, path: str) -> bool:
+    """Accepts only a numeric video-id path (vimeo.com/<digits>[/<privacy-hash>], player.vimeo.com/
+    video/<digits>) - a Vimeo username/channel/showcase slug is never purely numeric, which is
+    exactly the deterministic, safe signal this reuses; never broadened beyond it."""
+    segments = [s for s in path.split("/") if s]
+    if host.lower().endswith("player.vimeo.com"):
+        return len(segments) >= 2 and segments[0] == "video" and segments[1].isdigit()
+    return len(segments) >= 1 and segments[0].isdigit()
+
 
 def classify_video_url(url: str) -> VideoPlatform:
-    """Pure, URL-pattern-only. Never inspects the URL's content - only its host/path shape."""
+    """Pure, URL-pattern-only, no network call. Host match alone is never sufficient for YouTube/
+    Vimeo - see _is_youtube_video_path()/_is_vimeo_video_path() above for the exact accepted
+    shapes."""
     try:
         parsed = urlsplit(url)
     except ValueError:
         return VideoPlatform.UNKNOWN
     host = parsed.hostname or ""
     if _YOUTUBE_HOST_RE.search(host):
-        return VideoPlatform.YOUTUBE
+        if host.lower().endswith("youtu.be"):
+            return VideoPlatform.YOUTUBE if _is_youtu_be_video_path(parsed.path) else VideoPlatform.UNKNOWN
+        return VideoPlatform.YOUTUBE if _is_youtube_video_path(parsed.path, parsed.query) else VideoPlatform.UNKNOWN
     if _VIMEO_HOST_RE.search(host):
-        return VideoPlatform.VIMEO
+        return VideoPlatform.VIMEO if _is_vimeo_video_path(host, parsed.path) else VideoPlatform.UNKNOWN
     if parsed.scheme in ("http", "https") and parsed.path.lower().endswith(_DIRECT_VIDEO_EXTENSIONS):
         return VideoPlatform.DIRECT_HOSTED
     return VideoPlatform.UNKNOWN

@@ -88,6 +88,26 @@ class BusinessContext(BaseModel):
     # constructs a CapabilityContext with these populated.
     media_review_image_data_uri: str | None = None
     media_review_story_summary: str | None = None
+    # Phase 19 overnight A/B/C validation seam: bounded, deterministic text serializations of an
+    # already-persisted EditorialPlan / Story Timeline - never populated in any live production
+    # path (capabilities.executor.CapabilityExecutor._build_context() never sets either field;
+    # only the manual comparison harness does). CopywritingCapability only ever reads these when
+    # prompt.version == "6" (prompts/copywriting/v6.yaml) - both v4 and the existing, frozen v5
+    # ignore them completely regardless of whether a caller supplies them, by construction (see
+    # capabilities/copywriting_capability.py::_build_request()). None means "no plan"/"no prior
+    # coverage found" - never fabricated.
+    editorial_plan_context: str | None = None
+    prior_coverage_context: str | None = None
+    # Phase 23.1P (docs/phase23_1p_story_memory_quotes_gate_report.md): a bounded, cleaned excerpt
+    # of the already-acquired full article text (services/article_acquisition.py +
+    # services/article_cleaning.py, already running for real under article_acquisition_mode=shadow),
+    # for Copywriting's own quote-sourcing use ONLY - never a general fact source. Deliberately
+    # separate from article_evidence_text above: that field is Research's own enforce-only signal
+    # (article_acquisition_mode=="enforce" required) and this phase does not touch it or Research's
+    # behavior at all. This field is populated whenever article_acquisition_mode != "off" (shadow
+    # included) AND a FULL_TEXT/PARTIAL_TEXT acquisition exists - None otherwise, in which case
+    # Copywriting falls back to its own pre-23.1P news_event.content excerpt unchanged.
+    quote_source_text: str | None = None
 
 
 class RuntimeContext(BaseModel):

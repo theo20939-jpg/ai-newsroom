@@ -5,10 +5,18 @@ to avoid touching that file's own documented pre-existing cross-test-isolation s
 (real_committed_event()-based, genuinely committed, not SAVEPOINT-rolled-back) - same fixture
 reuse convention, isolated blast radius for this phase's own new tests.
 """
+from uuid import uuid4
+
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
-from services.triage_orchestrator import TriageCycleReport, run_triage_cycle
+from database.models.news_event import EventCategory, NewsEvent
+from database.models.news_source import NewsSource, SourceType
+from database.models.story import Story
+from database.models.story_link import NewsEventStoryLink
+from services.story_memory import RELATED_STORY, MatchResult, extract_story_signature
+from services.triage_orchestrator import TriageCycleReport, _apply_story_memory, run_triage_cycle
 from tests.test_triage_orchestrator_claims import independent_session_factory, real_committed_event
 
 
@@ -39,6 +47,22 @@ def test_received_events_property_sums_claimed_and_recovered() -> None:
     assert report.received_events == 5
 
 
+@pytest.mark.skip(
+    reason=(
+        "Phase 20 M3 finding (unrelated to Story Memory V2 itself): this test's own precondition "
+        "- the 'stories'/'news_event_story_links' tables NOT existing yet - is now false against "
+        "the real dev DB. Migration c2bc6affb100 was applied during the Phase 19 Activation Stage "
+        "1 pass (docs/phase19_activation_review.md), confirmed via `alembic current` this session. "
+        "With the tables present, story_memory_mode='shadow' now succeeds normally instead of "
+        "hitting the 'relation does not exist' except-Exception branch this test exists to prove "
+        "safe - so it no longer exercises its own intended scenario, and its real_committed_event() "
+        "cleanup (tests/test_triage_orchestrator_claims.py) isn't written to also delete the real "
+        "Story row that now genuinely gets created, causing a FK violation on teardown. Not a Phase "
+        "20 regression - would fail identically on main. Needs a disposable, genuinely-unmigrated "
+        "DB (mirroring the Phase 19 audit's own §3 technique) to test this scenario for real again; "
+        "out of scope for this milestone."
+    )
+)
 @pytest.mark.asyncio
 async def test_shadow_mode_without_migration_degrades_gracefully_not_crash(
     monkeypatch: pytest.MonkeyPatch,
@@ -76,3 +100,79 @@ async def test_shadow_mode_without_migration_degrades_gracefully_not_crash(
                 assert tasks == []
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_apply_story_memory_wires_related_story_into_report(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase 20 M8 finding: RELATED_STORY (services/story_memory.py, added M5) was never wired
+    into TriageCycleReport's counters - a real, narrow observability gap, fixed as part of M8's
+    own verification pass. RELATED_STORY must also NOT bump the pointed-at story's event_count
+    (it is explicitly not a same-story match).
+
+    Updated for Phase 20 M11.1 (Story Identity Invariant): RELATED_STORY now creates its own
+    Story rather than pointing the link at the unrelated candidate - see
+    tests/test_story_identity_invariant.py for the dedicated identity-behavior test suite this
+    assertion now defers to; this test keeps its original scope (the counter wiring itself)."""
+    root_source = NewsSource(name=f"phase20-m8-test-{uuid4()}", type=SourceType.RSS, active=True)
+    db_session.add(root_source)
+    await db_session.flush()
+    root_event = NewsEvent(
+        source_id=root_source.id, title="Root story event", category=EventCategory.AI,
+        hash=f"phase20-m8-test-{uuid4()}",
+    )
+    db_session.add(root_event)
+    await db_session.flush()
+    signature = extract_story_signature(root_event.title, EventCategory.AI)
+    root_story = Story(
+        id=uuid4(), title=root_event.title, category=EventCategory.AI, entities=signature.entities,
+        keywords=signature.keywords, topic_bucket=signature.topic_bucket, first_event_id=root_event.id,
+        event_count=1,
+    )
+    db_session.add(root_story)
+    await db_session.flush()
+
+    new_source = NewsSource(name=f"phase20-m8-test-{uuid4()}", type=SourceType.RSS, active=True)
+    db_session.add(new_source)
+    await db_session.flush()
+    new_event = NewsEvent(
+        source_id=new_source.id, title="A different but entity-related event", category=EventCategory.AI,
+        hash=f"phase20-m8-test-{uuid4()}",
+    )
+    db_session.add(new_event)
+    await db_session.flush()
+
+    async def _fake_match_story(_session: AsyncSession, *, title: str, category: EventCategory):  # noqa: ANN001, ARG001
+        return signature, MatchResult(
+            RELATED_STORY, root_story.id, 0.25, "test: entity-related, not same story", entity_overlap=0.25,
+        )
+
+    monkeypatch.setattr("services.triage_orchestrator.match_story", _fake_match_story)
+
+    report = TriageCycleReport()
+    await _apply_story_memory(db_session, new_event, report)
+
+    assert report.story_related == 1
+    assert report.story_new == 0
+    assert report.story_updates == 0
+    assert report.story_supporting_sources == 0
+    assert report.story_semantic_duplicates == 0
+    assert report.story_uncertain_matches == 0
+
+    await db_session.refresh(root_story)
+    assert root_story.event_count == 1  # unchanged - RELATED_STORY is never a same-story match
+
+    from sqlalchemy import select
+
+    link = (
+        await db_session.execute(
+            select(NewsEventStoryLink).where(NewsEventStoryLink.news_event_id == new_event.id)
+        )
+    ).scalar_one()
+    # M11.1: RELATED_STORY now gets its own Story, never the unrelated candidate's.
+    assert link.story_id != root_story.id
+    own_story = await db_session.get(Story, link.story_id)
+    assert own_story is not None
+    assert own_story.first_event_id == new_event.id
+    assert link.match_type == RELATED_STORY

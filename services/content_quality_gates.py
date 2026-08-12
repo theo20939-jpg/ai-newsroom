@@ -67,6 +67,7 @@ class QualityGateReport:
     why_it_matters_present: bool = True
     quote_traceable: bool = True
     quote_has_attribution: bool = True
+    quote_is_self_contained: bool = True
     blockquote_well_formed: bool = True
     update_not_repeating_root: bool = True
     failed_gates: list[str] = field(default_factory=list)
@@ -125,6 +126,65 @@ def check_quote_traceable(quote_text: str | None, source_content: str | None) ->
     return verify_quote(quote_text, source_content)
 
 
+# NEWS Output Stability Fix (Case D, docs/news_output_stability_forensic_report.md §5): the real
+# Discord/BBC case - quote_text="thoughtfully reviewing" - is verbatim (passes check_quote_
+# traceable), correctly attributed (passes check_quote_has_attribution), yet reads as a bare,
+# contextless fragment on its own (a present participle with no subject, no auxiliary - the
+# surrounding sentence's "Discord told the BBC it was ..." framing was stripped away by
+# extraction). No existing gate evaluates standalone grammatical/semantic completeness -
+# check_quote_traceable() only checks verbatim-match; check_quote_has_attribution() only checks
+# the speaker field is non-empty/non-generic. Deliberately NOT a phrase blacklist - no specific
+# quote text is ever named here; this checks grammatical SHAPE (word count + a closed, narrow set
+# of pronoun/auxiliary/modal tokens, the same "small, hand-curated, deterministic, no ML"
+# convention _GENERIC_FILLER_PHRASES/_UNSUPPORTED_SUPERLATIVES above already establish for this
+# exact module) - never keyed to any specific quote's own wording.
+_QUOTE_WORD_RE = re.compile(r"[a-zA-Zа-яА-ЯёЁ']+", re.UNICODE)
+
+# Personal pronouns / demonstrative subjects (English + Russian, matching this module's own
+# established bilingual scope) - a closed, fixed set, never a general-purpose lexicon.
+_QUOTE_SUBJECT_TOKENS = frozenset({
+    "i", "we", "you", "he", "she", "it", "they", "this", "that", "these", "those", "there",
+    "i'm", "we're", "you're", "he's", "she's", "it's", "they're", "that's", "there's",
+    "я", "мы", "вы", "он", "она", "оно", "они", "это", "этот", "эта", "эти", "то",
+})
+
+# Copula/auxiliary/modal finite-verb markers (English) - a closed set, not a general verb lexicon.
+_QUOTE_FINITE_VERB_TOKENS = frozenset({
+    "is", "are", "was", "were", "am", "be", "been", "being",
+    "has", "have", "had", "does", "do", "did", "don't", "doesn't", "didn't",
+    "will", "would", "can", "could", "shall", "should", "must", "may", "might",
+    "won't", "isn't", "aren't", "wasn't", "weren't", "haven't", "hasn't", "hadn't",
+})
+
+_MIN_QUOTE_WORDS = 4
+
+
+def _quote_has_finite_verb_or_subject(words: list[str]) -> bool:
+    normalized = [normalize_loose(w) for w in words]
+    if any(w in _QUOTE_SUBJECT_TOKENS for w in normalized):
+        return True
+    if any(w in _QUOTE_FINITE_VERB_TOKENS for w in normalized):
+        return True
+    # Standard Russian past-tense verb endings (a real, closed morphological marker - e.g.
+    # "сказал", "подтвердила" - never a phrase blacklist) - a permissive-only signal (can only
+    # make MORE quotes pass, never reject one), the safer failure direction for this heuristic.
+    return any(len(w) > 3 and w.endswith(("л", "ла", "ло", "ли")) for w in normalized)
+
+
+def check_quote_is_self_contained(quote_text: str | None) -> bool:
+    """True whenever there is no quote at all - only a *present* quote can fail this (mirrors
+    check_quote_traceable()'s own convention). A present quote must clear a minimum word-count
+    floor AND contain at least one recognizable subject/finite-verb-shape token - a bare
+    participle/gerund fragment extracted mid-sentence fails both. See this section's own header
+    comment for the real evidence and the "why not a blacklist" reasoning."""
+    if not quote_text:
+        return True
+    words = _QUOTE_WORD_RE.findall(quote_text)
+    if len(words) < _MIN_QUOTE_WORDS:
+        return False
+    return _quote_has_finite_verb_or_subject(words)
+
+
 def check_quote_has_attribution(quote_text: str | None, speaker: str | None) -> bool:
     """True whenever there is no quote at all. A present quote must have a non-empty, non-generic
     speaker - "someone"/"a person"/empty string never counts as real attribution."""
@@ -178,6 +238,7 @@ def evaluate_content_quality_gates(
         "why_it_matters_present": check_why_it_matters_present(why_it_matters, what_happened),
         "quote_traceable": check_quote_traceable(quote_text, source_content),
         "quote_has_attribution": check_quote_has_attribution(quote_text, quote_speaker),
+        "quote_is_self_contained": check_quote_is_self_contained(quote_text),
         "update_not_repeating_root": check_update_not_repeating_root(body, is_update, root_body),
     }
     if rendered_html is not None:
@@ -192,6 +253,7 @@ def evaluate_content_quality_gates(
         why_it_matters_present=gates["why_it_matters_present"],
         quote_traceable=gates["quote_traceable"],
         quote_has_attribution=gates["quote_has_attribution"],
+        quote_is_self_contained=gates["quote_is_self_contained"],
         blockquote_well_formed=gates.get("blockquote_well_formed", True),
         update_not_repeating_root=gates["update_not_repeating_root"],
         failed_gates=failed,

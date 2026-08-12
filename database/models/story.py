@@ -45,6 +45,11 @@ class Story(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    # Phase 20 M11.2: indexed - services/story_memory.py::_fetch_candidate_stories()'s own
+    # WHERE/ORDER BY on this column had no index at all until this migration (database/
+    # migrations/versions/3f37cf34109d_add_stories_updated_at_index.py); safe to declare here
+    # immediately (unlike a new column, an index never appears in a generated INSERT/UPDATE
+    # column list, so this has zero effect on inserts against a DB that hasn't been migrated yet).
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False, index=True
     )

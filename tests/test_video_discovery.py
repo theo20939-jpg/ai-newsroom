@@ -57,6 +57,113 @@ def test_youtube_lookalike_domain_not_misclassified() -> None:
     assert classify_video_url("https://notyoutube.com/watch?v=abc") == VideoPlatform.UNKNOWN
 
 
+# ---------------------------------------------------------------------------
+# Video URL Classification Checkpoint (follow-up to the Video Shadow Checkpoint's own real live
+# evidence: 14/19 = 74% of "hosted-platform" hints in a ~75-minute shadow sample were channel/
+# user/handle/subscribe links, not actual videos, docs/video_shadow_checkpoint.md §8). A YouTube/
+# Vimeo hostname match alone is no longer sufficient - the path/query shape must also identify one
+# of a small, explicitly bounded set of real video-URL forms.
+# ---------------------------------------------------------------------------
+
+
+# --- YouTube accepted -------------------------------------------------------------------------
+
+
+def test_youtube_watch_url_with_extra_tracking_params_still_accepted() -> None:
+    """Query/fragment normalization - extra tracking params and a fragment must not cause a
+    legitimate watch?v=... URL to be rejected."""
+    url = "https://m.youtube.com/watch?v=abc123&feature=share&list=PLxyz789#t=30s"
+    assert classify_video_url(url) == VideoPlatform.YOUTUBE
+
+
+def test_youtube_shorts_url_accepted() -> None:
+    assert classify_video_url("https://www.youtube.com/shorts/abc123") == VideoPlatform.YOUTUBE
+
+
+# (standard watch, youtu.be, and embed forms are already covered by the three pre-existing tests
+# above - test_youtube_watch_url_classified_as_youtube/test_youtu_be_short_url_classified_as_
+# youtube/test_youtube_embed_url_classified_as_youtube - re-verified unaffected by this fix.)
+
+
+# --- YouTube rejected (the real false-positive shapes observed live) ---------------------------
+
+
+def test_youtube_channel_url_rejected() -> None:
+    assert classify_video_url("https://www.youtube.com/channel/UChjRM_qQAaOAiLNbOGbYcRA") == VideoPlatform.UNKNOWN
+
+
+def test_youtube_user_url_rejected() -> None:
+    assert classify_video_url("https://www.youtube.com/user/techcrunch") == VideoPlatform.UNKNOWN
+
+
+def test_youtube_handle_url_rejected() -> None:
+    assert classify_video_url("https://www.youtube.com/@mkbhd") == VideoPlatform.UNKNOWN
+
+
+def test_youtube_c_channel_slug_url_rejected() -> None:
+    assert classify_video_url("https://www.youtube.com/c/9to5google") == VideoPlatform.UNKNOWN
+
+
+def test_youtube_channel_subscribe_confirmation_url_rejected() -> None:
+    assert classify_video_url("https://www.youtube.com/c/9to5mac?sub_confirmation=1") == VideoPlatform.UNKNOWN
+
+
+def test_youtube_bare_channel_slug_url_rejected() -> None:
+    """A bare "youtube.com/<name>" link (e.g. a footer "Follow us" link) - the exact shape of 10 of
+    the 14 real false positives observed in the shadow sample."""
+    assert classify_video_url("https://www.youtube.com/9to5mac") == VideoPlatform.UNKNOWN
+
+
+def test_youtube_feed_subscriptions_url_rejected() -> None:
+    assert classify_video_url("https://www.youtube.com/feed/subscriptions") == VideoPlatform.UNKNOWN
+
+
+def test_youtube_playlist_url_rejected() -> None:
+    assert classify_video_url("https://www.youtube.com/playlist?list=PLxyz") == VideoPlatform.UNKNOWN
+
+
+def test_youtube_subscribe_url_rejected() -> None:
+    assert classify_video_url("https://www.youtube.com/subscribe_widget?p=abc") == VideoPlatform.UNKNOWN
+
+
+def test_youtube_search_results_url_rejected() -> None:
+    assert classify_video_url("https://www.youtube.com/results?search_query=foo") == VideoPlatform.UNKNOWN
+
+
+def test_youtube_bare_homepage_url_rejected() -> None:
+    assert classify_video_url("https://www.youtube.com") == VideoPlatform.UNKNOWN
+    assert classify_video_url("https://www.youtube.com/") == VideoPlatform.UNKNOWN
+
+
+def test_youtube_watch_url_with_no_video_id_rejected() -> None:
+    assert classify_video_url("https://www.youtube.com/watch") == VideoPlatform.UNKNOWN
+    assert classify_video_url("https://www.youtube.com/watch?v=") == VideoPlatform.UNKNOWN
+    assert classify_video_url("https://www.youtube.com/watch?foo=bar") == VideoPlatform.UNKNOWN
+
+
+# --- Vimeo ---------------------------------------------------------------------------------------
+
+
+def test_vimeo_video_url_with_privacy_hash_suffix_accepted() -> None:
+    assert classify_video_url("https://vimeo.com/123456789/1a2b3c4d5e") == VideoPlatform.VIMEO
+
+
+def test_vimeo_username_profile_url_rejected() -> None:
+    assert classify_video_url("https://vimeo.com/someuser") == VideoPlatform.UNKNOWN
+
+
+def test_vimeo_channel_url_rejected() -> None:
+    assert classify_video_url("https://vimeo.com/channels/staffpicks") == VideoPlatform.UNKNOWN
+
+
+def test_vimeo_showcase_url_rejected() -> None:
+    assert classify_video_url("https://vimeo.com/showcase/12345") == VideoPlatform.UNKNOWN
+
+
+def test_vimeo_bare_homepage_url_rejected() -> None:
+    assert classify_video_url("https://vimeo.com") == VideoPlatform.UNKNOWN
+
+
 # --- extract_rss_native_video -------------------------------------------------------------------
 
 
@@ -137,6 +244,29 @@ def test_youtube_iframe_embed_already_in_article_html_is_extracted() -> None:
 def test_ordinary_article_link_is_not_extracted_as_video() -> None:
     html = '<html><body><a href="https://example.com/related-article">Related</a></body></html>'
     assert extract_article_video_metadata(html, base_url="https://example.com/article") == []
+
+
+def test_realistic_article_with_one_real_video_and_several_navigation_links_extracts_only_the_video() -> None:
+    """Video URL Classification Checkpoint - realistic article shape: a real embedded video link
+    alongside several channel/profile/navigation links of the exact kind observed live in the
+    video-shadow canary (footer "Follow us" link, subscribe link, author's channel link,
+    playlist link). Only the real video may become a NativeVideoHint."""
+    html = """
+    <html><body>
+        <p>Watch our full breakdown: <a href="https://www.youtube.com/watch?v=abc123">here</a>.</p>
+        <footer>
+            <a href="https://www.youtube.com/channel/UChjRM_qQAaOAiLNbOGbYcRA">Follow us on YouTube</a>
+            <a href="https://www.youtube.com/c/9to5mac?sub_confirmation=1">Subscribe</a>
+            <a href="https://www.youtube.com/@mkbhd">Author's channel</a>
+            <a href="https://www.youtube.com/playlist?list=PLxyz">Related playlist</a>
+        </footer>
+    </body></html>
+    """
+    hints = extract_article_video_metadata(html, base_url="https://example.com/article")
+    assert len(hints) == 1
+    assert hints[0].remote_url == "https://www.youtube.com/watch?v=abc123"
+    assert hints[0].platform == VideoPlatform.YOUTUBE
+    assert hints[0].discovery_method == VideoDiscoveryMethod.HOSTED_PLATFORM_LINK_IN_ARTICLE
 
 
 def test_empty_html_produces_no_hints() -> None:

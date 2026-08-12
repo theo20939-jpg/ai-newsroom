@@ -59,7 +59,7 @@ from database.models.news_event import EventCategory, NewsEvent  # noqa: E402
 from database.models.news_source import NewsSource, SourceType  # noqa: E402
 from integrations.llm_gateway.providers.openai_adapter import OpenAIAdapter  # noqa: E402
 
-_test_engine = create_async_engine(settings.database_url, poolclass=NullPool)
+_test_engine = create_async_engine(settings.test_database_url, poolclass=NullPool)
 
 # Phase 18.9-R M5 (Redis isolation): a dedicated Redis logical database index for the entire test
 # suite, structurally separate from production's index 0 (settings.redis_db) - real keyspace
@@ -188,6 +188,51 @@ def _guarded_sync_send(self: httpx.Client, request: httpx.Request, **kwargs: obj
 
 httpx.AsyncClient.send = _guarded_async_send  # type: ignore[method-assign]
 httpx.Client.send = _guarded_sync_send  # type: ignore[method-assign]
+
+
+# ---------------------------------------------------------------------------
+# Phase 23.1L Barrier 4 (test/live database isolation) - a real, confirmed incident (docs/
+# phase23_1l_runtime_isolation_final_canary_report.md): integration tests committed real rows
+# into `settings.postgres_db` (the same database the live canary and production containers read
+# from) via `create_async_engine(settings.database_url, ...)`, and hand-maintained per-table
+# teardown DELETEs fell behind a newly-added FK-referencing table, silently orphaning them - one
+# of those orphaned rows was later selected as a genuinely "eligible" event and generated two real
+# Telegram posts. Cleanup discipline is not a fix (Phase 23.1L's own explicit framing: "cleanup is
+# not isolation") - the fix is that no pytest process can open a write-capable connection to
+# `settings.postgres_db` at all, structurally, checked BEFORE any engine is even constructed (pure
+# string comparison, zero I/O - the earliest possible point, applied at module import time exactly
+# like Barriers 1-3 above, not dependent on any individual fixture remembering to call this).
+#
+# Exact identity comparison, not substring matching (deliberately, per the phase brief's own
+# instruction) - `settings.postgres_test_db` (e.g. "ai_newsroom_test") must equal the target
+# database's name AND that name must NOT equal `settings.postgres_db` (e.g. "ai_newsroom"),
+# checked independently so a misconfigured .env where both settings happen to coincide is still
+# caught, not silently allowed through.
+# ---------------------------------------------------------------------------
+
+
+class DatabaseIsolationViolationError(RuntimeError):
+    """Raised when a test attempted to connect to the real/dev database instead of the dedicated
+    pytest database (Phase 23.1L Barrier 4). If you see this, use settings.test_database_url
+    (via independent_session_factory() or the db_session fixture below), never
+    settings.database_url, in any test."""
+
+
+def assert_is_test_database(db_name: str) -> None:
+    if db_name == settings.postgres_db:
+        raise DatabaseIsolationViolationError(
+            f"REFUSING TO CONNECT: {db_name!r} is the real/dev database (settings.postgres_db). "
+            f"Tests must use settings.test_database_url ({settings.postgres_test_db!r}), never "
+            "settings.database_url. (Phase 23.1L Barrier 4)"
+        )
+    if db_name != settings.postgres_test_db:
+        raise DatabaseIsolationViolationError(
+            f"REFUSING TO CONNECT: {db_name!r} does not match the expected pytest database "
+            f"{settings.postgres_test_db!r} (settings.postgres_test_db). (Phase 23.1L Barrier 4)"
+        )
+
+
+assert_is_test_database(settings.postgres_test_db)  # fails fast at import time if misconfigured
 
 
 @pytest_asyncio.fixture

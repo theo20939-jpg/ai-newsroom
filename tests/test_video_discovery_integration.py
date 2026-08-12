@@ -15,6 +15,7 @@ from core.config import settings
 from database.models.news_event import NewsEvent
 from integrations.http.safe_fetch import SafeFetchResult
 from services.article_acquisition import get_or_acquire
+from services.video_discovery_persistence import get_video_candidates_for_event, persist_video_hint
 
 
 async def _table_exists(session: AsyncSession, table_name: str) -> bool:
@@ -113,3 +114,143 @@ async def test_off_mode_persists_nothing(
         )
     ).scalars().all()
     assert rows == []
+
+
+# ---------------------------------------------------------------------------
+# Phase 23.1Q (Media Roadmap Recovery, video shadow activation) -
+# get_video_candidates_for_event() - the sole read contract for this table, added alongside the
+# f2654fa00185 migration finally being applied to the real dev DB.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_video_candidates_excludes_rejected_by_default(
+    db_session: AsyncSession, real_news_event: NewsEvent,
+) -> None:
+    if not await _table_exists(db_session, "content_draft_media_items"):
+        pytest.skip("content_draft_media_items table not present on this DB.")
+    from schemas.video_candidate import NativeVideoHint, VideoDiscoveryMethod, VideoPlatform, VideoValidation, VideoValidationStatus
+
+    await persist_video_hint(
+        db_session, event_id=real_news_event.id,
+        hint=NativeVideoHint(
+            discovery_method=VideoDiscoveryMethod.OPEN_GRAPH_VIDEO_SECURE, remote_url="https://cdn.example.com/valid.mp4",
+            platform=VideoPlatform.DIRECT_HOSTED,
+        ),
+        validation=VideoValidation(status=VideoValidationStatus.VALID, detected_container="mp4", byte_size=1000),
+    )
+    await persist_video_hint(
+        db_session, event_id=real_news_event.id,
+        hint=NativeVideoHint(
+            discovery_method=VideoDiscoveryMethod.HTML_VIDEO_TAG, remote_url="https://cdn.example.com/broken.mp4",
+            platform=VideoPlatform.DIRECT_HOSTED,
+        ),
+        validation=VideoValidation(status=VideoValidationStatus.REJECTED, error_code="signature_mismatch"),
+    )
+    await persist_video_hint(
+        db_session, event_id=real_news_event.id,
+        hint=NativeVideoHint(
+            discovery_method=VideoDiscoveryMethod.HOSTED_PLATFORM_LINK_IN_ARTICLE,
+            remote_url="https://www.youtube.com/watch?v=xyz", platform=VideoPlatform.YOUTUBE,
+        ),
+        validation=VideoValidation(status=VideoValidationStatus.UNVALIDATED_HOSTED_PLATFORM),
+    )
+    await db_session.flush()
+
+    candidates = await get_video_candidates_for_event(db_session, real_news_event.id)
+
+    urls = {c.remote_url for c in candidates}
+    assert "https://cdn.example.com/valid.mp4" in urls
+    assert "https://www.youtube.com/watch?v=xyz" in urls  # unvalidated hosted-platform is NOT a rejection
+    assert "https://cdn.example.com/broken.mp4" not in urls  # rejected, excluded by default
+    assert len(candidates) == 2
+
+
+@pytest.mark.asyncio
+async def test_get_video_candidates_include_rejected_when_requested(
+    db_session: AsyncSession, real_news_event: NewsEvent,
+) -> None:
+    if not await _table_exists(db_session, "content_draft_media_items"):
+        pytest.skip("content_draft_media_items table not present on this DB.")
+    from schemas.video_candidate import NativeVideoHint, VideoDiscoveryMethod, VideoPlatform, VideoValidation, VideoValidationStatus
+
+    await persist_video_hint(
+        db_session, event_id=real_news_event.id,
+        hint=NativeVideoHint(
+            discovery_method=VideoDiscoveryMethod.HTML_VIDEO_TAG, remote_url="https://cdn.example.com/broken.mp4",
+            platform=VideoPlatform.DIRECT_HOSTED,
+        ),
+        validation=VideoValidation(status=VideoValidationStatus.REJECTED, error_code="signature_mismatch"),
+    )
+    await db_session.flush()
+
+    candidates = await get_video_candidates_for_event(db_session, real_news_event.id, include_rejected=True)
+
+    assert len(candidates) == 1
+    assert candidates[0].validation_status == "rejected"
+    assert candidates[0].error_code == "signature_mismatch"
+
+
+@pytest.mark.asyncio
+async def test_get_video_candidates_scoped_to_the_given_event_only(
+    db_session: AsyncSession, real_news_event: NewsEvent,
+) -> None:
+    if not await _table_exists(db_session, "content_draft_media_items"):
+        pytest.skip("content_draft_media_items table not present on this DB.")
+    import uuid as uuid_module
+
+    from database.models.news_event import EventCategory
+    from database.models.news_source import NewsSource, SourceType
+    from schemas.video_candidate import NativeVideoHint, VideoDiscoveryMethod, VideoPlatform, VideoValidation, VideoValidationStatus
+
+    # event_id genuinely FK-references news_events.id - a second real event is required, not an
+    # arbitrary UUID.
+    other_source = NewsSource(
+        name="Other Test Source", type=SourceType.RSS, url="https://example.com/other-feed.xml", active=True,
+    )
+    db_session.add(other_source)
+    await db_session.flush()
+    other_event = NewsEvent(
+        source_id=other_source.id, title="Other test event", content="Other content",
+        category=EventCategory.AI, hash=f"other-test-hash-{uuid_module.uuid4()}",
+    )
+    db_session.add(other_event)
+    await db_session.flush()
+
+    await persist_video_hint(
+        db_session, event_id=other_event.id,
+        hint=NativeVideoHint(
+            discovery_method=VideoDiscoveryMethod.HTML_VIDEO_TAG, remote_url="https://cdn.example.com/other-event.mp4",
+            platform=VideoPlatform.DIRECT_HOSTED,
+        ),
+        validation=VideoValidation(status=VideoValidationStatus.VALID, detected_container="mp4"),
+    )
+    await db_session.flush()
+
+    candidates = await get_video_candidates_for_event(db_session, real_news_event.id)
+
+    assert candidates == []
+
+
+@pytest.mark.asyncio
+async def test_get_video_candidates_respects_limit(
+    db_session: AsyncSession, real_news_event: NewsEvent,
+) -> None:
+    if not await _table_exists(db_session, "content_draft_media_items"):
+        pytest.skip("content_draft_media_items table not present on this DB.")
+    from schemas.video_candidate import NativeVideoHint, VideoDiscoveryMethod, VideoPlatform, VideoValidation, VideoValidationStatus
+
+    for i in range(3):
+        await persist_video_hint(
+            db_session, event_id=real_news_event.id,
+            hint=NativeVideoHint(
+                discovery_method=VideoDiscoveryMethod.HTML_VIDEO_TAG, remote_url=f"https://cdn.example.com/clip{i}.mp4",
+                platform=VideoPlatform.DIRECT_HOSTED,
+            ),
+            validation=VideoValidation(status=VideoValidationStatus.VALID, detected_container="mp4"),
+        )
+    await db_session.flush()
+
+    candidates = await get_video_candidates_for_event(db_session, real_news_event.id, limit=2)
+
+    assert len(candidates) == 2

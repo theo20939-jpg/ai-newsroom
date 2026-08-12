@@ -81,13 +81,22 @@ def build_image_preview_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def build_source_only_keyboard(source_url: str | None) -> InlineKeyboardMarkup | None:
+def build_source_only_keyboard(
+    source_url: str | None, *, label: str = "🔗 Open source",
+) -> InlineKeyboardMarkup | None:
     """Phase 16 UX fix (docs/phase16_ux_combined_preview_fix_report.md §5): the terminal state for
     every combined-preview message - no candidates at all, "No image" was chosen, or "Use image"
     was chosen (only a single source-of-truth link remains useful once the interactive
     Previous/Next/Use/No-image controls are no longer meaningful). Returns `None` (never an empty
     `InlineKeyboardMarkup`) when there is no URL at all, so the caller can pass it straight through
-    as `reply_markup=` and Telegram simply shows no keyboard."""
+    as `reply_markup=` and Telegram simply shows no keyboard.
+
+    `label` (Phase 23.1E, additive, default unchanged): every pre-existing caller (`services/
+    image_preview_notifier.py`) keeps its own "🔗 Open source" label byte-for-byte, since none of
+    them supply this kwarg. `worker/content_cycle.py`'s NEWS presentation profile is the one new
+    caller that passes `label="🔗 Источник"`, matching the Russian-language editorial card it
+    accompanies - this is a pure export/reuse of the existing Phase 16 keyboard, not a competing
+    implementation (docs/phase23_1e_telegram_news_compact_profile_report.md §10)."""
     if not source_url:
         return None
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔗 Open source", url=source_url)]])
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=label, url=source_url)]])

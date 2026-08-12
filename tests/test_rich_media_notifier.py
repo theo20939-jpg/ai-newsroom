@@ -175,6 +175,32 @@ def test_single_photo_plus_youtube_link_falls_back_since_group_would_have_only_o
     assert plan.fallback_single_photo is not None
 
 
+def test_previously_observed_false_positive_channel_link_produces_no_hosted_platform_line() -> None:
+    """Video URL Classification Checkpoint regression: this exact URL was a real false positive
+    observed in the ~75-minute video-shadow canary (docs/video_shadow_checkpoint.md §8/§11) - it
+    is a YouTube channel link, not a video, and now classifies as VideoPlatform.UNKNOWN
+    (services/video_discovery.py::classify_video_url()). Feeding the resulting NativeVideoHint
+    through the real, unmodified, still-dormant build_rich_media_plan() must produce NO
+    hosted_platform_link and NO media-group video item - the exact broken "Video: <channel link>"
+    caption line this fix exists to prevent."""
+    from services.video_discovery import classify_video_url
+
+    false_positive_url = "https://www.youtube.com/channel/UChjRM_qQAaOAiLNbOGbYcRA"
+    resolved_platform = classify_video_url(false_positive_url)
+    assert resolved_platform == VideoPlatform.UNKNOWN
+
+    hint = NativeVideoHint(
+        discovery_method=VideoDiscoveryMethod.HOSTED_PLATFORM_LINK_IN_ARTICLE,
+        remote_url=false_positive_url, platform=resolved_platform,
+    )
+    candidates = [_StubCandidate(), _StubCandidate()]
+    plan = build_rich_media_plan(candidates, hint, caption="hello")
+
+    assert plan.hosted_platform_link is None
+    assert len(plan.media_group_items) == 2  # only the two real photos - no video item at all
+    assert all(isinstance(m, InputMediaPhoto) for m in plan.media_group_items)
+
+
 def test_photo_count_is_bounded_to_telegram_media_group_cap() -> None:
     candidates = [_StubCandidate() for _ in range(15)]
     plan = build_rich_media_plan(candidates, _DIRECT_VIDEO, caption="hello")

@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.config import settings
 from database.models.content_draft import ContentDraft, ContentType
+from database.models.content_draft_quote import ContentDraftQuote
 from database.models.editorial_task import EditorialTask, TaskPriority, TaskStatus
 from database.models.news_event import EventCategory, NewsEvent
 from database.models.story import Story
@@ -37,6 +38,9 @@ from tests.test_content_worker_cycle import (  # noqa: F401,F811 - fixtures reus
     test_source,
 )
 from worker.content_cycle import run_content_cycle
+
+_REAL_CHAT_ID = -1004297182444
+_REAL_NEWS_TOPIC_ID = 2
 
 _MIGRATION_SKIP_REASON = (
     "Requires Alembic migrations c2bc6affb100/0fac25b59455 (stories/news_event_story_links/"
@@ -226,8 +230,14 @@ async def test_enforce_mode_story_update_with_existing_root_replies_to_it(
     assert result.story_fail_closed_review == 0
 
     async with factory() as session:
+        # Filtered by this test's own story_id - see the sibling shadow-mode test below for why
+        # an unfiltered `.first()` is fragile against pre-existing, unrelated teardown-FK debris.
         proposal = (
-            await session.execute(select(ContentDraftReplyRoutingProposal))
+            await session.execute(
+                select(ContentDraftReplyRoutingProposal).where(
+                    ContentDraftReplyRoutingProposal.story_id == story.id
+                )
+            )
         ).scalars().first()
         assert proposal is not None
         assert proposal.applied is True
@@ -308,9 +318,311 @@ async def test_shadow_mode_persists_proposal_but_never_skips_or_changes_the_real
     assert result.notified == 1
 
     async with factory() as session:
+        # Filtered by this test's own story_id - a pre-existing, unrelated teardown-FK cleanup
+        # gap (docs/phase23_1n1... "12 errors, pre-existing teardown-only FK pattern") can leave
+        # an earlier test's own proposal row (e.g. the enforce-mode test above, applied=True)
+        # un-deleted in the shared test DB; an unfiltered `.first()` could pick up that stale row
+        # instead of this test's own, causing a flaky false failure unrelated to any real code
+        # behavior. Each test creates its own unique story_id, so filtering by it is exact.
         proposal = (
-            await session.execute(select(ContentDraftReplyRoutingProposal))
+            await session.execute(
+                select(ContentDraftReplyRoutingProposal).where(
+                    ContentDraftReplyRoutingProposal.story_id == story.id
+                )
+            )
         ).scalars().first()
         assert proposal is not None
         assert proposal.applied is False
         assert proposal.action == "fail_closed_route_to_review"
+
+
+# ---------------------------------------------------------------------------
+# Phase 23.1Q - the same reply-target decision (computed above, mode-agnostically) was silently
+# dropped specifically when editorial_delivery_mode == "router" (docs/phase23_1p_story_memory_
+# quotes_gate_report.md §"newly-discovered items" / docs/phase22_telegram_editorial_routing_
+# report.md §8's own disclosed limitation) - services/telegram_routing.py's send functions had no
+# reply_to_message_id parameter at all until this phase. These tests prove the fix end-to-end,
+# through the real router branch, asserting directly on the real aiogram Bot mock (never patching
+# send_editorial_card - the legacy tests above already cover that path exhaustively).
+# ---------------------------------------------------------------------------
+
+
+def _router_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "editorial_delivery_mode", "router")
+    monkeypatch.setattr(settings, "newsroom_telegram_chat_id", _REAL_CHAT_ID)
+    monkeypatch.setattr(settings, "news_topic_id", _REAL_NEWS_TOPIC_ID)
+    monkeypatch.setattr(settings, "content_generation_dry_run", False)
+
+
+@pytest.mark.asyncio
+async def test_router_mode_story_update_with_existing_root_replies_to_it(
+    factory: async_sessionmaker[AsyncSession], test_source, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The router-mode analogue of test_enforce_mode_story_update_with_existing_root_replies_to_it
+    above - same real story/root-delivery setup, but delivered through the real
+    send_to_editorial_destination() call (not the legacy send_editorial_card()), proving
+    reply_to_message_id actually reaches the real Bot.send_message call for router-mode NEWS
+    delivery, which it silently never did before this phase. Uses V8-family output (not V6) so
+    this also exercises the real render_v81_news_card_html() path - the NINJA PULSE footer
+    (Phase 23.1Q) is wired only into that call site, never the legacy render_editorial_card()
+    fallback V6 output takes, so a V6 fixture here would not actually prove the footer survives
+    an UPDATE reply."""
+    _router_settings(monkeypatch)
+    monkeypatch.setattr(settings, "story_memory_mode", "shadow")
+    monkeypatch.setattr(settings, "telegram_story_reply_mode", "enforce")
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
+    from database.models.story_link import NewsEventStoryLink
+    from services.story_memory import STORY_UPDATE
+    from tests.test_router_media_integration import _v82_capability_registry
+
+    async with factory() as probe_session:
+        if not await _table_exists(probe_session, "content_draft_reply_routing_proposals"):
+            pytest.skip(_MIGRATION_SKIP_REASON)
+
+    story, event = await _make_story_linked_draft(factory, test_source, is_story_update=True)
+    async with factory() as session:
+        session.add(
+            NewsEventStoryLink(news_event_id=event.id, story_id=story.id, match_type=STORY_UPDATE, match_score=0.7)
+        )
+        root_event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
+        root_task = EditorialTask(
+            id=uuid4(), event_id=root_event.id, status=TaskStatus.COMPLETED, priority=TaskPriority.B,
+            workflow={"workflow_name": "CONTENT_GENERATION", "step_results": []},
+        )
+        session.add(root_task)
+        await session.flush()
+        root_draft = ContentDraft(
+            id=uuid4(), task_id=root_task.id, type=ContentType.POST, title="root", body="root body",
+            version=1, status="draft",
+        )
+        session.add(root_draft)
+        await session.flush()
+        session.add(
+            StoryTelegramDelivery(
+                id=uuid4(), story_id=story.id, content_draft_id=root_draft.id, telegram_chat_id=_REAL_CHAT_ID,
+                telegram_message_id=999, reply_to_message_id=None, delivery_type=DeliveryType.ROOT,
+                delivery_status=DeliveryStatus.SENT, idempotency_key=f"root-{uuid4()}",
+                sent_at=datetime.now(timezone.utc),
+            )
+        )
+        await session.commit()
+
+    _gateway, registry = _v82_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_message.return_value.message_id = 1001
+
+    result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    fake_bot.send_message.assert_called_once()
+    assert fake_bot.send_message.call_args.kwargs["reply_to_message_id"] == 999
+    assert result.story_fail_closed_review == 0
+    assert result.notified == 1
+
+    # Phase 23.1Q: the NINJA PULSE footer must survive an UPDATE reply exactly like a root post -
+    # reply-threading is purely about the send call's reply_to_message_id, never about which
+    # renderer built the HTML, so both use the identical render_v81_news_card_html() output.
+    sent_text = fake_bot.send_message.call_args.args[1]
+    assert sent_text.count("NINJA PULSE. Подписаться 🥷") == 1
+    assert '<a href="https://t.me/nnjvpn">NINJA PULSE. Подписаться 🥷</a>' in sent_text
+
+    async with factory() as session:
+        delivery = (
+            await session.execute(
+                select(StoryTelegramDelivery).where(
+                    StoryTelegramDelivery.story_id == story.id,
+                    StoryTelegramDelivery.delivery_type == DeliveryType.REPLY,
+                )
+            )
+        ).scalars().first()
+        assert delivery is not None
+        assert delivery.reply_to_message_id == 999
+        assert delivery.telegram_message_id == 1001
+
+
+@pytest.mark.asyncio
+async def test_router_mode_verified_quote_renders_in_the_v8_family_card(
+    factory: async_sessionmaker[AsyncSession], test_source, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A real, already-verified quote (services/quote_lookup.py::get_quote_for_draft(), patched
+    at its exact call site per this codebase's own established "patch the DB lookup, don't
+    hand-seed a full verification pipeline" convention - see tests/test_router_media_integration.
+    py's own module docstring) must actually appear in the delivered V8-family card once
+    quote_telegram_rendering_mode == "enforce" - the exact gap docs/phase23_1p_story_memory_
+    quotes_gate_report.md §19 disclosed (a real quote was extracted but never displayed)."""
+    _router_settings(monkeypatch)
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
+    monkeypatch.setattr(settings, "quote_telegram_rendering_mode", "enforce")
+    from tests.test_router_media_integration import _v82_capability_registry
+
+    async with factory() as session:
+        event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
+        session.add(event)
+        await session.commit()
+        await _make_completed_news_analysis_task(session, event, score=settings.content_generation_min_score)
+
+    fake_quote = ContentDraftQuote(
+        content_draft_id=uuid4(),  # never dereferenced - get_quote_for_draft() itself is patched
+        quote_text="We built this because reasoning matters more than raw speed.",
+        translated_text=None, speaker="A Company Spokesperson",
+    )
+
+    _gateway, registry = _v82_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_message.return_value.message_id = 2001
+
+    with patch("worker.content_cycle.get_quote_for_draft", new=AsyncMock(return_value=fake_quote)):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    assert result.notified == 1
+    fake_bot.send_message.assert_called_once()
+    sent_text = fake_bot.send_message.call_args.args[1]
+    assert "<blockquote>We built this because reasoning matters more than raw speed.</blockquote>" in sent_text
+    assert "— A Company Spokesperson" in sent_text
+    # The mandatory one-paragraph main body must still survive whole, unmodified by the quote.
+    assert "OpenAI released a new flagship model" in sent_text
+    # Phase 23.1Q: footer present exactly once, and strictly AFTER the quote block (headline ->
+    # body -> quote -> footer, the required order).
+    assert sent_text.count("NINJA PULSE. Подписаться 🥷") == 1
+    assert sent_text.index("</blockquote>") < sent_text.index("NINJA PULSE. Подписаться 🥷")
+
+
+@pytest.mark.asyncio
+async def test_router_mode_quote_shadow_mode_never_renders(
+    factory: async_sessionmaker[AsyncSession], test_source, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """quote_telegram_rendering_mode == "shadow" (this project's real, current .env value) must
+    look the quote up (proving the lookup path works) without ever changing real output - the
+    exact "shadow never changes production behavior" guarantee this codebase already establishes
+    for story_memory_mode/fact_safety_mode, now also verified for quotes specifically."""
+    _router_settings(monkeypatch)
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
+    monkeypatch.setattr(settings, "quote_telegram_rendering_mode", "shadow")
+    from tests.test_router_media_integration import _v82_capability_registry
+
+    async with factory() as session:
+        event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
+        session.add(event)
+        await session.commit()
+        await _make_completed_news_analysis_task(session, event, score=settings.content_generation_min_score)
+
+    fake_quote = ContentDraftQuote(
+        content_draft_id=uuid4(), quote_text="We built this because reasoning matters more than raw speed.",
+        translated_text=None, speaker="A Company Spokesperson",
+    )
+
+    _gateway, registry = _v82_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_message.return_value.message_id = 2002
+
+    with patch(
+        "worker.content_cycle.get_quote_for_draft", new=AsyncMock(return_value=fake_quote),
+    ) as mock_get_quote:
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    mock_get_quote.assert_called_once()  # the lookup path runs even in shadow
+    assert result.notified == 1
+    sent_text = fake_bot.send_message.call_args.args[1]
+    assert "<blockquote>" not in sent_text
+    assert "We built this" not in sent_text
+
+
+@pytest.mark.asyncio
+async def test_router_mode_multi_image_update_preserves_reply_to_message_id(
+    factory: async_sessionmaker[AsyncSession], test_source, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Case 8 (Media Roadmap Recovery step 1): a confirmed UPDATE with a resolvable root and
+    multiple ranked images must be delivered as a real Telegram media-group reply -
+    reply_to_message_id must point to the root independently of the media-group/topic routing
+    (services/telegram_routing.py::send_media_group_to_editorial_destination() threads it through
+    exactly like the other two send functions - never overwritten by message_thread_id, a
+    structurally separate parameter)."""
+    _router_settings(monkeypatch)
+    monkeypatch.setattr(settings, "story_memory_mode", "shadow")
+    monkeypatch.setattr(settings, "telegram_story_reply_mode", "enforce")
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
+    from database.models.story_link import NewsEventStoryLink
+    from services.story_memory import STORY_UPDATE
+    from tests.test_router_media_integration import _fake_candidate, _v82_capability_registry
+
+    async with factory() as probe_session:
+        if not await _table_exists(probe_session, "content_draft_reply_routing_proposals"):
+            pytest.skip(_MIGRATION_SKIP_REASON)
+
+    story, event = await _make_story_linked_draft(factory, test_source, is_story_update=True)
+    async with factory() as session:
+        event_row = await session.get(NewsEvent, event.id)
+        assert event_row is not None
+        event_row.url = "https://example.com/article"  # needed for the source-button assertion below
+        session.add(
+            NewsEventStoryLink(news_event_id=event.id, story_id=story.id, match_type=STORY_UPDATE, match_score=0.7)
+        )
+        root_event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
+        root_task = EditorialTask(
+            id=uuid4(), event_id=root_event.id, status=TaskStatus.COMPLETED, priority=TaskPriority.B,
+            workflow={"workflow_name": "CONTENT_GENERATION", "step_results": []},
+        )
+        session.add(root_task)
+        await session.flush()
+        root_draft = ContentDraft(
+            id=uuid4(), task_id=root_task.id, type=ContentType.POST, title="root", body="root body",
+            version=1, status="draft",
+        )
+        session.add(root_draft)
+        await session.flush()
+        session.add(
+            StoryTelegramDelivery(
+                id=uuid4(), story_id=story.id, content_draft_id=root_draft.id, telegram_chat_id=_REAL_CHAT_ID,
+                telegram_message_id=999, reply_to_message_id=None, delivery_type=DeliveryType.ROOT,
+                delivery_status=DeliveryStatus.SENT, idempotency_key=f"root-{uuid4()}",
+                sent_at=datetime.now(timezone.utc),
+            )
+        )
+        await session.commit()
+
+    _gateway, registry = _v82_capability_registry()
+    fake_bot = AsyncMock()
+    from unittest.mock import MagicMock
+    fake_bot.send_media_group.return_value = [MagicMock(message_id=1001), MagicMock(message_id=1002)]
+    candidates = [
+        _fake_candidate(candidate_id="u1", rank=1, quality_score=90, relevance_score=90),
+        _fake_candidate(candidate_id="u2", rank=2, quality_score=85, relevance_score=85),
+    ]
+
+    with patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=candidates)):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    fake_bot.send_media_group.assert_called_once()
+    fake_bot.send_photo.assert_not_called()
+    fake_bot.send_message.assert_not_called()
+    _, kwargs = fake_bot.send_media_group.call_args
+    assert len(kwargs["media"]) == 2
+    assert kwargs["reply_to_message_id"] == 999  # points to root, independent of media/topic routing
+    assert kwargs["message_thread_id"] == _REAL_NEWS_TOPIC_ID  # topic routing unaffected by reply-threading
+    assert result.router_media_group_sent == 1
+    assert result.story_fail_closed_review == 0
+
+    # Media-quality corrective phase: the real [Source] button must still be attached (via
+    # edit_message_reply_markup on the group's FIRST message) even for an UPDATE reply - the
+    # button fix and reply-threading are independent mechanisms that must not interfere.
+    fake_bot.edit_message_reply_markup.assert_called_once()
+    edit_args, edit_kwargs = fake_bot.edit_message_reply_markup.call_args
+    assert edit_kwargs["chat_id"] == _REAL_CHAT_ID
+    assert edit_kwargs["message_id"] == 1001  # the group's first message, not the reply target
+    assert edit_kwargs["reply_markup"].inline_keyboard[0][0].url == "https://example.com/article"
+
+    async with factory() as session:
+        delivery = (
+            await session.execute(
+                select(StoryTelegramDelivery).where(
+                    StoryTelegramDelivery.story_id == story.id,
+                    StoryTelegramDelivery.delivery_type == DeliveryType.REPLY,
+                )
+            )
+        ).scalars().first()
+        assert delivery is not None
+        assert delivery.reply_to_message_id == 999
+        assert delivery.telegram_message_id == 1001

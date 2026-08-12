@@ -43,12 +43,18 @@ class NotificationOutcome:
     message_id: int | None = None
 
 
-def _to_card(
+def to_editorial_card(
     draft: ContentDraftRead, event: NewsEvent, *, quote_text: str | None = None, quote_speaker: str | None = None,
 ) -> EditorialInboxCard:
     """Byte-for-byte the same field mapping services/editorial_inbox_service.py::_to_card()
     already uses for /news - not a new card shape (Phase 18.10 M5 adds the optional quote_text/
-    quote_speaker pair, both defaulting to None - every pre-18.10 caller unaffected)."""
+    quote_speaker pair, both defaulting to None - every pre-18.10 caller unaffected).
+
+    Public (Phase 23.1A, renamed from `_to_card`): reused directly by `worker/content_cycle.py`'s
+    router-mode delivery branch (docs/phase23_1a_canary_delivery_adapter_report.md) so the two
+    delivery paths render an identical card from an identical mapping - never a second,
+    duplicated field-mapping function. No other module imported the private name (confirmed
+    before renaming), so this is a pure export, not a behavior change."""
     return EditorialInboxCard(
         draft_id=draft.id,
         draft_title=draft.title,
@@ -86,7 +92,7 @@ async def send_editorial_card(
     to be). In live mode (dry_run=False), chat_id=None is a configuration error, not a silent
     no-op - fails loud via the assertion below, mirroring bot/loader.py::create_bot()'s own
     fail-fast convention for missing required Telegram configuration."""
-    card = _to_card(draft, event, quote_text=quote_text, quote_speaker=quote_speaker)
+    card = to_editorial_card(draft, event, quote_text=quote_text, quote_speaker=quote_speaker)
     try:
         html = render_editorial_card(card)  # bot/formatting.py - unmodified
     except CardTooLongError:

@@ -2,6 +2,7 @@
 from services.article_acquisition import (
     classify_acquisition_status,
     compute_text_hash,
+    estimate_substantive_char_count,
     extract_raw_text,
     resolve_canonical_url,
 )
@@ -81,3 +82,69 @@ def test_compute_text_hash_is_deterministic_and_sensitive_to_content() -> None:
     assert a == b
     assert a != c
     assert len(a) == 64  # sha256 hex digest
+
+
+# ---------------------------------------------------------------------------
+# NEWS Output Stability Fix (Case H, docs/news_output_stability_forensic_report.md §9):
+# estimate_substantive_char_count() - real, hand-curated interstitial-line markers, calibrated
+# directly against the real BAD_GARBAGE.c LinkedIn acquisition row (empirically confirmed during
+# implementation: 11 of its 401 extracted lines matched, ~400 of its 20000 characters - the vast
+# majority of that specific real page WAS genuine substantive article prose, not boilerplate; this
+# fix's own invariant only fires when a page is SUBSTANTIALLY a shell, which that specific real
+# page was not - see the checkpoint's own honest before/after note for that exact event).
+# ---------------------------------------------------------------------------
+
+_REAL_LINKEDIN_SHELL_LINES = (
+    "LinkedIn respects your privacy",
+    "LinkedIn and 3rd parties use essential and non-essential cookies to provide, secure, analyze and improve our Services.",
+    "Cookie Policy",
+    "Accept",
+    "Reject",
+    "Agree & Join LinkedIn",
+    "Sign in to view more content",
+    "Create your free account or sign in to continue your search",
+    "Sign in with Email",
+    "New to LinkedIn?",
+    "Skip to main content",
+)
+
+_REAL_ARTICLE_PARAGRAPH = (
+    "It doesn't happen often that you get to exploit the same bug three times in ten years. It "
+    "went from a truly universal escape to a less and less universal one, and it's now getting "
+    "slowly patched, the upstream fix landed in early May, some three months ago."
+)
+
+
+def test_estimate_substantive_char_count_of_a_pure_interstitial_page_is_near_zero() -> None:
+    """The required invariant: a page that is SUBSTANTIALLY just a cookie-consent/sign-in-wall
+    shell (no real article paragraph at all - the genuine hard-paywall shape, unlike the real
+    LinkedIn/BAD_GARBAGE.c case, which did contain the real article) must be measured as thin."""
+    raw_text = "\n".join(_REAL_LINKEDIN_SHELL_LINES)
+    substantive = estimate_substantive_char_count(raw_text)
+    assert substantive < len(raw_text) * 0.1
+
+
+def test_estimate_substantive_char_count_of_a_real_article_with_a_cookie_banner_is_unaffected() -> None:
+    """Do not make every fetch with incidental cookie-banner chrome into a rejection - a genuine,
+    substantial article with only a small amount of interstitial chrome mixed in must classify
+    essentially unchanged (mirrors the real, confirmed BAD_GARBAGE.c shape almost exactly: 11
+    short banner lines alongside a very long real article)."""
+    raw_text = "\n".join(
+        [*_REAL_LINKEDIN_SHELL_LINES] + [_REAL_ARTICLE_PARAGRAPH] * 20
+    )
+    substantive = estimate_substantive_char_count(raw_text)
+    assert substantive > len(raw_text) * 0.9
+
+
+def test_estimate_substantive_char_count_empty_text_is_zero() -> None:
+    assert estimate_substantive_char_count("") == 0
+
+
+def test_estimate_substantive_char_count_changes_classification_for_a_true_shell_page() -> None:
+    """End-to-end of the actual invariant this fix exists for: a page whose entire extracted text
+    is interstitial chrome must not classify as FULL_TEXT/SUBSTANTIAL_TEXT/PARTIAL_TEXT."""
+    raw_text = "\n".join(_REAL_LINKEDIN_SHELL_LINES)
+    raw_status = classify_acquisition_status(len(raw_text))
+    substantive_status = classify_acquisition_status(estimate_substantive_char_count(raw_text))
+    assert raw_status != ACQUISITION_STATUS_HEADLINE_ONLY  # the raw length alone would NOT catch this
+    assert substantive_status == ACQUISITION_STATUS_HEADLINE_ONLY  # the substantive count does

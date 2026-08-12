@@ -101,6 +101,7 @@ def _context(
     language: str = "ru",
     content: str | None = "Example body text.",
     step_results: dict[str, dict[str, object]] | None = None,
+    quote_source_text: str | None = None,
 ) -> CapabilityContext:
     return CapabilityContext(
         business=BusinessContext(
@@ -120,6 +121,7 @@ def _context(
                 step_results=step_results or {},
             ),
             language=language,
+            quote_source_text=quote_source_text,
         ),
         runtime=RuntimeContext(
             task_id=uuid4(),
@@ -456,3 +458,59 @@ async def test_missing_content_still_succeeds_with_no_source_excerpt() -> None:
         part.text for message in gateway.received_requests[0].messages for part in message.content if part.text
     )
     assert "no source excerpt available" in request_text.lower()
+
+
+# ---------------------------------------------------------------------------
+# Phase 23.1P (docs/phase23_1p_story_memory_quotes_gate_report.md): the real quote-sourcing root
+# cause fix - capabilities/executor.py now populates BusinessContext.quote_source_text from the
+# already-acquired, already-cleaned full article text (never Research/Intelligence, never a new
+# LLM call) whenever article_acquisition_mode != "off" and a FULL_TEXT/PARTIAL_TEXT acquisition
+# exists. This capability itself must prefer it over the plain news_event.content it used
+# exclusively before.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_quote_source_text_is_preferred_over_plain_news_event_content() -> None:
+    """The real, proven failure mode (Phase 23.1O, Research Gold story): a 130-char
+    news_event.content with zero quotes vs. a much richer acquired article containing several
+    genuinely useful ones. Proves the richer text - not the thin one - reaches the real request."""
+    gateway = FakeLLMGateway(generate_response=_valid_response())
+    capability = CopywritingCapability(gateway, _prompt_repository())
+    context = _context(
+        content="Research Gold's team of human methodologists are either AI generated or using stolen identities.",
+        quote_source_text=(
+            'Jenny Berrio, a real methodologist whose identity was used without permission, said: '
+            '"I do not work for Research Gold, and I never agreed to be listed as one of their '
+            'methodologists. They are using my name, photo, and bio without my permission."'
+        ),
+        step_results={"research": CANONICAL_RESEARCH_OUTPUT},
+    )
+
+    await capability.execute(context)
+
+    request_text = "\n".join(
+        part.text for message in gateway.received_requests[0].messages for part in message.content if part.text
+    )
+    assert "I do not work for Research Gold" in request_text
+    assert "quote-sourcing only" in request_text.lower()
+
+
+@pytest.mark.asyncio
+async def test_quote_source_text_none_falls_back_to_plain_content_unchanged() -> None:
+    """When capabilities/executor.py did not populate quote_source_text (article_acquisition_mode
+    == "off", or no FULL_TEXT/PARTIAL_TEXT acquisition exists) - byte-identical to pre-23.1P
+    behavior, the plain news_event.content excerpt is used exactly as before."""
+    gateway = FakeLLMGateway(generate_response=_valid_response())
+    capability = CopywritingCapability(gateway, _prompt_repository())
+    context = _context(
+        content="Example body text.", quote_source_text=None,
+        step_results={"research": CANONICAL_RESEARCH_OUTPUT},
+    )
+
+    await capability.execute(context)
+
+    request_text = "\n".join(
+        part.text for message in gateway.received_requests[0].messages for part in message.content if part.text
+    )
+    assert "Example body text." in request_text

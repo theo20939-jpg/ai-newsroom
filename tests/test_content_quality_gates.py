@@ -7,6 +7,7 @@ from services.content_quality_gates import (
     check_no_headline_body_repetition,
     check_no_unsupported_competitive_claim,
     check_quote_has_attribution,
+    check_quote_is_self_contained,
     check_quote_traceable,
     check_update_not_repeating_root,
     check_why_it_matters_present,
@@ -117,6 +118,50 @@ def test_quote_with_real_speaker_passes_attribution() -> None:
     assert check_quote_has_attribution("Some quote text", "Company X") is True
 
 
+# ---------------------------------------------------------------------------
+# NEWS Output Stability Fix (Case D, docs/news_output_stability_forensic_report.md §5) -
+# check_quote_is_self_contained(). Real evidence: the BBC/Discord draft's quote_text=
+# "thoughtfully reviewing" was verbatim (passed check_quote_traceable) and correctly attributed
+# to "Discord" (passed check_quote_has_attribution), yet reads as a bare, contextless fragment -
+# no existing gate evaluated that dimension before this fix.
+# ---------------------------------------------------------------------------
+
+
+def test_no_quote_at_all_passes_self_containment() -> None:
+    assert check_quote_is_self_contained(None) is True
+    assert check_quote_is_self_contained("") is True
+
+
+def test_real_discord_fragment_fails_self_containment() -> None:
+    """The exact real quote_text from the actual delivered draft - a bare present participle
+    with no subject, no auxiliary."""
+    assert check_quote_is_self_contained("thoughtfully reviewing") is False
+
+
+def test_another_bare_participle_fragment_fails_self_containment() -> None:
+    assert check_quote_is_self_contained("committed to user safety") is False
+
+
+def test_short_but_grammatically_complete_quote_passes_self_containment() -> None:
+    """Deliberately as short as the real Discord fragment in spirit - proves the gate is about
+    grammatical completeness, not merely a longer length requirement."""
+    assert check_quote_is_self_contained("We take this seriously.") is True
+
+
+def test_full_meaningful_quote_passes_self_containment() -> None:
+    quote = "We are committed to protecting user privacy and safety."
+    assert check_quote_is_self_contained(quote) is True
+
+
+def test_russian_bare_fragment_fails_self_containment() -> None:
+    """The real translated_text for the same Discord draft."""
+    assert check_quote_is_self_contained("вдумчиво рассматривает") is False
+
+
+def test_russian_short_complete_quote_passes_self_containment() -> None:
+    assert check_quote_is_self_contained("Мы серьёзно относимся к этому вопросу.") is True
+
+
 # --- blockquote well-formedness -------------------------------------------------------------------
 
 
@@ -174,3 +219,15 @@ def test_aggregator_reports_specific_failed_gates() -> None:
     assert report.passed is False
     assert "why_it_matters_present" in report.failed_gates
     assert "no_generic_filler" in report.failed_gates
+
+
+def test_aggregator_reports_fragment_quote_as_failed_self_containment() -> None:
+    report = evaluate_content_quality_gates(
+        title="Company X launches product Y",
+        body="The device ships next month with enterprise-focused features.",
+        why_it_matters="This intensifies competition in the enterprise hardware segment this year.",
+        what_happened="Company X launched product Y today.",
+        quote_text="thoughtfully reviewing", quote_speaker="Company X",
+    )
+    assert "quote_is_self_contained" in report.failed_gates
+    assert report.quote_is_self_contained is False

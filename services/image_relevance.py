@@ -32,13 +32,31 @@ logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Score-component budgets (docs §15 - centralized, no dead component, sum to 100).
+#
+# Phase 23.1N.1 (docs/phase23_1n1_image_ranking_quality_report.md): QUALITY_MAX raised 15->25 and
+# METADATA_CONFIDENCE_MAX reduced 10->0, funding the increase entirely from the single weakest,
+# most tangential-to-relevance signal (whether alt/caption/filename/declared-dims metadata merely
+# *exists*, never whether the image is actually the right one) rather than touching any of the
+# three genuinely relevance-related signals (PROVENANCE/RELATIONSHIP/TEXTUAL_OVERLAP, still 75/100
+# combined, unchanged). Root cause this fixes: `quality.quality_score` already reuses
+# services.image_quality's own bounded, saturating resolution/aspect-ratio bands (a "GOOD"-band
+# 1280x640 image and an 8000x8000 image already receive the identical M3 resolution component -
+# confirmed directly, not assumed) - but QUALITY_MAX=15 compressed even a 33-point real
+# quality_score gap (65 vs 98, the real Phase 23.1N Anthropic-IPO Techmeme-thumbnail-vs-WSJ-image
+# case) into just a 5-point relevance-component gap, letting a much smaller categorical
+# provenance/relationship edge (RELATIONSHIP_MAX=20, native_same_item vs source_cdn_or_related)
+# overrule a real, substantial display-quality difference. Relevance signals remain dominant by
+# construction (75/100 vs quality's new 25/100) - this only lets quality act as a meaningful
+# tie-breaker among candidates whose relevance is otherwise close, never a relevance override
+# (proven in tests/test_image_relevance.py's own Case 2/8 - a small relevant original still beats
+# a huge generic image, and an article lead still beats a logo).
 # ---------------------------------------------------------------------------
 
 PROVENANCE_MAX = 30
 RELATIONSHIP_MAX = 20
 TEXTUAL_OVERLAP_MAX = 25
-QUALITY_MAX = 15
-METADATA_CONFIDENCE_MAX = 10
+QUALITY_MAX = 25
+METADATA_CONFIDENCE_MAX = 0
 
 # Relevance-specific penalties only (docs §14's double-counting audit) - M3's own possible_logo/
 # possible_avatar/possible_banner/possible_placeholder/possible_icon/possible_thumbnail penalties

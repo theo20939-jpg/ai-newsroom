@@ -33,9 +33,11 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
 from database.models.news_event import EventCategory
 from database.models.story import Story
-from services.text_normalization import normalize_for_entity_match, token_overlap_ratio
+from services.editorial_content_type import classify_content_type, is_content_type_mismatch
+from services.text_normalization import normalize_for_entity_match, symmetric_token_overlap
 
 # --- outcomes -----------------------------------------------------------------------------
 
@@ -49,6 +51,14 @@ STORY_UPDATE = "story_update"
 SUPPORTING_SOURCE = "supporting_source"
 SEMANTIC_DUPLICATE = "semantic_duplicate"
 UNCERTAIN_MATCH = "uncertain_match"
+# Phase 20 M5: same entity family (company/product/person), genuinely different editorial event -
+# e.g. "GTA VI preorders" vs "GTA VI Netflix marketing campaign" (Take-Two, both about GTA VI, not
+# the same story). Never merges - a non-blocking, informational pointer only
+# (NewsEventStoryLink.matched_story_id still points at the related, NOT the same, Story). Exists
+# specifically to protect this precision case once M3's category/topic hard gates (which
+# accidentally protected it before) are relaxed for recall - see docs/phase20_story_memory_
+# calibration_dataset.md's own "gta_negative_control" case for the evidence this responds to.
+RELATED_STORY = "related_story"
 
 # --- topic buckets --------------------------------------------------------------------------
 # Deliberately few and broad (not one bucket per news-type) - the false-positive-protection goal
@@ -114,6 +124,15 @@ _TOPIC_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
 )
 
+# Phase 20 Checkpoint 6: grammatical determiners/demonstratives - never named entities - excluded
+# from _extract_entities() below. Fixed, closed, linguistically-principled set (English/Russian
+# only, matching this module's existing bilingual scope) - not derived from or specific to any
+# calibration case's own company/product/person names.
+_GENERIC_DETERMINER_ENTITIES = frozenset({
+    "this", "that", "these", "those", "it", "if", "a", "an", "the",
+    "это", "этот", "эта", "эти",
+})
+
 # Capitalized-run entity heuristic: one or more consecutive words each starting with an
 # uppercase Latin/Cyrillic letter, allowing internal digits/hyphens/dots (so "GPT-4", "GPT-5.6",
 # "iPhone"-style would still need the leading capital - a documented, narrow heuristic, not a
@@ -131,16 +150,47 @@ _WORD_RE = re.compile(r"[\w\-]+", re.UNICODE)
 _MIN_KEYWORD_LEN = 3
 
 # Bounded candidate window (mirrors services/editorial_scoring.py::fetch_engagement_baseline()'s
-# own "bounded window, scored in Python" pattern exactly) - recent, same-category stories only,
-# never the full table.
-STORY_MATCH_LOOKBACK_DAYS = 14
-STORY_MATCH_CANDIDATE_LIMIT = 50
+# own "bounded window, scored in Python" pattern exactly) - recent stories, never the full table.
+# Phase 20 M3: no longer same-category-only (see _fetch_candidate_stories's own docstring for why
+# - the Phase 19 overnight validation's "kitesurf" case proved a hard category gate excludes real
+# same-story matches). Lookback is now settings.story_match_lookback_days (tunable without a code
+# deploy); the candidate cap is raised (50 -> 150) to compensate for no longer being
+# category-narrowed, still cheap at real `stories` table volumes.
+#
+# Phase 20 M11.2 finding: this cap, applied directly at the SQL level (ORDER BY updated_at DESC
+# LIMIT 150), was measured (M11 historical replay, 3,774 real events) to saturate 94.2% of the
+# time at real production volume (750-1200 events/day) - a purely-recency-ordered top-150 window
+# routinely excludes the genuinely correct candidate once more than 150 *other* stories have been
+# touched more recently, which is common within a single busy hour. This constant now names the
+# FINAL cap on how many candidates reach the (more expensive) full score_candidate() scoring stage
+# - see _RETRIEVAL_FETCH_SAFETY_CAP / _PRESELECTION_RELEVANCE_LIMIT / _PRESELECTION_RECENCY_LIMIT
+# below for the new, wider two-stage retrieval that decides WHICH candidates fill this budget.
+STORY_MATCH_CANDIDATE_LIMIT = 150
 
-# Reasoned, not fit to historical outcome data (none exists yet - this is a brand-new signal,
-# same disclosed-limitation convention as services/editorial_scoring.py's own weight comments).
-# Tunable without a code change is deliberately NOT offered yet (unlike editorial_scoring's
-# weights) - shadow-mode data from this phase's own bake period is what should inform whether
-# these need to become settings, not a guess made before any real data exists.
+# Stage 1 (SQL): a much wider time-windowed fetch, safety-capped only to guard against a
+# pathological table size, not to shape retrieval quality (that is Stage 2's job). Reasoned from
+# the M11 replay's own real data: ~2,441 new stories over 4 real days (~610/day) implies roughly
+# 8,500 stories in a 14-day lookback window at today's production volume - this cap is set well
+# above that so it does not bind in practice; revisit only if a future replay shows it does.
+# Requires database/migrations/versions/3f37cf34109d_add_stories_updated_at_index.py (stories.
+# updated_at previously had no index at all) to stay cheap as the table grows past this width.
+_RETRIEVAL_FETCH_SAFETY_CAP = 10_000
+
+# Stage 2 (Python, pure, cheap - see _preselect_candidates()): two unioned tiers feeding the
+# STORY_MATCH_CANDIDATE_LIMIT-capped set that actually reaches full scoring. "Relevance" reuses
+# entity/keyword SETS the module already extracts for every Story (StorySignature.entities/
+# keywords - no new extraction, no embeddings) - a candidate sharing zero entities and zero
+# keywords with the new event is deprioritized without being scored via the (slightly pricier)
+# symmetric title-token-overlap computation. "Recency" is unioned in unconditionally, preserving
+# today's behavior for genuinely fresh, low-keyword-overlap corroboration.
+_PRESELECTION_RELEVANCE_LIMIT = 150
+_PRESELECTION_RECENCY_LIMIT = 50
+
+# Reasoned, not fit to historical outcome data (Phase 20 M11's historical replay is what should
+# refine these - see docs/phase20_story_memory_calibration_dataset.md - not a guess made before
+# any real data exists). Unchanged from the original values: the scoring *inputs* changed (M3/M4),
+# not these bands - re-deriving them without real replay data would be a second guess stacked on
+# the first.
 _LOW_THRESHOLD = 0.35
 _HIGH_THRESHOLD = 0.65
 # Within the confident-match zone (combined >= _HIGH_THRESHOLD), title_overlap alone decides the
@@ -156,6 +206,27 @@ _SUPPORTING_SOURCE_TITLE_OVERLAP_THRESHOLD = 0.55
 _ENTITY_WEIGHT = 0.6
 _TITLE_WEIGHT = 0.4
 
+# Phase 20 M3/M5: category/topic_bucket are no longer hard gates (see module docstring for the
+# "kitesurf" case that proved they were excluding real matches) - now small additive scoring
+# bonuses, applied only when they agree, on top of the entity/title combined score. Deliberately
+# small relative to the 0.6/0.4 entity/title weights - the Kitesurf case's real entity+title
+# overlap alone (independently hand-verified against this module's own regex/Dice logic:
+# entity_jaccard=0.75, title_dice≈0.57 -> combined≈0.68, already clears _HIGH_THRESHOLD) does not
+# require these bonuses to work; they exist to modestly reinforce agreement, not to carry a match
+# on their own. Combined score is capped at 1.0 after bonuses.
+_CATEGORY_BONUS = 0.05
+_TOPIC_BONUS = 0.05
+
+# Phase 20 M5: RELATED_STORY band - protects the "same entity family, different editorial event"
+# case (the "gta_negative_control" calibration case; also the synthetic entity-overlap-trap
+# cases) once the category/topic hard gates that accidentally protected it are relaxed. A
+# candidate whose entity_overlap alone clears this floor, but whose combined score stays below
+# _LOW_THRESHOLD (i.e. title/topic/category evidence does NOT support a real same-story match),
+# is tagged RELATED_STORY instead of a plain, uninformative NEW_STORY - never merged, never
+# auto-suppressed (see services/story_memory.py's own MatchResult docstring). Reasoned starting
+# point, not fit to data yet - explicitly called out as needing M11 replay calibration.
+_RELATED_STORY_ENTITY_FLOOR = 0.2
+
 
 @dataclass(frozen=True)
 class StorySignature:
@@ -166,22 +237,72 @@ class StorySignature:
 
 @dataclass(frozen=True)
 class MatchResult:
-    outcome: str  # NEW_STORY | STORY_UPDATE | SUPPORTING_SOURCE | SEMANTIC_DUPLICATE | UNCERTAIN_MATCH
+    outcome: str  # NEW_STORY | STORY_UPDATE | SUPPORTING_SOURCE | SEMANTIC_DUPLICATE | UNCERTAIN_MATCH | RELATED_STORY
     matched_story_id: UUID | None
     confidence: float
     similarity_reason: str
+    # Phase 20 M11.1: the raw entity_overlap component score_candidate() already computes
+    # internally for every outcome - exposed explicitly so callers (services/triage_orchestrator.
+    # py's Story Identity dispatch) can distinguish a genuinely substantial entity signal from a
+    # coincidental one, instead of parsing similarity_reason's free text. 0.0 for NEW_STORY when
+    # there were no candidates at all (nothing to compute overlap against).
+    entity_overlap: float = 0.0
+    # Phase 20 Checkpoint 6: whether the winning candidate shares at least one *distinctive*
+    # entity with the new event (see _distinctive_shared_entities()'s own docstring) - exposed so
+    # callers combining this match with Delta Engine output can apply the "identity before delta"
+    # rule (a weak/generic entity match must not let a coincidental new number/date/keyword be
+    # treated as a confirmed MATERIAL_UPDATE to this specific Story). False whenever no candidate
+    # was scored at all (NEW_STORY with an empty pool).
+    has_distinctive_shared_entity: bool = False
+
+
+def _strip_leading_determiner(normalized_entity: str) -> str:
+    """NEWS Output Stability Fix (CD Projekt/Project Sirius duplicate-story miss, docs/
+    news_output_stability_forensic_report.md §10): a captured multi-word entity run whose FIRST
+    word is a generic determiner/article (e.g. "The Witcher", captured whole because "The"
+    happened to be capitalized in this particular headline's own phrasing) must normalize
+    identically to the same entity captured without the leading article elsewhere in a different
+    headline about the same story (e.g. bare "Witcher"). Confirmed root cause of a real missed
+    match: "Witcher multiplayer spin-off Project Sirius hit by fresh layoffs" extracts entity
+    "witcher" (bare - "Witcher" is not preceded by a capitalized word in that headline), while "CD
+    Projekt cuts more than 20% of The Witcher spinoff development team..." extracts "the witcher"
+    (the leading "The" happened to be capitalized) - two different strings for the same real-world
+    entity, silently zeroing entity_overlap between two real headlines about the identical layoffs
+    story. Strips only ONE leading determiner, never recursively - the realistic English/Russian
+    headline pattern this class of bug actually occurs in. Reuses `_GENERIC_DETERMINER_ENTITIES`
+    verbatim (the same fixed, closed set Checkpoint 6 already established) - no new lexicon."""
+    words = normalized_entity.split(" ")
+    if len(words) > 1 and words[0] in _GENERIC_DETERMINER_ENTITIES:
+        return " ".join(words[1:])
+    return normalized_entity
 
 
 def _extract_entities(title: str) -> list[str]:
-    """Normalized, de-duplicated, order-preserving. A bare first-word capital (sentence-initial
-    capitalization, not a real entity) is not specially excluded - a documented, accepted
-    imprecision of this narrow heuristic (see module docstring)."""
+    """Normalized, de-duplicated, order-preserving.
+
+    Phase 20 Checkpoint 6 fix: a small, fixed set of grammatical determiners/demonstratives
+    (never named entities, never hardcoded from any calibration case) is excluded - these are
+    capitalized only because they happen to start a sentence ("This paper...", "The state of...",
+    "Это..."), not because they denote anything. Confirmed root cause of a real false-match class
+    (two entirely unrelated arXiv abstracts, both conventionally opening "This paper/research
+    ...", scored `entity_overlap=1.0` from a single shared "this" - the entire "entity" set on
+    both sides was this one spurious token). A bare first-word capital was previously not
+    specially excluded at all - documented at the time as "a documented, accepted imprecision";
+    Checkpoint 6's real replay evidence shows it is not merely imprecise but actively
+    identity-forming when it is the *only* extracted entity, so it is now excluded outright.
+
+    NEWS Output Stability Fix: `_strip_leading_determiner()` handles the adjacent case - a
+    determiner GLUED to a following real entity (rather than standing alone) - see that function's
+    own docstring for the real evidence."""
     seen: dict[str, None] = {}
     for match in _ENTITY_RUN_RE.finditer(title):
         candidate = match.group(0).strip()
         if len(candidate) < _MIN_ENTITY_LEN:
             continue
         normalized = normalize_for_entity_match(candidate)
+        if normalized in _GENERIC_DETERMINER_ENTITIES:
+            continue
+        normalized = _strip_leading_determiner(normalized)
         if normalized and normalized not in seen:
             seen[normalized] = None
     return list(seen.keys())
@@ -198,11 +319,22 @@ def _extract_keywords(title: str) -> list[str]:
 
 
 def _classify_topic(title: str) -> str:
-    from services.text_normalization import normalize_loose
+    """Phase 20 M4 fix: uses `services.text_normalization.fuzzy_phrase_contains()` - already-
+    established, whole-word-boundary, Russian-case-suffix-aware phrase containment - instead of
+    the original raw `keyword in normalized` substring check, which false-positive-matched "иск"
+    (a legal_regulatory keyword meaning "lawsuit") inside "искусственному" ("artificial", as in
+    "artificial intelligence") - a real bug independently found via the Phase 19 overnight
+    validation's `moscow_student_pair` case (docs/phase20_story_memory_calibration_dataset.md). A
+    naive `\\bkeyword\\b` regex fix was tried first and rejected: it also broke legitimate
+    Russian morphological variants the original substring behavior accidentally handled (e.g. the
+    keyword "представил" no longer matching "представила", a real gender-agreement inflection) -
+    `fuzzy_phrase_contains()`'s existing case-suffix stripping handles both correctly, since "иск"
+    (3 chars) is too short to be stripped further while "искусственному" strips down to a
+    different, non-matching stem."""
+    from services.text_normalization import fuzzy_phrase_contains
 
-    normalized = normalize_loose(title)
     for bucket, keywords in _TOPIC_KEYWORDS:
-        if any(keyword in normalized for keyword in keywords):
+        if any(fuzzy_phrase_contains(kw, title) for kw in keywords):
             return bucket
     return TOPIC_OTHER
 
@@ -211,7 +343,8 @@ def extract_story_signature(title: str, category: EventCategory) -> StorySignatu
     """Pure. Deterministic: identical input always produces an identical signature.
     `category` is accepted for interface symmetry with `match_story()` (both take the same two
     facts about an event) even though the signature itself does not currently vary by category -
-    matching is scoped to same-category candidates by the caller, not by this function."""
+    Phase 20 M3: category is a soft scoring bonus in `score_candidate()`, never a hard retrieval
+    filter (see this module's own docstring for why the original hard gate was removed)."""
     del category  # not used in the signature itself - see docstring
     return StorySignature(
         entities=_extract_entities(title),
@@ -227,37 +360,139 @@ def _jaccard(a: set[str], b: set[str]) -> float:
 
 
 def score_candidate(
-    title: str, signature: StorySignature, candidate_title: str, candidate: Story
+    title: str, signature: StorySignature, category: EventCategory, candidate_title: str, candidate: Story
 ) -> tuple[float, float, float]:
-    """Pure. Returns (combined_score, entity_overlap, title_overlap) for one candidate story -
-    the caller is responsible for the hard topic-bucket gate (candidates with a different
-    topic_bucket are never even scored, per the module's own false-positive-protection design -
-    see docs/phase18_10_editorial_intelligence_report.md's worked examples)."""
+    """Pure. Returns (combined_score, entity_overlap, title_overlap) for one candidate story.
+    Phase 20 M3/M4/M5: category/topic_bucket are now small additive bonuses (never a hard gate -
+    the caller no longer pre-filters candidates by either), and title_overlap now uses the
+    symmetric Dice measure (services/text_normalization.py::symmetric_token_overlap()) rather than
+    the original asymmetric ratio - see this module's own docstring for the calibration-dataset
+    case (a longer, differently-worded restatement of the same story) that motivated the switch."""
     candidate_entities = set(candidate.entities or [])
     entity_overlap = _jaccard(set(signature.entities), candidate_entities)
-    title_overlap = token_overlap_ratio(title, candidate_title)
-    combined = _ENTITY_WEIGHT * entity_overlap + _TITLE_WEIGHT * title_overlap
+    title_overlap = symmetric_token_overlap(title, candidate_title)
+    bonus = 0.0
+    if candidate.category == category:
+        bonus += _CATEGORY_BONUS
+    if candidate.topic_bucket == signature.topic_bucket:
+        bonus += _TOPIC_BONUS
+    combined = min(1.0, _ENTITY_WEIGHT * entity_overlap + _TITLE_WEIGHT * title_overlap + bonus)
     return combined, entity_overlap, title_overlap
 
 
-async def _fetch_candidate_stories(
-    session: AsyncSession, category: EventCategory, *, now: datetime
-) -> list[Story]:
-    cutoff = now - timedelta(days=STORY_MATCH_LOOKBACK_DAYS)
+async def _fetch_candidate_stories(session: AsyncSession, *, now: datetime) -> list[Story]:
+    """Phase 20 M3: no longer filtered by category - `services/story_memory.py`'s own module
+    docstring / the Phase 19 overnight validation's "kitesurf" case proved a same-category-only
+    SQL WHERE clause silently excludes real same-story candidates in a different NewsEvent
+    category. Still bounded (time window + a wide safety cap, indexed - see
+    _RETRIEVAL_FETCH_SAFETY_CAP's own comment) - a wide, not unbounded, scan. Category is
+    reintroduced as a soft scoring bonus in `score_candidate()` instead.
+
+    Phase 20 M11.2: this is now Stage 1 of a two-stage retrieval - callers must apply
+    `_preselect_candidates()` before scoring; this function alone no longer represents "the
+    candidates that will be scored," only "everything worth considering," ordered by recency
+    (still a reasonable, cheap ORDER BY given the new index) so `_preselect_candidates()`'s own
+    recency tier can simply take a prefix without re-sorting."""
+    cutoff = now - timedelta(days=settings.story_match_lookback_days)
     stmt = (
         select(Story)
-        .where(Story.category == category, Story.updated_at >= cutoff)
+        .where(Story.updated_at >= cutoff)
         .order_by(Story.updated_at.desc())
-        .limit(STORY_MATCH_CANDIDATE_LIMIT)
+        .limit(_RETRIEVAL_FETCH_SAFETY_CAP)
     )
     return list((await session.execute(stmt)).scalars().all())
+
+
+def _preselect_candidates(signature: StorySignature, candidates: list[Story]) -> list[Story]:
+    """Pure, deterministic, cheap - Stage 2 of retrieval (Phase 20 M11.2). `candidates` is assumed
+    already ordered by `updated_at DESC` (as `_fetch_candidate_stories()` returns it).
+
+    Two unioned tiers, feeding the `STORY_MATCH_CANDIDATE_LIMIT`-capped set that reaches full
+    `score_candidate()` scoring:
+    - up to `_PRESELECTION_RELEVANCE_LIMIT` candidates with the highest (entity_overlap_count,
+      keyword_overlap_count) set-intersection count against the new event's own signature -
+      "distinctive entity/product/project/company tokens" and "normalized headline token overlap"
+      per the M11.2 design brief, computed via plain Python set intersection (no embeddings, no
+      new extraction - reuses StorySignature.entities/keywords, already computed for every Story).
+      Candidates with zero overlap on both are excluded from this tier entirely (recency is their
+      only path back in, via the second tier).
+    - up to `_PRESELECTION_RECENCY_LIMIT` most-recently-updated candidates, unconditionally -
+      preserves today's behavior for a genuinely fresh corroborating source whose title happens to
+      share few distinctive tokens with the new event (e.g. very short headlines).
+
+    The union is capped at `STORY_MATCH_CANDIDATE_LIMIT` overall (relevance tier first, since it is
+    the higher-precision signal) purely to bound the downstream full-scoring compute cost - not to
+    reintroduce the old recall problem, since the two tiers are chosen deliberately rather than by
+    a single blind recency cutoff."""
+    new_entities = set(signature.entities)
+    new_keywords = set(signature.keywords)
+
+    def _relevance(story: Story) -> tuple[int, int]:
+        story_entities = set(story.entities or [])
+        story_keywords = set(story.keywords or [])
+        return len(new_entities & story_entities), len(new_keywords & story_keywords)
+
+    by_relevance = sorted(candidates, key=_relevance, reverse=True)
+    by_relevance = [c for c in by_relevance if _relevance(c) != (0, 0)][:_PRESELECTION_RELEVANCE_LIMIT]
+    by_recency = candidates[:_PRESELECTION_RECENCY_LIMIT]
+
+    seen_ids: set[UUID] = set()
+    merged: list[Story] = []
+    for story in by_relevance + by_recency:
+        if story.id not in seen_ids:
+            seen_ids.add(story.id)
+            merged.append(story)
+    return merged[:STORY_MATCH_CANDIDATE_LIMIT]
+
+
+# Phase 20 Checkpoint 6: an entity shared with at least this large a fraction of the current
+# candidate pool is treated as "generic for this pool" (a constantly-recurring subject - a
+# mega-corp, a head of state - rather than something that specifically identifies this one
+# story). Reasoned starting point (5% of the pool), not fit to data - the M11 replay's own
+# calibration convention applies here too: revisit only if a future replay's evidence justifies a
+# different value, never guessed twice.
+_DISTINCTIVE_ENTITY_DF_FRACTION = 0.05
+
+
+def _entity_document_frequencies(candidates: list[Story]) -> dict[str, int]:
+    """Pure. Classic, deterministic document-frequency count (not an embedding, not an ML model)
+    - for each entity string, how many Stories in the current candidate pool contain it. Used only
+    to distinguish a genuinely distinctive shared entity from a generic, constantly-recurring one;
+    never used to alter retrieval or the base combined score itself."""
+    df: dict[str, int] = {}
+    for story in candidates:
+        for entity in set(story.entities or []):
+            df[entity] = df.get(entity, 0) + 1
+    return df
+
+
+def _distinctive_shared_entities(
+    new_entities: list[str], candidate_entities: list[str], entity_df: dict[str, int], pool_size: int,
+) -> list[str]:
+    """Pure. A shared entity counts as distinctive if it is a multi-word phrase (inherently more
+    specific than a single common word - e.g. "app store", "windows pcs" - no document-frequency
+    check needed) or its document frequency within the current candidate pool is low (appears in
+    only a small fraction of the Stories under consideration, not a subject - a company, a head of
+    state - that recurs across many unrelated stories in this same pool). Checkpoint 6 root-cause
+    evidence (docs/phase20_checkpoint6_human_calibration_report.md): confirmed false-match cases
+    shared only a single generic word ("путин" alone, "apple" alone, "день" alone); confirmed
+    genuine-update cases always shared either a multi-word entity ("app store", "windows pcs") or
+    a company name that, in the real replay corpus, was specific to that one story pair."""
+    shared = set(new_entities) & set(candidate_entities)
+    if not shared or pool_size <= 0:
+        return []
+    threshold = max(1, round(pool_size * _DISTINCTIVE_ENTITY_DF_FRACTION))
+    return sorted(e for e in shared if " " in e or entity_df.get(e, 0) <= threshold)
 
 
 async def match_story(
     session: AsyncSession, *, title: str, category: EventCategory, now: datetime | None = None
 ) -> tuple[StorySignature, MatchResult]:
     """The only orchestration entry point services/triage_orchestrator.py calls. Does one bounded,
-    indexed, same-category query (see `_fetch_candidate_stories`) - never an unbounded table scan.
+    indexed query (see `_fetch_candidate_stories`) - never an unbounded table scan. Category is no
+    longer a hard retrieval filter (Phase 20 M3) - candidate retrieval is deliberately
+    high-recall; relationship classification (this function's own threshold bands) stays
+    precision-preserving.
 
     Returns both the extracted signature (the caller persists it onto the new Story if this
     becomes a new_story) and the match result. Never creates or mutates a Story row itself - that
@@ -266,57 +501,128 @@ async def match_story(
     either)."""
     reference_now = now if now is not None else datetime.now(timezone.utc)
     signature = extract_story_signature(title, category)
-    candidates = await _fetch_candidate_stories(session, category, now=reference_now)
+    # Phase 20.7: Editorial Content Type - computed here, before Story Identity is evaluated
+    # below, per the "identity before delta" ordering this module already establishes (a
+    # relationship classification must never be more confident than the evidence for it - a
+    # content-type mismatch is exactly the same class of evidence gap as a missing distinctive
+    # entity, see _distinctive_shared_entities()'s own docstring for the parallel).
+    new_content_type = classify_content_type(title)
+    fetched = await _fetch_candidate_stories(session, now=reference_now)
+    candidates = _preselect_candidates(signature, fetched)
+    entity_df = _entity_document_frequencies(candidates)
 
-    topic_matches = [c for c in candidates if c.topic_bucket == signature.topic_bucket]
-    if not topic_matches:
-        reason = (
-            "no candidate stories in matching category/topic_bucket "
-            f"(topic_bucket={signature.topic_bucket})"
+    if not candidates:
+        return signature, MatchResult(
+            NEW_STORY, None, 1.0, "no candidate stories in the lookback window", entity_overlap=0.0,
         )
-        return signature, MatchResult(NEW_STORY, None, 1.0, reason)
 
     best: tuple[float, float, float, Story] | None = None
-    for candidate in topic_matches:
-        combined, entity_overlap, title_overlap = score_candidate(title, signature, candidate.title, candidate)
+    for candidate in candidates:
+        combined, entity_overlap, title_overlap = score_candidate(title, signature, category, candidate.title, candidate)
         if best is None or combined > best[0]:
             best = (combined, entity_overlap, title_overlap, candidate)
 
-    assert best is not None  # topic_matches is non-empty, so the loop ran at least once
+    assert best is not None  # candidates is non-empty, so the loop ran at least once
     combined, entity_overlap, title_overlap, candidate = best
 
     if combined < _LOW_THRESHOLD:
+        if entity_overlap >= _RELATED_STORY_ENTITY_FLOOR:
+            reason = (
+                f"real entity overlap (entity_overlap={entity_overlap:.2f}) but combined score "
+                f"{combined:.2f} below low threshold {_LOW_THRESHOLD:.2f} (title_overlap="
+                f"{title_overlap:.2f}) - same entity family, not confidently the same story"
+            )
+            return signature, MatchResult(
+                RELATED_STORY, candidate.id, entity_overlap, reason, entity_overlap=entity_overlap,
+            )
         reason = (
-            f"best same-bucket candidate score {combined:.2f} below low threshold "
+            f"best candidate score {combined:.2f} below low threshold "
             f"{_LOW_THRESHOLD:.2f} (entity_overlap={entity_overlap:.2f}, title_overlap={title_overlap:.2f})"
         )
-        return signature, MatchResult(NEW_STORY, None, 1.0 - combined, reason)
+        return signature, MatchResult(
+            NEW_STORY, None, 1.0 - combined, reason, entity_overlap=entity_overlap,
+        )
 
     if combined >= _HIGH_THRESHOLD:
         if title_overlap >= _DUPLICATE_TITLE_OVERLAP_THRESHOLD:
             reason = (
                 f"near-identical title (title_overlap={title_overlap:.2f}) - same event, "
                 f"likely a different source's coverage (entity_overlap={entity_overlap:.2f}, "
-                f"topic_bucket={signature.topic_bucket} match)"
+                f"candidate topic_bucket={candidate.topic_bucket}, category={candidate.category})"
             )
-            return signature, MatchResult(SEMANTIC_DUPLICATE, candidate.id, combined, reason)
-        if title_overlap >= _SUPPORTING_SOURCE_TITLE_OVERLAP_THRESHOLD:
+            return signature, MatchResult(
+                SEMANTIC_DUPLICATE, candidate.id, combined, reason, entity_overlap=entity_overlap,
+                has_distinctive_shared_entity=True,  # near-identical wording is sufficient alone
+            )
+
+        # Phase 20 Checkpoint 6: SUPPORTING_SOURCE and STORY_UPDATE both assert a CONFIRMED
+        # same-story relationship (bump event_count, eligible for suppression/update treatment) -
+        # unlike SEMANTIC_DUPLICATE, their title overlap alone is not strong enough to trust
+        # without also requiring a genuinely distinctive shared entity (see
+        # _distinctive_shared_entities()'s own docstring for the real evidence this responds to -
+        # confirmed false matches shared only a single generic word; confirmed genuine matches
+        # always shared something more specific). Absent that, the match downgrades to
+        # UNCERTAIN_MATCH rather than being confidently (and wrongly) treated as the same story.
+        distinctive = _distinctive_shared_entities(signature.entities, candidate.entities or [], entity_df, len(candidates))
+        # Phase 20.7: same entity/product does not mean same editorial Story - a review and a
+        # guide about the same game are different editorial objects even with a perfect entity
+        # match. Gated the same way as the distinctive-entity check (both must clear before a
+        # confident same-story outcome is allowed) - NEWS (no specific marker on either side) is
+        # never itself a mismatch (services/editorial_content_type.py::is_content_type_mismatch()'s
+        # own docstring explains why: most genuine same-story updates carry no special marker).
+        candidate_content_type = classify_content_type(candidate.title)
+        content_type_ok = not is_content_type_mismatch(new_content_type, candidate_content_type)
+        if distinctive and content_type_ok:
+            if title_overlap >= _SUPPORTING_SOURCE_TITLE_OVERLAP_THRESHOLD:
+                reason = (
+                    f"confident match, substantially similar but not identical title "
+                    f"(title_overlap={title_overlap:.2f}) - likely a corroborating source, not new "
+                    f"substance (entity_overlap={entity_overlap:.2f}, distinctive_shared_entities="
+                    f"{distinctive}, content_type={new_content_type}/{candidate_content_type}, "
+                    f"candidate topic_bucket={candidate.topic_bucket}, category={candidate.category})"
+                )
+                return signature, MatchResult(
+                    SUPPORTING_SOURCE, candidate.id, combined, reason, entity_overlap=entity_overlap,
+                    has_distinctive_shared_entity=True,
+                )
             reason = (
-                f"confident match, substantially similar but not identical title "
-                f"(title_overlap={title_overlap:.2f}) - likely a corroborating source, not new "
-                f"substance (entity_overlap={entity_overlap:.2f}, topic_bucket="
-                f"{signature.topic_bucket} match)"
+                f"confident match, materially different title (entity_overlap={entity_overlap:.2f}, "
+                f"title_overlap={title_overlap:.2f}, distinctive_shared_entities={distinctive}, "
+                f"content_type={new_content_type}/{candidate_content_type}, candidate topic_bucket="
+                f"{candidate.topic_bucket}, category={candidate.category})"
             )
-            return signature, MatchResult(SUPPORTING_SOURCE, candidate.id, combined, reason)
-        reason = (
-            f"confident match, materially different title (entity_overlap={entity_overlap:.2f}, "
-            f"title_overlap={title_overlap:.2f}, topic_bucket={signature.topic_bucket} match)"
+            return signature, MatchResult(
+                STORY_UPDATE, candidate.id, combined, reason, entity_overlap=entity_overlap,
+                has_distinctive_shared_entity=True,
+            )
+
+        if not content_type_ok:
+            reason = (
+                f"score cleared the confident threshold ({combined:.2f}) but the new event's "
+                f"editorial content type ({new_content_type}) differs from the matched candidate's "
+                f"({candidate_content_type}) - same entity/product does not mean same editorial "
+                f"Story (e.g. a review vs. a guide about the same game) - downgraded "
+                f"(entity_overlap={entity_overlap:.2f}, title_overlap={title_overlap:.2f})"
+            )
+        else:
+            reason = (
+                f"score cleared the confident threshold ({combined:.2f}) but no distinctive shared "
+                f"entity survived (only generic/common shared entities, or none) and title_overlap "
+                f"({title_overlap:.2f}) is below the near-identical-title threshold - downgraded to "
+                f"avoid a confident same-story claim resting on a coincidental generic-entity match "
+                f"(entity_overlap={entity_overlap:.2f})"
+            )
+        return signature, MatchResult(
+            UNCERTAIN_MATCH, candidate.id, combined, reason, entity_overlap=entity_overlap,
+            has_distinctive_shared_entity=bool(distinctive),
         )
-        return signature, MatchResult(STORY_UPDATE, candidate.id, combined, reason)
 
     reason = (
         f"borderline score {combined:.2f} between thresholds [{_LOW_THRESHOLD:.2f}, "
         f"{_HIGH_THRESHOLD:.2f}) - not confidently new or matched "
         f"(entity_overlap={entity_overlap:.2f}, title_overlap={title_overlap:.2f})"
     )
-    return signature, MatchResult(UNCERTAIN_MATCH, candidate.id, combined, reason)
+    return signature, MatchResult(
+        UNCERTAIN_MATCH, candidate.id, combined, reason, entity_overlap=entity_overlap,
+        has_distinctive_shared_entity=bool(_distinctive_shared_entities(signature.entities, candidate.entities or [], entity_df, len(candidates))),
+    )

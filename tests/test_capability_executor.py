@@ -24,7 +24,7 @@ from core.config import settings
 from database.models.ai_execution import AIExecution
 from database.models.editorial_task import EditorialTask, TaskPriority, TaskStatus
 from database.models.news_event import EventCategory, NewsEvent
-from schemas.capability import CapabilityCall, CapabilityUsage
+from schemas.capability import CapabilityCall, CapabilityResult, CapabilityUsage
 from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
 from schemas.editorial_task import EditorialTaskCreate, EditorialTaskRead
 from schemas.workflow import (
@@ -98,6 +98,101 @@ async def _created_task(session: AsyncSession, event: NewsEvent, workflow_regist
 async def _ai_execution_count(session: AsyncSession) -> int:
     result = await session.execute(select(func.count()).select_from(AIExecution))
     return result.scalar_one()
+
+
+class _SpyCapability:
+    """Phase 23.1P test helper - captures the CapabilityContext it receives so a test can inspect
+    fields (`quote_source_text`) that never appear in the structured_output itself."""
+
+    def __init__(self) -> None:
+        self.received_context: object = None
+
+    async def execute(self, context):  # noqa: ANN001 - test spy, matches Capability protocol duck-typing
+        self.received_context = context
+        now = datetime.now(timezone.utc)
+        return CapabilityResult(
+            status="SUCCESS", structured_output={"ok": True}, calls=[],
+            started_at=now, finished_at=now, duration_seconds=0.0,
+        )
+
+
+@pytest.mark.asyncio
+async def test_quote_source_text_populated_from_full_text_acquisition_for_copywriting_step(
+    db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase 23.1P (docs/phase23_1p_story_memory_quotes_gate_report.md): the real executor wiring
+    - a FULL_TEXT NewsEventArticleAcquisition row must populate BusinessContext.quote_source_text
+    for the "copywriting" step specifically, cleaned via the already-existing
+    services/article_cleaning.py, when article_acquisition_mode != "off"."""
+    from database.models.news_event_article_acquisition import NewsEventArticleAcquisition
+
+    monkeypatch.setattr(settings, "article_acquisition_mode", "shadow")
+    db_session.add(NewsEventArticleAcquisition(
+        news_event_id=real_news_event.id, acquisition_status="FULL_TEXT",
+        effective_completeness_status="FULL_TEXT",
+        raw_extracted_text="A spokesperson said: \"This is the real, richer quote from the full article.\"",
+        extracted_char_count=80, triggered_by="test",
+    ))
+    await db_session.flush()
+
+    workflow_registry = _single_step_workflow_registry("copywriting")
+    task = await _created_task(db_session, real_news_event, workflow_registry)
+    spy = _SpyCapability()
+    capability_registry = _capability_registry("copywriting", spy)
+    executor = CapabilityExecutor(db_session, task.id, capability_registry)
+
+    result = await WorkflowRunner(executor=executor, registry=workflow_registry).run(db_session, task.id)
+
+    assert result.status == "COMPLETED"
+    assert spy.received_context is not None
+    assert "real, richer quote" in (spy.received_context.business.quote_source_text or "")
+
+
+@pytest.mark.asyncio
+async def test_quote_source_text_stays_none_when_acquisition_mode_off(
+    db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """article_acquisition_mode == "off" (a real, valid production configuration) must never
+    attempt the acquisition read at all - byte-identical to pre-23.1P behavior."""
+    monkeypatch.setattr(settings, "article_acquisition_mode", "off")
+    workflow_registry = _single_step_workflow_registry("copywriting")
+    task = await _created_task(db_session, real_news_event, workflow_registry)
+    spy = _SpyCapability()
+    capability_registry = _capability_registry("copywriting", spy)
+    executor = CapabilityExecutor(db_session, task.id, capability_registry)
+
+    await WorkflowRunner(executor=executor, registry=workflow_registry).run(db_session, task.id)
+
+    assert spy.received_context.business.quote_source_text is None
+
+
+@pytest.mark.asyncio
+async def test_quote_source_text_not_populated_for_non_copywriting_steps(
+    db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Scoped to "copywriting" only - a "research" step must never receive quote_source_text, even
+    with a real FULL_TEXT acquisition present (Research's own article_evidence_text/enforce gate,
+    completely untouched by this phase, is a separate mechanism)."""
+    from database.models.news_event_article_acquisition import NewsEventArticleAcquisition
+
+    monkeypatch.setattr(settings, "article_acquisition_mode", "shadow")
+    db_session.add(NewsEventArticleAcquisition(
+        news_event_id=real_news_event.id, acquisition_status="FULL_TEXT",
+        effective_completeness_status="FULL_TEXT",
+        raw_extracted_text="A spokesperson said something quotable here.",
+        extracted_char_count=44, triggered_by="test",
+    ))
+    await db_session.flush()
+
+    workflow_registry = _single_step_workflow_registry("research")
+    task = await _created_task(db_session, real_news_event, workflow_registry)
+    spy = _SpyCapability()
+    capability_registry = _capability_registry("research", spy)
+    executor = CapabilityExecutor(db_session, task.id, capability_registry)
+
+    await WorkflowRunner(executor=executor, registry=workflow_registry).run(db_session, task.id)
+
+    assert spy.received_context.business.quote_source_text is None
 
 
 @pytest.mark.asyncio

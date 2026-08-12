@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     postgres_user: str = "postgres"
     postgres_password: SecretStr = SecretStr("postgres")
     postgres_db: str = "ai_newsroom"
+    # Phase 23.1L (docs/phase23_1l_runtime_isolation_final_canary_report.md): a physically
+    # separate database, same Postgres server, dedicated to pytest - the fix for a proven
+    # incident (two live NEWS posts generated from a leaked test-fixture row) where integration
+    # tests committed real rows into this same `postgres_db` and hand-maintained per-table
+    # teardown DELETEs fell behind a newly-added FK-referencing table, silently orphaning them.
+    # Deliberately a distinct database name, not a naming convention within `postgres_db` - two
+    # different Postgres databases share nothing (no cross-database FK/query is even possible),
+    # so this is a structural guarantee, not a discipline someone has to remember to uphold.
+    postgres_test_db: str = "ai_newsroom_test"
 
     redis_host: str = "localhost"
     redis_port: int = 6379
@@ -143,6 +152,35 @@ class Settings(BaseSettings):
     content_generation_dry_run: bool = True
     editorial_chat_id: int | None = None
 
+    # Phase 22: Telegram Editorial Routing Foundation (docs/phase22_telegram_editorial_routing_
+    # report.md). All `None` by default - byte-identical to pre-Phase-22 behavior (nothing calls
+    # services/telegram_routing.py from any live/automated path yet, matching this phase's own
+    # "routing capability only, not automatic decision making" scope). `newsroom_telegram_chat_id`
+    # is deliberately separate from `editorial_chat_id` above (a different, single-topic delivery
+    # path already in production use since Phase 14 - left completely untouched, per acceptance
+    # criterion E) - the NINJA NEWSROOM supergroup this phase targets is a distinct destination.
+    # Each `*_topic_id` is optional independently of the chat id itself: a destination whose topic
+    # id is unset routes to the chat's own root (no `message_thread_id`), never an error - see
+    # services/telegram_routing.py::resolve_route()'s own docstring for the exact contract.
+    newsroom_telegram_chat_id: int | None = None
+    news_topic_id: int | None = None
+    meme_topic_id: int | None = None
+    telegraph_topic_id: int | None = None
+    instagram_topic_id: int | None = None
+    reels_topic_id: int | None = None
+
+    # Phase 23.1A: canary delivery adapter (docs/phase23_1a_canary_delivery_adapter_report.md).
+    # Two-state, not the usual off/shadow/enforce shape - this selects which of two already-built
+    # delivery mechanisms `worker/content_cycle.py` uses, it does not gate a new capability on/off.
+    # "legacy" (default - byte-identical to every pre-Phase-23.1A behavior): the existing
+    # `editorial_chat_id` + `services/telegram_notifier.py::send_editorial_card()`/`services/
+    # image_preview_notifier.py::send_news_with_image_preview()` path, completely untouched.
+    # "router": `worker/content_cycle.py` sends via Phase 22's `services/telegram_routing.py::
+    # send_to_editorial_destination()` instead, hardcoded to `EditorialDestination.NEWS` only -
+    # there is no path from this setting to any other destination. Intended only for the local
+    # canary; never set in the real `.env` this phase.
+    editorial_delivery_mode: Literal["legacy", "router"] = "legacy"
+
     # Default editorial target output language (docs/
     # content_generation_language_final_implementation_plan.md). Injected explicitly by
     # capabilities.executor.CapabilityExecutor._build_context() into every
@@ -215,6 +253,13 @@ class Settings(BaseSettings):
     # brand-new signal with zero live validation yet, not something safe to default to shadow
     # before this phase's own shadow-mode bake period produces real calibration data.
     story_memory_mode: Literal["off", "shadow", "enforce"] = "off"
+
+    # Phase 20 M3: candidate-retrieval time window for services/story_memory.py::match_story() -
+    # previously a module-level constant (STORY_MATCH_LOOKBACK_DAYS = 14), now tunable without a
+    # code deploy, matching services/editorial_scoring.py's own established "reasoned default,
+    # refine from real shadow-mode data" convention. Value unchanged from the original constant -
+    # this is a mechanism change (settings vs. hardcoded), not a recalibration.
+    story_match_lookback_days: int = Field(default=14, gt=0)
 
     # Phase 19 M7 (docs/phase19 plan, Correction 1): a real, previously-undisclosed shadow-mode
     # gap was found in the block above's own downstream consumer (worker/content_cycle.py) - it
@@ -353,7 +398,35 @@ class Settings(BaseSettings):
     # remains frozen/unmodified/fully selectable; v5 (prompts/copywriting/v5.yaml) is a genuinely
     # editorial long-form structure, opt-in only. capabilities/copywriting_capability.py reads
     # this at call time (never a fixed constant), so switching versions needs no code deploy.
-    copywriting_prompt_version: Literal["4", "5"] = "4"
+    # "6" (prompts/copywriting/v6.yaml, overnight A/B/C validation seam): the next immutable
+    # version, per the same prompt-immutability rule - v5 is never edited to add this, since it
+    # has its own established identity. Reachable only via the manual comparison harness, which
+    # overrides this setting in-process for the duration of a single call and restores it
+    # afterward (mirrors tests/test_content_generation_integration.py's own established
+    # temporarily-override-then-restore convention) - never set in .env, never the default.
+    # "7" (prompts/copywriting/v7.yaml, Phase 23.1I live editorial hardening): same structural
+    # shape as v6, plain-language + importance-does-not-imply-length rule set added - v6 stays
+    # frozen. Reachable the same in-process-override-only way, never set in .env, never the
+    # default.
+    # "8" (prompts/copywriting/v8.yaml, Phase 23.1J): a deliberately SMALLER output shape
+    # (title/main_body/ending/expandable_details/quote, not v6/v7's seven/eight sections) - v6/v7
+    # stay frozen. Reachable the same in-process-override-only way, never set in .env, never the
+    # default this phase.
+    # "8.1" (prompts/copywriting/v8.1.yaml, Phase 23.1J.1): a further simplification - main_body
+    # is exactly one paragraph, no expandable_details field at all. v6/v7/v8 stay frozen. Same
+    # in-process-override-only reachability, never set in .env, never the default this phase.
+    # "8.2" (prompts/copywriting/v8.2.yaml, Phase 23.1K): a pure editorial-style refinement of
+    # v8.1 (stronger "delete before explaining" + vendor/supplier rule) - the output SCHEMA is
+    # identical to v8.1, only the prompt wording differs. v6/v7/v8/v8.1 stay frozen. Reachable the
+    # same in-process-override-only way; this is the first version this session wires into a real
+    # live canary (Phase 23.1K), but it is still never the settings default.
+    # "8.6" (prompts/copywriting/v8.6.yaml, Phase 23.1Q): a single, narrow rule fix - rewrites the
+    # UNCERTAINTY rule to remove the "данные неизвестны"/"подробности не раскрыты" worked examples
+    # that licensed generic missing-detail-enumeration filler endings (confirmed live, e.g. the
+    # real Craft Ventures post), replacing them with an explicit materiality standard. Output
+    # SCHEMA is identical to v8.5 (still title/main_body/ending/quote/story_led/viral_potential/
+    # meme_potential) - v6 through v8.5 stay frozen. Still never the settings default.
+    copywriting_prompt_version: Literal["4", "5", "6", "7", "8", "8.1", "8.2", "8.3", "8.4", "8.5", "8.6"] = "4"
 
     # Phase 19 M5: quote delivery wiring and length safety (docs/phase19_m0_audit.md). Three-
     # state, matching article_acquisition_mode's own convention. "off" (default): worker/
@@ -538,6 +611,16 @@ class Settings(BaseSettings):
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password.get_secret_value()}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    @property
+    def test_database_url(self) -> str:
+        """Phase 23.1L: the dedicated pytest database - same host/user/password as `database_url`,
+        different database name (`postgres_test_db`). Every pytest fixture that opens a real
+        Postgres connection must use this, never `database_url`."""
+        return (
+            f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password.get_secret_value()}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_test_db}"
         )
 
     @property

@@ -26,7 +26,7 @@ import yaml  # type: ignore[import-untyped]  # no stub package installed repo-wi
 
 from integrations.prompts.protocol import RenderedPrompt
 
-_VERSION_FILENAME_RE = re.compile(r"^v(\d+)\.yaml$")
+_VERSION_FILENAME_RE = re.compile(r"^v(\d+(?:\.\d+)?)\.yaml$")
 
 
 class UnknownPromptError(Exception):
@@ -42,13 +42,28 @@ class PromptContentError(Exception):
     boot-time-failure precedent)."""
 
 
-def _parse_version_number(filename: str) -> int:
+def _parse_version_string(filename: str) -> str:
+    """Returns the version exactly as it appears in the filename (e.g. "4", "8.1") - version
+    identity is a string throughout this module and every caller (core/config.py's own
+    `copywriting_prompt_version` setting is a plain string Literal, never coerced to int anywhere)
+    - only `_version_sort_key()` below ever needs a numeric interpretation, and only for
+    determining "latest"."""
     match = _VERSION_FILENAME_RE.match(filename)
     if match is None:
         raise PromptContentError(
-            f"Prompt version filename '{filename}' does not match the required 'v<N>.yaml' shape."
+            f"Prompt version filename '{filename}' does not match the required 'v<N>.yaml' or "
+            f"'v<N>.<M>.yaml' shape."
         )
-    return int(match.group(1))
+    return match.group(1)
+
+
+def _version_sort_key(version: str) -> tuple[int, int]:
+    """Phase 23.1J.1: supports one optional minor-version level ("8" -> (8, 0), "8.1" -> (8, 1))
+    for latest-version determination - a real numeric sort, never a naive string comparison
+    (which would incorrectly order "8.1" before "10", since "8" < "1" lexicographically at the
+    first differing character is not how version numbers work)."""
+    major_str, _, minor_str = version.partition(".")
+    return (int(major_str), int(minor_str) if minor_str else 0)
 
 
 def _require_str(raw: dict[Any, Any], key: str, path: Path) -> str:
@@ -108,13 +123,12 @@ class FilePromptRepository:
 
         for name_dir in sorted(p for p in root.iterdir() if p.is_dir()):
             name = name_dir.name
-            numbered_versions: list[tuple[int, str]] = []
+            numbered_versions: list[tuple[tuple[int, int], str]] = []
             for version_file in sorted(name_dir.glob("v*.yaml")):
-                version_number = _parse_version_number(version_file.name)
-                version = str(version_number)
+                version = _parse_version_string(version_file.name)
                 rendered = _load_rendered_prompt(version_file, expected_name=name, expected_version=version)
                 self._prompts[(name, version)] = rendered
-                numbered_versions.append((version_number, version))
+                numbered_versions.append((_version_sort_key(version), version))
 
             if numbered_versions:
                 numbered_versions.sort(key=lambda pair: pair[0])

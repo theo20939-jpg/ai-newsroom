@@ -24,7 +24,21 @@ class NewsEventStoryLink(Base):
     """Links one NewsEvent to the Story it was matched to (Phase 18.10 M1/M2, shadow mode only -
     services/story_memory.py). A row here exists if and only if story_memory_mode != "off" was
     enabled at the time the event was triaged - never created for story_memory_mode == "off"
-    (the default)."""
+    (the default).
+
+    Phase 20 M10 note: database/migrations/versions/3c22be05f4e5_add_story_memory_v2_shadow_
+    columns.py adds three nullable columns (delta_classification, confidence_band, would_suppress)
+    for services/story_delta_engine.py, services/story_confidence.py, and services/
+    story_suppression.py's outputs - created but deliberately NOT applied to any real database
+    this phase (Phase 20's explicit shadow-neutrality/no-migration-application guardrail). This
+    ORM class is intentionally NOT updated to declare those columns yet: SQLAlchemy includes every
+    mapped column in every generated INSERT regardless of whether it was explicitly set on the
+    instance (confirmed empirically - an unset nullable column still appears as a NULL parameter
+    in the INSERT), so declaring them here before the migration is applied would break every real
+    INSERT against this table (verified: it does, with `UndefinedColumnError`). The model and
+    migration are updated together, in the same future, separately-authorized change that applies
+    the migration - exactly the precedent every prior shadow-infra migration in this codebase
+    follows (model + migration land and apply in the same authorized step, never split apart)."""
 
     __tablename__ = "news_event_story_links"
 

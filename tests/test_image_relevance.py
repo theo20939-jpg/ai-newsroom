@@ -478,10 +478,20 @@ def test_59_unknown_relationship_differs_from_conflicting():
     assert unknown_result.relevance_score != conflicting_result.relevance_score
 
 
-def test_60_missing_metadata_does_not_produce_dead_constant_component():
+def test_60_metadata_confidence_component_is_zero_by_design_but_coverage_still_varies():
+    """Phase 23.1N.1: METADATA_CONFIDENCE_MAX was reduced to 0 (its entire budget moved to
+    QUALITY_MAX, docs/phase23_1n1_image_ranking_quality_report.md) - the `metadata_confidence`
+    relevance-score COMPONENT is now always 0 by design, for every candidate, regardless of how
+    rich or poor its metadata is (0 * anything = 0) - this is the direct, intended consequence of
+    the rebalancing, not a bug. The underlying signal is not deleted, only removed from the final
+    score: `coverage` (test_61) still reports the real alt/caption/filename/dims-match flags
+    accurately either way - only their contribution to `relevance_score` itself was zeroed."""
     rich = score_candidate(_candidate(alt_text="GPT-5 launch photo", caption="official image", declared_width=1200, declared_height=630), _CTX)
     poor = score_candidate(_candidate(alt_text=None, caption=None, remote_url=None), _CTX)
-    assert rich.components["metadata_confidence"] != poor.components["metadata_confidence"]
+    assert rich.components["metadata_confidence"] == 0
+    assert poor.components["metadata_confidence"] == 0
+    assert rich.coverage["candidate_alt_available"] is True
+    assert poor.coverage["candidate_alt_available"] is False
 
 
 def test_61_coverage_flags_are_accurate():
@@ -625,3 +635,333 @@ def test_m3_shaped_candidate_deserializes_without_relevance_validation():
 
 def test_weighted_token_set_handles_none():
     assert _weighted_token_set(None) == {}
+
+
+# ---------------------------------------------------------------------------
+# Phase 23.1N.1 (docs/phase23_1n1_image_ranking_quality_report.md) - the real Anthropic-IPO
+# Techmeme-vs-WSJ case (Phase 23.1N's own disclosed, unfixed finding) and the required Part L
+# test cases. `_real_techmeme_thumbnail`/`_real_wsj_image` reproduce the ACTUAL persisted
+# dimensions/quality_score/discovery_method/source_relationship from the real live canary run
+# (scripts/_phase23_1n1_anthropic_full_candidates.txt) - not synthetic approximations.
+# ---------------------------------------------------------------------------
+
+
+def _real_techmeme_thumbnail() -> ImageCandidate:
+    """The real winner under the OLD weights: 142x72, quality_score=65 (weak resolution band),
+    native_same_item (RSS inline, same event item)."""
+    return _candidate(
+        ImageDiscoveryMethod.RSS_INLINE_IMAGE, candidate_id="techmeme-thumb",
+        remote_url="http://www.techmeme.com/260811/i1.jpg",
+        source_url="https://www.techmeme.com/260811/p1#a260811p1",
+        width=142, height=72, quality_score=65, quality_status=QualityStatus.REVIEW,
+        alt_text=None, caption=None,
+    )
+
+
+def _real_wsj_image() -> ImageCandidate:
+    """The real loser under the OLD weights despite vastly higher quality: 1280x640,
+    quality_score=98 (good resolution band), source_cdn_or_related (hosted on a related asset
+    domain, discovered via Open Graph on the same article page)."""
+    return _candidate(
+        ImageDiscoveryMethod.OPEN_GRAPH_IMAGE, candidate_id="wsj-hero",
+        remote_url="https://images.wsj.net/im-50714106/social",
+        source_url="https://www.techmeme.com/260811/p1#a260811p1",
+        width=1280, height=640, quality_score=98, quality_status=QualityStatus.REVIEW,
+        alt_text=None, caption=None,
+    )
+
+
+_ANTHROPIC_CTX = build_event_context(
+    event_title="Anthropic is courting investors for what could be the biggest IPO ever",
+    event_content="Sources: Anthropic is courting investors for what could be the biggest IPO ever",
+    source_name="Techmeme",
+    event_url="https://www.techmeme.com/260811/p1#a260811p1",
+)
+
+
+def test_case_1_real_techmeme_vs_wsj_case_the_higher_quality_direct_image_now_wins():
+    """CASE 1 (Part L): tiny aggregator thumbnail vs good direct-source image -> the good
+    direct-source image wins. Reproduces the exact real Phase 23.1N finding with real numbers -
+    under the OLD QUALITY_MAX=15/METADATA_CONFIDENCE_MAX=10 weights this candidate pair scored
+    Techmeme=50, WSJ=47 (Techmeme winning); after the QUALITY_MAX=25/METADATA_CONFIDENCE_MAX=0
+    rebalancing, WSJ must win."""
+    techmeme = score_candidate(_real_techmeme_thumbnail(), _ANTHROPIC_CTX)
+    wsj = score_candidate(_real_wsj_image(), _ANTHROPIC_CTX)
+    assert wsj.relevance_score > techmeme.relevance_score, (
+        f"WSJ ({wsj.relevance_score}) must outrank the tiny Techmeme thumbnail "
+        f"({techmeme.relevance_score}) now that quality carries more weight"
+    )
+
+
+def test_case_2_small_relevant_original_beats_huge_generic_image():
+    """CASE 2 (Part L): a small but clearly story-specific original image must still beat a huge
+    but generic/unrelated image - quality must never override relevance (Part F guard)."""
+    small_relevant = _candidate(
+        ImageDiscoveryMethod.RSS_MEDIA_CONTENT, candidate_id="small-relevant",
+        width=400, height=300, quality_score=55, alt_text="Anthropic IPO investors",
+        source_url="https://www.techmeme.com/260811/p1#a260811p1",
+    )
+    huge_generic = _candidate(
+        ImageDiscoveryMethod.IMAGE_SRC_LINK, candidate_id="huge-generic",
+        width=4000, height=3000, quality_score=100, alt_text=None,
+        source_url="https://unrelated.example/other-page",
+        remote_url="https://unrelated.example/generic-server-room.jpg",
+    )
+    small_result = score_candidate(small_relevant, _ANTHROPIC_CTX)
+    huge_result = score_candidate(huge_generic, _ANTHROPIC_CTX)
+    assert small_result.relevance_score > huge_result.relevance_score
+
+
+def test_case_3_equal_relevance_different_quality_better_quality_wins():
+    """CASE 3 (Part L): two equally relevant originals, different quality -> the better
+    Telegram-display-quality image wins (already partly covered by the pre-existing test_47;
+    this uses the real-scale Anthropic quality_score values specifically)."""
+    low_quality = _candidate(
+        ImageDiscoveryMethod.OPEN_GRAPH_IMAGE, candidate_id="og-low", width=600, height=300,
+        quality_score=65, alt_text="Anthropic IPO",
+        source_url="https://www.techmeme.com/260811/p1#a260811p1",
+    )
+    high_quality = _candidate(
+        ImageDiscoveryMethod.OPEN_GRAPH_IMAGE, candidate_id="og-high", width=1280, height=640,
+        quality_score=98, alt_text="Anthropic IPO",
+        source_url="https://www.techmeme.com/260811/p1#a260811p1",
+    )
+    low_result = score_candidate(low_quality, _ANTHROPIC_CTX)
+    high_result = score_candidate(high_quality, _ANTHROPIC_CTX)
+    assert high_result.relevance_score > low_result.relevance_score
+
+
+def test_case_4_gigantic_image_gains_no_runaway_advantage_over_already_good_image():
+    """CASE 4 (Part L): a gigantic image must not gain unbounded advantage over an
+    already-"comfortably suitable for Telegram" image. Reuses services.image_quality's own
+    already-saturating `resolution_band` (GOOD caps at shortest-side>=600, confirmed in
+    services/image_quality.py) - both a 1280x640 and an 8000x8000 image land in the GOOD band and
+    must receive the identical resolution component, so quality_score itself (which this
+    relevance layer reuses unmodified) already provides the diminishing-returns behavior Part E
+    asks for - this test proves that saturation survives into the final relevance score too."""
+    already_good = _candidate(
+        ImageDiscoveryMethod.OPEN_GRAPH_IMAGE, candidate_id="already-good", width=1280, height=640,
+        quality_score=98, alt_text="Anthropic IPO",
+        source_url="https://www.techmeme.com/260811/p1#a260811p1",
+    )
+    gigantic = _candidate(
+        ImageDiscoveryMethod.OPEN_GRAPH_IMAGE, candidate_id="gigantic", width=8000, height=4000,
+        quality_score=98, alt_text="Anthropic IPO",  # same M3 quality_score - both are GOOD band
+        source_url="https://www.techmeme.com/260811/p1#a260811p1",
+    )
+    good_result = score_candidate(already_good, _ANTHROPIC_CTX)
+    gigantic_result = score_candidate(gigantic, _ANTHROPIC_CTX)
+    assert good_result.relevance_score == gigantic_result.relevance_score
+
+
+def test_case_8_article_lead_image_beats_generic_company_logo():
+    """CASE 8 (Part L): article lead vs generic company logo -> the article lead wins when both
+    are otherwise valid."""
+    article_lead = _candidate(
+        ImageDiscoveryMethod.OPEN_GRAPH_SECURE_IMAGE, candidate_id="lead", width=1200, height=630,
+        quality_score=90, alt_text="Anthropic office announcement",
+        source_url="https://www.techmeme.com/260811/p1#a260811p1",
+    )
+    company_logo = _candidate(
+        ImageDiscoveryMethod.IMAGE_SRC_LINK, candidate_id="logo", width=512, height=512,
+        quality_score=70, alt_text="Anthropic logo",
+        source_url="https://www.techmeme.com/260811/p1#a260811p1",
+        remote_url="https://www.techmeme.com/logo.png",
+    )
+    lead_result = score_candidate(article_lead, _ANTHROPIC_CTX)
+    logo_result = score_candidate(company_logo, _ANTHROPIC_CTX)
+    assert lead_result.relevance_score > logo_result.relevance_score
+
+
+def test_case_12_candidate_order_reversed_winner_is_identical():
+    """CASE 12 (Part L): selection must not depend on discovery/input order - already
+    structurally guaranteed by rank_candidates()'s own full-resort design (confirmed by the
+    pre-existing test_66), re-proven here specifically for the real Techmeme/WSJ pair post-fix."""
+    techmeme = _real_techmeme_thumbnail()
+    wsj = _real_wsj_image()
+    forward = rank_candidates(
+        [techmeme, wsj], event_title="Anthropic IPO",
+        event_content="", event_url=_ANTHROPIC_CTX.event_url, source_name="Techmeme", top_candidates=5,
+    )
+    backward = rank_candidates(
+        [wsj, techmeme], event_title="Anthropic IPO", event_content="",
+        event_url=_ANTHROPIC_CTX.event_url, source_name="Techmeme", top_candidates=5,
+    )
+    forward_winner = next(c.candidate_id for c in forward if c.relevance_validation.rank == 1)
+    backward_winner = next(c.candidate_id for c in backward if c.relevance_validation.rank == 1)
+    assert forward_winner == backward_winner == "wsj-hero"
+
+
+# ---------------------------------------------------------------------------
+# Phase 23.1N.1 continuation (post-reboot recovery, docs/
+# session_recovery_after_reboot_phase23_1n1.md) - the 6 required Part L cases left unwritten when
+# the session was interrupted (1/2/3/4/8/12 above were already done pre-reboot). QUALITY_MAX=25/
+# METADATA_CONFIDENCE_MAX=0 are NOT touched by any test below - these only prove the rebalance
+# left everything it must not touch alone.
+# ---------------------------------------------------------------------------
+
+
+def test_case_5_tracking_pixel_and_icon_dimensioned_candidates_remain_hard_rejected():
+    """CASE 5 (Part L): tracking/icon hard rejection. A candidate M3 already hard-rejected as
+    tracking-pixel/icon-dimensioned (`QualityStatus.REJECTED_QUALITY` - services/image_quality.py's
+    own `tracking_pixel_dimensions`/`favicon_dimensions` hard rejection, confirmed live for
+    Anthropic's own real 11x12 Techmeme favicon, docs/phase23_1n_story_angle_meme_image_report.md
+    §9) must remain permanently ineligible regardless of this phase's weight rebalance -
+    `evaluate_eligibility()` gates on M3's `quality.status` BEFORE any relevance/quality scoring
+    ever runs, so `QUALITY_MAX`/`METADATA_CONFIDENCE_MAX` structurally cannot rescue it either way
+    (already covered in general by the pre-existing test_51; re-proven here end-to-end through
+    `rank_candidates()` specifically for this phase, not merely `evaluate_eligibility()` alone)."""
+    tracking_or_icon = _candidate(
+        ImageDiscoveryMethod.OPEN_GRAPH_IMAGE, candidate_id="tracking-icon",
+        width=11, height=12, quality_score=0, quality_status=QualityStatus.REJECTED_QUALITY,
+    )
+    eligible, reason = evaluate_eligibility(tracking_or_icon)
+    assert eligible is False and "rejected_quality" in reason
+
+    ranked = rank_candidates(
+        [tracking_or_icon], event_title="x", event_content="", event_url=None,
+        source_name=None, top_candidates=5,
+    )
+    assert ranked[0].relevance_validation.status == RelevanceStatus.INELIGIBLE
+    assert ranked[0].relevance_validation.eligible_for_editorial is False
+
+
+def test_case_6_mediocre_thumbnail_as_only_relevant_candidate_is_still_selected():
+    """CASE 6 (Part L): mediocre thumbnail as the only candidate. Documents the ACTUAL current
+    quality-floor semantics rather than inventing a new one: direct reading of
+    `evaluate_eligibility()`/`rank_candidates()` shows the only eligibility gate is M3's hard-
+    rejection status (tracking/icon/duplicate - Case 5/9) - there is no separate minimum
+    relevance_score floor underneath that. A candidate that clears M3's hard-rejection bar remains
+    eligible no matter how low its resulting relevance_score is; "no image" only occurs when zero
+    candidates clear that bar at all (Case 7 below) or none are discovered (pre-existing
+    test_72) - never merely "the only candidate wasn't good enough" on its own."""
+    mediocre = _candidate(
+        ImageDiscoveryMethod.RSS_INLINE_IMAGE, candidate_id="mediocre-thumb",
+        width=200, height=150, quality_score=35, quality_status=QualityStatus.REVIEW,
+        alt_text=None, caption=None, source_url=None, remote_url="https://example.com/thumb.jpg",
+    )
+    ranked = rank_candidates(
+        [mediocre], event_title="Some story headline", event_content="", event_url=None,
+        source_name=None, top_candidates=5,
+    )
+    assert ranked[0].relevance_validation.status == RelevanceStatus.RANKED
+    assert ranked[0].relevance_validation.eligible_for_editorial is True
+
+
+def test_case_7_all_candidates_hard_rejected_by_m3_yields_no_image():
+    """CASE 7 (Part L): all candidates poor -> no image. When EVERY candidate is hard-rejected by
+    M3 (tracking/icon dimensions or a non-representative duplicate - the only real "poor" gate that
+    exists in this architecture; Case 6 above proves there is no separate soft floor beneath it),
+    `rank_candidates()` marks none of them `eligible_for_editorial` - the real mechanism behind the
+    "NO IMAGE > BAD IMAGE" product rule, confirmed on real live data in docs/
+    phase23_1h_text_image_canary_report.md §12 (both discovered candidates for that post were
+    correctly rejected and it was sent text-only)."""
+    tiny_icon = _candidate(
+        candidate_id="icon", width=32, height=32, quality_score=5,
+        quality_status=QualityStatus.REJECTED_QUALITY,
+    )
+    duplicate = _candidate(
+        candidate_id="dup", quality_status=QualityStatus.DUPLICATE_NEAR,
+        is_representative=False, duplicate_of="icon", hamming_distance=2,
+    )
+    ranked = rank_candidates(
+        [tiny_icon, duplicate], event_title="x", event_content="", event_url=None,
+        source_name=None, top_candidates=5,
+    )
+    assert all(c.relevance_validation.eligible_for_editorial is False for c in ranked)
+    assert all(c.relevance_validation.status == RelevanceStatus.INELIGIBLE for c in ranked)
+
+
+def test_case_9_multi_candidate_ranking_still_yields_a_valid_fallback_target():
+    """CASE 9 (Part L): duplicate-image guard preserved. The cross-event duplicate-image guard
+    itself (`services/image_persistence.py::get_recently_attached_image_source_urls()`, Phase
+    23.1N Part J) is NOT modified by this phase (confirmed: file untouched since Phase 23.1N,
+    unrelated to relevance weights - it runs a separate DB query keyed on `source_url`) and is
+    already covered end-to-end, including its fall-through-to-next-candidate behavior, by
+    tests/test_story_angle_and_image_duplicate_guard.py (DB-dependent, unaffected by this phase).
+    What THIS ranking layer alone must still guarantee for that guard's caller (`worker/
+    content_cycle.py`, which walks the ranked list in order and skips a duplicate) to have
+    something to fall back to: a full, correctly-ordered multi-candidate result with each
+    candidate's own `source_url` intact, not just a single winner - proven here for a realistic
+    mixed native+metadata candidate set under the new weights."""
+    native_fallback = _candidate(
+        ImageDiscoveryMethod.RSS_MEDIA_CONTENT, candidate_id="native-fallback",
+        source_url=None, remote_url="https://cdn.example.com/rss-image.jpg",
+        width=800, height=533, quality_score=70, alt_text="Anthropic IPO investors",
+    )
+    og_winner = _candidate(
+        ImageDiscoveryMethod.OPEN_GRAPH_IMAGE, candidate_id="og-winner",
+        source_url="https://www.techmeme.com/a", remote_url="https://images.wsj.net/im-1/social",
+        width=1280, height=640, quality_score=98, alt_text="Anthropic IPO",
+    )
+    ranked = rank_candidates(
+        [native_fallback, og_winner], event_title="Anthropic IPO", event_content="",
+        event_url="https://www.techmeme.com/a", source_name="Techmeme", top_candidates=5,
+    )
+    eligible = [c for c in ranked if c.relevance_validation.eligible_for_editorial]
+    assert len(eligible) == 2
+    assert sorted(c.relevance_validation.rank for c in eligible) == [1, 2]
+    assert len({c.candidate_id for c in eligible}) == 2
+    ids_to_source = {c.candidate_id: c.source_url for c in eligible}
+    assert ids_to_source["native-fallback"] is None
+    assert ids_to_source["og-winner"] == "https://www.techmeme.com/a"
+
+
+_ARMENIA_EVENT_URL = "https://3dnews.ru/1146526"
+_ARMENIA_TITLE = "NVIDIA graphics cards from Armenia turned out to contain relabeled Firebird chips"
+
+
+def test_case_10_armenia_firebird_regression_own_domain_image_still_wins():
+    """CASE 10 (Part L): Armenia/Firebird regression. Disclosed honestly, matching Phase 23.1N's
+    own §11 disclosure style: no real persisted image_intelligence candidate data exists for this
+    event anywhere in this repository - it was never delivered through a real live canary with
+    Image Intelligence active (golden-replay only, text-based). This reconstructs a representative
+    candidate using the REAL event URL (scripts/_phase23_1i_armenia_events.json, event_id
+    36891f69-a5f0-47f8-a336-ddb917f9bdd1) and the exact realistic own-domain-CDN shape confirmed
+    for two OTHER real 3dnews.ru candidates persisted this session (`long_march_7a`/`gym_3dnews` in
+    scripts/_phase23_1n_image_forensics.json, both `open_graph_secure_image` on `cdn.3dnews.ru`)
+    against a generic unrelated alternative - proving the previously-correct class of winner (the
+    article's own domain image) is not displaced by the new weights, i.e. relevance still beats
+    raw quality here exactly as it did before this phase."""
+    own_domain_image = _candidate(
+        ImageDiscoveryMethod.OPEN_GRAPH_SECURE_IMAGE, candidate_id="3dnews-own",
+        source_url=_ARMENIA_EVENT_URL,
+        remote_url="https://cdn.3dnews.ru/assets/external/illustrations/2026/08/09/1146526/firebird.jpg",
+        width=800, height=535, quality_score=73, alt_text=None,
+    )
+    unrelated_generic = _candidate(
+        ImageDiscoveryMethod.IMAGE_SRC_LINK, candidate_id="generic-unrelated",
+        source_url="https://other.example/unrelated-page", remote_url="https://other.example/stock-photo.jpg",
+        width=1600, height=900, quality_score=95, alt_text=None,
+    )
+    ctx = build_event_context(
+        event_title=_ARMENIA_TITLE, event_content=_ARMENIA_TITLE, source_name="3DNews",
+        event_url=_ARMENIA_EVENT_URL,
+    )
+    own_domain_result = score_candidate(own_domain_image, ctx)
+    unrelated_result = score_candidate(unrelated_generic, ctx)
+    assert own_domain_result.relevance_score > unrelated_result.relevance_score
+
+
+def test_case_11_phase23_1h_google_news_aggregator_and_broken_candidate_regression():
+    """CASE 11 (Part L): Phase 23.1H text-only regression. Reproduces the real live case (docs/
+    phase23_1h_text_image_canary_report.md §12, NEWS #2) - a 300x300 generic Google-hosted
+    aggregator thumbnail (Phase 16.5's own `_is_generic_aggregator_asset` exclusion) and one
+    dimensionless/technically-failed candidate, both correctly rejected on real production data;
+    this must remain unchanged under the new weights - both rejections happen at the eligibility
+    gate, entirely before `QUALITY_MAX`/`METADATA_CONFIDENCE_MAX` are ever applied."""
+    google_aggregator_thumb = _candidate(
+        ImageDiscoveryMethod.OPEN_GRAPH_IMAGE, candidate_id="google-agg-thumb",
+        source_url="https://news.google.com/rss/articles/xyz",
+        remote_url="https://lh3.googleusercontent.com/some-generic-thumb.jpg",
+        width=300, height=300, quality_score=60,
+    )
+    broken = _candidate(candidate_id="broken", candidate_status=ImageCandidateStatus.FETCH_FAILED)
+    ranked = rank_candidates(
+        [google_aggregator_thumb, broken], event_title="x", event_content="",
+        event_url="https://news.google.com/rss/articles/xyz", source_name=None, top_candidates=5,
+    )
+    assert all(c.relevance_validation.eligible_for_editorial is False for c in ranked)
+    reasons = {c.candidate_id: c.relevance_validation.eligibility_reason for c in ranked}
+    assert reasons["google-agg-thumb"] == "generic_aggregator_asset"
+    assert "not_technically_validated" in reasons["broken"]

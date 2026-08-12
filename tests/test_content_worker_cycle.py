@@ -192,6 +192,26 @@ async def test_source(factory: async_sessionmaker[AsyncSession]) -> AsyncIterato
 
                     await session.execute(delete(Story).where(Story.id.in_(story_ids)))
 
+                # Phase 19 M1/M2: news_event_article_acquisitions FK-references news_events.id
+                # directly (its PK *is* news_event_id, per database/models/news_event_article_
+                # acquisition.py) - independent of whether a ContentDraft exists, unlike the
+                # content-draft-gated blocks above. Same guarded-delete convention as those blocks
+                # (table-existence check first, so this fixture still works against the
+                # unmigrated real DB) - added once article_acquisition_mode=shadow started
+                # writing real rows here during these tests, which otherwise made the NewsEvent
+                # delete below fail with a FK violation at teardown, after the test body itself
+                # had already passed.
+                if await _table_exists(session, "news_event_article_acquisitions"):
+                    from database.models.news_event_article_acquisition import (
+                        NewsEventArticleAcquisition,
+                    )
+
+                    await session.execute(
+                        delete(NewsEventArticleAcquisition).where(
+                            NewsEventArticleAcquisition.news_event_id.in_(event_ids)
+                        )
+                    )
+
                 await session.execute(delete(NewsEvent).where(NewsEvent.id.in_(event_ids)))
             await session.execute(delete(NewsSource).where(NewsSource.id == source.id))
             await session.commit()

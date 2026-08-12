@@ -26,12 +26,15 @@ calls.
 """
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from core.config import settings
+
+logger = logging.getLogger(__name__)
 
 FACT_SAFETY_VERSION = "v1"
 
@@ -552,7 +555,7 @@ _ENTITY_PREFIX_PATTERN = re.compile(r"^(ооо|зао|пао|оао)\b\.?\s*", r
 # morphological/suffix-stripping algorithm) - conservative by instruction: it only ever strips
 # one of these exact words, never guesses at an unlisted suffix.
 _ENTITY_DESCRIPTIVE_SUFFIX_PATTERN = re.compile(
-    r"-(?:система|технология|платформа|модель|метод|алгоритм|инструмент)\b", re.IGNORECASE
+    r"-(?:система|технология|платформа|модель|метод|алгоритм|инструмент|цод)\b", re.IGNORECASE
 )
 
 # M5.3 calibration: explicit, hand-curated equivalence groups for same-real-world-entity aliases
@@ -696,22 +699,37 @@ _ENTITY_GENERIC_ROLE_NOUN_WORDS = frozenset({
     "агент", "компания", "модель", "платформа", "стартап", "разработчик", "производитель",
     "agent", "company", "model", "platform", "startup", "developer", "manufacturer",
 })
+# Phase 23.1I Part F: a short Russian preposition, capitalized only because it happens to start a
+# sentence ("В Армении...", "На заводе...") - never itself part of a proper-noun phrase, exactly
+# the same false-positive mechanism M5.2/Checkpoint 6 already found and excluded for grammatical
+# determiners/demonstratives (this module's own docstring precedent) - confirmed as a real, live
+# false positive in the Phase 23.1H drafts ("В Армении" extracted as its own entity, never
+# matching the same real entity's mid-sentence, uncapitalized "Армении" elsewhere). A short,
+# fixed, hand-curated list, never a general preposition parser.
+_ENTITY_GENERIC_PREPOSITION_WORDS = frozenset({
+    "в", "во", "на", "от", "с", "со", "из", "по", "для", "у", "к", "ко", "над", "под", "при",
+    "за", "до", "о", "об", "обо",
+})
 # A hyphenated compound whose own suffix names a generic technology-descriptor category (mirrors
 # `_ENTITY_DESCRIPTIVE_SUFFIX_PATTERN`'s own word list, used for a different purpose - matching,
-# not extraction - kept in sync by hand) - e.g. "ИИ-модель"/"ИИ-агент"/"ИИ-платформа" is stripped
-# as one whole leading word, never decomposed further.
+# not extraction - kept in sync by hand) - e.g. "ИИ-модель"/"ИИ-агент"/"ИИ-платформа"/"ИИ-ЦОД" is
+# stripped as one whole leading word, never decomposed further. "цод" added per Phase 23.1I Part F
+# - a real, live false positive ("ИИ-ЦОД Firebird" extracted as one glued compound, never matching
+# the real entity "Firebird" alone in any independently-extracted evidence claim).
 _ENTITY_GENERIC_HYPHENATED_RE = re.compile(
-    r"^\w+-(?:система|технология|платформа|модель|метод|алгоритм|инструмент|агент)$", re.IGNORECASE,
+    r"^\w+-(?:система|технология|платформа|модель|метод|алгоритм|инструмент|агент|цод)$", re.IGNORECASE,
 )
 
 
 def _is_unconditionally_generic_word(word: str) -> bool:
-    """Role/category nouns and hyphenated technology descriptors - generic regardless of context,
-    safe to strip unconditionally. Nationality/generic ADJECTIVES are deliberately NOT included
-    here - see `_strip_generic_entity_prefix()`'s own docstring for why they need a look-ahead
-    instead."""
+    """Role/category nouns, prepositions, and hyphenated technology descriptors - generic
+    regardless of context, safe to strip unconditionally. Nationality/generic ADJECTIVES are
+    deliberately NOT included here - see `_strip_generic_entity_prefix()`'s own docstring for why
+    they need a look-ahead instead."""
     normalized = word.casefold()
     if normalized in _ENTITY_GENERIC_ROLE_NOUN_WORDS:
+        return True
+    if normalized in _ENTITY_GENERIC_PREPOSITION_WORDS:
         return True
     return bool(_ENTITY_GENERIC_HYPHENATED_RE.match(word))
 
@@ -983,6 +1001,73 @@ def evaluate_fact_safety(draft_title: str, draft_body: str, evidence: FactEviden
     }
 
 
+# Phase 21: Copywriting schema versions this module knows how to reduce to the single
+# (title, body_text) shape `evaluate_fact_safety()` has always accepted - `evaluate_fact_safety`
+# itself was never coupled to any one schema (it only ever wanted two plain strings, concatenated
+# into one `draft_text` blob before extraction); the coupling lived entirely in
+# `apply_fact_safety()`'s own narrow `.get("body")` lookup below. V6 (`prompts/copywriting/
+# v6.yaml`, verified directly against the real prompt file, not assumed) has no `body` key at
+# all - its long-form structure is `opening/context/why_it_matters/what_changed/
+# what_happens_next/conclusion/what_remains_unknown/quote`. Adding a schema here (a future V7)
+# never requires touching `evaluate_fact_safety()` or any claim-classification logic - only this
+# tuple.
+_V6_REQUIRED_TEXT_KEYS: tuple[str, ...] = ("opening", "context", "why_it_matters", "what_changed", "conclusion")
+_V6_OPTIONAL_TEXT_KEYS: tuple[str, ...] = ("what_happens_next", "what_remains_unknown")
+
+# Phase 23.1J: V8 (`prompts/copywriting/v8.yaml`) - mirrors services/content_draft_service.py's
+# own identical V8 extraction addition. `main_body` is the only required text field beyond
+# `title`; `ending`/`expandable_details` are included only when populated - Fact Safety must see
+# every claim regardless of whether the presentation layer later hides `expandable_details`
+# behind a Telegram expandable blockquote.
+_V8_REQUIRED_TEXT_KEYS: tuple[str, ...] = ("main_body",)
+_V8_OPTIONAL_TEXT_KEYS: tuple[str, ...] = ("ending", "expandable_details")
+
+
+def _extract_draft_text(copywriting_output: dict[str, Any]) -> tuple[str, str] | None:
+    """Reduces any *known* Copywriting output schema to `(title, body_text)` - the exact shape
+    `evaluate_fact_safety()` already accepts. Returns `None` for a schema this function does not
+    recognize (`apply_fact_safety()` then fails explicitly rather than silently no-opping - see
+    its own docstring).
+
+    V4 (and any future schema that still carries a plain `body` field): `body` used as-is,
+    unchanged from pre-Phase-21 behavior - byte-identical output for every existing V4 case.
+
+    V6: every one of its required non-null narrative sections (`opening`, `context`,
+    `why_it_matters`, `what_changed`, `conclusion`) must be present as a string, or this is not
+    recognized as V6 either; the two genuinely optional sections (`what_happens_next`,
+    `what_remains_unknown`) are included only when actually populated (V6's own prompt sets them
+    to `null`, not an empty string, when there is nothing genuine to say - matching that
+    contract). Concatenated in the prompt's own declared section order so findings read in the
+    same order a human editor would encounter them, joined with blank lines so claim extraction
+    never fuses two sections' words together.
+    """
+    title = copywriting_output.get("title")
+    if not isinstance(title, str):
+        return None
+
+    body = copywriting_output.get("body")
+    if isinstance(body, str):
+        return title, body
+
+    if all(isinstance(copywriting_output.get(key), str) for key in _V6_REQUIRED_TEXT_KEYS):
+        sections = [copywriting_output[key] for key in _V6_REQUIRED_TEXT_KEYS]
+        sections.extend(
+            copywriting_output[key] for key in _V6_OPTIONAL_TEXT_KEYS
+            if isinstance(copywriting_output.get(key), str)
+        )
+        return title, "\n\n".join(sections)
+
+    if all(isinstance(copywriting_output.get(key), str) for key in _V8_REQUIRED_TEXT_KEYS):
+        sections = [copywriting_output[key] for key in _V8_REQUIRED_TEXT_KEYS]
+        sections.extend(
+            copywriting_output[key] for key in _V8_OPTIONAL_TEXT_KEYS
+            if isinstance(copywriting_output.get(key), str)
+        )
+        return title, "\n\n".join(sections)
+
+    return None
+
+
 def apply_fact_safety(
     news_event_title: str,
     news_event_content: str | None,
@@ -995,9 +1080,9 @@ def apply_fact_safety(
     QualityCapability's own LLM call already succeeded. Returns `structured_output` completely
     unchanged when `fact_safety_mode == "off"` (M5.6's zero-processing rollback path).
 
-    `copywriting_output` - NOT `structured_output` - is where the actual draft `title`/`body`
-    live: `QualityCapability`'s own real output schema is `{"passed": bool, "issues": list}`
-    only (confirmed by `capabilities/quality_capability.py`'s own `QUALITY_CAPABILITY_DEFINITION.
+    `copywriting_output` - NOT `structured_output` - is where the actual draft text lives:
+    `QualityCapability`'s own real output schema is `{"passed": bool, "issues": list}` only
+    (confirmed by `capabilities/quality_capability.py`'s own `QUALITY_CAPABILITY_DEFINITION.
     expected_output_keys`) - it never carries the draft text itself. `copywriting_output` is
     `context.business.workflow_state.step_results["copywriting"]`, already present on the
     context with zero extra DB query, exactly like `research_output`. (A real bug during initial
@@ -1006,6 +1091,18 @@ def apply_fact_safety(
     function always silently no-opped via the guard below; only local test doubles that
     incorrectly included `title`/`body` on their *fake* Quality output masked this. Fixed in
     Phase 15 M5.2, alongside the regression test that would have caught it.)
+
+    Phase 21: draft-text extraction is schema-aware (`_extract_draft_text()`, immediately above)
+    - Fact Safety validates the draft's *semantic content*, not one specific presentation shape.
+    `evaluate_fact_safety()` itself never changed: it always only wanted two strings. When
+    `copywriting_output` matches no schema this module understands, that is now an explicit,
+    logged condition (`fact_safety_unsupported_copywriting_schema`) that still returns a
+    `"fact_safety"` key (`status: "skipped"`) rather than omitting it - an absent key would be
+    indistinguishable from "checked and passed"; this never is. `_draft_status_for()` (`services/
+    content_draft_service.py`) only ever treats literal `"review"`/`"block"` as blocking, so a
+    `"skipped"` status is a safe fallback in every mode, including a hypothetical future
+    `enforce` - this function's own long-standing "must not affect delivery" discipline is
+    preserved exactly, now with visibility instead of silence.
 
     On "shadow"/"enforce", the original `structured_output` (`passed`/`issues`, preserved
     verbatim) is merged with a `"fact_safety"` key - purely additive, matching
@@ -1017,15 +1114,22 @@ def apply_fact_safety(
     if settings.fact_safety_mode == "off":
         return structured_output
 
-    title = copywriting_output.get("title")
-    body = copywriting_output.get("body")
-    if not isinstance(title, str) or not isinstance(body, str):
-        # Defensive only, mirrors apply_editorial_scoring_v2()'s identical guard: Copywriting's
-        # own floor-validation already guarantees these are strings in practice - this only
-        # fires if Copywriting's own step never ran or produced no result, which the workflow's
-        # own step ordering (copywriting before quality) makes structurally unreachable for a
-        # successfully-running "quality" step.
-        return structured_output
+    draft_text = _extract_draft_text(copywriting_output)
+    if draft_text is None:
+        logger.warning(
+            "fact_safety_unsupported_copywriting_schema",
+            extra={"copywriting_output_keys": sorted(copywriting_output.keys())},
+        )
+        return {
+            **structured_output,
+            "fact_safety": {
+                "version": FACT_SAFETY_VERSION,
+                "status": "skipped",
+                "mode": settings.fact_safety_mode,
+                "reason": "unsupported_copywriting_schema",
+            },
+        }
+    title, body = draft_text
 
     evidence = FactEvidence(
         source_title=news_event_title,

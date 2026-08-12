@@ -22,6 +22,7 @@ import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -69,6 +70,22 @@ def _fact_safety_status(result: WorkflowRunResult) -> str | None:
     return None
 
 
+def _copywriting_output_for_outcome(result: WorkflowRunResult) -> dict[str, Any] | None:
+    """Phase 23.1E: locate the raw "copywriting" step's structured output, if present - mirrors
+    `services.content_draft_service._copywriting_output()`'s identical lookup shape, deliberately
+    duplicated rather than imported (same established convention as `_fact_safety_status()` just
+    above). Unlike that sibling, never raises - this is optional enrichment for `worker/
+    content_cycle.py`'s NEWS presentation profile (services/news_telegram_presentation.py), not a
+    persistence-blocking requirement; `None` here simply means the presentation layer falls back
+    to `ContentDraft.body` unchanged (docs/phase23_1e_telegram_news_compact_profile_report.md
+    §3's own disclosed fallback). Safe to call even when `create_from_result()` already consumed
+    this same data - `result.step_results` is read-only, never mutated."""
+    for step_result in result.step_results:
+        if step_result.step_name == "copywriting" and step_result.status == "SUCCESS" and step_result.result:
+            return step_result.result
+    return None
+
+
 async def _run_article_acquisition(session: AsyncSession, event_id: UUID) -> None:
     """Phase 19 M1. Gated by settings.article_acquisition_mode != "off" (checked by the caller).
     Resolves the NewsEvent/NewsSource needed for the source_type != TELEGRAM gate, then delegates
@@ -105,12 +122,20 @@ class ContentGenerationOutcome:
     the workflow never reached "quality". Exposed here, extracted directly from `result` (already
     in scope below), so `worker/content_cycle.py` can make its own enforcement-mode delivery
     decision (M5.8) without any additional DB query.
+
+    `copywriting_output` (Phase 23.1E): the raw "copywriting" step's structured output (the still-
+    STRUCTURED V6 fields, or V4's `{title, body}`), when available - `None` when the workflow
+    never reached "copywriting" (outcome 2). Exposed so `worker/content_cycle.py`'s NEWS
+    presentation profile (services/news_telegram_presentation.py) can select from V6's real
+    sections without a second DB query or re-parsing the already-flattened `ContentDraft.body` -
+    `ContentDraft`/`ContentDraftService` themselves are completely unaware this field exists.
     """
 
     task_id: UUID
     workflow_status: RunStatus
     content_draft: ContentDraftRead | None
     fact_safety_status: str | None = None
+    copywriting_output: dict[str, Any] | None = None
 
 
 async def run_content_generation_for_event(
@@ -208,6 +233,7 @@ async def run_content_generation_for_event(
         return ContentGenerationOutcome(
             task_id=task.id, workflow_status=result.status, content_draft=draft,
             fact_safety_status=_fact_safety_status(result),
+            copywriting_output=_copywriting_output_for_outcome(result),
         )
 
 

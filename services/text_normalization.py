@@ -105,6 +105,22 @@ def token_overlap_ratio(a: str, b: str, *, min_token_len: int = 3) -> float:
     return len(tokens_a & tokens_b) / len(tokens_a)
 
 
+def symmetric_token_overlap(a: str, b: str, *, min_token_len: int = 3) -> float:
+    """Phase 20 M4: Dice coefficient (2*|A∩B|/(|A|+|B|)) over the same length-filtered token sets
+    `token_overlap_ratio()` uses - symmetric, unlike that function, which was found (Phase 20
+    calibration dataset's `ai_olympiad_cluster` case) to penalize a longer, differently-worded
+    restatement of the same story purely because it divides by the *new* event's own (larger)
+    token count. Added as a new function rather than changing `token_overlap_ratio()` itself -
+    that function's existing caller (`services/editorial_completeness.py`) keeps its own,
+    unchanged, already-calibrated asymmetric behavior; only services/story_memory.py uses this
+    one. Returns 0.0 if either side has no length-filtered tokens (never divides by zero)."""
+    tokens_a = {t for t in _WORD_RE.findall(normalize_loose(a)) if len(t) >= min_token_len}
+    tokens_b = {t for t in _WORD_RE.findall(normalize_loose(b)) if len(t) >= min_token_len}
+    if not tokens_a or not tokens_b:
+        return 0.0
+    return 2 * len(tokens_a & tokens_b) / (len(tokens_a) + len(tokens_b))
+
+
 def count_paragraphs(text: str) -> int:
     """Splits on any blank line (one or more consecutive `\\n\\n+`) - matches how every prior
     Phase 17 milestone's own `paragraph_target` field is produced (`services/adaptive_length.py`/

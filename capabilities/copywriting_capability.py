@@ -55,7 +55,14 @@ PROMPT_VERSION = "4"
 # the v4 prompt's own rules), never to extracting additional facts beyond what Research/
 # Intelligence already established. Bounded to keep prompt size/cost predictable - long enough to
 # contain a realistic quote, never the full article.
-_QUOTE_SOURCE_EXCERPT_CHARS = 3000
+#
+# Phase 23.1P: raised 3000->6000 with direct evidence, not a guess - now that this excerpt can be
+# the already-acquired full article (see _format_quote_source_excerpt()'s own docstring), a real
+# genuinely useful quote (the Research Gold story's Jenny Berrio quote, Phase 23.1O) measured at
+# character offset 3364 in its own cleaned article text - already past the old 3000-char cap, cut
+# off by it even after this phase's own retrieval fix. 6000 leaves real margin past that measured
+# offset while staying a small, bounded, cost-predictable excerpt (~1500 tokens).
+_QUOTE_SOURCE_EXCERPT_CHARS = 6000
 
 COPYWRITING_CAPABILITY_DEFINITION = CapabilityDefinition(
     name=CAPABILITY_NAME,
@@ -132,11 +139,21 @@ def _format_intelligence_context(intelligence_output: dict[str, Any]) -> str:
     )
 
 
-def _format_quote_source_excerpt(news_event: Any) -> str:
+def _format_quote_source_excerpt(news_event: Any, quote_source_text: str | None = None) -> str:
     """Phase 18.10 M5 "Amendment B" (see PROMPT_VERSION's own comment above): the sole, narrow,
     disclosed exception to Copywriting's "never reads news_event.content" rule - bounded, and
-    labeled for quote-sourcing only, never for extracting additional facts."""
-    content = getattr(news_event, "content", None)
+    labeled for quote-sourcing only, never for extracting additional facts.
+
+    Phase 23.1P (docs/phase23_1p_story_memory_quotes_gate_report.md): prefers `quote_source_text`
+    (the already-acquired, already-cleaned full article text - `CapabilityContext.business.
+    quote_source_text`, populated by capabilities/executor.py only when article_acquisition_mode
+    != "off" and a FULL_TEXT/PARTIAL_TEXT acquisition exists) over the plain `news_event.content`
+    RSS teaser this function used exclusively before - the proven root cause of real, useful
+    quotes never reaching Copywriting at all (confirmed: a 130-char news_event.content with zero
+    quotes vs. an 11,289-char acquired article containing several, for the real Research Gold
+    story, Phase 23.1O). Falls back to today's `news_event.content` behavior, byte-identical,
+    whenever no richer text was acquired - never a regression for that case."""
+    content = quote_source_text or getattr(news_event, "content", None)
     if not content:
         return "(No source excerpt available - no quote can be sourced; leave quote null.)"
     excerpt = content[:_QUOTE_SOURCE_EXCERPT_CHARS]
@@ -161,8 +178,27 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
         f"Research output:\n{_format_research_context(research_output)}\n\n"
         f"Intelligence output:\n{_format_intelligence_context(intelligence_output)}\n\n"
         f"Source excerpt (for quote-sourcing only - never for additional facts):\n"
-        f"{_format_quote_source_excerpt(news_event)}"
+        f"{_format_quote_source_excerpt(news_event, context.business.quote_source_text)}"
     )
+    # Phase 19 overnight A/B/C validation seam: gated on prompt.version itself (RenderedPrompt's
+    # own field, not a settings re-read) rather than merely "the caller happened not to supply
+    # them" - v4 and the existing, frozen v5 structurally never append these blocks even if a
+    # caller mistakenly populated the BusinessContext fields for them; v6/v7/v8/v8.1/v8.2
+    # (prompts/copywriting/v6.yaml, v7.yaml, v8.yaml, v8.1.yaml, v8.2.yaml - each one's smaller
+    # schema still accepts the same optional context blocks) ever do, and only when present.
+    # NEWS Output Stability Fix (Case F, docs/news_output_stability_forensic_report.md §7/§13
+    # item 2): v8.6 (prompts/copywriting/v8.6.yaml) is a pure prompt-rule-text successor to v8.5 -
+    # confirmed by direct diff, identical schema, only the UNCERTAINTY rule's wording changed -
+    # was missing from this tuple entirely, which would have silently dropped the EDITORIAL PLAN/
+    # PRIOR COVERAGE context blocks the moment v8.6 actually went live, a real regression this
+    # activation would otherwise have introduced. v8.3/v8.4 were already listed even though not
+    # individually mentioned by name in this comment - v8.6 follows the same "every v8-family
+    # version accepts these blocks" pattern.
+    if prompt.version in ("6", "7", "8", "8.1", "8.2", "8.3", "8.4", "8.5", "8.6"):
+        if context.business.editorial_plan_context is not None:
+            context_text += f"\n\nEDITORIAL PLAN:\n{context.business.editorial_plan_context}"
+        if context.business.prior_coverage_context is not None:
+            context_text += f"\n\nPRIOR COVERAGE / STORY CONTEXT:\n{context.business.prior_coverage_context}"
     task_text = (
         "Write the post for the event above, following the system prompt's required structure "
         "exactly, based only on the given title/category, Research's/Intelligence's output, and "

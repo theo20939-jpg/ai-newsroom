@@ -187,6 +187,46 @@ def test_extract_claims_entity_never_spans_a_newline_boundary() -> None:
     assert extract_claims(text)["entity"] == []
 
 
+# ---------------------------------------------------------------------------
+# Phase 23.1I Part F - two real, confirmed false-positive classes found in the two live Phase
+# 23.1H drafts (docs/phase23_1i_live_editorial_hardening_report.md §9): a sentence-initial
+# capitalized preposition swept into the entity span, and "ЦОД" (a common Russian abbreviation for
+# "data center") missing from the generic hyphenated-descriptor list this module already
+# maintains for "система"/"технология"/"платформа"/etc.
+# ---------------------------------------------------------------------------
+
+
+def test_leading_sentence_initial_preposition_is_stripped_from_entity_span() -> None:
+    """Real Phase 23.1H false positive: "В Армении" (sentence-initial "В" capitalized only by
+    position) was previously extracted as its own two-word "entity", which would then almost never
+    match a real entity claim elsewhere (since the same place name appears lowercase/mid-sentence,
+    e.g. "в Армении", everywhere else). After stripping the leading preposition, the single
+    remaining word "Армении" is just an ordinary Title-Case word - correctly discarded by the same
+    existing rule that already excludes a lone sentence-initial capitalized word in general
+    (test_extract_claims_entity_ignores_lone_sentence_initial_word, this file). The fix's real
+    effect is that "В Армении" no longer becomes a spurious, unmatchable "entity" claim at all."""
+    entities = extract_claims("В Армении открыли завод.")["entity"]
+    assert entities == []
+    assert "В Армении" not in entities
+
+
+def test_data_center_hyphenated_prefix_is_stripped_like_other_generic_descriptors() -> None:
+    """Real Phase 23.1H false positive: "ИИ-ЦОД Firebird" was previously extracted as one glued
+    compound entity - "ЦОД" (data center) was missing from the same generic hyphenated-descriptor
+    list this module already strips "система"/"технология"/"платформа"/"модель"/etc. from. After
+    the fix, "ИИ-ЦОД" is stripped as a leading generic word, leaving only "Firebird" - which does
+    not independently qualify as a "strong" single-token entity (an ordinary Title-Case word, the
+    same conservative bar every other lone Title-Case word is already held to, e.g.
+    test_extract_claims_entity_ignores_lone_sentence_initial_word above) and so is correctly not
+    extracted as a checkable claim at all. The real, in-scope fix is that the unmatchable compound
+    "ИИ-ЦОД Firebird" - which would never appear verbatim in any independently-extracted evidence
+    claim - no longer becomes a false "unsupported" finding; this test locks that outcome in, not
+    a claim that "Firebird" alone becomes newly checkable (a separate, unrelated bar this phase
+    does not change)."""
+    entities = extract_claims("Компания запустила ИИ-ЦОД Firebird.")["entity"]
+    assert "ИИ-ЦОД Firebird" not in entities
+
+
 def test_extract_claims_quote() -> None:
     assert extract_claims('The CEO said "we are thrilled" in a statement.')["quote"] == ["we are thrilled"]
 

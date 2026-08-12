@@ -11,6 +11,7 @@ from database.models.news_event import EventCategory
 from database.models.story import Story
 from services.story_memory import (
     NEW_STORY,
+    RELATED_STORY,
     SEMANTIC_DUPLICATE,
     STORY_UPDATE,
     SUPPORTING_SOURCE,
@@ -104,7 +105,7 @@ def test_score_candidate_high_for_shared_entities_and_similar_title() -> None:
     candidate = _story(
         title="OpenAI releases GPT-X", entities=signature.entities, topic_bucket=TOPIC_PRODUCT,
     )
-    combined, entity_overlap, title_overlap = score_candidate(title, signature, candidate.title, candidate)
+    combined, entity_overlap, title_overlap = score_candidate(title, signature, EventCategory.AI, candidate.title, candidate)
     assert entity_overlap > 0.5
     assert combined > 0.3
 
@@ -113,13 +114,191 @@ def test_score_candidate_zero_for_no_entity_overlap() -> None:
     title = "OpenAI releases GPT-X"
     signature = extract_story_signature(title, EventCategory.AI)
     candidate = _story(title="A cat sat on a mat", entities=[], topic_bucket=TOPIC_OTHER)
-    combined, entity_overlap, title_overlap = score_candidate(title, signature, candidate.title, candidate)
+    combined, entity_overlap, title_overlap = score_candidate(title, signature, EventCategory.AI, candidate.title, candidate)
     assert entity_overlap == 0.0
+
+
+# ---------------------------------------------------------------------------
+# NEWS Output Stability Fix (CD Projekt/Project Sirius duplicate-story miss, docs/
+# news_output_stability_forensic_report.md §10): _strip_leading_determiner() - a captured entity
+# run whose leading word is a determiner/article ("The Witcher") must normalize identically to
+# the same entity captured without it elsewhere ("Witcher").
+# ---------------------------------------------------------------------------
+
+_CD_PROJEKT_TITLE_A = "Witcher multiplayer spin-off Project Sirius hit by fresh layoffs"
+_CD_PROJEKT_TITLE_B = (
+    "CD Projekt cuts more than 20% of The Witcher spinoff development team "
+    "'to reflect the project's needs at this stage of development'"
+)
+
+
+def test_leading_the_is_stripped_from_a_captured_multi_word_entity() -> None:
+    signature = extract_story_signature("Report on The Witcher spinoff", EventCategory.AI)
+    assert "witcher" in signature.entities
+    assert "the witcher" not in signature.entities
+
+
+def test_bare_entity_and_the_prefixed_entity_normalize_identically() -> None:
+    """The exact real mechanism: the same real-world entity ("Witcher") must produce the same
+    normalized string whether or not a given headline's own phrasing happens to capitalize a
+    leading "The" immediately before it."""
+    sig_bare = extract_story_signature("Witcher spinoff hit by layoffs", EventCategory.AI)
+    sig_the = extract_story_signature("Company cuts jobs at The Witcher spinoff studio", EventCategory.AI)
+    assert set(sig_bare.entities) & set(sig_the.entities)  # real, non-empty overlap now exists
+    assert "witcher" in sig_bare.entities
+    assert "witcher" in sig_the.entities
+
+
+def test_standalone_the_is_still_fully_excluded() -> None:
+    """Regression guard: the pre-existing Checkpoint 6 behavior (a determiner that is the ENTIRE
+    captured entity on its own, e.g. sentence-initial "The state of AI...") must be unaffected by
+    this fix - still excluded outright, never reduced to an empty-string entity."""
+    signature = extract_story_signature("The state of AI in 2026", EventCategory.AI)
+    assert "" not in signature.entities
+    assert "the" not in signature.entities
+
+
+def test_real_cd_projekt_pair_entity_overlap_measurably_improves() -> None:
+    """Uses the exact real headline pair from the forensic report as the regression case. Honest,
+    measured outcome (not an aspirational one): entity_overlap improves from 0.0 (both events
+    classified new_story, completely disconnected) to a real, non-zero value now that "Witcher"
+    matches across both headlines - but title_overlap between these two independently-worded real
+    headlines remains genuinely low (0.09), so the combined score does not clear
+    services.story_memory._HIGH_THRESHOLD (0.65) required for a confident STORY_UPDATE/
+    SUPPORTING_SOURCE merge on this narrow fix alone - see the checkpoint's own documented
+    before/after numbers and explicit policy-decision flag for achieving a full merge here."""
+    signature_b = extract_story_signature(_CD_PROJEKT_TITLE_B, EventCategory.HARDWARE)
+    signature_a = extract_story_signature(_CD_PROJEKT_TITLE_A, EventCategory.STARTUPS)
+    candidate = _story(title=_CD_PROJEKT_TITLE_A, entities=signature_a.entities, topic_bucket=signature_a.topic_bucket)
+
+    combined, entity_overlap, title_overlap = score_candidate(
+        _CD_PROJEKT_TITLE_B, signature_b, EventCategory.HARDWARE, _CD_PROJEKT_TITLE_A, candidate,
+    )
+
+    assert entity_overlap > 0.0  # was exactly 0.0 before this fix - the real, confirmed regression
+    assert "witcher" in signature_a.entities
+    assert "witcher" in signature_b.entities  # was "the witcher" before this fix
+
+
+def test_same_company_genuinely_different_event_remains_separate() -> None:
+    """Regression guard: the fix must not cause an unrelated same-entity-family pair to merge -
+    two different CD Projekt stories with no other shared signal stay well below the confident-
+    match threshold."""
+    title_layoffs = "CD Projekt cuts more than 20% of The Witcher spinoff development team"
+    title_earnings = "CD Projekt reports quarterly earnings decline amid investor concerns"
+    signature = extract_story_signature(title_earnings, EventCategory.STARTUPS)
+    layoffs_signature = extract_story_signature(title_layoffs, EventCategory.HARDWARE)
+    candidate = _story(
+        title=title_layoffs, entities=layoffs_signature.entities, topic_bucket=layoffs_signature.topic_bucket,
+    )
+    combined, entity_overlap, title_overlap = score_candidate(
+        title_earnings, signature, EventCategory.STARTUPS, title_layoffs, candidate,
+    )
+    from services.story_memory import _HIGH_THRESHOLD
+    assert combined < _HIGH_THRESHOLD  # never a confident same-story merge on entity alone
+
+
+def test_real_material_update_with_similar_wording_remains_update_capable() -> None:
+    """Regression guard: the fix must not weaken a genuine, easily-matched update case - a
+    materially-different-but-clearly-related headline about the same story, sharing both a
+    leading-"The" entity and substantial title wording, still clears the confident-match
+    threshold."""
+    root_title = "The Witcher 4 delayed to next year, CD Projekt confirms"
+    update_title = "CD Projekt delays The Witcher 4 release to next year amid development concerns"
+    root_signature = extract_story_signature(root_title, EventCategory.AI)
+    update_signature = extract_story_signature(update_title, EventCategory.AI)
+    candidate = _story(title=root_title, entities=root_signature.entities, topic_bucket=root_signature.topic_bucket)
+
+    combined, entity_overlap, title_overlap = score_candidate(
+        update_title, update_signature, EventCategory.AI, root_title, candidate,
+    )
+    from services.story_memory import _HIGH_THRESHOLD
+    assert combined >= _HIGH_THRESHOLD
+    assert "witcher 4" in root_signature.entities or "witcher" in root_signature.entities
 
 
 # --- outcome constants sanity (defensive - catches an accidental rename) ------------------------
 
 
 def test_outcome_constants_are_distinct_strings() -> None:
-    outcomes = {NEW_STORY, STORY_UPDATE, SUPPORTING_SOURCE, SEMANTIC_DUPLICATE, UNCERTAIN_MATCH}
-    assert len(outcomes) == 5
+    outcomes = {NEW_STORY, STORY_UPDATE, SUPPORTING_SOURCE, SEMANTIC_DUPLICATE, UNCERTAIN_MATCH, RELATED_STORY}
+    assert len(outcomes) == 6
+
+
+# --- Phase 20 M11.2: _preselect_candidates() two-stage retrieval (pure, no DB) -----------------
+
+
+def _story_with_keywords(*, title: str, entities: list[str], keywords: list[str]) -> Story:
+    from database.models.story import Story as StoryModel
+
+    return StoryModel(
+        id=uuid4(), title=title, category=EventCategory.AI, entities=entities, keywords=keywords,
+        topic_bucket=TOPIC_OTHER, first_event_id=uuid4(), event_count=1,
+    )
+
+
+def test_preselect_includes_high_relevance_candidate_even_if_not_in_recency_window() -> None:
+    from services.story_memory import _PRESELECTION_RECENCY_LIMIT, _preselect_candidates
+
+    signature = extract_story_signature("Cloudflare launches Kitesurf", EventCategory.AI)
+    true_match = _story_with_keywords(title="Cloudflare launches Kitesurf", entities=signature.entities, keywords=signature.keywords)
+    # Simulate the true match having aged out of the recency tier: put it AFTER _PRESELECTION_
+    # RECENCY_LIMIT other, unrelated, more-recently-updated candidates in the (already
+    # recency-ordered) input list.
+    filler = [
+        _story_with_keywords(title=f"Unrelated filler story {i}", entities=[], keywords=[f"filler{i}"])
+        for i in range(_PRESELECTION_RECENCY_LIMIT + 5)
+    ]
+    candidates = filler + [true_match]
+
+    result = _preselect_candidates(signature, candidates)
+    assert true_match.id in {c.id for c in result}
+
+
+def test_preselect_includes_zero_overlap_candidate_within_recency_window() -> None:
+    from services.story_memory import _preselect_candidates
+
+    signature = extract_story_signature("Some brand-new headline about a fresh topic", EventCategory.AI)
+    fresh_unrelated = _story_with_keywords(title="Completely unrelated fresh headline", entities=[], keywords=["totally", "different"])
+
+    result = _preselect_candidates(signature, [fresh_unrelated])
+    assert fresh_unrelated.id in {c.id for c in result}
+
+
+def test_preselect_excludes_old_zero_overlap_candidate_beyond_recency_window() -> None:
+    from services.story_memory import _PRESELECTION_RECENCY_LIMIT, _preselect_candidates
+
+    signature = extract_story_signature("Some brand-new headline about a fresh topic", EventCategory.AI)
+    old_unrelated = _story_with_keywords(title="Old unrelated headline", entities=[], keywords=["old", "irrelevant"])
+    filler = [
+        _story_with_keywords(title=f"Filler story {i}", entities=[], keywords=[f"filler{i}"])
+        for i in range(_PRESELECTION_RECENCY_LIMIT)
+    ]
+    candidates = filler + [old_unrelated]  # old_unrelated is beyond the recency window and shares nothing
+
+    result = _preselect_candidates(signature, candidates)
+    assert old_unrelated.id not in {c.id for c in result}
+
+
+def test_preselect_deduplicates_candidates_present_in_both_tiers() -> None:
+    from services.story_memory import _preselect_candidates
+
+    signature = extract_story_signature("OpenAI launches new product", EventCategory.AI)
+    both_tiers = _story_with_keywords(title="OpenAI launches new product update", entities=signature.entities, keywords=signature.keywords)
+
+    result = _preselect_candidates(signature, [both_tiers])
+    ids = [c.id for c in result]
+    assert ids.count(both_tiers.id) == 1
+
+
+def test_preselect_caps_at_story_match_candidate_limit() -> None:
+    from services.story_memory import STORY_MATCH_CANDIDATE_LIMIT, _preselect_candidates
+
+    signature = extract_story_signature("OpenAI launches new product", EventCategory.AI)
+    many_relevant = [
+        _story_with_keywords(title=f"OpenAI launches new product variant {i}", entities=signature.entities, keywords=signature.keywords)
+        for i in range(STORY_MATCH_CANDIDATE_LIMIT + 100)
+    ]
+
+    result = _preselect_candidates(signature, many_relevant)
+    assert len(result) <= STORY_MATCH_CANDIDATE_LIMIT

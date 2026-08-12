@@ -18,7 +18,7 @@ from integrations.prompts.file_repository import (
 )
 
 
-def _write_prompt(root: Path, dir_name: str, file_version: int, **content_overrides: object) -> None:
+def _write_prompt(root: Path, dir_name: str, file_version: int | str, **content_overrides: object) -> None:
     content = {
         "name": dir_name,
         "version": str(file_version),
@@ -106,6 +106,54 @@ def test_version_mismatch_between_filename_and_content_fails_at_construction(tmp
 
     with pytest.raises(PromptContentError):
         FilePromptRepository(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Phase 23.1J.1 - dotted minor versions ("v8.1.yaml"), e.g. prompts/copywriting/v8.1.yaml.
+# Every plain-integer test above must keep passing unchanged (regression) - these are additive.
+# ---------------------------------------------------------------------------
+
+
+def test_dotted_minor_version_resolves_by_its_exact_string() -> None:
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _write_prompt(root, "greeting", "8", system="v8 content")
+        _write_prompt(root, "greeting", "8.1", system="v8.1 content")
+        repo = FilePromptRepository(root)
+
+        assert repo.resolve("greeting", "8").system == "v8 content"
+        assert repo.resolve("greeting", "8.1").system == "v8.1 content"
+
+
+def test_dotted_minor_version_sorts_after_its_own_major_version_for_latest() -> None:
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _write_prompt(root, "greeting", "8", system="v8 content")
+        _write_prompt(root, "greeting", "8.1", system="v8.1 content")
+        repo = FilePromptRepository(root)
+
+        latest = repo.resolve("greeting")
+        assert latest.version == "8.1"
+
+
+def test_dotted_minor_version_does_not_disturb_plain_integer_latest_ordering() -> None:
+    """A dotted version like "8.1" must sort between "8" and "9" - never accidentally treated as
+    larger than every plain integer version (e.g. via naive string comparison, "8.1" < "10")."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _write_prompt(root, "greeting", "8", system="v8 content")
+        _write_prompt(root, "greeting", "8.1", system="v8.1 content")
+        _write_prompt(root, "greeting", "10", system="v10 content")
+        repo = FilePromptRepository(root)
+
+        latest = repo.resolve("greeting")
+        assert latest.version == "10"
 
 
 def test_resolve_makes_no_network_call(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -37,8 +37,17 @@ UTC = timezone.utc
 
 def independent_session_factory() -> tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
     """A fresh engine + session factory, fully independent of any other test's
-    connection - required for genuine cross-connection concurrency proofs."""
-    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    connection - required for genuine cross-connection concurrency proofs.
+
+    Phase 23.1L: connects to `settings.test_database_url` (a physically separate database from
+    `settings.database_url`), never the real/dev database - the guard below is a pure string
+    check, no I/O, so it fails before any connection is even opened. This one function is the
+    single, shared choke point for every one of the (currently 16) test files that import it -
+    fixing isolation here fixes all of them, per Phase 23.1L's own "reuse what exists" instruction."""
+    from tests.conftest import assert_is_test_database
+
+    assert_is_test_database(settings.postgres_test_db)
+    engine = create_async_engine(settings.test_database_url, poolclass=NullPool)
     return engine, async_sessionmaker(engine, expire_on_commit=False)
 
 
