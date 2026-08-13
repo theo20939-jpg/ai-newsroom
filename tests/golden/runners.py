@@ -19,8 +19,10 @@ from database.models.news_event import EventCategory, NewsEvent
 from database.models.news_event_article_acquisition import NewsEventArticleAcquisition
 from database.models.news_source import NewsSource, SourceType
 from services.article_acquisition import (
+    AcquisitionOutcome,
     classify_acquisition_status,
     estimate_substantive_char_count,
+    get_or_acquire,
     is_google_news_redirect_host,
     resolve_canonical_url,
     resolve_meta_refresh_url,
@@ -74,7 +76,65 @@ async def run_evidence_acquisition_case(case: dict[str, Any], *, session: AsyncS
         raw_text = input_["banner_text"] + "\n" + (input_["article_paragraph"] + "\n") * repeat
         return _classify_and_compare(raw_text)
 
+    if "wrapper_title" in input_:
+        return await _run_sibling_reuse_case(input_, session)
+
     raise ValueError(f"evidence_acquisition case {case['case_id']!r}: unrecognized input shape")
+
+
+async def _run_sibling_reuse_case(input_: dict[str, Any], session: AsyncSession | None) -> dict[str, Any]:
+    """Google News sibling-evidence-reuse fix (docs/google_news_sibling_reuse_fix_checkpoint.md) -
+    exercises the real, unmodified get_or_acquire() end to end, with acquire_article() itself
+    faked to deterministically return REDIRECT_UNRESOLVED (no real network fetch), matching the
+    real failure mode this fix responds to."""
+    if session is None:
+        raise ValueError("sibling-reuse evidence case requires a database session")
+    import services.article_acquisition as article_acquisition_module
+
+    published_at = datetime.fromisoformat(input_["published_at"])
+    source = NewsSource(id=uuid4(), name=f"golden-src-{uuid4().hex[:6]}", type=SourceType.RSS, active=True)
+    session.add(source)
+    await session.flush()
+
+    sibling_event = NewsEvent(
+        id=uuid4(), source_id=source.id, title=input_["sibling_title"], url=input_["sibling_url"],
+        category=EventCategory.AI, published_at=published_at, hash=f"golden-{uuid4()}",
+    )
+    session.add(sibling_event)
+    await session.flush()
+    session.add(NewsEventArticleAcquisition(
+        news_event_id=sibling_event.id, canonical_url=sibling_event.url, acquisition_status="FULL_TEXT",
+        raw_extracted_text=input_["sibling_text"], effective_completeness_status="FULL_TEXT",
+        extracted_char_count=len(input_["sibling_text"]), triggered_by="golden-suite",
+    ))
+    await session.flush()
+
+    wrapper_event = NewsEvent(
+        id=uuid4(), source_id=source.id, title=input_["wrapper_title"], url=input_["wrapper_url"],
+        category=EventCategory.AI, published_at=published_at, hash=f"golden-{uuid4()}",
+    )
+    session.add(wrapper_event)
+    await session.flush()
+
+    original_acquire_article = article_acquisition_module.acquire_article
+
+    async def _fake_acquire_article(url: str, *, event_id):
+        return AcquisitionOutcome(
+            status="REDIRECT_UNRESOLVED", raw_extracted_text=None, extracted_char_count=None,
+            canonical_url=url, source_html_bytes=500000, fetch_duration_ms=1000,
+            error_code="google_news_redirect_unresolved",
+        )
+
+    article_acquisition_module.acquire_article = _fake_acquire_article
+    try:
+        row = await get_or_acquire(session, wrapper_event, triggered_by="golden-suite")
+    finally:
+        article_acquisition_module.acquire_article = original_acquire_article
+
+    return {
+        "reused_from_sibling": row.reused_from_news_event_id == sibling_event.id,
+        "effective_completeness_status": row.effective_completeness_status,
+    }
 
 
 def _classify_and_compare(raw_text: str) -> dict[str, Any]:

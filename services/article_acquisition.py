@@ -69,6 +69,27 @@ _FULL_TEXT_MIN_CHARS = 2000
 _SUBSTANTIAL_TEXT_MIN_CHARS = 800
 _PARTIAL_TEXT_MIN_CHARS = 200
 
+# NEWS Stability - Google News sibling-evidence-reuse fix (docs/
+# google_news_sibling_reuse_fix_checkpoint.md, forensic evidence: docs/
+# story_cluster_fragmentation_focused_forensic_report.md): the same two trusted completeness
+# tiers as services/evidence_package.py::TRUSTED_FULL_ARTICLE_STATUSES - duplicated here (not
+# imported) because evidence_package.py itself imports from this module, and importing back would
+# be circular. Kept as a literal value-copy, matching this codebase's own established convention
+# for a small, rarely-changed constant that a real import-direction constraint prevents sharing
+# (e.g. bot/formatting.py's _SAFE_LIMIT vs. services/news_telegram_presentation.py's own copy).
+_SIBLING_REUSE_TRUSTED_STATUSES = frozenset({ACQUISITION_STATUS_FULL_TEXT, ACQUISITION_STATUS_PARTIAL_TEXT})
+# How close two NewsEvents' own published_at values must be to even be considered for sibling
+# reuse - the real, decisive safety signal (both confirmed real cases share the identical
+# published_at second; a coincidental identical-second match between two genuinely different
+# articles is not realistic, unlike title similarity or shared category/entity).
+_SIBLING_REUSE_PUBLISHED_AT_TOLERANCE_SECONDS = 5
+# A prefix/suffix-stripped title match shorter than this is never trusted alone (avoids a short,
+# generic titlefragment coincidentally prefixing an unrelated longer one).
+_SIBLING_REUSE_MIN_TITLE_LEN = 20
+# Google News RSS entries deterministically append " - {Publisher}" to the real headline (e.g.
+# "... - 3DNews") - stripping this exact, well-known suffix pattern is not a fuzzy heuristic.
+_GOOGLE_NEWS_TITLE_SUFFIX_RE = re.compile(r"\s+-\s+[^-\n]{2,60}$")
+
 _HTML_CONTENT_TYPE_PREFIXES = ("text/html", "application/xhtml+xml")
 
 # Tags whose text content is never part of the article body.
@@ -424,6 +445,91 @@ async def acquire_article(url: str, *, event_id: UUID, _google_news_hop: bool = 
     )
 
 
+def _strip_google_news_title_suffix(title: str) -> str:
+    """Pure. Strips a trailing ' - {Publisher}' suffix if present - Google News RSS entries
+    reliably append this to the real headline (confirmed empirically against both real cases this
+    fix responds to: '...традиционные ценности - 3DNews' vs. the direct feed's own bare
+    '...традиционные ценности'). A no-op when no such suffix is present."""
+    return _GOOGLE_NEWS_TITLE_SUFFIX_RE.sub("", title.strip()).strip()
+
+
+def _titles_confidently_match(title_a: str, title_b: str) -> bool:
+    """Pure. Conservative same-article title check, deliberately NOT a fuzzy/loose similarity
+    score - docs/google_news_sibling_reuse_fix_checkpoint.md's own required safety invariant
+    ("never reuse solely because of same company/topic/category/loose title similarity"). True
+    only for: an exact match (after stripping a Google News title suffix from either side), or one
+    title being a genuine, substantial prefix of the other (the real RSS-truncation pattern
+    confirmed in the Twitch/Amazon case, where the wrapper's own title was cut short mid-sentence
+    by the feed itself) - never a short/generic fragment (`_SIBLING_REUSE_MIN_TITLE_LEN` floor)."""
+    a = _strip_google_news_title_suffix(title_a)
+    b = _strip_google_news_title_suffix(title_b)
+    if a == b:
+        return True
+    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
+    return len(shorter) >= _SIBLING_REUSE_MIN_TITLE_LEN and longer.startswith(shorter)
+
+
+async def _find_acquisition_failure_sibling(
+    session: AsyncSession, news_event: NewsEvent,
+) -> NewsEventArticleAcquisition | None:
+    """Conservative post-failure fallback (docs/google_news_sibling_reuse_fix_checkpoint.md),
+    called ONLY after this event's own acquisition already failed with
+    ACQUISITION_STATUS_REDIRECT_UNRESOLVED - never replaces or precedes a real fetch attempt,
+    never runs speculatively. Real evidence: docs/
+    story_cluster_fragmentation_focused_forensic_report.md - both confirmed cases were a Google
+    News RSS wrapper of an article whose direct-feed sibling had already been fully, successfully
+    acquired 48-62 seconds earlier under a different NewsEvent/source_id.
+
+    Requires ALL of, none individually sufficient:
+    - the candidate's own NewsEvent.published_at is within
+      `_SIBLING_REUSE_PUBLISHED_AT_TOLERANCE_SECONDS` of this event's own published_at (the
+      decisive safety signal - see that constant's own comment);
+    - the two titles confidently match per `_titles_confidently_match()` (never loose similarity);
+    - the candidate's own acquisition reached a trusted completeness tier
+      (`_SIBLING_REUSE_TRUSTED_STATUSES`) - never promotes another weak/failed acquisition;
+    - the candidate is not itself a reuse row, and carries real text - the same one-hop invariant
+      `_find_reuse_candidate()` already enforces;
+    - within the existing `article_acquisition_reuse_window_hours` staleness window - reuses the
+      existing bound, introduces no new one;
+    - a different NewsEvent (never matches itself).
+
+    Never creates or mutates a Story, never touches services/story_memory.py, never affects
+    Telegram delivery - purely an acquisition-evidence upgrade, structurally identical in shape to
+    the existing canonical-URL reuse path this function sits beside, just triggered by a different,
+    later condition (a failed fetch, not a known-identical URL)."""
+    if not news_event.published_at or not news_event.title:
+        return None
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.article_acquisition_reuse_window_hours)
+    window_start = news_event.published_at - timedelta(seconds=_SIBLING_REUSE_PUBLISHED_AT_TOLERANCE_SECONDS)
+    window_end = news_event.published_at + timedelta(seconds=_SIBLING_REUSE_PUBLISHED_AT_TOLERANCE_SECONDS)
+    stmt = (
+        select(NewsEventArticleAcquisition, NewsEvent.title)
+        .join(NewsEvent, NewsEvent.id == NewsEventArticleAcquisition.news_event_id)
+        .where(
+            NewsEventArticleAcquisition.news_event_id != news_event.id,
+            NewsEventArticleAcquisition.reused_from_news_event_id.is_(None),
+            NewsEventArticleAcquisition.raw_extracted_text.is_not(None),
+            NewsEventArticleAcquisition.effective_completeness_status.in_(_SIBLING_REUSE_TRUSTED_STATUSES),
+            NewsEventArticleAcquisition.created_at >= cutoff,
+            NewsEvent.published_at >= window_start,
+            NewsEvent.published_at <= window_end,
+        )
+        .order_by(NewsEventArticleAcquisition.created_at.desc())
+    )
+    rows = (await session.execute(stmt)).all()
+    for acquisition, candidate_title in rows:
+        if _titles_confidently_match(news_event.title, candidate_title):
+            logger.info(
+                "article_acquisition_sibling_reused",
+                extra={
+                    "news_event_id": str(news_event.id),
+                    "sibling_news_event_id": str(acquisition.news_event_id),
+                },
+            )
+            return acquisition
+    return None
+
+
 async def _find_reuse_candidate(
     session: AsyncSession, *, canonical_url_guess: str
 ) -> NewsEventArticleAcquisition | None:
@@ -482,6 +588,20 @@ async def get_or_acquire(
         return row
 
     outcome = await acquire_article(news_event.url, event_id=news_event.id)
+
+    if outcome.status == ACQUISITION_STATUS_REDIRECT_UNRESOLVED:
+        sibling = await _find_acquisition_failure_sibling(session, news_event)
+        if sibling is not None:
+            row = NewsEventArticleAcquisition(
+                news_event_id=news_event.id, canonical_url=sibling.canonical_url,
+                reused_from_news_event_id=sibling.news_event_id,
+                acquisition_status=sibling.acquisition_status,
+                effective_completeness_status=sibling.effective_completeness_status,
+                cleaning_version=sibling.cleaning_version, triggered_by=triggered_by,
+            )
+            session.add(row)
+            return row
+
     row = NewsEventArticleAcquisition(
         news_event_id=news_event.id, canonical_url=outcome.canonical_url,
         acquisition_status=outcome.status, raw_extracted_text=outcome.raw_extracted_text,

@@ -1,5 +1,7 @@
 """Phase 19 M1: pure, tier-1 unit tests for services.article_acquisition - no DB, no network."""
 from services.article_acquisition import (
+    _strip_google_news_title_suffix,
+    _titles_confidently_match,
     classify_acquisition_status,
     compute_text_hash,
     estimate_substantive_char_count,
@@ -148,3 +150,57 @@ def test_estimate_substantive_char_count_changes_classification_for_a_true_shell
     substantive_status = classify_acquisition_status(estimate_substantive_char_count(raw_text))
     assert raw_status != ACQUISITION_STATUS_HEADLINE_ONLY  # the raw length alone would NOT catch this
     assert substantive_status == ACQUISITION_STATUS_HEADLINE_ONLY  # the substantive count does
+
+
+# ---------------------------------------------------------------------------------------------
+# Google News sibling-evidence-reuse fix (docs/google_news_sibling_reuse_fix_checkpoint.md) -
+# pure title-matching safety logic. Real titles from docs/
+# story_cluster_fragmentation_focused_forensic_report.md.
+# ---------------------------------------------------------------------------------------------
+
+_REAL_A1_TITLE = "Российский ИИ отправят на экзамен по духовности — модели проверят на традиционные ценности - 3DNews"
+_REAL_A2_TITLE = "Российский ИИ отправят на экзамен по духовности — модели проверят на традиционные ценности"
+_REAL_B1_TITLE = "«Будь это добровольно, никто бы не согласился»: Twitch начал тренировать ИИ на контенте пользователей, никого не"
+_REAL_B2_TITLE = "«Будь это добровольно, никто бы не согласился»: Twitch начал тренировать ИИ на контенте пользователей, никого не спросив"
+
+
+def test_strip_google_news_title_suffix_removes_real_publisher_suffix() -> None:
+    assert _strip_google_news_title_suffix(_REAL_A1_TITLE) == _REAL_A2_TITLE
+
+
+def test_strip_google_news_title_suffix_is_a_noop_without_a_suffix() -> None:
+    assert _strip_google_news_title_suffix(_REAL_A2_TITLE) == _REAL_A2_TITLE
+
+
+def test_titles_confidently_match_real_a_pair_via_suffix_stripping() -> None:
+    assert _titles_confidently_match(_REAL_A1_TITLE, _REAL_A2_TITLE) is True
+
+
+def test_titles_confidently_match_real_b_pair_via_prefix_containment() -> None:
+    """The real RSS-truncation case: B1's own title is cut short mid-sentence relative to B2's -
+    a genuine prefix, not a suffix-stripped exact match."""
+    assert _titles_confidently_match(_REAL_B1_TITLE, _REAL_B2_TITLE) is True
+
+
+def test_titles_confidently_match_is_order_independent() -> None:
+    assert _titles_confidently_match(_REAL_B2_TITLE, _REAL_B1_TITLE) is True
+
+
+def test_titles_confidently_match_rejects_same_publisher_similar_but_distinct_titles() -> None:
+    """Case 4 of the required test matrix: same publisher/topic, materially different article -
+    must NOT match even though both share substantial common wording."""
+    a = "Российские ИИ-модели проверят на соответствие традиционным ценностям - 3DNews"
+    b = "Российские ИИ-модели проверят на соответствие корпоративным стандартам безопасности"
+    assert _titles_confidently_match(a, b) is False
+
+
+def test_titles_confidently_match_rejects_loosely_related_short_titles() -> None:
+    """Case 3 of the required test matrix: a short, generic fragment must never be trusted alone,
+    even if technically a prefix (the _SIBLING_REUSE_MIN_TITLE_LEN floor)."""
+    assert _titles_confidently_match("Twitch", "Twitch launches new AI training feature today") is False
+
+
+def test_titles_confidently_match_rejects_same_category_different_event() -> None:
+    a = "Apple announces new iPhone features - 3DNews"
+    b = "Apple reports quarterly earnings decline amid investor concerns"
+    assert _titles_confidently_match(a, b) is False

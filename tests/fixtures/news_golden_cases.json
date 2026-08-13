@@ -95,6 +95,46 @@
       }
     },
     {
+      "case_id": "ru_ai_values_wrapper_sibling_reuse",
+      "name": "Russian AI values: a REDIRECT_UNRESOLVED Google News wrapper must reuse the already-collected direct-feed sibling's rich evidence",
+      "category": "evidence_acquisition",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "docs/story_cluster_fragmentation_focused_forensic_report.md §2-3 (Cluster A) and docs/google_news_sibling_reuse_fix_checkpoint.md. Real events: wrapper 62c66d1a-8aef-413a-9bda-34947248e5e8 (Google News RU: ИИ, REDIRECT_UNRESOLVED, 0 chars), direct 8a7e2647-592a-4f34-9345-e7e47d8166ea (3DNews, FULL_TEXT, 8990 chars, collected 48s earlier, identical published_at). Fixed this session via services/article_acquisition.py::_find_acquisition_failure_sibling().",
+      "input": {
+        "wrapper_title": "Российский ИИ отправят на экзамен по духовности — модели проверят на традиционные ценности - 3DNews",
+        "wrapper_url": "https://news.google.com/rss/articles/golden-a1-wrapper",
+        "sibling_title": "Российский ИИ отправят на экзамен по духовности — модели проверят на традиционные ценности",
+        "sibling_url": "https://3dnews.ru/1146777",
+        "sibling_text": "Принятый в июле Госдумой и утверждённый Владимиром Путиным закон «О поддержке развития технологий искусственного интеллекта в России» требует, чтобы большая фундаментальная модель соответствовала российскому законодательству и традиционным духовно-нравственным ценностям. Подтвердить соответствие этим требованиям компании смогут с одобрения Минцифры в независимой испытательной лаборатории.",
+        "published_at": "2026-08-13T14:34:00+00:00"
+      },
+      "expected": {
+        "reused_from_sibling": true,
+        "effective_completeness_status": "FULL_TEXT"
+      }
+    },
+    {
+      "case_id": "twitch_amazon_wrapper_sibling_reuse",
+      "name": "Twitch/Amazon: a REDIRECT_UNRESOLVED Google News wrapper must reuse the already-collected direct-feed sibling's rich evidence (RSS-truncated title prefix, not a suffix match)",
+      "category": "evidence_acquisition",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "docs/story_cluster_fragmentation_focused_forensic_report.md §4-5 (Cluster B) and docs/google_news_sibling_reuse_fix_checkpoint.md. Real events: wrapper ec54a4bd-4574-4568-96f7-d3a5b19f85d1 (Google News RU: ИИ, REDIRECT_UNRESOLVED, 0 chars, title truncated by the RSS feed itself), direct 405e767a-acef-493e-9ec4-bebb38fe50a8 (3DNews, FULL_TEXT, 8167 chars, collected 62s earlier, identical published_at). Exercises the prefix-containment branch of _titles_confidently_match(), distinct from the suffix-stripping branch the Russian AI values case exercises.",
+      "input": {
+        "wrapper_title": "«Будь это добровольно, никто бы не согласился»: Twitch начал тренировать ИИ на контенте пользователей, никого не",
+        "wrapper_url": "https://news.google.com/rss/articles/golden-b1-wrapper",
+        "sibling_title": "«Будь это добровольно, никто бы не согласился»: Twitch начал тренировать ИИ на контенте пользователей, никого не спросив",
+        "sibling_url": "https://3dnews.ru/1146774",
+        "sibling_text": "Стриминговый сервис Twitch возмутил сообщество нововведением — включённой по умолчанию функцией, разрешающей платформе использовать материалы канала пользователя для тренировки ИИ-моделей Amazon. Отключить функцию можно в настройках безопасности аккаунта. «Будь это добровольно, никто бы не согласился», — объяснил главный директор по продукту Twitch Майк Минтон.",
+        "published_at": "2026-08-13T14:03:23+00:00"
+      },
+      "expected": {
+        "reused_from_sibling": true,
+        "effective_completeness_status": "FULL_TEXT"
+      }
+    },
+    {
       "case_id": "vk_earnings_duplicate_entity_normalization",
       "name": "VK earnings: 'Отчёт VK' must normalize to bare 'VK' and reach a confident-match score",
       "category": "story_memory",
@@ -138,12 +178,12 @@
       "category": "story_memory",
       "failure_class": "known_limitation",
       "kind": "deterministically_testable",
-      "provenance": "docs/phase23_1o_final_2h_combined_news_canary_report.md §11, §13. Post #3 (9to5Mac, 15:31 UTC) and Post #14 (The Verge, 16:44 UTC), 73 minutes apart, both delivered as separate NEWS posts with story_id=null because story_memory_mode=off (a config-gate root cause). This golden case was originally written expecting the scorer to catch the pair once the gate is disregarded; running it against the real, unmodified score_candidate() (measured while building this harness) found combined=0.05, entity_overlap=0.0 - the two headlines share almost no title/entity text ('Zoom' vs 'Zoomsday' are different capitalized-run tokens). This is a SECOND, independent, previously-undocumented known limitation this harness surfaced: even with story_memory_mode enabled, this specific pair would still land as new_story from title/entity text alone. Documented honestly, not silently marked fixed.",
+      "provenance": "docs/phase23_1o_final_2h_combined_news_canary_report.md §11, §13. Post #3 (9to5Mac, 15:31 UTC) and Post #14 (The Verge, 16:44 UTC), 73 minutes apart, both delivered as separate NEWS posts with story_id=null because story_memory_mode=off (a config-gate root cause). This golden case was originally written expecting the scorer to catch the pair once the gate is disregarded; running it against the real, unmodified score_candidate() (measured while building this harness) found combined=0.05, entity_overlap=0.0 - the two headlines share almost no title/entity text ('Zoom' vs 'Zoomsday' are different capitalized-run tokens). This is a SECOND, independent, previously-undocumented known limitation this harness surfaced: even with story_memory_mode enabled, this specific pair would still land as new_story from title/entity text alone. Documented honestly, not silently marked fixed. Corrected (docs/zoom_cross_publisher_story_memory_forensic_report.md §12, docs/story_memory_content_overlap_calibration_report.md §13): event_1_category/event_2_category were previously CYBERSECURITY; the real, persisted NewsEvent.category for both events is GADGETS. Reconfirmed the correction does not change the measured score (combined=0.05 under both categories - the category bonus is symmetric to same-vs-different, not category-identity-specific).",
       "input": {
         "event_1_title": "Zoom flaw let an attacker take over your device, including iPhone and Mac",
-        "event_1_category": "CYBERSECURITY",
+        "event_1_category": "GADGETS",
         "event_2_title": "'Zoomsday' hack uncovered using fewer than 20 AI prompts",
-        "event_2_category": "CYBERSECURITY"
+        "event_2_category": "GADGETS"
       },
       "expected": {
         "outcome_bucket": "new_story_or_related",
