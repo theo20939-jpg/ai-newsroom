@@ -1,0 +1,130 @@
+version: '1.1'
+sources:
+- id: boston_dynamics_news
+  name: Boston Dynamics News
+  category: robotics
+  type: web_page
+  url: https://bostondynamics.com/news/
+  language: en
+  region: global
+  priority: 94
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - robotics
+  - ai
+  - hardware
+  adapter: generic_article_index
+- id: figure_ai_news
+  name: Figure AI News
+  category: robotics
+  type: web_page
+  url: https://www.figure.ai/news
+  language: en
+  region: global
+  priority: 94
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - robotics
+  - humanoid
+  - ai
+  adapter: generic_article_index
+- id: unitree_news
+  name: Unitree News
+  category: robotics
+  type: web_page
+  url: https://www.unitree.com/news/
+  language: en
+  region: global
+  priority: 92
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - robotics
+  - humanoid
+  - china
+  adapter: generic_article_index
+- id: agility_robotics_news
+  name: Agility Robotics News
+  category: robotics
+  type: web_page
+  url: https://www.agilityrobotics.com/news
+  language: en
+  region: global
+  priority: 92
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - robotics
+  - humanoid
+  - automation
+  adapter: generic_article_index
+- id: sanctuary_ai_news
+  name: Sanctuary AI News
+  category: robotics
+  type: web_page
+  url: https://www.sanctuary.ai/blog
+  language: en
+  region: global
+  priority: 90
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - robotics
+  - humanoid
+  - ai
+  adapter: generic_article_index
+- id: one_x_news
+  name: 1X News
+  category: robotics
+  type: web_page
+  url: https://www.1x.tech/discover
+  language: en
+  region: global
+  priority: 91
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - robotics
+  - humanoid
+  - ai
+  adapter: generic_article_index
+- id: apptronik_news
+  name: Apptronik News
+  category: robotics
+  type: web_page
+  url: https://apptronik.com/news
+  language: en
+  region: global
+  priority: 91
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - robotics
+  - humanoid
+  - ai
+  adapter: generic_article_index
+- id: fourier_intelligence_news
+  name: Fourier Intelligence News
+  category: robotics
+  type: web_page
+  url: https://www.fftai.com/news
+  language: en
+  region: global
+  priority: 88
+  reliability: 1.0
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - robotics
+  - humanoid
+  - healthtech
+  adapter: generic_article_index

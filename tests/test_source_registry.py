@@ -90,8 +90,8 @@ def test_real_package_loads_without_error() -> None:
     """Smoke test against the actual newsroom_sources_v1 package shipped in the repo."""
     definitions, report = load_source_pack()
 
-    assert report.declared == 127
+    assert report.declared == 230
     assert report.invalid == 0
     assert report.duplicate_ids == 0
     assert report.duplicate_urls == 0
-    assert len(definitions) == 127
+    assert len(definitions) == 230

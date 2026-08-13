@@ -1,0 +1,103 @@
+version: '1.1'
+sources:
+- id: ftc_news
+  name: US FTC News
+  category: government
+  type: web_page
+  url: https://www.ftc.gov/news-events/news/press-releases
+  language: en
+  region: global
+  priority: 92
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - regulation
+  - antitrust
+  - technology
+  - ai
+  adapter: generic_article_index
+- id: sec_press
+  name: US SEC Press Releases
+  category: government
+  type: web_page
+  url: https://www.sec.gov/newsroom/press-releases
+  language: en
+  region: global
+  priority: 90
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - regulation
+  - markets
+  - technology
+  adapter: generic_article_index
+- id: eu_digital_strategy_news
+  name: European Commission Digital Strategy News
+  category: government
+  type: web_page
+  url: https://digital-strategy.ec.europa.eu/en/news
+  language: en
+  region: global
+  priority: 94
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - eu
+  - regulation
+  - ai
+  - technology
+  adapter: generic_article_index
+- id: uk_cma_news
+  name: UK CMA News
+  category: government
+  type: web_page
+  url: https://www.gov.uk/government/organisations/competition-and-markets-authority
+  language: en
+  region: global
+  priority: 91
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - uk
+  - regulation
+  - antitrust
+  - technology
+  adapter: generic_article_index
+- id: nist_ai
+  name: NIST AI
+  category: government
+  type: web_page
+  url: https://www.nist.gov/artificial-intelligence
+  language: en
+  region: global
+  priority: 93
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - standards
+  - security
+  - government
+  adapter: generic_article_index
+- id: cisa_news
+  name: CISA News
+  category: government
+  type: web_page
+  url: https://www.cisa.gov/news-events/news
+  language: en
+  region: global
+  priority: 93
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - security
+  - cybersecurity
+  - government
+  - technology
+  adapter: generic_article_index

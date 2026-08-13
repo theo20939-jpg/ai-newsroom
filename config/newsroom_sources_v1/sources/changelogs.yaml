@@ -1,0 +1,70 @@
+version: '1.1'
+sources:
+- id: github_changelog
+  name: GitHub Changelog
+  category: changelog
+  type: web_page
+  url: https://github.blog/changelog/
+  language: en
+  region: global
+  priority: 93
+  reliability: 1.0
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - github
+  - developers
+  - ai
+  - coding
+  adapter: changelog
+- id: vercel_changelog
+  name: Vercel Changelog
+  category: changelog
+  type: web_page
+  url: https://vercel.com/changelog
+  language: en
+  region: global
+  priority: 91
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - vercel
+  - developers
+  - ai
+  - web
+  adapter: changelog
+- id: cloudflare_changelog
+  name: Cloudflare Changelog
+  category: changelog
+  type: web_page
+  url: https://developers.cloudflare.com/changelog/
+  language: en
+  region: global
+  priority: 91
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - cloudflare
+  - developers
+  - ai
+  - infrastructure
+  adapter: changelog
+- id: huggingface_hub_changelog
+  name: Hugging Face Hub Changelog
+  category: changelog
+  type: web_page
+  url: https://huggingface.co/changelog
+  language: en
+  region: global
+  priority: 92
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - huggingface
+  - ai
+  - models
+  - developers
+  adapter: changelog

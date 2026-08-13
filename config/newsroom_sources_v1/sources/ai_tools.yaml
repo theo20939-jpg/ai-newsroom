@@ -1,0 +1,134 @@
+version: '1.1'
+sources:
+- id: lovable_blog
+  name: Lovable Blog
+  category: ai_tool
+  type: web_page
+  url: https://lovable.dev/blog
+  language: en
+  region: global
+  priority: 89
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - coding
+  - startup
+  - product
+  adapter: generic_article_index
+- id: bolt_blog
+  name: Bolt Blog
+  category: ai_tool
+  type: web_page
+  url: https://bolt.new/blog
+  language: en
+  region: global
+  priority: 88
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - coding
+  - startup
+  - product
+  adapter: generic_article_index
+- id: cognition_blog
+  name: Cognition / Devin Blog
+  category: ai_tool
+  type: web_page
+  url: https://cognition.ai/blog
+  language: en
+  region: global
+  priority: 91
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - coding
+  - agents
+  - devin
+  adapter: generic_article_index
+- id: gamma_blog
+  name: Gamma Blog
+  category: ai_tool
+  type: web_page
+  url: https://gamma.app/blog
+  language: en
+  region: global
+  priority: 84
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - productivity
+  - presentation
+  adapter: generic_article_index
+- id: descript_blog
+  name: Descript Blog
+  category: ai_tool
+  type: web_page
+  url: https://www.descript.com/blog
+  language: en
+  region: global
+  priority: 84
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - audio
+  - video
+  - creator
+  adapter: generic_article_index
+- id: luma_blog
+  name: Luma AI Blog
+  category: ai_tool
+  type: web_page
+  url: https://lumalabs.ai/news
+  language: en
+  region: global
+  priority: 88
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - video-generation
+  - 3d
+  adapter: generic_article_index
+- id: higgsfield_blog
+  name: Higgsfield News
+  category: ai_tool
+  type: web_page
+  url: https://higgsfield.ai/blog
+  language: en
+  region: global
+  priority: 86
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - video-generation
+  - creator
+  adapter: generic_article_index
+- id: photoroom_blog
+  name: Photoroom Blog
+  category: ai_tool
+  type: web_page
+  url: https://www.photoroom.com/blog
+  language: en
+  region: global
+  priority: 84
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - image-generation
+  - creator
+  adapter: generic_article_index

@@ -1,0 +1,82 @@
+version: '1.1'
+sources:
+- id: a16z_ai
+  name: a16z AI
+  category: venture
+  type: web_page
+  url: https://a16z.com/ai/
+  language: en
+  region: global
+  priority: 87
+  reliability: 0.92
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - venture
+  - startup
+  adapter: generic_article_index
+- id: sequoia_ai
+  name: Sequoia Capital AI
+  category: venture
+  type: web_page
+  url: https://www.sequoiacap.com/our-companies/?_stage=ai
+  language: en
+  region: global
+  priority: 84
+  reliability: 0.9
+  fetch_interval: 6h
+  enabled: true
+  tags:
+  - ai
+  - venture
+  - startup
+  adapter: generic_article_index
+- id: general_catalyst_stories
+  name: General Catalyst Stories
+  category: venture
+  type: web_page
+  url: https://www.generalcatalyst.com/stories
+  language: en
+  region: global
+  priority: 82
+  reliability: 0.9
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - venture
+  - startup
+  - ai
+  adapter: generic_article_index
+- id: lightspeed_perspectives
+  name: Lightspeed Perspectives
+  category: venture
+  type: web_page
+  url: https://lsvp.com/stories/
+  language: en
+  region: global
+  priority: 82
+  reliability: 0.9
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - venture
+  - startup
+  - ai
+  adapter: generic_article_index
+- id: index_ventures_perspectives
+  name: Index Ventures Perspectives
+  category: venture
+  type: web_page
+  url: https://www.indexventures.com/perspectives/
+  language: en
+  region: global
+  priority: 82
+  reliability: 0.9
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - venture
+  - startup
+  - ai
+  adapter: generic_article_index

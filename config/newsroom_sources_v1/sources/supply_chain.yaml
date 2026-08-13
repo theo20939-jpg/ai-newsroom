@@ -1,0 +1,121 @@
+version: '1.1'
+sources:
+- id: trendforce_press
+  name: TrendForce Press Center
+  category: supply_chain
+  type: web_page
+  url: https://www.trendforce.com/presscenter
+  language: en
+  region: global
+  priority: 92
+  reliability: 0.94
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - supply-chain
+  - display
+  - memory
+  - chips
+  adapter: generic_article_index
+- id: counterpoint_insights
+  name: Counterpoint Research Insights
+  category: supply_chain
+  type: web_page
+  url: https://www.counterpointresearch.com/insights/
+  language: en
+  region: global
+  priority: 91
+  reliability: 0.93
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - smartphone
+  - market
+  - supply-chain
+  adapter: generic_article_index
+- id: canalys_insights
+  name: Canalys Insights
+  category: supply_chain
+  type: web_page
+  url: https://www.canalys.com/insights
+  language: en
+  region: global
+  priority: 90
+  reliability: 0.93
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - smartphone
+  - pc
+  - market
+  - supply-chain
+  adapter: generic_article_index
+- id: idc_press
+  name: IDC Press Releases
+  category: supply_chain
+  type: web_page
+  url: https://www.idc.com/getdoc.jsp?containerId=prUS
+  language: en
+  region: global
+  priority: 90
+  reliability: 0.94
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - market
+  - pc
+  - smartphone
+  - enterprise
+  adapter: generic_article_index
+- id: omdia_news
+  name: Omdia News
+  category: supply_chain
+  type: web_page
+  url: https://omdia.tech.informa.com/pr
+  language: en
+  region: global
+  priority: 90
+  reliability: 0.93
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - market
+  - display
+  - chips
+  - technology
+  adapter: generic_article_index
+- id: display_supply_chain
+  name: Display Supply Chain Consultants
+  category: supply_chain
+  type: web_page
+  url: https://www.displaysupplychain.com/blog
+  language: en
+  region: global
+  priority: 88
+  reliability: 0.88
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - display
+  - apple
+  - samsung
+  - supply-chain
+  adapter: generic_article_index
+- id: digitimes_news
+  name: DIGITIMES
+  category: supply_chain
+  type: web_page
+  url: https://www.digitimes.com/
+  language: en
+  region: global
+  priority: 90
+  reliability: 0.9
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - supply-chain
+  - chips
+  - asia
+  - hardware
+  adapter: generic_article_index
+  notes: Some articles may require subscription; store headline/metadata and canonical URL only when full text is unavailable.

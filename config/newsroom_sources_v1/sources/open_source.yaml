@@ -1,0 +1,98 @@
+version: '1.1'
+sources:
+- id: weaviate_blog
+  name: Weaviate Blog
+  category: open_source
+  type: web_page
+  url: https://weaviate.io/blog
+  language: en
+  region: global
+  priority: 87
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - vector-db
+  - rag
+  - open-source
+  adapter: generic_article_index
+- id: onnx_releases
+  name: ONNX Releases
+  category: open_source
+  type: atom
+  url: https://github.com/onnx/onnx/releases.atom
+  language: en
+  region: global
+  priority: 88
+  reliability: 1.0
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - ai
+  - ml
+  - runtime
+  - open-source
+- id: opencv_releases
+  name: OpenCV Releases
+  category: open_source
+  type: atom
+  url: https://github.com/opencv/opencv/releases.atom
+  language: en
+  region: global
+  priority: 87
+  reliability: 1.0
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - computer-vision
+  - open-source
+  - ai
+- id: jax_releases
+  name: JAX Releases
+  category: open_source
+  type: atom
+  url: https://github.com/jax-ml/jax/releases.atom
+  language: en
+  region: global
+  priority: 88
+  reliability: 1.0
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - ai
+  - ml
+  - framework
+  - open-source
+- id: mozilla_ai
+  name: Mozilla.ai
+  category: open_source
+  type: web_page
+  url: https://www.mozilla.ai/
+  language: en
+  region: global
+  priority: 85
+  reliability: 1.0
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - ai
+  - open-source
+  - mozilla
+  adapter: generic_article_index
+- id: linux_foundation_ai
+  name: Linux Foundation AI & Data
+  category: open_source
+  type: web_page
+  url: https://lfaidata.foundation/blog/
+  language: en
+  region: global
+  priority: 85
+  reliability: 1.0
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - ai
+  - open-source
+  - foundation
+  adapter: generic_article_index

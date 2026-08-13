@@ -1,0 +1,294 @@
+version: '1.1'
+sources:
+- id: x_mark_gurman
+  name: Mark Gurman
+  category: insider
+  type: requires_adapter
+  url: https://x.com/markgurman
+  language: en
+  region: global
+  priority: 94
+  reliability: 0.93
+  fetch_interval: 5m
+  enabled: true
+  tags:
+  - apple
+  - insider
+  - gadgets
+  adapter: x_api
+  auth: X_BEARER_TOKEN
+- id: x_ming_chi_kuo
+  name: Ming-Chi Kuo
+  category: insider
+  type: requires_adapter
+  url: https://x.com/mingchikuo
+  language: en
+  region: global
+  priority: 94
+  reliability: 0.92
+  fetch_interval: 10m
+  enabled: true
+  tags:
+  - apple
+  - supply-chain
+  - insider
+  adapter: x_api
+  auth: X_BEARER_TOKEN
+- id: x_sonny_dickson
+  name: Sonny Dickson
+  category: insider
+  type: requires_adapter
+  url: https://x.com/SonnyDickson
+  language: en
+  region: global
+  priority: 88
+  reliability: 0.82
+  fetch_interval: 10m
+  enabled: true
+  tags:
+  - apple
+  - leaks
+  - insider
+  adapter: x_api
+  auth: X_BEARER_TOKEN
+- id: x_majin_bu
+  name: Majin Bu
+  category: insider
+  type: requires_adapter
+  url: https://x.com/MajinBuOfficial
+  language: en
+  region: global
+  priority: 84
+  reliability: 0.72
+  fetch_interval: 10m
+  enabled: true
+  tags:
+  - apple
+  - leaks
+  - insider
+  adapter: x_api
+  auth: X_BEARER_TOKEN
+- id: x_ice_universe
+  name: Ice Universe
+  category: insider
+  type: requires_adapter
+  url: https://x.com/UniverseIce
+  language: en
+  region: global
+  priority: 92
+  reliability: 0.9
+  fetch_interval: 5m
+  enabled: true
+  tags:
+  - samsung
+  - android
+  - leaks
+  adapter: x_api
+  auth: X_BEARER_TOKEN
+- id: x_mishaal_rahman
+  name: Mishaal Rahman
+  category: insider
+  type: requires_adapter
+  url: https://x.com/MishaalRahman
+  language: en
+  region: global
+  priority: 92
+  reliability: 0.93
+  fetch_interval: 10m
+  enabled: true
+  tags:
+  - android
+  - google
+  - mobile
+  - insider
+  adapter: x_api
+  auth: X_BEARER_TOKEN
+- id: x_zac_bowden
+  name: Zac Bowden
+  category: insider
+  type: requires_adapter
+  url: https://x.com/zacbowden
+  language: en
+  region: global
+  priority: 89
+  reliability: 0.9
+  fetch_interval: 10m
+  enabled: true
+  tags:
+  - microsoft
+  - windows
+  - insider
+  adapter: x_api
+  auth: X_BEARER_TOKEN
+- id: x_tom_warren
+  name: Tom Warren
+  category: insider
+  type: requires_adapter
+  url: https://x.com/tomwarren
+  language: en
+  region: global
+  priority: 90
+  reliability: 0.92
+  fetch_interval: 10m
+  enabled: true
+  tags:
+  - microsoft
+  - gaming
+  - technology
+  - insider
+  adapter: x_api
+  auth: X_BEARER_TOKEN
+- id: x_kopite7kimi
+  name: kopite7kimi
+  category: insider
+  type: requires_adapter
+  url: https://x.com/kopite7kimi
+  language: en
+  region: global
+  priority: 91
+  reliability: 0.88
+  fetch_interval: 5m
+  enabled: true
+  tags:
+  - nvidia
+  - gpu
+  - leaks
+  adapter: x_api
+  auth: X_BEARER_TOKEN
+- id: x_hxl_gpu
+  name: HXL
+  category: insider
+  type: requires_adapter
+  url: https://x.com/9550pro
+  language: en
+  region: global
+  priority: 88
+  reliability: 0.82
+  fetch_interval: 5m
+  enabled: true
+  tags:
+  - gpu
+  - chips
+  - leaks
+  adapter: x_api
+  auth: X_BEARER_TOKEN
+- id: x_harukaze5719
+  name: Harukaze5719
+  category: insider
+  type: requires_adapter
+  url: https://x.com/harukaze5719
+  language: en
+  region: global
+  priority: 86
+  reliability: 0.8
+  fetch_interval: 10m
+  enabled: true
+  tags:
+  - gpu
+  - chips
+  - hardware
+  - leaks
+  adapter: x_api
+  auth: X_BEARER_TOKEN
+- id: x_billbil_kun
+  name: billbil-kun
+  category: insider
+  type: requires_adapter
+  url: https://x.com/billbil_kun
+  language: en
+  region: global
+  priority: 90
+  reliability: 0.91
+  fetch_interval: 10m
+  enabled: true
+  tags:
+  - gaming
+  - leaks
+  - insider
+  adapter: x_api
+  auth: X_BEARER_TOKEN
+- id: x_tom_henderson
+  name: Tom Henderson
+  category: insider
+  type: requires_adapter
+  url: https://x.com/_Tom_Henderson_
+  language: en
+  region: global
+  priority: 90
+  reliability: 0.91
+  fetch_interval: 10m
+  enabled: true
+  tags:
+  - gaming
+  - leaks
+  - insider
+  adapter: x_api
+  auth: X_BEARER_TOKEN
+- id: x_jason_schreier
+  name: Jason Schreier
+  category: insider
+  type: requires_adapter
+  url: https://x.com/jasonschreier
+  language: en
+  region: global
+  priority: 92
+  reliability: 0.95
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - gaming
+  - business
+  - insider
+  adapter: x_api
+  auth: X_BEARER_TOKEN
+- id: x_jez_corden
+  name: Jez Corden
+  category: insider
+  type: requires_adapter
+  url: https://x.com/JezCorden
+  language: en
+  region: global
+  priority: 86
+  reliability: 0.84
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - gaming
+  - xbox
+  - microsoft
+  - insider
+  adapter: x_api
+  auth: X_BEARER_TOKEN
+- id: x_ian_cutress
+  name: Ian Cutress
+  category: insider
+  type: requires_adapter
+  url: https://x.com/IanCutress
+  language: en
+  region: global
+  priority: 88
+  reliability: 0.9
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - hardware
+  - chips
+  - insider
+  adapter: x_api
+  auth: X_BEARER_TOKEN
+- id: servethehome
+  name: ServeTheHome
+  category: insider
+  type: web_page
+  url: https://www.servethehome.com/
+  language: en
+  region: global
+  priority: 88
+  reliability: 0.9
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - hardware
+  - datacenter
+  - chips
+  adapter: generic_article_index

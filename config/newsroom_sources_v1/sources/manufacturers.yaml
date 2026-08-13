@@ -1,0 +1,293 @@
+version: '1.1'
+sources:
+- id: huawei_newsroom
+  name: Huawei Newsroom
+  category: manufacturer
+  type: web_page
+  url: https://www.huawei.com/en/news
+  language: en
+  region: global
+  priority: 95
+  reliability: 1.0
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - huawei
+  - gadgets
+  - telecom
+  adapter: generic_article_index
+- id: honor_news
+  name: HONOR News
+  category: manufacturer
+  type: web_page
+  url: https://www.honor.com/global/news-events-trends/
+  language: en
+  region: global
+  priority: 93
+  reliability: 1.0
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - honor
+  - smartphone
+  - gadgets
+  adapter: generic_article_index
+- id: oppo_newsroom
+  name: OPPO Newsroom
+  category: manufacturer
+  type: web_page
+  url: https://www.oppo.com/en/newsroom/
+  language: en
+  region: global
+  priority: 93
+  reliability: 1.0
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - oppo
+  - smartphone
+  - gadgets
+  adapter: generic_article_index
+- id: vivo_news
+  name: vivo News
+  category: manufacturer
+  type: web_page
+  url: https://www.vivo.com/en/about-vivo/news
+  language: en
+  region: global
+  priority: 92
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - vivo
+  - smartphone
+  - gadgets
+  adapter: generic_article_index
+- id: nothing_news
+  name: Nothing Newsroom
+  category: manufacturer
+  type: web_page
+  url: https://nothing.tech/pages/newsroom
+  language: en
+  region: global
+  priority: 92
+  reliability: 1.0
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - nothing
+  - smartphone
+  - gadgets
+  adapter: generic_article_index
+- id: motorola_news
+  name: Motorola News
+  category: manufacturer
+  type: web_page
+  url: https://motorolanews.com/
+  language: en
+  region: global
+  priority: 91
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - motorola
+  - smartphone
+  - gadgets
+  adapter: generic_article_index
+- id: oneplus_community
+  name: OnePlus Community
+  category: manufacturer
+  type: web_page
+  url: https://community.oneplus.com/
+  language: en
+  region: global
+  priority: 88
+  reliability: 0.95
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - oneplus
+  - smartphone
+  - gadgets
+  adapter: generic_article_index
+- id: xiaomi_global_news
+  name: Xiaomi Global Newsroom
+  category: manufacturer
+  type: web_page
+  url: https://www.mi.com/global/event/
+  language: en
+  region: global
+  priority: 90
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - xiaomi
+  - smartphone
+  - gadgets
+  adapter: generic_article_index
+  notes: Use official global event/news pages; adapter should extract dated announcements only.
+- id: framework_blog
+  name: Framework Blog
+  category: manufacturer
+  type: web_page
+  url: https://frame.work/blog
+  language: en
+  region: global
+  priority: 92
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - laptop
+  - repairability
+  - hardware
+  adapter: generic_article_index
+- id: razer_press
+  name: Razer Press Room
+  category: manufacturer
+  type: web_page
+  url: https://www.razer.com/newsroom
+  language: en
+  region: global
+  priority: 90
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - gaming
+  - hardware
+  - peripherals
+  adapter: generic_article_index
+- id: gigabyte_news
+  name: GIGABYTE News
+  category: manufacturer
+  type: web_page
+  url: https://www.gigabyte.com/Press/News
+  language: en
+  region: global
+  priority: 90
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - hardware
+  - laptop
+  - gpu
+  - motherboard
+  adapter: generic_article_index
+- id: canon_news
+  name: Canon Global News
+  category: manufacturer
+  type: web_page
+  url: https://global.canon/en/news/
+  language: en
+  region: global
+  priority: 91
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - camera
+  - imaging
+  - hardware
+  adapter: generic_article_index
+- id: nikon_news
+  name: Nikon News
+  category: manufacturer
+  type: web_page
+  url: https://www.nikon.com/company/news/
+  language: en
+  region: global
+  priority: 91
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - camera
+  - imaging
+  - hardware
+  adapter: generic_article_index
+- id: fujifilm_news
+  name: Fujifilm News
+  category: manufacturer
+  type: web_page
+  url: https://global.fujifilm.com/en/news
+  language: en
+  region: global
+  priority: 90
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - camera
+  - imaging
+  - hardware
+  adapter: generic_article_index
+- id: leica_press
+  name: Leica Camera Press Centre
+  category: manufacturer
+  type: web_page
+  url: https://leica-camera.com/en-int/press-centre
+  language: en
+  region: global
+  priority: 89
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - camera
+  - imaging
+  - hardware
+  adapter: generic_article_index
+- id: dji_newsroom
+  name: DJI Newsroom
+  category: manufacturer
+  type: web_page
+  url: https://www.dji.com/newsroom
+  language: en
+  region: global
+  priority: 93
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - drone
+  - camera
+  - robotics
+  - gadgets
+  adapter: generic_article_index
+- id: htc_vive_blog
+  name: HTC VIVE Blog
+  category: manufacturer
+  type: web_page
+  url: https://blog.vive.com/us/
+  language: en
+  region: global
+  priority: 88
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - vr
+  - xr
+  - gadgets
+  adapter: generic_article_index
+- id: xreal_news
+  name: XREAL News
+  category: manufacturer
+  type: web_page
+  url: https://www.xreal.com/news/
+  language: en
+  region: global
+  priority: 89
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ar
+  - xr
+  - gadgets
+  adapter: generic_article_index

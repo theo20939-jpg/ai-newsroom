@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Newsroom source",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "category",
+    "type",
+    "url",
+    "language",
+    "region",
+    "priority",
+    "reliability",
+    "fetch_interval",
+    "enabled",
+    "tags"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "type": {
+      "enum": [
+        "rss",
+        "atom",
+        "api",
+        "arxiv_api",
+        "youtube_api",
+        "github_org",
+        "web_page",
+        "requires_adapter"
+      ]
+    },
+    "url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "language": {
+      "type": "string"
+    },
+    "region": {
+      "type": "string"
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "reliability": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "fetch_interval": {
+      "type": "string",
+      "pattern": "^[0-9]+[mhd]$"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "adapter": {
+      "type": "string"
+    },
+    "auth": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

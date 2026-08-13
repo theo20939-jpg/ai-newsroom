@@ -1,0 +1,187 @@
+version: '1.1'
+sources:
+- id: amd_newsroom
+  name: AMD Newsroom
+  category: semiconductor
+  type: web_page
+  url: https://newsroom.amd.com/
+  language: en
+  region: global
+  priority: 97
+  reliability: 1.0
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - amd
+  - cpu
+  - gpu
+  - ai
+  - chips
+  adapter: generic_article_index
+- id: intel_newsroom
+  name: Intel Newsroom
+  category: semiconductor
+  type: web_page
+  url: https://newsroom.intel.com/
+  language: en
+  region: global
+  priority: 97
+  reliability: 1.0
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - intel
+  - cpu
+  - ai
+  - chips
+  adapter: generic_article_index
+- id: qualcomm_releases
+  name: Qualcomm News Releases
+  category: semiconductor
+  type: web_page
+  url: https://www.qualcomm.com/news/releases
+  language: en
+  region: global
+  priority: 97
+  reliability: 1.0
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - qualcomm
+  - snapdragon
+  - mobile
+  - chips
+  adapter: generic_article_index
+- id: arm_newsroom
+  name: Arm Newsroom
+  category: semiconductor
+  type: web_page
+  url: https://newsroom.arm.com/
+  language: en
+  region: global
+  priority: 97
+  reliability: 1.0
+  fetch_interval: 15m
+  enabled: true
+  tags:
+  - arm
+  - cpu
+  - chips
+  - ai
+  adapter: generic_article_index
+- id: tsmc_latest_news
+  name: TSMC Latest News
+  category: semiconductor
+  type: web_page
+  url: https://pr.tsmc.com/english/latest-news
+  language: en
+  region: global
+  priority: 98
+  reliability: 1.0
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - tsmc
+  - foundry
+  - chips
+  - supply-chain
+  adapter: generic_article_index
+- id: micron_news
+  name: Micron Newsroom
+  category: semiconductor
+  type: web_page
+  url: https://investors.micron.com/news-releases
+  language: en
+  region: global
+  priority: 95
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - memory
+  - chips
+  - micron
+  - datacenter
+  adapter: generic_article_index
+- id: sk_hynix_news
+  name: SK hynix Newsroom
+  category: semiconductor
+  type: web_page
+  url: https://news.skhynix.com/
+  language: en
+  region: global
+  priority: 95
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - memory
+  - hbm
+  - chips
+  - ai
+  adapter: generic_article_index
+- id: globalfoundries_news
+  name: GlobalFoundries Newsroom
+  category: semiconductor
+  type: web_page
+  url: https://gf.com/newsroom/
+  language: en
+  region: global
+  priority: 94
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - foundry
+  - chips
+  - semiconductor
+  adapter: generic_article_index
+- id: marvell_news
+  name: Marvell Newsroom
+  category: semiconductor
+  type: web_page
+  url: https://www.marvell.com/company/newsroom.html
+  language: en
+  region: global
+  priority: 94
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - chips
+  - networking
+  - datacenter
+  - ai
+  adapter: generic_article_index
+- id: synopsys_news
+  name: Synopsys Newsroom
+  category: semiconductor
+  type: web_page
+  url: https://news.synopsys.com/
+  language: en
+  region: global
+  priority: 93
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - eda
+  - chips
+  - semiconductor
+  adapter: generic_article_index
+- id: cadence_news
+  name: Cadence Newsroom
+  category: semiconductor
+  type: web_page
+  url: https://www.cadence.com/en_US/home/company/newsroom.html
+  language: en
+  region: global
+  priority: 93
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - eda
+  - chips
+  - semiconductor
+  adapter: generic_article_index

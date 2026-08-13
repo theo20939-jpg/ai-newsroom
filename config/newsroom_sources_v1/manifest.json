@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "generated_at": "2026-07-14",
-  "source_count": 127,
+  "source_count": 230,
   "files": [
     "PROMPT_FOR_DEVELOPMENT_CHAT.txt",
     "README.md",
@@ -9,14 +9,26 @@
     "routing.yaml",
     "source.schema.json",
     "sources/accounts.yaml",
+    "sources/ai_tools.yaml",
+    "sources/certifications.yaml",
+    "sources/changelogs.yaml",
     "sources/custom.yaml",
     "sources/github.yaml",
+    "sources/government.yaml",
+    "sources/ide.yaml",
+    "sources/insiders.yaml",
     "sources/keywords.yaml",
+    "sources/manufacturers.yaml",
     "sources/media.yaml",
     "sources/official.yaml",
+    "sources/open_source.yaml",
     "sources/reddit.yaml",
     "sources/research.yaml",
+    "sources/robotics.yaml",
+    "sources/semiconductor.yaml",
     "sources/social.yaml",
-    "sources/trends.yaml"
+    "sources/supply_chain.yaml",
+    "sources/trends.yaml",
+    "sources/venture.yaml"
   ]
 }

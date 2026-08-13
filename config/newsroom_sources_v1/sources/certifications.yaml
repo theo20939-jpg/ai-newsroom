@@ -1,0 +1,102 @@
+version: '1.1'
+sources:
+- id: fcc_equipment_authorization
+  name: FCC Equipment Authorization
+  category: certification
+  type: web_page
+  url: https://www.fcc.gov/oet/ea/fccid
+  language: en
+  region: global
+  priority: 92
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - fcc
+  - certification
+  - gadgets
+  - leaks
+  adapter: generic_article_index
+  notes: Use search/query adapter; not a conventional news feed.
+- id: bluetooth_launch_studio
+  name: Bluetooth SIG Launch Studio
+  category: certification
+  type: web_page
+  url: https://launchstudio.bluetooth.com/
+  language: en
+  region: global
+  priority: 91
+  reliability: 1.0
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - bluetooth
+  - certification
+  - gadgets
+  adapter: generic_article_index
+  notes: Requires search/session capable adapter.
+- id: wifi_certified
+  name: Wi-Fi Alliance Product Finder
+  category: certification
+  type: web_page
+  url: https://www.wi-fi.org/product-finder
+  language: en
+  region: global
+  priority: 91
+  reliability: 1.0
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - wifi
+  - certification
+  - gadgets
+  adapter: generic_article_index
+- id: usb_if_products
+  name: USB-IF Product Search
+  category: certification
+  type: web_page
+  url: https://www.usb.org/products
+  language: en
+  region: global
+  priority: 89
+  reliability: 1.0
+  fetch_interval: 4h
+  enabled: true
+  tags:
+  - usb
+  - certification
+  - hardware
+  adapter: generic_article_index
+- id: geekbench_browser
+  name: Geekbench Browser
+  category: benchmark
+  type: web_page
+  url: https://browser.geekbench.com/
+  language: en
+  region: global
+  priority: 90
+  reliability: 0.9
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - benchmark
+  - cpu
+  - gpu
+  - mobile
+  adapter: benchmark_index
+- id: ul_3dmark_results
+  name: 3DMark Results
+  category: benchmark
+  type: web_page
+  url: https://www.3dmark.com/search
+  language: en
+  region: global
+  priority: 87
+  reliability: 0.9
+  fetch_interval: 2h
+  enabled: true
+  tags:
+  - benchmark
+  - gpu
+  - hardware
+  adapter: benchmark_index

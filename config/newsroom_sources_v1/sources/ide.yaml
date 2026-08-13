@@ -1,0 +1,118 @@
+version: '1.1'
+sources:
+- id: windsurf_changelog
+  name: Windsurf Changelog
+  category: ide
+  type: web_page
+  url: https://windsurf.com/changelog
+  language: en
+  region: global
+  priority: 93
+  reliability: 1.0
+  fetch_interval: 20m
+  enabled: true
+  tags:
+  - ai
+  - coding
+  - ide
+  - agents
+  adapter: changelog
+- id: claude_code_docs
+  name: Claude Code Docs
+  category: ide
+  type: web_page
+  url: https://docs.anthropic.com/en/docs/claude-code/overview
+  language: en
+  region: global
+  priority: 91
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - coding
+  - claude
+  - agents
+  adapter: generic_article_index
+  notes: Track page revisions only; Anthropic newsroom itself is already in v1.
+- id: continue_changelog
+  name: Continue Changelog
+  category: ide
+  type: web_page
+  url: https://docs.continue.dev/changelog
+  language: en
+  region: global
+  priority: 88
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - coding
+  - ide
+  - open-source
+  adapter: changelog
+- id: zed_releases
+  name: Zed Releases
+  category: ide
+  type: web_page
+  url: https://zed.dev/releases
+  language: en
+  region: global
+  priority: 88
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - coding
+  - ide
+  - ai
+  adapter: changelog
+- id: aider_blog
+  name: Aider Blog
+  category: ide
+  type: web_page
+  url: https://aider.chat/blog/
+  language: en
+  region: global
+  priority: 89
+  reliability: 1.0
+  fetch_interval: 1h
+  enabled: true
+  tags:
+  - ai
+  - coding
+  - open-source
+  adapter: generic_article_index
+- id: cline_releases
+  name: Cline Releases
+  category: ide
+  type: atom
+  url: https://github.com/cline/cline/releases.atom
+  language: en
+  region: global
+  priority: 90
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - coding
+  - agents
+  - open-source
+- id: roo_code_releases
+  name: Roo Code Releases
+  category: ide
+  type: atom
+  url: https://github.com/RooCodeInc/Roo-Code/releases.atom
+  language: en
+  region: global
+  priority: 89
+  reliability: 1.0
+  fetch_interval: 30m
+  enabled: true
+  tags:
+  - ai
+  - coding
+  - agents
+  - open-source
