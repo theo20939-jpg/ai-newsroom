@@ -14,7 +14,12 @@ from schemas.video_candidate import (
     VideoValidation,
     VideoValidationStatus,
 )
-from services.video_discovery_persistence import persist_video_hint, unvalidated_hosted_platform_result
+from services.video_discovery_persistence import (
+    EligibleVideoCandidate,
+    persist_video_hint,
+    to_native_video_hint,
+    unvalidated_hosted_platform_result,
+)
 
 
 class _FakeSession:
@@ -80,3 +85,67 @@ async def test_content_draft_id_defaults_to_none() -> None:
     )
 
     assert session.added[0].content_draft_id is None
+
+
+# ---------------------------------------------------------------------------------------------
+# Production wiring (docs/video_delivery_wiring_checkpoint.md): to_native_video_hint() converts
+# the read contract (EligibleVideoCandidate) back into the pydantic/enum shape build_rich_media_
+# plan() expects.
+# ---------------------------------------------------------------------------------------------
+
+
+def _eligible_candidate(**overrides: object) -> EligibleVideoCandidate:
+    base: dict[str, object] = dict(
+        id=uuid.uuid4(), event_id=uuid.uuid4(), content_draft_id=None,
+        discovery_method="open_graph_video_secure", remote_url="https://cdn.example.com/clip.mp4",
+        platform="direct_hosted", declared_width=1280, declared_height=720,
+        declared_mime_type="video/mp4", declared_duration_seconds=30,
+        validation_status="valid", detected_container="mp4", byte_size=5000, error_code=None,
+    )
+    base.update(overrides)
+    return EligibleVideoCandidate(**base)  # type: ignore[arg-type]
+
+
+def test_to_native_video_hint_converts_a_valid_direct_hosted_candidate() -> None:
+    candidate = _eligible_candidate()
+
+    hint = to_native_video_hint(candidate)
+
+    assert hint is not None
+    assert hint.discovery_method == VideoDiscoveryMethod.OPEN_GRAPH_VIDEO_SECURE
+    assert hint.remote_url == "https://cdn.example.com/clip.mp4"
+    assert hint.platform == VideoPlatform.DIRECT_HOSTED
+    assert hint.declared_width == 1280
+    assert hint.declared_height == 720
+    assert hint.declared_mime_type == "video/mp4"
+    assert hint.declared_duration_seconds == 30
+
+
+def test_to_native_video_hint_converts_a_youtube_candidate() -> None:
+    candidate = _eligible_candidate(
+        discovery_method="hosted_platform_link_in_article",
+        remote_url="https://www.youtube.com/watch?v=abc123", platform="youtube",
+        declared_width=None, declared_height=None, declared_mime_type=None,
+        declared_duration_seconds=None, validation_status="unvalidated_hosted_platform",
+        detected_container=None, byte_size=None,
+    )
+
+    hint = to_native_video_hint(candidate)
+
+    assert hint is not None
+    assert hint.platform == VideoPlatform.YOUTUBE
+    assert hint.remote_url == "https://www.youtube.com/watch?v=abc123"
+
+
+def test_to_native_video_hint_returns_none_for_an_unrecognized_platform_value() -> None:
+    """A stored value that no longer maps onto a known VideoPlatform member (e.g. a future
+    migration, manual data edit, or schema drift) must degrade to "no video", never raise."""
+    candidate = _eligible_candidate(platform="some_future_platform")
+
+    assert to_native_video_hint(candidate) is None
+
+
+def test_to_native_video_hint_returns_none_for_an_unrecognized_discovery_method_value() -> None:
+    candidate = _eligible_candidate(discovery_method="some_future_method")
+
+    assert to_native_video_hint(candidate) is None

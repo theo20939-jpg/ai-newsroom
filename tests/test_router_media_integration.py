@@ -27,6 +27,7 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
+from aiogram.types import InputMediaVideo
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.config import settings
@@ -34,6 +35,7 @@ from database.models.content_draft_quote import ContentDraftQuote
 from services.editorial_treatment import BRIEF, MAJOR, SKIP, STANDARD, EditorialTreatmentDecision
 from services.image_persistence import EditorialImageCandidate
 from services.telegram_notifier import NotificationOutcome
+from services.video_discovery_persistence import EligibleVideoCandidate
 from tests.test_content_worker_cycle import (
     _isolated_freshness_window,  # noqa: F401,F811 - a pytest fixture, reused as a parameter name below
     _make_completed_news_analysis_task,
@@ -1782,3 +1784,136 @@ def test_normalize_image_origin_strips_wordpress_dimension_suffix() -> None:
     full = "https://example.com/wp-content/uploads/2026/08/photo.jpg"
     resized = "https://example.com/wp-content/uploads/2026/08/photo-1024x768.jpg"
     assert _normalize_image_origin(full) == _normalize_image_origin(resized)
+
+
+# ---------------------------------------------------------------------------------------------
+# Production wiring (docs/video_delivery_wiring_checkpoint.md): worker/content_cycle.py now
+# retrieves/converts a real video candidate and passes it into build_rich_media_plan() (Phase 19
+# M10-M12, all reused verbatim). Gated behind rich_media_mode=="enforce" (default "off" is
+# byte-identical to every image-only test above, all of which remain unmodified and passing).
+# ---------------------------------------------------------------------------------------------
+
+def _fake_video_candidate(**overrides: object) -> EligibleVideoCandidate:
+    base: dict[str, object] = dict(
+        id=uuid4(), event_id=uuid4(), content_draft_id=None,
+        discovery_method="open_graph_video_secure", remote_url="https://cdn.example.com/clip.mp4",
+        platform="direct_hosted", declared_width=1280, declared_height=720,
+        declared_mime_type="video/mp4", declared_duration_seconds=30,
+        validation_status="valid", detected_container="mp4", byte_size=5000, error_code=None,
+    )
+    base.update(overrides)
+    return EligibleVideoCandidate(**base)  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_valid_video_candidate_reaches_the_media_group_when_rich_media_enforced(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A real direct-hosted video candidate, retrieved and converted, reaches
+    build_rich_media_plan() and is sent as the last item of the media group as an InputMediaVideo -
+    end-to-end proof of the wiring, not just the converter in isolation."""
+    _common_settings(monkeypatch)
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
+    monkeypatch.setattr(settings, "rich_media_mode", "enforce")
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v82_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_media_group.return_value = _fake_media_messages(2)
+
+    with (
+        patch(
+            "worker.content_cycle._classify_event_for_router_treatment",
+            new=AsyncMock(return_value=_standard_decision()),
+        ),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate()])),
+        patch(
+            "worker.content_cycle.get_video_candidates_for_event",
+            new=AsyncMock(return_value=[_fake_video_candidate()]),
+        ) as mock_get_video,
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    mock_get_video.assert_called_once()
+    fake_bot.send_media_group.assert_called_once()
+    _, kwargs = fake_bot.send_media_group.call_args
+    media = kwargs["media"]
+    assert len(media) == 2
+    assert isinstance(media[-1], InputMediaVideo)
+    assert media[-1].media == "https://cdn.example.com/clip.mp4"
+    assert result.notified == 1
+
+
+@pytest.mark.asyncio
+async def test_no_video_candidate_leaves_image_only_delivery_unchanged(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fallback (docs/video_delivery_wiring_checkpoint.md §"preserve fallback behavior"): even
+    with rich_media_mode="enforce", no persisted video candidate for the event must leave the
+    existing image-only media-group send completely unaffected - never a crash, never a blocked
+    or altered image send."""
+    _common_settings(monkeypatch)
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
+    monkeypatch.setattr(settings, "rich_media_mode", "enforce")
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v82_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_media_group.return_value = _fake_media_messages(2)
+    candidates = [
+        _fake_candidate(candidate_id="a", rank=1, quality_score=90, relevance_score=90),
+        _fake_candidate(candidate_id="b", rank=2, quality_score=85, relevance_score=85),
+    ]
+
+    with (
+        patch(
+            "worker.content_cycle._classify_event_for_router_treatment",
+            new=AsyncMock(return_value=_standard_decision()),
+        ),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=candidates)),
+        patch("worker.content_cycle.get_video_candidates_for_event", new=AsyncMock(return_value=[])),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    fake_bot.send_media_group.assert_called_once()
+    _, kwargs = fake_bot.send_media_group.call_args
+    media = kwargs["media"]
+    assert len(media) == 2
+    assert all(not isinstance(item, InputMediaVideo) for item in media)
+    assert result.notified == 1
+    assert result.router_media_group_sent == 1
+
+
+@pytest.mark.asyncio
+async def test_video_lookup_is_never_called_when_rich_media_mode_is_off(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Default-config regression guard: rich_media_mode defaults to "off" - the video lookup must
+    never even run, keeping this byte-identical to the pre-wiring image-only behavior every other
+    test in this file already exercises."""
+    _common_settings(monkeypatch)
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
+    assert settings.rich_media_mode == "off"
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v82_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_media_group.return_value = _fake_media_messages(2)
+    candidates = [
+        _fake_candidate(candidate_id="a", rank=1, quality_score=90, relevance_score=90),
+        _fake_candidate(candidate_id="b", rank=2, quality_score=85, relevance_score=85),
+    ]
+
+    with (
+        patch(
+            "worker.content_cycle._classify_event_for_router_treatment",
+            new=AsyncMock(return_value=_standard_decision()),
+        ),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=candidates)),
+        patch("worker.content_cycle.get_video_candidates_for_event", new=AsyncMock()) as mock_get_video,
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    mock_get_video.assert_not_called()
+    fake_bot.send_media_group.assert_called_once()
+    assert result.notified == 1

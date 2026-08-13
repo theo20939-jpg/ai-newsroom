@@ -21,6 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.models.content_draft_media_item import ContentDraftMediaItem
 from schemas.video_candidate import (
     NativeVideoHint,
+    VideoDiscoveryMethod,
+    VideoPlatform,
     VideoValidation,
     VideoValidationStatus,
 )
@@ -73,6 +75,31 @@ class EligibleVideoCandidate:
     detected_container: str | None
     byte_size: int | None
     error_code: str | None
+
+
+def to_native_video_hint(candidate: EligibleVideoCandidate) -> NativeVideoHint | None:
+    """Production-wiring converter (docs/video_delivery_wiring_checkpoint.md): the read contract
+    above stores plain, already-validated strings; services.image_preview_notifier.
+    build_rich_media_plan() expects the pydantic/enum-typed NativeVideoHint this table's own write
+    path (persist_video_hint(), above) originally built the row from - a converter is needed
+    because the two shapes intentionally differ, never because either one is wrong.
+
+    Returns None (never raises) if `discovery_method`/`platform` no longer map onto a currently-
+    known enum member - the caller treats that exactly like "no video available", the same
+    graceful-degradation contract every other candidate-resolution step in this codebase already
+    follows (e.g. bot.image_preview_media.resolve_photo_input())."""
+    try:
+        return NativeVideoHint(
+            discovery_method=VideoDiscoveryMethod(candidate.discovery_method),
+            remote_url=candidate.remote_url,
+            platform=VideoPlatform(candidate.platform),
+            declared_width=candidate.declared_width,
+            declared_height=candidate.declared_height,
+            declared_mime_type=candidate.declared_mime_type,
+            declared_duration_seconds=candidate.declared_duration_seconds,
+        )
+    except ValueError:
+        return None
 
 
 async def get_video_candidates_for_event(

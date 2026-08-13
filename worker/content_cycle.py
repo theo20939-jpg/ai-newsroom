@@ -47,6 +47,7 @@ from services.image_persistence import (
     sanitize_url,
 )
 from services.image_preview_notifier import build_rich_media_plan, send_news_with_image_preview
+from services.video_discovery_persistence import get_video_candidates_for_event, to_native_video_hint
 from services.news_telegram_presentation import (
     build_compact_news_body,
     is_v8_family_output,
@@ -848,7 +849,19 @@ async def run_content_cycle(
                     # variable below; 0 resolved photos leaves both empty (existing text-only
                     # fallback, unchanged).
                     top_candidates = _select_top_ranked_image_candidates(eligible_candidates, limit=_MAX_ROUTER_IMAGES)
-                    plan = build_rich_media_plan(top_candidates, None, caption=html)
+                    # Phase 19 M10/M12 production wiring (docs/video_delivery_wiring_checkpoint.md):
+                    # video attachment is opt-in via rich_media_mode - "off"/"shadow" (the current
+                    # defaults) skip the lookup entirely and stay byte-identical to the pre-wiring
+                    # image-only behavior below. "No candidate" and "candidate fails to convert"
+                    # both leave video_hint as None, which build_rich_media_plan() (unmodified)
+                    # already treats as "no video" - never a crash, never a blocked image send.
+                    video_hint = None
+                    if settings.rich_media_mode == "enforce":
+                        async with session_factory() as video_session:
+                            video_candidates = await get_video_candidates_for_event(video_session, event.id, limit=1)
+                        if video_candidates:
+                            video_hint = to_native_video_hint(video_candidates[0])
+                    plan = build_rich_media_plan(top_candidates, video_hint, caption=html)
                     if len(plan.media_group_items) >= 2:
                         # Phase 23.1Q media-quality corrective phase: the real [🔗 Источник] button
                         # is attached to the group's first message AFTER sending (see the
