@@ -30,7 +30,7 @@ from schemas.workflow import WorkflowRunResult
 from services.content_quality_gates import check_quote_is_self_contained, evaluate_content_quality_gates
 from services.evidence_package import build_evidence_package
 from services.quote_verification import verify_quote
-from services.story_memory import NEW_STORY, UNCERTAIN_MATCH
+from services.story_memory import is_story_update_match
 from services.story_telegram_delivery import get_root_delivery
 
 logger = logging.getLogger(__name__)
@@ -319,8 +319,11 @@ class ContentDraftService:
                 # uncertain_match is deliberately never treated as a confirmed update
                 # (services/story_memory.py's own conservative design) - only a confident match
                 # type marks this draft as an update, for both reply-routing and this quality
-                # gate.
-                is_update = story_link.match_type not in (NEW_STORY, UNCERTAIN_MATCH)
+                # gate. is_story_update_match() (NEWS Stability Acceptance follow-up, docs/
+                # post_acceptance_followup_checkpoint.md §B) extracts this exact check so
+                # services/story_duplicate_guard.py's pre-generation fail-closed short-circuit can
+                # never silently diverge from it.
+                is_update = is_story_update_match(story_link.match_type)
                 if is_update:
                     # Reuses services/story_telegram_delivery.py::get_root_delivery() verbatim -
                     # the same, already-established definition of "the story's root" used for

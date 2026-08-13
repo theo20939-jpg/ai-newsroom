@@ -1594,20 +1594,26 @@ async def test_honor_style_photon_cdn_duplicate_excluded_from_the_album(
 
 
 @pytest.mark.asyncio
-async def test_genuinely_different_crop_of_the_same_base_file_both_remain(
+async def test_same_base_file_crop_variants_are_now_deduplicated_to_one_slot(
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Required control case: two candidates sharing the same base image file (same normalized
-    URL origin) but a genuinely different visible crop, not a resize - real Hamming distance 36 -
-    must NOT be treated as duplicates. Proves this fix does not over-tighten past legitimate
-    distinct images that merely share a source filename."""
+    """NEWS Stability Acceptance follow-up (docs/post_acceptance_followup_checkpoint.md §A):
+    deliberate, evidence-driven policy correction. This fixture pair (same normalized URL origin,
+    real Hamming distance 36) was PREVIOUSLY treated as "genuinely different crops, both must
+    remain" - but the real acceptance canary showed this exact URL pattern (same base file,
+    different crop/resize query params) live-producing real published albums that show the same
+    photograph 2-3 times (the $70M SF-estate and Apple/iCloud Private Relay albums). Per the
+    corrected product invariant - "different transformations of the same source photograph must
+    occupy only one album slot" - same-origin is now sufficient on its own, regardless of
+    perceptual distance. See test_genuinely_different_images_at_different_paths_both_remain below
+    for the still-intact "truly distinct photos must remain eligible" guarantee."""
     _common_settings(monkeypatch)
     monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
     await _seed_eligible_event(factory, test_source)
     _gateway, registry = _v82_capability_registry()
     fake_bot = AsyncMock()
-    fake_bot.send_media_group.return_value = _fake_media_messages(2)
+    fake_bot.send_photo.return_value.message_id = 1
     candidates = [
         _fake_candidate(
             candidate_id="crop-a", rank=1, quality_score=90, relevance_score=90, width=1200, height=960,
@@ -1616,6 +1622,47 @@ async def test_genuinely_different_crop_of_the_same_base_file_both_remain(
         _fake_candidate(
             candidate_id="crop-b", rank=2, quality_score=85, relevance_score=85, width=1200, height=630,
             perceptual_hash=_REAL_GUARDIAN_CROP_B_PHASH, final_url=_REAL_GUARDIAN_CROP_B_URL,
+        ),
+    ]
+
+    with (
+        patch(
+            "worker.content_cycle._classify_event_for_router_treatment",
+            new=AsyncMock(return_value=_standard_decision()),
+        ),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=candidates)),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    fake_bot.send_media_group.assert_not_called()  # the same-source crop variant never becomes a second album image
+    fake_bot.send_photo.assert_called_once()
+    assert result.router_image_sent == 1
+
+
+@pytest.mark.asyncio
+async def test_genuinely_different_images_at_different_paths_both_remain(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Required control case: two candidates at genuinely DIFFERENT source file paths (not sharing
+    a base filename) must remain eligible even when their perceptual hashes happen to be close -
+    the origin-identity dedup signal only ever fires on a real shared source file, never on visual
+    similarity alone. Proves the acceptance follow-up fix does not over-tighten past legitimate
+    distinct images."""
+    _common_settings(monkeypatch)
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v82_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_media_group.return_value = _fake_media_messages(2)
+    candidates = [
+        _fake_candidate(
+            candidate_id="photo-a", rank=1, quality_score=90, relevance_score=90, width=1200, height=960,
+            perceptual_hash=_REAL_GUARDIAN_CROP_A_PHASH, final_url="https://i.guim.co.uk/img/media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/0_0_100_100/master/one.jpg?width=1200",
+        ),
+        _fake_candidate(
+            candidate_id="photo-b", rank=2, quality_score=85, relevance_score=85, width=1200, height=630,
+            perceptual_hash=_REAL_GUARDIAN_CROP_B_PHASH, final_url="https://i.guim.co.uk/img/media/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/0_0_100_100/master/two.jpg?width=1200",
         ),
     ]
 
@@ -1663,6 +1710,10 @@ def test_compute_within_event_duplicate_flags_honor_pair_directly() -> None:
 
 
 def test_compute_within_event_duplicate_flags_guardian_crop_pair_directly() -> None:
+    """NEWS Stability Acceptance follow-up: same normalized origin (same base file `3000.jpg`,
+    different crop/resize query params) is now sufficient on its own for a duplicate flag,
+    regardless of the real measured Hamming distance (36) between these two - see docs/
+    post_acceptance_followup_checkpoint.md §A."""
     from worker.content_cycle import _compute_within_event_duplicate_flags
 
     crop_a = _fake_candidate(
@@ -1673,4 +1724,61 @@ def test_compute_within_event_duplicate_flags_guardian_crop_pair_directly() -> N
     )
     flags = _compute_within_event_duplicate_flags([crop_a, crop_b])
     assert flags[crop_a.id] is False
-    assert flags[crop_b.id] is False
+    assert flags[crop_b.id] is True
+
+
+def test_compute_within_event_duplicate_flags_real_sf_estate_album_directly() -> None:
+    """The exact real acceptance-canary failure: the $70M SF-estate Guardian album presented the
+    same underlying photograph 3 times (ranks 1-3 actually sent), differing only by crop/resize
+    query params on the same base file `3702.jpg`. Real measured Hamming distances between the 3
+    sent variants were 14-28 - all well above both the old global (<=4) and same-origin (<=10)
+    thresholds, which is exactly why they previously all survived. Only the first (best-ranked)
+    must now survive."""
+    from worker.content_cycle import _compute_within_event_duplicate_flags
+
+    base = "https://i.guim.co.uk/img/media/7d9d381f45fe902c8c8f6e6f526ebeb6b2c15afc/785_0_3702_2962/master/3702.jpg"
+    rank1 = _fake_candidate(
+        candidate_id="rank1", rank=1, perceptual_hash="9fa8a08b888c2fbd",
+        final_url=f"{base}?width=1200&height=630&quality=85&auto=format&fit=crop&s=1af90ff2",
+    )
+    rank2 = _fake_candidate(
+        candidate_id="rank2", rank=2, perceptual_hash="39a88c8c272b05cc",
+        final_url=f"{base}?width=1200&height=1200&quality=85&auto=format&fit=crop&s=5b1da97b",
+    )
+    rank3 = _fake_candidate(
+        candidate_id="rank3", rank=3, perceptual_hash="b9888c8c369f8b0c",
+        final_url=f"{base}?width=1200&height=900&quality=85&auto=format&fit=crop&s=329cfb24",
+    )
+    flags = _compute_within_event_duplicate_flags([rank1, rank2, rank3])
+    assert flags[rank1.id] is False
+    assert flags[rank2.id] is True
+    assert flags[rank3.id] is True
+
+
+def test_compute_within_event_duplicate_flags_real_cnet_apple_album_directly() -> None:
+    """The exact real acceptance-canary failure: the Apple/iCloud Private Relay CNET album
+    presented the same underlying photograph 3 times via WordPress's own `?resize=WxH` query
+    convention on the same base file `7d5d5d73-...jpg`. Real measured Hamming distances were
+    12-22 - well above both old thresholds."""
+    from worker.content_cycle import _compute_within_event_duplicate_flags
+
+    base = "https://www.cnet.com/wp-content/uploads/sites/2/7d5d5d73-029b-4dcd-9b51-93acca1a424b.jpg"
+    rank1 = _fake_candidate(candidate_id="rank1", rank=1, perceptual_hash="0307070f1737170f", final_url=base)
+    rank2 = _fake_candidate(
+        candidate_id="rank2", rank=2, perceptual_hash="000301072b6b694d", final_url=f"{base}?resize=1200%2C1200",
+    )
+    rank3 = _fake_candidate(
+        candidate_id="rank3", rank=3, perceptual_hash="01070307b2b2330f", final_url=f"{base}?resize=1200%2C900",
+    )
+    flags = _compute_within_event_duplicate_flags([rank1, rank2, rank3])
+    assert flags[rank1.id] is False
+    assert flags[rank2.id] is True
+    assert flags[rank3.id] is True
+
+
+def test_normalize_image_origin_strips_wordpress_dimension_suffix() -> None:
+    from worker.content_cycle import _normalize_image_origin
+
+    full = "https://example.com/wp-content/uploads/2026/08/photo.jpg"
+    resized = "https://example.com/wp-content/uploads/2026/08/photo-1024x768.jpg"
+    assert _normalize_image_origin(full) == _normalize_image_origin(resized)

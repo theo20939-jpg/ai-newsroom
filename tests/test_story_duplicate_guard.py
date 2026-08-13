@@ -27,6 +27,7 @@ from database.models.news_event import EventCategory
 from database.models.story import Story
 from database.models.story_link import NewsEventStoryLink
 from database.models.story_telegram_delivery import DeliveryStatus, DeliveryType
+from core.config import settings
 from services.story_memory import (
     NEW_STORY,
     RELATED_STORY,
@@ -35,9 +36,14 @@ from services.story_memory import (
     SUPPORTING_SOURCE,
     UNCERTAIN_MATCH,
     extract_story_signature,
+    is_story_update_match,
     score_candidate,
 )
-from services.story_duplicate_guard import check_duplicate_story_delivery, should_block_duplicate_delivery
+from services.story_duplicate_guard import (
+    check_duplicate_story_delivery,
+    check_update_would_fail_closed,
+    should_block_duplicate_delivery,
+)
 from services.story_telegram_delivery import record_delivery
 from tests.test_content_worker_cycle import (
     _isolated_freshness_window,  # noqa: F401,F811 - a pytest fixture, reused as a parameter name below
@@ -308,3 +314,118 @@ async def test_orchestration_v1_would_block_but_v2_delta_shows_real_new_informat
     assert result.delta_classification == "material_update"
     assert result.blocked is False
     assert result.would_suppress is False
+
+
+# ---------------------------------------------------------------------------
+# NEWS Stability Acceptance follow-up (docs/post_acceptance_followup_checkpoint.md §B):
+# is_story_update_match() and check_update_would_fail_closed()
+# ---------------------------------------------------------------------------
+
+
+def test_is_story_update_match_true_for_every_confident_outcome() -> None:
+    for match_type in (STORY_UPDATE, SEMANTIC_DUPLICATE, SUPPORTING_SOURCE, RELATED_STORY):
+        assert is_story_update_match(match_type) is True
+
+
+def test_is_story_update_match_false_for_new_story_uncertain_and_none() -> None:
+    assert is_story_update_match(NEW_STORY) is False
+    assert is_story_update_match(UNCERTAIN_MATCH) is False
+    assert is_story_update_match(None) is False
+
+
+@pytest.mark.asyncio
+async def test_update_fail_closed_check_is_noop_unless_enforce(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """"off"/"shadow" must never fail-closed-drop - shadow still generates and sends as a
+    standalone post purely to observe the would-be rate (services/story_telegram_delivery.py's own
+    module docstring); short-circuiting for those modes would silently change that observability
+    behavior, not just save cost."""
+    story, event = await _make_story_with_link(factory, test_source, match_type=STORY_UPDATE)
+    for mode in ("off", "shadow"):
+        monkeypatch.setattr(settings, "telegram_story_reply_mode", mode)
+        async with factory() as session:
+            result = await check_update_would_fail_closed(session, event.id)
+        assert result.would_fail_closed is False
+        assert "not enforce" in result.reason
+
+
+@pytest.mark.asyncio
+async def test_update_fail_closed_check_true_when_no_root_under_enforce(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "telegram_story_reply_mode", "enforce")
+    story, event = await _make_story_with_link(factory, test_source, match_type=STORY_UPDATE)
+
+    async with factory() as session:
+        result = await check_update_would_fail_closed(session, event.id)
+
+    assert result.would_fail_closed is True
+    assert result.story_id == story.id
+    assert result.match_type == STORY_UPDATE
+
+
+@pytest.mark.asyncio
+async def test_update_fail_closed_check_false_when_root_resolvable_under_enforce(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "telegram_story_reply_mode", "enforce")
+    story, event = await _make_story_with_link(factory, test_source, match_type=STORY_UPDATE)
+
+    async with factory() as session:
+        root_task = EditorialTask(
+            id=uuid4(), event_id=story.first_event_id, status=TaskStatus.COMPLETED, priority=TaskPriority.B,
+            workflow={"workflow_name": "CONTENT_GENERATION", "step_results": []},
+        )
+        session.add(root_task)
+        await session.flush()
+        root_draft = ContentDraft(
+            id=uuid4(), task_id=root_task.id, type=ContentType.POST, title="root", body="root body",
+            version=1, status="draft",
+        )
+        session.add(root_draft)
+        await session.flush()
+        await record_delivery(
+            session, story_id=story.id, content_draft_id=root_draft.id, telegram_chat_id=-1004297182444,
+            telegram_message_id=777, reply_to_message_id=None, delivery_type=DeliveryType.ROOT,
+            delivery_status=DeliveryStatus.SENT, sent_at=datetime.now(timezone.utc),
+        )
+        await session.commit()
+
+    async with factory() as session:
+        result = await check_update_would_fail_closed(session, event.id)
+
+    assert result.would_fail_closed is False
+
+
+@pytest.mark.asyncio
+async def test_update_fail_closed_check_false_for_new_story(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "telegram_story_reply_mode", "enforce")
+    _story, event = await _make_story_with_link(factory, test_source, match_type=NEW_STORY)
+
+    async with factory() as session:
+        result = await check_update_would_fail_closed(session, event.id)
+
+    assert result.would_fail_closed is False
+
+
+@pytest.mark.asyncio
+async def test_update_fail_closed_check_false_with_no_story_link(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "telegram_story_reply_mode", "enforce")
+    async with factory() as session:
+        event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
+
+    async with factory() as session:
+        result = await check_update_would_fail_closed(session, event.id)
+
+    assert result.would_fail_closed is False
+    assert "did not run" in result.reason

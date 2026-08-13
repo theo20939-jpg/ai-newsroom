@@ -302,3 +302,126 @@ def test_preselect_caps_at_story_match_candidate_limit() -> None:
 
     result = _preselect_candidates(signature, many_relevant)
     assert len(result) <= STORY_MATCH_CANDIDATE_LIMIT
+
+
+# ---------------------------------------------------------------------------
+# Entity Normalization Calibration fix (docs/research_reuse_entity_normalization_checkpoint.md
+# Sections B/C): _CALIBRATED_GENERIC_PREFIX_ENTITIES ("в", "от", "отчёт", "компани",
+# "правительств") - real, corpus-calibrated tokens, kept deliberately separate from
+# _GENERIC_DETERMINER_ENTITIES. The real VK forensic pair is the primary regression case.
+# ---------------------------------------------------------------------------
+
+_VK_TITLE_1 = (
+    "VK отчиталась за квартал: выручка выросла на 17%, до 43,5 млрд рублей, "
+    "чистая прибыль составила 328 млн рублей."
+)
+_VK_TITLE_2 = "Отчёт VK за квартал: выручка — 43,5 млрд рублей, чистая прибыль — 328 млн рублей"
+
+
+def test_real_vk_pair_entity_overlap_and_score_reach_calibrated_counterfactual() -> None:
+    """The exact real VK forensic case, before/after: previously entity_overlap=0.0, combined=0.37
+    (uncertain_match) - the checkpoint's own calibrated counterfactual predicted entity_overlap=1.0,
+    combined≈0.97 once "Отчёт" no longer contaminates the captured entity. Reports the actual
+    result rather than asserting the exact float, per the phase brief's own "do not force the
+    exact final number" instruction - but the real result does land almost exactly on the
+    predicted 0.97."""
+    sig_1 = extract_story_signature(_VK_TITLE_1, EventCategory.UNKNOWN)
+    story_1 = _story(title=_VK_TITLE_1, entities=sig_1.entities, topic_bucket=sig_1.topic_bucket)
+
+    sig_2 = extract_story_signature(_VK_TITLE_2, EventCategory.STARTUPS)
+    combined, entity_overlap, title_overlap = score_candidate(
+        _VK_TITLE_2, sig_2, EventCategory.STARTUPS, story_1.title, story_1,
+    )
+
+    assert sig_1.entities == ["vk"]
+    assert sig_2.entities == ["vk"]  # was ["отчёт vk"] before this fix
+    assert entity_overlap == 1.0  # was 0.0 before this fix
+    assert combined > 0.9  # was 0.37 before this fix (uncertain_match) - now well past _HIGH_THRESHOLD
+    from services.story_memory import _HIGH_THRESHOLD
+    assert combined >= _HIGH_THRESHOLD  # now a confident match, not uncertain_match
+
+
+def test_otchet_vk_normalizes_to_bare_vk() -> None:
+    signature = extract_story_signature("Отчёт VK за квартал", EventCategory.STARTUPS)
+    assert "vk" in signature.entities
+    assert "отчёт vk" not in signature.entities
+
+
+def test_kompaniya_vk_normalizes_to_bare_vk() -> None:
+    signature = extract_story_signature("Компания VK объявила о результатах", EventCategory.STARTUPS)
+    assert "vk" in signature.entities
+    assert not any(e.startswith("компани") for e in signature.entities)
+
+
+def test_prepositional_wrappers_v_and_ot_are_stripped() -> None:
+    sig_v = extract_story_signature("В Steam вышла демоверсия новой игры", EventCategory.TECH)
+    assert "steam" in sig_v.entities
+    assert "в steam" not in sig_v.entities
+
+    sig_ot = extract_story_signature("От MCP к Agent Plugins 1.0", EventCategory.AI)
+    assert "mcp" in sig_ot.entities
+    assert "от mcp" not in sig_ot.entities
+
+
+def test_government_wrapper_case_from_real_calibration_set() -> None:
+    """Real calibration example: "Правительство России проработает новые меры поддержки
+    ИИ-проектов" - "россия" (in its real stemmed form) must survive, "правительств" must not lead
+    the captured entity."""
+    signature = extract_story_signature(
+        "Правительство России проработает новые меры поддержки ИИ-проектов", EventCategory.AI,
+    )
+    assert not any(e.startswith("правительств") for e in signature.entities)
+    assert any("росси" in e for e in signature.entities)
+
+
+def test_calibration_negative_controls_preserved() -> None:
+    """Real negative controls from the checkpoint's own calibration - none of these are members of
+    _CALIBRATED_GENERIC_PREFIX_ENTITIES, and none should be affected by this fix at all."""
+    ai_sig = extract_story_signature(
+        "Nebius увеличила выручку во II квартале в 5,5 раза за счет сегмента AI Cloud", EventCategory.AI,
+    )
+    assert "ai cloud" in ai_sig.entities  # standalone "ai" (149 real corpus occurrences) never stripped
+
+    pixel_sig = extract_story_signature("Google Pixel 11 launch: Live updates", EventCategory.GADGETS)
+    assert "google pixel" in pixel_sig.entities  # real company-prefixed product, untouched
+
+    watch_sig = extract_story_signature("Apple Watch face gets new options", EventCategory.GADGETS)
+    assert "apple watch" in watch_sig.entities
+
+    bedrock_sig = extract_story_signature("Amazon Bedrock cost attribution guide", EventCategory.AI)
+    assert "amazon bedrock" in bedrock_sig.entities
+
+    copilot_sig = extract_story_signature("Write your first prompt with the GitHub Copilot app", EventCategory.SOFTWARE)
+    assert "github copilot" in copilot_sig.entities
+
+
+def test_cd_projekt_regression_unaffected_by_the_new_calibrated_set() -> None:
+    """The already-shipped CD Projekt fix (_GENERIC_DETERMINER_ENTITIES's own "the"/"это" handling)
+    must remain completely unaffected by the new, separate _CALIBRATED_GENERIC_PREFIX_ENTITIES set
+    - re-run here as an explicit regression guard for this phase specifically, alongside the
+    pre-existing dedicated CD Projekt tests above."""
+    sig_bare = extract_story_signature(_CD_PROJEKT_TITLE_A, EventCategory.STARTUPS)
+    sig_the = extract_story_signature(_CD_PROJEKT_TITLE_B, EventCategory.HARDWARE)
+    assert "witcher" in sig_bare.entities
+    assert "witcher" in sig_the.entities
+    assert set(sig_bare.entities) & set(sig_the.entities)
+
+
+def test_distinct_same_entity_vk_stories_remain_separate() -> None:
+    """Regression guard: the fix must not cause an unrelated same-entity VK story to falsely merge
+    - two genuinely different VK stories (earnings vs. a product launch) share the "vk" entity but
+    must stay well below the confident-match threshold on title overlap alone."""
+    title_earnings = _VK_TITLE_1
+    title_product = "VK запустила новый видеосервис с функцией совместного просмотра для пользователей"
+    sig_earnings = extract_story_signature(title_earnings, EventCategory.UNKNOWN)
+    sig_product = extract_story_signature(title_product, EventCategory.STARTUPS)
+    candidate = _story(title=title_earnings, entities=sig_earnings.entities, topic_bucket=sig_earnings.topic_bucket)
+
+    combined, entity_overlap, title_overlap = score_candidate(
+        title_product, sig_product, EventCategory.STARTUPS, title_earnings, candidate,
+    )
+
+    assert entity_overlap == 1.0  # "vk" genuinely shared - correct, not a false negative
+    assert title_overlap < 0.3  # genuinely different stories - low title overlap
+    from services.story_memory import _HIGH_THRESHOLD
+    assert combined < _HIGH_THRESHOLD  # entity overlap alone never forces a confident merge

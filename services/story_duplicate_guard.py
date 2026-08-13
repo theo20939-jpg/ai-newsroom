@@ -47,13 +47,14 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
 from database.models.news_event import NewsEvent
 from database.models.story_link import NewsEventStoryLink
 from services.story_confidence import compute_confidence_band
-from services.story_delta_engine import compute_story_delta, gate_delta_by_identity
-from services.story_memory import SEMANTIC_DUPLICATE, SUPPORTING_SOURCE
+from services.story_delta_engine import compute_story_delta
+from services.story_memory import SEMANTIC_DUPLICATE, SUPPORTING_SOURCE, is_story_update_match
 from services.story_suppression import compute_would_suppress
-from services.story_telegram_delivery import get_root_delivery
+from services.story_telegram_delivery import FAIL_CLOSED_ROUTE_TO_REVIEW, determine_reply_target, get_root_delivery
 
 # Match types Story Memory itself already defines as "no material new information" - see this
 # module's own docstring for why STORY_UPDATE/UNCERTAIN_MATCH/RELATED_STORY/NEW_STORY are
@@ -138,4 +139,79 @@ async def check_duplicate_story_delivery(session: AsyncSession, event_id: UUID) 
     return DuplicateDeliveryCheck(
         blocked=would_suppress, story_id=link.story_id, match_type=link.match_type, reason=reason,
         delta_classification=delta_classification, would_suppress=would_suppress,
+    )
+
+
+# ---------------------------------------------------------------------------------------------
+# NEWS Stability Acceptance follow-up (docs/post_acceptance_followup_checkpoint.md §B): the real
+# acceptance canary found 2 genuine story_update candidates that correctly failed closed (no
+# resolvable root Telegram message) - but only AFTER Research + Copywriting had already run and
+# been paid for, since worker/content_cycle.py's own fail-closed check happens after
+# run_content_generation_for_event() returns. Both pieces of information the late check needs
+# (NewsEventStoryLink.match_type and the story's root delivery) are already fully determined at
+# TRIAGE time (services/triage_orchestrator.py::_apply_story_memory()), long before Scoring,
+# Intelligence, Research, or Copywriting ever run for the event - so the SAME check can run here,
+# reusing the exact same NewsEventStoryLink + get_root_delivery() + determine_reply_target() this
+# module and services/story_telegram_delivery.py already use, never a second, divergent rule.
+# ---------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class UpdateFailClosedCheck:
+    """`would_fail_closed=True` means: worker/content_cycle.py's own real reply-routing check
+    would, later, inevitably reach FAIL_CLOSED_ROUTE_TO_REVIEW and drop this draft entirely
+    (never sent, per the existing, unchanged, non-negotiable product policy) - so the caller can
+    skip the paid run_content_generation_for_event() call for this event now instead of paying for
+    it first. `reason` is always populated, matching DuplicateDeliveryCheck's own convention."""
+
+    would_fail_closed: bool
+    story_id: UUID | None
+    match_type: str | None
+    reason: str
+
+
+async def check_update_would_fail_closed(session: AsyncSession, event_id: UUID) -> UpdateFailClosedCheck:
+    """Read-only pre-generation gate. A no-op (would_fail_closed=False) whenever:
+
+    - `telegram_story_reply_mode != "enforce"` - "off"/"shadow" never fail-closed-DROP a draft
+      (shadow still generates and sends as a standalone post, purely to observe/log the would-be
+      rate - see services/story_telegram_delivery.py's own module docstring); short-circuiting
+      here for those modes would silently change that observability behavior, not just save cost.
+    - no `NewsEventStoryLink` exists (`story_memory_mode == "off"`, today's real default).
+    - the match type is not update-equivalent (`is_story_update_match()`).
+    - a resolvable root already exists.
+
+    Does NOT wait or retry for a root that might resolve moments later - an intentional design
+    choice, not an oversight: the root's own resolution is entirely driven by a SEPARATE event's
+    own asynchronous processing timeline, never by whether THIS event's Research/Copywriting runs
+    or not, so moving this exact same point-in-time check earlier (from after generation to
+    before it) does not meaningfully change how much wall-clock time the other event's root had to
+    resolve - see docs/post_acceptance_followup_checkpoint.md §B for the full reasoning. The final,
+    real send-time check in worker/content_cycle.py is left completely unchanged and remains the
+    authoritative decision - this function only ever prevents wasted spend on a case that check
+    would have dropped anyway, it never makes a delivery decision of its own."""
+    if settings.telegram_story_reply_mode != "enforce":
+        return UpdateFailClosedCheck(
+            False, None, None, "telegram_story_reply_mode is not enforce - never fail-closed-drops here",
+        )
+    link = await session.get(NewsEventStoryLink, event_id)
+    if link is None:
+        return UpdateFailClosedCheck(
+            False, None, None, "no NewsEventStoryLink - Story Memory did not run for this event",
+        )
+    if not is_story_update_match(link.match_type):
+        return UpdateFailClosedCheck(
+            False, link.story_id, link.match_type,
+            f"match_type ({link.match_type}) is not update-equivalent - proceeds normally",
+        )
+    root_delivery = await get_root_delivery(session, link.story_id)
+    root_message_id = root_delivery.telegram_message_id if root_delivery is not None else None
+    decision = determine_reply_target(is_story_update=True, root_message_id=root_message_id)
+    if decision.action == FAIL_CLOSED_ROUTE_TO_REVIEW:
+        return UpdateFailClosedCheck(
+            True, link.story_id, link.match_type,
+            f"Story {link.story_id} has no resolvable root Telegram message - would fail closed",
+        )
+    return UpdateFailClosedCheck(
+        False, link.story_id, link.match_type, f"Story {link.story_id} has a resolvable root - proceeds normally",
     )

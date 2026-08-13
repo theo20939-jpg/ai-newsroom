@@ -34,9 +34,37 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from database.models.news_event import NewsEvent
-from database.models.news_event_article_acquisition import ACQUISITION_STATUS_HEADLINE_ONLY
+from database.models.news_event_article_acquisition import (
+    ACQUISITION_STATUS_FULL_TEXT,
+    ACQUISITION_STATUS_HEADLINE_ONLY,
+    ACQUISITION_STATUS_PARTIAL_TEXT,
+)
 from database.models.news_source import NewsSource
 from services.article_acquisition import compute_text_hash, get_effective_acquisition
+from services.article_cleaning import clean_extracted_text
+
+# NEWS Stability Acceptance follow-up (docs/post_acceptance_followup_checkpoint.md §C): the
+# original Phase 19 M2 design (services/article_cleaning.py's own module docstring) intended
+# `cleaned_text` to be computed once and persisted directly on the news_event_article_acquisitions
+# row - but that persistence step was never actually wired into the acquisition write path
+# (confirmed empirically: 0 of 210 real rows have cleaned_text populated, despite 109 having
+# raw_extracted_text). `article_acquisition_mode == "enforce"`'s own documented purpose ("Research/
+# quote-verification read the persisted evidence via services.evidence_package instead") was
+# therefore silently a no-op even when enabled - build_evidence_package()'s `acquisition.
+# cleaned_text` check could never be true. Mirrors capabilities/executor.py's own already-proven,
+# already-shadow-active `quote_source_text` workaround (clean_extracted_text() computed on the fly
+# from `raw_extracted_text`) rather than depending on the never-populated column - same function,
+# same completeness-tier gate ("FULL_TEXT"/"PARTIAL_TEXT" only - a HEADLINE_ONLY/REDIRECT_
+# UNRESOLVED/FETCH_FAILED/PAYWALLED acquisition's raw text, if any, is never trusted as "full
+# article" evidence), reused verbatim, never a second, divergent cleaning rule. This is not a new
+# transport path - still the same already-persisted `raw_extracted_text` column, read via the same
+# already-existing get_effective_acquisition() call.
+#
+# NEWS Reuse/Enforce Interaction Fix (docs/research_reuse_entity_normalization_checkpoint.md §A):
+# now also imported by services/analysis_reuse.py's own reuse-freshness check, for the identical
+# reason - a public name since it now has two real consumers, never a second, divergent
+# "trusted enough" definition.
+TRUSTED_FULL_ARTICLE_STATUSES = frozenset({ACQUISITION_STATUS_FULL_TEXT, ACQUISITION_STATUS_PARTIAL_TEXT})
 
 _COMPLETENESS_EXCERPT_ONLY = "excerpt_only"
 _EXTRACTION_METHOD_FULL_ARTICLE = "full_article_acquisition"
@@ -148,8 +176,26 @@ async def build_evidence_package(session: AsyncSession, news_event: NewsEvent) -
     acquisition_status: str | None
     fetched_at: datetime | None
 
+    # `acquisition.cleaned_text` is checked first (the originally-designed, never-actually-
+    # populated persisted path - see this module's own import-block comment) - if a future change
+    # does start persisting it, this branch starts using that direct value for free, with zero
+    # further changes needed here. Until then, the `elif` below is what actually fires: the same
+    # on-the-fly clean_extracted_text() computation capabilities/executor.py's own quote_source_
+    # text mechanism already proves out, applied only for a trusted completeness tier.
     if acquisition is not None and acquisition.cleaned_text:
         selected_text = acquisition.cleaned_text
+        completeness_level = acquisition.effective_completeness_status
+        extraction_method = _EXTRACTION_METHOD_FULL_ARTICLE
+        full_text = acquisition.raw_extracted_text
+        canonical_url = acquisition.canonical_url
+        acquisition_status = acquisition.acquisition_status
+        fetched_at = acquisition.created_at
+    elif (
+        acquisition is not None
+        and acquisition.effective_completeness_status in TRUSTED_FULL_ARTICLE_STATUSES
+        and acquisition.raw_extracted_text
+    ):
+        selected_text = clean_extracted_text(acquisition.raw_extracted_text, title=news_event.title).cleaned_text
         completeness_level = acquisition.effective_completeness_status
         extraction_method = _EXTRACTION_METHOD_FULL_ARTICLE
         full_text = acquisition.raw_extracted_text

@@ -100,3 +100,109 @@ async def test_session_remains_usable_after_savepoint_rollback(
     reloaded = await db_session.get(NewsEvent, event.id)
     assert reloaded is not None
     assert reloaded.title == "t"
+
+
+# ---------------------------------------------------------------------------------------------
+# NEWS Stability Acceptance follow-up (docs/post_acceptance_followup_checkpoint.md §C): real,
+# empirically-confirmed gap - NewsEventArticleAcquisition.cleaned_text is never populated by any
+# production write path (0 of 210 real rows in this dev database have it set, despite 109 having
+# raw_extracted_text). build_evidence_package()'s original `acquisition.cleaned_text` branch could
+# therefore never fire even under article_acquisition_mode == "enforce". These tests exercise the
+# new on-the-fly clean_extracted_text() fallback added to close that gap.
+# ---------------------------------------------------------------------------------------------
+
+
+async def _seed_acquisition(
+    session: AsyncSession, event_id, *, raw_extracted_text: str | None, cleaned_text: str | None,
+    effective_completeness_status: str,
+) -> None:
+    from database.models.news_event_article_acquisition import NewsEventArticleAcquisition
+
+    session.add(
+        NewsEventArticleAcquisition(
+            news_event_id=event_id,
+            acquisition_status=effective_completeness_status,
+            effective_completeness_status=effective_completeness_status,
+            raw_extracted_text=raw_extracted_text,
+            cleaned_text=cleaned_text,
+            triggered_by="test",
+        )
+    )
+    await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_evidence_package_uses_raw_text_on_the_fly_when_cleaned_text_column_is_empty(
+    db_session: AsyncSession,
+) -> None:
+    """The real, confirmed-empirical shape: cleaned_text is never populated, but raw_extracted_text
+    is, for a trusted completeness tier (FULL_TEXT). build_evidence_package() must now recover
+    real article evidence via the on-the-fly clean_extracted_text() fallback instead of silently
+    falling back to the thin rss_excerpt."""
+    event = await _seed_event(db_session)
+    raw_text = "This is a real, substantial article paragraph with genuine reporting detail. " * 5
+    await _seed_acquisition(
+        db_session, event.id, raw_extracted_text=raw_text, cleaned_text=None,
+        effective_completeness_status="FULL_TEXT",
+    )
+
+    package = await build_evidence_package(db_session, event)
+
+    assert package.extraction_method == "full_article_acquisition"
+    assert package.selected_editorial_text != event.content  # upgraded past the thin rss_excerpt
+    assert len(package.selected_editorial_text) > len(event.content)
+
+
+@pytest.mark.asyncio
+async def test_evidence_package_prefers_persisted_cleaned_text_when_present(
+    db_session: AsyncSession,
+) -> None:
+    """Future-proofing: if a later change does start persisting cleaned_text directly on the row,
+    build_evidence_package() must use that value as-is rather than recomputing it."""
+    event = await _seed_event(db_session)
+    await _seed_acquisition(
+        db_session, event.id, raw_extracted_text="raw text that would clean differently",
+        cleaned_text="THE ALREADY-PERSISTED CLEANED TEXT", effective_completeness_status="FULL_TEXT",
+    )
+
+    package = await build_evidence_package(db_session, event)
+
+    assert package.selected_editorial_text == "THE ALREADY-PERSISTED CLEANED TEXT"
+
+
+@pytest.mark.asyncio
+async def test_evidence_package_does_not_trust_raw_text_from_a_weak_completeness_tier(
+    db_session: AsyncSession,
+) -> None:
+    """A HEADLINE_ONLY/REDIRECT_UNRESOLVED/FETCH_FAILED acquisition's raw_extracted_text (if any)
+    must never be treated as "full article" evidence - mirrors editorial_treatment.py's own
+    established weak-completeness tiers. Falls back to the rss_excerpt exactly as before."""
+    event = await _seed_event(db_session)
+    await _seed_acquisition(
+        db_session, event.id, raw_extracted_text="some scrap of interstitial/boilerplate text",
+        cleaned_text=None, effective_completeness_status="HEADLINE_ONLY",
+    )
+
+    package = await build_evidence_package(db_session, event)
+
+    assert package.extraction_method == "rss_excerpt_fallback"
+    assert package.selected_editorial_text == event.content
+
+
+@pytest.mark.asyncio
+async def test_evidence_package_falls_back_when_raw_text_is_empty_even_at_trusted_tier(
+    db_session: AsyncSession,
+) -> None:
+    """A trusted completeness tier with no actual raw_extracted_text (defensive/unexpected shape)
+    must still fall back safely, never crash and never select an empty string as "full article"
+    evidence."""
+    event = await _seed_event(db_session)
+    await _seed_acquisition(
+        db_session, event.id, raw_extracted_text=None, cleaned_text=None,
+        effective_completeness_status="FULL_TEXT",
+    )
+
+    package = await build_evidence_package(db_session, event)
+
+    assert package.extraction_method == "rss_excerpt_fallback"
+    assert package.selected_editorial_text == event.content

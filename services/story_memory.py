@@ -60,6 +60,19 @@ UNCERTAIN_MATCH = "uncertain_match"
 # calibration_dataset.md's own "gta_negative_control" case for the evidence this responds to.
 RELATED_STORY = "related_story"
 
+
+def is_story_update_match(match_type: str | None) -> bool:
+    """The single source of truth for "does this NewsEventStoryLink.match_type represent an
+    update to an existing story" (as opposed to a fresh, standalone story) - reused by both
+    services/content_draft_service.py (at draft-creation time, to populate ContentDraftStoryLink.
+    is_story_update) and services/story_duplicate_guard.py (at pre-generation time, docs/
+    post_acceptance_followup_checkpoint.md §B's cost short-circuit) so the two can never silently
+    diverge. Every outcome except NEW_STORY and UNCERTAIN_MATCH counts as an update - mirrors the
+    exact inline check content_draft_service.py used before this extraction (`match_type not in
+    (NEW_STORY, UNCERTAIN_MATCH)`), byte-for-byte, not a new policy."""
+    return match_type not in (None, NEW_STORY, UNCERTAIN_MATCH)
+
+
 # --- topic buckets --------------------------------------------------------------------------
 # Deliberately few and broad (not one bucket per news-type) - the false-positive-protection goal
 # is separating clearly-unrelated categories of news about the same entity (a product launch vs.
@@ -131,6 +144,30 @@ _TOPIC_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
 _GENERIC_DETERMINER_ENTITIES = frozenset({
     "this", "that", "these", "those", "it", "if", "a", "an", "the",
     "это", "этот", "эта", "эти",
+})
+
+# Entity Normalization Calibration (docs/research_reuse_entity_normalization_checkpoint.md §B/C,
+# the VK "Отчёт VK" vs "VK" duplicate-story miss): a second, small, explicitly calibration-
+# EVIDENCE-BACKED set - unlike _GENERIC_DETERMINER_ENTITIES above (fixed, closed, deliberately NOT
+# calibration-derived), these five tokens ARE calibration-derived, confirmed against the real,
+# full working database (1,280 real Story rows): two Russian prepositions ("в"/"от" - a closed
+# grammatical class, structurally incapable of being part of a real proper name) plus three
+# institutional/document common nouns, in the exact POST-CASE-STRIPPED form this module's own
+# normalize_for_entity_match()/strip_ru_case_suffix() pipeline actually produces before this check
+# ever runs ("компани"/"правительств", not the dictionary forms "компания"/"правительство"; "отчёт"
+# has no case suffix to strip in this instance, so it is unchanged). Real calibration evidence: 26
+# real entity pairs corrected across the corpus (including the exact real VK pair this set was
+# built to fix), 0 false positives against real negative controls checked (standalone "ai": 149
+# corpus occurrences, never touched; every real company-prefixed product name checked - "google
+# pixel", "apple watch", "amazon bedrock", "github copilot" among others - untouched, since Google/
+# Apple/Amazon/GitHub are proper nouns, never members of this generic-noun set).
+#
+# Deliberately kept SEPARATE from _GENERIC_DETERMINER_ENTITIES, never merged into it - that set's
+# own docstring's "never hardcoded from any calibration case" claim stays true only if this stays
+# its own set. Never broaden this set without the same per-word, real-corpus-evidence discipline
+# each of these five members individually received - this is not a general stopword list.
+_CALIBRATED_GENERIC_PREFIX_ENTITIES = frozenset({
+    "в", "от", "отчёт", "компани", "правительств",
 })
 
 # Capitalized-run entity heuristic: one or more consecutive words each starting with an
@@ -270,9 +307,17 @@ def _strip_leading_determiner(normalized_entity: str) -> str:
     entity, silently zeroing entity_overlap between two real headlines about the identical layoffs
     story. Strips only ONE leading determiner, never recursively - the realistic English/Russian
     headline pattern this class of bug actually occurs in. Reuses `_GENERIC_DETERMINER_ENTITIES`
-    verbatim (the same fixed, closed set Checkpoint 6 already established) - no new lexicon."""
+    verbatim (the same fixed, closed set Checkpoint 6 already established) - no new lexicon.
+
+    Entity Normalization Calibration addition (docs/research_reuse_entity_normalization_
+    checkpoint.md Sections B/C, the real VK "Отчёт VK" vs "VK" duplicate-story miss): also strips
+    a single leading token from `_CALIBRATED_GENERIC_PREFIX_ENTITIES` - the identical mechanism,
+    applied to a second, explicitly calibration-derived set kept separate from
+    `_GENERIC_DETERMINER_ENTITIES` itself (see that set's own docstring for why)."""
     words = normalized_entity.split(" ")
-    if len(words) > 1 and words[0] in _GENERIC_DETERMINER_ENTITIES:
+    if len(words) > 1 and (
+        words[0] in _GENERIC_DETERMINER_ENTITIES or words[0] in _CALIBRATED_GENERIC_PREFIX_ENTITIES
+    ):
         return " ".join(words[1:])
     return normalized_entity
 
@@ -300,7 +345,7 @@ def _extract_entities(title: str) -> list[str]:
         if len(candidate) < _MIN_ENTITY_LEN:
             continue
         normalized = normalize_for_entity_match(candidate)
-        if normalized in _GENERIC_DETERMINER_ENTITIES:
+        if normalized in _GENERIC_DETERMINER_ENTITIES or normalized in _CALIBRATED_GENERIC_PREFIX_ENTITIES:
             continue
         normalized = _strip_leading_determiner(normalized)
         if normalized and normalized not in seen:

@@ -1,0 +1,510 @@
+{
+  "_meta": {
+    "description": "Newsroom Stability Harness golden regression corpus. Single source of truth read by both the golden suite runner (tests/golden/, tests/test_news_golden_suite.py) and scripts/run_news_golden_suite.py - never duplicated. Every case in `cases` carries a `provenance` field pointing to the phase/report/test the real evidence was taken from. `failure_class` is one of: real_regression (a confirmed real production defect, now fixed - this fixture pins the fix), known_limitation (a confirmed real defect/gap, deliberately NOT fixed this phase - asserts CURRENT behavior honestly, never falsely marked fixed), good_control (a clean, correct case, real or representative-synthetic), negative_control (must NOT trigger the behavior under test). `kind` is one of: deterministically_testable (offline, no live model needed) or requires_live_validation (documents what this case cannot prove offline). See docs/newsroom_stability_harness_checkpoint.md for the full design.",
+    "categories": ["evidence_acquisition", "story_memory", "update", "quote", "copywriting", "media", "presentation"],
+    "schema_note": "Each case's `expected` dict is compared against the runner's returned `actual` dict by tests/golden/invariants.py::evaluate_expectations(). Plain keys are exact-equality. A `<key>__in` key checks membership against a list. A `<key>__contains`/`<key>__not_contains` key checks substring presence/absence. A `<key>__gte`/`<key>__lte` key checks a numeric bound."
+  },
+  "cases": [
+    {
+      "case_id": "google_news_wrapper_unresolved",
+      "name": "Google News wrapper-only shell must not count as article evidence",
+      "category": "evidence_acquisition",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "docs/news_output_stability_forensic_report.md §2 (Case A) - draft 442b7fd2-9078-481f-b13a-f375dc5135ab, event 0527dbc9-23a3-4b37-bbd7-e36a762487d8, source 'Google News: Artificial Intelligence' RSS, acquisition_status=HEADLINE_ONLY, extracted_char_count=11, raw_extracted_text='Google News'. Systemic pattern: 23/23 HEADLINE_ONLY rows from Google-News-named RSS sources in the same dataset. Unit-test shape from tests/test_article_acquisition_fetch.py:189-267.",
+      "input": {
+        "kind": "google_news_shell",
+        "url": "https://news.google.com/rss/articles/CBMi_fake_wrapper_only",
+        "shell_html": "<html><head><title>Google News</title></head><body>Google News</body></html>",
+        "no_resolvable_signal": true
+      },
+      "expected": {
+        "is_google_news_redirect_host": true,
+        "acquisition_status": "REDIRECT_UNRESOLVED",
+        "error_code": "google_news_redirect_unresolved",
+        "raw_extracted_text": null
+      }
+    },
+    {
+      "case_id": "bad_garbage_linkedin_interstitial",
+      "name": "LinkedIn cookie/consent-wall interstitial must not become fabricated full evidence",
+      "category": "evidence_acquisition",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "docs/news_output_stability_forensic_report.md §9 (Case H) - draft 6102059f-d1a7-412e-bd7b-2556cfbc2f5e, event 31866577-4d67-401b-a177-eebeb8b074ce ('BAD_GARBAGE.c: The AF_UNIX Container Escape That Resurrected Twice - Part I', via Lobsters RSS). Raw acquisition reported FULL_TEXT/20000 chars (cap hit) but was ~97% LinkedIn boilerplate (11/401 real lines were the article). Real constants from tests/test_article_acquisition.py:87-150 (_REAL_LINKEDIN_SHELL_LINES, _REAL_ARTICLE_PARAGRAPH).",
+      "input": {
+        "kind": "interstitial_with_thin_real_content",
+        "shell_lines": [
+          "LinkedIn respects your privacy",
+          "By clicking Continue to join or sign in, you agree to LinkedIn's User Agreement, Privacy Policy, and Cookie Policy.",
+          "Cookie Policy",
+          "Accept",
+          "Reject",
+          "Sign in to view more content",
+          "Create your free account or sign in to continue your search",
+          "New to LinkedIn? Join now",
+          "Welcome back",
+          "Continue with Google",
+          "Sign in"
+        ],
+        "real_article_paragraph": "BAD_GARBAGE.c is an AF_UNIX container escape technique that resurfaced twice in the wild, exploiting a race condition in socket credential passing between a container namespace and the host during rapid reconnection cycles.",
+        "repeat_shell_lines": 8,
+        "note_on_scale": "the real page was 20000 chars/401 lines (cap hit); this fixture repeats the real boilerplate block enough times (8x) to cross the same FULL_TEXT/2000-char threshold with a realistic small real-content fraction, without storing a 20000-char blob in the fixture"
+      },
+      "expected": {
+        "substantive_fraction_of_raw__lte": 0.3,
+        "substantive_status_downgraded_from_full_text": true,
+        "note": "the real page measured ~2% real content (400/20000 chars); this fixture's compact reconstruction (repeated real boilerplate block + one real paragraph, not the full 20000-char page) measures ~23% - still a clear, correctly-detected downgrade away from FULL_TEXT, the invariant this case actually verifies"
+      }
+    },
+    {
+      "case_id": "good_full_article_control",
+      "name": "Incidental cookie banner on an otherwise-real article still classifies FULL_TEXT",
+      "category": "evidence_acquisition",
+      "failure_class": "good_control",
+      "kind": "deterministically_testable",
+      "provenance": "Representative synthetic, mirroring tests/test_article_acquisition_fetch.py::test_article_with_incidental_cookie_banner_still_classifies_full_text (no single real production draft ID attached to this specific fixture shape; forensic report §10 lists real GOOD rows e.g. 'Honor Robot Phone (root)' without further per-field detail).",
+      "input": {
+        "kind": "real_article_with_incidental_banner",
+        "banner_text": "We use cookies to improve your experience. Accept All",
+        "article_paragraph": "The company announced a new product line during its quarterly earnings call, citing strong demand in the enterprise segment and plans to expand manufacturing capacity by 30 percent over the next fiscal year, according to statements made by the chief executive.",
+        "repeat_article_paragraph": 8
+      },
+      "expected": {
+        "substantive_status_downgraded_from_full_text": false,
+        "acquisition_status": "FULL_TEXT"
+      }
+    },
+    {
+      "case_id": "snapdragon_stale_reuse_evidence_supersedes",
+      "name": "Snapdragon C: fresh enforce-mode acquisition evidence must supersede a stale pre-acquisition Research reuse",
+      "category": "evidence_acquisition",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "docs/snapdragon_vk_focused_forensic_report.md §2-5. NewsEvent e6e51045-ead1-4234-bb5a-3908577ffc68 ('Быстрее и лучше Intel N250: Qualcomm раскрыла детали процессоров Snapdragon C'), 3DNews. NEWS_ANALYSIS Research ran 09:22:28 (22m38s before acquisition completed at 09:45:06, FULL_TEXT, 8867 chars). Fixed this session via services/analysis_reuse.py::_acquisition_postdates() staleness check, exercised directly in tests/test_analysis_reuse.py.",
+      "input": {
+        "capability": "research",
+        "news_analysis_result_timestamp": "2026-08-13T09:22:28+00:00",
+        "acquisition_created_at": "2026-08-13T09:45:06.125501+00:00",
+        "acquisition_status": "FULL_TEXT",
+        "article_acquisition_mode": "enforce"
+      },
+      "expected": {
+        "stale_result_reused": false,
+        "fresh_capability_call_required": true
+      }
+    },
+    {
+      "case_id": "vk_earnings_duplicate_entity_normalization",
+      "name": "VK earnings: 'Отчёт VK' must normalize to bare 'VK' and reach a confident-match score",
+      "category": "story_memory",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "docs/snapdragon_vk_focused_forensic_report.md §6-10. Event 1 9e6c9afb-27d5-4a11-be14-37f987e7bad0 (vc.ru Telegram, UNKNOWN), Event 2 4beec79f-e228-4536-824e-849d0b8d1496 (vc.ru AI RSS, STARTUPS). Real persisted match_score=0.37 (uncertain_match) before the fix; counterfactual/measured after fix = 0.97 (services/story_memory.py::_CALIBRATED_GENERIC_PREFIX_ENTITIES, fixed this session). Real titles from tests/test_story_memory.py::test_real_vk_pair_entity_overlap_and_score_reach_calibrated_counterfactual.",
+      "input": {
+        "event_1_title": "VK отчиталась за квартал: выручка выросла на 17%, до 43,5 млрд рублей, чистая прибыль составила 328 млн рублей.",
+        "event_1_category": "UNKNOWN",
+        "event_2_title": "Отчёт VK за квартал: выручка — 43,5 млрд рублей, чистая прибыль — 328 млн рублей",
+        "event_2_category": "STARTUPS"
+      },
+      "expected": {
+        "entity_overlap": 1.0,
+        "combined__gte": 0.65,
+        "outcome_bucket": "confident_same_story"
+      }
+    },
+    {
+      "case_id": "cd_projekt_layoffs_known_limitation",
+      "name": "CD Projekt/Witcher layoffs: entity overlap improves but title wording keeps this below confident-match (documented, not fixed)",
+      "category": "story_memory",
+      "failure_class": "known_limitation",
+      "kind": "deterministically_testable",
+      "provenance": "tests/test_story_memory.py:128-183 (_CD_PROJEKT_TITLE_A/_CD_PROJEKT_TITLE_B, test_real_cd_projekt_pair_entity_overlap_measurably_improves, test_same_company_genuinely_different_event_remains_separate). Real headline pair. Must NOT be asserted as a confident merge - this is an intentionally-disclosed, unresolved limitation (see forensic report row #173 for a second, distinct real GOOD occurrence).",
+      "input": {
+        "event_1_title": "Witcher multiplayer spin-off Project Sirius hit by fresh layoffs",
+        "event_1_category": "STARTUPS",
+        "event_2_title": "CD Projekt cuts more than 20% of The Witcher spinoff development team 'to reflect the project's needs at this stage of development'",
+        "event_2_category": "HARDWARE"
+      },
+      "expected": {
+        "entity_overlap__gte": 0.0,
+        "combined__lte": 0.65,
+        "note": "documented limitation - title_overlap stays low even though entity_overlap improves; no confident merge by design of the current scorer, not a bug to fix this phase"
+      }
+    },
+    {
+      "case_id": "zoom_vulnerability_cross_publisher_same_story",
+      "name": "Zoom vulnerability, two publishers: the scorer alone would NOT have caught this pair either (known limitation, newly surfaced by this harness)",
+      "category": "story_memory",
+      "failure_class": "known_limitation",
+      "kind": "deterministically_testable",
+      "provenance": "docs/phase23_1o_final_2h_combined_news_canary_report.md §11, §13. Post #3 (9to5Mac, 15:31 UTC) and Post #14 (The Verge, 16:44 UTC), 73 minutes apart, both delivered as separate NEWS posts with story_id=null because story_memory_mode=off (a config-gate root cause). This golden case was originally written expecting the scorer to catch the pair once the gate is disregarded; running it against the real, unmodified score_candidate() (measured while building this harness) found combined=0.05, entity_overlap=0.0 - the two headlines share almost no title/entity text ('Zoom' vs 'Zoomsday' are different capitalized-run tokens). This is a SECOND, independent, previously-undocumented known limitation this harness surfaced: even with story_memory_mode enabled, this specific pair would still land as new_story from title/entity text alone. Documented honestly, not silently marked fixed.",
+      "input": {
+        "event_1_title": "Zoom flaw let an attacker take over your device, including iPhone and Mac",
+        "event_1_category": "CYBERSECURITY",
+        "event_2_title": "'Zoomsday' hack uncovered using fewer than 20 AI prompts",
+        "event_2_category": "CYBERSECURITY"
+      },
+      "expected": {
+        "outcome_bucket": "new_story_or_related",
+        "combined__lte": 0.35,
+        "note": "known limitation, newly surfaced by this harness: the config gate (story_memory_mode=off) was the originally-documented root cause, but the title-scorer itself also would not confidently catch this pair - a second, independent gap, out of scope to fix this phase (architecture freeze)"
+      }
+    },
+    {
+      "case_id": "gta_vi_negative_control_distinct_events",
+      "name": "Same entity family (GTA), genuinely different editorial events - must never merge",
+      "category": "story_memory",
+      "failure_class": "negative_control",
+      "kind": "deterministically_testable",
+      "provenance": "tests/fixtures/phase20_calibration_cases.json real_cases[gta_negative_control] - real titles from 3DNews (GADGETS) and GamesIndustry.biz (STARTUPS), measured combined=0.031, entity_overlap=0.000 (roman numeral 'GTA VI' vs arabic-digit 'GTA 6' breaks the capitalized-run entity regex).",
+      "input": {
+        "event_1_title": "«Беспрецедентные» предзаказы GTA VI подорвали продажи GTA V — меньше миллиона копий за три месяца",
+        "event_1_category": "GADGETS",
+        "event_2_title": "Strauss Zelnick: Netflix debut is merely \"one of the hors d'oeuvres\" for full GTA 6 launch; pre-order numbers are",
+        "event_2_category": "STARTUPS"
+      },
+      "expected": {
+        "outcome_bucket": "new_story_or_related",
+        "combined__lte": 0.35
+      }
+    },
+    {
+      "case_id": "honor_robot_phone_update_repetition",
+      "name": "Honor Robot Phone UPDATE: root-repetition check must fire against the real near-duplicate root/update pair",
+      "category": "update",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "docs/news_output_stability_forensic_report.md §4 (Case C). Root draft 5f4a0459-3b91-4813-9d25-92946d736de7 (t.me/rozetked/27125, 13:51 UTC). UPDATE draft 94fa4891-58ec-4819-b8f7-5134c8ba3c09 (9to5google.com, 20:10 UTC). Real match_type=story_update, match_score=0.8. Root cause: check_update_not_repeating_root() existed but was never wired (is_update computed too late / defaulted False). Fixed this session (services/content_draft_service.py::is_story_update_match wiring).",
+      "input": {
+        "root_body": "Honor показала Robot Phone — смартфон с встроенной камерой-роботом, которая выдвигается из корпуса и вращается на 360 градусов. Цена составит 9999 юаней, что соответствует примерно 123 тысячам рублей. Механизм выдвижной камеры разработан совместно с партнёрами и прошёл тесты на износостойкость.",
+        "update_body": "Honor показала Robot Phone — смартфон с встроенной камерой-роботом, которая выдвигается из корпуса и вращается на 360 градусов. Цена составит 9999 юаней, что соответствует примерно 123 тысячам рублей. Механизм выдвижной камеры разработан совместно с партнёрами и прошёл тесты на износостойкость. Смартфон поступит в продажу в Китае в этом месяце.",
+        "is_update": true
+      },
+      "expected": {
+        "root_repetition_check_passes": false,
+        "token_overlap_ratio__gte": 0.6
+      }
+    },
+    {
+      "case_id": "update_unresolved_root_fail_closed",
+      "name": "UPDATE with no resolvable root must fail closed before paid generation",
+      "category": "update",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "docs/post_acceptance_followup_checkpoint.md §B - services/story_duplicate_guard.py::check_update_would_fail_closed(), fixed this session (short-circuit before run_content_generation_for_event()). Exercised in tests/test_content_cycle_story_delivery.py::test_enforce_mode_story_update_with_no_root_short_circuits_before_generation.",
+      "input": {
+        "telegram_story_reply_mode": "enforce",
+        "match_type": "story_update",
+        "root_message_id": null
+      },
+      "expected": {
+        "would_fail_closed": true,
+        "reason__contains": "no resolvable root"
+      }
+    },
+    {
+      "case_id": "discord_fragment_quote_not_self_contained",
+      "name": "Discord fragment quote: verbatim but grammatically incomplete must be rejected before rendering",
+      "category": "quote",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "docs/news_output_stability_forensic_report.md §5 (Case D). Draft 894cf848-63c8-4bfb-8379-476394a1e203 (BBC, 17:51 UTC), content_draft_quotes row: quote_text='thoughtfully reviewing', speaker='Discord'. Real source sentence: 'Discord told the BBC it was \"thoughtfully reviewing\" the order by Brazil's data protection agency and it was \"committed to user safety\"'. Passed verify_quote()/check_quote_has_attribution() (fuzzy match + non-empty speaker) but is not a standalone grammatical unit. Gate: services/content_quality_gates.py::check_quote_is_self_contained() (pre-existing, exercised here against the real fragment).",
+      "input": {
+        "quote_text": "thoughtfully reviewing",
+        "speaker": "Discord",
+        "source_content": "Discord told the BBC it was \"thoughtfully reviewing\" the order by Brazil's data protection agency and it was \"committed to user safety\"."
+      },
+      "expected": {
+        "verify_quote_passes": true,
+        "has_attribution": true,
+        "is_self_contained": false
+      }
+    },
+    {
+      "case_id": "meaningful_quote_positive_control",
+      "name": "A genuine, self-contained, attributed quote must survive every gate",
+      "category": "quote",
+      "failure_class": "good_control",
+      "kind": "deterministically_testable",
+      "provenance": "Representative synthetic control, mirroring the structural shape of real passing quotes in tests/test_content_draft_quote_integration.py.",
+      "input": {
+        "quote_text": "We built this feature because our users told us they needed better offline support",
+        "speaker": "Jane Smith, VP of Engineering",
+        "source_content": "In an interview, Jane Smith, VP of Engineering, said: \"We built this feature because our users told us they needed better offline support.\""
+      },
+      "expected": {
+        "verify_quote_passes": true,
+        "has_attribution": true,
+        "is_self_contained": true
+      }
+    },
+    {
+      "case_id": "quote_body_overlap_dedup",
+      "name": "A quote already fully restated in the body must not render as a separate duplicate blockquote",
+      "category": "quote",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "tests/test_content_cycle_story_delivery.py (shadow-mode quote suppression assertions: 'sent_text' must not contain '<blockquote>' nor the quote's own distinctive phrase when redundant). Structural control built from that established assertion pattern.",
+      "input": {
+        "quote_text": "We built this",
+        "main_body": "\"We built this,\" the company said, to address offline reliability complaints raised by enterprise customers.",
+        "quote_already_in_body": true
+      },
+      "expected": {
+        "quote_rendered_as_separate_blockquote": false
+      }
+    },
+    {
+      "case_id": "v85_uncertainty_filler_regression_v86_fix",
+      "name": "v8.5 licensed generic missing-detail filler as an acceptable positive example; v8.6 must not",
+      "category": "copywriting",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "tests/test_copywriting_v86_uncertainty_fix.py:1-72. Real live-canary regression: Craft Ventures post ending 'Точный размер фонда, сроки привлечения и инвестиционная стратегия пока неизвестны.'. Also disclosed deployment-gap finding (docs/news_output_stability_forensic_report.md §7, Case F): v8.6 existed but every canary hardcoded copywriting_prompt_version='8.5' - a config/activation gap, out of this phase's scope, disclosed not silently ignored.",
+      "input": {
+        "check": "prompt_file_structural",
+        "v85_path": "prompts/copywriting/v8.5.yaml",
+        "v86_path": "prompts/copywriting/v8.6.yaml"
+      },
+      "expected": {
+        "v85_contains_never_repeat_phrases_framing": true,
+        "v86_contains_never_repeat_phrases_framing": false,
+        "v86_contains_never_write_enumerates_missing_details": true,
+        "current_configured_prompt_version_is_86__note": "deployment-activation gating (which version is actually LIVE) is a config/ops concern outside this offline harness's scope - see checkpoint §J"
+      }
+    },
+    {
+      "case_id": "us_ai_productivity_weak_evidence_gating",
+      "name": "US AI productivity headline: hedged-but-not-keyword-matched Intelligence recommendation must still be recognized as weak evidence",
+      "category": "copywriting",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "docs/news_output_stability_forensic_report.md §2 (Case A) - same real instance as google_news_wrapper_unresolved (draft 442b7fd2..., event 0527dbc9...). Intelligence recommendation (real text): '...перед выпуском необходимо получить полный текст исследования... Не подавать тему как доказанное массовое повышение производительности без этих данных' - did NOT contain any of the exact negative-recommendation keyword markers ('не публиковать' etc.), so _is_negative_recommendation() returned False and treatment stayed BRIEF instead of SKIP. This case documents the real evidence_completeness/source signal that IS correctly available and asserts _is_weak_evidence() catches it via the completeness channel independent of the recommendation-text gap.",
+      "input": {
+        "evidence_completeness": "HEADLINE_ONLY",
+        "source_reliability": null,
+        "event_title": "How much time does AI save at work? New Census Bureau data breaks it down. - CBS News",
+        "event_content": "Google News"
+      },
+      "expected": {
+        "is_weak_evidence": true
+      }
+    },
+    {
+      "case_id": "v86_material_uncertainty_survives_control",
+      "name": "A genuinely material, non-generic uncertainty ending must survive the deterministic collapse layer",
+      "category": "copywriting",
+      "failure_class": "good_control",
+      "kind": "deterministically_testable",
+      "provenance": "tests/test_copywriting_v86_uncertainty_fix.py::test_material_uncertainty_ending_survives_when_main_body_has_no_matching_hedge (Case 6) - real assertion pattern, reused directly.",
+      "input": {
+        "main_body": "Компания представила новый продукт на мероприятии в среду.",
+        "ending": "Дата запуска пока не объявлена."
+      },
+      "expected": {
+        "ending_survives_in_body": true
+      }
+    },
+    {
+      "case_id": "honor_wordpress_photon_dedup",
+      "name": "Honor Robot Phone hero: same photo direct vs. WordPress/Jetpack Photon CDN proxy must dedupe to one slot",
+      "category": "media",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "tests/test_router_media_integration.py:1544-1547, 1779. Real URLs: 9to5google.com direct vs. i0.wp.com Photon-proxied. Real phashes a0bab2b23ababa30 / a0b8b0b07838b820, measured Hamming distance 9 (above the old <=4 threshold - required the same-origin unconditional-match fix, this session's predecessor phase).",
+      "input": {
+        "mode": "dedup",
+        "candidates": [
+          {"candidate_id": "honor-direct", "final_url": "https://9to5google.com/wp-content/uploads/sites/4/2026/08/honor-robot-phone-2.jpg?quality=82&strip=all", "perceptual_hash": "a0bab2b23ababa30"},
+          {"candidate_id": "honor-photon", "final_url": "https://i0.wp.com/9to5google.com/wp-content/uploads/sites/4/2026/08/honor-robot-phone-2.jpg?resize=1200%2C628&quality=82&strip=all&ssl=1", "perceptual_hash": "a0b8b0b07838b820"}
+        ]
+      },
+      "expected": {
+        "duplicate_flags": [false, true]
+      }
+    },
+    {
+      "case_id": "guardian_crop_pair_dedup",
+      "name": "Guardian crop pair: same source image, different crop dimensions - only one survives",
+      "category": "media",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "tests/test_router_media_integration.py:1552-1555, 1712 (test_compute_within_event_duplicate_flags_guardian_crop_pair_directly). Real phashes 628ecdce2b01c58f / f8d1842525ad3bed, measured Hamming distance 36 - well above the global near-duplicate threshold, still correctly flagged by the same-origin signal.",
+      "input": {
+        "mode": "dedup",
+        "candidates": [
+          {"candidate_id": "guardian-a", "final_url": "https://i.guim.co.uk/img/media/406704301905abb072d8bd2b3d9d87864722bf4a/0_21_3000_2399/master/3000.jpg?width=1200&quality=85&fit=max", "perceptual_hash": "628ecdce2b01c58f"},
+          {"candidate_id": "guardian-b", "final_url": "https://i.guim.co.uk/img/media/406704301905abb072d8bd2b3d9d87864722bf4a/0_21_3000_2399/master/3000.jpg?width=460&quality=85&fit=max", "perceptual_hash": "f8d1842525ad3bed"}
+        ]
+      },
+      "expected": {
+        "duplicate_flags": [false, true]
+      }
+    },
+    {
+      "case_id": "sf_estate_album_dedup",
+      "name": "$70M SF estate album: 3 crop/resize variants of the same source photograph - only rank 1 survives",
+      "category": "media",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "tests/test_router_media_integration.py:1730 (test_compute_within_event_duplicate_flags_real_sf_estate_album_directly). Real base https://i.guim.co.uk/img/media/7d9d381f45fe902c8c8f6e6f526ebeb6b2c15afc/785_0_3702_2962/master/3702.jpg, real phashes, measured Hamming distances 14-28 - the acceptance-run case that required removing the old hash-distance-gated same-origin rule.",
+      "input": {
+        "mode": "dedup",
+        "candidates": [
+          {"candidate_id": "sf-rank1", "final_url": "https://i.guim.co.uk/img/media/7d9d381f45fe902c8c8f6e6f526ebeb6b2c15afc/785_0_3702_2962/master/3702.jpg?width=1200&quality=85", "perceptual_hash": "9fa8a08b888c2fbd"},
+          {"candidate_id": "sf-rank2", "final_url": "https://i.guim.co.uk/img/media/7d9d381f45fe902c8c8f6e6f526ebeb6b2c15afc/785_0_3702_2962/master/3702.jpg?width=620&quality=85", "perceptual_hash": "39a88c8c272b05cc"},
+          {"candidate_id": "sf-rank3", "final_url": "https://i.guim.co.uk/img/media/7d9d381f45fe902c8c8f6e6f526ebeb6b2c15afc/785_0_3702_2962/master/3702.jpg?width=460&quality=85", "perceptual_hash": "b9888c8c369f8b0c"}
+        ]
+      },
+      "expected": {
+        "duplicate_flags": [false, true, true]
+      }
+    },
+    {
+      "case_id": "cnet_apple_icloud_album_dedup",
+      "name": "CNET/Apple iCloud Private Relay album: 3 WordPress resize variants of the same source photograph - only rank 1 survives",
+      "category": "media",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "tests/test_router_media_integration.py:1758 (test_compute_within_event_duplicate_flags_real_cnet_apple_album_directly). Real base https://www.cnet.com/wp-content/uploads/sites/2/7d5d5d73-029b-4dcd-9b51-93acca1a424b.jpg, real phashes, measured Hamming distances 12-22.",
+      "input": {
+        "mode": "dedup",
+        "candidates": [
+          {"candidate_id": "cnet-rank1", "final_url": "https://www.cnet.com/wp-content/uploads/sites/2/7d5d5d73-029b-4dcd-9b51-93acca1a424b.jpg", "perceptual_hash": "0307070f1737170f"},
+          {"candidate_id": "cnet-rank2", "final_url": "https://www.cnet.com/wp-content/uploads/sites/2/7d5d5d73-029b-4dcd-9b51-93acca1a424b.jpg?resize=1200%2C1200", "perceptual_hash": "000301072b6b694d"},
+          {"candidate_id": "cnet-rank3", "final_url": "https://www.cnet.com/wp-content/uploads/sites/2/7d5d5d73-029b-4dcd-9b51-93acca1a424b.jpg?resize=1200%2C900", "perceptual_hash": "01070307b2b2330f"}
+        ]
+      },
+      "expected": {
+        "duplicate_flags": [false, true, true]
+      }
+    },
+    {
+      "case_id": "hero_plus_avatar_exclusion",
+      "name": "Hero photo + 96x96 avatar: the avatar must be excluded, only the hero survives",
+      "category": "media",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "tests/test_router_media_integration.py (test_hero_plus_tiny_avatar_selects_only_the_hero, line ~1247). Real forensic calibration (docs/media_quality_checkpoint.md) confirmed-bad example: 96x96 avatar. Confirmed-good hero dimensions: 3000x1500.",
+      "input": {
+        "mode": "resolution_band",
+        "candidates": [
+          {"candidate_id": "hero", "width": 3000, "height": 1500},
+          {"candidate_id": "avatar", "width": 96, "height": 96}
+        ]
+      },
+      "expected": {
+        "eligible_candidate_ids": ["hero"]
+      }
+    },
+    {
+      "case_id": "hero_plus_tiny_icon_exclusion",
+      "name": "Hero photo + 140x74 icon carrying no branding-risk warning tokens: excluded purely by resolution",
+      "category": "media",
+      "failure_class": "real_regression",
+      "kind": "deterministically_testable",
+      "provenance": "tests/test_router_media_integration.py (test_hero_plus_tiny_icon_selects_only_the_hero, line ~1278). Real forensic example: 140x74 icon carried NO possible_* warning tokens at all - excluded purely by resolution_band() dimensions, not branding-risk flags.",
+      "input": {
+        "mode": "resolution_band",
+        "candidates": [
+          {"candidate_id": "hero", "width": 1920, "height": 1005},
+          {"candidate_id": "icon", "width": 140, "height": 74}
+        ]
+      },
+      "expected": {
+        "eligible_candidate_ids": ["hero"]
+      }
+    },
+    {
+      "case_id": "album_cap_three_distinct_images",
+      "name": "Five genuinely distinct high-quality candidates: album capped at the current max (3)",
+      "category": "media",
+      "failure_class": "good_control",
+      "kind": "deterministically_testable",
+      "provenance": "tests/test_router_media_integration.py:970 (test_five_candidates_selects_at_most_three).",
+      "input": {
+        "mode": "media_plan",
+        "candidates": [
+          {"candidate_id": "img1", "width": 1600, "height": 900},
+          {"candidate_id": "img2", "width": 1600, "height": 900},
+          {"candidate_id": "img3", "width": 1600, "height": 900},
+          {"candidate_id": "img4", "width": 1600, "height": 900},
+          {"candidate_id": "img5", "width": 1600, "height": 900}
+        ]
+      },
+      "expected": {
+        "media_group_size__lte": 3
+      }
+    },
+    {
+      "case_id": "first_image_fails_second_succeeds",
+      "name": "Rank-1 candidate fails to resolve: media must still be delivered using ranks 2-3",
+      "category": "media",
+      "failure_class": "good_control",
+      "kind": "deterministically_testable",
+      "provenance": "tests/test_router_media_integration.py:1001 (test_first_candidate_fails_second_and_third_succeed_media_still_delivered).",
+      "input": {
+        "mode": "media_plan",
+        "candidates": [
+          {"candidate_id": "img1", "resolvable": false},
+          {"candidate_id": "img2", "resolvable": true},
+          {"candidate_id": "img3", "resolvable": true}
+        ]
+      },
+      "expected": {
+        "media_available": true,
+        "media_group_size": 2
+      }
+    },
+    {
+      "case_id": "text_news_footer_no_preview",
+      "name": "Text-only NEWS post: NINJA PULSE footer clickable when enabled, and link preview always disabled",
+      "category": "presentation",
+      "failure_class": "good_control",
+      "kind": "deterministically_testable",
+      "provenance": "tests/test_news_telegram_presentation_v81.py:136-146 (footer), tests/test_telegram_editorial_routing.py::test_text_only_send_disables_link_preview (link_preview_options=LinkPreviewOptions(is_disabled=True), NEWS Output Stability Fix Case G, unconditional on every text send).",
+      "input": {
+        "main_body": "The company announced a new product today.",
+        "include_ninja_pulse_footer": true
+      },
+      "expected": {
+        "footer_present_exactly_once": true,
+        "link_preview_disabled": true
+      }
+    },
+    {
+      "case_id": "media_group_source_button_attached",
+      "name": "Media-group NEWS post: real 'Источник' source button attached via edit_message_reply_markup, no in-caption URL fallback",
+      "category": "presentation",
+      "failure_class": "good_control",
+      "kind": "deterministically_testable",
+      "provenance": "tests/test_router_media_integration.py:1145 (test_media_group_source_button_attached_via_keyboard_edit_on_first_message), bot/keyboards/image_preview.py::build_source_only_keyboard(label='🔗 Источник').",
+      "input": {
+        "source_url": "https://example.com/real-source-article-button"
+      },
+      "expected": {
+        "button_label": "🔗 Источник",
+        "button_url": "https://example.com/real-source-article-button",
+        "no_url_in_caption_fallback": true
+      }
+    },
+    {
+      "case_id": "update_media_reply_routing",
+      "name": "UPDATE with media: reply_to_message_id must point to the root, independent of media/topic routing",
+      "category": "presentation",
+      "failure_class": "good_control",
+      "kind": "deterministically_testable",
+      "provenance": "tests/test_content_cycle_story_delivery.py:676-772 (test_router_mode_multi_image_update_preserves_reply_to_message_id, Case 8 Media Roadmap Recovery). services/story_telegram_delivery.py::determine_reply_target() exercised directly here (pure function).",
+      "input": {
+        "is_story_update": true,
+        "root_message_id": 999
+      },
+      "expected": {
+        "decision": "send_as_reply",
+        "reply_to_message_id": 999,
+        "delivery_type": "reply"
+      }
+    }
+  ]
+}

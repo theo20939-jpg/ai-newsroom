@@ -251,7 +251,14 @@ async def test_enforce_mode_story_update_with_no_root_fails_closed_never_sends(
 ) -> None:
     """An update whose story has NO root delivery must never be sent as a standalone post - the
     explicit, non-negotiable fail-closed requirement - under telegram_story_reply_mode ==
-    "enforce"."""
+    "enforce". NEWS Stability Acceptance follow-up (docs/post_acceptance_followup_checkpoint.md
+    §B): this case is now caught by the EARLY pre-generation short-circuit (services.
+    story_duplicate_guard.check_update_would_fail_closed(), wired in worker/content_cycle.py
+    right before run_content_generation_for_event()) rather than the late post-generation check -
+    `update_fail_closed_before_generation` replaces `story_fail_closed_review` for this exact
+    scenario (the late check is never reached; run_content_generation_for_event() is never
+    called - see test_enforce_mode_story_update_with_no_root_short_circuits_before_generation
+    below for the direct proof of that)."""
     monkeypatch.setattr(settings, "story_memory_mode", "shadow")
     monkeypatch.setattr(settings, "telegram_story_reply_mode", "enforce")
     from database.models.story_link import NewsEventStoryLink
@@ -274,8 +281,144 @@ async def test_enforce_mode_story_update_with_no_root_fails_closed_never_sends(
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     mock_notify.assert_not_called()
-    assert result.story_fail_closed_review == 1
+    # >= 1 rather than == 1: robust to any other fail-closed-eligible event sharing this run's
+    # freshness window (e.g. a sibling test's leftover, same discipline as the per-event-id checks
+    # used elsewhere in this file's newer tests).
+    assert result.update_fail_closed_before_generation >= 1
+    assert result.story_fail_closed_review == 0  # the late check is never reached for this case anymore
     assert result.notified == 0
+
+
+@pytest.mark.asyncio
+async def test_enforce_mode_story_update_with_no_root_short_circuits_before_generation(
+    factory: async_sessionmaker[AsyncSession], test_source, _isolated_freshness_window: None,  # noqa: F811
+    _deterministic_delivery_settings: None, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The direct cost-saving proof (docs/post_acceptance_followup_checkpoint.md §B): the paid
+    run_content_generation_for_event() call (Research + Copywriting + quality gates) must never
+    even be invoked for an update whose story has no resolvable root, under telegram_story_reply_
+    mode == "enforce" - the exact real acceptance-canary waste this phase targets."""
+    monkeypatch.setattr(settings, "story_memory_mode", "shadow")
+    monkeypatch.setattr(settings, "telegram_story_reply_mode", "enforce")
+    from database.models.story_link import NewsEventStoryLink
+    from services.story_memory import STORY_UPDATE
+
+    async with factory() as probe_session:
+        if not await _table_exists(probe_session, "content_draft_reply_routing_proposals"):
+            pytest.skip(_MIGRATION_SKIP_REASON)
+
+    story, event = await _make_story_linked_draft(factory, test_source, is_story_update=True)
+    async with factory() as session:
+        session.add(
+            NewsEventStoryLink(news_event_id=event.id, story_id=story.id, match_type=STORY_UPDATE, match_score=0.7)
+        )
+        await session.commit()
+
+    _gateway, registry = _real_capability_registry()
+    fake_bot = AsyncMock()
+    with patch("worker.content_cycle.run_content_generation_for_event") as mock_generate:
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    # Per-event assertion (robust to any other eligible event sharing this run's freshness
+    # window, e.g. leftovers from a sibling test in the same batch) rather than a brittle
+    # assert_not_called()/exact-count check on the whole mock.
+    called_event_ids = {call.args[0] for call in mock_generate.call_args_list}
+    assert event.id not in called_event_ids
+    assert result.update_fail_closed_before_generation >= 1
+
+
+@pytest.mark.asyncio
+async def test_enforce_mode_story_update_with_resolvable_root_still_generates_and_sends(
+    factory: async_sessionmaker[AsyncSession], test_source, _isolated_freshness_window: None,  # noqa: F811
+    _deterministic_delivery_settings: None, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Control case: an update whose story DOES have a resolvable root must not be short-circuited
+    - the early gate must not suppress a genuinely resolvable candidate."""
+    monkeypatch.setattr(settings, "story_memory_mode", "shadow")
+    monkeypatch.setattr(settings, "telegram_story_reply_mode", "enforce")
+    from database.models.story_link import NewsEventStoryLink
+    from services.story_memory import STORY_UPDATE
+    from services.story_telegram_delivery import record_delivery
+
+    async with factory() as probe_session:
+        if not await _table_exists(probe_session, "content_draft_reply_routing_proposals"):
+            pytest.skip(_MIGRATION_SKIP_REASON)
+
+    story, event = await _make_story_linked_draft(factory, test_source, is_story_update=True)
+    async with factory() as session:
+        session.add(
+            NewsEventStoryLink(news_event_id=event.id, story_id=story.id, match_type=STORY_UPDATE, match_score=0.7)
+        )
+        await session.commit()
+
+    # A genuinely SEPARATE root event/draft/delivery - distinct from the story_update candidate
+    # `event` itself (reusing `story.first_event_id`, which equals `event.id` here, would wrongly
+    # make the candidate its own root).
+    async with factory() as session:
+        root_event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
+        root_task = EditorialTask(
+            id=uuid4(), event_id=root_event.id, status=TaskStatus.COMPLETED, priority=TaskPriority.B,
+            workflow={"workflow_name": "CONTENT_GENERATION", "step_results": []},
+        )
+        session.add(root_task)
+        await session.flush()
+        root_draft = ContentDraft(
+            id=uuid4(), task_id=root_task.id, type=ContentType.POST, title="root", body="root body",
+            version=1, status="draft",
+        )
+        session.add(root_draft)
+        await session.flush()
+        await record_delivery(
+            session, story_id=story.id, content_draft_id=root_draft.id, telegram_chat_id=_REAL_CHAT_ID,
+            telegram_message_id=555, reply_to_message_id=None, delivery_type=DeliveryType.ROOT,
+            delivery_status=DeliveryStatus.SENT, sent_at=datetime.now(timezone.utc),
+        )
+        await session.commit()
+
+    _gateway, registry = _real_capability_registry()
+    fake_bot = AsyncMock()
+    with patch("worker.content_cycle.run_content_generation_for_event") as mock_generate:
+        mock_generate.return_value = AsyncMock(content_draft=None, fact_safety_status=None)
+        await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    # NOT short-circuited - proceeds to the paid work exactly as before.
+    called_event_ids = {call.args[0] for call in mock_generate.call_args_list}
+    assert event.id in called_event_ids
+
+
+@pytest.mark.asyncio
+async def test_new_story_never_short_circuited_by_the_update_fail_closed_gate(
+    factory: async_sessionmaker[AsyncSession], test_source, _isolated_freshness_window: None,  # noqa: F811
+    _deterministic_delivery_settings: None, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A NEW_STORY match (no prior story to be an update of) must never be treated as
+    update-equivalent by the early gate - is_story_update_match(NEW_STORY) is False, so the gate
+    is always a no-op for it regardless of root-delivery state."""
+    monkeypatch.setattr(settings, "story_memory_mode", "shadow")
+    monkeypatch.setattr(settings, "telegram_story_reply_mode", "enforce")
+    from database.models.story_link import NewsEventStoryLink
+    from services.story_memory import NEW_STORY
+
+    async with factory() as probe_session:
+        if not await _table_exists(probe_session, "content_draft_reply_routing_proposals"):
+            pytest.skip(_MIGRATION_SKIP_REASON)
+
+    story, event = await _make_story_linked_draft(factory, test_source, is_story_update=False)
+    async with factory() as session:
+        session.add(
+            NewsEventStoryLink(news_event_id=event.id, story_id=story.id, match_type=NEW_STORY, match_score=1.0)
+        )
+        await session.commit()
+
+    _gateway, registry = _real_capability_registry()
+    fake_bot = AsyncMock()
+    with patch("worker.content_cycle.run_content_generation_for_event") as mock_generate:
+        mock_generate.return_value = AsyncMock(content_draft=None, fact_safety_status=None)
+        await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    # never short-circuited for a NEW_STORY match
+    called_event_ids = {call.args[0] for call in mock_generate.call_args_list}
+    assert event.id in called_event_ids
 
 
 @pytest.mark.asyncio

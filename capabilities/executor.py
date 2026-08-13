@@ -1008,7 +1008,7 @@ class CapabilityExecutor:
         source_task_id = self._source_news_analysis_task_id
         if source_task_id is None:
             return None
-        return await reuse_prior_result(self._session, source_task_id, step.capability)
+        return await reuse_prior_result(self._session, source_task_id, step.capability, event_id=task.event_id)
 
     def _build_context(
         self, task: EditorialTask, news_event: NewsEvent, step: WorkflowStepDefinition, attempt: int,

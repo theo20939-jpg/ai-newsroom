@@ -813,3 +813,57 @@ AI Newsroom MVP считается качественным не тогда, к�
 - расходы контролируются;
 - ошибки обрабатываются;
 - команда может использовать систему каждый день.
+
+---
+
+# 15. Bug-to-Regression Rule (Newsroom Stability Harness, added post-Phase-19)
+
+This section codifies the permanent project rule introduced with the Newsroom Stability Harness
+(`tests/fixtures/news_golden_cases.json`, `tests/golden/`, `tests/test_news_golden_suite.py`,
+`scripts/run_news_golden_suite.py` - see `docs/newsroom_stability_harness_checkpoint.md` for the
+full design).
+
+**Rule: every confirmed production/live NEWS defect must produce a permanent regression case
+before the fix is considered complete.**
+
+Process for a new defect going forward:
+
+1. Capture real evidence (event/story/draft IDs, exact text, timestamps) from the live system or
+   a forensic investigation - never invent evidence for a real-defect case.
+2. Minimize/sanitize the evidence into a fixture entry in `tests/fixtures/news_golden_cases.json`
+   (no secrets, no signed/private URLs where unnecessary, no unbounded raw dumps).
+3. Where practical, confirm the fixture fails against the pre-fix code (proves the case actually
+   exercises the defect, not an unrelated path).
+4. Implement the narrowest safe fix (this project's `Zero Technical Debt Policy`, §16, and
+   `Efficiency by Design`, §22, both apply unchanged).
+5. Confirm the fixture passes against the fix.
+6. The fixture stays in the corpus permanently - it is never deleted once a real defect is fixed,
+   only ever joined by new cases.
+
+A defect that cannot yet be fixed (a genuine known limitation, or one requiring a policy decision
+out of the current phase's scope) still gets a fixture - marked `failure_class: "known_limitation"`
+in the corpus, asserting the CURRENT, honest behavior. A known limitation must never be encoded as
+if it were a passing, fixed case - see the corpus's own `cd_projekt_layoffs_known_limitation` and
+`zoom_vulnerability_cross_publisher_same_story` entries for the established pattern (the latter
+was itself discovered mid-harness-build: a second, previously-undocumented gap surfaced by simply
+running the real scorer against real headline text, and was honestly recorded as a limitation
+rather than forced to pass).
+
+**Developer workflow** (replaces relying on a live canary as the first regression signal):
+
+```
+unit/integration tests
+    ↓
+golden NEWS regression suite  (python scripts/run_news_golden_suite.py)
+    ↓
+shadow/targeted validation (only where the golden suite cannot prove nuanced LLM prose quality)
+    ↓
+live acceptance
+    ↓
+deploy
+```
+
+Before a significant commit: targeted unit tests, the golden suite, Ruff/mypy/
+`scripts/validate_architecture.py`. Before a deploy: the full relevant integration suite, the
+golden suite, and the latest targeted/live acceptance status - never the golden suite alone (see
+`docs/newsroom_stability_harness_checkpoint.md` §J for what it structurally cannot prove).
