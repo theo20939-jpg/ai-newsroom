@@ -15,11 +15,28 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from urllib.parse import urlsplit
 
 _QUOTE_CHARS = "«»“”‘’\"'`"
 _DASH_RE = re.compile(r"[‐-―−]")  # unicode dash variants -> ascii hyphen
 _WHITESPACE_RE = re.compile(r"\s+")
 _WORD_RE = re.compile(r"[\w-]+", re.UNICODE)
+
+# Moved here from services/article_acquisition.py (originally added for the Google News
+# sibling-reuse fix, docs/google_news_sibling_reuse_fix_checkpoint.md) so a second caller
+# (services/story_delta_engine.py) can reuse the exact same, already-proven regex without
+# importing that much heavier service module (DB models, HTTP fetch, video discovery) just for
+# one small pure helper. Behavior is byte-for-byte unchanged from the original.
+_GOOGLE_NEWS_TITLE_SUFFIX_RE = re.compile(r"\s+-\s+[^-\n]{2,60}$")
+
+# Moved here alongside _GOOGLE_NEWS_TITLE_SUFFIX_RE above, same reasoning: a second caller
+# (services/story_delta_engine.py::compute_story_delta()) needs the actual Google News URL
+# provenance signal - not just the title-shape regex - to know when neutralizing the suffix is
+# safe (docs/<this fix's own report>: title shape alone is provably insufficient, since a short
+# genuine semantic continuation can have the exact same " - X" shape as a publisher credit).
+# Host-suffix matching only (never payload decoding) - see the original docstring this was moved
+# from for the full rationale.
+_GOOGLE_NEWS_HOST_RE = re.compile(r"(^|\.)news\.google\.[a-z]{2,3}(\.[a-z]{2})?$", re.IGNORECASE)
 
 # Conservative Russian case-suffix list: only endings that matter for the declension mismatch
 # class actually observed (docs/phase17_m4_1_reasoning_budget_fix_report.md §11). Ordered longest
@@ -53,6 +70,32 @@ def normalize_loose(text: str) -> str:
     text = strip_quotes(text)
     text = normalize_dashes(text)
     return _WHITESPACE_RE.sub(" ", text).strip().casefold()
+
+
+def is_google_news_redirect_host(url: str) -> bool:
+    """Pure, hostname-only, no network call. True for news.google.com and its known locale
+    variants (news.google.co.uk, news.google.de, etc.). The provenance signal
+    strip_google_news_title_suffix() itself deliberately does NOT check on its own - callers
+    that need to know WHY a suffix is safe to strip (not just that its shape matches) combine
+    the two explicitly."""
+    try:
+        host = urlsplit(url).hostname or ""
+    except ValueError:
+        return False
+    return bool(_GOOGLE_NEWS_HOST_RE.search(host))
+
+
+def strip_google_news_title_suffix(title: str) -> str:
+    """Pure. Strips a trailing ' - {Publisher}' suffix if present - Google News RSS entries
+    reliably append this to the real headline (confirmed empirically against real cases:
+    '...традиционные ценности - 3DNews' vs. the direct feed's own bare '...традиционные
+    ценности'; also 'ИИ-модель DeepSeek V4 Pro выпущена официально - 3DNews' vs. the direct
+    feed's bare title). A no-op when no such suffix is present.
+
+    Shared by services/article_acquisition.py (sibling-reuse title matching) and
+    services/story_delta_engine.py (Story Delta title-comparison normalization) - never a second,
+    divergent regex for the same known publisher-attribution pattern."""
+    return _GOOGLE_NEWS_TITLE_SUFFIX_RE.sub("", title.strip()).strip()
 
 
 def strip_ru_case_suffix(token: str) -> str:

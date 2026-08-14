@@ -25,7 +25,12 @@ from database.models.news_event import EventCategory, NewsEvent
 from database.models.story_link import NewsEventStoryLink
 from services.fact_safety import extract_claims
 from services.story_memory import extract_story_signature
-from services.text_normalization import normalize_loose, symmetric_token_overlap
+from services.text_normalization import (
+    is_google_news_redirect_host,
+    normalize_loose,
+    strip_google_news_title_suffix,
+    symmetric_token_overlap,
+)
 
 # --- outcomes ------------------------------------------------------------------------------
 
@@ -70,30 +75,70 @@ def _normalize_claim(claim: str) -> str:
     return normalize_loose(claim)
 
 
-def classify_delta(new_title: str, prior_titles: list[str]) -> DeltaResult:
+def classify_delta(
+    new_title: str,
+    prior_titles: list[str],
+    *,
+    new_title_is_google_news_wrapper: bool = False,
+    prior_title_is_google_news_wrapper: list[bool] | None = None,
+) -> DeltaResult:
     """Pure. `prior_titles` is every other real title already linked to this Story (order does
     not matter - all are pooled together, never compared pairwise). Empty `prior_titles` is a
     caller error (a story with no prior events isn't a delta question at all - services/
     story_memory.py's NEW_STORY/RELATED_STORY outcomes never reach this function), but this
-    function stays defensive rather than raising: returns UNCERTAIN_DELTA."""
+    function stays defensive rather than raising: returns UNCERTAIN_DELTA.
+
+    PROVENANCE-GATED, not shape-gated (review finding, second iteration): a title's trailing
+    ' - X' suffix is neutralized for comparison purposes ONLY when the caller explicitly asserts,
+    via `new_title_is_google_news_wrapper`/`prior_title_is_google_news_wrapper`, that the
+    corresponding NewsEvent's own URL is confirmed Google News (services/text_normalization.py::
+    is_google_news_redirect_host() - real URL-hostname provenance, never inferred from the title
+    string itself). Both parameters default to "no provenance known" (False / None-as-all-False)
+    - by default this function is fully generic and strips nothing, exactly as it did before any
+    Google News fix existed.
+
+    This function deliberately does NOT try to infer Google News-ness from title shape or title-
+    overlap magnitude - both were tried and proven insufficient: a genuine short semantic
+    continuation ("Apple запустила новую функцию спутниковой связи для пользователей iPhone" +
+    " - в России") has the exact same " - X" shape AND can exceed any title-overlap threshold
+    just as easily as a real publisher credit does, because overlap magnitude depends only on
+    how many extra words the tail adds, not on what those words mean. Only real URL provenance
+    (`compute_story_delta()` below resolves this from each NewsEvent's own persisted `.url`) can
+    tell the two apart - see docs/<this fix's own report> for the full before/after evidence.
+
+    A title with no confirmed Google News provenance is left completely untouched regardless of
+    its shape, so a legitimate ' - semantic tail' always still participates fully in claim/
+    keyword/overlap comparison below. Comparison-only: the raw titles this function received are
+    never mutated, returned, or persisted."""
     if not prior_titles:
         return DeltaResult(UNCERTAIN_DELTA, reason="no prior titles supplied - nothing to compare against")
 
-    new_claims = extract_claims(new_title)
+    if prior_title_is_google_news_wrapper is None or len(prior_title_is_google_news_wrapper) != len(prior_titles):
+        prior_title_is_google_news_wrapper = [False] * len(prior_titles)
+
+    comparison_new_title = (
+        strip_google_news_title_suffix(new_title) if new_title_is_google_news_wrapper else new_title
+    )
+    comparison_prior_titles = [
+        strip_google_news_title_suffix(title) if is_wrapper else title
+        for title, is_wrapper in zip(prior_titles, prior_title_is_google_news_wrapper)
+    ]
+
+    new_claims = extract_claims(comparison_new_title)
     new_material_claims = [
         claim for claim_type in _MATERIAL_CLAIM_TYPES for claim in new_claims.get(claim_type, [])
     ]
 
     prior_material_pool: set[str] = set()
     max_title_overlap = 0.0
-    for prior_title in prior_titles:
+    for prior_title in comparison_prior_titles:
         prior_claims = extract_claims(prior_title)
         for claim_type in _MATERIAL_CLAIM_TYPES:
             prior_material_pool.update(_normalize_claim(c) for c in prior_claims.get(claim_type, []))
-        max_title_overlap = max(max_title_overlap, symmetric_token_overlap(new_title, prior_title))
+        max_title_overlap = max(max_title_overlap, symmetric_token_overlap(comparison_new_title, prior_title))
 
     return _classify_from_signals(
-        new_title=new_title, prior_titles=prior_titles, new_material_claims=new_material_claims,
+        new_title=comparison_new_title, prior_titles=comparison_prior_titles, new_material_claims=new_material_claims,
         prior_material_pool=prior_material_pool, max_title_overlap=max_title_overlap,
     )
 
@@ -187,18 +232,45 @@ def gate_delta_by_identity(delta: DeltaResult, *, has_distinctive_shared_entity:
     return delta
 
 
-async def compute_story_delta(session: AsyncSession, *, new_title: str, story_id: UUID, exclude_event_id: UUID | None = None) -> DeltaResult:
-    """The only DB-touching entry point. Fetches every other real NewsEvent title already linked
-    to this Story (one bounded query, mirrors services/story_context.py::build_story_timeline()'s
-    own "3 bounded queries, never N+1" discipline) and delegates to the pure `classify_delta()`.
-    `exclude_event_id` lets the caller exclude the event currently being classified if it has
-    already been linked (defensive - normally the caller classifies delta BEFORE linking)."""
+async def compute_story_delta(
+    session: AsyncSession,
+    *,
+    new_title: str,
+    story_id: UUID,
+    exclude_event_id: UUID | None = None,
+) -> DeltaResult:
+    """DB-touching Story Delta entry point.
+
+    Fetches prior Story event titles together with their persisted URLs so Google News publisher
+    suffix normalization can be gated by real URL provenance rather than title shape. When
+    `exclude_event_id` identifies the current NewsEvent, its own persisted URL supplies the same
+    provenance signal for `new_title`. Missing provenance always fails safe to generic,
+    non-stripping behavior.
+    """
     stmt = (
-        select(NewsEvent.title)
+        select(NewsEvent.title, NewsEvent.url)
         .join(NewsEventStoryLink, NewsEventStoryLink.news_event_id == NewsEvent.id)
         .where(NewsEventStoryLink.story_id == story_id)
     )
     if exclude_event_id is not None:
         stmt = stmt.where(NewsEvent.id != exclude_event_id)
-    prior_titles = list((await session.execute(stmt)).scalars().all())
-    return classify_delta(new_title, prior_titles)
+
+    prior_rows = (await session.execute(stmt)).all()
+    prior_titles = [row.title for row in prior_rows]
+    prior_google_news_flags = [
+        is_google_news_redirect_host(row.url) if row.url else False
+        for row in prior_rows
+    ]
+
+    new_is_google_news_wrapper = False
+    if exclude_event_id is not None:
+        current_event = await session.get(NewsEvent, exclude_event_id)
+        if current_event is not None and current_event.url:
+            new_is_google_news_wrapper = is_google_news_redirect_host(current_event.url)
+
+    return classify_delta(
+        new_title,
+        prior_titles,
+        new_title_is_google_news_wrapper=new_is_google_news_wrapper,
+        prior_title_is_google_news_wrapper=prior_google_news_flags,
+    )

@@ -32,7 +32,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin
 from uuid import UUID
 
 from sqlalchemy import select
@@ -57,7 +57,8 @@ from integrations.http.safe_fetch import (
     _validate_url,
     safe_fetch,
 )
-from services.text_normalization import normalize_loose
+from services.text_normalization import is_google_news_redirect_host, normalize_loose
+from services.text_normalization import strip_google_news_title_suffix as _strip_google_news_title_suffix
 from services.video_discovery import extract_article_video_metadata
 
 logger = logging.getLogger(__name__)
@@ -86,9 +87,6 @@ _SIBLING_REUSE_PUBLISHED_AT_TOLERANCE_SECONDS = 5
 # A prefix/suffix-stripped title match shorter than this is never trusted alone (avoids a short,
 # generic titlefragment coincidentally prefixing an unrelated longer one).
 _SIBLING_REUSE_MIN_TITLE_LEN = 20
-# Google News RSS entries deterministically append " - {Publisher}" to the real headline (e.g.
-# "... - 3DNews") - stripping this exact, well-known suffix pattern is not a fuzzy heuristic.
-_GOOGLE_NEWS_TITLE_SUFFIX_RE = re.compile(r"\s+-\s+[^-\n]{2,60}$")
 
 _HTML_CONTENT_TYPE_PREFIXES = ("text/html", "application/xhtml+xml")
 
@@ -263,20 +261,10 @@ def resolve_canonical_url(html: str, *, base_url: str) -> str | None:
 # matching only (never payload decoding, which is unreliable and fragile against Google's own
 # encoding changes, and was empirically confirmed NOT to contain a readable destination URL for
 # the current format) - the same convention services/video_discovery.py::classify_video_url()
-# already established for YouTube/Vimeo host matching.
-_GOOGLE_NEWS_HOST_RE = re.compile(r"(^|\.)news\.google\.[a-z]{2,3}(\.[a-z]{2})?$", re.IGNORECASE)
-
+# already established for YouTube/Vimeo host matching. is_google_news_redirect_host() itself now
+# lives in services/text_normalization.py (imported above) - a second caller (services/
+# story_delta_engine.py) needs it too, without importing this much heavier module.
 _META_REFRESH_URL_RE = re.compile(r"url\s*=\s*['\"]?([^'\";]+)", re.IGNORECASE)
-
-
-def is_google_news_redirect_host(url: str) -> bool:
-    """Pure, hostname-only, no network call. True for news.google.com and its known locale
-    variants (news.google.co.uk, news.google.de, etc.)."""
-    try:
-        host = urlsplit(url).hostname or ""
-    except ValueError:
-        return False
-    return bool(_GOOGLE_NEWS_HOST_RE.search(host))
 
 
 def resolve_meta_refresh_url(html: str, *, base_url: str) -> str | None:
@@ -443,14 +431,6 @@ async def acquire_article(url: str, *, event_id: UUID, _google_news_hop: bool = 
         source_html_bytes=result.received_byte_count, fetch_duration_ms=duration_ms, error_code=None,
         discovered_video_hints=video_hints,
     )
-
-
-def _strip_google_news_title_suffix(title: str) -> str:
-    """Pure. Strips a trailing ' - {Publisher}' suffix if present - Google News RSS entries
-    reliably append this to the real headline (confirmed empirically against both real cases this
-    fix responds to: '...традиционные ценности - 3DNews' vs. the direct feed's own bare
-    '...традиционные ценности'). A no-op when no such suffix is present."""
-    return _GOOGLE_NEWS_TITLE_SUFFIX_RE.sub("", title.strip()).strip()
 
 
 def _titles_confidently_match(title_a: str, title_b: str) -> bool:

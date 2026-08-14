@@ -91,6 +91,43 @@ def test_near_identical_repeat_is_no_new_facts() -> None:
     assert result.classification == NO_NEW_FACTS
 
 
+def test_google_news_publisher_suffix_is_not_a_new_keyword() -> None:
+    """Real observed production false negative: a Google News RSS wrapper of "ИИ-модель DeepSeek
+    V4 Pro выпущена официально" arrives titled "...официально - 3DNews" - the same real article,
+    already correctly classified by Story Memory as semantic_duplicate/same story_id
+    (match_score≈0.713636). Before this fix, extract_story_signature() had no publisher-suffix
+    awareness, so "3dnews" was extracted as a spuriously "new" distinctive keyword, producing
+    MINOR_DELTA (new_keywords=["3dnews"]) and letting Story Memory V2 suppression allow the
+    duplicate through (would_suppress=False). strip_google_news_title_suffix() normalization
+    (shared with services/article_acquisition.py, never a second regex) must make this collapse
+    to NO_NEW_FACTS with no fabricated keyword, so the existing duplicate guard blocks it exactly
+    as it already does for the direct-feed/direct-feed duplicate case above."""
+    result = classify_delta(
+        "ИИ-модель DeepSeek V4 Pro выпущена официально - 3DNews",
+        ["ИИ-модель DeepSeek V4 Pro выпущена официально"],
+        new_title_is_google_news_wrapper=True,
+    )
+    assert result.classification == NO_NEW_FACTS
+    assert result.new_keywords == []
+    assert result.new_material_claims == []
+
+
+def test_genuine_semantic_hyphen_tail_is_not_silently_stripped() -> None:
+    """Negative control (review finding): a legitimate editorial title can have the exact same
+    shape as a Google News wrapper (" - X" trailing segment) without X being a publisher credit
+    at all. strip_google_news_title_suffix() must NOT be applied here, because the RAW pair's
+    own title overlap (0.667) never reaches _NO_NEW_FACTS_TITLE_OVERLAP (0.85) - unlike the real
+    DeepSeek pair (raw overlap 0.909) - so there is no pair evidence the suffix is attribution-
+    only. The semantic tail ("что изменится для пользователей") must remain real comparison
+    input and surface as a delta, not be silently discarded."""
+    result = classify_delta(
+        "Apple представила новую функцию - что изменится для пользователей",
+        ["Apple представила новую функцию"],
+    )
+    assert result.classification != NO_NEW_FACTS
+    assert result.new_keywords  # the semantic tail's own distinctive keywords must survive
+
+
 def test_repeated_material_claim_across_sources_is_not_genuinely_new() -> None:
     """A claim already present in ANY prior title must not count as new, even if the new
     title's wording around it differs (money claim echoed by a second source)."""
