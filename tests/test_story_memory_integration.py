@@ -200,3 +200,49 @@ async def test_similarity_reason_is_a_non_empty_human_readable_string(db_session
     )
     assert isinstance(result.similarity_reason, str)
     assert len(result.similarity_reason) > 0
+
+
+@pytest.mark.asyncio
+async def test_exact_title_without_entities_is_semantic_duplicate(
+    db_session: AsyncSession,
+) -> None:
+    title = "anthropics/anthropic-sdk-typescript: bedrock-sdk: v0.32.2"
+    original = await _seed_story(
+        db_session,
+        title,
+        category=EventCategory.SOFTWARE,
+    )
+
+    signature = extract_story_signature(title, EventCategory.SOFTWARE)
+    assert signature.entities == []
+
+    _signature, result = await match_story(
+        db_session,
+        title=title,
+        category=EventCategory.SOFTWARE,
+    )
+
+    assert result.outcome == SEMANTIC_DUPLICATE
+    assert result.matched_story_id == original.id
+
+
+@pytest.mark.asyncio
+async def test_different_release_version_without_entities_is_not_forced_duplicate(
+    db_session: AsyncSession,
+) -> None:
+    original = await _seed_story(
+        db_session,
+        "anthropics/anthropic-sdk-typescript: bedrock-sdk: v0.32.2",
+        category=EventCategory.SOFTWARE,
+    )
+
+    _signature, result = await match_story(
+        db_session,
+        title="anthropics/anthropic-sdk-typescript: bedrock-sdk: v0.32.3",
+        category=EventCategory.SOFTWARE,
+    )
+
+    assert not (
+        result.outcome == SEMANTIC_DUPLICATE
+        and result.matched_story_id == original.id
+    )

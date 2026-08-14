@@ -577,6 +577,22 @@ async def match_story(
             NEW_STORY, None, 1.0, "no candidate stories in the lookback window", entity_overlap=0.0,
         )
 
+    # Shadow calibration: an exactly identical normalized title is sufficient evidence for a
+    # semantic duplicate even when entity extraction yields no entities (for example GitHub
+    # release titles). Keep this deliberately narrower than the 0.75 near-identical-title rule:
+    # different versions or otherwise non-identical titles continue through normal scoring.
+    normalized_title = " ".join(title.split()).casefold()
+    for candidate in candidates:
+        if normalized_title == " ".join(candidate.title.split()).casefold():
+            return signature, MatchResult(
+                SEMANTIC_DUPLICATE,
+                candidate.id,
+                1.0,
+                "exact normalized title match - same event regardless of entity extraction",
+                entity_overlap=0.0,
+                has_distinctive_shared_entity=True,
+            )
+
     best: tuple[float, float, float, Story] | None = None
     for candidate in candidates:
         combined, entity_overlap, title_overlap = score_candidate(title, signature, category, candidate.title, candidate)
