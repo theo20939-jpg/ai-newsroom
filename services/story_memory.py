@@ -498,6 +498,17 @@ def _preselect_candidates(signature: StorySignature, candidates: list[Story]) ->
 # different value, never guessed twice.
 _DISTINCTIVE_ENTITY_DF_FRACTION = 0.05
 
+# Phase 23 shadow calibration: broad AI-topic tokens can be useful for retrieval/scoring,
+# but they are not specific enough to serve as the final identity evidence required for
+# STORY_UPDATE or SUPPORTING_SOURCE. Keep this deliberately narrow and apply it only inside
+# _distinctive_shared_entities(); extraction, preselection, base scoring and duplicate matching
+# remain unchanged.
+_CALIBRATED_GENERIC_IDENTITY_ENTITIES = frozenset({
+    "ai",
+    "\u0438\u0438",
+    "\u0438\u0441\u043a\u0443\u0441\u0441\u0442\u0432\u0435\u043d\u043d",
+})
+
 
 def _entity_document_frequencies(candidates: list[Story]) -> dict[str, int]:
     """Pure. Classic, deterministic document-frequency count (not an embedding, not an ML model)
@@ -527,7 +538,12 @@ def _distinctive_shared_entities(
     if not shared or pool_size <= 0:
         return []
     threshold = max(1, round(pool_size * _DISTINCTIVE_ENTITY_DF_FRACTION))
-    return sorted(e for e in shared if " " in e or entity_df.get(e, 0) <= threshold)
+    return sorted(
+        e
+        for e in shared
+        if e not in _CALIBRATED_GENERIC_IDENTITY_ENTITIES
+        and (" " in e or entity_df.get(e, 0) <= threshold)
+    )
 
 
 async def match_story(

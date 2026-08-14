@@ -43,6 +43,10 @@ from services.story_memory import _RELATED_STORY_ENTITY_FLOOR as _OWN_STORY_ENTI
 from services.story_confidence import compute_confidence_band
 from services.story_delta_engine import compute_story_delta, gate_delta_by_identity
 from services.story_suppression import compute_would_suppress
+from services.text_normalization import (
+    is_google_news_redirect_host,
+    strip_google_news_title_suffix,
+)
 from services.triage import decide_triage
 from services.workflow_service import _find_active_task, create_task
 from workflows.errors import DuplicateActiveTaskError
@@ -231,7 +235,18 @@ async def _apply_story_memory(session: AsyncSession, event: NewsEvent, report: T
     like any other Story) can still attach to it normally via the confirmed-outcome path above,
     naturally converging the cluster's future growth without retroactively re-parenting already-
     linked events (out of scope as more than "the smallest fix")."""
-    signature, result = await match_story(session, title=event.title, category=event.category)
+    # Phase 23 shadow calibration: Google News RSS titles append a publisher attribution
+    # suffix (e.g. " - Vietnam.vn"). That suffix is source provenance, not Story identity.
+    # Strip it only when the persisted event URL proves this is a Google News wrapper; title
+    # shape alone is intentionally insufficient (same safety rule as Story Delta).
+    story_match_title = (
+        strip_google_news_title_suffix(event.title)
+        if is_google_news_redirect_host(event.url or "")
+        else event.title
+    )
+    signature, result = await match_story(
+        session, title=story_match_title, category=event.category
+    )
 
     creates_own_story = result.outcome in (NEW_STORY, RELATED_STORY) or (
         result.outcome == UNCERTAIN_MATCH and result.entity_overlap < _OWN_STORY_ENTITY_FLOOR

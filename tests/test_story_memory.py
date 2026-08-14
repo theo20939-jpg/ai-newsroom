@@ -425,3 +425,45 @@ def test_distinct_same_entity_vk_stories_remain_separate() -> None:
     assert title_overlap < 0.3  # genuinely different stories - low title overlap
     from services.story_memory import _HIGH_THRESHOLD
     assert combined < _HIGH_THRESHOLD  # entity overlap alone never forces a confident merge
+
+
+def test_generic_ai_entity_cannot_be_distinctive_identity_evidence() -> None:
+    """Real shadow false-positive component: broad AI-topic language is not Story identity."""
+    from services.story_memory import _distinctive_shared_entities
+
+    result = _distinctive_shared_entities(
+        ["\u0438\u0441\u043a\u0443\u0441\u0441\u0442\u0432\u0435\u043d\u043d"],
+        ["\u0438\u0441\u043a\u0443\u0441\u0441\u0442\u0432\u0435\u043d\u043d"],
+        {"\u0438\u0441\u043a\u0443\u0441\u0441\u0442\u0432\u0435\u043d\u043d": 3},
+        pool_size=56,
+    )
+
+    assert result == []
+
+
+def test_real_specific_product_entity_remains_distinctive_identity_evidence() -> None:
+    """Positive control: genuine product identity must remain usable."""
+    from services.story_memory import _distinctive_shared_entities
+
+    result = _distinctive_shared_entities(
+        ["deepseek", "deepseek v4 pro"],
+        ["deepseek", "deepseek v4 pro"],
+        {"deepseek": 3, "deepseek v4 pro": 1},
+        pool_size=56,
+    )
+
+    assert "deepseek v4 pro" in result
+
+
+def test_short_two_word_product_entity_is_not_treated_as_a_publisher_domain() -> None:
+    """Safety control for the Vietnam.vn fix: Apple TV is a product, not publisher metadata."""
+    from services.story_memory import _distinctive_shared_entities
+
+    result = _distinctive_shared_entities(
+        ["apple tv"],
+        ["apple tv"],
+        {"apple tv": 1},
+        pool_size=56,
+    )
+
+    assert "apple tv" in result

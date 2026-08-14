@@ -15,7 +15,7 @@ from database.models.news_event import EventCategory, NewsEvent
 from database.models.news_source import NewsSource, SourceType
 from database.models.story import Story
 from database.models.story_link import NewsEventStoryLink
-from services.story_memory import RELATED_STORY, MatchResult, extract_story_signature
+from services.story_memory import NEW_STORY, RELATED_STORY, MatchResult, extract_story_signature
 from services.triage_orchestrator import TriageCycleReport, _apply_story_memory, run_triage_cycle
 from tests.test_triage_orchestrator_claims import independent_session_factory, real_committed_event
 
@@ -176,3 +176,110 @@ async def test_apply_story_memory_wires_related_story_into_report(
     assert own_story is not None
     assert own_story.first_event_id == new_event.id
     assert link.match_type == RELATED_STORY
+
+
+@pytest.mark.asyncio
+async def test_google_news_publisher_suffix_is_stripped_before_story_matching(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Confirmed Google News provenance: publisher suffix is metadata, not Story identity."""
+    source = NewsSource(
+        name=f"story-memory-google-provenance-{uuid4()}",
+        type=SourceType.RSS,
+        active=True,
+    )
+    db_session.add(source)
+    await db_session.flush()
+
+    raw_title = (
+        "\u0418\u0441\u043a\u0443\u0441\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0439 "
+        "\u0438\u043d\u0442\u0435\u043b\u043b\u0435\u043a\u0442 "
+        "\u043e\u0442\u043a\u0440\u044b\u0432\u0430\u0435\u0442 "
+        "\u043d\u043e\u0432\u044b\u0435 "
+        "\u0432\u043e\u0437\u043c\u043e\u0436\u043d\u043e\u0441\u0442\u0438 "
+        "- Vietnam.vn"
+    )
+    expected_title = raw_title.rsplit(" - ", 1)[0]
+
+    event = NewsEvent(
+        source_id=source.id,
+        title=raw_title,
+        url="https://news.google.com/rss/articles/test-story-memory-provenance",
+        category=EventCategory.AI,
+        hash=f"story-memory-google-provenance-{uuid4()}",
+    )
+    db_session.add(event)
+    await db_session.flush()
+
+    seen: dict[str, str] = {}
+
+    async def _fake_match_story(_session, *, title, category):  # noqa: ANN001
+        seen["title"] = title
+        signature = extract_story_signature(title, category)
+        return signature, MatchResult(
+            NEW_STORY,
+            None,
+            1.0,
+            "test: new story",
+            entity_overlap=0.0,
+        )
+
+    monkeypatch.setattr(
+        "services.triage_orchestrator.match_story",
+        _fake_match_story,
+    )
+
+    await _apply_story_memory(db_session, event, TriageCycleReport())
+
+    assert seen["title"] == expected_title
+    assert "vietnam vn" not in extract_story_signature(
+        seen["title"], EventCategory.AI
+    ).entities
+
+
+@pytest.mark.asyncio
+async def test_non_google_title_suffix_is_preserved_before_story_matching(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Title shape alone is insufficient: semantic '- X' tails on direct URLs stay untouched."""
+    source = NewsSource(
+        name=f"story-memory-direct-provenance-{uuid4()}",
+        type=SourceType.RSS,
+        active=True,
+    )
+    db_session.add(source)
+    await db_session.flush()
+
+    raw_title = "Apple expands streaming service - Apple TV"
+
+    event = NewsEvent(
+        source_id=source.id,
+        title=raw_title,
+        url="https://example.com/apple-tv-story",
+        category=EventCategory.AI,
+        hash=f"story-memory-direct-provenance-{uuid4()}",
+    )
+    db_session.add(event)
+    await db_session.flush()
+
+    seen: dict[str, str] = {}
+
+    async def _fake_match_story(_session, *, title, category):  # noqa: ANN001
+        seen["title"] = title
+        signature = extract_story_signature(title, category)
+        return signature, MatchResult(
+            NEW_STORY,
+            None,
+            1.0,
+            "test: new story",
+            entity_overlap=0.0,
+        )
+
+    monkeypatch.setattr(
+        "services.triage_orchestrator.match_story",
+        _fake_match_story,
+    )
+
+    await _apply_story_memory(db_session, event, TriageCycleReport())
+
+    assert seen["title"] == raw_title
