@@ -36,6 +36,10 @@ from schemas.workflow import (
 from services import workflow_service
 from capabilities.executor import CapabilityExecutor
 from capabilities.registry import Capability, CapabilityRegistry
+from capabilities.research_capability import CAPABILITY_NAME as RESEARCH_CAPABILITY_NAME
+from capabilities.research_capability import ResearchCapability
+from integrations.llm_gateway.protocol import GenerateResponse
+from integrations.prompts.protocol import RenderedPrompt
 from services.ai_execution_mapper import DefaultAIExecutionMapper
 from tests.fakes.fake_capability import (
     AlwaysFailsConfigurationCapability,
@@ -46,6 +50,9 @@ from tests.fakes.fake_capability import (
     AlwaysTimesOutCapability,
     FailsThenSucceedsCapability,
 )
+from tests.fakes.fake_gateway import FakeLLMGateway
+from tests.fakes.fake_prompt_repository import FakePromptRepository
+from tests.fakes.research_output import CANONICAL_RESEARCH_OUTPUT
 from workflows.registry import WorkflowRegistry
 from workflows.runner import WorkflowRunner
 
@@ -238,6 +245,68 @@ async def test_retryable_capability_error_maps_to_step_execution_error_and_retri
     assert await _ai_execution_count(db_session) == 0
 
 
+_RESEARCH_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "facts": {"type": "array"},
+        "confidence": {"type": "number"},
+        "gaps": {"type": "array"},
+    },
+    "required": ["facts", "confidence", "gaps"],
+}
+
+
+def _research_prompt_repository() -> FakePromptRepository:
+    repository = FakePromptRepository()
+    repository.register(
+        RenderedPrompt(
+            name=RESEARCH_CAPABILITY_NAME, version="2",
+            system="You are a fake research assistant for tests.", rules=["Do not invent facts."],
+            output_schema=_RESEARCH_OUTPUT_SCHEMA,
+        )
+    )
+    return repository
+
+
+@pytest.mark.asyncio
+async def test_real_research_capability_truncation_is_retried_then_succeeds(
+    db_session: AsyncSession, real_news_event: NewsEvent
+) -> None:
+    """End-to-end regression for the production truncation fix (333/333 failed NEWS_ANALYSIS
+    Research tasks, finish_reason='length'): the REAL ResearchCapability - not a fake - raising
+    RetryableCapabilityError for a truncated response must be retried by CapabilityExecutor's
+    existing, unmodified StepExecutionError mapping and WorkflowRunner's existing, unmodified
+    per-step retry loop, exactly like any other transient failure, and succeed once a subsequent
+    attempt returns a complete response."""
+    workflow_registry = _single_step_workflow_registry("research", max_attempts=2)
+    task = await _created_task(db_session, real_news_event, workflow_registry)
+    gateway = FakeLLMGateway(
+        generate_responses=[
+            GenerateResponse(
+                text=None, structured_output=None, finish_reason="length",
+                model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=520, output_tokens=450),
+            ),
+            GenerateResponse(
+                text=None, structured_output=CANONICAL_RESEARCH_OUTPUT, finish_reason="stop",
+                model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=520, output_tokens=210),
+            ),
+        ]
+    )
+    real_research_capability = ResearchCapability(gateway, _research_prompt_repository())
+    capability_registry = _capability_registry("research", real_research_capability)
+    executor = CapabilityExecutor(db_session, task.id, capability_registry)
+
+    result = await WorkflowRunner(executor=executor, registry=workflow_registry).run(db_session, task.id)
+
+    assert result.status == "COMPLETED"
+    assert result.step_results[0].status == "FAILED"  # truncated attempt, retried (not permanent)
+    assert result.step_results[1].status == "SUCCESS"  # retry succeeded
+    assert result.step_results[1].result == CANONICAL_RESEARCH_OUTPUT
+    persisted = await workflow_service.get_task(db_session, task.id)
+    assert persisted.retry_count == 1
+    assert persisted.status == TaskStatus.COMPLETED
+
+
 @pytest.mark.asyncio
 async def test_permanent_capability_error_maps_to_permanent_step_failure_without_retry(
     db_session: AsyncSession, real_news_event: NewsEvent
@@ -425,7 +494,7 @@ def test_build_context_respects_overridden_target_language(monkeypatch: pytest.M
 @pytest.mark.parametrize(
     ("capability_name", "expected_max_tokens", "expected_reasoning_effort"),
     [
-        ("research", 450, "none"),
+        ("research", 700, "none"),
         ("intelligence", 500, "low"),
         ("engagement", 350, "low"),
         ("scoring", 250, "low"),

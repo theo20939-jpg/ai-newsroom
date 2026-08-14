@@ -90,7 +90,12 @@ logger = logging.getLogger(__name__)
 # text, not editorial judgment); "low" for every other capability (real, if modest, editorial
 # judgment - significance, tone, factual review, copy).
 _MAX_OUTPUT_TOKENS_BY_CAPABILITY: dict[str, int] = {
-    "research": 450,
+    # Production forensics: 333/333 failed NEWS_ANALYSIS Research tasks (314 arXiv) hit this
+    # ceiling exactly (finish_reason="length", output_tokens=450=ceiling) before completing
+    # their structured JSON - FAILED input content (avg 1801.6 chars) was ~3.3x COMPLETED
+    # (avg 550.8 chars). Raised from 450 to 700, the smallest change consistent with the
+    # evidence; no other capability's ceiling touched.
+    "research": 700,
     "intelligence": 500,
     "engagement": 350,
     "scoring": 250,

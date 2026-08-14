@@ -24,7 +24,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from capabilities.errors import ValidationCapabilityError
+from capabilities.errors import RetryableCapabilityError, ValidationCapabilityError
 from capabilities.gateway_call import call_generate
 from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, LLMGateway, Message
 from integrations.prompts.protocol import PromptRepository, RenderedPrompt
@@ -158,6 +158,22 @@ class ResearchCapability:
 
         violation = _floor_validate(response.structured_output, prompt.output_schema)
         if violation is not None:
+            # Production forensics: 333/333 failed NEWS_ANALYSIS Research tasks (314 arXiv) all
+            # failed this exact floor validation with finish_reason="length" - the gateway
+            # response was truncated at the output-token ceiling before the model could finish
+            # its structured JSON, a transient capacity failure, not a permanent one. §9.1's
+            # floor validation itself is unchanged and still runs unconditionally (never
+            # relaxed, never fabricated) - only the error TYPE raised on an already-detected
+            # violation changes, and only for this one finish_reason. A violation whose
+            # finish_reason is anything else (content_filter included) keeps its existing
+            # ValidationCapabilityError (permanent) classification exactly as before; a fully
+            # valid structured_output is unaffected regardless of finish_reason, since this
+            # branch is only reached after floor validation has already failed.
+            if response.finish_reason == "length":
+                raise RetryableCapabilityError(
+                    f"research: gateway response truncated at the output-token ceiling before "
+                    f"completing structured output (finish_reason='length') - {violation}"
+                )
             raise ValidationCapabilityError(violation)
 
         finished_at = datetime.now(timezone.utc)

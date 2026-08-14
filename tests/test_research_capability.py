@@ -15,6 +15,7 @@ from capabilities.errors import (
     CapabilityConfigurationError,
     CapabilityError,
     PermanentCapabilityError,
+    RetryableCapabilityError,
     ValidationCapabilityError,
 )
 from capabilities.research_capability import CAPABILITY_NAME, ResearchCapability
@@ -137,6 +138,119 @@ async def test_validation_failure_raises_validation_capability_error_not_silent_
 
     with pytest.raises(ValidationCapabilityError):
         await capability.execute(_context())
+
+
+# ---------------------------------------------------------------------------------------------
+# Production forensics fix: 333/333 failed NEWS_ANALYSIS Research tasks (314 arXiv) all failed
+# floor validation with finish_reason="length" - the gateway response was truncated at the
+# output-token ceiling before the model could finish its structured JSON. That is a transient
+# capacity failure, not a permanent one, and must be retried by the existing workflow retry
+# system, not classified as a permanent validation failure.
+# ---------------------------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_truncated_response_with_missing_structured_output_raises_retryable_error() -> None:
+    """The exact production shape: finish_reason='length', structured_output=None (§9.1 floor
+    violation) - must raise RetryableCapabilityError, not ValidationCapabilityError, so
+    CapabilityExecutor maps it to a retryable StepExecutionError instead of a permanent one."""
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None,
+            structured_output=None,
+            finish_reason="length",
+            model_used="fake-model-v1",
+            usage=CapabilityUsage(input_tokens=520, output_tokens=450),
+        )
+    )
+    capability = ResearchCapability(gateway, _prompt_repository())
+
+    with pytest.raises(RetryableCapabilityError):
+        await capability.execute(_context())
+
+
+@pytest.mark.asyncio
+async def test_truncated_response_with_incomplete_structured_output_raises_retryable_error() -> None:
+    """A truncated response can also produce a structured_output dict that is present but
+    incomplete (missing a required key) - still a §9.1 floor violation, still finish_reason
+    "length", still retryable for the same reason."""
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None,
+            structured_output={"facts": []},  # missing required "confidence"/"gaps" - cut off mid-object
+            finish_reason="length",
+            model_used="fake-model-v1",
+            usage=CapabilityUsage(input_tokens=520, output_tokens=450),
+        )
+    )
+    capability = ResearchCapability(gateway, _prompt_repository())
+
+    with pytest.raises(RetryableCapabilityError):
+        await capability.execute(_context())
+
+
+@pytest.mark.asyncio
+async def test_content_filter_violation_still_raises_validation_capability_error() -> None:
+    """finish_reason values other than 'length' keep their existing (permanent) classification
+    unchanged - only 'length' is reclassified. content_filter in particular must not be silently
+    retried."""
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None,
+            structured_output=None,
+            finish_reason="content_filter",
+            model_used="fake-model-v1",
+            usage=CapabilityUsage(input_tokens=20, output_tokens=8),
+        )
+    )
+    capability = ResearchCapability(gateway, _prompt_repository())
+
+    with pytest.raises(ValidationCapabilityError):
+        await capability.execute(_context())
+
+
+@pytest.mark.asyncio
+async def test_finish_reason_stop_with_missing_structured_output_still_raises_validation_error() -> None:
+    """A missing/invalid structured_output with a normal finish_reason ('stop') is not a
+    truncation - the pre-existing ValidationCapabilityError (permanent) classification must be
+    completely unaffected by this fix."""
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None,
+            structured_output=None,
+            finish_reason="stop",
+            model_used="fake-model-v1",
+            usage=CapabilityUsage(input_tokens=20, output_tokens=8),
+        )
+    )
+    capability = ResearchCapability(gateway, _prompt_repository())
+
+    with pytest.raises(ValidationCapabilityError):
+        await capability.execute(_context())
+
+
+@pytest.mark.asyncio
+async def test_valid_structured_output_with_finish_reason_length_still_succeeds() -> None:
+    """Edge case: the model finished a fully valid structured object right at the token ceiling
+    (finish_reason still reports 'length', but §9.1 floor validation passes). Existing successful
+    Research behavior must be completely unchanged - this branch is only reached after floor
+    validation has already failed, so a valid result is never discarded regardless of
+    finish_reason."""
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None,
+            structured_output=CANONICAL_RESEARCH_OUTPUT,
+            finish_reason="length",
+            model_used="fake-model-v1",
+            usage=CapabilityUsage(input_tokens=520, output_tokens=450),
+        )
+    )
+    capability = ResearchCapability(gateway, _prompt_repository())
+
+    result = await capability.execute(_context())
+
+    assert result.status == "SUCCESS"
+    assert result.structured_output == CANONICAL_RESEARCH_OUTPUT
 
 
 def test_construction_accepts_only_gateway_and_prompt_repository() -> None:
