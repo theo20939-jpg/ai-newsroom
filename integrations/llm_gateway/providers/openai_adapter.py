@@ -272,17 +272,57 @@ def _finish_reason(
     return "stop"
 
 
+def _extract_structured_output(response: Any) -> dict[str, Any] | None:
+    """§9.1 structured-output extraction. `response.output_text` (a single string concatenated
+    across the whole response) is unreliable for Responses API structured JSON output - it can
+    be empty even though a structured content part is present. Tries, in order:
+
+    1. A content part's own `.parsed` attribute (present in some structured-output response
+       shapes; not a field on the SDK's own `ResponseOutputText` type, so always read
+       defensively via getattr - never assumed to exist).
+    2. That same content part's `.text` field, parsed as JSON.
+    3. `response.output_text`, parsed as JSON - last-resort fallback, kept for backward
+       compatibility with responses that only ever populated this field.
+
+    Returns a dict only. A value that parses successfully but is not a JSON object (a bare
+    list/string/number), or a `.parsed` value that is not itself a dict, is treated exactly like
+    "no structured output" - the §9.1 floor requires an object, never a partial/malformed
+    substitute."""
+    for item in getattr(response, "output", None) or []:
+        for part in getattr(item, "content", None) or []:
+            parsed = getattr(part, "parsed", None)
+            if isinstance(parsed, dict):
+                return parsed
+
+            text = getattr(part, "text", None)
+            if text:
+                try:
+                    candidate = json.loads(text)
+                except (json.JSONDecodeError, TypeError):
+                    candidate = None
+                if isinstance(candidate, dict):
+                    return candidate
+
+    text = getattr(response, "output_text", None)
+    if text:
+        try:
+            candidate = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            candidate = None
+        if isinstance(candidate, dict):
+            return candidate
+
+    return None
+
+
 def _translate_response(response: Any, response_mode: str) -> GenerateResponse:
     tool_calls = _extract_tool_calls(response.output)
     finish_reason = _finish_reason(response, tool_calls)
     text = response.output_text or None
 
     structured_output: dict[str, Any] | None = None
-    if response_mode == "json_schema" and text:
-        try:
-            structured_output = json.loads(text)
-        except (json.JSONDecodeError, TypeError):
-            structured_output = None
+    if response_mode == "json_schema":
+        structured_output = _extract_structured_output(response)
 
     usage = response.usage
     return GenerateResponse(

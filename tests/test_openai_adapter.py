@@ -263,6 +263,128 @@ async def test_response_translation_maps_length_and_content_filter() -> None:
     assert response_filtered.finish_reason == "content_filter"
 
 
+# ---------------------------------------------------------------------------
+# Structured output extraction (_extract_structured_output) - fix for "structured_output is
+# missing; the §9.1 floor requires an object": response.output_text alone is unreliable for
+# Responses API structured JSON output, since a structured content part can carry the data via
+# `.parsed` or `.text` while output_text itself is empty.
+# ---------------------------------------------------------------------------
+
+
+def _structured_response(
+    *, parsed: Any = None, text: str | None = None, model: str = "gpt-5.6-terra",
+) -> Response:
+    """Builds a Response whose sole output message content part optionally carries a `.parsed`
+    attribute - dynamically attached by the SDK in some structured-output response shapes, not a
+    declared field on ResponseOutputText itself (confirmed: that type's own model_config sets
+    extra="allow", which is exactly how the real SDK attaches it) - and/or a `.text` JSON string."""
+    content_kwargs: dict[str, Any] = {"type": "output_text", "text": text or "", "annotations": []}
+    if parsed is not None:
+        content_kwargs["parsed"] = parsed
+    part = ResponseOutputText.model_construct(**content_kwargs)
+    message = ResponseOutputMessage(
+        id="msg_1", type="message", role="assistant", status="completed", content=[part],
+    )
+    return Response.model_construct(
+        id="resp_1", created_at=0.0, error=None, incomplete_details=None, instructions=None,
+        metadata=None, model=model, object="response", output=[message], parallel_tool_calls=True,
+        temperature=None, tool_choice="auto", tools=[], top_p=None, status="completed", text=None,
+        usage=_usage(),
+    )
+
+
+def _json_request() -> GenerateRequest:
+    return GenerateRequest(
+        messages=[Message(role="user", content=[ContentPart(type="text", text="hello")])],
+        metadata={"resolved_model_id": "gpt-5.6-terra"},
+        response_mode="json_schema",
+    )
+
+
+@pytest.mark.asyncio
+async def test_structured_output_extracted_from_content_part_parsed_attribute() -> None:
+    """Primary extraction path: response.output[].content[].parsed, even when the content part's
+    own .text is empty - the exact real-world shape that produced the reported bug."""
+    response = _structured_response(parsed={"title": "Real headline", "score": 87}, text="")
+    adapter = OpenAIAdapter(_credential(), client=_mock_client(response))
+
+    result = await adapter.generate(_json_request())
+
+    assert result.structured_output == {"title": "Real headline", "score": 87}
+
+
+@pytest.mark.asyncio
+async def test_structured_output_falls_back_to_content_part_text_json() -> None:
+    """Fallback path 2: no .parsed attribute, but the content part's own .text is valid JSON."""
+    response = _structured_response(text='{"title": "From text field", "score": 42}')
+    adapter = OpenAIAdapter(_credential(), client=_mock_client(response))
+
+    result = await adapter.generate(_json_request())
+
+    assert result.structured_output == {"title": "From text field", "score": 42}
+
+
+@pytest.mark.asyncio
+async def test_structured_output_falls_back_to_output_text_when_content_part_is_empty() -> None:
+    """Fallback path 3 (last resort, backward compatible with the pre-fix behavior): no
+    .parsed, empty content-part .text, but response.output_text itself carries the JSON."""
+    response = _text_response('{"title": "From output_text", "score": 7}')
+    adapter = OpenAIAdapter(_credential(), client=_mock_client(response))
+
+    result = await adapter.generate(_json_request())
+
+    assert result.structured_output == {"title": "From output_text", "score": 7}
+
+
+@pytest.mark.asyncio
+async def test_structured_output_is_none_when_nothing_is_extractable() -> None:
+    """The exact regression this fix targets: no .parsed, no usable .text anywhere, empty
+    output_text - must return None, never raise, never fabricate a value."""
+    response = _structured_response(text="")
+    adapter = OpenAIAdapter(_credential(), client=_mock_client(response))
+
+    result = await adapter.generate(_json_request())
+
+    assert result.structured_output is None
+
+
+@pytest.mark.asyncio
+async def test_structured_output_ignores_non_dict_json_payloads() -> None:
+    """A JSON payload that is technically valid but not an object (a bare list) must be treated
+    as "no structured output" - the §9.1 floor requires an object."""
+    response = _structured_response(text="[1, 2, 3]")
+    adapter = OpenAIAdapter(_credential(), client=_mock_client(response))
+
+    result = await adapter.generate(_json_request())
+
+    assert result.structured_output is None
+
+
+def test_extract_structured_output_prefers_parsed_over_text_when_both_present() -> None:
+    """Direct unit test of the helper's own priority order (pure function, no adapter/mock)."""
+    from integrations.llm_gateway.providers.openai_adapter import _extract_structured_output
+
+    response = _structured_response(parsed={"from": "parsed"}, text='{"from": "text"}')
+    assert _extract_structured_output(response) == {"from": "parsed"}
+
+
+def test_extract_structured_output_handles_malformed_json_text_gracefully() -> None:
+    from integrations.llm_gateway.providers.openai_adapter import _extract_structured_output
+
+    response = _structured_response(text="{not valid json")
+    assert _extract_structured_output(response) is None
+
+
+def test_extract_structured_output_ignores_non_dict_parsed_value() -> None:
+    """A `.parsed` attribute that is present but not itself a dict (e.g. a bare list, matching a
+    schema whose root type is an array) must fall through to the next extraction strategy, never
+    be returned as-is."""
+    from integrations.llm_gateway.providers.openai_adapter import _extract_structured_output
+
+    response = _structured_response(parsed=[1, 2, 3], text="")
+    assert _extract_structured_output(response) is None
+
+
 @pytest.mark.asyncio
 async def test_usage_mapping() -> None:
     client = _mock_client(_text_response(usage=_usage(input_tokens=123, output_tokens=45)))
