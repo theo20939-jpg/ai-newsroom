@@ -467,3 +467,29 @@ def test_short_two_word_product_entity_is_not_treated_as_a_publisher_domain() ->
     )
 
     assert "apple tv" in result
+
+
+def test_russian_sentence_opener_kak_is_not_distinctive_identity_evidence() -> None:
+    from services.story_memory import _distinctive_shared_entities
+
+    result = _distinctive_shared_entities(
+        ["\u043a\u0430\u043a"],
+        ["\u043a\u0430\u043a"],
+        {"\u043a\u0430\u043a": 1},
+        pool_size=100,
+    )
+
+    assert result == []
+
+
+def test_english_sentence_opener_we_is_not_distinctive_identity_evidence() -> None:
+    from services.story_memory import _distinctive_shared_entities
+
+    result = _distinctive_shared_entities(
+        ["we"],
+        ["we"],
+        {"we": 1},
+        pool_size=100,
+    )
+
+    assert result == []

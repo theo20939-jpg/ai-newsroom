@@ -505,6 +505,8 @@ _DISTINCTIVE_ENTITY_DF_FRACTION = 0.05
 # remain unchanged.
 _CALIBRATED_GENERIC_IDENTITY_ENTITIES = frozenset({
     "ai",
+    "we",
+    "\u043a\u0430\u043a",
     "\u0438\u0438",
     "\u0438\u0441\u043a\u0443\u0441\u0441\u0442\u0432\u0435\u043d\u043d",
 })
