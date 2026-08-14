@@ -169,12 +169,18 @@ class ResearchCapability:
             # ValidationCapabilityError (permanent) classification exactly as before; a fully
             # valid structured_output is unaffected regardless of finish_reason, since this
             # branch is only reached after floor validation has already failed.
+            # Cost-accounting forensic fix: `outcome.call` reflects a gateway call that actually
+            # completed (real provider spend, real usage/model data) - it must travel with the
+            # raised error so CapabilityExecutor can still cost it (via the exact same
+            # `_record_cost()` seam the success path already uses) even though this Capability
+            # itself is about to raise rather than return a CapabilityResult.
             if response.finish_reason == "length":
                 raise RetryableCapabilityError(
                     f"research: gateway response truncated at the output-token ceiling before "
-                    f"completing structured output (finish_reason='length') - {violation}"
+                    f"completing structured output (finish_reason='length') - {violation}",
+                    calls=[outcome.call],
                 )
-            raise ValidationCapabilityError(violation)
+            raise ValidationCapabilityError(violation, calls=[outcome.call])
 
         finished_at = datetime.now(timezone.utc)
         return CapabilityResult(

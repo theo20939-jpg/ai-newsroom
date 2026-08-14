@@ -494,7 +494,7 @@ def test_build_context_respects_overridden_target_language(monkeypatch: pytest.M
 @pytest.mark.parametrize(
     ("capability_name", "expected_max_tokens", "expected_reasoning_effort"),
     [
-        ("research", 700, "none"),
+        ("research", 1000, "none"),
         ("intelligence", 500, "low"),
         ("engagement", 350, "low"),
         ("scoring", 250, "low"),

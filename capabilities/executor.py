@@ -90,12 +90,16 @@ logger = logging.getLogger(__name__)
 # text, not editorial judgment); "low" for every other capability (real, if modest, editorial
 # judgment - significance, tone, factual review, copy).
 _MAX_OUTPUT_TOKENS_BY_CAPABILITY: dict[str, int] = {
-    # Production forensics: 333/333 failed NEWS_ANALYSIS Research tasks (314 arXiv) hit this
-    # ceiling exactly (finish_reason="length", output_tokens=450=ceiling) before completing
-    # their structured JSON - FAILED input content (avg 1801.6 chars) was ~3.3x COMPLETED
-    # (avg 550.8 chars). Raised from 450 to 700, the smallest change consistent with the
-    # evidence; no other capability's ceiling touched.
-    "research": 700,
+    # Production forensics round 1: 333/333 failed NEWS_ANALYSIS Research tasks (314 arXiv) hit
+    # the original 450 ceiling exactly (finish_reason="length") before completing their
+    # structured JSON - FAILED input content (avg 1801.6 chars) was ~3.3x COMPLETED (avg 550.8
+    # chars). Raised 450 -> 700.
+    # Production forensics round 2 (second canary): 700 was still insufficient for some real
+    # long-form input - task d3fe7076-e075-4003-9c26-f138bf741063 (content_chars=1897) truncated
+    # on all 3 attempts at 700; a direct diagnostic against the same task at 1000 succeeded with
+    # meaningful headroom (output_tokens=732, finish_reason="stop"). Raised 700 -> 1000, the
+    # smallest change consistent with this new evidence; no other capability's ceiling touched.
+    "research": 1000,
     "intelligence": 500,
     "engagement": 350,
     "scoring": 250,
@@ -259,10 +263,19 @@ class CapabilityExecutor:
             try:
                 result = await capability.execute(context)
             except RetryableCapabilityError as error:
+                # Cost-accounting forensic fix: a gateway call can succeed (real provider spend)
+                # and still lead the Capability to raise here (e.g. §9.1 floor validation failed
+                # on a truncated response) - `error.calls`, if the Capability attached any, is
+                # costed through the exact same `_record_cost()` seam the success path below
+                # uses (which already only ever costs `status == "SUCCESS"` calls) before the
+                # error is translated. Empty for every existing raise site that never attaches
+                # calls - byte-identical behavior there.
+                await self._record_cost(task, step, error.calls)
                 raise StepExecutionError(str(error)) from error
             except CapabilityTimeoutError as error:
                 raise StepExecutionError(str(error)) from error
             except (PermanentCapabilityError, ValidationCapabilityError, CapabilityConfigurationError) as error:
+                await self._record_cost(task, step, error.calls)
                 raise PermanentStepFailureError(str(error)) from error
 
             if result.status != "SUCCESS":
