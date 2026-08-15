@@ -119,16 +119,17 @@ def test_case_f_low_intelligence_strong_compensating_signal_not_blind_skip() -> 
     assert decision.treatment == BRIEF
 
 
-def test_case_f_low_intelligence_weak_evidence_strong_score_still_flagged_not_skipped() -> None:
-    """The phase brief's own literal example: "very low Intelligence + strong score/source/
-    engagement -> BRIEF + review flag" - even when evidence IS weak, an exceptionally strong
-    Scoring result pulls this back from SKIP to a flagged BRIEF, never silently STANDARD/MAJOR."""
+def test_case_f_low_intelligence_weak_evidence_is_skip_regardless_of_score() -> None:
+    """2026-08-15 spec-compliance correction: an earlier pass of this recalibration kept the
+    module's original carve-out ("very low Intelligence + strong score -> BRIEF + review flag"
+    even when evidence IS weak). The corrected policy is narrower: at sig<=3.0, Scoring can only
+    ever compensate for significance, never for evidence quality - weak evidence is an
+    unconditional SKIP at this tier no matter how high scoring_score is."""
     decision = classify_editorial_treatment(
         significance=2, recommendation="Незначительная тема, но источник указан.",
         scoring_score=92, source_reliability=None, evidence_completeness="HEADLINE_ONLY",
     )
-    assert decision.treatment == BRIEF
-    assert decision.human_review_required is True
+    assert decision.treatment == SKIP
 
 
 # ---------------------------------------------------------------------------
@@ -291,3 +292,193 @@ def test_redirect_unresolved_with_hedged_non_negative_recommendation_downgrades_
     )
     assert decision.treatment != STANDARD
     assert decision.treatment != MAJOR
+
+
+# ---------------------------------------------------------------------------
+# 2026-08-15 production forensic recalibration: real selected-candidate replay found 73% of
+# posted stories scored only 70-79/100, and several of them carried REDIRECT_UNRESOLVED/thin
+# evidence plus an Intelligence recommendation that, in plain language, said not to run the
+# story as-is - but that wording ("не продвигать", "не использовать как самостоятельную/
+# полноценную") was not in the old marker list, and the sig<=5 tiers gave an unconditional
+# BRIEF regardless of evidence quality. Every fixture below is shaped after one real selected
+# candidate from that forensic (paraphrased titles, real significance/evidence/score/
+# recommendation shape).
+# ---------------------------------------------------------------------------
+
+
+def test_forensic_teenagers_trust_ai_is_skip() -> None:
+    decision = classify_editorial_treatment(
+        significance=0.35,
+        recommendation="Не продвигать как подтвержденное значимое событие без дополнительных источников.",
+        scoring_score=72, source_reliability=None, evidence_completeness="REDIRECT_UNRESOLVED",
+    )
+    assert decision.treatment == SKIP
+
+
+def test_forensic_chinese_technology_influence_is_skip() -> None:
+    decision = classify_editorial_treatment(
+        significance=0.35,
+        recommendation="Не использовать как самостоятельную новость без дополнительной проверки.",
+        scoring_score=72, source_reliability=None, evidence_completeness="REDIRECT_UNRESOLVED",
+    )
+    assert decision.treatment == SKIP
+
+
+def test_forensic_china_global_ai_governance_is_skip() -> None:
+    decision = classify_editorial_treatment(
+        significance=0.45,
+        recommendation="Не использовать как полноценную новостную заметку.",
+        scoring_score=72, source_reliability=None, evidence_completeness="REDIRECT_UNRESOLVED",
+    )
+    assert decision.treatment == SKIP
+
+
+def test_forensic_2005_concurrency_article_full_text_moderate_score_is_skip() -> None:
+    """Do NOT allow a low significance story through just because FULL_TEXT exists - Scoring
+    stays a secondary/compensating signal and 72 does not clear the strong-compensating bar."""
+    decision = classify_editorial_treatment(
+        significance=2, recommendation="Публиковать, историческая статья по теме параллелизма.",
+        scoring_score=72, source_reliability=0.8, evidence_completeness="FULL_TEXT",
+    )
+    assert decision.treatment == SKIP
+
+
+def test_forensic_very_low_significance_full_text_strong_score_is_brief_with_review() -> None:
+    """The one exception to the tier-1 default SKIP: evidence genuinely not weak AND Scoring
+    clears the existing strong-compensating threshold (85)."""
+    decision = classify_editorial_treatment(
+        significance=2, recommendation="Публиковать, факты подтверждены несколькими источниками.",
+        scoring_score=88, source_reliability=0.9, evidence_completeness="FULL_TEXT",
+    )
+    assert decision.treatment == BRIEF
+    assert decision.human_review_required is True
+
+
+# ---------------------------------------------------------------------------
+# 2026-08-15 spec-compliance correction for sig<=3.0: Scoring can only ever compensate for
+# significance, never for evidence quality. Weak evidence at this tier is an unconditional SKIP
+# no matter how high scoring_score is - even a near-perfect 95 must not paper over evidence that
+# is REDIRECT_UNRESOLVED/PARTIAL_TEXT/HEADLINE_ONLY. Non-weak evidence is the only path to the
+# strong-compensating BRIEF+review exception, and only when score actually clears 85.
+# ---------------------------------------------------------------------------
+
+
+def test_very_low_significance_redirect_unresolved_very_high_score_is_still_skip() -> None:
+    decision = classify_editorial_treatment(
+        significance=2, recommendation="Публиковать.", scoring_score=95,
+        source_reliability=0.9, evidence_completeness="REDIRECT_UNRESOLVED",
+    )
+    assert decision.treatment == SKIP
+
+
+def test_very_low_significance_partial_text_very_high_score_is_still_skip() -> None:
+    decision = classify_editorial_treatment(
+        significance=2, recommendation="Публиковать.", scoring_score=95,
+        source_reliability=0.9, evidence_completeness="PARTIAL_TEXT",
+    )
+    assert decision.treatment == SKIP
+
+
+def test_very_low_significance_headline_only_very_high_score_is_still_skip() -> None:
+    decision = classify_editorial_treatment(
+        significance=2, recommendation="Публиковать.", scoring_score=95,
+        source_reliability=0.9, evidence_completeness="HEADLINE_ONLY",
+    )
+    assert decision.treatment == SKIP
+
+
+def test_very_low_significance_full_text_score_88_is_brief_with_review() -> None:
+    decision = classify_editorial_treatment(
+        significance=2, recommendation="Публиковать.", scoring_score=88,
+        source_reliability=0.9, evidence_completeness="FULL_TEXT",
+    )
+    assert decision.treatment == BRIEF
+    assert decision.human_review_required is True
+
+
+def test_very_low_significance_full_text_score_84_is_skip() -> None:
+    """One point below the strong-compensating threshold (85) - not weak evidence alone is not
+    enough, exactly like the "Free Lunch" (score 72) case, just closer to the boundary."""
+    decision = classify_editorial_treatment(
+        significance=2, recommendation="Публиковать.", scoring_score=84,
+        source_reliability=0.9, evidence_completeness="FULL_TEXT",
+    )
+    assert decision.treatment == SKIP
+
+
+def test_forensic_petersburg_ai_tram_is_brief_not_standard() -> None:
+    decision = classify_editorial_treatment(
+        significance=0.55, recommendation="Публиковать как техническую новость регионального значения.",
+        scoring_score=72, source_reliability=None, evidence_completeness="REDIRECT_UNRESOLVED",
+    )
+    assert decision.treatment == BRIEF
+    assert decision.treatment != STANDARD
+
+
+def test_forensic_valid_medium_full_text_story_is_standard() -> None:
+    decision = classify_editorial_treatment(
+        significance=6.5, recommendation="Публиковать как заметную технологическую новость.",
+        scoring_score=78, source_reliability=0.85, evidence_completeness="FULL_TEXT",
+    )
+    assert decision.treatment == STANDARD
+
+
+def test_forensic_high_significance_full_text_is_major() -> None:
+    decision = classify_editorial_treatment(
+        significance=8.5, recommendation="Публиковать как главную новость дня.",
+        scoring_score=90, source_reliability=0.9, evidence_completeness="FULL_TEXT",
+    )
+    assert decision.treatment == MAJOR
+
+
+def test_forensic_high_significance_weak_evidence_is_standard_with_review() -> None:
+    decision = classify_editorial_treatment(
+        significance=8.5, recommendation="Публиковать, требует подтверждения деталей.",
+        scoring_score=80, source_reliability=None, evidence_completeness="HEADLINE_ONLY",
+    )
+    assert decision.treatment == STANDARD
+    assert decision.human_review_required is True
+
+
+# ---------------------------------------------------------------------------
+# Negative-marker false-positive guard: generic hedging phrases that appear on many valid
+# stories must not, by themselves, become an automatic veto.
+# ---------------------------------------------------------------------------
+
+
+def test_generic_caution_phrase_requires_additional_verification_is_not_negative() -> None:
+    decision = classify_editorial_treatment(
+        significance=6.5, recommendation="Требуется дополнительная проверка перед публикацией.",
+        scoring_score=78, source_reliability=0.85, evidence_completeness="FULL_TEXT",
+    )
+    assert decision.treatment == STANDARD
+    assert decision.human_review_required is False
+
+
+def test_generic_caution_phrase_sleduet_proverit_is_not_negative() -> None:
+    decision = classify_editorial_treatment(
+        significance=6.5, recommendation="Следует проверить детали перед публикацией.",
+        scoring_score=78, source_reliability=0.85, evidence_completeness="FULL_TEXT",
+    )
+    assert decision.treatment == STANDARD
+    assert decision.human_review_required is False
+
+
+def test_generic_caution_phrase_zhelatelno_utochnit_is_not_negative() -> None:
+    decision = classify_editorial_treatment(
+        significance=6.5, recommendation="Желательно уточнить некоторые детали.",
+        scoring_score=78, source_reliability=0.85, evidence_completeness="FULL_TEXT",
+    )
+    assert decision.treatment == STANDARD
+    assert decision.human_review_required is False
+
+
+def test_new_negative_markers_do_trigger_review_at_medium_significance_with_full_text() -> None:
+    """A well-evidenced medium-significance story is not auto-SKIPped by a negative
+    recommendation alone (no weak-evidence combination), but must be flagged for human review."""
+    decision = classify_editorial_treatment(
+        significance=6.5, recommendation="Не выносить в основную новостную повестку без уточнения деталей.",
+        scoring_score=78, source_reliability=0.85, evidence_completeness="FULL_TEXT",
+    )
+    assert decision.treatment == STANDARD
+    assert decision.human_review_required is True

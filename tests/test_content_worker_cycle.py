@@ -624,6 +624,160 @@ def test_h_ordering_contains_no_source_type_reference() -> None:
     assert "source_type" not in source
 
 
+# ---------------------------------------------------------------------------
+# 2026-08-15 forensic recalibration: quality-first ranking within the bounded fresh window.
+# Real production evidence showed the pre-existing "first score-eligible rows in freshness
+# order" selection let 73% of selected stories through at only 70-79/100, even when a materially
+# stronger story sat a few rows further down the very same bounded scan window. These tests
+# prove score now ranks candidates within the unchanged freshness/scan_limit/duplicate-exclusion
+# boundary, never widening it into an unbounded backlog quality sort.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_quality_first_ranking_prefers_higher_score_over_freshness(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None
+) -> None:
+    """The task's own worked example: fresh candidates scored 72 (newest), 75, 88, 82, 78
+    (oldest) with batch_size=3 must select [88, 82, 78] - the three highest scores - never
+    [72, 75, 88], the three freshest."""
+    original_batch_size = settings.content_generation_batch_size
+    settings.content_generation_batch_size = 3
+    try:
+        async with factory() as session:
+            now = datetime.now(timezone.utc)
+            scores_newest_to_oldest = [72, 75, 88, 82, 78]
+            events = []
+            for offset, score in enumerate(scores_newest_to_oldest):
+                event = await _make_event(session, test_source, published_at=now - timedelta(seconds=offset))
+                await _make_completed_news_analysis_task(session, event, score=score)
+                events.append(event)
+
+            eligible = await _select_eligible_events(session)
+
+            assert eligible == [events[2].id, events[3].id, events[4].id]  # scores 88, 82, 78
+    finally:
+        settings.content_generation_batch_size = original_batch_size
+
+
+@pytest.mark.asyncio
+async def test_tie_scores_resolve_by_freshest_anchor(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None
+) -> None:
+    """Equal scores fall back to the existing freshness-first ordering as the secondary
+    tie-break, exactly as the pre-recalibration ordering already did for equal-score rows."""
+    original_batch_size = settings.content_generation_batch_size
+    settings.content_generation_batch_size = 1
+    try:
+        async with factory() as session:
+            now = datetime.now(timezone.utc)
+            older_event = await _make_event(session, test_source, published_at=now - timedelta(hours=1))
+            await _make_completed_news_analysis_task(
+                session, older_event, score=settings.content_generation_min_score + 5
+            )
+            fresher_event = await _make_event(session, test_source, published_at=now)
+            await _make_completed_news_analysis_task(
+                session, fresher_event, score=settings.content_generation_min_score + 5
+            )
+
+            eligible = await _select_eligible_events(session)
+
+            assert eligible == [fresher_event.id]
+    finally:
+        settings.content_generation_batch_size = original_batch_size
+
+
+@pytest.mark.asyncio
+async def test_fewer_than_batch_size_eligible_returns_fewer_never_padded(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None
+) -> None:
+    """Product-critical: a weak news period must be allowed to produce fewer stories than
+    batch_size - a sub-threshold candidate must never be pulled in to fill the batch."""
+    original_batch_size = settings.content_generation_batch_size
+    settings.content_generation_batch_size = 5
+    try:
+        async with factory() as session:
+            now = datetime.now(timezone.utc)
+            passing_event_a = await _make_event(session, test_source, published_at=now)
+            await _make_completed_news_analysis_task(
+                session, passing_event_a, score=settings.content_generation_min_score
+            )
+            passing_event_b = await _make_event(session, test_source, published_at=now - timedelta(minutes=1))
+            await _make_completed_news_analysis_task(
+                session, passing_event_b, score=settings.content_generation_min_score + 3
+            )
+            failing_event = await _make_event(session, test_source, published_at=now)
+            await _make_completed_news_analysis_task(
+                session, failing_event, score=settings.content_generation_min_score - 1
+            )
+
+            eligible = await _select_eligible_events(session)
+
+            assert len(eligible) == 2
+            assert failing_event.id not in eligible
+            assert set(eligible) == {passing_event_a.id, passing_event_b.id}
+    finally:
+        settings.content_generation_batch_size = original_batch_size
+
+
+@pytest.mark.asyncio
+async def test_quality_ranking_never_reaches_beyond_the_scan_limit_bounded_window(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None
+) -> None:
+    """The quality sort operates only over rows the bounded SQL scan already returned - a
+    high-scoring candidate that the scan_limit-bounded freshness window never even reaches must
+    stay excluded, never pulled in by a wider, unbounded quality search over the whole backlog."""
+    original_scan_limit = settings.content_generation_scan_limit
+    original_batch_size = settings.content_generation_batch_size
+    settings.content_generation_scan_limit = 3
+    settings.content_generation_batch_size = 3
+    try:
+        async with factory() as session:
+            now = datetime.now(timezone.utc)
+            in_window_ids = []
+            for offset in range(3):
+                event = await _make_event(session, test_source, published_at=now - timedelta(seconds=offset))
+                await _make_completed_news_analysis_task(
+                    session, event, score=settings.content_generation_min_score
+                )
+                in_window_ids.append(event.id)
+
+            # Least fresh of the four - pushed entirely outside the scan_limit=3 bounded window
+            # by the three fresher rows above, despite a far higher score.
+            outside_window_event = await _make_event(session, test_source, published_at=now - timedelta(hours=1))
+            await _make_completed_news_analysis_task(session, outside_window_event, score=99)
+
+            eligible = await _select_eligible_events(session)
+
+            assert outside_window_event.id not in eligible
+            assert set(eligible) == set(in_window_ids)
+    finally:
+        settings.content_generation_scan_limit = original_scan_limit
+        settings.content_generation_batch_size = original_batch_size
+
+
+@pytest.mark.asyncio
+async def test_stale_task_with_a_genuinely_high_score_is_still_excluded(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None
+) -> None:
+    """Quality-first ranking must never reach past the freshness cutoff (a hard eligibility
+    boundary, unchanged by this checkpoint) to pull in a higher-scoring but stale candidate - a
+    near-perfect score does not buy an exemption from EditorialTask.updated_at >= cutoff."""
+    async with factory() as session:
+        now = datetime.now(timezone.utc)
+        stale_event = await _make_event(session, test_source, published_at=now)
+        await _make_completed_news_analysis_task(
+            session, stale_event, score=95, completed_at=now - timedelta(hours=1),
+        )
+        fresh_event = await _make_event(session, test_source, published_at=now)
+        await _make_completed_news_analysis_task(session, fresh_event, score=settings.content_generation_min_score)
+
+        eligible = await _select_eligible_events(session)
+
+        assert stale_event.id not in eligible
+        assert fresh_event.id in eligible
+
+
 def test_i_content_cycle_module_imports_no_llm_gateway_or_capability_execution() -> None:
     """Structural: the M5.2 change (a `func`/`NewsEvent` join for ordering only) introduces no
     new provider-call surface - content_cycle.py still only imports CapabilityRegistry as a

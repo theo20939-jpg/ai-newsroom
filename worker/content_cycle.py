@@ -487,8 +487,8 @@ async def _select_eligible_events(session: AsyncSession) -> list[UUID]:
     Plan's own §0/§3, never an editorial-freshness control - unchanged by Phase 15 M5.2, still
     `EditorialTask.updated_at >= cutoff`), ordering, and a scan-limit cap are all evaluated by
     Postgres. Only the final, capped result rows are ever materialized into Python, for the
-    score-threshold check below - the worker never loads an unbounded number of NEWS_ANALYSIS
-    tasks (Plan §3's own scan-limit guarantee).
+    score-threshold-and-ranking step below - the worker never loads an unbounded number of
+    NEWS_ANALYSIS tasks (Plan §3's own scan-limit guarantee).
 
     Phase 15 M5.2: ordering changed from `EditorialTask.updated_at.asc()` (oldest-task-COMPLETED-
     first - a technical FIFO, not an editorial signal) to freshest-EDITORIAL-content-first, using
@@ -502,6 +502,11 @@ async def _select_eligible_events(session: AsyncSession) -> list[UUID]:
     means a truly fresh eligible story is never pushed out of the scan window by an older one,
     regardless of backlog depth. The eligibility WHERE clause (which rows qualify at all) is
     completely unchanged - only the ordering of already-eligible rows, before LIMIT, changed.
+
+    2026-08-15 forensic recalibration: this SQL ordering still establishes the bounded fresh scan
+    window exactly as before, but is no longer the final selection order - see the score-ranking
+    step below, which reuses this same (anchor DESC, id ASC) order as the freshness/stable
+    tie-break for its own score-DESC ranking.
     """
     cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.content_generation_freshness_cutoff_hours)
     ContentGenTask = aliased(EditorialTask)
@@ -534,14 +539,31 @@ async def _select_eligible_events(session: AsyncSession) -> list[UUID]:
     # workflow["step_results"][i]["result"]["score"] for the entry whose step_name == "scoring" -
     # locating an array element by a sibling field's value, then reading a nested key, inside a
     # generic (non-JSONB) JSON column is not cleanly expressible with this stack.
-    eligible: list[UUID] = []
+    #
+    # 2026-08-15 forensic recalibration: this used to take the first `content_generation_
+    # batch_size` score-eligible rows in freshness order (i.e. "newest eligible stories first"),
+    # never comparing scores against each other - on a weak news day that fills the batch with
+    # whatever cleared 70 first, even when a materially stronger story was sitting a few rows
+    # further down the same bounded scan window. Quality now determines rank *within* that same
+    # bounded fresh window: every score-eligible row in `rows` (still capped by scan_limit, still
+    # only rows inside the freshness cutoff - no wider query) is collected first, then ranked by
+    # score DESC. `rows` is already ordered (anchor DESC, EditorialTask.id ASC) by the SQL ORDER BY
+    # above; Python's sort() is guaranteed stable (reverse=True does not disturb tie order - see
+    # the stdlib sorted() docs), so a single sort on score alone preserves that existing order as
+    # the secondary (freshest first) and tertiary (EditorialTask.id ascending) tie-break, exactly
+    # the ranking this checkpoint asks for, with no second query and no new tie-break rule to keep
+    # in sync with the SQL ORDER BY.
+    eligible: list[tuple[int, UUID]] = []
     for _task_id, event_id, workflow in rows:
         score = _extract_scoring_result(workflow)
         if score is not None and score >= settings.content_generation_min_score:
-            eligible.append(event_id)
-        if len(eligible) >= settings.content_generation_batch_size:
-            break
-    return eligible
+            eligible.append((score, event_id))
+
+    eligible.sort(key=lambda candidate: candidate[0], reverse=True)
+
+    # Fewer than batch_size eligible candidates is a valid, product-intended outcome (a weak news
+    # period must be allowed to produce fewer stories) - never padded with sub-threshold rows.
+    return [event_id for _score, event_id in eligible[: settings.content_generation_batch_size]]
 
 
 async def run_content_cycle(

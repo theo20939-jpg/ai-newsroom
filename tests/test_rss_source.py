@@ -184,3 +184,182 @@ def _patch_httpx_client(monkeypatch: pytest.MonkeyPatch, handler) -> None:
         original_init(self, *args, **kwargs)
 
     monkeypatch.setattr(httpx.AsyncClient, "__init__", patched_init)
+
+
+# Real production forensic (2026-08-15): feeds returning 301/302/307/308 to a valid new
+# location were being counted as hard source failures because httpx.AsyncClient defaulted to
+# follow_redirects=False, and raise_for_status() raises on an unfollowed 3xx. These regression
+# tests prove the fix (integrations/sources/rss_source.py: follow_redirects=True,
+# max_redirects=MAX_REDIRECTS).
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [301, 302, 307, 308])
+async def test_fetch_follows_single_redirect_to_valid_feed(
+    monkeypatch: pytest.MonkeyPatch, status_code: int
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == "https://example.com/old-feed.rss":
+            return httpx.Response(status_code, headers={"Location": "https://example.com/new-feed.rss"})
+        return httpx.Response(200, content=RSS_BODY)
+
+    _patch_httpx_client(monkeypatch, handler)
+
+    items = await RSSSourceAdapter().fetch(_source("https://example.com/old-feed.rss"), CONTEXT)
+
+    assert len(items) == 2
+    assert items[0].external_id == "https://example.com/first"
+
+
+@pytest.mark.asyncio
+async def test_fetch_follows_bounded_redirect_chain(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A chain within MAX_REDIRECTS still succeeds - the bound rejects only pathological chains."""
+    hops = ["https://example.com/hop0", "https://example.com/hop1", "https://example.com/hop2"]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url in hops:
+            next_index = hops.index(url) + 1
+            if next_index < len(hops):
+                return httpx.Response(301, headers={"Location": hops[next_index]})
+            return httpx.Response(301, headers={"Location": "https://example.com/feed.rss"})
+        return httpx.Response(200, content=RSS_BODY)
+
+    _patch_httpx_client(monkeypatch, handler)
+
+    items = await RSSSourceAdapter().fetch(_source(hops[0]), CONTEXT)
+
+    assert len(items) == 2
+
+
+@pytest.mark.asyncio
+async def test_fetch_rejects_redirect_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        other = "https://example.com/b" if url == "https://example.com/a" else "https://example.com/a"
+        return httpx.Response(302, headers={"Location": other})
+
+    _patch_httpx_client(monkeypatch, handler)
+
+    with pytest.raises(httpx.TooManyRedirects):
+        await RSSSourceAdapter().fetch(_source("https://example.com/a"), CONTEXT)
+
+
+@pytest.mark.asyncio
+async def test_fetch_rejects_redirect_chain_beyond_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        n = int(str(request.url).rsplit("/", 1)[-1])
+        return httpx.Response(301, headers={"Location": f"https://example.com/hop/{n + 1}"})
+
+    _patch_httpx_client(monkeypatch, handler)
+
+    with pytest.raises(httpx.TooManyRedirects):
+        await RSSSourceAdapter().fetch(_source("https://example.com/hop/0"), CONTEXT)
+
+
+@pytest.mark.asyncio
+async def test_fetch_raises_on_final_404(monkeypatch: pytest.MonkeyPatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404)
+
+    _patch_httpx_client(monkeypatch, handler)
+
+    with pytest.raises(httpx.HTTPStatusError) as exc_info:
+        await RSSSourceAdapter().fetch(_source("https://example.com/missing.rss"), CONTEXT)
+    assert exc_info.value.response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_fetch_raises_on_final_403(monkeypatch: pytest.MonkeyPatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403)
+
+    _patch_httpx_client(monkeypatch, handler)
+
+    with pytest.raises(httpx.HTTPStatusError) as exc_info:
+        await RSSSourceAdapter().fetch(_source("https://example.com/forbidden.rss"), CONTEXT)
+    assert exc_info.value.response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_fetch_redirect_to_404_still_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A redirect must not mask a genuinely dead target at the end of the chain."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == "https://example.com/moved.rss":
+            return httpx.Response(301, headers={"Location": "https://example.com/gone.rss"})
+        return httpx.Response(404)
+
+    _patch_httpx_client(monkeypatch, handler)
+
+    with pytest.raises(httpx.HTTPStatusError) as exc_info:
+        await RSSSourceAdapter().fetch(_source("https://example.com/moved.rss"), CONTEXT)
+    assert exc_info.value.response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_fetch_successful_redirect_does_not_trigger_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """services.collector._fetch_with_retry only retries when adapter.fetch() raises - a
+    followed redirect must resolve inside the single httpx.AsyncClient.get() call and never
+    raise, so this proves the retry path is never even entered for a successful redirect."""
+    call_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if str(request.url) == "https://example.com/old-feed.rss":
+            return httpx.Response(301, headers={"Location": "https://example.com/new-feed.rss"})
+        return httpx.Response(200, content=RSS_BODY)
+
+    _patch_httpx_client(monkeypatch, handler)
+
+    from services.collector import _fetch_with_retry
+
+    items = await _fetch_with_retry(
+        RSSSourceAdapter(), _source("https://example.com/old-feed.rss"), CONTEXT
+    )
+
+    assert len(items) == 2
+    # One request per hop (old-feed -> new-feed), never multiplied by a retry attempt.
+    assert call_count == 2
+
+
+# A narrow scheme-safety test (redirect Location switching to file://, ftp://, etc.) was
+# evaluated and deliberately NOT added: proving it faithfully requires a real, unconfigured
+# httpx.AsyncClient's default per-scheme transport routing (no mount matches a non-http(s)
+# scheme, so it fails client-side with UnsupportedProtocol before any network I/O) - but this
+# repo's own tests/conftest.py Barrier 3 network-egress guard (`_is_mock_transport`) only
+# recognizes a client whose single top-level `_transport` attribute is itself a MockTransport
+# instance, which is exactly the fallback httpx uses for any scheme with no matching mount -
+# making a client that both satisfies the guard and genuinely lacks a route for file://
+# self-contradictory to construct. Reproducing the real behavior would require weakening or
+# reshaping that shared guard, which is out of this task's scope. See the MAX_REDIRECTS comment
+# in integrations/sources/rss_source.py for the documented (not fixed) limitation this would
+# have covered.
+
+
+@pytest.mark.asyncio
+async def test_fetch_with_retry_still_retries_and_isolates_a_real_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Source-failure isolation and retry behavior for a genuine (non-redirect) failure must be
+    unchanged: a persistently-403 source is retried MAX_FETCH_ATTEMPTS times and then raises,
+    without affecting unrelated sources (services.collector._process_source/run_collection_cycle
+    already isolate one source's exception from the rest of the cycle - this proves the adapter
+    side of that contract still raises so isolation has something to catch)."""
+    call_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        return httpx.Response(403)
+
+    _patch_httpx_client(monkeypatch, handler)
+    monkeypatch.setattr("services.collector.RETRY_BACKOFF_SECONDS", 0.0)
+
+    from services.collector import MAX_FETCH_ATTEMPTS, _fetch_with_retry
+
+    with pytest.raises(httpx.HTTPStatusError):
+        await _fetch_with_retry(RSSSourceAdapter(), _source("https://example.com/forbidden.rss"), CONTEXT)
+
+    assert call_count == MAX_FETCH_ATTEMPTS

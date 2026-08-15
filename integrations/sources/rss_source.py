@@ -20,6 +20,31 @@ logger = logging.getLogger(__name__)
 
 FETCH_TIMEOUT_SECONDS = 15.0
 
+# Real production forensic (2026-08-15): feeds that moved to a new URL respond with a normal
+# 301/302/307/308 redirect. httpx defaults to follow_redirects=False, which means
+# response.raise_for_status() treats an unfollowed 3xx as an error (httpx raises for any
+# non-2xx when redirects were not followed, not only 4xx/5xx) - every such feed was retried
+# 3x by services.collector._fetch_with_retry and then counted as a hard source failure,
+# indistinguishable from a real 403/404. Following redirects here (bounded, so a redirect loop
+# still fails deterministically instead of hanging) fixes that.
+#
+# Documented, NOT fixed, remaining limitation: this adapter has no redirect-target SSRF/
+# private-IP validation (unlike integrations/http/safe_fetch.py's DNS-pinned path, used only by
+# Image Intelligence) - neither before nor after this change. Before, that gap was inert for
+# redirects specifically, because a 3xx was never followed at all; the only fetch destination
+# was ever the exact configured source URL. After this change, whatever Location header that
+# URL's operator (or a man-in-the-middle) returns is now actually fetched, bounded only by
+# MAX_REDIRECTS and http(s)-scheme routing (httpx's default AsyncClient only mounts http(s)
+# transports, so a same-request scheme change - e.g. to file:///ftp:// - fails safely with
+# UnsupportedProtocol; see tests/test_rss_source.py's dedicated scheme-safety test) - a
+# same-scheme redirect straight to a private/internal address is not rejected. Practical risk is
+# bounded (feed URLs come from the curated, admin-maintained source pack, never user input; a
+# redirect to an internal IP requires either a compromised/misconfigured feed or an on-path
+# attacker), but it is a real, new reachable-destination surface this change introduces, not
+# zero new surface - migrating this adapter onto safe_fetch() would close it but is a materially
+# larger change than this fix, left for a separate, dedicated pass.
+MAX_REDIRECTS = 5
+
 
 class RSSSourceAdapter(SourceAdapter):
     """Fetches recent entries from an RSS or Atom feed."""
@@ -29,9 +54,18 @@ class RSSSourceAdapter(SourceAdapter):
         if not source.url:
             return []
 
-        async with httpx.AsyncClient(timeout=FETCH_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(
+            timeout=FETCH_TIMEOUT_SECONDS, follow_redirects=True, max_redirects=MAX_REDIRECTS
+        ) as client:
             response = await client.get(source.url)
             response.raise_for_status()
+            if response.history:
+                logger.info(
+                    "Followed %d redirect(s) fetching %s -> %s",
+                    len(response.history),
+                    source.url,
+                    response.url,
+                )
 
         parsed = feedparser.parse(response.content)
         items = [item for entry in parsed.entries if (item := self._to_raw_item(entry)) is not None]

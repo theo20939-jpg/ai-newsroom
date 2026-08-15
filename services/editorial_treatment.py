@@ -85,15 +85,30 @@ _LOW_SIGNIFICANCE_MAX = 5.0
 _MEDIUM_SIGNIFICANCE_MAX = 7.0
 _HIGH_SIGNIFICANCE_MIN = 8.0
 
-# A very high Scoring result is treated as one possible "strong compensating signal" (phase brief
-# §6's own conceptual example: "very low Intelligence + strong score/source/engagement -> BRIEF +
-# review flag") - deliberately high/conservative, so this only ever pulls a very-low-significance
-# story back from SKIP to BRIEF+review, never all the way to STANDARD/MAJOR on Scoring alone.
+# A very high Scoring result is treated as one possible "strong compensating signal" - but
+# (2026-08-15 forensic recalibration) only ever a compensator for significance, never for
+# evidence quality: at sig<=3.0 it pulls a story back from SKIP to BRIEF+review ONLY when
+# evidence is independently NOT weak too. Weak evidence + very-low significance is always SKIP
+# at this tier now, regardless of how high scoring_score is - a high score cannot be trusted to
+# stand in for actually-verified evidence, and never all the way to STANDARD/MAJOR on Scoring
+# alone either way.
 _STRONG_COMPENSATING_SCORE_MIN = 85
 
 _NEGATIVE_RECOMMENDATION_MARKERS: tuple[str, ...] = (
     "не публиковать", "не выпускать", "не рекомендуется публиковать",
     "do not publish", "not publish", "do not release",
+    # 2026-08-15 production forensic: real Intelligence output uses several other explicit-veto
+    # phrasings the original marker set missed entirely (each one verbatim from a real selected
+    # story that should not have reached BRIEF) - "не продвигать" (do not promote it as a
+    # confirmed significant event), "не использовать как самостоятельную"/"как полноценную" (do
+    # not use as a standalone/full news item), "не выделять как самостоятельную" (do not feature
+    # as a standalone significant story), "не выносить в основную новостную повестку" (do not put
+    # in the main news agenda). Deliberately still narrow, exact-phrase substrings, not a
+    # generative classifier - generic hedging like "требуется дополнительная проверка"/"следует
+    # проверить" is NOT a marker and must not become an automatic veto (it appears on many valid
+    # stories, per the same forensic).
+    "не продвигать", "не использовать как самостоятельную", "не использовать как полноценную",
+    "не выделять как самостоятельную", "не выносить в основную новостную повестку",
 )
 
 
@@ -218,26 +233,49 @@ def classify_editorial_treatment(
         )
 
     if sig <= _VERY_LOW_SIGNIFICANCE_MAX:
+        # 2026-08-15 forensic recalibration (and a correction to this recalibration's own first
+        # pass): this tier used to give any non-weak-evidence story an unconditional BRIEF,
+        # regardless of Scoring - the real production example was "The Free Lunch Is Over" (sig 2,
+        # FULL_TEXT, score 72), not a strong enough story to post on FULL_TEXT alone. Default is
+        # now SKIP. The ONLY exception is evidence independently NOT weak AND scoring_score
+        # clearing the strong-compensating bar - weak evidence always SKIPs at this tier
+        # regardless of scoring_score, full stop. (An earlier pass of this fix kept the old
+        # weak-evidence+very-high-score carve-out from before this recalibration; that carve-out
+        # let a score alone paper over evidence too weak to trust and has been removed - a high
+        # score must never compensate for evidence quality, only for significance.)
         if weak_evidence:
-            if strong_compensating:
-                return EditorialTreatmentDecision(
-                    BRIEF, human_review_required=True,
-                    reason=f"very low significance ({sig}) + weak evidence, but a strong compensating "
-                           f"Scoring result ({scoring_score}) - kept as a flagged brief, not skipped",
-                )
             return EditorialTreatmentDecision(
                 SKIP, human_review_required=False,
-                reason=f"very low significance ({sig}) + weak evidence ({evidence_completeness or 'low source reliability'})",
+                reason=f"very low significance ({sig}) + weak evidence "
+                       f"({evidence_completeness or 'low source reliability'}) - Scoring cannot compensate "
+                       f"for evidence quality",
+            )
+        if strong_compensating:
+            return EditorialTreatmentDecision(
+                BRIEF, human_review_required=True,
+                reason=f"very low significance ({sig}), evidence not weak, and a strong compensating "
+                       f"Scoring result ({scoring_score}) - kept as a flagged brief, not skipped",
             )
         return EditorialTreatmentDecision(
-            BRIEF, human_review_required=negative_rec,
-            reason=f"very low significance ({sig}), evidence not independently weak",
+            SKIP, human_review_required=False,
+            reason=f"very low significance ({sig}), evidence not weak but no strong compensating "
+                   f"Scoring result",
         )
 
     if sig <= _LOW_SIGNIFICANCE_MAX:
+        # 2026-08-15 forensic recalibration: this tier used to be an unconditional BRIEF
+        # regardless of evidence quality - three real production examples ("Подростки доверяют
+        # ИИ...", "Рост влияния китайских технологий...", "Китай комплексно продвигает...") all
+        # had REDIRECT_UNRESOLVED (weak) evidence at this significance and still survived to
+        # BRIEF. Weak evidence at low significance should usually stop a story outright.
+        if weak_evidence:
+            return EditorialTreatmentDecision(
+                SKIP, human_review_required=False,
+                reason=f"low significance ({sig}) + weak evidence ({evidence_completeness or 'low source reliability'})",
+            )
         return EditorialTreatmentDecision(
             BRIEF, human_review_required=negative_rec,
-            reason=f"low significance ({sig}) - a valid but minor story",
+            reason=f"low significance ({sig}), evidence not weak - a valid but minor story",
         )
 
     if sig <= _MEDIUM_SIGNIFICANCE_MAX:
