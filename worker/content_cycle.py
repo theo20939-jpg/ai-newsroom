@@ -257,6 +257,33 @@ def _meets_additional_album_image_bar(result: MediaRankingResult, candidate: Edi
     return band not in (ResolutionBand.TRACKING, ResolutionBand.ICON, ResolutionBand.WEAK)
 
 
+def _meets_primary_image_bar(candidate: EditorialImageCandidate) -> bool:
+    """2026-08-16 production forensic (Telegram NEWS image quality): the primary/rank-1 image
+    used to inherit only the generic `eligible_for_delivery` bar - confirmed real production
+    rank=1 candidates included 124x83 WEAK screenshots (quality=65) and a 328x328 Techmeme logo
+    (possible_logo=True, possible_branded_screenshot=True, quality=51). The strict quality bar
+    (`_meets_additional_album_image_bar()`) was only ever applied to SECOND/THIRD album slots, so
+    a weak/logo image could still become the one photo actually sent to Telegram.
+
+    Reuses the same already-calibrated `resolution_band()` (services/image_quality.py) this
+    module's own album bar already relies on - no new classifier, no arbitrary pixel constant.
+    `possible_logo` is read directly from the candidate's own persisted `warnings` (the same
+    field `_build_media_ranking_input()` already reads it from) rather than from `branding_risk`:
+    `branding_risk` is an aggregate of five separate possible_* signals, and the phase brief is
+    explicit that `possible_branded_screenshot`/`possible_tv_lower_third`/`possible_watermark`/
+    `possible_banner` must NOT become automatic primary-image failures this checkpoint (those
+    classifiers are confirmed to produce false positives on real high-resolution images, e.g. the
+    real 1600x899 Engadget candidate flagged possible_branded_screenshot + possible_tv_lower_
+    third) - only the narrower, specific `possible_logo` signal is a hard primary-image failure.
+    """
+    if candidate.width is None or candidate.height is None:
+        return False  # unknown dimensions - never assumed good enough to be the one sent photo
+    band = resolution_band(candidate.width, candidate.height)
+    if band not in (ResolutionBand.ADEQUATE, ResolutionBand.GOOD):
+        return False
+    return "possible_logo" not in (candidate.warnings or [])
+
+
 def _select_top_ranked_image_candidates(
     candidates: list[EditorialImageCandidate], *, limit: int,
 ) -> list[EditorialImageCandidate]:
@@ -268,7 +295,18 @@ def _select_top_ranked_image_candidates(
     docstring). Within-event duplicates (exact sha256 or near-identical perceptual hash) are hard-
     excluded here, not merely deprioritized - `rank_media_candidates()`'s own `is_duplicate_
     within_event` penalty only affects composite score/ordering, never eligibility, so the actual
-    "at most one survives" guarantee is enforced at this selection layer."""
+    "at most one survives" guarantee is enforced at this selection layer.
+
+    2026-08-16 production forensic: the single best-ranked candidate no longer automatically
+    becomes the primary image - it must additionally clear `_meets_primary_image_bar()`. Ranked
+    order is walked once; the first candidate clearing the primary bar becomes the primary image,
+    and every OTHER candidate (both ones ranked above it that failed the primary bar, and ones
+    ranked below it) is still evaluated for a SECOND/THIRD album slot via the pre-existing,
+    unchanged `_meets_additional_album_image_bar()` - relative rank order is preserved throughout
+    (deterministic, never reshuffled). If no candidate clears the primary bar at all, this
+    returns `[]` - the caller (worker/content_cycle.py's own router branch) already degrades to
+    its existing text-only send in that case; a known-bad image is never sent merely to avoid a
+    text-only post."""
     if not candidates:
         return []
     duplicate_flags = _compute_within_event_duplicate_flags(candidates)
@@ -285,8 +323,19 @@ def _select_top_ranked_image_candidates(
     if not eligible:
         return []
 
-    selected = [eligible[0][1]]  # the single best candidate keeps today's existing, unchanged bar
-    for result, candidate in eligible[1:]:
+    primary: EditorialImageCandidate | None = None
+    album_candidates: list[tuple[MediaRankingResult, EditorialImageCandidate]] = []
+    for result, candidate in eligible:
+        if primary is None and _meets_primary_image_bar(candidate):
+            primary = candidate
+        else:
+            album_candidates.append((result, candidate))
+
+    if primary is None:
+        return []
+
+    selected = [primary]
+    for result, candidate in album_candidates:
         if len(selected) >= limit:
             break
         if _meets_additional_album_image_bar(result, candidate):
