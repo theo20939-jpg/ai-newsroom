@@ -261,6 +261,17 @@ class Settings(BaseSettings):
     # this is a mechanism change (settings vs. hardcoded), not a recalibration.
     story_match_lookback_days: int = Field(default=14, gt=0)
 
+    # TELEGRAPH Checkpoint 1 (deterministic topic-candidate formation, services/
+    # telegraph_topic_candidates.py) - dormant until a caller invokes build_telegraph_topic_
+    # candidates(); no scheduler, worker, or bot command reaches this module yet. TELEGRAPH
+    # articles can legitimately be based on a Story older than a normal NEWS post (a still-current
+    # topic worth explaining in depth), so this is a deliberately separate, larger window from
+    # content_generation_freshness_cutoff_hours/news_analysis_freshness_cutoff_hours above - never
+    # reused from either. Reasoned starting default (3 days - long enough for a developing story to
+    # accumulate real depth, short enough to stay "current"), not fit to any real data yet, matching
+    # this codebase's own established "reasoned default, refine later" convention.
+    telegraph_candidate_recency_hours: float = Field(default=72.0, gt=0)
+
     # Phase 19 M7 (docs/phase19 plan, Correction 1): a real, previously-undisclosed shadow-mode
     # gap was found in the block above's own downstream consumer (worker/content_cycle.py) - it
     # unconditionally computed and applied a Telegram reply_to_message_id, and could skip a send
