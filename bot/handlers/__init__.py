@@ -8,6 +8,7 @@ from bot.handlers.news import router as news_router
 from bot.handlers.settings import router as settings_router
 from bot.handlers.start import router as start_router
 from bot.handlers.status import router as status_router
+from bot.handlers.telegraph_shortlist import router as telegraph_shortlist_router
 from bot.handlers.whereami import router as whereami_router
 
 router = Router(name="root")
@@ -20,6 +21,10 @@ router.include_router(image_preview_router)
 # Phase 18 M8: inert until something actually sends a "memeprev:" message - no production code
 # path calls services/meme_preview_notifier.py yet (meme_telegram_preview_mode defaults "off").
 router.include_router(meme_preview_router)
+# TELEGRAPH Checkpoint 2: inert until something actually creates+sends a shortlist batch - no
+# scheduler/worker/bot-command calls services/telegraph_shortlist_service.py::
+# create_telegraph_shortlist() or services/telegraph_shortlist_notifier.py yet.
+router.include_router(telegraph_shortlist_router)
 # Phase 23.0: temporary diagnostic command (bot/handlers/whereami.py's own docstring has the full
 # safety scope) - reports chat_id/is_forum/message_thread_id only, no other effect.
 router.include_router(whereami_router)

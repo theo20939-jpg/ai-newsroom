@@ -272,6 +272,31 @@ class Settings(BaseSettings):
     # this codebase's own established "reasoned default, refine later" convention.
     telegraph_candidate_recency_hours: float = Field(default=72.0, gt=0)
 
+    # TELEGRAPH Checkpoint 2 (durable shortlist + human approval, services/telegraph_shortlist_
+    # service.py::get_recently_proposed_story_ids()) - dormant until a caller invokes
+    # create_telegraph_shortlist(); no scheduler/worker reaches this yet. Deliberately its own
+    # setting, never reused from story_match_lookback_days (a Story-MATCHING window, an unrelated
+    # concern) or telegraph_candidate_recency_hours above (candidate FRESHNESS, not reproposal
+    # SPACING). Reasoned starting default (24h - one full day, so a Story is never re-proposed
+    # twice within the same day across multiple future shortlist windows, but can be reconsidered
+    # the next day if still developing), not fit to any real data yet.
+    telegraph_reproposal_cooldown_hours: float = Field(default=24.0, gt=0)
+
+    # TELEGRAPH Checkpoint 2 security correction: the explicit, minimal per-user approver
+    # boundary for the shortlist callback (bot/handlers/telegraph_shortlist.py). A forensic
+    # sweep of this codebase found no existing reusable admin/owner/operator allowlist or
+    # authorization middleware anywhere (grepped for admin_user/owner_id/operator_id/allowlist/
+    # is_admin - the only precedent is `enabled_providers` above, a provider-id allowlist, not a
+    # person allowlist) - this is a new, narrowly-scoped setting, not a reuse of an existing one.
+    # Mirrors `enabled_providers`'s own list-of-primitives shape/JSON-array env parsing exactly
+    # (`TELEGRAPH_APPROVER_USER_IDS=[123456789]`). Deliberately FAIL CLOSED: the empty default
+    # means NO Telegram user id is authorized to approve/reject - never "every member of
+    # newsroom_telegram_chat_id", which was the exact gap this setting closes (chat membership
+    # alone is necessary but no longer sufficient once APPROVED will gate paid Deep Research/
+    # article generation). Populating this list is a deliberate, separate operator action (adding
+    # real Telegram numeric user ids to `.env`), not made as part of this checkpoint.
+    telegraph_approver_user_ids: list[int] = Field(default_factory=list)
+
     # Phase 19 M7 (docs/phase19 plan, Correction 1): a real, previously-undisclosed shadow-mode
     # gap was found in the block above's own downstream consumer (worker/content_cycle.py) - it
     # unconditionally computed and applied a Telegram reply_to_message_id, and could skip a send
