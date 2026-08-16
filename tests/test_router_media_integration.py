@@ -1917,3 +1917,284 @@ async def test_video_lookup_is_never_called_when_rich_media_mode_is_off(
     mock_get_video.assert_not_called()
     fake_bot.send_media_group.assert_called_once()
     assert result.notified == 1
+
+
+# ---------------------------------------------------------------------------
+# Delivery-gap fix (2026-08-16 production forensic): a real router-mode photo send timed out
+# (~60s) - services.telegram_routing.send_photo_to_editorial_destination() caught the
+# TelegramAPIError and returned sent=False, but worker/content_cycle.py only counted
+# notification_failed and moved on, dropping a fully generated, treatment-approved post
+# entirely. It now attempts exactly one plain-text fallback via the existing
+# send_to_editorial_destination() (same html/keyboard/destination/reply_to_message_id) whenever
+# send_photo_to_editorial_destination()/send_media_group_to_editorial_destination() returns
+# sent=False. Residual, disclosed, NOT fixed here: a Telegram timeout can occur after Telegram
+# already accepted the photo/media-group but before this process saw the response, so this
+# one-shot fallback can theoretically produce a real photo+text duplicate in that ambiguous
+# case - see the matching comment in worker/content_cycle.py. No idempotency redesign, no
+# retries, no sleeps are introduced.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_photo_succeeds_no_text_fallback_attempted(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Requirement 1: the unmodified success path - no fallback call, notified once,
+    router_image_sent increments, the new router_text_fallback_sent counter stays 0."""
+    _common_settings(monkeypatch)
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v6_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_photo.return_value.message_id = 111
+
+    with (
+        patch(
+            "worker.content_cycle._classify_event_for_router_treatment",
+            new=AsyncMock(return_value=_standard_decision()),
+        ),
+        patch(
+            "worker.content_cycle.get_editorial_image_candidates",
+            new=AsyncMock(return_value=[_fake_candidate()]),
+        ),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    fake_bot.send_photo.assert_called_once()
+    fake_bot.send_message.assert_not_called()
+    assert result.notified == 1
+    assert result.notification_failed == 0
+    assert result.router_image_sent == 1
+    assert result.router_text_fallback_sent == 0
+
+
+@pytest.mark.asyncio
+async def test_photo_timeout_triggers_exactly_one_text_fallback_attempt(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Requirements 2 and 3: send_photo raising TelegramAPIError (the real production timeout
+    shape) triggers exactly one send_message fallback attempt, which succeeds - notified once,
+    notification_failed stays 0, router_image_sent stays 0 (the shape actually delivered was
+    text, not photo), and the delivered message_id is the fallback's own."""
+    from aiogram.exceptions import TelegramAPIError
+
+    _common_settings(monkeypatch)
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v6_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_photo.side_effect = TelegramAPIError(method=None, message="Request timeout error")  # type: ignore[arg-type]
+    fake_bot.send_message.return_value.message_id = 222
+
+    with (
+        patch(
+            "worker.content_cycle._classify_event_for_router_treatment",
+            new=AsyncMock(return_value=_standard_decision()),
+        ),
+        patch(
+            "worker.content_cycle.get_editorial_image_candidates",
+            new=AsyncMock(return_value=[_fake_candidate()]),
+        ),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    fake_bot.send_photo.assert_called_once()
+    fake_bot.send_message.assert_called_once()
+    assert result.notified == 1
+    assert result.notification_failed == 0
+    assert result.router_image_sent == 0
+    assert result.router_text_fallback_sent == 1
+
+
+@pytest.mark.asyncio
+async def test_photo_timeout_and_text_fallback_both_fail_counts_one_notification_failure(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Requirement 4: when the fallback also fails, notification_failed increments exactly
+    once - never retried, never double-counted."""
+    from aiogram.exceptions import TelegramAPIError
+
+    _common_settings(monkeypatch)
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v6_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_photo.side_effect = TelegramAPIError(method=None, message="Request timeout error")  # type: ignore[arg-type]
+    fake_bot.send_message.side_effect = TelegramAPIError(method=None, message="Request timeout error")  # type: ignore[arg-type]
+
+    with (
+        patch(
+            "worker.content_cycle._classify_event_for_router_treatment",
+            new=AsyncMock(return_value=_standard_decision()),
+        ),
+        patch(
+            "worker.content_cycle.get_editorial_image_candidates",
+            new=AsyncMock(return_value=[_fake_candidate()]),
+        ),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    fake_bot.send_photo.assert_called_once()
+    fake_bot.send_message.assert_called_once()  # exactly one fallback attempt, never retried
+    assert result.notified == 0
+    assert result.notification_failed == 1
+    assert result.router_image_sent == 0
+    assert result.router_text_fallback_sent == 0
+
+
+@pytest.mark.asyncio
+async def test_media_group_timeout_triggers_text_fallback_router_media_group_sent_stays_zero(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Requirement 5: the media-group analogue - send_media_group raising TelegramAPIError
+    triggers the same one-shot text fallback, which succeeds; router_media_group_sent stays 0
+    (a media group was never actually delivered), router_text_fallback_sent counts it instead."""
+    from aiogram.exceptions import TelegramAPIError
+
+    _common_settings(monkeypatch)
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v82_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_media_group.side_effect = TelegramAPIError(method=None, message="Request timeout error")  # type: ignore[arg-type]
+    fake_bot.send_message.return_value.message_id = 333
+    candidates = [
+        _fake_candidate(candidate_id="a", rank=1, quality_score=90, relevance_score=90),
+        _fake_candidate(candidate_id="b", rank=2, quality_score=85, relevance_score=85),
+        _fake_candidate(candidate_id="c", rank=3, quality_score=80, relevance_score=80),
+    ]
+
+    with (
+        patch(
+            "worker.content_cycle._classify_event_for_router_treatment",
+            new=AsyncMock(return_value=_standard_decision()),
+        ),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=candidates)),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    fake_bot.send_media_group.assert_called_once()
+    fake_bot.send_message.assert_called_once()
+    fake_bot.send_photo.assert_not_called()
+    assert result.notified == 1
+    assert result.notification_failed == 0
+    assert result.router_media_group_sent == 0
+    assert result.router_text_fallback_sent == 1
+
+
+@pytest.mark.asyncio
+async def test_media_group_succeeds_no_text_fallback_attempted(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Requirement 6: the unmodified media-group success path - no fallback call."""
+    _common_settings(monkeypatch)
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v82_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_media_group.return_value = _fake_media_messages(3)
+    candidates = [
+        _fake_candidate(candidate_id="a", rank=1, quality_score=90, relevance_score=90),
+        _fake_candidate(candidate_id="b", rank=2, quality_score=85, relevance_score=85),
+        _fake_candidate(candidate_id="c", rank=3, quality_score=80, relevance_score=80),
+    ]
+
+    with (
+        patch(
+            "worker.content_cycle._classify_event_for_router_treatment",
+            new=AsyncMock(return_value=_standard_decision()),
+        ),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=candidates)),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    fake_bot.send_media_group.assert_called_once()
+    fake_bot.send_message.assert_not_called()
+    assert result.notified == 1
+    assert result.router_media_group_sent == 1
+    assert result.router_text_fallback_sent == 0
+
+
+@pytest.mark.asyncio
+async def test_dry_run_never_attempts_a_real_send_or_a_fallback(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Requirement 7: dry-run must stay exactly as side-effect-free as before this fix.
+    send_photo_to_editorial_destination()/send_media_group_to_editorial_destination() both
+    short-circuit to sent=False, reason="dry_run" without ever calling the real bot method
+    (services/telegram_routing.py's own established contract) - the new fallback guard
+    (`not effective_dry_run`) must never treat that dry-run sent=False as a real failure worth
+    a second, equally-fake send attempt."""
+    settings.editorial_delivery_mode = "router"
+    monkeypatch.setattr(settings, "newsroom_telegram_chat_id", _REAL_CHAT_ID)
+    monkeypatch.setattr(settings, "news_topic_id", _REAL_NEWS_TOPIC_ID)
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "6")
+    monkeypatch.setattr(settings, "content_generation_dry_run", True)
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v6_capability_registry()
+    fake_bot = AsyncMock()
+
+    with (
+        patch(
+            "worker.content_cycle._classify_event_for_router_treatment",
+            new=AsyncMock(return_value=_standard_decision()),
+        ),
+        patch(
+            "worker.content_cycle.get_editorial_image_candidates",
+            new=AsyncMock(return_value=[_fake_candidate()]),
+        ),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    fake_bot.send_photo.assert_not_called()
+    fake_bot.send_message.assert_not_called()
+    fake_bot.send_media_group.assert_not_called()
+    assert result.dry_run_rendered == 1
+    assert result.notified == 0
+    assert result.notification_failed == 0
+    assert result.router_image_sent == 0
+    assert result.router_text_fallback_sent == 0
+
+
+@pytest.mark.asyncio
+async def test_fallback_reuses_the_exact_same_keyboard_and_reply_to_message_id(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Requirement 9: the fallback call is the exact same send_to_editorial_destination() call
+    every other plain-text NEWS send already uses, given the exact same `keyboard`/
+    `reply_to_message_id` local variables the failed photo attempt itself received - proven here
+    by object-identity on the keyboard (built exactly once per draft, never rebuilt for the
+    fallback) and value-equality on reply_to_message_id, compared directly against what the
+    failed send_photo call itself was actually invoked with (AsyncMock records call args before
+    a side_effect exception is raised, so this is the real value passed, not a re-derived one)."""
+    from aiogram.exceptions import TelegramAPIError
+
+    _common_settings(monkeypatch)
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v6_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_photo.side_effect = TelegramAPIError(method=None, message="Request timeout error")  # type: ignore[arg-type]
+    fake_bot.send_message.return_value.message_id = 444
+
+    with (
+        patch(
+            "worker.content_cycle._classify_event_for_router_treatment",
+            new=AsyncMock(return_value=_standard_decision()),
+        ),
+        patch(
+            "worker.content_cycle.get_editorial_image_candidates",
+            new=AsyncMock(return_value=[_fake_candidate()]),
+        ),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    assert result.router_text_fallback_sent == 1
+    photo_kwargs = fake_bot.send_photo.call_args.kwargs
+    text_kwargs = fake_bot.send_message.call_args.kwargs
+    assert text_kwargs["reply_markup"] is photo_kwargs["reply_markup"]  # exact same keyboard object
+    assert text_kwargs["reply_to_message_id"] == photo_kwargs["reply_to_message_id"]
+    assert text_kwargs["message_thread_id"] == photo_kwargs["message_thread_id"]

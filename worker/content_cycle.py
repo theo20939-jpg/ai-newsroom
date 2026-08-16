@@ -353,6 +353,15 @@ class ContentCycleResult:
     # `router_image_sent` - counts a router-mode NEWS send delivered as a real Telegram media
     # group (2-3 images, send_media_group), as opposed to a single photo or plain text.
     router_media_group_sent: int = 0
+    # Delivery-gap fix (2026-08-16 production forensic - a completed draft's photo send timed
+    # out and the whole post was silently dropped, notification_failed only): a strict subset of
+    # `notified`, disjoint from router_image_sent/router_media_group_sent - counts a router-mode
+    # NEWS send that only succeeded because the photo/media-group attempt returned sent=False and
+    # the single plain-text fallback (send_to_editorial_destination(), same html/keyboard/
+    # destination/reply_to_message_id) then succeeded. Mirrors router_image_sent/router_media_
+    # group_sent's own established "strict subset of notified, named after the shape actually
+    # delivered" counting convention.
+    router_text_fallback_sent: int = 0
     # Phase 23.1I Part B: counts an event whose standalone NEWS delivery was blocked by
     # services/story_duplicate_guard.py because its Story already has a delivered root post and
     # this event's own Story Memory match_type is SEMANTIC_DUPLICATE/SUPPORTING_SOURCE. Always 0
@@ -968,13 +977,46 @@ async def run_content_cycle(
                         bot, EditorialDestination.NEWS, html, dry_run=effective_dry_run, reply_markup=keyboard,
                         reply_to_message_id=reply_to_message_id,
                     )
+
+                # Delivery-gap fix (2026-08-16 production forensic): a real photo/media-group
+                # send timing out (or any other live TelegramAPIError) previously dropped a fully
+                # generated, treatment-approved post entirely - only notification_failed
+                # incremented, no post ever reached NEWS. `not effective_dry_run` guards this so
+                # dry-run stays exactly as side-effect-free as before (a dry-run outcome is always
+                # sent=False by construction, but must never trigger a second fake send here).
+                # `send_as_media_group or send_as_photo` scopes the fallback to exactly the two
+                # media-carrying paths named in the brief - the `else` branch above already IS
+                # the plain-text path (including the existing caption-too-long-degrades-to-text
+                # case, upstream of this block), so it never re-enters its own fallback.
+                #
+                # Residual, disclosed limitation (not fixed, not in scope this checkpoint): a
+                # Telegram network timeout can occur after Telegram has already accepted the
+                # photo/media-group but before this process received the response (exactly the
+                # real production case that motivated this fix) - RoutingOutcome.sent=False is
+                # this codebase's only signal and cannot distinguish "never reached Telegram"
+                # from "Telegram accepted it, response was lost." In that ambiguous case, this
+                # one-shot text fallback can produce a real photo+text duplicate for the same
+                # story. No idempotency/dedup redesign is introduced here - the fallback is
+                # capped at exactly one plain-text attempt, and the original media send itself is
+                # never retried, so the worst case stays bounded (at most one extra message),
+                # never an unbounded retry loop.
+                used_text_fallback = False
+                if not effective_dry_run and not routing_outcome.sent and (send_as_media_group or send_as_photo):
+                    routing_outcome = await send_to_editorial_destination(
+                        bot, EditorialDestination.NEWS, html, dry_run=effective_dry_run, reply_markup=keyboard,
+                        reply_to_message_id=reply_to_message_id,
+                    )
+                    used_text_fallback = True
+
                 if effective_dry_run:
                     result.dry_run_rendered += 1  # expected outcome in dry-run mode, not a failure
                 elif routing_outcome.sent:
                     result.notified += 1
                     sent_message_id = routing_outcome.message_id
                     sent_chat_id = routing_outcome.chat_id
-                    if send_as_media_group:
+                    if used_text_fallback:
+                        result.router_text_fallback_sent += 1
+                    elif send_as_media_group:
                         result.router_media_group_sent += 1
                     elif send_as_photo:
                         result.router_image_sent += 1

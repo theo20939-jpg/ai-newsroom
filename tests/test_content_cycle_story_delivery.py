@@ -769,3 +769,179 @@ async def test_router_mode_multi_image_update_preserves_reply_to_message_id(
         assert delivery is not None
         assert delivery.reply_to_message_id == 999
         assert delivery.telegram_message_id == 1001
+
+
+# ---------------------------------------------------------------------------
+# Delivery-gap fix (2026-08-16 production forensic): a real router-mode photo send timing out
+# previously dropped a fully generated, treatment-approved post entirely (notification_failed
+# only, nothing ever reached NEWS). worker/content_cycle.py now attempts exactly one plain-text
+# fallback via the existing send_to_editorial_destination() when send_photo_to_editorial_
+# destination()/send_media_group_to_editorial_destination() returns sent=False. This is the
+# router-mode analogue of test_router_mode_story_update_with_existing_root_replies_to_it above -
+# same real story/root-delivery setup, but the photo send is made to fail so the fallback's own
+# message_id is what actually reaches services/story_telegram_delivery.py::record_delivery().
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_router_mode_photo_timeout_fallback_persists_the_fallback_message_id(
+    factory: async_sessionmaker[AsyncSession], test_source, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reproduces the real production gap directly: send_photo raises TelegramAPIError (the real
+    ~60s timeout shape), the plain-text fallback then succeeds, and the ONE delivery row this
+    draft ever gets must carry the fallback's message_id - not be missing, and not be a second,
+    duplicate row alongside a phantom photo delivery."""
+    from aiogram.exceptions import TelegramAPIError
+
+    _router_settings(monkeypatch)
+    monkeypatch.setattr(settings, "story_memory_mode", "shadow")
+    monkeypatch.setattr(settings, "telegram_story_reply_mode", "enforce")
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
+    from database.models.story_link import NewsEventStoryLink
+    from services.story_memory import STORY_UPDATE
+    from tests.test_router_media_integration import _fake_candidate, _v82_capability_registry
+
+    async with factory() as probe_session:
+        if not await _table_exists(probe_session, "content_draft_reply_routing_proposals"):
+            pytest.skip(_MIGRATION_SKIP_REASON)
+
+    story, event = await _make_story_linked_draft(factory, test_source, is_story_update=True)
+    async with factory() as session:
+        session.add(
+            NewsEventStoryLink(news_event_id=event.id, story_id=story.id, match_type=STORY_UPDATE, match_score=0.7)
+        )
+        root_event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
+        root_task = EditorialTask(
+            id=uuid4(), event_id=root_event.id, status=TaskStatus.COMPLETED, priority=TaskPriority.B,
+            workflow={"workflow_name": "CONTENT_GENERATION", "step_results": []},
+        )
+        session.add(root_task)
+        await session.flush()
+        root_draft = ContentDraft(
+            id=uuid4(), task_id=root_task.id, type=ContentType.POST, title="root", body="root body",
+            version=1, status="draft",
+        )
+        session.add(root_draft)
+        await session.flush()
+        session.add(
+            StoryTelegramDelivery(
+                id=uuid4(), story_id=story.id, content_draft_id=root_draft.id, telegram_chat_id=_REAL_CHAT_ID,
+                telegram_message_id=999, reply_to_message_id=None, delivery_type=DeliveryType.ROOT,
+                delivery_status=DeliveryStatus.SENT, idempotency_key=f"root-{uuid4()}",
+                sent_at=datetime.now(timezone.utc),
+            )
+        )
+        await session.commit()
+
+    _gateway, registry = _v82_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_photo.side_effect = TelegramAPIError(method=None, message="Request timeout error")  # type: ignore[arg-type]
+    fake_bot.send_message.return_value.message_id = 1001
+
+    with patch(
+        "worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate()]),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    fake_bot.send_photo.assert_called_once()  # the real, failing attempt - never retried
+    fake_bot.send_message.assert_called_once()  # exactly one text fallback attempt
+    assert fake_bot.send_message.call_args.kwargs["reply_to_message_id"] == 999
+    assert result.notified == 1
+    assert result.notification_failed == 0
+    assert result.router_image_sent == 0
+    assert result.router_text_fallback_sent == 1
+
+    async with factory() as session:
+        deliveries = (
+            await session.execute(
+                select(StoryTelegramDelivery).where(
+                    StoryTelegramDelivery.story_id == story.id,
+                    StoryTelegramDelivery.delivery_type == DeliveryType.REPLY,
+                )
+            )
+        ).scalars().all()
+        # Exactly one delivery row for this draft - never a duplicate, and it must carry the
+        # fallback's own message_id, never the (never-persisted) failed photo attempt's.
+        assert len(deliveries) == 1
+        assert deliveries[0].reply_to_message_id == 999
+        assert deliveries[0].telegram_message_id == 1001
+
+
+@pytest.mark.asyncio
+async def test_router_mode_photo_and_fallback_both_fail_records_no_delivery(
+    factory: async_sessionmaker[AsyncSession], test_source, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When the text fallback also fails, notification_failed increments exactly once and no
+    delivery row is ever written - a failed send has nothing to record, exactly like the
+    pre-existing "notification failed, nothing recorded" contract for every other delivery mode."""
+    from aiogram.exceptions import TelegramAPIError
+
+    _router_settings(monkeypatch)
+    monkeypatch.setattr(settings, "story_memory_mode", "shadow")
+    monkeypatch.setattr(settings, "telegram_story_reply_mode", "enforce")
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
+    from database.models.story_link import NewsEventStoryLink
+    from services.story_memory import STORY_UPDATE
+    from tests.test_router_media_integration import _fake_candidate, _v82_capability_registry
+
+    async with factory() as probe_session:
+        if not await _table_exists(probe_session, "content_draft_reply_routing_proposals"):
+            pytest.skip(_MIGRATION_SKIP_REASON)
+
+    story, event = await _make_story_linked_draft(factory, test_source, is_story_update=True)
+    async with factory() as session:
+        session.add(
+            NewsEventStoryLink(news_event_id=event.id, story_id=story.id, match_type=STORY_UPDATE, match_score=0.7)
+        )
+        root_event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
+        root_task = EditorialTask(
+            id=uuid4(), event_id=root_event.id, status=TaskStatus.COMPLETED, priority=TaskPriority.B,
+            workflow={"workflow_name": "CONTENT_GENERATION", "step_results": []},
+        )
+        session.add(root_task)
+        await session.flush()
+        root_draft = ContentDraft(
+            id=uuid4(), task_id=root_task.id, type=ContentType.POST, title="root", body="root body",
+            version=1, status="draft",
+        )
+        session.add(root_draft)
+        await session.flush()
+        session.add(
+            StoryTelegramDelivery(
+                id=uuid4(), story_id=story.id, content_draft_id=root_draft.id, telegram_chat_id=_REAL_CHAT_ID,
+                telegram_message_id=999, reply_to_message_id=None, delivery_type=DeliveryType.ROOT,
+                delivery_status=DeliveryStatus.SENT, idempotency_key=f"root-{uuid4()}",
+                sent_at=datetime.now(timezone.utc),
+            )
+        )
+        await session.commit()
+
+    _gateway, registry = _v82_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_photo.side_effect = TelegramAPIError(method=None, message="Request timeout error")  # type: ignore[arg-type]
+    fake_bot.send_message.side_effect = TelegramAPIError(method=None, message="Request timeout error")  # type: ignore[arg-type]
+
+    with patch(
+        "worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate()]),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    fake_bot.send_photo.assert_called_once()
+    fake_bot.send_message.assert_called_once()  # exactly one fallback attempt, never retried again
+    assert result.notified == 0
+    assert result.notification_failed == 1
+    assert result.router_image_sent == 0
+    assert result.router_text_fallback_sent == 0
+
+    async with factory() as session:
+        deliveries = (
+            await session.execute(
+                select(StoryTelegramDelivery).where(
+                    StoryTelegramDelivery.story_id == story.id,
+                    StoryTelegramDelivery.delivery_type == DeliveryType.REPLY,
+                )
+            )
+        ).scalars().all()
+        assert deliveries == []
