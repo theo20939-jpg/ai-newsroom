@@ -185,6 +185,27 @@ async def test_7_proposal_stores_compact_score_and_rationale_snapshot(db_session
 
 
 @pytest.mark.asyncio
+async def test_proposal_saves_editorial_channel(db_session: AsyncSession) -> None:
+    """TELEGRAPH editorial channel split, required test 4 ("proposal saves channel"):
+    create_telegraph_shortlist() classifies and persists a real EditorialChannel value on every
+    proposal it creates - never left at some implicit/unset state."""
+    from schemas.editorial import EditorialChannel
+
+    await _require_shortlist_tables(db_session)
+    await _seed_story_with_events(db_session, title="Как использовать новую функцию Claude")
+    now = datetime.now(timezone.utc)
+    result = await create_telegraph_shortlist(db_session, limit=5, now=now, recency_cutoff_hours=72.0)
+
+    proposal = result.proposals[0]
+    assert isinstance(proposal.editorial_channel, EditorialChannel)
+    assert proposal.editorial_channel == EditorialChannel.NINJA_AI
+    # The channel rationale is appended to rationale_snapshot, per the task's own explicit
+    # "в rationale добавить: почему выбран канал" requirement.
+    assert "Канал:" in proposal.rationale_snapshot
+    assert "NINJA_AI" in proposal.rationale_snapshot
+
+
+@pytest.mark.asyncio
 async def test_8_no_full_news_content_copied_into_proposal(db_session: AsyncSession) -> None:
     await _require_shortlist_tables(db_session)
     await _seed_story_with_events(db_session, title="No leakage story")

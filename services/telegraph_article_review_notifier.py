@@ -18,18 +18,22 @@ from aiogram.exceptions import TelegramAPIError
 from bot.keyboards.telegraph_article_review import build_article_review_keyboard
 from bot.telegraph_article_review_formatting import render_article_review_text
 from database.models.telegraph_article_review import TelegraphArticleReview
+from schemas.editorial import EditorialChannel
 from schemas.editorial_route import EditorialDestination
 from services.telegram_routing import RoutingOutcome, send_to_editorial_destination
 
 
 async def send_article_review(
-    bot: Bot, review: TelegraphArticleReview, article_result: dict, *, dry_run: bool = True,
+    bot: Bot, review: TelegraphArticleReview, article_result: dict, editorial_channel: EditorialChannel,
+    *, dry_run: bool = True,
 ) -> RoutingOutcome:
     """Sends the article-review preview as ONE message to the TELEGRAPH editorial destination.
     The caller is responsible for persisting `RoutingOutcome.chat_id`/`message_id` onto the
     owning `TelegraphArticleReview` via `TelegraphArticleReviewService.record_telegram_delivery()`
-    once `sent` is True."""
-    text = render_article_review_text(review, article_result)
+    once `sent` is True. `editorial_channel` is fetched by the caller from the owning
+    `TelegraphTopicProposal` - this module stays DB-free, matching its own established
+    convention."""
+    text = render_article_review_text(review, article_result, editorial_channel)
     keyboard = build_article_review_keyboard(review)
     return await send_to_editorial_destination(
         bot, EditorialDestination.TELEGRAPH, text, dry_run=dry_run, reply_markup=keyboard,
@@ -38,11 +42,12 @@ async def send_article_review(
 
 async def update_article_review_message(
     bot: Bot, *, chat_id: int, message_id: int, review: TelegraphArticleReview, article_result: dict,
+    editorial_channel: EditorialChannel,
 ) -> bool:
     """Edits the ALREADY-SENT review message in place after a decision - never sends a new
     message. Returns `True` on success, `False` on a live `TelegramAPIError` (never raises - the
     decision itself is already durably recorded regardless of whether the re-render succeeds)."""
-    text = render_article_review_text(review, article_result)
+    text = render_article_review_text(review, article_result, editorial_channel)
     keyboard = build_article_review_keyboard(review)
     try:
         await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=keyboard)

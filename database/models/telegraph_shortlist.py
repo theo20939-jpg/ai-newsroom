@@ -40,6 +40,17 @@ its JSON for a proposal id would be exactly the "fragile free-text matching" rec
 depend on. `NULL` until claimed; never cleared afterward, even if the linked task later FAILs -
 that task row remains the durable, inspectable record of what was attempted (see services/
 telegraph_research_processor.py's own docstring for the full failure/retry semantics).
+
+`editorial_channel` (TELEGRAPH editorial channel split addition): which of `schemas.editorial.
+EditorialChannel`'s two directions (NINJA_AI/NINJA_PULSE) this proposal's Story was classified
+into by `services/editorial_channel_classifier.py::classify_editorial_channel()` - set once, at
+proposal-creation time, by `services/telegraph_shortlist_service.py::create_telegraph_shortlist()`,
+BEFORE the row is ever persisted (never mutated afterward - this is a classification snapshot at
+proposal time, the same "snapshot, not live-recomputed" discipline `signals_snapshot`/
+`topic_title` already follow). NOT NULL with a `server_default` of `'ninja_pulse'` (the same
+"NINJA_PULSE wins on a close call" tie-break the classifier itself uses - see that module's own
+docstring) - mirrors `status`'s own NOT-NULL-plus-server_default pattern exactly, so this column
+never needs backfilling even in principle.
 """
 import enum
 import uuid
@@ -61,6 +72,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database.base import Base
+from schemas.editorial import EditorialChannel
 
 
 class TelegraphProposalStatus(str, enum.Enum):
@@ -154,6 +166,14 @@ class TelegraphTopicProposal(Base):
     # TELEGRAPH Checkpoint 3 - see module docstring. NULL until claimed.
     research_task_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("editorial_tasks.id"), nullable=True, index=True
+    )
+    # Editorial channel split - see module docstring. Set once, at creation time, never mutated.
+    editorial_channel: Mapped[EditorialChannel] = mapped_column(
+        Enum(
+            EditorialChannel, name="editorial_channel",
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        nullable=False, server_default=EditorialChannel.NINJA_PULSE.value, index=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

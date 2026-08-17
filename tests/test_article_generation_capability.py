@@ -60,14 +60,17 @@ def _prompt_repository() -> FakePromptRepository:
     repository = FakePromptRepository()
     repository.register(
         RenderedPrompt(
-            name=CAPABILITY_NAME, version="1", system="You are a fake article writer.",
+            name=CAPABILITY_NAME, version="2", system="You are a fake article writer.",
             rules=["Do not invent facts."], output_schema=_OUTPUT_SCHEMA,
         )
     )
     return repository
 
 
-def _context(*, content: str | None = "raw NewsEvent content that must never be read") -> CapabilityContext:
+def _context(
+    *, content: str | None = "raw NewsEvent content that must never be read",
+    editorial_channel: str | None = None,
+) -> CapabilityContext:
     return CapabilityContext(
         business=BusinessContext(
             news_event=NewsEventSnapshot(
@@ -79,6 +82,7 @@ def _context(*, content: str | None = "raw NewsEvent content that must never be 
             ),
             telegraph_deep_research_output=_RESEARCH_OUTPUT,
             telegraph_visual_bundle_summary="1 hero image(s) selected.",
+            telegraph_editorial_channel=editorial_channel,
         ),
         runtime=RuntimeContext(
             task_id=uuid4(), event_id=uuid4(), capability_name=CAPABILITY_NAME,
@@ -147,3 +151,34 @@ async def test_truncated_response_raises_retryable_error() -> None:
 
 def test_capability_definition_expected_output_keys_match_schema_required() -> None:
     assert set(ARTICLE_GENERATION_CAPABILITY_DEFINITION.expected_output_keys) == set(_OUTPUT_SCHEMA["required"])
+
+
+@pytest.mark.asyncio
+async def test_editorial_channel_is_threaded_into_the_request_text() -> None:
+    """Required test 6 ("prompt selection works"): the same capability/prompt is used for both
+    channels - only the CONTEXT text's own "Editorial channel: ..." line changes, never a
+    different prompt name/schema."""
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None, structured_output=_VALID_OUTPUT, finish_reason="stop", model_used="fake-model-v1",
+            usage=CapabilityUsage(input_tokens=100, output_tokens=200),
+        )
+    )
+    capability = ArticleGenerationCapability(gateway, _prompt_repository())
+    await capability.execute(_context(editorial_channel="ninja_ai"))
+    sent_text = gateway.received_requests[0].messages[-1].content[0].text
+    assert "Editorial channel: ninja_ai" in sent_text
+
+
+@pytest.mark.asyncio
+async def test_unspecified_editorial_channel_never_silently_guessed() -> None:
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None, structured_output=_VALID_OUTPUT, finish_reason="stop", model_used="fake-model-v1",
+            usage=CapabilityUsage(input_tokens=100, output_tokens=200),
+        )
+    )
+    capability = ArticleGenerationCapability(gateway, _prompt_repository())
+    await capability.execute(_context(editorial_channel=None))
+    sent_text = gateway.received_requests[0].messages[-1].content[0].text
+    assert "Editorial channel: (unspecified)" in sent_text

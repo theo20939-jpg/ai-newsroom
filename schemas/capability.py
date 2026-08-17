@@ -128,6 +128,14 @@ class BusinessContext(BaseModel):
     # article text; this field exists so the model at least knows visual coverage exists, not so
     # it writes about the images.
     telegraph_visual_bundle_summary: str | None = None
+    # TELEGRAPH editorial channel split (capabilities/article_generation_capability.py): the
+    # proposal's own `schemas.editorial.EditorialChannel` value ("ninja_ai"/"ninja_pulse"),
+    # classified once at shortlist-creation time (services/editorial_channel_classifier.py) and
+    # threaded in read-only by capabilities/executor.py for the "generate_article" step only -
+    # never re-classified here, never influences any other step/workflow. A plain `str` (the
+    # enum's own `.value`), not the enum type itself, matching every other TELEGRAPH field on
+    # this schema's own "no ORM/domain object crosses into a Capability" convention.
+    telegraph_editorial_channel: str | None = None
 
 
 class RuntimeContext(BaseModel):

@@ -17,6 +17,7 @@ from bot.telegraph_article_review_formatting import (
     SAFE_LIMIT,
     render_article_review_text,
 )
+from schemas.editorial import EditorialChannel
 
 _ARTICLE = {
     "headline": "Product Y Launch",
@@ -37,41 +38,55 @@ def _review(*, status: TelegraphArticleReviewStatus = TelegraphArticleReviewStat
 
 
 def test_renders_headline_and_lead() -> None:
-    text = render_article_review_text(_review(), _ARTICLE)
+    text = render_article_review_text(_review(), _ARTICLE, EditorialChannel.NINJA_AI)
     assert _ARTICLE["headline"] in text
     assert _ARTICLE["lead"] in text
 
 
 def test_renders_bounded_fact_preview_not_all_facts() -> None:
-    text = render_article_review_text(_review(), _ARTICLE)
+    text = render_article_review_text(_review(), _ARTICLE, EditorialChannel.NINJA_AI)
     assert "Fact A." in text
     assert "и ещё" in text  # only a preview, notes the rest exists
 
 
 def test_renders_russian_operator_text() -> None:
-    text = render_article_review_text(_review(), _ARTICLE)
-    assert "черновик статьи" in text
+    text = render_article_review_text(_review(), _ARTICLE, EditorialChannel.NINJA_AI)
+    assert "TELEGRAPH ARTICLE" in text
     assert "предпросмотр" in text
 
 
 def test_renders_current_status_line() -> None:
-    approved_text = render_article_review_text(_review(status=TelegraphArticleReviewStatus.APPROVED), _ARTICLE)
+    approved_text = render_article_review_text(
+        _review(status=TelegraphArticleReviewStatus.APPROVED), _ARTICLE, EditorialChannel.NINJA_AI,
+    )
     assert "✅ Статья одобрена" in approved_text
     revision_text = render_article_review_text(
-        _review(status=TelegraphArticleReviewStatus.NEEDS_REVISION), _ARTICLE
+        _review(status=TelegraphArticleReviewStatus.NEEDS_REVISION), _ARTICLE, EditorialChannel.NINJA_AI,
     )
     assert "✏️ Требуется доработка" in revision_text
 
 
 def test_text_within_safe_limit_for_a_normal_article() -> None:
-    text = render_article_review_text(_review(), _ARTICLE)
+    text = render_article_review_text(_review(), _ARTICLE, EditorialChannel.NINJA_PULSE)
     assert len(text) <= SAFE_LIMIT
 
 
 def test_never_dumps_full_article_body() -> None:
     huge_article = {**_ARTICLE, "confirmed_facts": [f"Fact {i} " * 50 for i in range(50)]}
-    text = render_article_review_text(_review(), huge_article)
+    text = render_article_review_text(_review(), huge_article, EditorialChannel.NINJA_PULSE)
     assert len(text) <= SAFE_LIMIT  # bounded preview, never the full 50-fact dump
+
+
+def test_ninja_ai_channel_displays_correct_label() -> None:
+    text = render_article_review_text(_review(), _ARTICLE, EditorialChannel.NINJA_AI)
+    assert "🥷 Ninja AI" in text
+    assert "⚡ Ninja Pulse" not in text
+
+
+def test_ninja_pulse_channel_displays_correct_label() -> None:
+    text = render_article_review_text(_review(), _ARTICLE, EditorialChannel.NINJA_PULSE)
+    assert "⚡ Ninja Pulse" in text
+    assert "🥷 Ninja AI" not in text
 
 
 def test_callback_data_within_telegram_limits() -> None:

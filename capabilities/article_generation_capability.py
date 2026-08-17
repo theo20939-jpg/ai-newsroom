@@ -24,6 +24,15 @@ already-completed "deep_research" step result, threaded in by capabilities/execu
 `context.business.telegraph_visual_bundle_summary` (informational only - Visual Research image
 selections, never embedded/described as article content) - never `context.business.news_event.
 content`, never any other prior step_results.
+
+Editorial channel split (prompts/article_generation/v2.yaml): `context.business.
+telegraph_editorial_channel` ("ninja_ai"/"ninja_pulse", classified once at shortlist-creation
+time by services/editorial_channel_classifier.py) is threaded into the request text - still ONE
+capability, ONE prompt name, ONE output schema (byte-identical between channels) - only the
+model's TONE changes, per v2's own system text. `PROMPT_VERSION = "2"` is now the active version
+for every TELEGRAPH article generation call; v1 (prompts/article_generation/v1.yaml) is left in
+place, unmodified, per this codebase's own prompt-immutability rule - it is simply no longer
+resolved by this class.
 """
 from __future__ import annotations
 
@@ -41,7 +50,7 @@ from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
 logger = logging.getLogger(__name__)
 
 CAPABILITY_NAME = "article_generation"
-PROMPT_VERSION = "1"
+PROMPT_VERSION = "2"
 
 ARTICLE_GENERATION_CAPABILITY_DEFINITION = CapabilityDefinition(
     name=CAPABILITY_NAME,
@@ -117,9 +126,15 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
     assert research_output is not None  # required_context - capabilities/executor.py always sets this
     bundle_text = _render_research_bundle(research_output)
     visual_summary = context.business.telegraph_visual_bundle_summary or "(no visual research available)"
+    # Deliberately no fallback default here - a missing channel is a genuine upstream
+    # configuration gap (every TELEGRAPH_ARTICLE task's proposal always has one, set at shortlist-
+    # creation time), never silently guessed. capabilities/executor.py's own TELEGRAPH_ARTICLE
+    # branch is the sole place this is populated.
+    editorial_channel = context.business.telegraph_editorial_channel or "(unspecified)"
 
     system_text = prompt.system + "\n\nRULES:\n" + "\n".join(f"- {rule}" for rule in prompt.rules)
     context_text = (
+        f"Editorial channel: {editorial_channel}\n\n"
         f"RESEARCH BUNDLE:\n{bundle_text}\n\n"
         f"VISUAL RESEARCH (informational only - do not describe or embed these images in the "
         f"article text):\n{visual_summary}\n\n"

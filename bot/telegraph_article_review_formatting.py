@@ -13,10 +13,19 @@ a "send the rest" flow (no new Telegram pipeline, per the brief's own explicit c
 from typing import Any
 
 from database.models.telegraph_article_review import TelegraphArticleReview, TelegraphArticleReviewStatus
+from schemas.editorial import EditorialChannel
 
 # Same constant bot/telegraph_shortlist_formatting.py::SAFE_LIMIT already established - Telegram's
 # own hard limit for a plain text message.
 SAFE_LIMIT = 4096
+
+# Editorial channel split: deterministic, no LLM - a plain display label per
+# schemas.editorial.EditorialChannel value, mirroring _STATUS_LINE_RU's own "one dict, one place"
+# convention. Emoji/labels exactly as given in the task brief - never derived/guessed.
+_CHANNEL_LABEL_RU: dict[EditorialChannel, str] = {
+    EditorialChannel.NINJA_AI: "🥷 Ninja AI",
+    EditorialChannel.NINJA_PULSE: "⚡ Ninja Pulse",
+}
 
 # How much of the article's own content this preview shows before summarizing the rest - a
 # reasoned starting bound (this checkpoint's own first calibration), never the full article.
@@ -42,21 +51,34 @@ def _truncate(text: str, max_chars: int) -> str:
     return text[: max_chars - 1].rstrip() + "…"
 
 
-def render_article_review_text(review: TelegraphArticleReview, article_result: dict[str, Any]) -> str:
-    """Renders ONE bounded preview message for a generated article - headline, lead, a few
-    confirmed facts, conclusion, source count, and the current review status line. Called both
-    for the initial send AND for every decision re-render, so it always reflects the CURRENT
+def render_article_review_text(
+    review: TelegraphArticleReview, article_result: dict[str, Any], editorial_channel: EditorialChannel,
+) -> str:
+    """Renders ONE bounded preview message for a generated article - channel, headline, lead, a
+    few confirmed facts, conclusion, source count, and the current review status line. Called
+    both for the initial send AND for every decision re-render, so it always reflects the CURRENT
     status, never a stale snapshot (mirrors render_shortlist_message_text()'s identical
-    discipline)."""
+    discipline).
+
+    `editorial_channel` is a required, explicit parameter, never looked up inside this function -
+    this module stays pure/DB-free (module docstring's own "no database access" discipline); the
+    caller (bot/handlers/telegraph_article_review.py, services/telegraph_article_review_notifier.py,
+    scripts/telegraph_pipeline_worker.py) is responsible for fetching it from the owning
+    TelegraphTopicProposal via `review.proposal_id`."""
     headline = str(article_result.get("headline") or "(без заголовка)")
     lead = str(article_result.get("lead") or "")
     facts = article_result.get("confirmed_facts") or []
     conclusion = str(article_result.get("conclusion") or "")
     sources = article_result.get("sources") or []
+    channel_label = _CHANNEL_LABEL_RU[editorial_channel]
 
     lines = [
-        "📰 TELEGRAPH — черновик статьи готов к проверке",
+        "📰 TELEGRAPH ARTICLE",
         "",
+        "Канал:",
+        channel_label,
+        "",
+        "Тема:",
         headline,
         "",
         lead,

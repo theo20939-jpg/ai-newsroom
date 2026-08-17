@@ -274,6 +274,7 @@ class CapabilityExecutor:
         telegraph_research_bundle_text: str | None = None
         telegraph_deep_research_output: dict[str, Any] | None = None
         telegraph_visual_bundle_summary: str | None = None
+        telegraph_editorial_channel: str | None = None
         state_for_bundle = WorkflowExecutionState.model_validate(task.workflow)
 
         if step.capability == "research" and state_for_bundle.workflow_name == WorkflowType.TELEGRAPH_RESEARCH:
@@ -351,18 +352,23 @@ class CapabilityExecutor:
                 )
             telegraph_deep_research_output = deep_research_result
 
-            proposal_id = (
+            proposal = (
                 await self._session.execute(
-                    select(TelegraphTopicProposal.id).where(
+                    select(TelegraphTopicProposal).where(
                         TelegraphTopicProposal.research_task_id == research_task.id
                     )
                 )
-            ).scalar_one_or_none()
-            if proposal_id is not None:
+            ).scalars().first()
+            if proposal is not None:
                 visual_bundle = await build_visual_research_bundle(
-                    self._session, proposal_id=proposal_id, story_id=story.id,
+                    self._session, proposal_id=proposal.id, story_id=story.id,
                 )
                 telegraph_visual_bundle_summary = render_visual_bundle_summary(visual_bundle)
+                # Editorial channel split: classified once at shortlist-creation time (services/
+                # editorial_channel_classifier.py) and persisted on the proposal - read here,
+                # never re-classified. `.value` (a plain string) crosses into CapabilityContext,
+                # never the ORM row or the enum type itself.
+                telegraph_editorial_channel = proposal.editorial_channel.value
 
         context = self._build_context(
             task, news_event, step, attempt,
@@ -371,6 +377,7 @@ class CapabilityExecutor:
             telegraph_research_bundle_text=telegraph_research_bundle_text,
             telegraph_deep_research_output=telegraph_deep_research_output,
             telegraph_visual_bundle_summary=telegraph_visual_bundle_summary,
+            telegraph_editorial_channel=telegraph_editorial_channel,
         )
 
         # API cost optimization (docs/api_cost_optimization_report.md): CONTENT_GENERATION's
@@ -1163,6 +1170,7 @@ class CapabilityExecutor:
         quote_source_text: str | None = None, telegraph_research_bundle_text: str | None = None,
         telegraph_deep_research_output: dict[str, Any] | None = None,
         telegraph_visual_bundle_summary: str | None = None,
+        telegraph_editorial_channel: str | None = None,
     ) -> CapabilityContext:
         state = WorkflowExecutionState.model_validate(task.workflow)
         is_telegraph_deep_research = telegraph_research_bundle_text is not None
@@ -1200,6 +1208,7 @@ class CapabilityExecutor:
                 telegraph_research_bundle_text=telegraph_research_bundle_text,
                 telegraph_deep_research_output=telegraph_deep_research_output,
                 telegraph_visual_bundle_summary=telegraph_visual_bundle_summary,
+                telegraph_editorial_channel=telegraph_editorial_channel,
             ),
             execution=ExecutionContext(
                 # TELEGRAPH Checkpoint 3: deep research reads a materially larger bundle and is

@@ -30,6 +30,7 @@ from bot.keyboards.telegraph_article_review import parse_callback_data
 from core.config import settings
 from database.models.editorial_task import EditorialTask
 from database.models.telegraph_article_review import TelegraphArticleReviewStatus
+from database.models.telegraph_shortlist import TelegraphTopicProposal
 from database.session import async_session_factory
 from services.telegraph_article_review_notifier import update_article_review_message
 from services.telegraph_article_review_service import TelegraphArticleReviewService
@@ -125,10 +126,21 @@ async def handle_article_review_callback(callback: CallbackQuery) -> None:
             await callback.answer(_ACTION_TO_ACK_RU[action])
             return
 
+        # Editorial channel split: fetched here (never cached, never re-classified) from the
+        # originating proposal - the formatting/notifier layer stays DB-free by design.
+        proposal = await session.get(TelegraphTopicProposal, updated.proposal_id)
+        if proposal is None:
+            logger.warning(
+                "telegraph_article_review_missing_proposal",
+                extra={"review_id": str(review_id), "proposal_id": str(updated.proposal_id)},
+            )
+            await callback.answer(_ACTION_TO_ACK_RU[action])
+            return
+
         assert message.bot is not None
         edited = await update_article_review_message(
             message.bot, chat_id=message.chat.id, message_id=message.message_id,
-            review=updated, article_result=article_result,
+            review=updated, article_result=article_result, editorial_channel=proposal.editorial_channel,
         )
         if not edited:
             logger.warning(

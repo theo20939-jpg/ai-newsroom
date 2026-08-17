@@ -30,6 +30,7 @@ from database.models.telegraph_shortlist import (
     TelegraphShortlistBatch,
     TelegraphTopicProposal,
 )
+from services.editorial_channel_classifier import classify_editorial_channel
 from services.telegraph_topic_candidates import TelegraphTopicCandidate, build_telegraph_topic_candidates
 
 logger = logging.getLogger(__name__)
@@ -110,7 +111,9 @@ async def create_telegraph_shortlist(
     Zero LLM/Gateway calls, zero web/fetch calls, zero Telegram calls - reuses `services.
     telegraph_topic_candidates.build_telegraph_topic_candidates()` (Checkpoint 1, unmodified)
     verbatim for candidate formation; the only new work here is wiring real reproposal-cooldown
-    persistence into its own `already_proposed_story_ids` parameter and persisting the result.
+    persistence into its own `already_proposed_story_ids` parameter, classifying each candidate's
+    editorial channel (services.editorial_channel_classifier.py - deterministic, zero-LLM), and
+    persisting the result.
 
     Zero-candidate outcome (the phase brief's own explicit "zero topics is valid... do NOT create
     fake candidates"): no `TelegraphShortlistBatch` row is created at all - a batch's only real
@@ -151,14 +154,23 @@ async def create_telegraph_shortlist(
     for rank, candidate in enumerate(candidates, start=1):
         story = await session.get(Story, candidate.story_id)
         assert story is not None  # candidate.story_id was just resolved from a real Story row
+
+        # Editorial channel split: classified here, BEFORE the proposal is ever persisted (never
+        # a live-recomputed value later) - deterministic, zero-LLM, zero-new-query (reuses
+        # candidate.summary, the same StoryEvidenceSummary already computed by services.
+        # telegraph_topic_candidates.py for THIS candidate). See services.
+        # editorial_channel_classifier.py's own docstring for the full scoring rubric.
+        channel_decision = classify_editorial_channel(candidate.summary)
+
         proposal = TelegraphTopicProposal(
             batch_id=batch.id,
             story_id=candidate.story_id,
             rank=rank,
             topic_score=candidate.topic_score,
             topic_title=_derive_topic_title(candidate),
-            rationale_snapshot=candidate.rationale,
+            rationale_snapshot=f"{candidate.rationale} | {channel_decision.rationale}",
             signals_snapshot=_build_signals_snapshot(candidate),
+            editorial_channel=channel_decision.channel,
         )
         session.add(proposal)
         proposals.append(proposal)

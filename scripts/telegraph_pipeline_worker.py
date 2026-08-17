@@ -185,10 +185,19 @@ async def run_telegraph_pipeline_for_proposal(proposal_id: UUID, *, live: bool) 
             )
             return
 
+        # Editorial channel split: fetched from the proposal itself - classified once at
+        # shortlist-creation time (services/editorial_channel_classifier.py), never re-classified.
+        from database.models.telegraph_shortlist import TelegraphTopicProposal
+
+        proposal = await session.get(TelegraphTopicProposal, proposal_id)
+        assert proposal is not None  # already resolved successfully by every prior stage above
+
         dry_run = not (live and settings.telegraph_pipeline_enabled)
         bot = create_bot()
         try:
-            outcome = await send_article_review(bot, review, article_result, dry_run=dry_run)
+            outcome = await send_article_review(
+                bot, review, article_result, proposal.editorial_channel, dry_run=dry_run,
+            )
         finally:
             await bot.session.close()
         logger.info(

@@ -179,6 +179,24 @@ async def test_article_request_never_reads_raw_news_event_content(db_session: As
 
 
 @pytest.mark.asyncio
+async def test_article_generation_receives_the_proposals_own_editorial_channel(
+    db_session: AsyncSession,
+) -> None:
+    """Required test 5 ("article generation receives channel"): the exact editorial_channel
+    services.editorial_channel_classifier.py assigned at shortlist-creation time (Checkpoint 4)
+    is the same value that ends up in the real article-generation request - end to end, through
+    the real DB, not a hand-built CapabilityContext."""
+    gateway = _DualGateway()
+    proposal, registry = await _researched_proposal(db_session, gateway)
+
+    await generate_article_for_researched_proposal(db_session, proposal.id, capability_registry=registry)
+
+    assert len(gateway.article_requests) == 1
+    sent_text = gateway.article_requests[0].messages[-1].content[0].text
+    assert f"Editorial channel: {proposal.editorial_channel.value}" in sent_text
+
+
+@pytest.mark.asyncio
 async def test_second_attempt_reuses_existing_task_no_new_paid_call(db_session: AsyncSession) -> None:
     gateway = _DualGateway()
     proposal, registry = await _researched_proposal(db_session, gateway)
