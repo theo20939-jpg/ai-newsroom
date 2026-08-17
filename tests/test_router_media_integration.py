@@ -1787,6 +1787,135 @@ def test_normalize_image_origin_strips_wordpress_dimension_suffix() -> None:
 
 
 # ---------------------------------------------------------------------------------------------
+# iXBT production forensic (event d5b8d887-3176-4876-8640-4572ca3bcbe2, exact selector replay
+# against the real deployed code): _normalize_image_origin() previously only looked at the OUTER
+# CDN host, never past it - media.ixbt.com's own resize proxy embeds the full, scheme-qualified
+# original URL after a resize/crop path segment, so four real crop/resize transformations of the
+# SAME source photo (MINISFORUM-NAS-N5-MAX-HERO_large.jpg) each normalized to a different string
+# and all got dup=False. The live selector replay picked three of them for the same album. This
+# is the generic "CDN wrapper embeds a full absolute source URL" fix - real production URLs below,
+# reproduced verbatim from the replay output.
+# ---------------------------------------------------------------------------------------------
+
+_REAL_IXBT_HERO_1600 = "https://media.ixbt.com/1600x900/smart/jpeg/https://www.ixbt.com/img/n1/news/2026/7/1/MINISFORUM-NAS-N5-MAX-HERO_large.jpg"
+_REAL_IXBT_HERO_1200x900 = "https://media.ixbt.com/1200x900/smart/https://www.ixbt.com/img/n1/news/2026/7/1/MINISFORUM-NAS-N5-MAX-HERO_large.jpg"
+_REAL_IXBT_HERO_1200x1200 = "https://media.ixbt.com/1200x1200/smart/https://www.ixbt.com/img/n1/news/2026/7/1/MINISFORUM-NAS-N5-MAX-HERO_large.jpg"
+_REAL_IXBT_HERO_FITIN = "https://media.ixbt.com/fit-in/1729x900/https://www.ixbt.com/img/n1/news/2026/7/1/MINISFORUM-NAS-N5-MAX-HERO_large.jpg"
+_REAL_IXBT_OTHER_URL = "https://media.ixbt.video/fit-in/768x432/ixbt-data/1289117/f6a3582e-c0df-406c-9765-b27f6821b00a.png"
+
+
+def test_normalize_image_origin_collapses_all_four_real_ixbt_hero_transforms() -> None:
+    """The exact 4 real URLs from the production selector replay - all must normalize to the
+    same origin, despite the outer media.ixbt.com wrapper differing in resize/crop path segment
+    on every one."""
+    from worker.content_cycle import _normalize_image_origin
+
+    origins = {
+        _normalize_image_origin(u)
+        for u in (_REAL_IXBT_HERO_1600, _REAL_IXBT_HERO_1200x900, _REAL_IXBT_HERO_1200x1200, _REAL_IXBT_HERO_FITIN)
+    }
+    assert len(origins) == 1
+    assert origins == {"www.ixbt.com/img/n1/news/2026/7/1/MINISFORUM-NAS-N5-MAX-HERO_large.jpg"}
+
+
+def test_normalize_image_origin_ixbt_unrelated_candidate_keeps_its_own_origin() -> None:
+    from worker.content_cycle import _normalize_image_origin
+
+    assert _normalize_image_origin(_REAL_IXBT_OTHER_URL) != _normalize_image_origin(_REAL_IXBT_HERO_1600)
+
+
+def test_normalize_image_origin_embedded_url_never_collapses_different_source_files() -> None:
+    """Required control case: two genuinely different embedded source files (different basenames,
+    same wrapper convention) must never collapse - the fix reads the embedded path verbatim, never
+    guesses identity from a filename alone."""
+    from worker.content_cycle import _normalize_image_origin
+
+    a = "https://media.ixbt.com/1200x900/smart/https://www.ixbt.com/img/a.jpg"
+    b = "https://media.ixbt.com/1200x900/smart/https://www.ixbt.com/img/b.jpg"
+    assert _normalize_image_origin(a) != _normalize_image_origin(b)
+
+
+def test_normalize_image_origin_wrapper_without_embedded_scheme_falls_back_unchanged() -> None:
+    """No literal http(s):// anywhere in the path - must resolve exactly as it did before this
+    fix (plain outer host+path, WordPress-suffix-stripped)."""
+    from worker.content_cycle import _normalize_image_origin
+
+    assert (
+        _normalize_image_origin("https://media.ixbt.com/1200x900/smart/no-embedded-url-here.jpg")
+        == "media.ixbt.com/1200x900/smart/no-embedded-url-here.jpg"
+    )
+
+
+def test_normalize_image_origin_jetpack_photon_regression_unaffected_by_embedded_url_addition() -> None:
+    """Jetpack/Photon's own pattern embeds a bare host+path (no scheme) - _EMBEDDED_ABSOLUTE_URL_RE
+    must never match it, so this falls through to the pre-existing, unmodified Jetpack-specific
+    branch exactly as before."""
+    from worker.content_cycle import _normalize_image_origin
+
+    assert _normalize_image_origin(_REAL_HONOR_HERO_URL) == _normalize_image_origin(_REAL_HONOR_PHOTON_URL)
+
+
+def test_compute_within_event_duplicate_flags_real_ixbt_minisforum_hero_transforms() -> None:
+    """Direct replay of the real production event's own candidate shape (4 hero crop/resize
+    transforms + 1 genuinely different image), mirroring the SF-estate/CNET direct-unit-test style
+    above. Perceptual hashes are illustrative (not captured by the original replay's own print
+    statement) and deliberately chosen with LARGE mutual Hamming distance, to prove the
+    origin-identity signal alone - not perceptual similarity - is what catches these."""
+    from worker.content_cycle import _compute_within_event_duplicate_flags
+
+    hero_1600 = _fake_candidate(
+        candidate_id="hero-1600", rank=1, perceptual_hash="0000000000000000", final_url=_REAL_IXBT_HERO_1600,
+    )
+    hero_1200x900 = _fake_candidate(
+        candidate_id="hero-1200x900", rank=2, perceptual_hash="ffffffffffffffff", final_url=_REAL_IXBT_HERO_1200x900,
+    )
+    hero_1200x1200 = _fake_candidate(
+        candidate_id="hero-1200x1200", rank=3, perceptual_hash="0f0f0f0f0f0f0f0f", final_url=_REAL_IXBT_HERO_1200x1200,
+    )
+    other = _fake_candidate(
+        candidate_id="other", rank=4, perceptual_hash="f0f0f0f0f0f0f0f0", final_url=_REAL_IXBT_OTHER_URL,
+    )
+    flags = _compute_within_event_duplicate_flags([hero_1600, hero_1200x900, hero_1200x1200, other])
+    assert flags[hero_1600.id] is False
+    assert flags[hero_1200x900.id] is True
+    assert flags[hero_1200x1200.id] is True
+    assert flags[other.id] is False
+
+
+def test_select_top_ranked_image_candidates_ixbt_hero_transforms_never_fill_more_than_one_slot() -> None:
+    """Deterministic replay unit test for the selector layer itself (not just the duplicate-flag
+    computation): 3 real hero transforms + 1 real unrelated image -> selection must pick exactly
+    one hero transform (the best-ranked) and the one genuinely different image, never 2-3 hero
+    transforms filling the whole album."""
+    from worker.content_cycle import _select_top_ranked_image_candidates
+
+    hero_1600 = _fake_candidate(
+        candidate_id="hero-1600", rank=1, quality_score=98, relevance_score=81, width=1600, height=900,
+        perceptual_hash="0000000000000000", final_url=_REAL_IXBT_HERO_1600,
+    )
+    hero_1200x900 = _fake_candidate(
+        candidate_id="hero-1200x900", rank=2, quality_score=96, relevance_score=81, width=1200, height=900,
+        perceptual_hash="ffffffffffffffff", final_url=_REAL_IXBT_HERO_1200x900,
+    )
+    hero_1200x1200 = _fake_candidate(
+        candidate_id="hero-1200x1200", rank=3, quality_score=91, relevance_score=80, width=1200, height=1200,
+        perceptual_hash="0f0f0f0f0f0f0f0f", final_url=_REAL_IXBT_HERO_1200x1200,
+    )
+    other = _fake_candidate(
+        candidate_id="other", rank=4, quality_score=70, relevance_score=44, width=768, height=432,
+        perceptual_hash="f0f0f0f0f0f0f0f0", final_url=_REAL_IXBT_OTHER_URL,
+    )
+
+    selected = _select_top_ranked_image_candidates([hero_1600, hero_1200x900, hero_1200x1200, other], limit=3)
+
+    selected_ids = [c.candidate_id for c in selected]
+    print("SELECTED IDs:", selected_ids)
+    print("SELECTED URLs:", [c.final_url for c in selected])
+    assert selected_ids == ["hero-1600", "other"]
+    assert sum(1 for cid in selected_ids if cid.startswith("hero-")) == 1
+
+
+# ---------------------------------------------------------------------------------------------
 # Production wiring (docs/video_delivery_wiring_checkpoint.md): worker/content_cycle.py now
 # retrieves/converts a real video candidate and passes it into build_rich_media_plan() (Phase 19
 # M10-M12, all reused verbatim). Gated behind rich_media_mode=="enforce" (default "off" is

@@ -628,3 +628,65 @@ def test_many_siblings_after_a_secondary_img_all_survive() -> None:
         "https://example.com/article/b.jpg",
         "https://example.com/article/c.jpg",
     }
+
+
+# ---------------------------------------------------------------------------------------------
+# iXBT production forensic (https://www.ixbt.com/news/2026/08/17/10-200-minisforum-nas-n5-max.
+# html): unrelated "also on the site" widgets (Ugreen Nexode X759, Samsung Flip WM55FX, Eisenhof
+# LS200 - none related to the actual article) were picked up because they live inside <aside>
+# nested directly under <main>, and <main> is itself a priority container. <aside> is now a hard,
+# tag-name-only secondary-container signal (services/article_metadata.py::
+# _SECONDARY_CONTAINER_TAGS), independent of class/id/dimensions/alt/URL.
+# ---------------------------------------------------------------------------------------------
+
+
+def test_1_aside_inside_main_excluded_article_image_kept() -> None:
+    html = """
+    <main>
+      <article>
+        <img src="real.jpg" width="1200" height="800">
+      </article>
+
+      <aside>
+        <img src="wrong.jpg" width="1200" height="800">
+      </aside>
+    </main>
+    """
+    hints = extract_inline_article_images(html, base_url=BASE_URL)
+    assert [h.remote_url for h in hints] == ["https://example.com/article/real.jpg"]
+
+
+def test_2_aside_secondary_wins_over_a_nested_priority_container() -> None:
+    """A priority-token-bearing div (article-entry) nested INSIDE <aside> must still be excluded -
+    secondary takes priority over priority, exactly like the 3DNews related-slider case."""
+    html = """
+    <main>
+      <aside>
+        <div class="article-entry">
+          <img src="wrong.jpg" width="1200" height="800">
+        </div>
+      </aside>
+    </main>
+    """
+    hints = extract_inline_article_images(html, base_url=BASE_URL)
+    assert hints == []
+
+
+def test_3_aside_without_class_or_id_still_excluded() -> None:
+    html = "<main><aside><img src=\"wrong.jpg\" width=\"1200\" height=\"800\"></aside></main>"
+    hints = extract_inline_article_images(html, base_url=BASE_URL)
+    assert hints == []
+
+
+def test_4_normal_images_inside_article_are_unaffected_by_the_aside_rule() -> None:
+    html = """
+    <main>
+      <article>
+        <img src="one.jpg" width="1200" height="800">
+        <img src="two.jpg" width="1200" height="800">
+      </article>
+    </main>
+    """
+    hints = extract_inline_article_images(html, base_url=BASE_URL)
+    urls = {h.remote_url for h in hints}
+    assert urls == {"https://example.com/article/one.jpg", "https://example.com/article/two.jpg"}

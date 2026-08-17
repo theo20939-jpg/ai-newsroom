@@ -269,6 +269,11 @@ _PRIORITY_CONTAINER_CLASS_TOKENS = ("content", "post", "entry", "story")
 _SECONDARY_CONTAINER_TOKENS = (
     "related", "recommend", "read-more", "readmore", "more-news", "news-slider", "newsslider",
 )
+# <aside> - see _is_secondary_container()'s own docstring for the real iXBT forensic case this
+# closes. Matched by tag name alone (mirrors _PRIORITY_CONTAINER_TAGS), independent of class/id/
+# dimensions/alt/URL - the HTML5 spec's own definition of "tangentially related content" is
+# already a sufficient, safe signal on its own.
+_SECONDARY_CONTAINER_TAGS = frozenset({"aside"})
 
 _ICON_TOKENS = ("favicon", "icon", "logo", "avatar", "profile", "sprite")
 _AD_TOKENS = ("banner", "ads", "advertisement", "promo")
@@ -363,10 +368,20 @@ def _is_priority_container(tag: str, attrs: dict[str, str]) -> bool:
     return _matches_any_token(signal, _PRIORITY_CONTAINER_CLASS_TOKENS)
 
 
-def _is_secondary_container(attrs: dict[str, str]) -> bool:
-    """No tag-name signal exists for "this is a related/recommended widget" (unlike <article>/
-    <main> for priority containers) - class/id substring only, see _SECONDARY_CONTAINER_TOKENS's
-    own docstring for the real forensic values this was calibrated against."""
+def _is_secondary_container(tag: str, attrs: dict[str, str]) -> bool:
+    """iXBT production forensic (https://www.ixbt.com/news/2026/08/17/10-200-minisforum-nas-n5-
+    max.html): unrelated "also on the site" widgets (Ugreen Nexode X759, Samsung Flip WM55FX,
+    Eisenhof LS200 - none related to the actual MINISFORUM NAS article) were being picked up
+    because they live inside <aside> nested directly under <main>, and <main> is itself a priority
+    container - the extractor had no way to tell "sidebar content" from "article content" other
+    than class/id substrings, which this particular CMS simply doesn't use on its <aside>.
+    <aside> is a real HTML5 semantic tag whose spec definition is literally "content tangentially
+    related to the content around it" - a hard, safe, class/id-independent signal, mirroring how
+    `_PRIORITY_CONTAINER_TAGS` already hard-includes <article>/<main> by tag name alone. Never a
+    broad, unevidenced class-token guess (no "sidebar"/"widget"/"column" - those still require
+    real forensic evidence before being added, per this module's own established discipline)."""
+    if tag in _SECONDARY_CONTAINER_TAGS:
+        return True
     signal = f"{attrs.get('class', '')} {attrs.get('id', '')}"
     return _matches_any_token(signal, _SECONDARY_CONTAINER_TOKENS)
 
@@ -476,7 +491,7 @@ class _InlineImageCollector(HTMLParser):
         attrs_dict = {name.lower(): (value or "") for name, value in attrs}
 
         is_priority = _is_priority_container(lowered, attrs_dict)
-        is_secondary = _is_secondary_container(attrs_dict)
+        is_secondary = _is_secondary_container(lowered, attrs_dict)
         if lowered not in _VOID_ELEMENTS:
             # Void elements (img/source and the rest of the HTML5 void-element set) can never have
             # children and, in ordinary (non-XHTML-self-closed) HTML, never trigger a matching

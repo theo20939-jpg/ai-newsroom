@@ -100,6 +100,43 @@ _IMAGE_CDN_PROXY_HOST_RE = re.compile(r"^i[0-3]\.wp\.com$", re.IGNORECASE)
 # the query string (which is dropped entirely regardless).
 _WORDPRESS_DIMENSION_SUFFIX_RE = re.compile(r"-\d+x\d+(?=\.[A-Za-z0-9]+$)")
 
+# iXBT production forensic (event d5b8d887-3176-4876-8640-4572ca3bcbe2): a second, more general
+# "CDN wrapper embeds the original asset's identity" pattern than the Jetpack/Photon one above -
+# here the wrapper embeds a full, scheme-qualified absolute URL (not just a bare host+path) after
+# a resize/crop path segment, e.g. "media.ixbt.com/1200x900/smart/https://www.ixbt.com/img/n1/
+# news/2026/7/1/MINISFORUM-NAS-N5-MAX-HERO_large.jpg" - four real candidates for the same source
+# photo (1600x900, 1200x900, 1200x1200, fit-in/1729x900 crops) each normalized to a DIFFERENT
+# string under the old logic (which never looked past the outer host), so
+# _compute_within_event_duplicate_flags() marked all four as distinct and the selector put three
+# of them in the same album. Deliberately generic (not an ixbt.com-specific substring rule): finds
+# the first literal "http://"/"https://" occurrence anywhere in the OUTER url's path and treats
+# everything from there onward as the real embedded source URL, ignoring whatever resize/crop
+# wrapper segment precedes it - works for any CDN using this "wrapper-prefix + embedded absolute
+# URL" convention, not just ixbt.com's.
+_EMBEDDED_ABSOLUTE_URL_RE = re.compile(r"https?://.+", re.IGNORECASE)
+
+
+def _embedded_source_origin(path: str) -> str | None:
+    """Returns the embedded source URL's own "<host><path>" (query stripped, WordPress dimension
+    suffix stripped - same semantics as the rest of `_normalize_image_origin()`) if `path`
+    contains a literal embedded http(s):// URL, else None (the caller then falls back to today's
+    existing normalization unchanged). Never guesses from a filename/basename alone - the full
+    embedded path is used verbatim, so two different source files (even with the same basename,
+    e.g. two different articles' own "hero.jpg") never collapse to the same origin; only the
+    literal embedded URL string matters."""
+    match = _EMBEDDED_ABSOLUTE_URL_RE.search(path)
+    if match is None:
+        return None
+    try:
+        embedded = urlsplit(match.group(0))
+    except ValueError:
+        return None
+    embedded_host = (embedded.hostname or "").lower()
+    if not embedded_host:
+        return None
+    embedded_path = _WORDPRESS_DIMENSION_SUFFIX_RE.sub("", embedded.path)
+    return f"{embedded_host}{embedded_path}"
+
 
 def _normalize_image_origin(url: str | None) -> str | None:
     """Pure. Strips a known CDN-proxy host prefix (WordPress/Jetpack Photon: i0-i3.wp.com, whose
@@ -112,6 +149,13 @@ def _normalize_image_origin(url: str | None) -> str | None:
     DIMENSION_SUFFIX_RE) is stripped too. Returns None for an empty/unparseable URL - never
     raises, never a false "match".
 
+    Also tries `_embedded_source_origin()` first (iXBT forensic - see its own docstring): a CDN
+    wrapper that embeds a full scheme-qualified absolute source URL is a stronger, more specific
+    signal than the outer wrapper host, and is checked before the Jetpack/Photon (bare host+path,
+    no scheme - structurally distinct, never matched by `_EMBEDDED_ABSOLUTE_URL_RE`) and plain
+    host+path fallbacks below, never replacing them - a URL with no embedded absolute URL falls
+    through to the exact same behavior as before this addition.
+
     Used for two independent purposes (see _compute_within_event_duplicate_flags()): gating the
     relaxed same-origin Hamming threshold (unchanged), and - as of the acceptance follow-up phase
     - as its own standalone, hash-independent same-source-asset-identity duplicate signal."""
@@ -123,6 +167,11 @@ def _normalize_image_origin(url: str | None) -> str | None:
         return None
     host = (parsed.hostname or "").lower()
     path = parsed.path
+
+    embedded_origin = _embedded_source_origin(path)
+    if embedded_origin is not None:
+        return embedded_origin
+
     if _IMAGE_CDN_PROXY_HOST_RE.match(host):
         segments = path.lstrip("/").split("/", 1)
         if len(segments) == 2 and "." in segments[0]:
