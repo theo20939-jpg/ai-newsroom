@@ -641,6 +641,27 @@ class Settings(BaseSettings):
     meme_opportunity_calibration_version: Literal["v1", "v2"] = "v1"
     meme_safety_calibration_version: Literal["v1", "v2"] = "v1"
 
+    # TELEGRAPH Checkpoint 7 (docs/telegraph_checkpoint_7_dormant_production_prep_report.md):
+    # dormant scheduler/worker config, declared ahead of the feature that would read it - mirrors
+    # verify_capabilities_at_boot's own established "the setting is added now so its default is
+    # already the safe, documented value" precedent (Phase 7 §17.3). Nothing in this codebase
+    # reads any of the three fields below yet - no scheduler, cron, or automatic-execution path
+    # exists for TELEGRAPH (scripts/telegraph_pipeline_worker.py is a manually-invoked harness
+    # only, exactly like scripts/run_content_generation.py/scripts/phase19_m13_vision_review_
+    # manual.py's own established "human invokes this, nothing else does" convention). Enabling
+    # automatic TELEGRAPH generation/approval/publishing is explicitly out of this checkpoint's
+    # scope and requires a future, separately-authorized milestone - these three fields exist
+    # only so that future milestone does not also need a settings migration.
+    telegraph_pipeline_enabled: bool = False
+    # Reasoned starting point mirroring news_collection_interval_seconds's own cadence exactly -
+    # how often a future scheduler would form a new shortlist batch. Not fit to any real
+    # operating data yet.
+    telegraph_shortlist_schedule_interval_seconds: int = Field(default=3600, gt=0)
+    # Reasoned starting point mirroring news_analysis_poll_interval_seconds's own cadence - how
+    # often a future worker would poll for APPROVED-and-unconsumed proposals /
+    # COMPLETED-and-unreviewed articles to advance. Not fit to any real operating data yet.
+    telegraph_pipeline_poll_interval_seconds: int = Field(default=300, gt=0)
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""

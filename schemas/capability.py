@@ -108,6 +108,26 @@ class BusinessContext(BaseModel):
     # included) AND a FULL_TEXT/PARTIAL_TEXT acquisition exists - None otherwise, in which case
     # Copywriting falls back to its own pre-23.1P news_event.content excerpt unchanged.
     quote_source_text: str | None = None
+    # TELEGRAPH Checkpoint 3 (services/telegraph_research_context.py): a bounded, deterministic
+    # text rendering of an ArticleResearchBundle - present ONLY for the "deep_research" step of a
+    # TELEGRAPH_RESEARCH workflow (capabilities/executor.py's own workflow_name check), never for
+    # a NEWS_ANALYSIS/CONTENT_GENERATION/MEME_GENERATION "research" step, where this stays None
+    # and ResearchCapability's existing news_event-based behavior is completely byte-identical to
+    # before this checkpoint. capabilities/research_capability.py's own docstring documents the
+    # exact branch this field drives.
+    telegraph_research_bundle_text: str | None = None
+    # TELEGRAPH Checkpoint 5 (capabilities/article_generation_capability.py): the prior,
+    # already-COMPLETED TELEGRAPH_RESEARCH task's own "deep_research" step structured output
+    # (prompts/research/v3.yaml's schema) - present ONLY for the "generate_article" step of a
+    # TELEGRAPH_ARTICLE workflow (capabilities/executor.py's own workflow_name check). Never a
+    # re-run of Research - this is a read of an already-persisted prior result.
+    telegraph_deep_research_output: dict[str, Any] | None = None
+    # TELEGRAPH Checkpoint 5: a bounded, deterministic text summary of the Visual Research bundle
+    # (services/telegraph_visual_research.py) - informational only. ArticleGenerationCapability's
+    # own prompt explicitly instructs the model never to describe or embed these images as
+    # article text; this field exists so the model at least knows visual coverage exists, not so
+    # it writes about the images.
+    telegraph_visual_bundle_summary: str | None = None
 
 
 class RuntimeContext(BaseModel):

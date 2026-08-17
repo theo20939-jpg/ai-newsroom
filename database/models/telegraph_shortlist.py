@@ -29,6 +29,17 @@ overwritten by a repeated or opposite later decision (the same immutable-final p
 governs `status`/`decided_at`; this column follows it, not a separate rule). Deliberately just
 the numeric id - no username/display-name/profile field is stored, matching the checkpoint's own
 "Telegram numeric user ID is enough" requirement.
+
+`research_task_id` (TELEGRAPH Checkpoint 3 addition): links a claimed proposal
+(`consumed_at IS NOT NULL`) to the `EditorialTask` running its TELEGRAPH_RESEARCH workflow - set
+once, atomically, in the same transaction as the `consumed_at` claim (services/
+telegraph_research_processor.py::process_approved_telegraph_proposal()). A tiny FK here, not a
+free-text/JSON lookup inside `EditorialTask.workflow` - `schemas.workflow.WorkflowExecutionState`
+is a shared, `extra="forbid"` contract every other workflow type also relies on, and searching
+its JSON for a proposal id would be exactly the "fragile free-text matching" recovery must not
+depend on. `NULL` until claimed; never cleared afterward, even if the linked task later FAILs -
+that task row remains the durable, inspectable record of what was attempted (see services/
+telegraph_research_processor.py's own docstring for the full failure/retry semantics).
 """
 import enum
 import uuid
@@ -137,9 +148,13 @@ class TelegraphTopicProposal(Base):
     # Security correction: WHO decided - see module docstring. NULL while PENDING, set once,
     # atomically with status/decided_at, in TelegraphShortlistService.set_decision().
     decided_by_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    # Reserved for a future Checkpoint 3 exactly-once handoff - see module docstring. Unset
-    # (always NULL) anywhere in this checkpoint; no code here ever writes to it.
+    # Set once, atomically with consumed_at, by claim_approved_telegraph_proposal() (Checkpoint
+    # 3). Unset (always NULL) until a real claim happens; no code here ever writes to it.
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # TELEGRAPH Checkpoint 3 - see module docstring. NULL until claimed.
+    research_task_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("editorial_tasks.id"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

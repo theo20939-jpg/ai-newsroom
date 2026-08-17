@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
@@ -172,6 +172,92 @@ async def create_telegraph_shortlist(
         extra={"batch_id": str(batch.id), "proposal_count": len(proposals)},
     )
     return TelegraphShortlistResult(batch=batch, proposals=proposals)
+
+
+async def claim_approved_telegraph_proposal(
+    session: AsyncSession, proposal_id: UUID, *, now: datetime | None = None, commit: bool = True,
+) -> TelegraphTopicProposal | None:
+    """TELEGRAPH Checkpoint 3: the exactly-once claim primitive. Mirrors this codebase's own
+    established atomic-conditional-claim idiom byte-for-byte (the same pattern the Workflow
+    Engine's own task-claim step already uses elsewhere in this codebase) - a single-statement
+    conditional UPDATE (`WHERE status == APPROVED AND consumed_at IS NULL`) followed by a
+    `rowcount` check, never a `SELECT ... FOR UPDATE` and never a new distributed-lock mechanism.
+    Postgres's own row-level locking on the UPDATE statement is what makes two concurrent callers
+    racing this same `proposal_id` safe: only one transaction's WHERE clause can still match once
+    the other has (atomically) set `consumed_at` - the second sees `rowcount == 0` and returns
+    `None`, exactly like a second concurrent claim of the same CREATED task elsewhere in this
+    codebase already does.
+
+    Deliberately does NOT create or link an `EditorialTask`, and never imports anything from the
+    Workflow Engine or Capability layer - that orchestration is services.
+    telegraph_research_processor.process_approved_telegraph_proposal()'s job, immediately after a
+    successful claim, in the same overall transaction. This function's only job is the claim
+    itself, so it stays independently testable (a claim can succeed with zero task-creation
+    machinery involved at all) and so "no paid call happens before successful claim" is
+    structurally true: nothing past this function's own single UPDATE can run until it returns
+    a non-None proposal.
+
+    Returns the claimed proposal (its own in-memory `status` stays APPROVED; `consumed_at` is now
+    set) on success. Returns `None` for every non-claimable case, never raising: PENDING,
+    REJECTED, already-consumed (`consumed_at` already set, regardless of status), or a
+    nonexistent `proposal_id` - the caller cannot and must not distinguish between these from the
+    return value alone (mirrors `TelegraphShortlistService.set_decision()`'s own "return a
+    signal, never raise" convention for a missing row); the pre-claim `status`/`consumed_at`
+    values are already durable and inspectable via a normal read if a caller needs to know why.
+
+    `commit` (Checkpoint 3 correctness fix, additive/backward-compatible - defaults to `True`,
+    byte-identical to every pre-existing caller/test's behavior): pass `commit=False` so this
+    claim participates in the caller's own larger atomic transaction (services.
+    telegraph_research_processor.process_approved_telegraph_proposal()'s claim+create-task+link
+    sequence) instead of committing independently. The returned proposal always reflects the real
+    post-UPDATE state either way - a session always sees its own uncommitted writes within the
+    same transaction, so `session.get()` below never needs a commit to be accurate.
+    """
+    claim_at = now if now is not None else datetime.now(timezone.utc)
+    result = await session.execute(
+        update(TelegraphTopicProposal)
+        .where(
+            TelegraphTopicProposal.id == proposal_id,
+            TelegraphTopicProposal.status == TelegraphProposalStatus.APPROVED,
+            TelegraphTopicProposal.consumed_at.is_(None),
+        )
+        .values(consumed_at=claim_at)
+    )
+    if commit:
+        await session.commit()
+    else:
+        await session.flush()
+    if result.rowcount != 1:  # type: ignore[attr-defined]
+        return None
+    return await session.get(TelegraphTopicProposal, proposal_id)
+
+
+async def link_research_task(
+    session: AsyncSession, proposal_id: UUID, task_id: UUID, *, commit: bool = True,
+) -> TelegraphTopicProposal | None:
+    """Sets `research_task_id` on an already-claimed proposal - called exactly once, immediately
+    after `claim_approved_telegraph_proposal()` succeeds and the new `EditorialTask` row has been
+    flushed (services.telegraph_research_processor.process_approved_telegraph_proposal()).
+    Unconditional (no WHERE-clause race guard): by the time this is called, the claim UPDATE
+    above has already made this proposal exclusively "ours" for this call - a second concurrent
+    processing attempt for the same `proposal_id` could not have reached this point (its own
+    claim would have returned `None` first). Returns `None` only if `proposal_id` does not exist
+    (should not happen immediately after a successful claim; handled safely regardless, never
+    raising).
+
+    `commit` (Checkpoint 3 correctness fix, additive/backward-compatible - defaults to `True`):
+    pass `commit=False` to make this UPDATE participate in the caller's own larger atomic
+    transaction, exactly like `claim_approved_telegraph_proposal()`'s identical parameter."""
+    proposal = await session.get(TelegraphTopicProposal, proposal_id)
+    if proposal is None:
+        return None
+    proposal.research_task_id = task_id
+    if commit:
+        await session.commit()
+    else:
+        await session.flush()
+    await session.refresh(proposal)
+    return proposal
 
 
 class TelegraphShortlistService:

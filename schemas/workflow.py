@@ -33,6 +33,33 @@ class WorkflowType(str, Enum):
     # `MemeConceptCapability` and `services.meme_candidate_service` have a real, typed workflow
     # identity to build/test against.
     MEME_GENERATION = "MEME_GENERATION"
+    # TELEGRAPH Checkpoint 3 (docs/telegraph_checkpoint_3_research_report.md): claim + deep
+    # research only, for exactly one already-APPROVED TelegraphTopicProposal. Deliberately its
+    # own narrow workflow type, never TELEGRAPH_ARTICLE - a task that reaches COMPLETED here
+    # cannot later be "resumed" with additional steps (workflows.runner.WorkflowRunner.run()
+    # only ever claims a task whose status is CREATED; there is no COMPLETED -> RUNNING
+    # transition anywhere in this engine), so a shared, incrementally-growing "TELEGRAPH_ARTICLE"
+    # workflow name would imply a continuity this engine cannot actually provide. A future
+    # Visual Research / Copywriting / publishing checkpoint is expected to look up this
+    # workflow's own COMPLETED task and reuse its persisted result - exactly the same pattern
+    # CONTENT_GENERATION already uses to reuse a COMPLETED NEWS_ANALYSIS task's results
+    # (services/analysis_reuse.py) - never to keep extending this same task.
+    TELEGRAPH_RESEARCH = "TELEGRAPH_RESEARCH"
+    # TELEGRAPH Checkpoint 5 (docs/telegraph_checkpoint_5_article_generation_report.md): its own,
+    # separate workflow type - NOT an extension of TELEGRAPH_RESEARCH (see that value's own
+    # docstring for why a COMPLETED task can never gain new steps in this engine). One step,
+    # "generate_article" (capability="article_generation", a genuinely new Capability - never
+    # CopywritingCapability, to avoid entangling NEWS-only hooks like adaptive_length/beginner_
+    # friendly/image_intelligence attachment in capabilities/executor.py, all keyed off
+    # step.capability == "copywriting"). Anchored to the SAME event_id as its Story's
+    # TELEGRAPH_RESEARCH task (story.first_event_id) - this is also the exactly-once mechanism
+    # for article generation: services.workflow_service.create_task()'s own existing one-task-
+    # per-(event_id, workflow_type) guard means a second attempt raises DuplicateActiveTaskError
+    # rather than ever producing two articles for the same Story, with zero new proposal column
+    # or claim primitive needed (unlike Checkpoint 3's own consumed_at claim, which exists to gate
+    # the first PAID research call - the guard here plays the identical role for the paid article-
+    # generation call).
+    TELEGRAPH_ARTICLE = "TELEGRAPH_ARTICLE"
 
 
 class WorkflowRetryPolicy(BaseModel):

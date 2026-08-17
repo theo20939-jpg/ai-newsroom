@@ -13,6 +13,22 @@ step_results`, since Research always runs first in this phase and has nothing up
 read. "Research" in this phase means structured fact extraction, precisely - never external
 fact-checking, browsing, or verification, which this Capability cannot structurally perform.
 
+TELEGRAPH Checkpoint 3 addendum: reused, unmodified as a class/registration, for article-level
+Deep Research too - `capabilities.registry.build_registry()` registers exactly one
+`ResearchCapability` instance under the name "research"; `workflows/definitions/
+telegraph_research.py`'s own "deep_research" step reuses that same registered name (never a
+second Research subsystem). The branch is driven entirely by
+`context.business.telegraph_research_bundle_text`: `None` (every NEWS_ANALYSIS/
+CONTENT_GENERATION/MEME_GENERATION call, unconditionally) resolves `PROMPT_VERSION` ("2") and
+builds the request exactly as before, byte-for-byte; a non-None bundle (only ever set by
+`capabilities/executor.py` for a TELEGRAPH_RESEARCH workflow's "deep_research" step) resolves
+`PROMPT_VERSION_TELEGRAPH_DEEP_RESEARCH` ("3", prompts/research/v3.yaml - a new, immutable
+version; v1/v2 are untouched) and builds the request from the bundle text instead of
+`news_event.content`. `news_event` itself is still present in that branch (the Story's anchor
+event, required by `EditorialTask.event_id`/`CapabilityExecutor`'s own NewsEvent-centric
+contract) but its `content` is deliberately NOT read for the deep-research request - the bundle
+is the complete, already-aggregated input.
+
 This module intentionally duplicates `scoring_capability.py`/`quality_capability.py`'s
 floor-validation helper rather than factoring out a shared one, per the same rationale those
 two modules already record (§19.2 Q1: validation-strategy sharing is deliberately left
@@ -35,6 +51,9 @@ logger = logging.getLogger(__name__)
 
 CAPABILITY_NAME = "research"
 PROMPT_VERSION = "2"
+# TELEGRAPH Checkpoint 3 - see module docstring's addendum. Selected only when
+# context.business.telegraph_research_bundle_text is present.
+PROMPT_VERSION_TELEGRAPH_DEEP_RESEARCH = "3"
 
 RESEARCH_CAPABILITY_DEFINITION = CapabilityDefinition(
     name=CAPABILITY_NAME,
@@ -118,6 +137,38 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
     )
 
 
+def _build_deep_research_request(context: CapabilityContext, prompt: RenderedPrompt) -> GenerateRequest:
+    """TELEGRAPH Checkpoint 3. Built from `context.business.telegraph_research_bundle_text`
+    only - never `news_event.content` (see module docstring's addendum)."""
+    bundle_text = context.business.telegraph_research_bundle_text
+    assert bundle_text is not None  # only called when the caller already checked this
+    system_text = prompt.system + "\n\nRULES:\n" + "\n".join(f"- {rule}" for rule in prompt.rules)
+    context_text = (
+        f"EVIDENCE BUNDLE:\n{bundle_text}\n\nTarget output language: {context.business.language}"
+    )
+    task_text = (
+        "Conduct deep research on the story above, strictly from the evidence bundle given - "
+        "produce structured evidence for a future article writer, not article prose."
+    )
+
+    return GenerateRequest(
+        messages=[
+            Message(role="system", content=[ContentPart(type="text", text=system_text)]),
+            Message(
+                role="user",
+                content=[ContentPart(type="text", text=f"CONTEXT:\n{context_text}\n\nTASK:\n{task_text}")],
+            ),
+        ],
+        preferred_model=context.execution.preferred_model,
+        preferred_provider=context.execution.preferred_provider,
+        max_tokens=context.execution.max_tokens,
+        reasoning_effort=context.execution.reasoning_effort,
+        temperature=context.execution.temperature,
+        response_mode="json_schema",
+        response_schema=prompt.output_schema,
+    )
+
+
 class ResearchCapability:
     """Implements the `Capability` Protocol (`capabilities.registry.Capability`). Holds only
     `LLMGateway` and `PromptRepository` (§4.2 of the frozen Phase 8 contract) - no
@@ -130,8 +181,13 @@ class ResearchCapability:
     async def execute(self, context: CapabilityContext) -> CapabilityResult:
         started_at = datetime.now(timezone.utc)
 
-        prompt = self._prompt_repository.resolve(CAPABILITY_NAME, PROMPT_VERSION)
-        request = _build_request(context, prompt)
+        is_deep_research = context.business.telegraph_research_bundle_text is not None
+        if is_deep_research:
+            prompt = self._prompt_repository.resolve(CAPABILITY_NAME, PROMPT_VERSION_TELEGRAPH_DEEP_RESEARCH)
+            request = _build_deep_research_request(context, prompt)
+        else:
+            prompt = self._prompt_repository.resolve(CAPABILITY_NAME, PROMPT_VERSION)
+            request = _build_request(context, prompt)
 
         # §6.4/§6.5/§6.7 via the centralized M1 mechanism (§6.8) - never reimplemented here.
         outcome = await call_generate(self._gateway, request, runtime=context.runtime, sequence=0)

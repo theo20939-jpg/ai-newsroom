@@ -43,6 +43,12 @@ _CAPABILITY_NAME_TO_AI_CAPABILITY: dict[str, AICapability] = {
     # than adding a new enum value/migration, mirroring the editorial_planning -> INTELLIGENCE
     # reuse decision above.
     "media_vision_review": AICapability.QUALITY,
+    # TELEGRAPH Checkpoint 5: a genuinely new Capability (never CopywritingCapability reused -
+    # see capabilities/article_generation_capability.py's own docstring for why), mapped to the
+    # semantically closest existing value rather than adding a new enum/migration - it IS writing
+    # copy, just long-form and TELEGRAPH-scoped, mirroring editorial_planning -> INTELLIGENCE's
+    # own precedent exactly.
+    "article_generation": AICapability.COPYWRITING,
 }
 
 

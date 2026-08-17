@@ -24,7 +24,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
-from database.models.editorial_task import EditorialTask
+from database.models.editorial_task import EditorialTask, TaskStatus
 from database.models.news_event import NewsEvent
 from database.models.news_event_article_acquisition import NewsEventArticleAcquisition
 from database.models.news_source import NewsSource
@@ -36,6 +36,8 @@ from services.source_intelligence import classify_source_role
 from services.source_intelligence_persistence import persist_source_intelligence
 from services.story_context import build_story_timeline
 from services.story_context_persistence import persist_story_context_snapshot
+from services.telegraph_research_context import build_article_research_bundle, render_bundle_text
+from services.telegraph_visual_research import build_visual_research_bundle, render_visual_bundle_summary
 from schemas.capability import (
     BusinessContext,
     CapabilityCall,
@@ -105,6 +107,13 @@ _MAX_OUTPUT_TOKENS_BY_CAPABILITY: dict[str, int] = {
     "scoring": 250,
     "copywriting": 600,
     "quality": 400,
+    # TELEGRAPH Checkpoint 5: its own capability name (never overloads "research"/"copywriting" -
+    # see capabilities/article_generation_capability.py's own docstring), so a plain dict entry
+    # is sufficient here, unlike deep_research's own distinct-override need in _build_context()
+    # below (that one DOES overload the shared "research" name). A full long-form article is a
+    # materially larger structured output than any NEWS capability produces - reasoned starting
+    # point, not fit to any real output-size data yet.
+    "article_generation": 6000,
 }
 _REASONING_EFFORT_BY_CAPABILITY: dict[str, Literal["none", "low", "medium", "high"]] = {
     "research": "none",
@@ -113,7 +122,21 @@ _REASONING_EFFORT_BY_CAPABILITY: dict[str, Literal["none", "low", "medium", "hig
     "scoring": "low",
     "copywriting": "low",
     "quality": "low",
+    # TELEGRAPH Checkpoint 5: real editorial-style judgment (structuring a long-form article from
+    # research evidence), closer to "copywriting" than to plain "research" extraction.
+    "article_generation": "medium",
 }
+
+# TELEGRAPH Checkpoint 3: reasoned starting points for the "deep_research" step only (see
+# _build_context()'s own comment on why this can't live in the two dicts above, which are keyed
+# by capability name and shared with NEWS_ANALYSIS/CONTENT_GENERATION's own "research" step).
+# Not fit to any real output-size data yet - matches this codebase's own established
+# "reasoned default, refine later" convention (e.g. article_acquisition_reuse_window_hours).
+# "medium" reasoning effort (vs. plain "research"'s "none"): this step synthesizes/deepens
+# already-extracted evidence rather than performing flat extraction - real, if bounded,
+# editorial-style judgment, closer to "intelligence"/"copywriting" than to "research" itself.
+_TELEGRAPH_DEEP_RESEARCH_MAX_OUTPUT_TOKENS = 4000
+_TELEGRAPH_DEEP_RESEARCH_REASONING_EFFORT: Literal["none", "low", "medium", "high"] = "medium"
 
 
 class CapabilityExecutor:
@@ -238,10 +261,116 @@ class CapabilityExecutor:
                     extra={"task_id": str(task.id), "event_id": str(task.event_id)},
                 )
 
+        # TELEGRAPH Checkpoint 3: build the deterministic article research bundle for exactly one
+        # step - "deep_research" (capability="research") of a TELEGRAPH_RESEARCH workflow. Mirrors
+        # _attach_story_context()'s own established shape (look up the anchor event's
+        # NewsEventStoryLink, resolve story_id, call a bounded builder) - the one difference is
+        # this MUST succeed for the step to do anything meaningful, so failure here is not
+        # swallowed the way every "shadow" attach hook's failure is: an unresolvable Story for a
+        # TELEGRAPH_RESEARCH task is a genuine configuration error (services.
+        # telegraph_research_processor.process_approved_telegraph_proposal() always creates this
+        # task with event_id == story.first_event_id, so a missing link/Story here means something
+        # is structurally wrong, not a transient/optional condition).
+        telegraph_research_bundle_text: str | None = None
+        telegraph_deep_research_output: dict[str, Any] | None = None
+        telegraph_visual_bundle_summary: str | None = None
+        state_for_bundle = WorkflowExecutionState.model_validate(task.workflow)
+
+        if step.capability == "research" and state_for_bundle.workflow_name == WorkflowType.TELEGRAPH_RESEARCH:
+            from database.models.story import Story
+            from database.models.story_link import NewsEventStoryLink
+
+            link = await self._session.get(NewsEventStoryLink, news_event.id)
+            if link is None:
+                raise PermanentStepFailureError(
+                    f"TELEGRAPH_RESEARCH task {task.id}: no NewsEventStoryLink for anchor event "
+                    f"{news_event.id} - cannot resolve the Story to research."
+                )
+            story = await self._session.get(Story, link.story_id)
+            if story is None:
+                raise PermanentStepFailureError(
+                    f"TELEGRAPH_RESEARCH task {task.id}: Story {link.story_id} not found."
+                )
+            bundle = await build_article_research_bundle(self._session, story)
+            telegraph_research_bundle_text = render_bundle_text(bundle)
+
+        # TELEGRAPH Checkpoint 5: the "generate_article" step of a TELEGRAPH_ARTICLE workflow
+        # reads the prior, already-COMPLETED TELEGRAPH_RESEARCH task's own result - never re-runs
+        # Research. Resolved by (event_id, workflow_name) exactly like services.analysis_reuse.
+        # find_source_news_analysis_task_id()'s own established pattern - both tasks share the
+        # same anchor event_id (story.first_event_id) by construction (services.
+        # telegraph_research_processor.py / services.telegraph_article_processor.py both create
+        # their task with event_id=story.first_event_id). A missing or incomplete prior research
+        # result is a genuine precondition violation (services.telegraph_article_processor.py's
+        # own caller-side guard is expected to prevent this from ever being reached in practice -
+        # see that module's own docstring) - raised as PermanentStepFailureError, never silently
+        # degraded, since there is no safe fallback content to write an article from.
+        if (
+            step.capability == "article_generation"
+            and state_for_bundle.workflow_name == WorkflowType.TELEGRAPH_ARTICLE
+        ):
+            from sqlalchemy import select
+
+            from database.models.story import Story
+            from database.models.story_link import NewsEventStoryLink
+            from database.models.telegraph_shortlist import TelegraphTopicProposal
+
+            link = await self._session.get(NewsEventStoryLink, news_event.id)
+            if link is None:
+                raise PermanentStepFailureError(
+                    f"TELEGRAPH_ARTICLE task {task.id}: no NewsEventStoryLink for anchor event "
+                    f"{news_event.id} - cannot resolve the Story to write about."
+                )
+            story = await self._session.get(Story, link.story_id)
+            if story is None:
+                raise PermanentStepFailureError(
+                    f"TELEGRAPH_ARTICLE task {task.id}: Story {link.story_id} not found."
+                )
+
+            research_task_stmt = select(EditorialTask).where(
+                EditorialTask.event_id == task.event_id,
+                EditorialTask.status == TaskStatus.COMPLETED,
+                EditorialTask.workflow["workflow_name"].as_string() == WorkflowType.TELEGRAPH_RESEARCH.value,
+            )
+            research_task = (await self._session.execute(research_task_stmt)).scalars().first()
+            if research_task is None:
+                raise PermanentStepFailureError(
+                    f"TELEGRAPH_ARTICLE task {task.id}: no COMPLETED TELEGRAPH_RESEARCH task "
+                    f"found for event {task.event_id} - cannot generate an article without a "
+                    f"completed Deep Research result."
+                )
+            deep_research_result = None
+            for step_result in (research_task.workflow or {}).get("step_results", []):
+                if step_result.get("step_name") == "deep_research" and step_result.get("status") == "SUCCESS":
+                    deep_research_result = step_result.get("result")
+                    break
+            if not isinstance(deep_research_result, dict):
+                raise PermanentStepFailureError(
+                    f"TELEGRAPH_ARTICLE task {task.id}: research task {research_task.id} has no "
+                    f"successful 'deep_research' step result to build an article from."
+                )
+            telegraph_deep_research_output = deep_research_result
+
+            proposal_id = (
+                await self._session.execute(
+                    select(TelegraphTopicProposal.id).where(
+                        TelegraphTopicProposal.research_task_id == research_task.id
+                    )
+                )
+            ).scalar_one_or_none()
+            if proposal_id is not None:
+                visual_bundle = await build_visual_research_bundle(
+                    self._session, proposal_id=proposal_id, story_id=story.id,
+                )
+                telegraph_visual_bundle_summary = render_visual_bundle_summary(visual_bundle)
+
         context = self._build_context(
             task, news_event, step, attempt,
             evidence_text=evidence_text, evidence_completeness=evidence_completeness,
             quote_source_text=quote_source_text,
+            telegraph_research_bundle_text=telegraph_research_bundle_text,
+            telegraph_deep_research_output=telegraph_deep_research_output,
+            telegraph_visual_bundle_summary=telegraph_visual_bundle_summary,
         )
 
         # API cost optimization (docs/api_cost_optimization_report.md): CONTENT_GENERATION's
@@ -1031,9 +1160,12 @@ class CapabilityExecutor:
     def _build_context(
         self, task: EditorialTask, news_event: NewsEvent, step: WorkflowStepDefinition, attempt: int,
         *, evidence_text: str | None = None, evidence_completeness: str | None = None,
-        quote_source_text: str | None = None,
+        quote_source_text: str | None = None, telegraph_research_bundle_text: str | None = None,
+        telegraph_deep_research_output: dict[str, Any] | None = None,
+        telegraph_visual_bundle_summary: str | None = None,
     ) -> CapabilityContext:
         state = WorkflowExecutionState.model_validate(task.workflow)
+        is_telegraph_deep_research = telegraph_research_bundle_text is not None
 
         news_event_snapshot = NewsEventSnapshot(
             id=news_event.id,
@@ -1065,10 +1197,28 @@ class CapabilityExecutor:
                 article_evidence_text=evidence_text,
                 article_evidence_completeness=evidence_completeness,
                 quote_source_text=quote_source_text,
+                telegraph_research_bundle_text=telegraph_research_bundle_text,
+                telegraph_deep_research_output=telegraph_deep_research_output,
+                telegraph_visual_bundle_summary=telegraph_visual_bundle_summary,
             ),
             execution=ExecutionContext(
-                max_tokens=_MAX_OUTPUT_TOKENS_BY_CAPABILITY.get(step.capability),
-                reasoning_effort=_REASONING_EFFORT_BY_CAPABILITY.get(step.capability),
+                # TELEGRAPH Checkpoint 3: deep research reads a materially larger bundle and is
+                # expected to produce a materially larger structured output than a normal
+                # single-event "research" call - the shared _MAX_OUTPUT_TOKENS_BY_CAPABILITY/
+                # _REASONING_EFFORT_BY_CAPABILITY dicts above are keyed by capability NAME
+                # ("research"), which this step also uses (by design - see capabilities/
+                # research_capability.py's own addendum), so a distinct override is needed here
+                # rather than a second dict entry. NEWS_ANALYSIS/CONTENT_GENERATION/
+                # MEME_GENERATION's own "research" step is completely unaffected - this branch
+                # only fires when telegraph_research_bundle_text is not None.
+                max_tokens=(
+                    _TELEGRAPH_DEEP_RESEARCH_MAX_OUTPUT_TOKENS if is_telegraph_deep_research
+                    else _MAX_OUTPUT_TOKENS_BY_CAPABILITY.get(step.capability)
+                ),
+                reasoning_effort=(
+                    _TELEGRAPH_DEEP_RESEARCH_REASONING_EFFORT if is_telegraph_deep_research
+                    else _REASONING_EFFORT_BY_CAPABILITY.get(step.capability)
+                ),
             ),
             runtime=RuntimeContext(
                 task_id=task.id,

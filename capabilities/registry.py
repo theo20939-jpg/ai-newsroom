@@ -47,6 +47,10 @@ from integrations.llm_gateway.tools.registry import ToolRegistry
 from integrations.prompts.protocol import PromptRepository
 from services.budget_guard import BudgetGuard
 
+from capabilities.article_generation_capability import (
+    ARTICLE_GENERATION_CAPABILITY_DEFINITION,
+    ArticleGenerationCapability,
+)
 from capabilities.copywriting_capability import COPYWRITING_CAPABILITY_DEFINITION, CopywritingCapability
 from capabilities.editorial_planning_capability import (
     EDITORIAL_PLANNING_CAPABILITY_DEFINITION,
@@ -179,5 +183,11 @@ def build_registry(
     # Phase 18 M4: registered alongside meme_concept, same rationale (real, resolvable,
     # cost-tracked via "meme_copywriting" -> AICapability.COPYWRITING).
     registry.register(MEME_COPYWRITING_CAPABILITY_DEFINITION, MemeCopywritingCapability(gateway, prompt_repository))
+    # TELEGRAPH Checkpoint 5: registered like every other capability (real, resolvable, cost-
+    # tracked via capability_mapping.py's "article_generation" -> AICapability.COPYWRITING
+    # entry) even though no live/automatic path calls it - services.telegraph_article_processor.
+    # generate_article_for_researched_proposal() is the only caller, and nothing calls that
+    # automatically, mirroring meme_concept/editorial_planning's own precedent exactly.
+    registry.register(ARTICLE_GENERATION_CAPABILITY_DEFINITION, ArticleGenerationCapability(gateway, prompt_repository))
     registry.seal()
     return registry

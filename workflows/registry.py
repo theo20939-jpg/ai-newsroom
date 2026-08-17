@@ -12,7 +12,13 @@ instead of source adapters.
 import logging
 
 from schemas.workflow import WorkflowDefinition, WorkflowType
-from workflows.definitions import content_generation, meme_generation, news_analysis
+from workflows.definitions import (
+    content_generation,
+    meme_generation,
+    news_analysis,
+    telegraph_article,
+    telegraph_research,
+)
 from workflows.errors import (
     DuplicateWorkflowRegistrationError,
     RegistryAlreadySealedError,
@@ -78,11 +84,20 @@ def build_registry() -> WorkflowRegistry:
     workflows.definitions package docstring. MEME_GENERATION is registered as of Phase 18 M4
     (docs/phase18_m4_meme_copywriting_report.md) - see workflows/definitions/meme_generation.py's
     own docstring for why registering it is safe (no automatic caller creates a task for it yet).
+    TELEGRAPH_RESEARCH is registered as of TELEGRAPH Checkpoint 3 - safe for the identical
+    reason: only services/telegraph_research_processor.py::process_approved_telegraph_proposal()
+    creates a task for it, and nothing calls that function automatically (no scheduler/worker
+    path exists yet).
     """
     registry = WorkflowRegistry()
     registry.register(news_analysis.DEFINITION)
     registry.register(content_generation.DEFINITION)
     registry.register(meme_generation.DEFINITION)
+    registry.register(telegraph_research.DEFINITION)
+    # TELEGRAPH Checkpoint 5: registered like TELEGRAPH_RESEARCH - safe for the identical reason
+    # (only services/telegraph_article_processor.py::generate_article_for_researched_proposal()
+    # creates a task for it, and nothing calls that automatically).
+    registry.register(telegraph_article.DEFINITION)
     registry.seal()
     return registry
 

@@ -26,6 +26,8 @@ async def create_task(
     session: AsyncSession,
     command: EditorialTaskCreate,
     registry: WorkflowRegistry = default_registry,
+    *,
+    commit: bool = True,
 ) -> EditorialTaskRead:
     """Create an EditorialTask from a validated EditorialTaskCreate command, or raise.
 
@@ -34,6 +36,16 @@ async def create_task(
     unrelated failures are reported without wasting the later checks. No ORM
     model crosses this boundary in either direction - callers pass and
     receive only these Pydantic schemas.
+
+    `commit` (TELEGRAPH Checkpoint 3 correctness fix, additive/backward-compatible - defaults to
+    `True`, byte-identical to every pre-existing caller's behavior): pass `commit=False` when the
+    caller wants this INSERT to participate in a larger caller-owned transaction (e.g. services.
+    telegraph_research_processor.process_approved_telegraph_proposal()'s own atomic claim+create+
+    link sequence) rather than committing independently. `session.flush()` + `session.refresh()`
+    are still performed either way, so the returned `EditorialTaskRead` always reflects real,
+    server-assigned values (`id`, `created_at`/`updated_at` defaults) even before the caller's own
+    later commit - `refresh()` reads the current transaction's own uncommitted-but-flushed row,
+    which is always visible to the same session/connection.
     """
     event = await session.get(NewsEvent, command.event_id)
     if event is None:
@@ -66,7 +78,10 @@ async def create_task(
         retry_count=0,
     )
     session.add(task)
-    await session.commit()
+    if commit:
+        await session.commit()
+    else:
+        await session.flush()
     await session.refresh(task)
 
     logger.info(
