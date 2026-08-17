@@ -245,9 +245,43 @@ _PRIORITY_CONTAINER_TAGS = frozenset({"article", "main"})
 # own priority list) - matched as a substring of the element's own `class`/`id` attribute.
 _PRIORITY_CONTAINER_CLASS_TOKENS = ("content", "post", "entry", "story")
 
+# 3DNews production forensic (https://3dnews.ru/1146956): the inline extractor correctly found
+# the real article image (cdn.3dnews.ru/.../github.jpg, inside article-entry > entry-body >
+# js-mediator-article) but ALSO picked up unrelated images from sibling "related content" widgets
+# nested in that same priority container - a related-article slider, a "related boxes" grid, and a
+# second related-slider variant. Real observed class/id values that triggered this:
+#   slider-container id="newsSlider" / slider-track / slider-slide / slider-slide-content
+#   content-block relatedbox rbxglob / related-box-item _isrelated
+#   content-block related-slider js-related-slider
+# Every one of the substrings below is present, case-insensitively, in at least one of those real
+# observed values - each token is deliberately specific enough that it does not also appear in
+# ordinary article-body class names (unlike "content"/"post"/"story", which the priority-container
+# tokens above already claim and which would break the main article body if reused here).
+# "recommend" alone (substring) already covers "recommended"/"recommendation" - not listed
+# separately. Deliberately NO bare "slider"/"carousel" token: a generic in-article image gallery
+# (e.g. class="article-gallery slider-container") must never be excluded on its own - see this
+# constant's own module docstring note on why the ancestor-stack mechanism below already gives a
+# slider inside an actually-related/news/recommend-labeled ancestor the correct exclusion without
+# a bespoke "slider + nearby signal" rule (every real forensic case above already contains
+# "related"/"newsslider" directly, so no such generic-slider case has ever been observed to need
+# one - if the future ever produces one, it belongs here as its own named, disclosed token, never
+# as a blanket "slider" ban).
+_SECONDARY_CONTAINER_TOKENS = (
+    "related", "recommend", "read-more", "readmore", "more-news", "news-slider", "newsslider",
+)
+
 _ICON_TOKENS = ("favicon", "icon", "logo", "avatar", "profile", "sprite")
 _AD_TOKENS = ("banner", "ads", "advertisement", "promo")
 _TRACKING_TOKENS = ("pixel", "tracking", "analytics")
+
+# The standard HTML5 void-element set - none of these can have children or a matching closing
+# tag in ordinary (non-XHTML-self-closed) HTML. `_InlineImageCollector.handle_starttag()` must
+# never push one onto its ancestor stack - see that method's own docstring comment for the real,
+# confirmed leak this prevents.
+_VOID_ELEMENTS = frozenset({
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param",
+    "source", "track", "wbr",
+})
 
 # "если известен размер" (docs) - a candidate with NO declared dimensions is never rejected on
 # size alone; only a KNOWN width/height below these floors is excluded.
@@ -329,6 +363,14 @@ def _is_priority_container(tag: str, attrs: dict[str, str]) -> bool:
     return _matches_any_token(signal, _PRIORITY_CONTAINER_CLASS_TOKENS)
 
 
+def _is_secondary_container(attrs: dict[str, str]) -> bool:
+    """No tag-name signal exists for "this is a related/recommended widget" (unlike <article>/
+    <main> for priority containers) - class/id substring only, see _SECONDARY_CONTAINER_TOKENS's
+    own docstring for the real forensic values this was calibrated against."""
+    signal = f"{attrs.get('class', '')} {attrs.get('id', '')}"
+    return _matches_any_token(signal, _SECONDARY_CONTAINER_TOKENS)
+
+
 def _matches_any_token(haystack: str, tokens: tuple[str, ...]) -> bool:
     lowered = haystack.lower()
     return any(token in lowered for token in tokens)
@@ -382,7 +424,9 @@ class _InlineImageCollector(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.raw_images: list[_RawInlineImage] = []
         self.any_priority_container_seen = False
-        self._container_stack: list[tuple[str, bool]] = []
+        # (tag, is_priority, is_secondary) - one entry per currently-open element, popped on its
+        # own matching end tag (handle_endtag below, unchanged - it only ever reads index 0).
+        self._container_stack: list[tuple[str, bool, bool]] = []
         # Each open <picture> gets one entry: True once a child <source srcset> has already
         # contributed a candidate for it - the fallback <img> inside that same <picture> is then
         # skipped (docs: "picture/source", never double-counted against the same visual slot).
@@ -390,13 +434,27 @@ class _InlineImageCollector(HTMLParser):
         self._position = 0
 
     def _in_priority_container(self) -> bool:
-        return any(is_priority for _, is_priority in self._container_stack)
+        return any(is_priority for _, is_priority, _ in self._container_stack)
+
+    def _in_secondary_container(self) -> bool:
+        """3DNews fix: secondary (related/recommended/read-more) ancestors take priority over
+        priority-container membership - an <img> nested inside e.g. entry-body > related-slider
+        is excluded even though entry-body itself is a priority container (the task's own explicit
+        "secondary ancestor должен иметь приоритет над priority ancestor" requirement)."""
+        return any(is_secondary for _, _, is_secondary in self._container_stack)
 
     def _try_add(self, *, url_raw: str | None, declared_width: int | None, declared_height: int | None,
-                 alt: str, class_attr: str, id_attr: str) -> bool:
+                 alt: str, class_attr: str, id_attr: str, is_priority: bool, is_secondary: bool) -> bool:
         """Returns True if a candidate was actually added (used by <source>/<img> handling to
-        decide whether a <picture>'s fallback <img> should be skipped)."""
+        decide whether a <picture>'s fallback <img> should be skipped). `is_priority`/`is_secondary`
+        are the void tag's OWN computed flags (img/source are never pushed onto `_container_stack`
+        - see its own docstring for why); combined here with `self._in_*_container()`, which now
+        reflects only real, still-open ancestors, this reproduces the exact same "does this
+        candidate's own class/id or any ancestor's count" semantics the stack-based check gave
+        before the void-element fix, just without leaking into siblings."""
         if len(self.raw_images) >= _MAX_RAW_INLINE_CANDIDATES:
+            return False
+        if is_secondary or self._in_secondary_container():
             return False
         if url_raw is None:
             return False
@@ -408,7 +466,8 @@ class _InlineImageCollector(HTMLParser):
         self._position += 1
         self.raw_images.append(_RawInlineImage(
             url_raw=url_raw.strip(), declared_width=declared_width, declared_height=declared_height,
-            alt=alt, position=self._position, in_priority_container=self._in_priority_container(),
+            alt=alt, position=self._position,
+            in_priority_container=is_priority or self._in_priority_container(),
         ))
         return True
 
@@ -417,7 +476,20 @@ class _InlineImageCollector(HTMLParser):
         attrs_dict = {name.lower(): (value or "") for name, value in attrs}
 
         is_priority = _is_priority_container(lowered, attrs_dict)
-        self._container_stack.append((lowered, is_priority))
+        is_secondary = _is_secondary_container(attrs_dict)
+        if lowered not in _VOID_ELEMENTS:
+            # Void elements (img/source and the rest of the HTML5 void-element set) can never have
+            # children and, in ordinary (non-XHTML-self-closed) HTML, never trigger a matching
+            # handle_endtag() call at all - html.parser.HTMLParser does not synthesize one; only an
+            # explicitly self-closed `<tag ... />` reaches handle_endtag(), via the base class's
+            # own default handle_startendtag(). Pushing a void element here would leave a stale
+            # entry on the stack until some UNRELATED ancestor's later closing tag happens to
+            # truncate far enough to remove it - silently poisoning every sibling element's
+            # _in_priority_container()/_in_secondary_container() check in between. Confirmed as a
+            # real bug (not hypothetical), traced against the live parser: a `class="related-
+            # thumbnail"` <img> immediately followed by a legitimate sibling <img> caused the
+            # sibling to be wrongly excluded too, until the enclosing <div> finally closed.
+            self._container_stack.append((lowered, is_priority, is_secondary))
         if is_priority:
             self.any_priority_container_seen = True
 
@@ -438,6 +510,7 @@ class _InlineImageCollector(HTMLParser):
             added = self._try_add(
                 url_raw=source_url_raw, declared_width=source_declared_width, declared_height=None,
                 alt="", class_attr=attrs_dict.get("class", ""), id_attr=attrs_dict.get("id", ""),
+                is_priority=is_priority, is_secondary=is_secondary,
             )
             if added:
                 self._picture_stack[-1] = True
@@ -464,7 +537,7 @@ class _InlineImageCollector(HTMLParser):
             self._try_add(
                 url_raw=url_raw, declared_width=declared_width, declared_height=declared_height,
                 alt=attrs_dict.get("alt", ""), class_attr=attrs_dict.get("class", ""),
-                id_attr=attrs_dict.get("id", ""),
+                id_attr=attrs_dict.get("id", ""), is_priority=is_priority, is_secondary=is_secondary,
             )
 
     def handle_endtag(self, tag: str) -> None:
@@ -490,9 +563,16 @@ def extract_inline_article_images(html: str, *, base_url: str) -> list[NativeMed
     every priority container is dropped, not merely deprioritized. Falls back to the whole
     document when no priority container exists anywhere.
 
+    Secondary-subtree exclusion (3DNews production forensic - see `_SECONDARY_CONTAINER_TOKENS`'s
+    own docstring for the real class/id values this was calibrated against): an <img>/<source>
+    nested inside a related/recommended/read-more/news-slider ancestor is dropped entirely, even
+    when that same element is ALSO inside a priority container - secondary always wins over
+    priority (`_InlineImageCollector._try_add()` checks it before the candidate is ever recorded,
+    never merely deprioritizes it the way `in_priority_container=False` does).
+
     Returns at most `_MAX_FINAL_INLINE_CANDIDATES` (5) hints, best-first per `_inline_sort_key()`,
     drawn from at most `_MAX_RAW_INLINE_CANDIDATES` (10) raw sightings that already passed the
-    cheap icon/ad/tracking/svg/data-uri/too-small filters during parsing."""
+    cheap icon/ad/tracking/svg/data-uri/too-small/secondary-subtree filters during parsing."""
     if not html:
         return []
 

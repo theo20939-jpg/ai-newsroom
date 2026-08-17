@@ -407,3 +407,224 @@ def test_inline_extractor_never_reads_meta_tags() -> None:
     html = '<meta property="og:image" content="https://cdn.example.com/a.jpg">'
     hints = extract_inline_article_images(html, base_url=BASE_URL)
     assert hints == []
+
+
+# ---------------------------------------------------------------------------------------------
+# 3DNews secondary/related-subtree false-positive fix. Real production canary case:
+# https://3dnews.ru/1146956 - the real article image (github.jpg) is correctly found inline, but
+# unrelated "related content" widgets nested in the same priority container were also being
+# picked up. Shapes below are the real observed class/id values (see services/article_metadata.py
+# ::_SECONDARY_CONTAINER_TOKENS's own docstring for the full forensic trail).
+# ---------------------------------------------------------------------------------------------
+
+
+def test_1_3dnews_forensic_shape_only_returns_the_real_article_image() -> None:
+    html = """
+    <div class="article-entry">
+      <div class="entry-body">
+        <div class="js-mediator-article">
+
+          <img src="github.jpg" width="800" height="533">
+
+          <div class="slider-container" id="newsSlider">
+            <img class="slider-slide-image" src="wrong1.jpg" width="800" height="600">
+          </div>
+
+          <div class="content-block relatedbox rbxglob">
+            <img src="wrong2.jpg" width="800" height="600">
+          </div>
+
+          <div class="content-block related-slider js-related-slider">
+            <img src="wrong3.jpg" width="800" height="600">
+          </div>
+
+        </div>
+      </div>
+    </div>
+    """
+    hints = extract_inline_article_images(html, base_url=BASE_URL)
+    assert [h.remote_url for h in hints] == ["https://example.com/article/github.jpg"]
+
+
+def test_2_habr_like_normal_article_body_keeps_useful_images() -> None:
+    html = """
+    <article class="tm-article-body">
+      <div class="article-formatted-body">
+        <p>Some intro text.</p>
+        <img src="diagram1.png" width="900" height="500" alt="Architecture diagram">
+        <p>More text.</p>
+        <img src="screenshot2.png" width="850" height="480" alt="Screenshot">
+      </div>
+    </article>
+    """
+    hints = extract_inline_article_images(html, base_url=BASE_URL)
+    urls = {h.remote_url for h in hints}
+    assert urls == {
+        "https://example.com/article/diagram1.png",
+        "https://example.com/article/screenshot2.png",
+    }
+
+
+def test_3_generic_slider_without_related_signal_is_not_excluded() -> None:
+    """A bare "slider"/gallery wrapper, with no related/recommend/news-slider signal anywhere in
+    its own or ancestor class/id, must never be excluded just for containing the word "slider" -
+    the task's own explicit "не убить легитимную галерею" requirement."""
+    html = """
+    <article>
+      <div class="article-gallery slider-container">
+        <img src="gallery1.jpg" width="900" height="600">
+        <img src="gallery2.jpg" width="900" height="600">
+      </div>
+    </article>
+    """
+    hints = extract_inline_article_images(html, base_url=BASE_URL)
+    urls = {h.remote_url for h in hints}
+    assert urls == {
+        "https://example.com/article/gallery1.jpg",
+        "https://example.com/article/gallery2.jpg",
+    }
+
+
+def test_4_secondary_ancestor_wins_over_priority_ancestor() -> None:
+    """priority=True AND secondary=True (nested) -> excluded. Mirrors the real 3DNews shape:
+    entry-body (priority, via "entry") wraps related-slider (secondary)."""
+    html = """
+    <div class="entry-body">
+      <div class="related-slider">
+        <img src="wrong.jpg" width="900" height="600">
+      </div>
+      <img src="right.jpg" width="900" height="600">
+    </div>
+    """
+    hints = extract_inline_article_images(html, base_url=BASE_URL)
+    assert [h.remote_url for h in hints] == ["https://example.com/article/right.jpg"]
+
+
+def test_5_related_block_without_declared_dimensions_still_excluded() -> None:
+    html = """
+    <article>
+      <div class="read-more-block">
+        <img src="wrong.jpg">
+      </div>
+      <img src="right.jpg" width="900" height="600">
+    </article>
+    """
+    hints = extract_inline_article_images(html, base_url=BASE_URL)
+    assert [h.remote_url for h in hints] == ["https://example.com/article/right.jpg"]
+
+
+def test_recommended_and_recommendation_variants_excluded_via_recommend_substring() -> None:
+    html = """
+    <article>
+      <div class="recommended-articles"><img src="a.jpg" width="900" height="600"></div>
+      <div class="recommendation-widget"><img src="b.jpg" width="900" height="600"></div>
+      <img src="right.jpg" width="900" height="600">
+    </article>
+    """
+    hints = extract_inline_article_images(html, base_url=BASE_URL)
+    assert [h.remote_url for h in hints] == ["https://example.com/article/right.jpg"]
+
+
+def test_more_news_and_readmore_variants_excluded() -> None:
+    html = """
+    <article>
+      <div class="more-news-block"><img src="a.jpg" width="900" height="600"></div>
+      <div class="readmore"><img src="b.jpg" width="900" height="600"></div>
+      <img src="right.jpg" width="900" height="600">
+    </article>
+    """
+    hints = extract_inline_article_images(html, base_url=BASE_URL)
+    assert [h.remote_url for h in hints] == ["https://example.com/article/right.jpg"]
+
+
+# ---------------------------------------------------------------------------------------------
+# Void-element ancestor-stack leak fix. <img>/<source> are HTML5 void elements - written without
+# a self-closing slash (the ordinary, common case), they never get a matching handle_endtag()
+# call from html.parser.HTMLParser at all. Before this fix, handle_starttag() pushed EVERY tag
+# (including void ones) onto the same ancestor stack used for priority/secondary-container
+# tracking; a secondary-flagged <img> then stayed on that stack indefinitely (until some UNRELATED
+# ancestor's later closing tag happened to truncate far enough to remove it), incorrectly marking
+# every sibling element processed in between as "inside a secondary container" too. Confirmed
+# empirically against the live parser before this fix (not assumed).
+# ---------------------------------------------------------------------------------------------
+
+
+def test_secondary_img_does_not_leak_onto_a_following_sibling_img() -> None:
+    """The task's own minimal reproducer: a related-thumbnail <img>, written the ordinary
+    (non-self-closed) way, must not poison the very next sibling <img> in the same container."""
+    html = """
+    <div class="article-entry">
+      <div class="entry-body">
+
+        <img
+          class="related-thumbnail"
+          src="wrong.jpg"
+          width="800"
+          height="600"
+        >
+
+        <img
+          src="real-after-it.jpg"
+          width="800"
+          height="600"
+        >
+
+      </div>
+    </div>
+    """
+    hints = extract_inline_article_images(html, base_url=BASE_URL)
+    assert [h.remote_url for h in hints] == ["https://example.com/article/real-after-it.jpg"]
+
+
+def test_secondary_source_inside_picture_does_not_leak_onto_a_following_sibling_picture() -> None:
+    """<source> is also a void element and is likewise pushed/checked via the same _try_add() path
+    - a related-flagged <picture><source> must not poison a following sibling <picture>'s own
+    <source>."""
+    html = """
+    <div class="entry-body">
+      <picture class="related-teaser">
+        <source srcset="wrong.jpg 800w">
+        <img src="wrong-fallback.jpg" width="800" height="600">
+      </picture>
+      <picture>
+        <source srcset="real.jpg 800w">
+        <img src="real-fallback.jpg" width="800" height="600">
+      </picture>
+    </div>
+    """
+    hints = extract_inline_article_images(html, base_url=BASE_URL)
+    assert [h.remote_url for h in hints] == ["https://example.com/article/real.jpg"]
+
+
+def test_self_closed_xhtml_style_img_is_also_unaffected() -> None:
+    """A self-closed <img ... /> reaches handle_startendtag() (base class default: calls
+    handle_starttag() then handle_endtag() immediately) - this path never leaked even before the
+    fix, and must keep working identically after it."""
+    html = """
+    <div class="entry-body">
+      <img class="related-thumbnail" src="wrong.jpg" width="800" height="600" />
+      <img src="real.jpg" width="800" height="600" />
+    </div>
+    """
+    hints = extract_inline_article_images(html, base_url=BASE_URL)
+    assert [h.remote_url for h in hints] == ["https://example.com/article/real.jpg"]
+
+
+def test_many_siblings_after_a_secondary_img_all_survive() -> None:
+    """Not just the immediate next sibling - the leak (before the fix) would have poisoned every
+    sibling up until the enclosing element finally closed, however many there were."""
+    html = """
+    <div class="entry-body">
+      <img class="related-thumbnail" src="wrong.jpg" width="800" height="600">
+      <img src="a.jpg" width="800" height="600">
+      <img src="b.jpg" width="800" height="600">
+      <img src="c.jpg" width="800" height="600">
+    </div>
+    """
+    hints = extract_inline_article_images(html, base_url=BASE_URL)
+    urls = {h.remote_url for h in hints}
+    assert urls == {
+        "https://example.com/article/a.jpg",
+        "https://example.com/article/b.jpg",
+        "https://example.com/article/c.jpg",
+    }
