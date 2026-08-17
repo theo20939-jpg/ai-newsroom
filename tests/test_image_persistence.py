@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
-from database.models.image_candidate_record import ImageCandidateRecord, ImageStorageStatus
+from database.models.image_candidate_record import ImageCandidateRecord, ImageQualityStatus, ImageStorageStatus
 from database.models.news_event import NewsEvent
 from database.models.news_source import SourceType
 from integrations.storage.image_storage import LocalImageStorage
@@ -59,12 +59,14 @@ def _candidate(
     rank: int | None = 1,
     with_technical: bool = True,
     remote_url: str = "https://cdn.example.com/photo.jpg?token=secret123&width=800",
+    sha256: str = _SHA256,
+    perceptual_hash: str = "abcd1234",
 ) -> ImageCandidate:
     technical = (
         TechnicalValidation(
             final_url=remote_url, http_status=200, observed_mime="image/jpeg", format="JPEG",
             byte_size=len(_DATA), width=800, height=600, pixel_count=480_000, aspect_ratio=1.33,
-            animated=False, sha256=_SHA256,
+            animated=False, sha256=sha256,
         )
         if with_technical
         else None
@@ -74,7 +76,7 @@ def _candidate(
             status=quality_status, quality_score=80,
             signals=QualitySignals(resolution_band=ResolutionBand.GOOD, aspect_ratio_band=AspectRatioBand.EDITORIAL_LANDSCAPE),
             deduplication=DeduplicationInfo(
-                exact_hash=_SHA256, perceptual_hash="abcd1234", exact_cluster_id="c1",
+                exact_hash=sha256, perceptual_hash=perceptual_hash, exact_cluster_id="c1",
                 is_representative=is_representative,
             ),
         )
@@ -376,3 +378,178 @@ async def test_persistence_never_raises_on_a_single_bad_candidate(
         )
 
     assert summary.candidates_persisted == 2
+
+
+# ---------------------------------------------------------------------------------------------
+# Repeat-run deduplication gap fix (Media Stability Audit finding): the same NewsEvent discovered
+# across multiple SEPARATE persist_image_intelligence_result() calls must never accumulate more
+# than one eligible row for what is really the same underlying photo.
+# ---------------------------------------------------------------------------------------------
+
+
+async def _persist(db_session: AsyncSession, event_id, *candidates: ImageCandidate) -> None:
+    with patch.object(settings, "image_candidate_persistence_mode", "metadata"):
+        await image_persistence.persist_image_intelligence_result(
+            db_session, result=_result(event_id, *candidates), editorial_task_id=None,
+            image_bytes_by_candidate_id={},
+        )
+
+
+async def _rows_by_candidate_id(db_session: AsyncSession, event_id) -> dict[str, ImageCandidateRecord]:
+    rows = (
+        await db_session.execute(
+            select(ImageCandidateRecord).where(ImageCandidateRecord.news_event_id == event_id)
+        )
+    ).scalars().all()
+    return {row.candidate_id: row for row in rows}
+
+
+@pytest.mark.asyncio
+async def test_1_second_run_same_sha256_different_url_marks_second_as_duplicate(
+    db_session: AsyncSession, real_news_event: NewsEvent,
+) -> None:
+    first = _candidate(candidate_id="run1-cand", event_id=real_news_event.id, remote_url="https://cdn.example.com/a.jpg?v=1")
+    await _persist(db_session, real_news_event.id, first)
+
+    second = _candidate(candidate_id="run2-cand", event_id=real_news_event.id, remote_url="https://cdn.example.com/a.jpg?v=2")
+    await _persist(db_session, real_news_event.id, second)
+
+    rows = await _rows_by_candidate_id(db_session, real_news_event.id)
+    assert rows["run1-cand"].eligible_for_editorial is True
+    assert rows["run1-cand"].quality_status == ImageQualityStatus.ACCEPTED
+    assert rows["run2-cand"].eligible_for_editorial is False
+    assert rows["run2-cand"].quality_status == ImageQualityStatus.DUPLICATE_EXACT
+    assert rows["run2-cand"].duplicate_of_candidate_id == "run1-cand"
+
+
+@pytest.mark.asyncio
+async def test_2_signed_url_changes_every_run_still_deduped_by_sha256(
+    db_session: AsyncSession, real_news_event: NewsEvent,
+) -> None:
+    """Real production case (Media Stability Audit): GitHub's repository-images.githubusercontent.
+    com issues a fresh X-Amz-Signature on every fetch of the SAME underlying image - three separate
+    discovery runs for one event, three different signed URLs, identical sha256."""
+    signed_urls = [
+        "https://repository-images.githubusercontent.com/123/abc?X-Amz-Signature=sig1",
+        "https://repository-images.githubusercontent.com/123/abc?X-Amz-Signature=sig2",
+        "https://repository-images.githubusercontent.com/123/abc?X-Amz-Signature=sig3",
+    ]
+    for index, url in enumerate(signed_urls, start=1):
+        candidate = _candidate(candidate_id=f"signed-run{index}", event_id=real_news_event.id, remote_url=url)
+        await _persist(db_session, real_news_event.id, candidate)
+
+    rows = await _rows_by_candidate_id(db_session, real_news_event.id)
+    eligible_ids = sorted(cid for cid, row in rows.items() if row.eligible_for_editorial)
+    assert eligible_ids == ["signed-run1"]
+    assert rows["signed-run2"].quality_status == ImageQualityStatus.DUPLICATE_EXACT
+    assert rows["signed-run2"].duplicate_of_candidate_id == "signed-run1"
+    assert rows["signed-run3"].quality_status == ImageQualityStatus.DUPLICATE_EXACT
+    assert rows["signed-run3"].duplicate_of_candidate_id == "signed-run1"
+
+
+@pytest.mark.asyncio
+async def test_3_cdn_resize_different_sha256_same_perceptual_hash_marks_duplicate_near(
+    db_session: AsyncSession, real_news_event: NewsEvent,
+) -> None:
+    first = _candidate(
+        candidate_id="resize-run1", event_id=real_news_event.id,
+        remote_url="https://cdn.example.com/photo-1200x800.jpg",
+        sha256="a" * 64, perceptual_hash="0000000000000000",
+    )
+    await _persist(db_session, real_news_event.id, first)
+
+    second = _candidate(
+        candidate_id="resize-run2", event_id=real_news_event.id,
+        remote_url="https://cdn.example.com/photo-800x533.jpg",
+        sha256="b" * 64, perceptual_hash="0000000000000001",  # Hamming distance 1 from run1
+    )
+    await _persist(db_session, real_news_event.id, second)
+
+    rows = await _rows_by_candidate_id(db_session, real_news_event.id)
+    assert rows["resize-run1"].eligible_for_editorial is True
+    assert rows["resize-run2"].eligible_for_editorial is False
+    assert rows["resize-run2"].quality_status == ImageQualityStatus.DUPLICATE_NEAR
+    assert rows["resize-run2"].duplicate_of_candidate_id == "resize-run1"
+
+
+@pytest.mark.asyncio
+async def test_4_genuinely_different_images_both_remain_eligible(
+    db_session: AsyncSession, real_news_event: NewsEvent,
+) -> None:
+    first = _candidate(
+        candidate_id="distinct-run1", event_id=real_news_event.id,
+        remote_url="https://cdn.example.com/photo-a.jpg", sha256="c" * 64, perceptual_hash="0000000000000000",
+    )
+    await _persist(db_session, real_news_event.id, first)
+
+    second = _candidate(
+        candidate_id="distinct-run2", event_id=real_news_event.id,
+        remote_url="https://cdn.example.com/photo-b.jpg", sha256="d" * 64, perceptual_hash="ffffffffffffffff",
+    )
+    await _persist(db_session, real_news_event.id, second)
+
+    rows = await _rows_by_candidate_id(db_session, real_news_event.id)
+    assert rows["distinct-run1"].eligible_for_editorial is True
+    assert rows["distinct-run2"].eligible_for_editorial is True
+    assert rows["distinct-run2"].quality_status == ImageQualityStatus.ACCEPTED
+    assert rows["distinct-run2"].duplicate_of_candidate_id is None
+
+
+@pytest.mark.asyncio
+async def test_review_band_distance_marks_review_without_forcing_ineligible(
+    db_session: AsyncSession, real_news_event: NewsEvent,
+) -> None:
+    """Distance 8 is above AUTO_DUPLICATE_MAX_DISTANCE (4) but within REVIEW_MAX_DISTANCE (12) -
+    per the task's own explicit spec, this becomes REVIEW, not a forced-ineligible duplicate
+    (mirrors the existing within-run precedent: REVIEW is not in image_relevance.py's own
+    _INELIGIBLE_QUALITY_STATUSES)."""
+    first = _candidate(
+        candidate_id="review-run1", event_id=real_news_event.id,
+        remote_url="https://cdn.example.com/photo-x.jpg", sha256="e" * 64, perceptual_hash="0000000000000000",
+    )
+    await _persist(db_session, real_news_event.id, first)
+
+    second = _candidate(
+        candidate_id="review-run2", event_id=real_news_event.id,
+        remote_url="https://cdn.example.com/photo-y.jpg", sha256="f" * 64, perceptual_hash="0000000000000ff0",
+    )
+    await _persist(db_session, real_news_event.id, second)
+
+    rows = await _rows_by_candidate_id(db_session, real_news_event.id)
+    assert rows["review-run2"].quality_status == ImageQualityStatus.REVIEW
+    assert rows["review-run2"].duplicate_of_candidate_id == "review-run1"
+    assert rows["review-run2"].eligible_for_editorial is True  # not forced False for REVIEW
+
+
+@pytest.mark.asyncio
+async def test_5_same_run_distinct_candidates_never_cross_flagged(
+    db_session: AsyncSession, real_news_event: NewsEvent,
+) -> None:
+    """Regression guard for the exact false positive this feature's design had to avoid: two
+    candidates persisted in the SAME persist_image_intelligence_result() call (sharing the test
+    helper's default sha256/perceptual_hash, exactly like test_get_editorial_image_candidates_
+    orders_by_rank_and_flags_expiry above) must never see each other via the cross-run snapshot,
+    which is taken once, before this call's own loop starts."""
+    first = _candidate(candidate_id="same-run-a", event_id=real_news_event.id, remote_url="https://cdn.example.com/a.jpg", rank=1)
+    second = _candidate(candidate_id="same-run-b", event_id=real_news_event.id, remote_url="https://cdn.example.com/b.jpg", rank=2)
+    await _persist(db_session, real_news_event.id, first, second)
+
+    rows = await _rows_by_candidate_id(db_session, real_news_event.id)
+    assert rows["same-run-a"].eligible_for_editorial is True
+    assert rows["same-run-b"].eligible_for_editorial is True
+
+
+@pytest.mark.asyncio
+async def test_legitimate_rerun_of_the_exact_same_url_never_flags_itself(
+    db_session: AsyncSession, real_news_event: NewsEvent,
+) -> None:
+    """A normal metadata-refresh upsert of the SAME candidate_id (identical URL re-fetched) must
+    never be treated as its own duplicate."""
+    candidate = _candidate(candidate_id="stable-cand", event_id=real_news_event.id, remote_url="https://cdn.example.com/stable.jpg")
+    await _persist(db_session, real_news_event.id, candidate)
+    await _persist(db_session, real_news_event.id, candidate)  # identical candidate, rerun
+
+    rows = await _rows_by_candidate_id(db_session, real_news_event.id)
+    assert rows["stable-cand"].eligible_for_editorial is True
+    assert rows["stable-cand"].quality_status == ImageQualityStatus.ACCEPTED
+    assert rows["stable-cand"].duplicate_of_candidate_id is None

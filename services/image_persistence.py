@@ -35,6 +35,8 @@ from database.models.image_candidate_record import (
 )
 from integrations.storage.image_storage import ImageStorage, LocalImageStorage, StorageError
 from schemas.image_candidate import ImageCandidate, ImageCandidateStatus, ImageIntelligenceResult, QualityStatus
+from services.image_deduplication import AUTO_DUPLICATE_MAX_DISTANCE, REVIEW_MAX_DISTANCE
+from services.image_quality import hamming_distance
 
 logger = logging.getLogger(__name__)
 
@@ -178,6 +180,94 @@ def _metadata_row_values(
     }
 
 
+# Repeat-run deduplication gap fix (Media Stability Audit finding): services.image_deduplication.
+# cluster_candidates() is deliberately pure/DB-free and scoped to one discovery run's own
+# candidate set (its own docstring: "items must already be scoped to one event"). When a NewsEvent
+# is discovered more than once (a retried CONTENT_GENERATION attempt, a re-run), each run's own
+# consolidate_candidates()/_identity_key() sees only that run's own URLs - a cache-busted or
+# signed URL (real confirmed cases: GitHub's opengraph.githubassets.com and repository-images.
+# githubusercontent.com, whose query string/path segment changes on every fetch even though the
+# rendered image is byte-identical or perceptually identical) produces a brand-new candidate_id
+# each time, so the existing within-run clustering never gets a chance to compare it against an
+# already-persisted, already-eligible row from a prior run. This is an ADDITIVE layer on top of
+# that existing, unmodified within-run logic - never a replacement for it, never touching
+# cluster_candidates()/consolidate_candidates() themselves, no migration, no new table.
+
+
+async def _fetch_existing_eligible_signatures(
+    session: AsyncSession, *, news_event_id: UUID,
+) -> list[tuple[str, str | None, str | None]]:
+    """One query, called once per persist_image_intelligence_result() call, BEFORE its own
+    per-candidate loop starts - never re-queried mid-loop. This is deliberate, not an
+    optimization: re-querying after each upsert would let two genuinely distinct candidates from
+    the very same run see each other's just-written row within the same transaction and get
+    cross-flagged, silently changing within-run behavior (forbidden). Only ACCEPTED, currently-
+    eligible rows are candidates for matching - a REVIEW or already-ineligible row is not itself a
+    confirmed duplicate, so it is deliberately never chained against."""
+    stmt = select(
+        ImageCandidateRecord.candidate_id, ImageCandidateRecord.sha256, ImageCandidateRecord.perceptual_hash,
+    ).where(
+        ImageCandidateRecord.news_event_id == news_event_id,
+        ImageCandidateRecord.quality_status == ImageQualityStatus.ACCEPTED,
+        ImageCandidateRecord.eligible_for_editorial.is_(True),
+    )
+    rows = (await session.execute(stmt)).all()
+    return [(candidate_id, sha, phash) for candidate_id, sha, phash in rows]
+
+
+def _find_cross_run_duplicate(
+    existing: list[tuple[str, str | None, str | None]], *,
+    candidate_id: str, sha256: str | None, perceptual_hash: str | None,
+) -> tuple[str, int] | None:
+    """Pure, no I/O - mirrors services.image_deduplication's own pure-function style, just scoped
+    to "one new candidate vs. a pre-fetched snapshot of existing rows" instead of "one run's own
+    candidate set". `candidate_id` is excluded from the match set so a legitimate re-fetch of the
+    exact same URL (same candidate_id, an ordinary upsert-refresh of an already-accepted row)
+    never flags itself as its own duplicate. Priority exactly as specified: sha256 exact match
+    first (distance sentinel 0, matching services.image_deduplication's own convention), then the
+    closest perceptual_hash Hamming distance - URL is never used as a matching signal."""
+    candidates = [(cid, sha, phash) for cid, sha, phash in existing if cid != candidate_id]
+    if not candidates:
+        return None
+
+    if sha256:
+        for cid, existing_sha, _ in candidates:
+            if existing_sha == sha256:
+                return cid, 0
+
+    if not perceptual_hash:
+        return None
+    best: tuple[str, int] | None = None
+    for cid, _, existing_phash in candidates:
+        if not existing_phash:
+            continue
+        distance = hamming_distance(perceptual_hash, existing_phash)
+        if best is None or distance < best[1]:
+            best = (cid, distance)
+    if best is not None and best[1] <= REVIEW_MAX_DISTANCE:
+        return best
+    return None
+
+
+def _apply_cross_run_duplicate(values: dict, *, existing_candidate_id: str, distance: int) -> None:
+    """Mutates `values` in place, exactly mirroring the within-run precedent (services.
+    image_intelligence._decide_quality_status()): distance<=AUTO_DUPLICATE_MAX_DISTANCE is a
+    confirmed duplicate (never eligible, never representative, matching image_relevance.py's own
+    _INELIGIBLE_QUALITY_STATUSES treatment of DUPLICATE_EXACT/DUPLICATE_NEAR); a distance in the
+    review band gets QualityStatus.REVIEW WITHOUT forcing eligible_for_editorial False - REVIEW is
+    deliberately not in _INELIGIBLE_QUALITY_STATUSES today (it only carries a relevance-scoring
+    penalty), so this cross-run layer stays consistent with that existing rule rather than
+    inventing a stricter one. The OLD (existing) row is never touched here or anywhere else in
+    this function - it stays the representative/eligible candidate exactly as it already is."""
+    values["duplicate_of_candidate_id"] = existing_candidate_id
+    if distance <= AUTO_DUPLICATE_MAX_DISTANCE:
+        values["quality_status"] = ImageQualityStatus.DUPLICATE_EXACT if distance == 0 else ImageQualityStatus.DUPLICATE_NEAR
+        values["eligible_for_editorial"] = False
+        values["is_representative"] = False
+    else:
+        values["quality_status"] = ImageQualityStatus.REVIEW
+
+
 async def _upsert_metadata_row(session: AsyncSession, values: dict) -> None:
     """Idempotent upsert keyed on (news_event_id, candidate_id) - storage_*/content_draft_id are
     deliberately excluded from the UPDATE SET clause (docs §17): a metadata-only rerun must never
@@ -251,11 +341,28 @@ async def persist_image_intelligence_result(
     storage_failures = 0
     total_bytes_this_event = 0
 
+    # Repeat-run dedup gap fix: one snapshot, taken before this call's own writes begin - see
+    # _fetch_existing_eligible_signatures()'s own docstring for why this must never be re-queried
+    # per-candidate.
+    existing_eligible_signatures = (
+        await _fetch_existing_eligible_signatures(session, news_event_id=result.event_id)
+        if result.candidates
+        else []
+    )
+
     for candidate in result.candidates:
         try:
             values = _metadata_row_values(
                 candidate, news_event_id=result.event_id, editorial_task_id=editorial_task_id, now=now,
             )
+            if values["eligible_for_editorial"]:
+                duplicate = _find_cross_run_duplicate(
+                    existing_eligible_signatures, candidate_id=values["candidate_id"],
+                    sha256=values["sha256"], perceptual_hash=values["perceptual_hash"],
+                )
+                if duplicate is not None:
+                    existing_candidate_id, distance = duplicate
+                    _apply_cross_run_duplicate(values, existing_candidate_id=existing_candidate_id, distance=distance)
             await _upsert_metadata_row(session, values)
             persisted += 1
         except Exception:
