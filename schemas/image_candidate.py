@@ -47,6 +47,12 @@ class ImageDiscoveryMethod(str, enum.Enum):
     JSONLD_ARTICLE_IMAGE = "jsonld_article_image"
     TWITTER_IMAGE = "twitter_image"
     IMAGE_SRC_LINK = "image_src_link"
+    # Image Discovery Upgrade: an <img>/<picture><source> found in the article body itself
+    # (services/article_metadata.py::extract_inline_article_images()) - the HTML-page analogue of
+    # RSS_INLINE_IMAGE above, added because most publishers point every head-metadata tag
+    # (og:image, twitter:image, JSON-LD image) at the same single canonical share image, so
+    # metadata discovery alone rarely yields more than one genuinely distinct photo.
+    ARTICLE_INLINE_IMAGE = "article_inline_image"
 
 
 class ImageCandidateStatus(str, enum.Enum):

@@ -48,7 +48,7 @@ from schemas.image_candidate import (
     TechnicalValidation,
     TelegramReference,
 )
-from services.article_metadata import extract_article_image_metadata
+from services.article_metadata import extract_article_image_metadata, extract_inline_article_images
 from services.image_deduplication import cluster_candidates
 from services.image_persistence import persist_image_intelligence_result
 from services.image_quality import QualityAnalysis, analyze_candidate
@@ -592,6 +592,17 @@ async def _fetch_article_metadata_hints(
     except Exception:
         logger.warning("article_metadata_parse_unexpected_error", extra={"event_id": str(event_id)})
         return [], "internal_fetch_error"
+
+    # Image Discovery Upgrade: a second, independent extractor over the SAME already-fetched HTML
+    # (no second request) - head-metadata tags usually all point at one canonical share image, so
+    # this adds real article-body photos to the same combined_hints list run_shadow_discovery()
+    # already builds below. A failure here is isolated from the metadata extractor's own
+    # already-successful result - never discards `hints` just because inline scanning errored.
+    try:
+        hints = hints + extract_inline_article_images(html_text, base_url=result.final_url)
+    except Exception:
+        logger.warning("inline_article_image_parse_unexpected_error", extra={"event_id": str(event_id)})
+
     return hints, None
 
 

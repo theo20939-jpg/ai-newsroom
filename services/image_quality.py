@@ -293,6 +293,9 @@ _DISCOVERY_METADATA_CONFIDENCE: dict[ImageDiscoveryMethod, int] = {
     ImageDiscoveryMethod.TWITTER_IMAGE: 14,
     ImageDiscoveryMethod.RSS_MEDIA_THUMBNAIL: 10,
     ImageDiscoveryMethod.RSS_INLINE_IMAGE: 10,
+    # Image Discovery Upgrade: same tier as RSS_INLINE_IMAGE - both are inline/article-body
+    # sourced images, not a curated head-metadata tag.
+    ImageDiscoveryMethod.ARTICLE_INLINE_IMAGE: 10,
     ImageDiscoveryMethod.IMAGE_SRC_LINK: 10,
     ImageDiscoveryMethod.TELEGRAM_THUMBNAIL: 10,
     ImageDiscoveryMethod.SOURCE_NATIVE_UNKNOWN: 5,

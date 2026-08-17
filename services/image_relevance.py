@@ -88,6 +88,9 @@ PROVENANCE_TABLE: dict[ImageDiscoveryMethod, int] = {
     ImageDiscoveryMethod.TELEGRAM_THUMBNAIL: 55,
     ImageDiscoveryMethod.RSS_MEDIA_THUMBNAIL: 50,
     ImageDiscoveryMethod.RSS_INLINE_IMAGE: 45,
+    # Image Discovery Upgrade: same tier as RSS_INLINE_IMAGE above - the HTML-page analogue of
+    # the identical concept (a real content image found inline, not a curated head-metadata tag).
+    ImageDiscoveryMethod.ARTICLE_INLINE_IMAGE: 45,
     ImageDiscoveryMethod.IMAGE_SRC_LINK: 40,
     ImageDiscoveryMethod.SOURCE_NATIVE_UNKNOWN: 20,
 }
@@ -488,6 +491,7 @@ def _build_reason(
         ImageDiscoveryMethod.RSS_ENCLOSURE: "RSS enclosure image",
         ImageDiscoveryMethod.RSS_MEDIA_THUMBNAIL: "RSS entry thumbnail",
         ImageDiscoveryMethod.RSS_INLINE_IMAGE: "RSS inline content image",
+        ImageDiscoveryMethod.ARTICLE_INLINE_IMAGE: "article inline image",
         ImageDiscoveryMethod.OPEN_GRAPH_SECURE_IMAGE: "original article Open Graph image",
         ImageDiscoveryMethod.OPEN_GRAPH_IMAGE: "original article Open Graph image",
         ImageDiscoveryMethod.JSONLD_ARTICLE_IMAGE: "original article structured-data image",
