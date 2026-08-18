@@ -39,6 +39,7 @@ from services.editorial_treatment import SKIP, EditorialTreatmentDecision, treat
 from services.image_quality import aspect_ratio_band, hamming_distance, resolution_band
 from services.image_relevance import PROVENANCE_TABLE
 from services.media_ranking import _NEAR_DUPLICATE_MAX_HAMMING_DISTANCE, rank_media_candidates
+from services.news_editorial_relevance import OUT_OF_SCOPE, classify_editorial_relevance
 from services.story_duplicate_guard import check_duplicate_story_delivery, check_update_would_fail_closed
 from services.image_persistence import (
     EditorialImageCandidate,
@@ -681,7 +682,7 @@ async def _select_eligible_events(session: AsyncSession) -> list[UUID]:
     anchor = func.coalesce(NewsEvent.published_at, NewsEvent.collected_at)
 
     stmt = (
-        select(EditorialTask.id, EditorialTask.event_id, EditorialTask.workflow)
+        select(EditorialTask.id, EditorialTask.event_id, EditorialTask.workflow, NewsEvent.title, NewsEvent.content)
         .join(NewsEvent, EditorialTask.event_id == NewsEvent.id)
         .where(
             EditorialTask.status == TaskStatus.COMPLETED,
@@ -717,21 +718,32 @@ async def _select_eligible_events(session: AsyncSession) -> list[UUID]:
     # only rows inside the freshness cutoff - no wider query) is collected first, then ranked by
     # score DESC. `rows` is already ordered (anchor DESC, EditorialTask.id ASC) by the SQL ORDER BY
     # above; Python's sort() is guaranteed stable (reverse=True does not disturb tie order - see
-    # the stdlib sorted() docs), so a single sort on score alone preserves that existing order as
-    # the secondary (freshest first) and tertiary (EditorialTask.id ascending) tie-break, exactly
-    # the ranking this checkpoint asks for, with no second query and no new tie-break rule to keep
-    # in sync with the SQL ORDER BY.
+    # the stdlib sorted() docs), so a single sort on the composite key preserves that existing
+    # order as the secondary (freshest first) and tertiary (EditorialTask.id ascending) tie-break,
+    # exactly the ranking this checkpoint asks for, with no second query and no new tie-break rule
+    # to keep in sync with the SQL ORDER BY.
+    #
+    # Topic-skew fix: `Scoring.score` alone has no topical awareness (a well-evidenced funding
+    # story and a well-evidenced product launch score identically). `classify_editorial_relevance()`
+    # (services/news_editorial_relevance.py) is a pure, deterministic, LLM-free function of the
+    # same title/content already loaded above - it never touches `Scoring.score` itself, only
+    # contributes a small `rank_adjustment` used purely for this in-Python ranking. OUT_OF_SCOPE
+    # candidates (unambiguous non-tech noise) are hard-excluded here, same as a failed score check.
     eligible: list[tuple[int, UUID]] = []
-    for _task_id, event_id, workflow in rows:
+    for _task_id, event_id, workflow, title, content in rows:
         score = _extract_scoring_result(workflow)
-        if score is not None and score >= settings.content_generation_min_score:
-            eligible.append((score, event_id))
+        if score is None or score < settings.content_generation_min_score:
+            continue
+        relevance = classify_editorial_relevance(title, content)
+        if relevance.tier == OUT_OF_SCOPE:
+            continue
+        eligible.append((score + relevance.rank_adjustment, event_id))
 
     eligible.sort(key=lambda candidate: candidate[0], reverse=True)
 
     # Fewer than batch_size eligible candidates is a valid, product-intended outcome (a weak news
     # period must be allowed to produce fewer stories) - never padded with sub-threshold rows.
-    return [event_id for _score, event_id in eligible[: settings.content_generation_batch_size]]
+    return [event_id for _rank, event_id in eligible[: settings.content_generation_batch_size]]
 
 
 async def run_content_cycle(
