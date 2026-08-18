@@ -1916,6 +1916,161 @@ def test_select_top_ranked_image_candidates_ixbt_hero_transforms_never_fill_more
 
 
 # ---------------------------------------------------------------------------------------------
+# Approved narrow CDN source-origin normalization fix (2026-08-17 forensic + design proposal):
+# two confirmed real production gaps, both caught by the live post-c39a09b canary. Real URLs
+# reproduced verbatim below - see worker/content_cycle.py::_IXBT_STABLE_ASSET_MARKER/
+# _MACRUMORS_STABLE_ASSET_MARKER for the full forensic trail.
+# ---------------------------------------------------------------------------------------------
+
+_REAL_IXBT_DATA_1289200_A = "https://media.ixbt.com/1200x1200/smart/ixbt-data/1289200/media-6otqdpxmgcu7zjyloyntpqqh.jpg"
+_REAL_IXBT_DATA_1289200_B = "https://media.ixbt.com/1600x900/smart/jpeg/ixbt-data/1289200/media-6otqdpxmgcu7zjyloyntpqqh.jpg"
+_REAL_IXBT_VIDEO_1289117 = "https://media.ixbt.video/fit-in/768x432/ixbt-data/1289117/f6a3582e-c0df-406c-9765-b27f6821b00a.png"
+
+_REAL_MACRUMORS_SIRI_A = "https://images.macrumors.com/t/5VqGjtmjIjCfOM8Sv0v-nzPfg54=/1600x/article-new/2026/03/ios-27-siri-animation.jpg"
+_REAL_MACRUMORS_SIRI_B = "https://images.macrumors.com/t/K3APdjcvztsHADZNjOYSvOm3kEI=/1600x1200/smart/article-new/2026/03/ios-27-siri-animation.jpg"
+_REAL_MACRUMORS_IPHONE18 = "https://images.macrumors.com/t/0543dbjxfqM6PrA4sngiXK-aF-o=/2500x/article-new/2026/07/iPhone-18-Pro-and-Pro-Max-Feature.jpg"
+
+
+def test_normalize_image_origin_collapses_two_real_ixbt_data_transforms() -> None:
+    from worker.content_cycle import _normalize_image_origin
+
+    assert _normalize_image_origin(_REAL_IXBT_DATA_1289200_A) == _normalize_image_origin(_REAL_IXBT_DATA_1289200_B)
+    assert _normalize_image_origin(_REAL_IXBT_DATA_1289200_A) == "media.ixbt.com/ixbt-data/1289200/media-6otqdpxmgcu7zjyloyntpqqh.jpg"
+
+
+def test_normalize_image_origin_ixbt_video_host_supported() -> None:
+    """Proves the marker rule applies on the sibling confirmed host, not just media.ixbt.com."""
+    from worker.content_cycle import _normalize_image_origin
+
+    assert _normalize_image_origin(_REAL_IXBT_VIDEO_1289117) == "media.ixbt.video/ixbt-data/1289117/f6a3582e-c0df-406c-9765-b27f6821b00a.png"
+
+
+def test_normalize_image_origin_ixbt_data_marker_scoped_to_allowed_hosts_only() -> None:
+    """The identical path shape on an unrelated host must NOT use the marker rule - falls through
+    to plain host+path instead."""
+    from worker.content_cycle import _normalize_image_origin
+
+    unrelated = "https://example.com/1200x1200/smart/ixbt-data/1289200/media-6otqdpxmgcu7zjyloyntpqqh.jpg"
+    assert _normalize_image_origin(unrelated) == "example.com/1200x1200/smart/ixbt-data/1289200/media-6otqdpxmgcu7zjyloyntpqqh.jpg"
+    assert _normalize_image_origin(unrelated) != _normalize_image_origin(_REAL_IXBT_DATA_1289200_A)
+
+
+def test_normalize_image_origin_ixbt_data_different_assets_remain_distinct() -> None:
+    from worker.content_cycle import _normalize_image_origin
+
+    assert _normalize_image_origin(_REAL_IXBT_DATA_1289200_A) != _normalize_image_origin(_REAL_IXBT_VIDEO_1289117)
+
+
+def test_normalize_image_origin_collapses_two_real_macrumors_article_new_transforms() -> None:
+    from worker.content_cycle import _normalize_image_origin
+
+    assert _normalize_image_origin(_REAL_MACRUMORS_SIRI_A) == _normalize_image_origin(_REAL_MACRUMORS_SIRI_B)
+    assert _normalize_image_origin(_REAL_MACRUMORS_SIRI_A) == "images.macrumors.com/article-new/2026/03/ios-27-siri-animation.jpg"
+
+
+def test_normalize_image_origin_macrumors_marker_scoped_to_macrumors_only() -> None:
+    from worker.content_cycle import _normalize_image_origin
+
+    unrelated = "https://example.com/t/sig=/1600x/article-new/2026/03/ios-27-siri-animation.jpg"
+    assert _normalize_image_origin(unrelated) != _normalize_image_origin(_REAL_MACRUMORS_SIRI_A)
+
+
+def test_normalize_image_origin_macrumors_different_files_remain_distinct() -> None:
+    from worker.content_cycle import _normalize_image_origin
+
+    assert _normalize_image_origin(_REAL_MACRUMORS_SIRI_A) != _normalize_image_origin(_REAL_MACRUMORS_IPHONE18)
+
+
+def test_compute_within_event_duplicate_flags_real_ixbt_data_pair_directly() -> None:
+    """Direct duplicate-flag replay for the real iXBT pair - deliberately different dimensions,
+    sha256, and pHash on both candidates, so only the normalized-origin signal can be what
+    catches this (proves the fix, not an accidental hash coincidence)."""
+    from worker.content_cycle import _compute_within_event_duplicate_flags
+
+    first = _fake_candidate(
+        candidate_id="ixbt-a", rank=1, width=1200, height=1200, sha256="a" * 64,
+        perceptual_hash="0000000000000000", final_url=_REAL_IXBT_DATA_1289200_A,
+    )
+    second = _fake_candidate(
+        candidate_id="ixbt-b", rank=2, width=1600, height=900, sha256="b" * 64,
+        perceptual_hash="ffffffffffffffff", final_url=_REAL_IXBT_DATA_1289200_B,
+    )
+    flags = _compute_within_event_duplicate_flags([first, second])
+    assert flags[first.id] is False
+    assert flags[second.id] is True
+
+
+def test_compute_within_event_duplicate_flags_real_macrumors_pair_directly() -> None:
+    from worker.content_cycle import _compute_within_event_duplicate_flags
+
+    first = _fake_candidate(
+        candidate_id="mr-a", rank=1, width=1600, height=900, sha256="c" * 64,
+        perceptual_hash="0f0f0f0f0f0f0f0f", final_url=_REAL_MACRUMORS_SIRI_A,
+    )
+    second = _fake_candidate(
+        candidate_id="mr-b", rank=2, width=1600, height=1200, sha256="d" * 64,
+        perceptual_hash="f0f0f0f0f0f0f0f0", final_url=_REAL_MACRUMORS_SIRI_B,
+    )
+    flags = _compute_within_event_duplicate_flags([first, second])
+    assert flags[first.id] is False
+    assert flags[second.id] is True
+
+
+def test_select_top_ranked_image_candidates_ixbt_data_transforms_never_fill_more_than_one_slot() -> None:
+    """Selector production-shape replay: 2 real ixbt-data transforms of the same asset + 1
+    genuinely different valid image -> selection must pick exactly one ixbt-data transform and
+    the other image, never both transforms."""
+    from worker.content_cycle import _select_top_ranked_image_candidates
+
+    transform_a = _fake_candidate(
+        candidate_id="ixbt-a", rank=1, quality_score=95, relevance_score=80, width=1200, height=1200,
+        perceptual_hash="0000000000000000", final_url=_REAL_IXBT_DATA_1289200_A,
+    )
+    transform_b = _fake_candidate(
+        candidate_id="ixbt-b", rank=2, quality_score=90, relevance_score=78, width=1600, height=900,
+        perceptual_hash="ffffffffffffffff", final_url=_REAL_IXBT_DATA_1289200_B,
+    )
+    other = _fake_candidate(
+        candidate_id="other", rank=3, quality_score=70, relevance_score=44, width=768, height=432,
+        perceptual_hash="f0f0f0f0f0f0f0f0", final_url=_REAL_IXBT_VIDEO_1289117,
+    )
+
+    selected = _select_top_ranked_image_candidates([transform_a, transform_b, other], limit=3)
+
+    selected_ids = [c.candidate_id for c in selected]
+    print("SELECTED IDs:", selected_ids)
+    print("SELECTED URLs:", [c.final_url for c in selected])
+    assert selected_ids == ["ixbt-a", "other"]
+    assert sum(1 for cid in selected_ids if cid.startswith("ixbt-")) == 1
+
+
+def test_select_top_ranked_image_candidates_macrumors_transforms_never_fill_more_than_one_slot() -> None:
+    """Equivalent selector production-shape replay for MacRumors."""
+    from worker.content_cycle import _select_top_ranked_image_candidates
+
+    transform_a = _fake_candidate(
+        candidate_id="mr-a", rank=1, quality_score=95, relevance_score=80, width=1600, height=900,
+        perceptual_hash="0f0f0f0f0f0f0f0f", final_url=_REAL_MACRUMORS_SIRI_A,
+    )
+    transform_b = _fake_candidate(
+        candidate_id="mr-b", rank=2, quality_score=90, relevance_score=78, width=1600, height=1200,
+        perceptual_hash="f0f0f0f0f0f0f0f0", final_url=_REAL_MACRUMORS_SIRI_B,
+    )
+    other = _fake_candidate(
+        candidate_id="other", rank=3, quality_score=70, relevance_score=60, width=2500, height=1400,
+        perceptual_hash="00ff00ff00ff00ff", final_url=_REAL_MACRUMORS_IPHONE18,
+    )
+
+    selected = _select_top_ranked_image_candidates([transform_a, transform_b, other], limit=3)
+
+    selected_ids = [c.candidate_id for c in selected]
+    print("SELECTED IDs:", selected_ids)
+    print("SELECTED URLs:", [c.final_url for c in selected])
+    assert selected_ids == ["mr-a", "other"]
+    assert sum(1 for cid in selected_ids if cid.startswith("mr-")) == 1
+
+
+# ---------------------------------------------------------------------------------------------
 # Production wiring (docs/video_delivery_wiring_checkpoint.md): worker/content_cycle.py now
 # retrieves/converts a real video candidate and passes it into build_rich_media_plan() (Phase 19
 # M10-M12, all reused verbatim). Gated behind rich_media_mode=="enforce" (default "off" is

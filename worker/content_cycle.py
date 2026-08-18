@@ -138,6 +138,53 @@ def _embedded_source_origin(path: str) -> str | None:
     return f"{embedded_host}{embedded_path}"
 
 
+# Second iXBT production forensic (2026-08-17 canary, real post-fix album on event using
+# ixbt-data asset ids 1289200/1289117): a DIFFERENT iXBT CDN convention from the embedded-
+# absolute-URL one above - here the wrapper embeds no scheme at all, just a bare, stable
+# "ixbt-data/<id>/<filename>" asset path after a variable-length resize/crop prefix, e.g.
+# "media.ixbt.com/1200x1200/smart/ixbt-data/1289200/media-....jpg" vs "media.ixbt.com/1600x900/
+# smart/jpeg/ixbt-data/1289200/media-....jpg" - both the SAME asset, but the transform-prefix
+# segment count varies (2 segments vs 3), so it cannot be stripped by fixed path position. The
+# sibling host media.ixbt.video uses the identical "ixbt-data/<id>/<filename>" convention
+# (confirmed on a separate real event, asset id 1289117) - both hosts share the same underlying
+# asset-storage naming, so both are included. Host-scoped (not a global "ixbt-data" substring
+# rule): the marker string is specific enough on its own, but scoping to the two confirmed hosts
+# is a free, zero-cost extra guard against an unrelated CDN coincidentally using the same path
+# segment name.
+_IXBT_ORIGIN_HOSTS = frozenset({"media.ixbt.com", "media.ixbt.video"})
+_IXBT_STABLE_ASSET_MARKER = "ixbt-data/"
+
+# MacRumors production forensic (2026-08-17 canary, real post-fix album, Siri animation asset):
+# images.macrumors.com's own signed image-resize proxy embeds a stable "article-new/<yyyy>/<mm>/
+# <filename>" asset path after a "/t/<signature>=/<variable transform>/" prefix, e.g.
+# ".../t/5VqGjtmjIjCfOM8Sv0v-nzPfg54=/1600x/article-new/2026/03/ios-27-siri-animation.jpg" vs
+# ".../t/K3APdjcvztsHADZNjOYSvOm3kEI=/1600x1200/smart/article-new/2026/03/ios-27-siri-
+# animation.jpg" - same asset, different signature AND different transform-segment count (1 vs 2).
+# A third, independent real sample (a different article, local dev DB) confirms the same
+# "article-new/<yyyy>/<mm>/<filename>" shape recurs, not a one-off. Host-scoped to
+# images.macrumors.com only - "article-new" reads as a CMS content-type folder name, plausible
+# (if unconfirmed) on unrelated sites, so this marker is deliberately never applied globally.
+_MACRUMORS_ORIGIN_HOSTS = frozenset({"images.macrumors.com"})
+_MACRUMORS_STABLE_ASSET_MARKER = "article-new/"
+
+
+def _marker_anchored_origin(host: str, path: str, *, allowed_hosts: frozenset[str], marker: str) -> str | None:
+    """Generic helper behind both host-scoped marker rules above (never a new dedup subsystem -
+    just a second and third application of the same "find a dataset-confirmed literal anchor,
+    keep everything after it verbatim" principle `_embedded_source_origin()` already established).
+    Returns None (caller falls through to existing normalization) unless `host` is one of
+    `allowed_hosts` AND `marker` is literally present in `path` - never guesses, never reduces to
+    a basename. The marker itself is kept as part of the returned path (not stripped), so the
+    origin is unambiguously anchored at the same point for every transform variant."""
+    if host not in allowed_hosts:
+        return None
+    index = path.find(marker)
+    if index == -1:
+        return None
+    stable_path = _WORDPRESS_DIMENSION_SUFFIX_RE.sub("", path[index:])
+    return f"{host}/{stable_path}"
+
+
 def _normalize_image_origin(url: str | None) -> str | None:
     """Pure. Strips a known CDN-proxy host prefix (WordPress/Jetpack Photon: i0-i3.wp.com, whose
     own URL path embeds the ORIGINAL host+path as its first path segment, e.g.
@@ -149,12 +196,14 @@ def _normalize_image_origin(url: str | None) -> str | None:
     DIMENSION_SUFFIX_RE) is stripped too. Returns None for an empty/unparseable URL - never
     raises, never a false "match".
 
-    Also tries `_embedded_source_origin()` first (iXBT forensic - see its own docstring): a CDN
-    wrapper that embeds a full scheme-qualified absolute source URL is a stronger, more specific
-    signal than the outer wrapper host, and is checked before the Jetpack/Photon (bare host+path,
-    no scheme - structurally distinct, never matched by `_EMBEDDED_ABSOLUTE_URL_RE`) and plain
-    host+path fallbacks below, never replacing them - a URL with no embedded absolute URL falls
-    through to the exact same behavior as before this addition.
+    Also tries, in order, before falling through to the Jetpack/Photon and plain host+path logic
+    below (never replacing them - a URL matching none of these falls through to the exact same
+    behavior as before any of these additions):
+    1. `_embedded_source_origin()` (iXBT forensic, embedded absolute URL - see its own docstring).
+    2. iXBT `ixbt-data/` marker (`_IXBT_ORIGIN_HOSTS`/`_IXBT_STABLE_ASSET_MARKER` - see
+       `_marker_anchored_origin()`'s own docstring and the constants' own forensic trail).
+    3. MacRumors `article-new/` marker (`_MACRUMORS_ORIGIN_HOSTS`/`_MACRUMORS_STABLE_ASSET_MARKER`,
+       same mechanism).
 
     Used for two independent purposes (see _compute_within_event_duplicate_flags()): gating the
     relaxed same-origin Hamming threshold (unchanged), and - as of the acceptance follow-up phase
@@ -171,6 +220,18 @@ def _normalize_image_origin(url: str | None) -> str | None:
     embedded_origin = _embedded_source_origin(path)
     if embedded_origin is not None:
         return embedded_origin
+
+    ixbt_origin = _marker_anchored_origin(
+        host, path, allowed_hosts=_IXBT_ORIGIN_HOSTS, marker=_IXBT_STABLE_ASSET_MARKER,
+    )
+    if ixbt_origin is not None:
+        return ixbt_origin
+
+    macrumors_origin = _marker_anchored_origin(
+        host, path, allowed_hosts=_MACRUMORS_ORIGIN_HOSTS, marker=_MACRUMORS_STABLE_ASSET_MARKER,
+    )
+    if macrumors_origin is not None:
+        return macrumors_origin
 
     if _IMAGE_CDN_PROXY_HOST_RE.match(host):
         segments = path.lstrip("/").split("/", 1)
