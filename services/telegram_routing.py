@@ -25,7 +25,7 @@ from dataclasses import dataclass
 
 from aiogram import Bot
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramAPIError
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.types import BufferedInputFile, InlineKeyboardMarkup, LinkPreviewOptions, MediaUnion
 
 from core.config import settings
@@ -46,6 +46,24 @@ logger = logging.getLogger(__name__)
 # InputMediaVideo types expose no link-preview field at all, consistent with this). The NINJA
 # PULSE link itself remains fully clickable - only the large expanded preview card is suppressed.
 _DISABLED_LINK_PREVIEW = LinkPreviewOptions(is_disabled=True)
+
+# Production canary (twice-observed): send_media_group_to_editorial_destination()'s own keyboard-
+# edit step can raise aiogram.exceptions.TelegramBadRequest("...message is not modified: specified
+# new message content and reply markup are exactly the same as a current content and reply markup
+# of the message...") - Telegram's own idempotent-success response when the keyboard already has
+# the exact state the edit was asking for. The post itself already sent successfully either way;
+# this is not a delivery failure, so it must not be logged as one (logger.exception + ERROR was
+# polluting error monitoring with a benign, expected outcome). Matched on the one full, stable
+# phrase Telegram actually returns for this specific case - deliberately NOT the shorter, riskier
+# substring "not modified" alone, which could in principle appear in an unrelated real error
+# message. Every other TelegramBadRequest (e.g. "message to edit not found") is a genuine failure
+# and must keep the existing ERROR/logger.exception treatment unchanged.
+_MESSAGE_NOT_MODIFIED_PHRASE = "message is not modified"
+
+
+def _is_message_not_modified_error(exc: TelegramBadRequest) -> bool:
+    return _MESSAGE_NOT_MODIFIED_PHRASE in str(exc).lower()
+
 
 # Maps each destination to the *name* of its `core.config.Settings` topic-id attribute - adding a
 # new destination later means adding one enum member (schemas/editorial_route.py) plus one entry
@@ -384,6 +402,29 @@ async def send_media_group_to_editorial_destination(
             await bot.edit_message_reply_markup(
                 chat_id=route.chat_id, message_id=first_message_id, reply_markup=reply_markup,
             )
+        except TelegramBadRequest as exc:
+            if _is_message_not_modified_error(exc):
+                # Idempotent success, not a failure - see _MESSAGE_NOT_MODIFIED_PHRASE's own
+                # docstring. INFO, no traceback, distinct event name so it never gets confused
+                # with a real keyboard-edit failure in logs/monitoring.
+                logger.info(
+                    "telegram_routing_media_group_keyboard_already_current",
+                    extra={
+                        "destination": resolved_destination.value, "chat_id": route.chat_id,
+                        "message_id": first_message_id,
+                    },
+                )
+            else:
+                # A real TelegramBadRequest (e.g. "message to edit not found") - the post itself
+                # already sent successfully - never re-send/duplicate it merely because attaching
+                # the button afterward failed. Logged, not raised, not retried.
+                logger.exception(
+                    "telegram_routing_media_group_keyboard_edit_failed",
+                    extra={
+                        "destination": resolved_destination.value, "chat_id": route.chat_id,
+                        "message_id": first_message_id,
+                    },
+                )
         except TelegramAPIError:
             # The post itself already sent successfully - never re-send/duplicate it merely
             # because attaching the button afterward failed. Logged, not raised, not retried.

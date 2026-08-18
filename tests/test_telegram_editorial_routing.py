@@ -419,3 +419,131 @@ async def test_reply_to_message_id_never_sent_when_dry_run() -> None:
     bot.send_message.assert_not_called()
     assert outcome.sent is False
     assert outcome.reason == "dry_run"
+
+
+# ---------------------------------------------------------------------------
+# Production canary (twice-observed): send_media_group_to_editorial_destination()'s keyboard-edit
+# step can raise TelegramBadRequest("...message is not modified: specified new message content
+# and reply markup are exactly the same as a current content and reply markup of the message...")
+# - Telegram's own idempotent-success response when the keyboard is already in the requested
+# state. Must be classified separately from a real keyboard-edit failure: INFO, no traceback, a
+# distinct stable event name, never ERROR/logger.exception - the post itself already sent.
+# ---------------------------------------------------------------------------
+
+_REAL_MESSAGE_NOT_MODIFIED_TEXT = (
+    "Bad Request: message is not modified: specified new message content and reply markup are "
+    "exactly the same as a current content and reply markup of the message"
+)
+
+
+@pytest.mark.asyncio
+async def test_media_group_keyboard_message_not_modified_is_idempotent_success(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from unittest.mock import MagicMock
+
+    from aiogram.exceptions import TelegramBadRequest
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    from services.telegram_routing import send_media_group_to_editorial_destination
+
+    bot = AsyncMock()
+    bot.send_media_group.return_value = [MagicMock(message_id=910), MagicMock(message_id=911)]
+    bot.edit_message_reply_markup.side_effect = TelegramBadRequest(  # type: ignore[arg-type]
+        method=None, message=_REAL_MESSAGE_NOT_MODIFIED_TEXT,
+    )
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔗 Источник", url="https://example.com")]])
+
+    with caplog.at_level("INFO", logger="services.telegram_routing"):
+        outcome = await send_media_group_to_editorial_destination(
+            bot, EditorialDestination.NEWS, ["fake-media-item-1", "fake-media-item-2"],  # type: ignore[list-item]
+            dry_run=False, reply_markup=keyboard,
+        )
+
+    assert outcome.sent is True
+    assert outcome.message_id == 910  # the group's FIRST message id
+    bot.send_media_group.assert_called_once()
+    bot.edit_message_reply_markup.assert_called_once()
+    # No resend/fallback of any kind.
+    bot.send_message.assert_not_called()
+    bot.send_photo.assert_not_called()
+
+    benign_records = [r for r in caplog.records if r.message == "telegram_routing_media_group_keyboard_already_current"]
+    assert len(benign_records) == 1
+    assert benign_records[0].levelname == "INFO"
+    assert benign_records[0].exc_info is None  # no traceback for the benign case
+    assert all(r.message != "telegram_routing_media_group_keyboard_edit_failed" for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_media_group_keyboard_edit_generic_bad_request_remains_a_real_failure(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A different TelegramBadRequest message (e.g. "message to edit not found") must NOT get the
+    idempotent-success treatment - only the one exact, stable "message is not modified" phrase
+    does. The post itself is still counted as sent (already delivered); the keyboard-edit failure
+    is still a real ERROR."""
+    from unittest.mock import MagicMock
+
+    from aiogram.exceptions import TelegramBadRequest
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    from services.telegram_routing import send_media_group_to_editorial_destination
+
+    bot = AsyncMock()
+    bot.send_media_group.return_value = [MagicMock(message_id=920), MagicMock(message_id=921)]
+    bot.edit_message_reply_markup.side_effect = TelegramBadRequest(  # type: ignore[arg-type]
+        method=None, message="Bad Request: message to edit not found",
+    )
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔗 Источник", url="https://example.com")]])
+
+    with caplog.at_level("INFO", logger="services.telegram_routing"):
+        outcome = await send_media_group_to_editorial_destination(
+            bot, EditorialDestination.NEWS, ["fake-media-item-1", "fake-media-item-2"],  # type: ignore[list-item]
+            dry_run=False, reply_markup=keyboard,
+        )
+
+    assert outcome.sent is True  # the post itself already sent successfully
+    bot.send_media_group.assert_called_once()
+    bot.send_message.assert_not_called()
+    bot.send_photo.assert_not_called()
+
+    failure_records = [r for r in caplog.records if r.message == "telegram_routing_media_group_keyboard_edit_failed"]
+    assert len(failure_records) == 1
+    assert failure_records[0].levelname == "ERROR"
+    assert all(r.message != "telegram_routing_media_group_keyboard_already_current" for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_media_group_keyboard_generic_telegram_api_error_still_logged_as_failure(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Regression guard: a generic (non-BadRequest) TelegramAPIError on the keyboard edit must
+    keep its existing ERROR/logger.exception behavior unchanged, untouched by the new
+    TelegramBadRequest-specific branch."""
+    from unittest.mock import MagicMock
+
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    from services.telegram_routing import send_media_group_to_editorial_destination
+
+    bot = AsyncMock()
+    bot.send_media_group.return_value = [MagicMock(message_id=930), MagicMock(message_id=931)]
+    bot.edit_message_reply_markup.side_effect = TelegramAPIError(method=None, message="edit failed")  # type: ignore[arg-type]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔗 Источник", url="https://example.com")]])
+
+    with caplog.at_level("INFO", logger="services.telegram_routing"):
+        outcome = await send_media_group_to_editorial_destination(
+            bot, EditorialDestination.NEWS, ["fake-media-item-1", "fake-media-item-2"],  # type: ignore[list-item]
+            dry_run=False, reply_markup=keyboard,
+        )
+
+    assert outcome.sent is True
+    bot.send_media_group.assert_called_once()
+    bot.edit_message_reply_markup.assert_called_once()
+    bot.send_message.assert_not_called()
+    bot.send_photo.assert_not_called()
+
+    failure_records = [r for r in caplog.records if r.message == "telegram_routing_media_group_keyboard_edit_failed"]
+    assert len(failure_records) == 1
+    assert failure_records[0].levelname == "ERROR"
