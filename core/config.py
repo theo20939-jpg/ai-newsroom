@@ -662,6 +662,37 @@ class Settings(BaseSettings):
     # COMPLETED-and-unreviewed articles to advance. Not fit to any real operating data yet.
     telegraph_pipeline_poll_interval_seconds: int = Field(default=300, gt=0)
 
+    # NINJA PULSE Visual System v1 (services/presentation_director.py, services/brand_renderer.py)
+    # - "off" (default): byte-identical to pre-Visual-System delivery, no presentation decision is
+    # even computed. "shadow": decision computed and logged, never rendered/sent. "enforce": the
+    # real router-mode send path uses the rendered/branded output. Mirrors this file's own
+    # established off/shadow/enforce convention (e.g. article_acquisition_mode) exactly.
+    presentation_director_mode: Literal["off", "shadow", "enforce"] = "off"
+    pulse_brand_enabled: bool = False
+    brand_asset_path: str = "assets/brand/nnj_logo.svg"
+    brand_red_asset_path: str = "assets/brand/nnj_logo_red.svg"
+    brand_raster_fallback_path: str = "assets/brand/nnj_logo.png"
+    brand_template_version: str = "v1"
+    # Unset by default - see services/brand_renderer.py's own module docstring for the OS-font
+    # resolution fallback chain this drives (no font file is ever downloaded or shipped).
+    brand_font_path: str | None = None
+    watermark_enabled: bool = True
+    watermark_opacity: float = Field(default=1.0, ge=0.0, le=1.0)
+    pulse_line_enabled: bool = True
+    editorial_code_enabled: bool = True
+    # No persistent 24h delivery history query backs this (a disclosed, deliberate follow-up
+    # limitation - report §"known limitations") - only a per-cycle in-memory counter the caller
+    # (worker/content_cycle.py) threads through itself; resets every run_content_cycle() call.
+    presentation_breaking_max_per_cycle: int = Field(default=1, ge=0)
+    # Pre-commit correction ("BREAKING first-canary safety"): a narrow kill switch for BREAKING
+    # specifically, independent of presentation_director_mode - lets a first "enforce" canary run
+    # with NEWS/DATA/QUOTE presentation active while BREAKING (the strongest visual treatment)
+    # stays off. Defaults to True (no behavior change) because presentation_director_mode itself
+    # (default "off") is still the overall master switch - this only matters once that is already
+    # "enforce". No new scoring system, no persistence - see services/presentation_director.py::
+    # decide_presentation()'s own docstring.
+    presentation_breaking_enabled: bool = True
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""

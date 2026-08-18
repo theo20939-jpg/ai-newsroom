@@ -164,6 +164,48 @@ async def test_photo_send_never_receives_a_link_preview_kwarg() -> None:
 
 
 @pytest.mark.asyncio
+async def test_photo_send_uses_aiogram_default_sentinel_by_default() -> None:
+    """NINJA PULSE Visual System v1 pre-commit correction: every existing caller (and
+    presentation_director_mode in ("off", "shadow"), which always passes the parameter's own
+    default False) must produce the exact same outgoing Telegram API request as before this
+    parameter existed at all - the value passed must be aiogram's own `Default(
+    "show_caption_above_media")` sentinel (byte-identical to Bot.send_photo()'s own parameter
+    default - Default resolves purely by its .name string), never a literal `False` (which would
+    change the outgoing request payload shape even though the rendered result would look
+    identical)."""
+    from aiogram.client.default import Default
+
+    from services.telegram_routing import send_photo_to_editorial_destination
+
+    bot = AsyncMock()
+    bot.send_photo.return_value.message_id = 906
+
+    await send_photo_to_editorial_destination(
+        bot, EditorialDestination.NEWS, "file_id_123", "Caption text", dry_run=False,
+    )
+
+    _, kwargs = bot.send_photo.call_args
+    assert kwargs["show_caption_above_media"] == Default("show_caption_above_media")
+    assert kwargs["show_caption_above_media"] is not True
+
+
+@pytest.mark.asyncio
+async def test_photo_send_includes_show_caption_above_media_only_when_true() -> None:
+    from services.telegram_routing import send_photo_to_editorial_destination
+
+    bot = AsyncMock()
+    bot.send_photo.return_value.message_id = 907
+
+    await send_photo_to_editorial_destination(
+        bot, EditorialDestination.NEWS, "file_id_123", "Caption text", dry_run=False,
+        show_caption_above_media=True,
+    )
+
+    _, kwargs = bot.send_photo.call_args
+    assert kwargs["show_caption_above_media"] is True
+
+
+@pytest.mark.asyncio
 async def test_media_group_send_never_receives_a_link_preview_kwarg() -> None:
     """Same reasoning as the photo case - Telegram never generates a link preview for a
     media-group caption either; send_media_group_to_editorial_destination() must be unaffected."""

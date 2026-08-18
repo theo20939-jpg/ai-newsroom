@@ -24,6 +24,7 @@ import logging
 from dataclasses import dataclass
 
 from aiogram import Bot
+from aiogram.client.default import Default
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.types import BufferedInputFile, InlineKeyboardMarkup, LinkPreviewOptions, MediaUnion
@@ -241,6 +242,7 @@ async def send_photo_to_editorial_destination(
     parse_mode: ParseMode = ParseMode.HTML,
     reply_markup: InlineKeyboardMarkup | None = None,
     reply_to_message_id: int | None = None,
+    show_caption_above_media: bool = False,
 ) -> RoutingOutcome:
     """Phase 23.1H media integration (docs/phase23_1h_text_image_canary_report.md) - the minimal
     sibling this phase adds to reuse the router's own resolved-target/dry-run/error-handling shape
@@ -261,7 +263,21 @@ async def send_photo_to_editorial_destination(
     `route.topic_id` is always passed as `message_thread_id`; a live `TelegramAPIError` is caught
     and returned, never raised. `reply_to_message_id` (Phase 23.1Q, additive, default `None`):
     identical contract to `send_to_editorial_destination()`'s own new parameter above - see its
-    docstring."""
+    docstring.
+
+    `show_caption_above_media` (NINJA PULSE Visual System v1, additive, default `False` - every
+    existing caller unaffected): threaded straight to aiogram's own `Bot.send_photo()` parameter
+    of the same name (confirmed present on the installed aiogram version) - this function makes
+    no layout decision of its own, exactly like `reply_markup` already doesn't.
+
+    Pre-commit correction: `Bot.send_photo()`'s own parameter defaults to aiogram's `Default(
+    "show_caption_above_media")` sentinel, not `False` - passing a literal `False` explicitly
+    (as this function used to do unconditionally) changes the outgoing Telegram API request shape
+    (the key becomes present with value `false` instead of omitted entirely), even though the
+    rendered result is the same either way. To keep `presentation_director_mode in ("off",
+    "shadow")` (where every caller here passes the default `False`) and every pre-existing caller
+    truly byte-identical to the request Telegram actually receives, the kwarg is only included
+    at all when `True` is explicitly requested - `False` never touches the outgoing call."""
     resolved_destination = (
         destination if isinstance(destination, EditorialDestination) else parse_editorial_destination(destination)
     )
@@ -292,11 +308,19 @@ async def send_photo_to_editorial_destination(
             reason="dry_run",
         )
 
+    # Pass aiogram's own Default("show_caption_above_media") sentinel - byte-identical to what
+    # Bot.send_photo()'s own parameter default already is (Default resolves purely by its .name
+    # string, confirmed by reading aiogram.client.default.Default's own __eq__/__hash__) - when
+    # False, never a literal `False`, which would change the outgoing request payload shape (see
+    # this function's own docstring above).
+    caption_position_value: bool | Default = True if show_caption_above_media else Default("show_caption_above_media")
+
     try:
         message = await bot.send_photo(
             route.chat_id, photo=photo, caption=caption, parse_mode=parse_mode,
             message_thread_id=route.topic_id, reply_markup=reply_markup,
             reply_to_message_id=reply_to_message_id,
+            show_caption_above_media=caption_position_value,
         )
     except TelegramAPIError:
         logger.exception(

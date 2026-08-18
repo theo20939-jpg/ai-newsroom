@@ -19,7 +19,7 @@ from sqlalchemy.orm import aliased
 from bot.formatting import CardTooLongError, render_editorial_card
 from bot.image_preview_formatting import CAPTION_SAFE_LIMIT
 from bot.image_preview_media import resolve_photo_input
-from bot.keyboards.image_preview import build_source_only_keyboard
+from bot.keyboards.image_preview import build_source_and_cta_keyboard, build_source_only_keyboard
 from capabilities.registry import CapabilityRegistry
 from core.config import settings
 from database.models.content_draft_story_link import ContentDraftStoryLink
@@ -40,6 +40,15 @@ from services.image_quality import aspect_ratio_band, hamming_distance, resoluti
 from services.image_relevance import PROVENANCE_TABLE
 from services.media_ranking import _NEAR_DUPLICATE_MAX_HAMMING_DISTANCE, rank_media_candidates
 from services.news_editorial_relevance import OUT_OF_SCOPE, classify_editorial_relevance
+from services.brand_renderer import render_branded_media
+from services.presentation_director import (
+    BREAKING as PRESENTATION_BREAKING,
+    CAPTION_ABOVE,
+    DATA as PRESENTATION_DATA,
+    QUOTE as PRESENTATION_QUOTE,
+    build_editorial_code,
+    decide_presentation,
+)
 from services.story_duplicate_guard import check_duplicate_story_delivery, check_update_would_fail_closed
 from services.image_persistence import (
     EditorialImageCandidate,
@@ -535,6 +544,15 @@ class ContentCycleResult:
     # story_fail_closed_review for the cases caught here (the late check never runs for these, so
     # it can never double-count them). Always 0 outside telegram_story_reply_mode == "enforce".
     update_fail_closed_before_generation: int = 0
+    # NINJA PULSE Visual System v1: counts every event this cycle whose PresentationDecision
+    # resolved to BREAKING (services/presentation_director.py) - in both "shadow" and "enforce"
+    # presentation_director_mode, purely as an in-memory, per-cycle count (no persistent 24h
+    # frequency store - a disclosed, deliberate follow-up limitation, report §"known
+    # limitations"). Threaded back into decide_presentation()'s own `breaking_count_this_cycle`
+    # guard for every subsequent event in the same cycle, so a single cycle can never propose more
+    # than `settings.presentation_breaking_max_per_cycle` BREAKING presentations. Always 0 when
+    # presentation_director_mode == "off" (the default).
+    presentation_breaking_sent: int = 0
 
 
 def _fact_safety_delivery_decision(
@@ -641,6 +659,44 @@ async def _classify_event_for_router_treatment(
         event_title=event_row.title if event_row is not None else None,
         event_content=event_row.content if event_row is not None else None,
     )
+
+
+def _extract_research_facts(workflow: dict[str, Any] | None) -> list[str]:
+    """Mirrors `_extract_scoring_result()`/`_extract_intelligence_result()`'s own exact shape -
+    the "research" step's `result["facts"]`, `[]` if the step never ran/failed or `facts` isn't a
+    list of strings. Used only by `services/presentation_director.py`'s DATA grounding (never a
+    new signal for selection/scoring/treatment - those remain completely unchanged)."""
+    if not workflow:
+        return []
+    for step_result in workflow.get("step_results", []):
+        if step_result.get("step_name") == "research" and step_result.get("status") == "SUCCESS":
+            result = step_result.get("result")
+            if isinstance(result, dict):
+                facts = result.get("facts")
+                if isinstance(facts, list):
+                    return [f for f in facts if isinstance(f, str)]
+    return []
+
+
+async def _fetch_router_presentation_signals(session: AsyncSession, event_id: UUID) -> tuple[list[str], int | None]:
+    """NINJA PULSE Visual System v1: a second, deliberately separate, bounded per-event query for
+    the same NEWS_ANALYSIS task `_classify_event_for_router_treatment()` above already reads -
+    duplicated rather than threading a wider return type through that heavily-depended-on function
+    (44+ existing mocked call sites across tests/scripts - see report §"scope decisions"). Exactly
+    as bounded as the image-candidate/quote/video lookups this same loop already performs once per
+    event; never a query over more than one task."""
+    na_task = await session.scalar(
+        select(EditorialTask)
+        .where(
+            EditorialTask.event_id == event_id,
+            EditorialTask.workflow["workflow_name"].as_string() == WorkflowType.NEWS_ANALYSIS.value,
+            EditorialTask.status == TaskStatus.COMPLETED,
+        )
+        .order_by(EditorialTask.updated_at.desc())
+        .limit(1)
+    )
+    workflow = na_task.workflow if na_task is not None else None
+    return _extract_research_facts(workflow), _extract_scoring_result(workflow)
 
 
 def _telegram_utf16_length(text: str) -> int:
@@ -984,6 +1040,9 @@ async def run_content_cycle(
             photo_input: str | BufferedInputFile | None = None
             media_group_items: list[MediaUnion] = []
             image_candidate_count = 0
+            # NINJA PULSE Visual System v1 - reassigned only inside the presentation_director_mode
+            # != "off" branch below; stays False (today's exact existing behavior) otherwise.
+            show_caption_above_media = False
             # Phase 23.1K: pre-rendered directly for V8-family output (§2, docs/
             # phase23_1k_v82_live_canary_report.md) - bypasses card/render_editorial_card()
             # entirely, since V8/V8.1/V8.2's own simplified card shape (headline + one paragraph +
@@ -1090,6 +1149,134 @@ async def run_content_cycle(
                     # pre-Phase-23.1Q behavior (never used by any real canary; V8-family output is
                     # the only shape any live send has ever produced), untouched by this phase.
                     photo_input = resolve_photo_input(eligible_candidates[0])
+
+                # NINJA PULSE Visual System v1 (services/presentation_director.py,
+                # services/brand_renderer.py). Gated entirely on presentation_director_mode -
+                # "off" (the default) skips this block completely, leaving every line above/below
+                # byte-identical to pre-Visual-System behavior. "shadow" computes and logs the
+                # decision only, never changes what is sent. Only "enforce" changes the keyboard/
+                # image/caption actually delivered - and even then, every rendering step fails
+                # safe to the original keyboard/media/text (spec §29).
+                if settings.presentation_director_mode != "off":
+                    async with session_factory() as presentation_session:
+                        research_facts, presentation_score = await _fetch_router_presentation_signals(
+                            presentation_session, event.id,
+                        )
+                    presentation_decision = decide_presentation(
+                        title=event.title, content=event.content,
+                        copywriting_output=outcome.copywriting_output,
+                        treatment=treatment_decision.treatment,
+                        scoring_score=presentation_score,
+                        research_facts=research_facts,
+                        quote_text=quote_text, quote_speaker=quote_speaker,
+                        fallback_category=event.category,
+                        breaking_count_this_cycle=result.presentation_breaking_sent,
+                        breaking_max_per_cycle=settings.presentation_breaking_max_per_cycle,
+                        breaking_enabled=settings.presentation_breaking_enabled,
+                    )
+                    logger.info(
+                        "presentation_decision",
+                        extra={
+                            "draft_id": str(outcome.content_draft.id),
+                            "presentation_type": presentation_decision.presentation_type,
+                            "presentation_category": presentation_decision.category,
+                            "presentation_ai_used": outcome.copywriting_output.get("viral_potential") is not None,
+                            "branding_strength": presentation_decision.branding_strength,
+                            "caption_position": presentation_decision.caption_position,
+                            "reason": presentation_decision.reason,
+                        },
+                    )
+
+                    if settings.presentation_director_mode == "enforce":
+                        # Pre-commit correction: no `label=` override here - the exact spec text
+                        # ("Источник ↗") is this function's own default (bot/keyboards/
+                        # image_preview.py::NINJA_PULSE_SOURCE_LABEL), deliberately distinct from
+                        # `_NEWS_SOURCE_BUTTON_LABEL` ("🔗 Источник") above, which remains the
+                        # unchanged legacy/off/shadow-mode label.
+                        keyboard = build_source_and_cta_keyboard(event.url)
+
+                        if settings.pulse_brand_enabled:
+                            editorial_code = build_editorial_code(outcome.task_id)
+                            source_bytes = photo_input.data if isinstance(photo_input, BufferedInputFile) else None
+                            needs_render = presentation_decision.presentation_type in (
+                                PRESENTATION_DATA, PRESENTATION_QUOTE, PRESENTATION_BREAKING,
+                            ) or source_bytes is not None
+                            if not needs_render:
+                                # Pre-commit correction ("cached file_id branding - measure, do
+                                # not redesign"): a NEWS presentation with no local image bytes
+                                # (photo_input is a cached Telegram file_id string, or no photo
+                                # was resolved at all) has nothing for the Pillow renderer to
+                                # composite onto - branding is skipped, never blocking the send.
+                                # Previously this path was silent; this is the one observability
+                                # gap the pre-commit review found and closed - no behavior change.
+                                skip_reason = (
+                                    "cached_file_id_no_local_bytes" if isinstance(photo_input, str)
+                                    else "no_source_media"
+                                )
+                                logger.info(
+                                    "brand_render_skipped",
+                                    extra={
+                                        "draft_id": str(outcome.content_draft.id),
+                                        "presentation_type": presentation_decision.presentation_type,
+                                        "brand_applied": False,
+                                        "brand_skip_reason": skip_reason,
+                                    },
+                                )
+                            if needs_render:
+                                render_result = render_branded_media(
+                                    presentation_type=presentation_decision.presentation_type,
+                                    source_image_bytes=source_bytes,
+                                    category=presentation_decision.category,
+                                    editorial_code=editorial_code,
+                                    branding_strength=presentation_decision.branding_strength,
+                                    data_candidate=presentation_decision.data_candidate,
+                                    quote_candidate=presentation_decision.quote_candidate,
+                                )
+                                logger.info(
+                                    "brand_render_attempted",
+                                    extra={
+                                        "draft_id": str(outcome.content_draft.id),
+                                        "presentation_type": presentation_decision.presentation_type,
+                                        "brand_applied": render_result.success,
+                                        "brand_skip_reason": None if render_result.success else render_result.fallback_reason,
+                                        "brand_render_success": render_result.success,
+                                        "brand_render_duration_ms": round(render_result.duration_ms, 1),
+                                        "brand_render_fallback": render_result.fallback_reason,
+                                        "brand_template_version": render_result.template_version,
+                                    },
+                                )
+                                if render_result.success and render_result.image_bytes is not None:
+                                    branded_file = BufferedInputFile(render_result.image_bytes, filename="pulse.jpg")
+                                    photo_input = branded_file
+                                    if media_group_items:
+                                        media_group_items = [
+                                            media_group_items[0].model_copy(update={"media": branded_file}),
+                                            *media_group_items[1:],
+                                        ]
+                                elif presentation_decision.presentation_type in (
+                                    PRESENTATION_DATA, PRESENTATION_QUOTE, PRESENTATION_BREAKING,
+                                ):
+                                    # Fail-safe (spec §29): a DATA/QUOTE/BREAKING card that could
+                                    # not be rendered has no other valid visual form - demote to
+                                    # ordinary NEWS delivery (whatever photo/text was already
+                                    # resolved above), never block the send itself.
+                                    presentation_decision = presentation_decision.__class__(
+                                        presentation_type="NEWS", category=presentation_decision.category,
+                                        caption_position="BELOW", branding_strength="MINIMAL",
+                                        brand_media=False, visual_priority=1, data_candidate=None,
+                                        quote_candidate=None, reason="brand_render_failed_demoted_to_news",
+                                    )
+
+                        if presentation_decision.caption_position == CAPTION_ABOVE:
+                            show_caption_above_media = True
+                            if media_group_items:
+                                media_group_items = [
+                                    media_group_items[0].model_copy(update={"show_caption_above_media": True}),
+                                    *media_group_items[1:],
+                                ]
+
+                    if presentation_decision.presentation_type == PRESENTATION_BREAKING:
+                        result.presentation_breaking_sent += 1
             else:
                 include_url = True
 
@@ -1142,6 +1329,7 @@ async def run_content_cycle(
                         bot, EditorialDestination.NEWS, photo_input, html,
                         dry_run=effective_dry_run, reply_markup=keyboard,
                         reply_to_message_id=reply_to_message_id,
+                        show_caption_above_media=show_caption_above_media,
                     )
                 else:
                     routing_outcome = await send_to_editorial_destination(
