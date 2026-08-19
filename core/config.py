@@ -693,6 +693,81 @@ class Settings(BaseSettings):
     # decide_presentation()'s own docstring.
     presentation_breaking_enabled: bool = True
 
+    # NINJA PULSE RECAP Phase R1 (offline/shadow foundation only - services/recap_event.py,
+    # services/weekly_recap_selection.py). ALL inactive by default - no scheduler, worker, or
+    # command reaches any of this code yet; flipping these to True alone still does nothing
+    # (nothing calls the recap services from a running loop in R1 - see those modules' own
+    # docstrings). pulse_recap_enabled is the overall master switch (mirrors presentation_
+    # director_mode's own "off" default / master-switch role); the two mode-specific flags below
+    # let a future canary enable EVENT_RECAP and WEEKLY_RECAP independently of each other, the
+    # same independent-kill-switch pattern presentation_breaking_enabled already established
+    # relative to presentation_director_mode.
+    pulse_recap_enabled: bool = False
+    pulse_event_recap_enabled: bool = False
+    pulse_weekly_recap_enabled: bool = False
+
+    # services/recap_event.py::evaluate_recap_readiness() thresholds - reasoned starting points
+    # (this codebase's own established "reasoned default, refine from real data later" convention
+    # - see story_match_lookback_days/telegraph_candidate_recency_hours above for the same
+    # disclosed-as-such pattern), NOT calibrated against any real recap replay dataset yet (none
+    # exists - Phase R1 is the first checkpoint to define this metric at all).
+    recap_min_event_count: int = Field(default=3, ge=1)
+    # Phase R1.1 quality-floor correction: raised from 2 to 4 - two distinct announcements is
+    # insufficient maturity for a genuinely useful recap (spec's own "EVENT_RECAP is intended to
+    # summarize a genuinely developed event and normally produce approximately 5-8 useful items").
+    # Still config-driven, never hardcoded in the evaluator - tests may override it explicitly.
+    recap_min_announcement_count: int = Field(default=4, ge=1)
+    recap_min_unique_sources: int = Field(default=2, ge=1)
+    # Minutes since the story's most recent linked event before it is considered "cooled" enough
+    # to be recap-eligible - deliberately independent of story_match_lookback_days (a Story-
+    # MATCHING window, an unrelated concern) or telegraph_candidate_recency_hours (candidate
+    # freshness, the opposite direction). 90 minutes: long enough that a still-actively-developing
+    # launch (new announcements arriving every few minutes) is not prematurely recapped mid-event,
+    # short enough that a genuinely concluded event does not sit un-recapped for hours.
+    recap_cooling_window_minutes: int = Field(default=90, ge=0)
+
+    # services/recap_event.py::cluster_announcements() - the minimum combined entity/title
+    # similarity score (see that module's own _announcement_similarity() docstring for the
+    # inverted 0.4/0.6 entity/title weighting reasoning) for two events within ONE story to be
+    # folded into the same AnnouncementCluster. Deliberately higher than services/story_memory.
+    # py's own _HIGH_THRESHOLD (0.65, a cross-story "is this the same story at all" bar) - within
+    # one already-confirmed story, over-merging two genuinely distinct announcements (e.g. a
+    # product launch vs. its own later pricing announcement) is the more costly failure mode, so
+    # this bar is set higher.
+    recap_announcement_cluster_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
+
+    # Phase R1.3 (services/recap_event.py::evaluate_recap_story_integrity()) - the temporal-
+    # compactness informational signal only (§5.E's own "should be suspicious," not a hard gate -
+    # see that function's own docstring for why this is not itself disqualifying). 168h = 7 days,
+    # a reasoned starting point (long enough for a genuinely multi-day developing story - a
+    # security incident, a legal case - to stay unflagged), not calibrated against real data yet.
+    recap_integrity_max_time_span_hours: float = Field(default=168.0, gt=0)
+
+    # services/weekly_recap_selection.py::select_weekly_recap_stories() - target Story count
+    # (spec's own "Target 5-8 Stories max"), lookback window, and the per-company diversity cap
+    # (spec's own "recommended default 2").
+    weekly_recap_target_min: int = Field(default=5, ge=1)
+    weekly_recap_target_max: int = Field(default=8, ge=1)
+    weekly_recap_window_days: int = Field(default=7, gt=0)
+    weekly_recap_max_per_company: int = Field(default=2, ge=1)
+
+    # Phase R1.1 quality floor (services/weekly_recap_selection.py::_is_eligible()) - "quality >
+    # count": a Story must clear this deterministic floor BEFORE ranking/diversity even runs, so
+    # weak stories are never used as padding to reach weekly_recap_target_min. CORE is always
+    # eligible; ADJACENT needs one of these two signals to clear its own threshold; PERIPHERAL is
+    # eligible only via the existing major_impact_override signal (never these thresholds).
+    # weekly_recap_adjacent_min_score reuses content_generation_min_score's own 0-100 magnitude
+    # (70) - same scale, a separate setting since this is a different decision (recap
+    # inclusion, not draft generation) and must be tunable independently.
+    # weekly_recap_adjacent_min_significance reuses services/editorial_treatment.py's own
+    # _LOW_SIGNIFICANCE_MAX=5.0 boundary (0-10 scale) - "at least medium significance", the same
+    # reasoned tier boundary already established there, not a new number invented for this
+    # checkpoint. Neither signal present (both None) means "not verifiably sufficient" - fails
+    # closed, mirroring editorial_treatment.py's own "no significance available - conservative
+    # default" precedent.
+    weekly_recap_adjacent_min_score: int = Field(default=70, ge=0, le=100)
+    weekly_recap_adjacent_min_significance: float = Field(default=5.0, ge=0.0, le=10.0)
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""
