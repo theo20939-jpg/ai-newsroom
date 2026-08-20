@@ -546,6 +546,7 @@ async def _collect_media_candidates(
 
 async def build_event_recap_candidate(
     session: AsyncSession, story: Story, *, force_shadow: bool = False, now: datetime | None = None,
+    research_complete: bool = False,
 ) -> EventRecapBuildResult:
     """The one deterministic entry point. Zero LLM/Gateway calls, zero network access - exactly as
     safe to call as any R1 diagnostic. Rejects (fail-closed, never silently degrades) when:
@@ -553,6 +554,17 @@ async def build_event_recap_candidate(
     membership projection (Phase R2.9, `services.recap_origin_projection` - see that module's own
     docstring for the full contract) is not itself eligible; Story Integrity fails; or readiness is
     not READY and `force_shadow` was not explicitly passed.
+
+    Phase R2.10A.3: `research_complete` (default `False`, unchanged behavior for every existing
+    caller that omits it) is threaded straight through to `services.recap_event.
+    evaluate_recap_readiness()` unmodified - mirroring R1's OWN already-established caller-supplied-
+    signal convention exactly (`services.recap_event.build_recap_event_snapshot(research_complete:
+    bool = False, ...)`, already exercised with `research_complete=True` throughout tests/
+    test_recap_event.py). R2 itself still runs no Recap Research step and still never sets this True
+    on its own; this only lets a caller that legitimately knows research is complete (e.g. a future
+    Recap Research phase, or a test proving the natural non-`force_shadow` READY path is reachable at
+    all) supply that already-existing signal, exactly as R1 always allowed. No new architecture, no
+    new persistent state, no change to `evaluate_recap_readiness()` itself or any of its thresholds.
 
     Phase R2.9: when `first_event_id` is absent from confirmed membership but the origin event's
     own current link proves it is a `RELATED_STORY`/weak-`UNCERTAIN_MATCH` own-Story-creation
@@ -601,11 +613,30 @@ async def build_event_recap_candidate(
 
     clusters = cluster_announcements(events)
     unique_sources = count_unique_sources(events)
-    last_event_at = max((e.published_at or e.collected_at for e in events), default=story.updated_at)
+    # Phase R2.10A.1 MissingGreenlet hardening (real production hazard, not a fixture artifact):
+    # `events` is guaranteed non-empty by every path that reaches this line - either `anchor` was
+    # found directly above (so `events`, its source list, already contained it), or the R2.9 origin-
+    # projection branch above reassigned `events` via `build_effective_recap_members()`, which always
+    # returns `[origin_event] + confirmed_members` (never empty) - any other outcome of that branch
+    # returns early before this point. The previous `default=story.updated_at` fallback was therefore
+    # unreachable dead code, yet Python still evaluates a `default=` expression unconditionally on
+    # every call regardless of whether the iterable is empty - forcing an eager, unconditional read
+    # of `story.updated_at` on every single invocation. `Story.updated_at` is a server-side
+    # `onupdate=func.now()` column (database/models/story.py): whenever a caller flushes ANY change
+    # to that same `Story` row earlier in the same session (e.g. `services/triage_orchestrator.py`'s
+    # own `matched_story.event_count += 1`) without an explicit `session.refresh()` in between, the
+    # attribute is left expired, and this eager read triggered an implicit lazy-load - a real
+    # `sqlalchemy.exc.MissingGreenlet` under asyncpg outside a greenlet context (reproduced exactly
+    # in tests/test_event_recap.py::test_missinggreenlet_regression_no_story_refresh_needed). Removing
+    # the unreachable default eliminates the hazard with zero behavior change - the fallback value
+    # was never actually reachable/used - and fails loudly instead of fabricating a timestamp if this
+    # invariant is ever violated by a future code change.
+    assert events, "unreachable: both call paths above guarantee non-empty events by this point"
+    last_event_at = max(e.published_at or e.collected_at for e in events)
 
     readiness = evaluate_recap_readiness(
         event_count=len(events), announcement_count=len(clusters), unique_source_count=unique_sources,
-        last_event_at=last_event_at, now=now, research_complete=False, unresolved_conflict_count=0,
+        last_event_at=last_event_at, now=now, research_complete=research_complete, unresolved_conflict_count=0,
         story_integrity_eligible=integrity.eligible, story_integrity_reasons=integrity.reasons,
     )
 

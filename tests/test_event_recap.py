@@ -1145,3 +1145,39 @@ def test_legitimate_multi_source_entities_are_retained_even_when_generic_phrase_
 
 def test_publisher_suffix_numbers_returns_empty_when_no_trailing_suffix_exists():
     assert _publisher_suffix_numbers("Apple unveils new AI chip with 40 percent faster inference") == set()
+
+
+# ---------------------------------------------------------------------------
+# Phase R2.10A.1 - MissingGreenlet runtime hardening regression
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_missinggreenlet_regression_no_story_refresh_needed(db_session):
+    """Real, reproducible `sqlalchemy.exc.MissingGreenlet` hazard (not a fixture/test artifact) -
+    proven BEFORE the fix by reverting services/event_recap.py's `last_event_at` line back to
+    `max(..., default=story.updated_at)`. `Story.updated_at` (database/models/story.py) is a
+    server-side `onupdate=func.now()` column: any earlier flush in the SAME session that mutates
+    the Story row (e.g. services/triage_orchestrator.py's own `matched_story.event_count += 1`,
+    exactly reproduced here) leaves it expired with no explicit `session.refresh()` in between - an
+    eager, unconditional read of an expired scalar (as a `max(..., default=...)` argument, always
+    evaluated by Python regardless of whether the iterable is empty) then triggers an implicit
+    lazy-load outside a greenlet context. Root cause fix: `events` is provably non-empty at that
+    point on every call path that reaches it (see services/event_recap.py's own comment there), so
+    the `story.updated_at` fallback was unreachable dead code - removing it removes the hazard with
+    zero behavior change. This test must pass WITHOUT any `db_session.refresh(story)` call - adding
+    one back would silently mask a regression rather than prove the fix."""
+    story, events = await _make_story(db_session, [
+        "Marvell and Google expand their chip development deal",
+        "Marvell pops 6% on AI chip deal with Google - CNBC",
+    ], match_types=[NEW_STORY, STORY_UPDATE])
+
+    # Mirrors services/triage_orchestrator.py::_apply_story_memory()'s own confirmed-continuation
+    # bump exactly - the real production sequence that leaves `story.updated_at` expired.
+    story.event_count += 1
+    await db_session.flush()
+    # Deliberately NO db_session.refresh(story) here - this is the point of the regression test.
+
+    result = await build_event_recap_candidate(db_session, story, force_shadow=True, now=_NOW)
+    assert result.rejected is False
+    assert result.candidate is not None

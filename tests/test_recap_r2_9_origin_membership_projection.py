@@ -254,6 +254,114 @@ async def test_case4_marvell_google_origin_projection_passes(db_session: AsyncSe
 
 
 # ---------------------------------------------------------------------------
+# CASE 4B - Phase R2.10A.3: the one confirmed R2.9 coverage gap - an origin-projected Story
+# naturally reaching READY WITHOUT --force-shadow. A one-more-announcement extension of Case 4's
+# own real Marvell/Google fixture (never a synthetic unrelated shape): the real production Marvell
+# Story (checkpoint's own record) was rejected by natural readiness for exactly two reasons -
+# `announcement_count 3 < required 4` and `recap research not complete` - never for origin
+# projection, integrity, or any other threshold. This proves both of those are ordinary, satisfiable
+# readiness conditions, never an architectural dead end: a 4th genuinely distinct, on-topic
+# announcement plus the caller-supplied `research_complete=True` signal (Phase R2.10A.3's own
+# `build_event_recap_candidate(..., research_complete=...)` parameter - see that function's own
+# docstring: threads straight through to the frozen `evaluate_recap_readiness()` exactly as R1's own
+# `build_recap_event_snapshot()` already allowed, never a new architecture, never a lowered
+# threshold) is the complete, deterministic, natural path to READY.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_case4b_marvell_google_origin_projection_reaches_natural_readiness(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    origin_title = (
+        "Marvell and Google expand their chip development deal, with Marvell granting Google a "
+        "warrant to buy up to 58M+ shares"
+    )
+    story, origin_event = await _apply_related_or_uncertain_root(
+        db_session, origin_title, outcome=RELATED_STORY, monkeypatch=monkeypatch,
+    )
+    # _apply_related_or_uncertain_root()'s own _new_event() call never sets published_at for the
+    # origin - real production events always have one; without pinning it here, `NewsEvent.
+    # collected_at`'s server-side wall-clock default would leak the real test-execution time into
+    # `last_event_at` (services/event_recap.py's own `max(e.published_at or e.collected_at ...)`),
+    # silently poisoning the cooling-window check against this fixture's fixed `_NOW`.
+    origin_event.published_at = _NOW - timedelta(hours=6)
+    await db_session.flush()
+    m1 = await _new_event(
+        db_session,
+        "Marvell pops 6% on AI chip deal that lets Google buy up to $12.2 billion in shares - CNBC",
+        published_at=_NOW - timedelta(hours=5),
+    )
+    m2 = await _new_event(
+        db_session,
+        "Marvell будет разрабатывать чипы для Google и позволит ей купить собственных акций на "
+        "сумму $12,2 млрд",
+        published_at=_NOW - timedelta(hours=4),
+    )
+    m3 = await _new_event(
+        db_session,
+        "Google's custom silicon partnership with Marvell seen as bellwether for AI chip warrant "
+        "deals across the industry",
+        published_at=_NOW - timedelta(hours=3),
+    )
+    await _attach_link(db_session, m1, story, STORY_UPDATE)
+    await _attach_link(db_session, m2, story, SUPPORTING_SOURCE)
+    await _attach_link(db_session, m3, story, SUPPORTING_SOURCE)
+    story.event_count += 3
+    await db_session.flush()
+    await db_session.refresh(story)
+
+    confirmed_before = await load_story_events(db_session, story.id)
+    assert len(confirmed_before) == 3
+    assert origin_event.id not in {e.id for e in confirmed_before}, (
+        "origin must remain excluded from global confirmed membership - this test proves RECAP-"
+        "local projection reaches READY, never that global membership semantics changed"
+    )
+
+    session_new_before = set(db_session.new)
+    session_dirty_before = set(db_session.dirty)
+
+    # THE POINT OF THIS TEST: no force_shadow, real research_complete=True - the complete natural,
+    # deterministic path, never a mock/threshold/force-shadow bypass.
+    result = await build_event_recap_candidate(db_session, story, research_complete=True, now=_NOW)
+
+    assert result.rejected is False
+    assert result.candidate is not None
+    candidate = result.candidate
+    assert candidate.origin_projection_applied is True
+    assert candidate.anchor_event_id == origin_event.id == story.first_event_id
+    assert candidate.story_integrity_eligible is True
+    assert candidate.readiness_overridden is False, "must reach READY on its own merit, never via force_shadow"
+    assert candidate.readiness_state == "READY"
+    assert candidate.announcement_count >= 4
+    assert candidate.publishable is False, "R2 never publishes, regardless of readiness"
+
+    # No writes: build_event_recap_candidate() is read-only (module docstring's own "zero LLM/
+    # Gateway calls and zero network access... exactly as safe to call as any R1 diagnostic").
+    assert set(db_session.new) == session_new_before
+    assert set(db_session.dirty) == session_dirty_before
+
+    # Global confirmed membership (services.recap_event.load_story_events(), frozen) is completely
+    # unaffected by this RECAP-local read - re-querying it after the call proves nothing was mutated.
+    confirmed_after = await load_story_events(db_session, story.id)
+    assert {e.id for e in confirmed_after} == {e.id for e in confirmed_before}
+    assert origin_event.id not in {e.id for e in confirmed_after}
+
+    # Deterministic: re-running (still no force_shadow) produces the identical natural-READY verdict.
+    result_again = await build_event_recap_candidate(db_session, story, research_complete=True, now=_NOW)
+    assert result_again.candidate is not None
+    assert result_again.candidate.readiness_state == "READY"
+    assert result_again.candidate.readiness_overridden is False
+
+    # Sanity oracle: WITHOUT the caller-supplied research_complete=True signal, this exact same
+    # Story still correctly fails to reach natural readiness (default unchanged - Phase R2.10A.3
+    # changes nothing for every existing caller that omits the new parameter).
+    result_default = await build_event_recap_candidate(db_session, story, now=_NOW)
+    assert result_default.rejected is True
+    assert any("recap research not complete" in r for r in result_default.rejection_reasons)
+
+
+# ---------------------------------------------------------------------------
 # CASE 5 - broad generic LLM research cluster: must remain FAIL, never a false PASS.
 # ---------------------------------------------------------------------------
 
