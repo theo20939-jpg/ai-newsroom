@@ -28,6 +28,7 @@ from database.models.editorial_task import TaskPriority
 from services.event_recap import (
     EventRecapCandidate,
     EventRecapSynthesisError,
+    EventRecapTelegramPreviewTooLongError,
     FACT_MULTI_SOURCE_CONFIRMED,
     FACT_SINGLE_SOURCE_ONLY,
     _build_announcement_summaries,
@@ -39,6 +40,7 @@ from services.event_recap import (
     _verify_synthesis_facts,
     build_event_recap_candidate,
     render_event_recap_bundle_text,
+    render_event_recap_telegram_preview,
     synthesize_event_recap,
 )
 from services.recap_event import cluster_announcements
@@ -970,7 +972,10 @@ def test_cli_script_defers_llm_gateway_import_until_with_llm_flag():
 
 def test_no_bot_or_worker_or_telegram_imports_anywhere_in_r2():
     """Structural proof no Telegram/worker/scheduler path is reachable from R2 code."""
-    for path in ("services/event_recap.py", "scripts/_recap_r2_event_shadow.py"):
+    for path in (
+        "services/event_recap.py", "scripts/_recap_r2_event_shadow.py",
+        "scripts/_recap_r2_10_readiness_candidate_scanner.py",
+    ):
         source = Path(path).read_text(encoding="utf-8")
         tree = ast.parse(source)
         for node in ast.walk(tree):
@@ -1593,3 +1598,84 @@ async def test_publishable_stays_false_across_every_reachable_r2_path(db_session
     )
     assert unsupported_synthesized.fact_verification.status != "pass"
     assert unsupported_synthesized.publishable is False
+
+
+# ---------------------------------------------------------------------------
+# Phase R2.10 Night 2 - Telegram pure presentation prototype (Phase 18, report-only otherwise)
+# ---------------------------------------------------------------------------
+
+
+def _synthesized_taiwan_candidate() -> EventRecapCandidate:
+    from dataclasses import replace
+
+    candidate = _candidate_from_titles(
+        [
+            "Taiwan approves $314 AI dividend for every citizen",
+            "Government confirms $314 per person AI dividend program in Taiwan",
+        ],
+        "Taiwan AI dividend program",
+    )
+    return replace(
+        candidate,
+        recap_title="Taiwan approves $314 AI dividend for every citizen",
+        recap_summary="Taiwan's government confirmed a one-time $314 AI dividend paid to every citizen.",
+        key_takeaways=["The dividend is funded from AI-related budget surplus.", "Payments begin next quarter."],
+        uncertainty_notes=["Exact disbursement mechanism is single-source only."],
+    )
+
+
+def test_telegram_preview_renders_all_expected_sections():
+    candidate = _synthesized_taiwan_candidate()
+    text = render_event_recap_telegram_preview(candidate)
+    assert text.startswith("Taiwan approves $314 AI dividend for every citizen")
+    assert "AI dividend paid to every citizen" in text
+    assert "Key developments:" in text
+    assert "Key takeaways:" in text
+    assert "AI-related budget surplus" in text
+    assert "What remains uncertain:" in text
+    assert "disbursement mechanism" in text
+    assert "Sources:" in text
+
+
+def test_telegram_preview_falls_back_to_story_title_before_synthesis():
+    """Before synthesis has ever run, recap_title is None - the preview must use the real,
+    deterministic story_title, never an empty/placeholder title."""
+    candidate = _candidate_from_titles(
+        ["Taiwan approves $314 AI dividend for every citizen", "Government confirms $314 per person AI dividend program in Taiwan"],
+        "Taiwan AI dividend program",
+    )
+    assert candidate.recap_title is None
+    text = render_event_recap_telegram_preview(candidate)
+    assert text.startswith(candidate.story_title)
+
+
+def test_telegram_preview_omits_empty_sections_never_pads():
+    """A candidate with no uncertainty notes must never render a "no uncertainty" filler line -
+    mirrors this module's own established "never pad" discipline elsewhere."""
+    candidate = _candidate_from_titles(
+        ["Taiwan approves $314 AI dividend for every citizen", "Government confirms $314 per person AI dividend program in Taiwan"],
+        "Taiwan AI dividend program",
+    )
+    text = render_event_recap_telegram_preview(candidate)
+    assert "What remains uncertain:" not in text
+
+
+def test_telegram_preview_never_dumps_raw_urls_only_domains():
+    candidate = _synthesized_taiwan_candidate()
+    text = render_event_recap_telegram_preview(candidate)
+    for ref in candidate.source_refs:
+        assert ref not in text  # raw URLs never appear, only their normalized domains
+
+
+def test_telegram_preview_raises_rather_than_silently_truncates_over_limit():
+    from dataclasses import replace
+
+    candidate = _synthesized_taiwan_candidate()
+    oversized = replace(candidate, recap_summary="x" * 5000)
+    with pytest.raises(EventRecapTelegramPreviewTooLongError):
+        render_event_recap_telegram_preview(oversized)
+
+
+def test_telegram_preview_is_deterministic():
+    candidate = _synthesized_taiwan_candidate()
+    assert render_event_recap_telegram_preview(candidate) == render_event_recap_telegram_preview(candidate)

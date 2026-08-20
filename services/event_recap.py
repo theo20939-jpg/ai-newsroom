@@ -853,6 +853,88 @@ def render_event_recap_bundle_text(candidate: EventRecapCandidate) -> str:
     return text
 
 
+# Telegram's own hard limit for a plain text message, in UTF-16 code units (mirrors bot/
+# telegraph_shortlist_formatting.py's own SAFE_LIMIT constant and "fail loud, never silently
+# truncate" discipline exactly - this codebase's own established convention for Telegram text).
+_TELEGRAM_SAFE_LIMIT = 4096
+_MAX_TIMELINE_ENTRIES_IN_PREVIEW = 6
+_MAX_SOURCE_DOMAINS_IN_PREVIEW = 5
+
+
+class EventRecapTelegramPreviewTooLongError(RuntimeError):
+    """Raised when the rendered preview exceeds `_TELEGRAM_SAFE_LIMIT` - never silently truncated
+    (mirrors bot/telegraph_shortlist_formatting.py::TelegraphShortlistTextTooLongError's identical
+    "fail loud, let the caller decide" discipline)."""
+
+
+def render_event_recap_telegram_preview(candidate: EventRecapCandidate) -> str:
+    """Phase R2.10 Night 2 (Phase 18) - PURE PROTOTYPE ONLY. A pure, deterministic formatting
+    function - no `aiogram`/`Bot` import anywhere in this module, never wired into any router,
+    worker, or delivery path (repo-wide, this is enforced by the same AST check tests/
+    test_event_recap.py::test_no_bot_or_worker_or_telegram_imports_anywhere_in_r2() already applies
+    to this whole module). Exists to prototype the SHAPE of an eventual Telegram-facing rendering,
+    never to send anything - `EventRecapCandidate.publishable` stays unconditionally `False`
+    regardless of what this function returns, and nothing calls this function anywhere except its
+    own tests.
+
+    Deliberately respects the two hard Telegram constraints already known in this codebase (never
+    assumed, never guessed): a channel post cannot place arbitrary text INSIDE/OVER an image, so
+    this renders text-only (media selection/attachment is a delivery-layer decision, entirely out
+    of scope here - see the R2.10 Night 2 report's own Media Readiness Audit); and a forwarded
+    message strips inline buttons, so this never emits a button/callback shape of any kind - the
+    source attribution is a plain trailing text line, nothing else.
+
+    Renders (in order): title (the synthesized `recap_title` if synthesis has run, else the real,
+    deterministic `story_title` - never a placeholder), a short intro (`recap_summary`), a bounded
+    "key developments" section (from `candidate.timeline`, publication order, the same "not
+    necessarily proven event stages" caveat `render_event_recap_bundle_text()` already applies),
+    key takeaways, an uncertainty note section (only rendered when non-empty - never a "no
+    uncertainty" filler line, mirrors this module's own `_build_verified_facts()`-adjacent "never
+    pad" discipline elsewhere), and a bounded source-attribution line (deduplicated domains only,
+    never a raw URL dump - mirrors `_evidence_reference_identity()`'s own domain-first identity
+    preference). Raises `EventRecapTelegramPreviewTooLongError` rather than silently truncating."""
+    title = candidate.recap_title or candidate.story_title
+    lines: list[str] = [title, ""]
+
+    if candidate.recap_summary:
+        lines.append(candidate.recap_summary)
+        lines.append("")
+
+    if candidate.timeline:
+        lines.append("Key developments:")
+        for entry in candidate.timeline[:_MAX_TIMELINE_ENTRIES_IN_PREVIEW]:
+            lines.append(f"- {entry.timestamp.date().isoformat()}: {entry.label}")
+        if len(candidate.timeline) > _MAX_TIMELINE_ENTRIES_IN_PREVIEW:
+            lines.append(f"- (+{len(candidate.timeline) - _MAX_TIMELINE_ENTRIES_IN_PREVIEW} more)")
+        lines.append("")
+
+    if candidate.key_takeaways:
+        lines.append("Key takeaways:")
+        for takeaway in candidate.key_takeaways:
+            lines.append(f"- {takeaway}")
+        lines.append("")
+
+    if candidate.uncertainty_notes:
+        lines.append("What remains uncertain:")
+        for note in candidate.uncertainty_notes:
+            lines.append(f"- {note}")
+        lines.append("")
+
+    domains = sorted({d for d in (_normalize_domain(ref) for ref in candidate.source_refs) if d})
+    if domains:
+        shown = domains[:_MAX_SOURCE_DOMAINS_IN_PREVIEW]
+        more = len(domains) - len(shown)
+        suffix = f" (+{more} more)" if more > 0 else ""
+        lines.append(f"Sources: {', '.join(shown)}{suffix}")
+
+    text = "\n".join(lines).strip()
+    if len(text) > _TELEGRAM_SAFE_LIMIT:
+        raise EventRecapTelegramPreviewTooLongError(
+            f"rendered preview is {len(text)} chars, exceeds Telegram's {_TELEGRAM_SAFE_LIMIT}-char limit"
+        )
+    return text
+
+
 class EventRecapSynthesisError(RuntimeError):
     """Raised on any LLM Gateway failure or malformed/incomplete structured output during
     EVENT_RECAP synthesis - never silently swallowed, never returns a partially-fabricated
