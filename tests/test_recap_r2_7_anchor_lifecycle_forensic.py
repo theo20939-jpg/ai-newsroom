@@ -165,16 +165,23 @@ async def test_related_story_creation_produces_anchor_missing_from_confirmed_mem
     assert root_event.id not in {e.id for e in confirmed}
     assert confirmed == []  # this Story has literally zero confirmed members
 
+    # R2.9 EFFECTIVE RECAP SEMANTICS (production, services/recap_origin_projection.py +
+    # services/event_recap.py::build_event_recap_candidate(), checkpoint commit AFTER 7ebfd82): the
+    # STORAGE-level anchor-missing state proven above (lines 157-166 - first_event_id present, but
+    # excluded from confirmed membership) is exactly the shape R2.9's own fail-closed origin-
+    # projection eligibility gate exists to recover from - RELATED_STORY on an event whose own
+    # current link points to THIS Story, with no conflicting other-Story relationship, is the
+    # textbook eligible case. build_event_recap_candidate() therefore no longer unconditionally
+    # rejects this Story; it transiently treats the immutable root_event as the RECAP anchor and
+    # sole effective member - never mutating first_event_id/match_type/global confirmed membership,
+    # all of which remain exactly as proven above (this is the historical bug evidence R2.9 does
+    # NOT erase, only the downstream RECAP-candidate consequence of it).
     result = await build_event_recap_candidate(db_session, new_story, force_shadow=True, now=_NOW)
-    assert result.rejected is True
-    assert result.candidate is None
-    # This Story has ZERO confirmed members at all (not merely a mismatched anchor among others),
-    # so build_event_recap_candidate()'s own fail-closed branch takes its "no confirmed member
-    # events loaded" wording rather than the "first_event_id ... not among confirmed" wording -
-    # both are the SAME anchor-is-None fail-closed code path (services/event_recap.py's own
-    # `if events else` branch), just worded differently depending on whether any OTHER confirmed
-    # member exists.
-    assert any("confirmed" in r for r in result.rejection_reasons)
+    assert result.rejected is False
+    assert result.candidate is not None
+    assert result.candidate.origin_projection_applied is True
+    assert result.candidate.anchor_event_id == root_event.id
+    assert result.candidate.story_integrity_eligible is True  # single-event Story - trivial PASS
 
 
 @pytest.mark.asyncio
@@ -204,9 +211,15 @@ async def test_weak_uncertain_match_creation_produces_the_identical_anchor_missi
     assert new_story.first_event_id == root_event.id
     assert link.match_type == UNCERTAIN_MATCH
 
+    # R2.9 EFFECTIVE RECAP SEMANTICS - see the identical reasoning in test_related_story_creation_
+    # produces_anchor_missing_from_confirmed_members_at_birth() above (the weak-overlap UNCERTAIN_
+    # MATCH own-Story-creation shape is the second, independent path R2.9's eligibility gate covers).
     result = await build_event_recap_candidate(db_session, new_story, force_shadow=True, now=_NOW)
-    assert result.rejected is True
-    assert any("confirmed" in r for r in result.rejection_reasons)
+    assert result.rejected is False
+    assert result.candidate is not None
+    assert result.candidate.origin_projection_applied is True
+    assert result.candidate.anchor_event_id == root_event.id
+    assert result.candidate.story_integrity_eligible is True
 
 
 @pytest.mark.asyncio

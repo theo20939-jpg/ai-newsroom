@@ -167,13 +167,27 @@ async def test_root_zero_confirmed_origin_projection_deterministic(db_session: A
     story, root_event = await _apply_related_or_uncertain_root(
         db_session, f"Zero-confirmed {outcome} root story", outcome=outcome, monkeypatch=monkeypatch,
     )
+    # STORAGE / CONFIRMED-MEMBERSHIP LAYER (unchanged by R2.9, still exactly the R2.7-proven bug at
+    # this layer): the origin's own link is RELATED_STORY/UNCERTAIN_MATCH, excluded from global
+    # confirmed membership by services.recap_event._CONFIRMED_MEMBERSHIP_MATCH_TYPES - so the
+    # declared origin is STILL absent from load_story_events()'s own result, and Story.event_count
+    # still disagrees with the actual confirmed-member count. This historical finding remains TRUE
+    # and is never superseded - only the downstream RECAP CANDIDATE layer below changed.
     confirmed = await load_story_events(db_session, story.id)
     assert confirmed == []
     assert story.event_count == 1  # declared_event_count - the R2.7-documented mismatch (Part F)
 
     bundle = await _process_story(db_session, story, confirmed, now=_NOW)
     assert bundle["projection"].reason_code == ORIGIN_PROJECTION_ELIGIBLE
-    assert bundle["current_rejected"] is True
+    # R2.9 EFFECTIVE RECAP SEMANTICS (production, `services/recap_origin_projection.py` +
+    # `services/event_recap.py::build_event_recap_candidate()`, checkpoint commit AFTER 7ebfd82):
+    # `_process_story()`'s own "CURRENT" model calls the REAL, unmodified `build_event_recap_
+    # candidate()` - and R2.9 changed that real function's behavior for exactly this population
+    # (origin-projection-eligible, zero confirmed members). It NO LONGER unconditionally rejects -
+    # this is the intended, evidence-validated fix, not a regression of this test or of R2.8's own
+    # "CURRENT" model docstring (which predates R2.9 and now describes stale behavior for this one
+    # population - not corrected here per this checkpoint's own "modify tests only" scope).
+    assert bundle["current_rejected"] is False
     # Single-event story - evaluate_recap_story_integrity()'s own "no group to be incoherent" PASS.
     assert bundle["origin_anchor_only_a1"].eligible is True
     assert bundle["origin_anchor_only_a2"].eligible is True
@@ -203,6 +217,15 @@ async def test_related_root_plus_identical_confirmed_duplicate(db_session: Async
     await _attach_link(db_session, dup_event, story, SUPPORTING_SOURCE)
     story.event_count += 1
     await db_session.flush()
+    # R2.9A test-fixture fix (MissingGreenlet): `Story.updated_at` has `onupdate=func.now()`, so
+    # the flush above expires it. Now that origin projection lets this Story's candidate build
+    # proceed FAR ENOUGH to reach `services/event_recap.py`'s own pre-existing `last_event_at =
+    # max(..., default=story.updated_at)` line (previously unreachable for this population - it
+    # always rejected before reaching it), a bare lazy reload of that expired attribute inside an
+    # async context raises `MissingGreenlet`. An explicit refresh here is the same proven pattern
+    # `tests/test_recap_r2_9_origin_membership_projection.py` already established - a test-fixture
+    # timing fix only, never a change to `services/event_recap.py` itself.
+    await db_session.refresh(story)
 
     confirmed = await load_story_events(db_session, story.id)
     assert [e.id for e in confirmed] == [dup_event.id]
@@ -232,6 +255,9 @@ async def test_related_root_plus_coherent_members(db_session: AsyncSession, monk
     await _attach_link(db_session, m2, story, STORY_UPDATE)
     story.event_count += 2
     await db_session.flush()
+    # R2.9A test-fixture fix (MissingGreenlet) - see the identical comment/reasoning in
+    # test_related_root_plus_identical_confirmed_duplicate() above.
+    await db_session.refresh(story)
 
     confirmed = await load_story_events(db_session, story.id)
     assert len(confirmed) == 2
