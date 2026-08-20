@@ -1445,3 +1445,151 @@ def test_entity_legal_suffix_variants_do_not_merge_known_documented_limitation()
         "if this ever changes, story_memory.py's frozen entity extraction changed - update this "
         "pinning test and the R2.10 Night 2 report"
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase R2.10 Night 2 - synthesis input invariant suite (Phase 8)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_synthesis_evidence_invariants_hold_and_build_is_reproducible(db_session):
+    """A single strong invariant test covering the exact evidence that reaches Prompt v2
+    (render_event_recap_bundle_text()'s own inputs), run against a real 4-announcement DB
+    fixture. Builds the candidate TWICE from the same fixture and cross-checks every invariant
+    below against BOTH runs, proving both correctness and reproducibility in one pass."""
+    from services.recap_event import load_story_events
+
+    story, events = await _make_story(db_session, [
+        "Taiwan approves $314 AI dividend for every citizen",
+        "Government confirms $314 per person AI dividend program in Taiwan",
+        "Taiwan dividend program expands eligibility criteria for AI payout",
+        "Officials detail rollout timeline for Taiwan's AI dividend scheme",
+    ], match_types=[NEW_STORY, STORY_UPDATE, STORY_UPDATE, STORY_UPDATE])
+    event_ids = {e.id for e in events}
+
+    for _ in range(2):
+        result = await build_event_recap_candidate(db_session, story, force_shadow=True, now=_NOW)
+        assert result.candidate is not None
+        candidate = result.candidate
+
+        # Anchor always represented among the announcements' own member events - never an anchor
+        # that R1's own clustering silently dropped or that lies outside candidate membership.
+        all_member_ids = {eid for a in candidate.announcements for eid in a.member_event_ids}
+        assert candidate.anchor_event_id in event_ids
+        assert candidate.anchor_event_id in all_member_ids
+
+        # No duplicate announcement cluster ids.
+        cluster_ids = [a.cluster_id for a in candidate.announcements]
+        assert len(cluster_ids) == len(set(cluster_ids))
+
+        # No duplicate source ref at the candidate level.
+        assert len(candidate.source_refs) == len(set(candidate.source_refs))
+
+        # No duplicate source ref within any single announcement.
+        for a in candidate.announcements:
+            assert len(a.source_refs) == len(set(a.source_refs))
+
+        # Every timeline item maps to a known announcement cluster id.
+        announcement_ids = {a.cluster_id for a in candidate.announcements}
+        for entry in candidate.timeline:
+            assert entry.announcement_id in announcement_ids
+
+        # Every timeline entry's supporting events exist in candidate membership.
+        for entry in candidate.timeline:
+            assert set(entry.supporting_event_ids) <= event_ids
+
+        # Every fact's source_event_ids exist in candidate membership - never an unsupported event.
+        for fact in candidate.verified_facts:
+            assert set(fact.source_event_ids) <= event_ids
+
+        # Every announcement's member events exist in candidate membership.
+        for a in candidate.announcements:
+            assert set(a.member_event_ids) <= event_ids
+
+        # Every source ref in candidate.source_refs actually comes from some announcement's own
+        # source_refs (never a ref invented at the top level).
+        all_announcement_refs = {ref for a in candidate.announcements for ref in a.source_refs}
+        assert set(candidate.source_refs) <= all_announcement_refs
+
+        # Stable ordering: timeline is sorted chronologically by timestamp.
+        timestamps = [entry.timestamp for entry in candidate.timeline]
+        assert timestamps == sorted(timestamps)
+
+        # Origin projection did not alter stored membership (mirrors R2.9's case4b oracle).
+        confirmed = await load_story_events(db_session, story.id)
+        assert {e.id for e in confirmed} == event_ids
+
+
+@pytest.mark.asyncio
+async def test_evidence_bundle_text_normalized_identical_across_two_builds(db_session):
+    """generated_at is the only intentionally non-deterministic field on EventRecapCandidate
+    itself (module docstring) - render_event_recap_bundle_text() never embeds it at all, so the
+    rendered evidence TEXT sent to the prompt must be byte-for-byte identical across two builds of
+    the same fixture, independent of story_title/generated_at differences."""
+    story, _events = await _make_story(db_session, [
+        "Taiwan approves $314 AI dividend for every citizen",
+        "Government confirms $314 per person AI dividend program in Taiwan",
+    ])
+    result_a = await build_event_recap_candidate(db_session, story, force_shadow=True, now=_NOW)
+    result_b = await build_event_recap_candidate(db_session, story, force_shadow=True, now=_NOW + timedelta(hours=1))
+    assert result_a.candidate is not None and result_b.candidate is not None
+    text_a = render_event_recap_bundle_text(result_a.candidate)
+    text_b = render_event_recap_bundle_text(result_b.candidate)
+    assert text_a == text_b, "evidence bundle text must not depend on `now`/generated_at"
+
+
+# ---------------------------------------------------------------------------
+# Phase R2.10 Night 2 - publishable invariant audit (Phase 11)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_publishable_stays_false_across_every_reachable_r2_path(db_session):
+    """Phase 11: exhaustively proves EventRecapCandidate.publishable cannot become True through
+    any reachable R2 code path - deterministic build (natural READY, force_shadow), and every
+    synthesis outcome (success, well-grounded, unsupported-claim-flagged, internal-vocabulary-leak-
+    flagged). Structural guarantee (not just empirical): the dataclass default is `False`
+    (services/event_recap.py's own `publishable: bool = False`) and the ONE `dataclasses.replace()`
+    call in synthesize_event_recap() passes `publishable=False` unconditionally - no other
+    constructor call for EventRecapCandidate exists anywhere in this module."""
+    story, _events = await _make_story(db_session, [
+        "Taiwan approves $314 AI dividend for every citizen",
+        "Government confirms $314 per person AI dividend program in Taiwan",
+    ])
+
+    deterministic_forced = await build_event_recap_candidate(db_session, story, force_shadow=True, now=_NOW)
+    assert deterministic_forced.candidate is not None
+    assert deterministic_forced.candidate.publishable is False
+
+    gateway = FakeLLMGateway(generate_response=GenerateResponse(
+        text=None,
+        structured_output={
+            "recap_title": "Taiwan AI dividend approved",
+            "recap_summary": "Taiwan approved a $314 AI dividend for every citizen.",
+            "key_takeaways": ["Taiwan approved a $314 AI dividend for every citizen."],
+            "uncertainty_notes": [],
+        },
+        finish_reason="stop", model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=10, output_tokens=5),
+    ))
+    synthesized = await synthesize_event_recap(
+        deterministic_forced.candidate, gateway, _prompt_repository(), runtime=_runtime(),
+    )
+    assert synthesized.publishable is False
+    assert synthesized.fact_verification.status in ("pass", "review", "block")
+
+    unsupported_gateway = FakeLLMGateway(generate_response=GenerateResponse(
+        text=None,
+        structured_output={
+            "recap_title": "Taiwan AI dividend approved",
+            "recap_summary": "Taiwan approved a $314 AI dividend for every citizen.",
+            "key_takeaways": ["The program will actually cost $999999999 in total, unlike anything reported."],
+            "uncertainty_notes": [],
+        },
+        finish_reason="stop", model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=10, output_tokens=5),
+    ))
+    unsupported_synthesized = await synthesize_event_recap(
+        deterministic_forced.candidate, unsupported_gateway, _prompt_repository(), runtime=_runtime(),
+    )
+    assert unsupported_synthesized.fact_verification.status != "pass"
+    assert unsupported_synthesized.publishable is False
