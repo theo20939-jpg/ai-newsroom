@@ -800,6 +800,46 @@ async def test_synthesis_raises_on_malformed_output(db_session):
         await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime())
 
 
+@pytest.mark.asyncio
+async def test_synthesis_raises_when_structured_output_is_not_a_dict(db_session):
+    """Phase R2.10B offline matrix (case B): a Gateway/model that returns no structured output at
+    all (or a non-dict shape, e.g. the model emitted plain text instead of JSON) must fail closed,
+    never be silently coerced or partially accepted."""
+    candidate = await _candidate_for_synthesis(db_session)
+    gateway = FakeLLMGateway(generate_response=GenerateResponse(
+        text="not structured JSON", structured_output=None,
+        finish_reason="stop", model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=10, output_tokens=5),
+    ))
+    with pytest.raises(EventRecapSynthesisError):
+        await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime())
+
+
+@pytest.mark.asyncio
+async def test_synthesis_ignores_unexpected_extra_fields(db_session):
+    """Phase R2.10B offline matrix (case G): extra/unexpected keys beyond the four the prompt
+    schema declares (e.g. a model that adds its own "confidence_score" or "sources_used" field)
+    must never break synthesis and must never leak into the candidate - only the four declared
+    fields are ever read."""
+    candidate = await _candidate_for_synthesis(db_session)
+    gateway = FakeLLMGateway(generate_response=GenerateResponse(
+        text=None,
+        structured_output={
+            "recap_title": "Taiwan AI dividend approved",
+            "recap_summary": "Taiwan approved a $314 AI dividend for every citizen.",
+            "key_takeaways": ["Taiwan approved a $314 AI dividend for every citizen."],
+            "uncertainty_notes": [],
+            "confidence_score": 0.97,
+            "sources_used": ["https://example.com/unexpected-extra-field"],
+        },
+        finish_reason="stop", model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=10, output_tokens=5),
+    ))
+    updated = await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime())
+    assert updated.recap_title == "Taiwan AI dividend approved"
+    assert updated.publishable is False
+    assert not hasattr(updated, "confidence_score")
+    assert not hasattr(updated, "sources_used")
+
+
 def test_detect_internal_vocabulary_leak_finds_known_terms():
     """Item 11/12: the deterministic guard's own unit behavior - a real-shaped leak (the exact
     literal phrases production output was observed to contain) must be detected."""
