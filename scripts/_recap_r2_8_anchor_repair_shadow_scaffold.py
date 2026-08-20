@@ -1,5 +1,24 @@
 """NINJA PULSE RECAP Phase R2.8 - Story Anchor Repair Shadow (SCAFFOLD/DESIGN ONLY, READ ONLY).
 
+DEPRECATED - NOT CANONICAL. Superseded by
+`scripts/_recap_r2_8_origin_membership_semantics_shadow.py`, written AFTER R2.7's real production
+forensic (this file predates that evidence - see its own module docstring's "R2.7 recap" section
+for the two production-proven facts this file's own design never accounted for: (1) `_apply_story_
+memory()`'s `match_type` on the NEWLY-created Story's own link is copied unchanged from the
+classification against the OLD candidate Story it was scored against, a real semantic-context
+question this file's HYPOTHETICAL model never investigates at all; (2) this file's own
+`transient_story_with_anchor()` + real `build_event_recap_candidate()` combination can express an
+anchor SWAP among EXISTING confirmed members only - it structurally CANNOT express "the origin
+event becomes its own extra member," because `build_event_recap_candidate()` always re-derives its
+member-event list via a live `load_story_events(session, story.id)` DB query tied to the real,
+unchanged link rows, which can never be made to include a non-confirmed link no matter what
+`first_event_id` the transient Story copy declares). Retained, unmodified, only as forensic
+history of the pre-R2.7-evidence design - not deleted (nothing else in this codebase imports it),
+not run this checkpoint either. Use the canonical file above for any future R2.8 production
+mounting.
+
+Everything below this point is the ORIGINAL, unmodified pre-R2.7 scaffold text.
+
 NOT a fully-authorized production diagnostic checkpoint yet - prepared per the overnight
 autonomous checkpoint's own explicit "prepare, but DO NOT execute, the next logical development
 checkpoint... design/tooling only" instruction (Part IX). Do not treat this as equivalent in
