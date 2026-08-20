@@ -1312,3 +1312,136 @@ async def test_missinggreenlet_regression_no_story_refresh_needed(db_session):
     result = await build_event_recap_candidate(db_session, story, force_shadow=True, now=_NOW)
     assert result.rejected is False
     assert result.candidate is not None
+
+
+# ---------------------------------------------------------------------------
+# Phase R2.10 Night 2 - source identity / diversity forensic (Google News wrapper risk)
+# ---------------------------------------------------------------------------
+
+
+def test_frozen_count_unique_sources_can_inflate_same_real_publisher_via_wrapper():
+    """Phase 3 forensic finding, REPORT ONLY: `services/recap_event.py::count_unique_sources()`
+    is FROZEN (never modified here). It normalizes purely by `NewsEvent.url`'s own domain
+    (`_normalize_domain()`) - it has no awareness of canonical/acquisition data at all. When the
+    SAME real publisher's article reaches this newsroom twice - once via a direct URL, once via a
+    Google News RSS wrapper (`news.google.com`) - the two events' domains differ
+    ("cnbc.com" vs "news.google.com"), so this frozen function counts them as 2 distinct sources
+    for READINESS purposes even though there is only 1 real publisher. This is a real,
+    reproducible characteristic of frozen R1 code - documented here as evidence, never fixed
+    (`evaluate_recap_readiness()`'s own `unique_source_count` threshold is out of scope this
+    phase). `services/event_recap.py`'s own `evidence_reference_count` (see the sibling test
+    below) is R2's already-existing, already-disclosed mitigation for evidence-bundle purposes -
+    it does NOT retroactively correct what `count_unique_sources()` itself reports to readiness."""
+    from services.recap_event import count_unique_sources
+
+    direct = _event(title="Marvell chip deal", url="https://www.cnbc.com/2026/08/20/marvell-google.html", minutes_ago=10)
+    via_google_news = _event(
+        title="Marvell chip deal", url="https://news.google.com/rss/articles/CBMi...", minutes_ago=5,
+    )
+    assert count_unique_sources([direct, via_google_news]) == 2, (
+        "documents the real inflation risk - same real publisher, counted twice, because one "
+        "event arrived through a Google News wrapper URL"
+    )
+
+
+def test_frozen_count_unique_sources_can_also_collapse_distinct_publishers_via_wrapper():
+    """The mirror-image, already-disclosed R1.3 finding (module docstring of
+    load_canonical_urls_for_events()/count_unique_sources_with_canonical_urls()): two GENUINELY
+    DIFFERENT real publishers, both wrapped by Google News, normalize to the identical
+    "news.google.com" domain and are undercounted as ONE source. Frozen, documented, not fixed."""
+    from services.recap_event import count_unique_sources
+
+    outlet_a = _event(title="Marvell chip deal - CNBC", url="https://news.google.com/rss/articles/AAA...", minutes_ago=10)
+    outlet_b = _event(title="Marvell chip deal - Reuters", url="https://news.google.com/rss/articles/BBB...", minutes_ago=5)
+    assert count_unique_sources([outlet_a, outlet_b]) == 1, (
+        "documents the real undercounting risk - two genuinely distinct publishers, both wrapped "
+        "by Google News, collapse to a single normalized domain"
+    )
+
+
+def test_evidence_reference_identity_correctly_prefers_canonical_url_over_wrapper_domain():
+    """R2's own `_evidence_reference_identity()` (NOT frozen, R2-owned) is the already-existing
+    correction for the evidence BUNDLE (never for readiness, which stays frozen): when Article
+    Acquisition has already resolved a canonical URL for a Google-News-wrapped event, that
+    canonical domain is used instead of the wrapper's own domain - two wrappers pointing at the
+    SAME real canonical publisher correctly collapse to ONE evidence reference."""
+    from services.event_recap import _evidence_reference_identity
+
+    wrapper_event_a = _event(title="x", url="https://news.google.com/rss/articles/AAA...", minutes_ago=10)
+    wrapper_event_b = _event(title="x", url="https://news.google.com/rss/articles/BBB...", minutes_ago=5)
+    identity_a = _evidence_reference_identity(wrapper_event_a, "https://www.cnbc.com/2026/08/20/marvell-google.html")
+    identity_b = _evidence_reference_identity(wrapper_event_b, "https://www.cnbc.com/2026/08/20/marvell-google.html")
+    assert identity_a == identity_b == "cnbc.com"
+
+
+def test_evidence_reference_identity_never_collapses_to_bare_wrapper_domain_without_canonical():
+    """When NO canonical URL is available yet (acquisition has not run for that event), R2's own
+    correction deliberately falls back to the FULL raw event URL, never the wrapper's own domain
+    alone - re-collapsing to "news.google.com" would silently reintroduce the exact ambiguity this
+    correction exists to fix (module docstring's own explicit reasoning)."""
+    from services.event_recap import _evidence_reference_identity
+
+    wrapper_event = _event(title="x", url="https://news.google.com/rss/articles/AAA...", minutes_ago=10)
+    identity = _evidence_reference_identity(wrapper_event, None)
+    assert identity == wrapper_event.url
+    assert identity != "news.google.com"
+
+
+def test_evidence_reference_identity_distinguishes_genuinely_distinct_publishers():
+    from services.event_recap import _evidence_reference_identity
+
+    cnbc_event = _event(title="x", url="https://www.cnbc.com/article1", minutes_ago=10)
+    reuters_event = _event(title="y", url="https://www.reuters.com/article2", minutes_ago=5)
+    assert (
+        _evidence_reference_identity(cnbc_event, None) != _evidence_reference_identity(reuters_event, None)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase R2.10 Night 2 - fact cross-source merging (Phase 6)
+# ---------------------------------------------------------------------------
+
+
+def test_decimal_comma_fix_enables_correct_multi_source_numeric_confirmation():
+    """End-to-end proof that the Phase 1 numeric fix (see the decimal-comma tests above) actually
+    reaches _build_verified_facts(): the real Marvell/Google English+Russian pair now correctly
+    merges the SAME real $12.2B figure into one FACT_MULTI_SOURCE_CONFIRMED fact, instead of two
+    unrelated FACT_SINGLE_SOURCE_ONLY facts (one of which - "122" - was a fabricated value present
+    in no evidence text at all)."""
+    events, _clusters, _summaries, facts = _summaries_and_facts([
+        "Marvell pops 6% on AI chip deal that lets Google buy up to $12.2 billion in shares - CNBC",
+        "Marvell будет разрабатывать чипы для Google и позволит ей купить собственных акций на "
+        "сумму $12,2 млрд",
+    ])
+    numeric_facts = {f.value: f for f in facts if f.fact_type == "numeric"}
+    assert "12.2" in numeric_facts
+    assert numeric_facts["12.2"].status == FACT_MULTI_SOURCE_CONFIRMED
+    assert numeric_facts["12.2"].source_count == 2
+    assert "122" not in numeric_facts
+
+
+def test_entity_legal_suffix_variants_do_not_merge_known_documented_limitation():
+    """Phase 6 forensic finding, REPORT ONLY / NOT FIXED (documented, not implemented tonight -
+    no real production instance of this exact split was found, unlike the numeric bug; per this
+    phase's own "fix only high-confidence cases" instruction, a speculative legal-suffix stripper
+    was deliberately not built without concrete forensic evidence it is needed). `extract_story_
+    signature()` (services/story_memory.py, FROZEN, never modified here) treats "Marvell
+    Technology" and "Marvell" - and "Google LLC" and "Google" - as different entity strings.
+    If two real sources described the same company using different legal-suffix forms, this
+    system would currently under-detect the corroboration (two SINGLE_SOURCE_ONLY entities
+    instead of one MULTI_SOURCE_CONFIRMED) - not a fabricated fact (unlike the numeric bug), just
+    a missed-corroboration case. Pinned here so a future checkpoint has a concrete regression
+    anchor and reproducer if a narrow, evidence-backed RECAP-local alias correction is ever
+    warranted (mirroring _publisher_suffix_numbers()'s own small-explicit-list precedent, never a
+    general entity-resolution engine)."""
+    from services.story_memory import extract_story_signature
+    from database.models.news_event import EventCategory
+
+    full_name = extract_story_signature("Marvell Technology announces new AI chip", EventCategory.TECH)
+    short_name = extract_story_signature("Marvell announces new AI chip", EventCategory.TECH)
+    assert "marvell technology" in full_name.entities
+    assert "marvell" in short_name.entities
+    assert "marvell technology" not in short_name.entities, (
+        "if this ever changes, story_memory.py's frozen entity extraction changed - update this "
+        "pinning test and the R2.10 Night 2 report"
+    )
