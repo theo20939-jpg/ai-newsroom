@@ -1188,6 +1188,97 @@ def test_publisher_suffix_numbers_returns_empty_when_no_trailing_suffix_exists()
 
 
 # ---------------------------------------------------------------------------
+# Phase R2.10 Night 2 - decimal-comma numeric normalization (real production-shadow finding)
+# ---------------------------------------------------------------------------
+
+
+def test_russian_decimal_comma_matches_english_decimal_point_marvell_fixture():
+    """The exact real production-shadow anomaly: the English Marvell/Google event produced the
+    fact "12.2" while the Russian-language event for the SAME underlying $12.2 billion figure
+    produced "122" - a fabricated-looking value that appears in no evidence text at all, and one
+    that silently prevented the two sources from ever being recognized as corroborating the same
+    fact (_build_verified_facts() groups by exact string equality). Both must now normalize
+    identically."""
+    from services.event_recap import _extract_meaningful_numbers
+
+    english = _extract_meaningful_numbers(
+        "Marvell pops 6% on AI chip deal that lets Google buy up to $12.2 billion in shares - CNBC"
+    )
+    russian = _extract_meaningful_numbers(
+        "Marvell будет разрабатывать чипы для Google и позволит ей купить собственных акций на "
+        "сумму $12,2 млрд"
+    )
+    assert "12.2" in english
+    assert "12.2" in russian, "Russian decimal comma must normalize to the same fact as the English decimal point"
+    assert "122" not in russian, "the old naive comma-strip must no longer fabricate a nonexistent value"
+
+
+def test_normalize_numeric_token_locale_disambiguation_matrix():
+    """Phase 2 numeric semantics audit: comma/period disambiguation must never collapse a genuine
+    thousands-grouped whole number into a fabricated decimal, and must never leave a genuine
+    decimal comma unconverted. `_normalize_numeric_token()` is intentionally a narrow heuristic
+    (last separator = decimal when both appear; a lone comma followed by 1-2 digits = decimal;
+    everything else comma-only = thousands grouping), never a general locale/NLP parser."""
+    from services.event_recap import _normalize_numeric_token
+
+    cases = {
+        "12.2": "12.2",  # English decimal - already unambiguous, must stay unchanged
+        "12,2": "12.2",  # Russian/EU decimal comma - the reported bug
+        "1,5": "1.5",
+        "0,5": "0.5",
+        "1,234": "1234",  # conventional 3-digit thousands grouping - never a decimal
+        "$1,299": "1299",  # a price tag, not a decimal
+        "1,234.56": "1234.56",  # US thousands + decimal
+        "1.234,56": "1234.56",  # EU thousands + decimal
+    }
+    for raw, expected in cases.items():
+        assert _normalize_numeric_token(raw) == expected, f"{raw!r} -> expected {expected!r}"
+
+
+def test_thousands_grouped_price_never_becomes_a_decimal():
+    """A real-shaped price tag ("$1,299") must never be misread as "1.299" - the disambiguation
+    heuristic must not overcorrect the original bug into a new, opposite one."""
+    from services.event_recap import _extract_meaningful_numbers
+
+    numbers = _extract_meaningful_numbers("The new flagship launches at $1,299 this fall")
+    assert "1299" in numbers
+    assert "1.299" not in numbers
+
+
+def test_percent_and_currency_prefixed_decimal_commas_normalize_correctly():
+    from services.event_recap import _extract_meaningful_numbers
+
+    numbers = _extract_meaningful_numbers("Рост составил 1,5% при выручке в 12,2 млн рублей")
+    assert "1.5" in numbers
+    assert "12.2" in numbers
+
+
+def test_space_separated_thousands_fractional_part_still_preserved():
+    """"1 234,56" is tokenized as two separate matches by the existing (unchanged) regex - the
+    single leading "1" is filtered as too short to be meaningful, exactly as before this fix; the
+    fractional group "234,56" must still normalize to a genuine decimal, never "23456"."""
+    from services.event_recap import _extract_meaningful_numbers
+
+    numbers = _extract_meaningful_numbers("Цена составила 1 234,56 рублей")
+    assert "234.56" in numbers
+    assert "23456" not in numbers
+
+
+def test_recap_event_frozen_extractor_has_the_same_unfixed_pattern_documented_not_touched():
+    """Phase R2.10 Night 2 forensic: the FROZEN `services/recap_event.py::_extract_numeric_tokens()`
+    duplicates the exact same pre-fix naive comma-strip behavior this test file's own RECAP-local
+    fix replaces. This is deliberately NOT fixed here (frozen R1 file) - this test only documents
+    and pins the known, disclosed limitation so a future checkpoint has a concrete regression
+    anchor, and so nobody mistakes R1's copy as already fixed by this commit."""
+    from services.recap_event import _extract_numeric_tokens
+
+    assert _extract_numeric_tokens("$12,2 млрд") == {"122"}, (
+        "if this ever changes, services/recap_event.py was modified - update this pinning test "
+        "and the R2.10 report, since that file is supposed to be frozen this phase"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Phase R2.10A.1 - MissingGreenlet runtime hardening regression
 # ---------------------------------------------------------------------------
 

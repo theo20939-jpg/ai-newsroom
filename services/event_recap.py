@@ -168,13 +168,64 @@ _MAX_BUNDLE_TEXT_CHARS = 12_000  # mirrors services/telegraph_research_context.p
 _NUMERIC_TOKEN_RE = re.compile(r"\$?\d[\d,.]*\d|\$?\d")
 
 
+def _normalize_numeric_token(raw: str) -> str:
+    """Phase R2.10 Night 2 (real production-shadow finding, Marvell/Google Story): locale-aware
+    separator normalization for one `_NUMERIC_TOKEN_RE` match. Pure, deterministic, RECAP-LOCAL
+    only (`services/event_recap.py`'s own private helper - `services/recap_event.py`'s frozen
+    `_extract_numeric_tokens()` duplicates the OLD naive `.replace(",", "")` behavior unchanged;
+    see that function's own docstring cross-reference and this fix's own commit message for why
+    that frozen copy is deliberately left untouched).
+
+    The bug this replaces: blindly stripping every comma treated a Russian-locale decimal comma
+    identically to a thousands-grouping comma - `"$12,2 млрд"` (twelve point two billion) silently
+    became the fact `"122"`, a fabricated-looking value that never appeared in any evidence text,
+    while the equivalent English source `"$12.2 billion"` correctly stayed `"12.2"` - the same
+    real-world number was represented as two different, non-matching fact strings, which
+    `_build_verified_facts()`'s own event-set grouping (keyed on exact string equality) then
+    counted as two unrelated `FACT_SINGLE_SOURCE_ONLY` facts instead of one genuinely
+    `FACT_MULTI_SOURCE_CONFIRMED` fact - both a hallucination-adjacent risk (a number in the
+    evidence bundle that traces to no real source text) and a corroboration-detection miss.
+
+    Deliberately NOT "replace every comma with a period" - that would silently corrupt genuine
+    thousands-grouped numbers like `"$1,299"` (mis-normalizing it to `1.299`). Disambiguation
+    (a narrow, conventional heuristic - never a general locale/NLP number parser):
+      - BOTH a comma and a period present: whichever separator occurs LAST is the decimal
+        separator (handles both `"1,234.56"` US-thousands-then-decimal and `"1.234,56"`
+        EU-thousands-then-decimal); every earlier occurrence of the OTHER separator is stripped as
+        thousands grouping.
+      - ONLY commas present, exactly one comma, followed by exactly 1-2 digits (e.g. `"12,2"`,
+        `"1,5"`, `"0,5"`): a decimal separator (no real-world thousands grouping is ever 1-2
+        digits) - converted to a period.
+      - Any other comma-only shape (multiple commas, or a lone comma followed by exactly 3 digits -
+        conventional thousands grouping, e.g. `"1,234"`): every comma is thousands grouping,
+        stripped entirely - unchanged from the previous behavior for this shape.
+      - Period-only or no separator at all: already unambiguous (this codebase's own English
+        evidence titles always use `.` as a decimal point) - left untouched, exactly as before."""
+    body = raw.replace("$", "")
+    has_comma, has_period = "," in body, "." in body
+    if has_comma and has_period:
+        if body.rfind(",") > body.rfind("."):
+            body = body.replace(".", "").replace(",", ".")
+        else:
+            body = body.replace(",", "")
+    elif has_comma:
+        parts = body.split(",")
+        if len(parts) == 2 and 1 <= len(parts[1]) <= 2:
+            body = parts[0] + "." + parts[1]
+        else:
+            body = body.replace(",", "")
+    return body
+
+
 def _extract_meaningful_numbers(title: str) -> set[str]:
-    """Pure. A 2+-digit number (optional leading currency sign, commas/decimals stripped) is
-    distinctive; a single lone digit is too common to count as a meaningful fact by itself -
-    identical reasoning to services/recap_event.py's own `_extract_numeric_tokens()`."""
+    """Pure. A 2+-digit number (optional leading currency sign, locale-aware decimal/thousands
+    separators normalized - see `_normalize_numeric_token()`) is distinctive; a single lone digit
+    is too common to count as a meaningful fact by itself - identical reasoning to services/
+    recap_event.py's own `_extract_numeric_tokens()` (whose separator-handling this deliberately
+    no longer mirrors exactly - see `_normalize_numeric_token()`'s own docstring)."""
     tokens: set[str] = set()
     for match in _NUMERIC_TOKEN_RE.finditer(title):
-        normalized = match.group(0).replace(",", "").replace("$", "")
+        normalized = _normalize_numeric_token(match.group(0))
         if len(normalized) >= 2:
             tokens.add(normalized)
     return tokens
