@@ -101,7 +101,23 @@ async def scan_story_readiness(session: AsyncSession, story: Story, *, now: date
     nothing new. `research_complete_tracked` is unconditionally `False`: no column or table in
     this schema currently persists a "recap research complete" signal for any Story (confirmed by
     inspection - services/event_recap.py's own `research_complete` parameter, Phase R2.10A.3, is
-    caller-supplied per call, never stored) - reported honestly as untracked rather than guessed."""
+    caller-supplied per call, never stored) - reported honestly as untracked rather than guessed.
+
+    Phase R2.11 caveat for the human reviewer (docs/r2_11_announcement_identity_findings.md - a
+    real production-shadow finding, not fixed, characterized only): `announcement_count` here is
+    R1's own raw report-level cluster count, verbatim - it can be inflated by several publishers
+    reporting the SAME single real-world event with no genuine additional development (confirmed
+    reproducible: a real VK-vs-Apple Story showed 3 near-simultaneous, same-event reports from 3
+    different outlets as `announcement_count=3`, and a synthetic 4th-publisher extension of the
+    identical shape reaches natural READY). A Story marked `recommended_for_manual_review=True`
+    with a HIGH `announcement_count` is not automatically evidence of real story evolution - the
+    human evidence-inspection step this scanner's own docstring already calls for (`scripts/
+    _recap_r2_event_shadow.py --story-id <id>`) must independently judge whether the announcements
+    are genuinely distinct developments or corroborating reports of one event, no deterministic
+    correction for this exists yet (design considered and rejected - see the report's own Phase
+    5-7 for why: no existing signal reliably distinguishes "same fact restated" from "a different
+    development involving the same entities" without also risking the opposite, worse failure -
+    a false merge of two genuinely different developments)."""
     confirmed = await load_story_events(session, story.id)
     _origin_event, projection_decision = await resolve_recap_origin_projection(session, story)
     origin_projection_status = (

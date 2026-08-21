@@ -173,3 +173,42 @@ def test_rank_rows_is_deterministic_across_repeated_calls() -> None:
     first = [r.story_id for r in rank_rows(rows)]
     second = [r.story_id for r in rank_rows(rows)]
     assert first == second
+
+
+@pytest.mark.asyncio
+async def test_corpus_case5_vk_apple_three_publishers_reports_raw_announcement_count(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase R2.11 addition - real production-shadow shape (exact titles from this checkpoint's
+    own record). The scanner's own `announcement_count` field is R1's raw report-level cluster
+    count, UNCHANGED by this checkpoint (no R2-local correction was implemented - see docs/
+    r2_11_announcement_identity_findings.md). This test pins that CURRENT scanner output for a
+    same-event/multi-publisher shape, and exists specifically so a future correction (if one is
+    ever safely designed) has a concrete before/after regression anchor. Not asserting
+    `recommended_for_manual_review` either way here - depends on the exact cooling-window timing,
+    which is not this test's own point (see scan_story_readiness()'s own new Phase R2.11 docstring
+    caveat for the human-reviewer-facing warning this finding produced instead of a code fix)."""
+    story, _origin_event = await _apply_related_or_uncertain_root(
+        db_session, "VK подала в суд на Apple и потребовала вернуть свои приложения в App Store",
+        outcome=NEW_STORY, entity_overlap=0.0, monkeypatch=monkeypatch,
+    )
+    m1 = await _new_event(
+        db_session, "VK подала иск против Apple в российский суд из-за удаления её приложений из App Store",
+        published_at=_NOW - timedelta(minutes=19),
+    )
+    m2 = await _new_event(
+        db_session, "VK решила засудить Apple за удаление приложений из App Store",
+        published_at=_NOW,
+    )
+    await _attach_link(db_session, m1, story, STORY_UPDATE)
+    await _attach_link(db_session, m2, story, STORY_UPDATE)
+    story.event_count += 2
+    await db_session.flush()
+    await db_session.refresh(story)
+
+    row = await scan_story_readiness(db_session, story, now=_NOW)
+    assert row.story_integrity_eligible is True
+    assert row.announcement_count == 3, (
+        "raw R1 report-level count for 3 same-event publications - not development count; "
+        "unchanged from current production behavior, characterized not corrected this checkpoint"
+    )
