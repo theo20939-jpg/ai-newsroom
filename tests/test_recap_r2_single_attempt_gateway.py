@@ -222,3 +222,30 @@ def test_single_attempt_flag_alone_without_with_llm_makes_no_gateway_import():
             module_level_imports.update(alias.name for alias in node.names)
     assert "integrations.llm_gateway.boot" not in module_level_imports
     assert "integrations.llm_gateway.fallback.policy" not in module_level_imports
+
+
+# ---------------------------------------------------------------------------
+# 4. Phase R2.10 Night 2 (Phase 22) - CLI UX hardening: dangerous flag combinations
+# ---------------------------------------------------------------------------
+
+
+def test_with_llm_without_single_attempt_warns():
+    module = _load_cli_module()
+    warnings = module._cli_safety_warnings(with_llm=True, single_attempt=False)
+    assert any("single-attempt" in w for w in warnings)
+
+
+def test_with_llm_and_single_attempt_together_warns_nothing():
+    module = _load_cli_module()
+    assert module._cli_safety_warnings(with_llm=True, single_attempt=True) == []
+
+
+def test_single_attempt_without_with_llm_notes_no_effect():
+    module = _load_cli_module()
+    warnings = module._cli_safety_warnings(with_llm=False, single_attempt=True)
+    assert any("no effect" in w for w in warnings)
+
+
+def test_neither_flag_warns_nothing():
+    module = _load_cli_module()
+    assert module._cli_safety_warnings(with_llm=False, single_attempt=False) == []

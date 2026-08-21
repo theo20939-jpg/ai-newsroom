@@ -365,6 +365,32 @@ def _build_single_attempt_gateway(layer: object) -> _SingleAttemptGateway:
     )
 
 
+def _cli_safety_warnings(*, with_llm: bool, single_attempt: bool) -> list[str]:
+    """Phase R2.10 Night 2 (Phase 22, CLI UX hardening). Pure - computes warning strings only,
+    never blocks execution (this script's own established "SAFE BY DEFAULT" discipline extends to
+    never breaking automation with an interactive prompt - a clear stderr warning is the correct,
+    non-blocking middle ground). The single dangerous state worth calling out loudly: `--with-llm`
+    WITHOUT `--single-attempt` silently falls back to the SHARED production Gateway's own default
+    resilience (up to 2 same-candidate retries + fallback to up to 2 further candidates - see
+    `_build_single_attempt_gateway()`'s own module docstring) for what is meant to be one
+    controlled diagnostic call - an operator who forgets `--single-attempt` could trigger several
+    real, paid physical provider attempts instead of the intended one."""
+    warnings: list[str] = []
+    if with_llm and not single_attempt:
+        warnings.append(
+            "WARNING: --with-llm without --single-attempt uses the SHARED Gateway's default "
+            "resilience (potentially several physical provider attempts, not one controlled "
+            "attempt) - pass --single-attempt for a real diagnostic run unless you specifically "
+            "intend to exercise ordinary fallback behavior."
+        )
+    if single_attempt and not with_llm:
+        warnings.append(
+            "NOTE: --single-attempt has no effect without --with-llm - this run makes zero "
+            "LLM/Gateway calls regardless."
+        )
+    return warnings
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--story-id", required=True, type=UUID, help="Story.id to build an EVENT_RECAP shadow candidate for.")
@@ -398,9 +424,15 @@ async def main() -> int:
     )
     args = parser.parse_args()
 
+    for warning in _cli_safety_warnings(with_llm=args.with_llm, single_attempt=args.single_attempt):
+        print(warning, file=sys.stderr)
+
     output_path = args.output or DEFAULT_OUTPUT_DIR / f"recap_r2_event_shadow_{args.story_id}.json"
     text_output_path = output_path.with_suffix(".txt")
     evidence_output_path = args.evidence_output or output_path.with_name(f"{output_path.stem}_evidence.txt")
+    for existing in (output_path, text_output_path, evidence_output_path):
+        if existing.exists():
+            print(f"NOTE: {existing} already exists and will be overwritten.", file=sys.stderr)
 
     # Runtime-visible proof, printed before any DB access, regardless of outcome - unambiguous
     # for both a human reading stdout and an automated check grepping for this exact line.
