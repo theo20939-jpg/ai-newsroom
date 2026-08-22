@@ -798,10 +798,26 @@ def _synthesis_display_title(title: str) -> str:
     """R2-only display projection.
 
     Reuses the frozen R1 title-normalization/suffix-stripping implementation.
+    A bounded second pass handles observed syndicated titles shaped like
+    ``headline - original publisher - syndicating publisher``.
+
+    Intermediate suffix removal intentionally does not normalize punctuation
+    again: R1 normalization removes trailing punctuation, while the synthesis
+    display projection must preserve punctuation left on the substantive core.
     Does not mutate Story/Event/Announcement state.
     """
-    normalized = recap_event_service._title_with_normalized_punctuation(title)
-    return recap_event_service._trailing_suffix_stripped(normalized) or normalized
+    projected = recap_event_service._title_with_normalized_punctuation(title)
+
+    # Two passes are deliberate and evidence-bounded: the production-shadow
+    # fixture showed exactly two publisher suffix layers (Euronews -> Kursiv Media).
+    # R1 parsing semantics themselves remain frozen and untouched.
+    for _ in range(2):
+        stripped = recap_event_service._trailing_suffix_stripped(projected)
+        if not stripped:
+            break
+        projected = stripped
+
+    return projected
 
 
 def _fact_safety_literal_entity_support(

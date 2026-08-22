@@ -748,6 +748,40 @@ def test_vtb_publisher_attribution_absent_from_clean_evidence_still_blocks():
     assert all("Банка России" not in claim for claim in verification.flagged_claims)
 
 
+
+def test_nested_syndication_publisher_suffixes_are_removed_from_synthesis_projection():
+    """Real R2 Shadow fixture: the final syndicator suffix and the embedded original-publisher
+    suffix must both stay forensic-only, never become synthesis evidence."""
+    titles = [
+        "Компании Центральной Азии и Кавказа внедряют ИИ вдвое быстрее мирового уровня - Euronews.com",
+        "Компании Центральной Азии внедряют ИИ вдвое быстрее мирового уровня — Euronews - Kursiv Media",
+    ]
+    candidate = _candidate_from_titles(
+        titles,
+        titles[0],
+        gap_minutes=180.0,
+    )
+
+    # Raw forensic announcement data stays untouched.
+    raw_headlines = [announcement.headline for announcement in candidate.announcements]
+    assert any("Euronews" in headline for headline in raw_headlines)
+    assert any("Kursiv Media" in headline for headline in raw_headlines)
+
+    assert _synthesis_display_title(titles[0]) == (
+        "Компании Центральной Азии и Кавказа внедряют ИИ вдвое быстрее мирового уровня"
+    )
+    assert _synthesis_display_title(titles[1]) == (
+        "Компании Центральной Азии внедряют ИИ вдвое быстрее мирового уровня"
+    )
+
+    bundle_text = render_event_recap_bundle_text(candidate)
+
+    assert "Euronews" not in bundle_text
+    assert "Kursiv Media" not in bundle_text
+    assert "Компании Центральной Азии и Кавказа внедряют ИИ вдвое быстрее мирового уровня" in bundle_text
+    assert "Компании Центральной Азии внедряют ИИ вдвое быстрее мирового уровня" in bundle_text
+
+
 # ---------------------------------------------------------------------------
 # Phase R2.5 - editorial semantics hygiene (real production finding: a real Sverdlovsk synthesis
 # call echoed "independent"/"независимыми" - traced to R2.4's own wording, "mentioned across
