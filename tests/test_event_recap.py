@@ -36,6 +36,7 @@ from services.event_recap import (
     _build_verified_facts,
     _is_generic_entity_phrase,
     _publisher_suffix_numbers,
+    _synthesis_display_title,
     _synthesis_verified_facts,
     _verify_synthesis_facts,
     build_event_recap_candidate,
@@ -537,9 +538,15 @@ def test_synthesis_evidence_excludes_bare_single_source_entity_token():
     bundle_text = render_event_recap_bundle_text(candidate)
     assert "областн" not in bundle_text
 
-    # C. real announcement headlines still present
+    # C. raw forensic headlines stay unchanged on the candidate, while only their
+    # publisher-suffix-stripped display projection reaches synthesis evidence.
+    raw_headlines = [announcement.headline for announcement in candidate.announcements]
     for title in _SVERDLOVSK_TITLES:
-        assert title in bundle_text
+        assert title in raw_headlines
+        projected_title = _synthesis_display_title(title)
+        assert projected_title in bundle_text
+        if projected_title != title:
+            assert title not in bundle_text
 
 
 def test_synthesis_evidence_never_exposes_internal_vocabulary():
@@ -627,6 +634,118 @@ def test_english_story_same_adapter_behavior_no_sverdlovsk_specific_logic():
         candidate, "AI Tool Trialled For Cancer Screening", "Researchers are testing a new AI tool for cancer screening.", [],
     )
     assert verification.status != "block"
+
+
+
+# ---------------------------------------------------------------------------
+# Phase R2 Shadow VTB regression - real 2026-08-22 production-shadow finding:
+#
+# Raw Story/announcement titles contained trailing publisher suffixes:
+#   "... - Сибирское информационное агентство"
+#   "... - Самарская газета"
+#
+# Those suffixes reached the LLM-facing bundle as if they were event evidence. The generated
+# recap therefore attributed the event to "Самарская газета". Separately, Fact Safety extracted
+# the legitimate phrase "Банка России" from generated prose while source evidence exposed the
+# longer entity claim "ИИ Банка России", producing a deterministic false high-severity BLOCK even
+# though the exact phrase "Банка России" literally existed in the clean source text.
+#
+# The correction is R2-only:
+# - forensic Story/Event/Announcement data remains raw and unchanged;
+# - synthesis-facing title/headline display strips only R1-recognized publisher suffixes;
+# - literal entity support is granted only when the exact normalized phrase already occurs in the
+#   CLEAN R2 source evidence;
+# - an attribution absent from clean evidence must remain unsupported/BLOCK.
+# services/recap_event.py and services/fact_safety.py remain untouched.
+# ---------------------------------------------------------------------------
+
+_VTB_TITLES_WITH_PUBLISHERS = [
+    "ВТБ присоединился к Кодексу этики ИИ Банка России. - Сибирское информационное агентство",
+    "Банк присоединился к Кодексу этики ИИ Банка России - Самарская газета",
+]
+_VTB_RAW_STORY_TITLE = _VTB_TITLES_WITH_PUBLISHERS[0]
+_VTB_RECAP_TITLE = "ВТБ присоединился к Кодексу этики ИИ Банка России"
+_VTB_RECAP_SUMMARY = (
+    "ВТБ присоединился к Кодексу этики искусственного интеллекта Банка России."
+)
+
+
+def _vtb_candidate() -> EventRecapCandidate:
+    return _candidate_from_titles(
+        _VTB_TITLES_WITH_PUBLISHERS,
+        _VTB_RAW_STORY_TITLE,
+        gap_minutes=240.0,
+    )
+
+
+def test_vtb_synthesis_bundle_strips_publisher_suffixes_from_all_display_headlines():
+    """The exact VTB contamination class: publisher suffixes stay in forensic candidate data but
+    must disappear from Story/timeline/announcement headline text shown to synthesis."""
+    candidate = _vtb_candidate()
+
+    # Forensic data is deliberately untouched.
+    assert candidate.story_title == _VTB_RAW_STORY_TITLE
+    assert any(
+        "Сибирское информационное агентство" in announcement.headline
+        for announcement in candidate.announcements
+    )
+    assert any(
+        "Самарская газета" in announcement.headline
+        for announcement in candidate.announcements
+    )
+
+    bundle_text = render_event_recap_bundle_text(candidate)
+
+    # LLM-facing evidence contains substantive headline cores only.
+    assert "Сибирское информационное агентство" not in bundle_text
+    assert "Самарская газета" not in bundle_text
+    assert "Story: ВТБ присоединился к Кодексу этики ИИ Банка России." in bundle_text
+    assert "Банк присоединился к Кодексу этики ИИ Банка России" in bundle_text
+
+    for entry in candidate.timeline:
+        assert _synthesis_display_title(entry.label) in bundle_text
+    for announcement in candidate.announcements:
+        assert _synthesis_display_title(announcement.headline) in bundle_text
+
+
+def test_vtb_literal_banka_rossii_entity_no_longer_false_blocks():
+    """The real Fact Safety false positive: generated prose extracts 'Банка России' while evidence
+    extracts 'ИИ Банка России'. Exact literal presence in CLEAN evidence is sufficient support;
+    no fuzzy/semantic entity matching is introduced."""
+    candidate = _vtb_candidate()
+
+    verification = _verify_synthesis_facts(
+        candidate,
+        _VTB_RECAP_TITLE,
+        _VTB_RECAP_SUMMARY,
+        ["ВТБ присоединился к Кодексу этики ИИ Банка России."],
+    )
+
+    assert "Банка России" not in verification.flagged_claims
+    assert verification.unsupported == 0
+    assert verification.status == "pass"
+
+
+def test_vtb_publisher_attribution_absent_from_clean_evidence_still_blocks():
+    """Safety regression: the literal-support bridge must never bless an attribution merely because
+    the model generated it. 'Самарская газета' is gone from clean evidence, so the old contaminated
+    draft remains a hard BLOCK while the legitimate 'Банка России' false positive disappears."""
+    candidate = _vtb_candidate()
+
+    verification = _verify_synthesis_facts(
+        candidate,
+        _VTB_RECAP_TITLE,
+        _VTB_RECAP_SUMMARY,
+        [
+            "ВТБ присоединился к Кодексу этики ИИ Банка России.",
+            "Об этом сообщили Сибирское информационное агентство и «Самарская газета».",
+        ],
+    )
+
+    assert verification.status == "block"
+    assert verification.unsupported >= 1
+    assert any("Самарская газета" in claim for claim in verification.flagged_claims)
+    assert all("Банка России" not in claim for claim in verification.flagged_claims)
 
 
 # ---------------------------------------------------------------------------

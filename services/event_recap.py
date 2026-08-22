@@ -119,6 +119,8 @@ from database.models.story import Story
 from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, LLMGateway, Message
 from integrations.prompts.protocol import PromptRepository, RenderedPrompt
 from schemas.capability import RuntimeContext
+from services import fact_safety as fact_safety_service
+from services import recap_event as recap_event_service
 from services.fact_safety import FactEvidence, evaluate_fact_safety
 from services.image_persistence import get_editorial_image_candidates
 from services.recap_event import (
@@ -791,6 +793,59 @@ def _describe_fact_provenance(fact: VerifiedFactCandidate) -> str:
     return f"{fact.value} - mentioned in a single stored report only"
 
 
+
+def _synthesis_display_title(title: str) -> str:
+    """R2-only display projection.
+
+    Reuses the frozen R1 title-normalization/suffix-stripping implementation.
+    Does not mutate Story/Event/Announcement state.
+    """
+    normalized = recap_event_service._title_with_normalized_punctuation(title)
+    return recap_event_service._trailing_suffix_stripped(normalized) or normalized
+
+
+def _fact_safety_literal_entity_support(
+    *,
+    draft_text: str,
+    source_content: str,
+) -> str:
+    """Add only literal entity support already present in source evidence.
+
+    This is intentionally much narrower than fuzzy/semantic matching:
+    - entity claims only;
+    - exact normalized literal phrase;
+    - token-boundary constrained;
+    - derived only from the already-clean R2 source content.
+
+    It cannot support a hallucinated/publisher claim absent from clean evidence.
+    """
+    normalized_source = fact_safety_service._normalize_text(source_content)
+
+    literal_entities: list[str] = []
+    seen: set[str] = set()
+
+    for entity in fact_safety_service.extract_claims(draft_text)["entity"]:
+        normalized_entity = fact_safety_service._normalize_text(entity).strip()
+        if not normalized_entity or normalized_entity in seen:
+            continue
+
+        pattern = rf"(?<!\w){re.escape(normalized_entity)}(?!\w)"
+        if re.search(pattern, normalized_source):
+            literal_entities.append(entity)
+            seen.add(normalized_entity)
+
+    if not literal_entities:
+        return source_content
+
+    lines = [
+        source_content,
+        "",
+        "LITERAL ENTITY SUPPORT (exact phrases already present in source evidence):",
+    ]
+    lines.extend(f"- {entity}" for entity in literal_entities)
+    return "\n".join(lines)
+
+
 def render_event_recap_bundle_text(candidate: EventRecapCandidate) -> str:
     """Deterministic, bounded plain-text rendering - the exact text the EVENT_RECAP synthesis
     prompt reads, and the exact text fed to `services.fact_safety.evaluate_fact_safety()` as
@@ -807,7 +862,7 @@ def render_event_recap_bundle_text(candidate: EventRecapCandidate) -> str:
     itself never proves. `EventRecapCandidate.verified_facts`/`.announcements` themselves are
     completely unaffected - this function only changes what THIS rendering shows."""
     lines: list[str] = [
-        f"Story: {candidate.story_title}",
+        f"Story: {_synthesis_display_title(candidate.story_title)}",
         f"Announcement count: {candidate.announcement_count} | "
         f"readiness source count: {candidate.readiness_source_count} | "
         f"evidence reference count: {candidate.evidence_reference_count}",
@@ -819,7 +874,7 @@ def render_event_recap_bundle_text(candidate: EventRecapCandidate) -> str:
     ]
     for entry in candidate.timeline:
         lines.append(
-            f"- {entry.timestamp.isoformat()} | {entry.label} "
+            f"- {entry.timestamp.isoformat()} | {_synthesis_display_title(entry.label)} "
             f"(sources: {len(entry.source_refs)}, supporting events: {len(entry.supporting_event_ids)})"
         )
 
@@ -842,7 +897,8 @@ def render_event_recap_bundle_text(candidate: EventRecapCandidate) -> str:
         ]
         synthesis_numbers = [n for n in announcement.meaningful_numbers if n in synthesis_numeric_values]
         lines.append(
-            f"- #{announcement.cluster_id}: {announcement.headline!r} | "
+            f"- #{announcement.cluster_id}: "
+            f"{_synthesis_display_title(announcement.headline)!r} | "
             f"numbers={synthesis_numbers} | entities={synthesis_entities} | "
             f"evidence_refs={announcement.evidence_reference_count}"
         )
@@ -997,14 +1053,19 @@ def _verify_synthesis_facts(
     fabrication (e.g. an invented percentage) still blocks unchanged - neither `_extract_entities()`
     nor any severity/threshold constant was touched."""
     bundle_text = render_event_recap_bundle_text(candidate)
-    evidence = FactEvidence(
-        source_title=candidate.story_title,
+    clean_story_title = _synthesis_display_title(candidate.story_title)
+    draft_body = recap_title + "\n" + recap_summary + "\n" + "\n".join(key_takeaways)
+    fact_safety_source_content = _fact_safety_literal_entity_support(
+        draft_text=clean_story_title + "\n" + draft_body,
         source_content=bundle_text,
+    )
+    evidence = FactEvidence(
+        source_title=clean_story_title,
+        source_content=fact_safety_source_content,
         source_url=None,
         research_facts=[f"{fact.fact_type}: {fact.value}" for fact in candidate.verified_facts],
     )
-    draft_body = recap_title + "\n" + recap_summary + "\n" + "\n".join(key_takeaways)
-    result = evaluate_fact_safety(candidate.story_title, draft_body, evidence)
+    result = evaluate_fact_safety(clean_story_title, draft_body, evidence)
     return FactVerificationResult(
         status=result["status"], claims_checked=result["claims_checked"],
         supported=result["supported"], uncertain=result["uncertain"], unsupported=result["unsupported"],
