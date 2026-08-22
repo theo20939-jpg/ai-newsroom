@@ -279,3 +279,73 @@ def test_case10_origin_projection_mechanics_unaffected_by_announcement_duplicati
     assert origin.id in {e.id for e in effective}
     clusters = cluster_announcements(effective)
     assert len(clusters) == 3  # same duplicate-report shape as Case 1, origin projection just adds the anchor
+
+
+
+# ---------------------------------------------------------------------------
+# Case 11 - real Falcon/Starlink production-shadow Story Integrity false-pass.
+# ---------------------------------------------------------------------------
+
+
+def test_case11_real_falcon_starlink_story_exposes_integrity_conflict_gap() -> None:
+    """Real R2 Shadow production fixture.
+
+    These two reports contain conflicting distinctive numeric facts and are therefore correctly
+    treated as separate announcements by the existing frozen R1 announcement-identity logic.
+
+    However, frozen evaluate_recap_story_integrity() does not consult
+    _has_conflicting_distinctive_facts(); shared Falcon/Starlink entity evidence is sufficient for
+    the anchor/member pair to clear its much looser Story-level coherence floor.
+
+    This test intentionally CHARACTERIZES the current safety gap. It must not be changed to expect
+    integrity=False unless the Story Integrity semantics are deliberately revised in a later,
+    separately reviewed phase.
+    """
+    anchor_title = (
+        "101-я миссия в 2026 году и 30-я успешная посадка: "
+        "ракета Falcon 9 разом запустила 29 спутников Starlink"
+    )
+    member_title = (
+        "SpaceX в сотый раз запустила ракету Falcon в этом году — "
+        "на орбиту доставлено ещё 27 спутников Starlink"
+    )
+
+    events = [
+        _ev(
+            anchor_title,
+            hours_ago=16,
+            url="https://www.ixbt.com/news/2026/08/22/429586-falcon-starlink.html",
+        ),
+        _ev(
+            member_title,
+            hours_ago=0,
+            url="https://3dnews.ru/1147297",
+        ),
+    ]
+
+    sig_a = extract_story_signature(events[0].title, events[0].category)
+    sig_b = extract_story_signature(events[1].title, events[1].category)
+
+    # Existing announcement-identity safety signal correctly sees the reports as materially
+    # conflicting because their numeric fact sets differ (29 vs 27, plus anchor-only 101/2026/30).
+    assert _has_conflicting_distinctive_facts(
+        sig_a,
+        events[0].title,
+        sig_b,
+        events[1].title,
+    ) is True
+
+    clusters = cluster_announcements(events)
+    assert len(clusters) == 2
+
+    # Characterization of the gap: Story Integrity answers the broader lexical/entity-coherence
+    # question and currently ignores the conflicting-distinctive-fact veto entirely.
+    integrity = evaluate_recap_story_integrity(events[0], events)
+
+    assert integrity.eligible is True
+    assert integrity.metrics["anchor_coherent_ratio"] == 1.0
+    assert integrity.metrics["anchor_coherent_count"] == 1
+    assert integrity.metrics["anchor_total_others"] == 1
+    assert integrity.reasons[0].startswith(
+        "1/1 members plausibly coherent with the Story's original event"
+    )
