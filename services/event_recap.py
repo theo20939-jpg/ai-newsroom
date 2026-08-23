@@ -812,11 +812,21 @@ def render_event_recap_bundle_text(candidate: EventRecapCandidate) -> str:
         f"readiness source count: {candidate.readiness_source_count} | "
         f"evidence reference count: {candidate.evidence_reference_count}",
         "",
+        "ANNOUNCEMENT CONTEXT:",
+    ]
+    for announcement in candidate.announcements:
+        role = "ORIGIN" if announcement.stable_event_id == candidate.anchor_event_id else "FOLLOW_UP"
+        lines.append("")
+        lines.append(f"- [{role}]")
+        lines.append(announcement.headline)
+
+    lines.append("")
+    lines.append(
         "TIMELINE (order of PUBLICATION only, oldest first - this reflects when each report "
         "appeared, not necessarily separate stages of the underlying event's own development; "
         "do not narrate multiple publications as proven sequential developments unless the "
-        "evidence itself states that):",
-    ]
+        "evidence itself states that):"
+    )
     for entry in candidate.timeline:
         lines.append(
             f"- {entry.timestamp.isoformat()} | {entry.label} "
@@ -832,21 +842,15 @@ def render_event_recap_bundle_text(candidate: EventRecapCandidate) -> str:
     else:
         lines.append("- (none recorded)")
 
-    lines.append("")
-    lines.append("ANNOUNCEMENTS (detail):")
-    synthesis_numeric_values = {fact.value for fact in synthesis_facts if fact.fact_type == "numeric"}
-    for announcement in candidate.announcements:
-        synthesis_entities = [
-            fact.value for fact in synthesis_facts
-            if fact.fact_type == "entity" and fact.value in announcement.content_entities
-        ]
-        synthesis_numbers = [n for n in announcement.meaningful_numbers if n in synthesis_numeric_values]
-        lines.append(
-            f"- #{announcement.cluster_id}: {announcement.headline!r} | "
-            f"numbers={synthesis_numbers} | entities={synthesis_entities} | "
-            f"evidence_refs={announcement.evidence_reference_count}"
-        )
-
+    # Phase R2.10 correction (real diagnostic finding, Story 2cb29dab-de57-493d-bf2b-09f80db875a7):
+    # a per-announcement "ANNOUNCEMENTS (detail)" section used to follow here, repeating the same
+    # announcement headlines already shown in ANNOUNCEMENT CONTEXT and TIMELINE above as a third
+    # one-bullet-per-announcement block. That structural repetition - not the prompt's own wording -
+    # was the dominant signal pushing synthesis toward one key_takeaway per announcement, so this
+    # rendering no longer includes it. `EventRecapCandidate.announcements` itself (cluster_id,
+    # meaningful_numbers, content_entities, evidence_reference_count per announcement) is completely
+    # unaffected - only this LLM-facing text changes; ANNOUNCEMENT CONTEXT (ORIGIN/FOLLOW_UP roles)
+    # and TIMELINE (chronology) still carry every announcement's headline exactly once each.
     text = "\n".join(lines)
     if len(text) > _MAX_BUNDLE_TEXT_CHARS:
         text = text[:_MAX_BUNDLE_TEXT_CHARS] + "\n[... truncated at bounded length ...]"

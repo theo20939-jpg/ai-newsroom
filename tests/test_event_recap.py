@@ -542,6 +542,65 @@ def test_synthesis_evidence_excludes_bare_single_source_entity_token():
         assert title in bundle_text
 
 
+def test_bundle_text_marks_anchor_announcement_as_origin():
+    """ANNOUNCEMENT CONTEXT section: the announcement whose `stable_event_id` matches the
+    candidate's own `anchor_event_id` must be rendered as [ORIGIN] - deterministic, no LLM/keyword
+    inference involved."""
+    candidate = _candidate_from_titles(_SVERDLOVSK_TITLES, "Свердловские дерматологи тестируют искусственный интеллект для диагностики рака кожи")
+    anchor_summary = next(a for a in candidate.announcements if a.stable_event_id == candidate.anchor_event_id)
+
+    bundle_text = render_event_recap_bundle_text(candidate)
+
+    assert "ANNOUNCEMENT CONTEXT:" in bundle_text
+    assert f"- [ORIGIN]\n{anchor_summary.headline}" in bundle_text
+
+
+def test_bundle_text_marks_non_anchor_announcements_as_follow_up():
+    """ANNOUNCEMENT CONTEXT section: every announcement whose `stable_event_id` does NOT match the
+    candidate's own `anchor_event_id` must be rendered as [FOLLOW_UP]."""
+    candidate = _candidate_from_titles(_SVERDLOVSK_TITLES, "Свердловские дерматологи тестируют искусственный интеллект для диагностики рака кожи")
+    follow_up_summaries = [a for a in candidate.announcements if a.stable_event_id != candidate.anchor_event_id]
+    assert follow_up_summaries  # sanity: fixture actually has non-anchor announcements
+
+    bundle_text = render_event_recap_bundle_text(candidate)
+
+    for summary in follow_up_summaries:
+        assert f"- [FOLLOW_UP]\n{summary.headline}" in bundle_text
+
+
+def test_bundle_text_contains_announcement_context_section():
+    """Phase R2.10: ANNOUNCEMENT CONTEXT (ORIGIN/FOLLOW_UP roles) must still be present in the
+    synthesis-facing bundle text."""
+    candidate = _candidate_from_titles(_SVERDLOVSK_TITLES, "Свердловские дерматологи тестируют искусственный интеллект для диагностики рака кожи")
+    bundle_text = render_event_recap_bundle_text(candidate)
+    assert "ANNOUNCEMENT CONTEXT:" in bundle_text
+
+
+def test_bundle_text_contains_timeline_section():
+    """Phase R2.10: TIMELINE (publication chronology) must still be present in the synthesis-facing
+    bundle text."""
+    candidate = _candidate_from_titles(_SVERDLOVSK_TITLES, "Свердловские дерматологи тестируют искусственный интеллект для диагностики рака кожи")
+    bundle_text = render_event_recap_bundle_text(candidate)
+    assert "TIMELINE (order of PUBLICATION only" in bundle_text
+
+
+def test_bundle_text_no_longer_contains_announcements_detail_section():
+    """Phase R2.10 correction (real diagnostic finding, Story
+    2cb29dab-de57-493d-bf2b-09f80db875a7): the "ANNOUNCEMENTS (detail)" section repeated the same
+    announcement headlines already shown in ANNOUNCEMENT CONTEXT and TIMELINE as a third
+    one-bullet-per-announcement block - a structural signal that pushed synthesis toward one
+    key_takeaway per announcement regardless of prompt-level wording. It must no longer appear in
+    the LLM-facing bundle text. `EventRecapCandidate.announcements` itself (cluster_id,
+    meaningful_numbers, content_entities, evidence_reference_count) is untouched - only this
+    rendering changes."""
+    candidate = _candidate_from_titles(_SVERDLOVSK_TITLES, "Свердловские дерматологи тестируют искусственный интеллект для диагностики рака кожи")
+    bundle_text = render_event_recap_bundle_text(candidate)
+    assert "ANNOUNCEMENTS (detail)" not in bundle_text
+    # The underlying candidate data itself is untouched by this rendering-only change.
+    assert all(a.cluster_id is not None for a in candidate.announcements)
+    assert candidate.announcement_count == len(candidate.announcements)
+
+
 def test_synthesis_evidence_never_exposes_internal_vocabulary():
     """Item 11.F / item 8: "entity", "SINGLE_SOURCE_ONLY", "MULTI_SOURCE_CONFIRMED", "bundle" as
     internal-status jargon must not appear in the synthesis-facing bundle text."""
