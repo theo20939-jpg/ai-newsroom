@@ -31,11 +31,13 @@ router.include_router(telegraph_shortlist_router)
 # scheduler/worker/bot-command calls services/telegraph_article_review_service.py::
 # create_article_review() or services/telegraph_article_review_notifier.py yet.
 router.include_router(telegraph_article_review_router)
-# NINJA PULSE RECAP Phase R2 integration, Phase C.1: inert until something actually sends an
+# NINJA PULSE RECAP Phase R2 integration, Phase D.0: inert until something actually sends an
 # EVENT_RECAP review preview - no scheduler/worker/bot-command calls services/
 # event_recap_review_notifier.py yet (services/event_recap_processor.py::generate_recap_for_story()
-# deliberately never calls it - processor != notification). Its own callback handler is itself a
-# deliberate stub (no decision persistence - bot/handlers/event_recap_review.py's own docstring).
+# deliberately never calls it - processor != notification). Its own callback handler now fully
+# persists approve/needs_revision decisions onto EventRecapReview (Phase D.0), but is only ever
+# reached once some future, separately-authorized caller actually sends a review message with a
+# real "eventrecap:" callback button - bot/handlers/event_recap_review.py's own docstring.
 router.include_router(event_recap_review_router)
 # Phase 23.0: temporary diagnostic command (bot/handlers/whereami.py's own docstring has the full
 # safety scope) - reports chat_id/is_forum/message_thread_id only, no other effect.

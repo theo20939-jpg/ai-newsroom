@@ -1,62 +1,61 @@
-"""NINJA PULSE RECAP Phase R2 integration, Phase C.1: inline keyboard + callback_data codec for
+"""NINJA PULSE RECAP Phase R2 integration, Phase D.0: inline keyboard + callback_data codec for
 the EVENT_RECAP review UI. Mirrors bot/keyboards/telegraph_article_review.py's exact shape - pure,
 no database access, no aiogram Bot call.
 
-A distinct prefix ("evrecrev", never "tgartrev") - different decision namespace entirely.
+A distinct prefix ("eventrecap", never "tgartrev") - different decision namespace entirely.
 
-Deliberate difference from telegraph_article_review.py's own build_article_review_keyboard():
-that function is keyed on `TelegraphArticleReview.id` (a durable review row with its own
-`.status`, letting the keyboard disappear once a final decision is recorded). No equivalent
-review row exists for EVENT_RECAP (Phase C.1 does not add one - see this module's own package
-docstring / services/event_recap_review_notifier.py). This keyboard is therefore keyed on
-`EventRecapCandidate.story_id` instead (already-existing, stable, no new storage) and always
-returns the same two-button row - there is no persisted status to hide it behind. The buttons are
-wired to a real callback route (bot/handlers/event_recap_review.py) but that handler does not yet
-persist any decision - see its own docstring for why, and for what a future phase would need to
-add before these buttons can do more than acknowledge a click.
+Phase D.0 change from Phase C.1: now keyed on the durable `EventRecapReview.id` (Phase D.0 added
+that table) instead of `EventRecapCandidate.story_id` - exactly like
+build_article_review_keyboard() is keyed on `TelegraphArticleReview.id`. The keyboard now
+disappears (`None`) once a final decision has been recorded, matching that same precedent, since
+there is now a real persisted status to check.
 """
 from uuid import UUID
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-_PREFIX = "evrecrev"
-_ACTIONS = ("approve", "reject")
+from database.models.event_recap_review import EventRecapReview, EventRecapReviewStatus
+
+_PREFIX = "eventrecap"
+_ACTIONS = ("approve", "needs_revision")
 
 
-def encode_callback_data(action: str, story_id: UUID) -> str:
-    """`evrecrev:<action>:<story_id>` - well within Telegram's 64-byte callback_data limit."""
-    return f"{_PREFIX}:{action}:{story_id}"
+def encode_callback_data(action: str, review_id: UUID) -> str:
+    """`eventrecap:<action>:<review_id>` - well within Telegram's 64-byte callback_data limit."""
+    return f"{_PREFIX}:{action}:{review_id}"
 
 
 def parse_callback_data(data: str) -> tuple[str, UUID] | None:
-    """Returns `(action, story_id)`, or `None` if `data` is not a well-formed evrecrev callback -
-    callback_data is user-controllable transport, never trusted blindly."""
+    """Returns `(action, review_id)`, or `None` if `data` is not a well-formed eventrecap
+    callback - callback_data is user-controllable transport, never trusted blindly."""
     parts = data.split(":")
     if len(parts) != 3 or parts[0] != _PREFIX:
         return None
-    action, story_id_raw = parts[1], parts[2]
+    action, review_id_raw = parts[1], parts[2]
     if action not in _ACTIONS:
         return None
     try:
-        story_id = UUID(story_id_raw)
+        review_id = UUID(review_id_raw)
     except ValueError:
         return None
-    return action, story_id
+    return action, review_id
 
 
-def build_event_recap_review_keyboard(story_id: UUID) -> InlineKeyboardMarkup:
-    """One row of [✅ Одобрить][❌ Отклонить]. Unlike build_article_review_keyboard(), never
-    returns `None` for a "terminal state" - Phase C.1 has no persisted decision state to check
-    (see module docstring). Neither button triggers publication - the handler these route to only
-    acknowledges the click (bot/handlers/event_recap_review.py's own docstring)."""
+def build_event_recap_review_keyboard(review: EventRecapReview) -> InlineKeyboardMarkup | None:
+    """One row of [✅ Одобрить][✏️ На доработку] while PENDING - `None` once a final decision has
+    been made (mirrors build_article_review_keyboard()'s own "terminal state, no keyboard"
+    convention). Neither button triggers publication - the handler these route to only persists a
+    decision (bot/handlers/event_recap_review.py's own docstring)."""
+    if review.status != EventRecapReviewStatus.PENDING:
+        return None
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="✅ Одобрить", callback_data=encode_callback_data("approve", story_id),
+                    text="✅ Одобрить", callback_data=encode_callback_data("approve", review.id),
                 ),
                 InlineKeyboardButton(
-                    text="❌ Отклонить", callback_data=encode_callback_data("reject", story_id),
+                    text="✏️ На доработку", callback_data=encode_callback_data("needs_revision", review.id),
                 ),
             ]
         ]
