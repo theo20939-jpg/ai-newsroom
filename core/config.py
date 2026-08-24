@@ -653,6 +653,16 @@ class Settings(BaseSettings):
     # scope and requires a future, separately-authorized milestone - these three fields exist
     # only so that future milestone does not also need a settings migration.
     telegraph_pipeline_enabled: bool = False
+
+    # NINJA PULSE RECAP Phase R2 integration, Phase E.0: the identical double-confirmation flag,
+    # for the identical reason, one level later in a different pipeline - mirrors
+    # telegraph_pipeline_enabled's own docstring exactly. Nothing in this codebase reads this
+    # field yet except scripts/event_recap_pipeline_worker.py's own `--live` guard (a manually-
+    # invoked harness only, exactly like scripts/telegraph_pipeline_worker.py's own established
+    # "human invokes this, nothing else does" convention) - no scheduler, cron, or automatic-
+    # execution path exists for EVENT_RECAP.
+    event_recap_pipeline_enabled: bool = False
+
     # Reasoned starting point mirroring news_collection_interval_seconds's own cadence exactly -
     # how often a future scheduler would form a new shortlist batch. Not fit to any real
     # operating data yet.
