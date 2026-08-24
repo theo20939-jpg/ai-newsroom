@@ -4,7 +4,7 @@ Phase A registered this capability (capabilities/registry.py) and mapped it (cap
 capability_mapping.py) so an EVENT_RECAP WorkflowDefinition step has a real, importable
 implementation to resolve to - still true here (mirrors TELEGRAPH_RESEARCH/TELEGRAPH_ARTICLE's
 own dormant-at-registration precedent, workflows/registry.py's own docstring): nothing in this
-codebase creates an EVENT_RECAP task yet, no processor/CLI/scheduler exists (Phase B.2/B.3).
+codebase creates an EVENT_RECAP task yet, no processor/CLI/scheduler exists (Phase B.3+).
 
 A genuinely NEW Capability class - never CopywritingCapability - registered under its own name
 ("event_recap", mapped to AICapability.INTELLIGENCE in capabilities/capability_mapping.py, the
@@ -13,51 +13,56 @@ already-assembled evidence set, not a fresh editorial draft from raw source text
 "copywriting"/"article_generation" are - mirrors editorial_planning -> INTELLIGENCE's own
 precedent, reused rather than adding a new AICapability enum member/migration).
 
-Phase B.1 (deterministic execution plumbing only): this class still deliberately does NOT call
-services.event_recap.build_event_recap_candidate() or synthesize_event_recap() itself, and
-services/event_recap.py is not modified anywhere in this checkpoint either. Both existing entry
-points require an `AsyncSession` (`build_event_recap_candidate`) and a full `EventRecapCandidate`
-dataclass (`synthesize_event_recap`) - neither fits inside a `Capability.execute(context:
-CapabilityContext)` call, because `schemas/capability.py`'s own architecture contract is explicit:
-"NewsEventSnapshot/WorkflowExecutionStateSnapshot are read-only snapshots built by
-capabilities.executor.CapabilityExecutor - never the SQLAlchemy NewsEvent/EditorialTask rows
-themselves... no ORM object crosses into a Capability." No DB session of any kind reaches a
-Capability's own `execute()` - only `capabilities/executor.py::CapabilityExecutor` (which does
-hold a session) is architecturally permitted to resolve a Story/EventRecapCandidate, exactly the
-way it already does for `context.business.telegraph_deep_research_output`
-(capabilities/executor.py's own TELEGRAPH_ARTICLE-only branch).
+Phase B.1 (deterministic execution plumbing only) established that `capabilities/executor.py`'s
+own EVENT_RECAP branch resolves the Story (via `NewsEventStoryLink`) and calls the existing,
+unmodified `services.event_recap.build_event_recap_candidate(session, story, force_shadow=True)`
+- the one, architecturally-required place this can happen, since `schemas/capability.py`'s own
+contract is explicit: "no ORM object crosses into a Capability", and `build_event_recap_candidate`
+needs an `AsyncSession` no `Capability.execute()` ever receives.
 
-What changed in Phase B.1: `capabilities/executor.py` now has that hook - a narrow, EVENT_RECAP-
-only branch that resolves the Story (via `NewsEventStoryLink`), calls the existing, unmodified
-`services.event_recap.build_event_recap_candidate(session, story, force_shadow=True)`, and renders
-its deterministic evidence via the existing, unmodified `render_event_recap_bundle_text()` - the
-plain-text result crosses into `CapabilityContext.business.event_recap_evidence_text` (schemas/
-capability.py). This class's own `execute()`:
-  1. Resolves the exact same prompt `services.event_recap.synthesize_event_recap()` itself would
-     resolve (reusing `EVENT_RECAP_PROMPT_NAME`/`EVENT_RECAP_PROMPT_VERSION` directly, never
-     redefined here) - proves the prompt-repository wiring is correct end-to-end.
-  2. Requires `context.business.event_recap_evidence_text` to be present (non-empty) - raises
-     `CapabilityConfigurationError` otherwise (the same "missing context" contract Phase A already
-     established, now reachable only when the executor hook genuinely found nothing to recap).
-  3. Returns a plain SUCCESS `CapabilityResult` whose `structured_output` is a minimal, explicitly
-     diagnostic preview of the deterministic evidence it received (`EVENT_RECAP_CAPABILITY_
-     DEFINITION.expected_output_keys` matches this exact temporary shape, not the real
-     `recap_title`/`recap_summary`/`key_takeaways`/`uncertainty_notes` synthesis contract - see
-     that definition's own comment). It never calls `call_generate()`, never touches
-     `self._gateway`, never reaches the LLM Gateway - Phase B.1's own explicit "deterministic
-     execution plumbing only" boundary (`synthesize_event_recap()` remains this class's own future
-     job, in a later, separately-authorized phase, not this one)."""
+Phase B.2 (this checkpoint): the executor hook now also threads the FULL, already-built
+`EventRecapCandidate` itself into `context.business.event_recap_candidate` (schemas/capability.py
+- a plain dataclass, never an ORM row; typed `Any` there specifically to avoid a real circular
+import between schemas/capability.py and services/event_recap.py - see that field's own comment).
+This class's own `execute()`:
+  1. Requires `context.business.event_recap_candidate` to be present - raises
+     `CapabilityConfigurationError` otherwise (the same "missing context" contract Phase A/B.1
+     already established).
+  2. Calls the existing, completely unmodified `services.event_recap.synthesize_event_recap()` -
+     never a reimplementation of prompt resolution/request building/fact verification/quality-flag
+     detection, all of which stay exactly where they already lived. Passes a small `call_observer`
+     callback (services/event_recap.py's own new, purely additive parameter) to capture the real
+     `CapabilityCall` `call_generate()` produces internally - `synthesize_event_recap()` itself
+     never returns that object, so without this observer `CapabilityResult.calls`/error `calls=`
+     could never be populated, and `capabilities/executor.py::CapabilityExecutor._record_cost()`
+     (which reads exactly that list, on both the success and error paths) would silently record
+     zero cost for a real, paid call.
+  3. On `EventRecapSynthesisError` (Gateway failure, or malformed/incomplete structured output -
+     services/event_recap.py's own docstring), raises `RetryableCapabilityError` with the captured
+     call(s) attached - `WorkflowStepDefinition.max_attempts` (already 3, workflows/definitions/
+     event_recap.py) governs the retry budget, exactly like every other Capability; this class does
+     not distinguish finer-grained retryable-vs-permanent causes within that one exception type,
+     since `call_observer` only ever receives the `CapabilityCall`, never the raw `finish_reason`/
+     response (Phase B.2's own deliberately narrow scope).
+  4. On success, returns a plain SUCCESS `CapabilityResult` whose `structured_output` is the real
+     `recap_title`/`recap_summary`/`key_takeaways`/`uncertainty_notes` contract
+     (`EVENT_RECAP_CAPABILITY_DEFINITION.expected_output_keys` matches this exactly again, no
+     longer Phase B.1's temporary `event_recap_evidence_preview` shape), with `calls=` populated
+     from the observer. `publishable` is never read or set here - it stays unconditionally `False`
+     on the `EventRecapCandidate` `synthesize_event_recap()` itself returns (services/event_recap.py's
+     own module docstring); this class never constructs/publishes anything from that candidate at
+     all, it only reads four plain string/list fields off it into `structured_output`."""
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
 
-from capabilities.errors import CapabilityConfigurationError
+from capabilities.errors import CapabilityConfigurationError, RetryableCapabilityError
 from integrations.llm_gateway.protocol import LLMGateway
 from integrations.prompts.protocol import PromptRepository
-from schemas.capability import CapabilityContext, CapabilityResult
+from schemas.capability import CapabilityCall, CapabilityContext, CapabilityResult
 from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
-from services.event_recap import EVENT_RECAP_PROMPT_NAME, EVENT_RECAP_PROMPT_VERSION
+from services.event_recap import EventRecapSynthesisError, synthesize_event_recap
 
 logger = logging.getLogger(__name__)
 
@@ -68,12 +73,10 @@ EVENT_RECAP_CAPABILITY_DEFINITION = CapabilityDefinition(
     version=1,
     config=CapabilityConfig(timeout_seconds=120),
     required_context=["news_event"],
-    # Temporary Phase B.1 deterministic-plumbing output shape - matches this capability's own
-    # actual execute() return value today (structured_output={"event_recap_evidence_preview":
-    # ...}), not the real recap synthesis contract. The real
-    # recap_title/recap_summary/key_takeaways/uncertainty_notes shape lands in Phase B.2, once
-    # synthesize_event_recap() is actually wired in.
-    expected_output_keys=["event_recap_evidence_preview"],
+    # The real synthesis contract (services/event_recap.py::EventRecapCandidate's own
+    # recap_title/recap_summary/key_takeaways/uncertainty_notes fields) - matches this
+    # capability's own actual structured_output as of Phase B.2.
+    expected_output_keys=["recap_title", "recap_summary", "key_takeaways", "uncertainty_notes"],
 )
 
 
@@ -90,48 +93,54 @@ class EventRecapCapability:
     async def execute(self, context: CapabilityContext) -> CapabilityResult:
         started_at = datetime.now(timezone.utc)
 
-        # Proves the prompt-repository wiring resolves the exact same (name, version)
-        # services.event_recap.synthesize_event_recap() itself resolves - reused directly, never
-        # redefined here. Phase B.1 does not use the resolved prompt for anything further (no
-        # call_generate(), no Gateway) - this call exists purely to prove the wiring end-to-end.
-        self._prompt_repository.resolve(EVENT_RECAP_PROMPT_NAME, EVENT_RECAP_PROMPT_VERSION)
-
-        evidence_text = context.business.event_recap_evidence_text
-        if not evidence_text:
+        candidate = context.business.event_recap_candidate
+        if candidate is None:
             logger.info(
-                "event_recap_capability_missing_evidence",
+                "event_recap_capability_missing_candidate",
                 extra={
                     "capability_name": CAPABILITY_NAME,
                     "news_event_id": str(context.business.news_event.id),
-                    "reason": "context.business.event_recap_evidence_text is None/empty - either "
+                    "reason": "context.business.event_recap_candidate is None - either "
                               "capabilities/executor.py's own EVENT_RECAP branch did not run for "
                               "this step, or it ran and found nothing to recap.",
                 },
             )
             raise CapabilityConfigurationError(
-                "event_recap: context.business.event_recap_evidence_text is missing - no "
-                "deterministic R2 evidence was threaded into this CapabilityContext (see this "
-                "module's own docstring for the capabilities/executor.py hook that is supposed "
-                "to populate it).",
+                "event_recap: context.business.event_recap_candidate is missing - no "
+                "EventRecapCandidate was threaded into this CapabilityContext (see this module's "
+                "own docstring for the capabilities/executor.py hook that is supposed to "
+                "populate it).",
             )
 
+        calls: list[CapabilityCall] = []
+
+        try:
+            updated = await synthesize_event_recap(
+                candidate, self._gateway, self._prompt_repository,
+                runtime=context.runtime, call_observer=calls.append,
+            )
+        except EventRecapSynthesisError as error:
+            raise RetryableCapabilityError(str(error), calls=calls) from error
+
         logger.info(
-            "event_recap_capability_deterministic_success",
+            "event_recap_capability_synthesis_success",
             extra={
                 "capability_name": CAPABILITY_NAME,
                 "news_event_id": str(context.business.news_event.id),
-                "evidence_text_length": len(evidence_text),
+                "fact_verification_status": updated.fact_verification.status,
+                "quality_flags": updated.quality_flags,
             },
         )
         finished_at = datetime.now(timezone.utc)
         return CapabilityResult(
             status="SUCCESS",
-            # Phase B.1's own temporary, explicitly diagnostic shape - proves the deterministic R2
-            # evidence reached this capability intact, NOT the real recap_title/recap_summary/
-            # key_takeaways/uncertainty_notes synthesis contract (no synthesize_event_recap() call
-            # exists yet - see this module's own docstring).
-            structured_output={"event_recap_evidence_preview": evidence_text},
-            calls=[],  # zero Gateway calls made - see module docstring
+            structured_output={
+                "recap_title": updated.recap_title,
+                "recap_summary": updated.recap_summary,
+                "key_takeaways": updated.key_takeaways,
+                "uncertainty_notes": updated.uncertainty_notes,
+            },
+            calls=calls,
             started_at=started_at, finished_at=finished_at,
             duration_seconds=(finished_at - started_at).total_seconds(),
         )

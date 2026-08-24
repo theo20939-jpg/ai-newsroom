@@ -370,16 +370,18 @@ class CapabilityExecutor:
                 # never the ORM row or the enum type itself.
                 telegraph_editorial_channel = proposal.editorial_channel.value
 
-        # NINJA PULSE RECAP Phase R2 integration, Phase B.1: the "synthesize_recap" step of an
+        # NINJA PULSE RECAP Phase R2 integration, Phase B.1/B.2: the "synthesize_recap" step of an
         # EVENT_RECAP workflow. Mirrors the TELEGRAPH_ARTICLE branch above exactly (session-bound
         # Story resolution belongs here, the one place in this whole chain that already holds an
         # AsyncSession - schemas/capability.py's own "no ORM object crosses into a Capability"
         # rule forbids doing this inside EventRecapCapability itself). Deterministic only: reuses
         # services.event_recap.build_event_recap_candidate()/render_event_recap_bundle_text()
         # completely unmodified - no new clustering/readiness/integrity logic, no LLM/Gateway
-        # call, no synthesize_event_recap() call (that remains this capability's own future job,
-        # not this executor hook's).
+        # call here (synthesize_event_recap() remains this capability's own job, not this executor
+        # hook's - this branch only resolves and threads through the deterministic candidate it
+        # needs to call that function).
         event_recap_evidence_text: str | None = None
+        event_recap_candidate: Any | None = None
         if step.capability == "event_recap" and state_for_bundle.workflow_name == WorkflowType.EVENT_RECAP:
             from database.models.story import Story
             from database.models.story_link import NewsEventStoryLink
@@ -403,6 +405,7 @@ class CapabilityExecutor:
                     f"EVENT_RECAP task {task.id}: candidate build rejected for Story {story.id} - "
                     f"{build_result.rejection_reasons}"
                 )
+            event_recap_candidate = build_result.candidate
             event_recap_evidence_text = render_event_recap_bundle_text(build_result.candidate)
 
         context = self._build_context(
@@ -414,6 +417,7 @@ class CapabilityExecutor:
             telegraph_visual_bundle_summary=telegraph_visual_bundle_summary,
             telegraph_editorial_channel=telegraph_editorial_channel,
             event_recap_evidence_text=event_recap_evidence_text,
+            event_recap_candidate=event_recap_candidate,
         )
 
         # API cost optimization (docs/api_cost_optimization_report.md): CONTENT_GENERATION's
@@ -1208,6 +1212,7 @@ class CapabilityExecutor:
         telegraph_visual_bundle_summary: str | None = None,
         telegraph_editorial_channel: str | None = None,
         event_recap_evidence_text: str | None = None,
+        event_recap_candidate: Any | None = None,
     ) -> CapabilityContext:
         state = WorkflowExecutionState.model_validate(task.workflow)
         is_telegraph_deep_research = telegraph_research_bundle_text is not None
@@ -1247,6 +1252,7 @@ class CapabilityExecutor:
                 telegraph_visual_bundle_summary=telegraph_visual_bundle_summary,
                 telegraph_editorial_channel=telegraph_editorial_channel,
                 event_recap_evidence_text=event_recap_evidence_text,
+                event_recap_candidate=event_recap_candidate,
             ),
             execution=ExecutionContext(
                 # TELEGRAPH Checkpoint 3: deep research reads a materially larger bundle and is

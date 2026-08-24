@@ -106,6 +106,7 @@ never silently dropped and never allowed to change `publishable`.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
@@ -118,7 +119,7 @@ from database.models.news_event import NewsEvent
 from database.models.story import Story
 from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, LLMGateway, Message
 from integrations.prompts.protocol import PromptRepository, RenderedPrompt
-from schemas.capability import RuntimeContext
+from schemas.capability import CapabilityCall, RuntimeContext
 from services.fact_safety import FactEvidence, evaluate_fact_safety
 from services.image_persistence import get_editorial_image_candidates
 from services.recap_event import (
@@ -1045,7 +1046,7 @@ def _detect_internal_vocabulary_leak(
 
 async def synthesize_event_recap(
     candidate: EventRecapCandidate, gateway: LLMGateway, prompt_repository: PromptRepository,
-    *, runtime: RuntimeContext,
+    *, runtime: RuntimeContext, call_observer: Callable[[CapabilityCall], None] | None = None,
 ) -> EventRecapCandidate:
     """SHADOW ONLY - the returned candidate's `publishable` remains unconditionally `False`
     regardless of the synthesis or verification outcome (module docstring). Makes exactly one
@@ -1053,10 +1054,24 @@ async def synthesize_event_recap(
     observability wrapper - never a raw/direct provider call. Raises `EventRecapSynthesisError` on
     any Gateway failure or malformed/incomplete structured output; never returns a partially
     populated candidate on failure - the caller's own `candidate` is untouched until this function
-    returns successfully."""
+    returns successfully.
+
+    `call_observer` (Phase R2 integration, Phase B.2 - purely additive, never changes synthesis
+    behavior): optional, called once with the real `CapabilityCall` `call_generate()` itself
+    already produced (`GatewayCallOutcome.call` - "always populated... on both success and
+    failure", capabilities/gateway_call.py's own docstring), on BOTH the success and the
+    `EventRecapSynthesisError` path. Exists because this function's own return shape (the updated
+    `candidate`, or a raised exception) never otherwise exposes that `CapabilityCall` - a direct
+    caller (capabilities/event_recap_capability.py::EventRecapCapability) needs it to populate its
+    own `CapabilityResult.calls`/error `calls=` for cost accounting
+    (capabilities/executor.py::CapabilityExecutor._record_cost() reads exactly that list). Never
+    called with anything else, never influences the synthesis/verification outcome itself - a
+    caller that omits it (every caller before Phase B.2) is completely unaffected."""
     prompt = prompt_repository.resolve(EVENT_RECAP_PROMPT_NAME, EVENT_RECAP_PROMPT_VERSION)
     request = _build_synthesis_request(candidate, prompt)
     outcome = await call_generate(gateway, request, runtime=runtime, sequence=0)
+    if call_observer is not None:
+        call_observer(outcome.call)
     if outcome.error is not None:
         raise EventRecapSynthesisError(str(outcome.error)) from outcome.error
 

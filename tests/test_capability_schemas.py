@@ -74,6 +74,25 @@ def test_business_context_accepts_event_recap_evidence_text() -> None:
     assert "ANNOUNCEMENT CONTEXT" in business.event_recap_evidence_text
 
 
+def test_business_context_event_recap_candidate_defaults_to_none() -> None:
+    """NINJA PULSE RECAP Phase R2 integration, Phase B.2: same default-None contract as
+    event_recap_evidence_text above."""
+    context = _context()
+    assert context.business.event_recap_candidate is None
+
+
+def test_business_context_accepts_event_recap_candidate_as_a_plain_object() -> None:
+    """Typed `Any` deliberately (see the field's own comment in schemas/capability.py - avoids a
+    real circular import with services/event_recap.py) - accepts any plain object, never an ORM
+    row in practice (capabilities/executor.py's own EVENT_RECAP branch is the only populator)."""
+    sentinel = object()
+    business = BusinessContext(
+        news_event=_news_event_snapshot(), workflow_state=_workflow_state_snapshot(),
+        event_recap_candidate=sentinel,
+    )
+    assert business.event_recap_candidate is sentinel
+
+
 def test_capability_context_rejects_unknown_top_level_field() -> None:
     with pytest.raises(ValidationError):
         CapabilityContext(

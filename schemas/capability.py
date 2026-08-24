@@ -141,10 +141,27 @@ class BusinessContext(BaseModel):
     # unmodified) - present ONLY for the "synthesize_recap" step of an EVENT_RECAP workflow
     # (capabilities/executor.py's own workflow_name check), mirroring
     # telegraph_research_bundle_text's own identical shape/precedent exactly. Deterministic
-    # evidence only - never an LLM-generated result (no EVENT_RECAP synthesis call exists yet;
-    # capabilities/event_recap_capability.py's own docstring documents the exact branch this
-    # field drives).
+    # evidence only - never an LLM-generated result.
     event_recap_evidence_text: str | None = None
+    # NINJA PULSE RECAP Phase R2 integration, Phase B.2: the full, already-built
+    # `services.event_recap.EventRecapCandidate` - a plain, immutable dataclass built entirely
+    # from confirmed NewsEvents (never a SQLAlchemy ORM row; "no ORM object crosses into a
+    # Capability" above is about the latter, not about a plain dataclass composed of already-
+    # extracted UUIDs/strings/datetimes), present ONLY for the "synthesize_recap" step of an
+    # EVENT_RECAP workflow (capabilities/executor.py's own workflow_name check, same branch that
+    # populates event_recap_evidence_text above). Required because
+    # services.event_recap.synthesize_event_recap()'s own internal helpers
+    # (_build_synthesis_request()/_verify_synthesis_facts()) read fields straight off the full
+    # candidate (candidate.story_title, candidate.verified_facts, ...), not just its rendered
+    # evidence text - capabilities/event_recap_capability.py::EventRecapCapability.execute() needs
+    # the real object to call that function unmodified, never a hand-rolled re-implementation.
+    # Typed `Any`, never `services.event_recap.EventRecapCandidate` directly: that module already
+    # imports `schemas.capability` (for `RuntimeContext`/`CapabilityCall`) - a top-level import the
+    # other direction here would be a real circular import, not a hypothetical one (confirmed by
+    # direct execution). This is the standard, minimal way to give a foundational schema module a
+    # field for a "leaf" module's type without creating a runtime dependency cycle - not a new
+    # architectural pattern.
+    event_recap_candidate: Any | None = None
 
 
 class RuntimeContext(BaseModel):

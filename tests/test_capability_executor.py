@@ -649,33 +649,36 @@ async def test_event_recap_branch_populates_evidence_text_and_reaches_capability
     assert render_call_count == 1  # render_event_recap_bundle_text() is actually called, exactly once
     assert spy.received_context is not None
     assert spy.received_context.business.event_recap_evidence_text == _PHASE_B1_FAKE_EVIDENCE_TEXT
+    assert spy.received_context.business.event_recap_candidate is _SENTINEL_CANDIDATE
     assert await _ai_execution_count(db_session) == 0  # zero AI calls anywhere in this chain
 
 
 @pytest.mark.asyncio
-async def test_event_recap_branch_delivers_evidence_text_to_the_real_capability(
+async def test_event_recap_branch_delivers_candidate_to_the_real_capability_and_completes_synthesis(
     db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Same chain as the test above, but with the REAL EventRecapCapability (never a spy) as the
-    registered capability - proves the deterministic evidence text is not just threaded into
-    CapabilityContext, but actually consumed by the real capability and reflected in the
-    persisted WorkflowStepResult."""
+    """Phase B.2: same chain as the test above, but with the REAL EventRecapCapability (never a
+    spy) as the registered capability, and a REAL (in-memory, no DB) EventRecapCandidate - proves
+    the full chain EditorialTask(EVENT_RECAP) -> WorkflowRunner -> CapabilityExecutor -> Story
+    resolution -> build_event_recap_candidate(force_shadow=True) -> CapabilityContext.business.
+    event_recap_candidate -> EventRecapCapability.execute() -> synthesize_event_recap() ->
+    call_generate() -> FakeLLMGateway -> real recap_title/recap_summary/key_takeaways/
+    uncertainty_notes reflected in the persisted WorkflowStepResult."""
     import services.event_recap as event_recap_module
     from capabilities.event_recap_capability import EVENT_RECAP_CAPABILITY_DEFINITION, EventRecapCapability
     from services.event_recap import EVENT_RECAP_PROMPT_NAME, EVENT_RECAP_PROMPT_VERSION, EventRecapBuildResult
+    from tests.test_event_recap import _candidate_from_titles
 
-    _SENTINEL_CANDIDATE = object()
+    real_candidate = _candidate_from_titles(
+        ["Apple unveils new Watch Ultra priced at $999"], "Apple unveils new Watch Ultra",
+    )
 
     async def _fake_build(session, story, *, force_shadow=False, now=None, research_complete=False):
         assert force_shadow is True
-        return EventRecapBuildResult(candidate=_SENTINEL_CANDIDATE, rejected=False, rejection_reasons=[])
-
-    def _fake_render(candidate):
-        assert candidate is _SENTINEL_CANDIDATE
-        return _PHASE_B1_FAKE_EVIDENCE_TEXT
+        return EventRecapBuildResult(candidate=real_candidate, rejected=False, rejection_reasons=[])
 
     monkeypatch.setattr(event_recap_module, "build_event_recap_candidate", _fake_build)
-    monkeypatch.setattr(event_recap_module, "render_event_recap_bundle_text", _fake_render)
+    # render_event_recap_bundle_text() is left completely unmonkeypatched here - runs for real.
 
     await _seed_story_link(db_session, anchor_event=real_news_event)
     workflow_registry = _event_recap_workflow_registry()
@@ -685,12 +688,30 @@ async def test_event_recap_branch_delivers_evidence_text_to_the_real_capability(
     prompt_repository.register(
         RenderedPrompt(
             name=EVENT_RECAP_PROMPT_NAME, version=EVENT_RECAP_PROMPT_VERSION,
-            system="You are a fake recap analyst.", rules=["Never invent facts."], output_schema={},
+            system="You are a fake recap analyst.", rules=["Never invent facts."],
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "recap_title": {"type": "string"}, "recap_summary": {"type": "string"},
+                    "key_takeaways": {"type": "array"}, "uncertainty_notes": {"type": "array"},
+                },
+                "required": ["recap_title", "recap_summary", "key_takeaways", "uncertainty_notes"],
+            },
+        )
+    )
+    valid_output = {
+        "recap_title": "Example Recap Title", "recap_summary": "Example recap summary.",
+        "key_takeaways": ["First takeaway."], "uncertainty_notes": [],
+    }
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None, structured_output=valid_output, finish_reason="stop",
+            model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=100, output_tokens=50),
         )
     )
     capability_registry = CapabilityRegistry()
     capability_registry.register(
-        EVENT_RECAP_CAPABILITY_DEFINITION, EventRecapCapability(FakeLLMGateway(), prompt_repository),
+        EVENT_RECAP_CAPABILITY_DEFINITION, EventRecapCapability(gateway, prompt_repository),
     )
     capability_registry.seal()
     executor = CapabilityExecutor(db_session, task.id, capability_registry)
@@ -700,8 +721,9 @@ async def test_event_recap_branch_delivers_evidence_text_to_the_real_capability(
     assert result.status == "COMPLETED"
     assert len(result.step_results) == 1
     assert result.step_results[0].status == "SUCCESS"
-    assert result.step_results[0].result == {"event_recap_evidence_preview": _PHASE_B1_FAKE_EVIDENCE_TEXT}
-    assert await _ai_execution_count(db_session) == 0
+    assert result.step_results[0].result == valid_output
+    assert len(gateway.received_requests) == 1  # the Gateway was actually reached
+    assert await _ai_execution_count(db_session) == 0  # no cost_tracker passed to this executor
 
 
 @pytest.mark.asyncio
@@ -817,10 +839,11 @@ def test_build_context_event_recap_evidence_text_defaults_to_none_for_other_capa
     context = capability_executor._build_context(task, news_event, step, attempt=1)
 
     assert context.business.event_recap_evidence_text is None
+    assert context.business.event_recap_candidate is None  # Phase B.2's own new field, same default
 
 
-def test_build_context_threads_event_recap_evidence_text_when_supplied() -> None:
-    """Pure unit proof that _build_context()'s own new parameter reaches BusinessContext
+def test_build_context_threads_event_recap_evidence_text_and_candidate_when_supplied() -> None:
+    """Pure unit proof that _build_context()'s own new parameters reach BusinessContext
     unchanged - no DB, no workflow run, mirrors the existing per-capability token-limit test
     above in style."""
     task = EditorialTask(
@@ -833,9 +856,12 @@ def test_build_context_threads_event_recap_evidence_text_when_supplied() -> None
     )
     step = WorkflowStepDefinition(name="synthesize_recap", capability="event_recap", timeout_seconds=30)
     capability_executor = CapabilityExecutor(session=None, task_id=task.id, registry=None)  # type: ignore[arg-type]
+    _sentinel_candidate = object()
 
     context = capability_executor._build_context(
         task, news_event, step, attempt=1, event_recap_evidence_text=_PHASE_B1_FAKE_EVIDENCE_TEXT,
+        event_recap_candidate=_sentinel_candidate,
     )
 
     assert context.business.event_recap_evidence_text == _PHASE_B1_FAKE_EVIDENCE_TEXT
+    assert context.business.event_recap_candidate is _sentinel_candidate
