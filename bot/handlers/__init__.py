@@ -2,6 +2,7 @@
 from aiogram import Router
 
 from bot.handlers.digest import router as digest_router
+from bot.handlers.event_recap_review import router as event_recap_review_router
 from bot.handlers.image_preview import router as image_preview_router
 from bot.handlers.meme_preview import router as meme_preview_router
 from bot.handlers.news import router as news_router
@@ -30,6 +31,12 @@ router.include_router(telegraph_shortlist_router)
 # scheduler/worker/bot-command calls services/telegraph_article_review_service.py::
 # create_article_review() or services/telegraph_article_review_notifier.py yet.
 router.include_router(telegraph_article_review_router)
+# NINJA PULSE RECAP Phase R2 integration, Phase C.1: inert until something actually sends an
+# EVENT_RECAP review preview - no scheduler/worker/bot-command calls services/
+# event_recap_review_notifier.py yet (services/event_recap_processor.py::generate_recap_for_story()
+# deliberately never calls it - processor != notification). Its own callback handler is itself a
+# deliberate stub (no decision persistence - bot/handlers/event_recap_review.py's own docstring).
+router.include_router(event_recap_review_router)
 # Phase 23.0: temporary diagnostic command (bot/handlers/whereami.py's own docstring has the full
 # safety scope) - reports chat_id/is_forum/message_thread_id only, no other effect.
 router.include_router(whereami_router)
