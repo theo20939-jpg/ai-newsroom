@@ -29,7 +29,7 @@ from schemas.capability import CapabilityUsage
 from services.event_recap_processor import generate_recap_for_story
 from services.event_recap_review_service import create_event_recap_review, get_event_recap_review
 from tests.fakes.fake_gateway import FakeLLMGateway
-from tests.test_event_recap_processor import _prompt_repository, _registry, _seed_story
+from tests.test_event_recap_processor import _prompt_repository, _registry, _seed_ready_story
 
 _FAKE_TOKEN = "123456:FAKE-TEST-TOKEN-AAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 _AUTHORIZED_CHAT_ID = -1004297182444
@@ -104,7 +104,7 @@ def _authorized(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def _seed_pending_review(db_session: AsyncSession):
-    story, _event = await _seed_story(db_session)
+    story, _events = await _seed_ready_story(db_session)
     gateway = FakeLLMGateway(
         generate_response=GenerateResponse(
             text=None, structured_output=_VALID_RECAP_OUTPUT, finish_reason="stop",

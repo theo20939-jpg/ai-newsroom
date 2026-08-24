@@ -603,10 +603,13 @@ async def test_event_recap_branch_populates_evidence_text_and_reaches_capability
     db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Proves the full deterministic chain: EditorialTask(EVENT_RECAP) -> WorkflowRunner ->
-    CapabilityExecutor -> Story resolution -> build_event_recap_candidate(force_shadow=True) ->
-    render_event_recap_bundle_text() -> CapabilityContext.business.event_recap_evidence_text ->
-    a spy Capability that captures the context it received. build_event_recap_candidate/
-    render_event_recap_bundle_text are monkeypatched to isolate the executor's own plumbing."""
+    CapabilityExecutor -> Story resolution -> build_event_recap_candidate(force_shadow=False,
+    research_complete=True) -> render_event_recap_bundle_text() ->
+    CapabilityContext.business.event_recap_evidence_text -> a spy Capability that captures the
+    context it received. No `precomputed_event_recap_candidate` is passed to this executor, so
+    this exercises its Phase G.1 fallback path (any caller that bypasses the processor's own
+    pre-check) - build_event_recap_candidate/render_event_recap_bundle_text are monkeypatched to
+    isolate the executor's own plumbing."""
     import services.event_recap as event_recap_module
     from services.event_recap import EventRecapBuildResult
 
@@ -621,6 +624,7 @@ async def test_event_recap_branch_populates_evidence_text_and_reaches_capability
         call_kwargs["session"] = session
         call_kwargs["story"] = story
         call_kwargs["force_shadow"] = force_shadow
+        call_kwargs["research_complete"] = research_complete
         return EventRecapBuildResult(candidate=_SENTINEL_CANDIDATE, rejected=False, rejection_reasons=[])
 
     def _fake_render(candidate):
@@ -645,7 +649,8 @@ async def test_event_recap_branch_populates_evidence_text_and_reaches_capability
     assert result.status == "COMPLETED"
     assert build_call_count == 1  # build_event_recap_candidate() is actually called, exactly once
     assert call_kwargs["story"].id == story.id
-    assert call_kwargs["force_shadow"] is True  # non-negotiable per Phase B.1 requirements
+    assert call_kwargs["force_shadow"] is False  # Phase G.1: production/manual never bypasses readiness
+    assert call_kwargs["research_complete"] is True  # Phase G.1: R2 has no separate research stage
     assert render_call_count == 1  # render_event_recap_bundle_text() is actually called, exactly once
     assert spy.received_context is not None
     assert spy.received_context.business.event_recap_evidence_text == _PHASE_B1_FAKE_EVIDENCE_TEXT
@@ -660,7 +665,8 @@ async def test_event_recap_branch_delivers_candidate_to_the_real_capability_and_
     """Phase B.2: same chain as the test above, but with the REAL EventRecapCapability (never a
     spy) as the registered capability, and a REAL (in-memory, no DB) EventRecapCandidate - proves
     the full chain EditorialTask(EVENT_RECAP) -> WorkflowRunner -> CapabilityExecutor -> Story
-    resolution -> build_event_recap_candidate(force_shadow=True) -> CapabilityContext.business.
+    resolution -> build_event_recap_candidate(force_shadow=False, research_complete=True) [Phase
+    G.1 fallback path - no precomputed candidate passed] -> CapabilityContext.business.
     event_recap_candidate -> EventRecapCapability.execute() -> synthesize_event_recap() ->
     call_generate() -> FakeLLMGateway -> real recap_title/recap_summary/key_takeaways/
     uncertainty_notes reflected in the persisted WorkflowStepResult."""
@@ -674,7 +680,8 @@ async def test_event_recap_branch_delivers_candidate_to_the_real_capability_and_
     )
 
     async def _fake_build(session, story, *, force_shadow=False, now=None, research_complete=False):
-        assert force_shadow is True
+        assert force_shadow is False
+        assert research_complete is True
         return EventRecapBuildResult(candidate=real_candidate, rejected=False, rejection_reasons=[])
 
     monkeypatch.setattr(event_recap_module, "build_event_recap_candidate", _fake_build)
@@ -798,12 +805,16 @@ async def test_event_recap_branch_rejected_candidate_raises_permanent_step_failu
     db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """build_event_recap_candidate() rejecting (e.g. Story Integrity failure) must fail the step
-    closed, surfacing the existing rejection_reasons - never inventing new decision logic here."""
+    closed, surfacing the existing rejection_reasons - never inventing new decision logic here.
+    Phase G.1: this is the executor's own fail-closed fallback (no precomputed candidate passed) -
+    the defense-in-depth path a direct/future caller bypassing the processor's own pre-check would
+    hit; `force_shadow=False`/`research_complete=True` mirror the processor's own contract exactly."""
     import services.event_recap as event_recap_module
     from services.event_recap import EventRecapBuildResult
 
     async def _fake_build_rejected(session, story, *, force_shadow=False, now=None, research_complete=False):
-        assert force_shadow is True
+        assert force_shadow is False
+        assert research_complete is True
         return EventRecapBuildResult(
             candidate=None, rejected=True, rejection_reasons=["fake_integrity_failure_reason"],
         )
@@ -820,6 +831,52 @@ async def test_event_recap_branch_rejected_candidate_raises_permanent_step_failu
 
     assert result.status == "FAILED"
     assert "fake_integrity_failure_reason" in (result.step_results[0].error or "")
+
+
+@pytest.mark.asyncio
+async def test_event_recap_branch_uses_precomputed_candidate_without_rebuilding(
+    db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase G.1 race-safety contract: when `CapabilityExecutor` is constructed with a
+    `precomputed_event_recap_candidate`, the branch must use that exact object and never call
+    build_event_recap_candidate() again - re-querying here would open a new, snapshot-inconsistent
+    transaction (Phase G.0.2's own forensic finding) that could see Story state the caller's own
+    readiness decision never saw."""
+    import services.event_recap as event_recap_module
+
+    async def _fake_build(*args, **kwargs):
+        raise AssertionError(
+            "build_event_recap_candidate must not be called when a precomputed candidate was supplied"
+        )
+
+    monkeypatch.setattr(event_recap_module, "build_event_recap_candidate", _fake_build)
+
+    render_call_count = 0
+    _SENTINEL_CANDIDATE = object()
+
+    def _fake_render(candidate):
+        nonlocal render_call_count
+        render_call_count += 1
+        assert candidate is _SENTINEL_CANDIDATE
+        return _PHASE_B1_FAKE_EVIDENCE_TEXT
+
+    monkeypatch.setattr(event_recap_module, "render_event_recap_bundle_text", _fake_render)
+
+    workflow_registry = _event_recap_workflow_registry()
+    task = await _created_event_recap_task(db_session, real_news_event, workflow_registry)
+    spy = _SpyCapability()
+    capability_registry = _capability_registry("event_recap", spy)
+    executor = CapabilityExecutor(
+        db_session, task.id, capability_registry, precomputed_event_recap_candidate=_SENTINEL_CANDIDATE,
+    )
+
+    result = await WorkflowRunner(executor=executor, registry=workflow_registry).run(db_session, task.id)
+
+    assert result.status == "COMPLETED"
+    assert render_call_count == 1
+    assert spy.received_context is not None
+    assert spy.received_context.business.event_recap_candidate is _SENTINEL_CANDIDATE
+    assert spy.received_context.business.event_recap_evidence_text == _PHASE_B1_FAKE_EVIDENCE_TEXT
 
 
 def test_build_context_event_recap_evidence_text_defaults_to_none_for_other_capabilities() -> None:

@@ -23,19 +23,23 @@ duplicate-task attempt in this codebase already raises. This function treats tha
 "already handled" (looks up and returns the existing task instead of creating a second one) -
 never as a hard failure, and never by retrying/overwriting.
 
-No caller-side precondition guard exists here, unlike services.telegraph_article_processor.py's
-own "research_task_id set AND COMPLETED" check: EVENT_RECAP has no equivalent cheap, separately-
-checkable prior artifact to look up - the real "is this Story recap-eligible" determination is
-`services.event_recap.build_event_recap_candidate()`'s own readiness/Story-Integrity logic,
-already invoked (unmodified) inside `capabilities/executor.py`'s own EVENT_RECAP branch the moment
-the workflow actually runs. Duplicating that full deterministic computation here, only to decide
-whether to bother creating a task, would recompute the identical clustering/readiness work a
-second time for no cost savings (it is deterministic and free, never an LLM/network call) - so a
-genuinely ineligible Story is allowed to reach `CREATED` and then fail closed as `FAILED`
-(`PermanentStepFailureError`, surfaced in the returned `WorkflowRunResult.step_results`), exactly
-the same fail-closed outcome, one layer later than Telegraph's own equivalent check. Disclosed
-here explicitly, not left implicit - a future checkpoint may choose to add a cheaper pre-check if
-this turns out to matter in practice.
+Phase G.1 (race-safe readiness gate): unlike the Phase C.0 discipline this module used to follow
+(let an ineligible Story reach `CREATED` and fail closed inside the executor), readiness is now
+decided HERE, before any `EditorialTask` is created. Reason (Phase G.0.1/G.0.2's own forensic
+findings): `services.workflow_service.create_task()`'s duplicate-task guard is PERMANENT and
+matches a task of ANY status, including `FAILED` - a NOT_READY Story that creates a `FAILED` task
+would be locked out of ever being recapped again, even after it naturally matures into a genuinely
+READY Story later. `build_event_recap_candidate()` is deterministic and free (zero LLM/network
+calls) - computing it once here, before task creation, costs nothing extra and is the only way to
+keep a NOT_READY Story retry-able.
+
+Race-safety (Phase G.0.2): the candidate is built EXACTLY ONCE per call to this function. If READY,
+that SAME in-memory `EventRecapCandidate` - never a second, independently-requeried one - is
+threaded through to `CapabilityExecutor` (via its `precomputed_event_recap_candidate` constructor
+argument) for synthesis. A second, independent rebuild inside the executor would open a new,
+snapshot-inconsistent transaction (`create_task()` commits in between) that could see a Story
+update the first check never saw, flipping an already-READY decision to NOT_READY mid-run and
+permanently poisoning the task via the same duplicate guard this whole design exists to avoid.
 
 Disclosed, pre-existing limitation (not introduced by this checkpoint, mirrors services.
 telegraph_article_processor.py's own identical disclosure): services.workflow_service.
@@ -44,10 +48,13 @@ statement/unique constraint - two genuinely concurrent callers could theoretical
 check and both insert a task for the same (event_id, workflow_type) before either commits. Out of
 this checkpoint's scope to fix.
 
-Nothing here touches services/event_recap.py, capabilities/executor.py, any workflow definition,
-any worker/scheduler, Telegram, or any DB model - this file only orchestrates the already-existing
-EditorialTask/WorkflowRunner/CapabilityExecutor machinery for one more WorkflowType, exactly as
-services/telegraph_article_processor.py already does for TELEGRAPH_ARTICLE.
+This file calls `services.event_recap.build_event_recap_candidate()` (Phase G.1, unmodified) and
+`capabilities.executor.CapabilityExecutor`'s new optional `precomputed_event_recap_candidate`
+constructor argument (Phase G.1, additive-only default `None` - every other caller/workflow type
+unaffected) - no workflow definition, worker/scheduler, Telegram, or DB model is touched; this
+file still only orchestrates the already-existing EditorialTask/WorkflowRunner/CapabilityExecutor
+machinery for one more WorkflowType, exactly as services/telegraph_article_processor.py already
+does for TELEGRAPH_ARTICLE.
 """
 from __future__ import annotations
 
@@ -66,6 +73,7 @@ from schemas.editorial_task import EditorialTaskCreate
 from schemas.workflow import WorkflowRunResult, WorkflowType
 from services import workflow_service
 from services.cost_tracker import CostTracker
+from services.event_recap import build_event_recap_candidate
 from services.pricing_catalog import PricingCatalog
 from workflows.errors import DuplicateActiveTaskError
 from workflows.runner import WorkflowRunner
@@ -74,7 +82,7 @@ from workflows.runner import WorkflowRunner
 # deliberate, human-triggered background task, never time-sensitive.
 _EVENT_RECAP_TASK_PRIORITY = TaskPriority.C
 
-EventRecapGenerationStatus = Literal["story_not_found", "already_exists", "generated"]
+EventRecapGenerationStatus = Literal["story_not_found", "not_ready", "already_exists", "generated"]
 
 
 @dataclass(frozen=True)
@@ -83,6 +91,10 @@ class EventRecapGenerationOutcome:
     status: EventRecapGenerationStatus
     task_id: UUID | None
     run_result: WorkflowRunResult | None
+    # Phase G.1: non-empty only for status="not_ready" - the exact
+    # `EventRecapBuildResult.rejection_reasons` the readiness pre-check produced (never a parallel
+    # reason-code system). Empty tuple for every other status, including "generated".
+    readiness_reasons: tuple[str, ...] = ()
 
 
 async def find_event_recap_task_id(session: AsyncSession, event_id: UUID) -> UUID | None:
@@ -110,14 +122,36 @@ async def generate_recap_for_story(
     cost_tracker: CostTracker | None = None,
     pricing_catalog: PricingCatalog | None = None,
 ) -> EventRecapGenerationOutcome:
-    """Story lookup -> create (or find existing) EditorialTask -> run its EVENT_RECAP workflow.
-    Returns without ever reaching the LLM Gateway if the Story does not exist or a task already
-    exists for it (structural cost boundary, exactly like services.telegraph_article_processor.py's
-    own claim-first discipline)."""
+    """Story lookup -> existing-task check -> readiness pre-check -> create (or find existing)
+    EditorialTask -> run its EVENT_RECAP workflow. Returns without ever reaching the LLM Gateway
+    if the Story does not exist, a task already exists for it, or it is not yet recap-worthy
+    (structural cost boundary, exactly like services.telegraph_article_processor.py's own
+    claim-first discipline, extended in Phase G.1 with a real readiness gate)."""
     story = await session.get(Story, story_id)
     if story is None:
         return EventRecapGenerationOutcome(
             story_id=story_id, status="story_not_found", task_id=None, run_result=None,
+        )
+
+    # Phase G.1: check for an existing task BEFORE building a candidate at all - a Story already
+    # claimed (in any status) needs no readiness recomputation, mirroring find_event_recap_task_id()
+    # 's own established "any status" duplicate-detection contract.
+    existing_task_id = await find_event_recap_task_id(session, story.first_event_id)
+    if existing_task_id is not None:
+        return EventRecapGenerationOutcome(
+            story_id=story_id, status="already_exists", task_id=existing_task_id, run_result=None,
+        )
+
+    # Phase G.1: built exactly once, before the EditorialTask exists. `research_complete=True` -
+    # R2 EVENT_RECAP has no separate recap-research stage; its deterministic evidence bundle is
+    # the complete input contract, therefore readiness treats research as satisfied for this
+    # processor path. `force_shadow=False` - production/manual EVENT_RECAP no longer bypasses
+    # readiness.
+    build_result = await build_event_recap_candidate(session, story, force_shadow=False, research_complete=True)
+    if build_result.rejected or build_result.candidate is None:
+        return EventRecapGenerationOutcome(
+            story_id=story_id, status="not_ready", task_id=None, run_result=None,
+            readiness_reasons=tuple(build_result.rejection_reasons),
         )
 
     try:
@@ -129,13 +163,18 @@ async def generate_recap_for_story(
             ),
         )
     except DuplicateActiveTaskError:
+        # Concurrency safety-net only (disclosed, pre-existing check-then-insert race - see this
+        # module's own docstring): the pre-check above found nothing, but another concurrent
+        # caller won the race and created a task in between.
         existing_task_id = await find_event_recap_task_id(session, story.first_event_id)
         return EventRecapGenerationOutcome(
             story_id=story_id, status="already_exists", task_id=existing_task_id, run_result=None,
         )
 
+    # Phase G.1: the SAME candidate object just used for the readiness decision - never rebuilt.
     executor = CapabilityExecutor(
         session, task_read.id, capability_registry, cost_tracker=cost_tracker, pricing_catalog=pricing_catalog,
+        precomputed_event_recap_candidate=build_result.candidate,
     )
     runner = WorkflowRunner(executor)
     run_result = await runner.run(session, task_read.id)

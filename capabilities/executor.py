@@ -153,12 +153,21 @@ class CapabilityExecutor:
         *,
         cost_tracker: CostTracker | None = None,
         pricing_catalog: PricingCatalog | None = None,
+        precomputed_event_recap_candidate: Any | None = None,
     ) -> None:
         self._session = session
         self._task_id = task_id
         self._registry = registry
         self._cost_tracker = cost_tracker
         self._pricing_catalog = pricing_catalog
+        # Phase G.1 (race-safe readiness gate): optional, EVENT_RECAP-only. When supplied by
+        # services/event_recap_processor.py::generate_recap_for_story() - the one real production
+        # caller - this is the EXACT `services.event_recap.EventRecapCandidate` object that
+        # already decided readiness for this task, built once, before the task even existed.
+        # Typed `Any` for the identical circular-import reason `schemas.capability.BusinessContext.
+        # event_recap_candidate` already is (services/event_recap.py imports schemas.capability).
+        # `None` (every other caller/workflow type) is completely unaffected.
+        self._precomputed_event_recap_candidate = precomputed_event_recap_candidate
         self._attempts: dict[str, int] = {}
         # API cost optimization: memoized per executor instance (one per workflow run) so a
         # CONTENT_GENERATION task's "research" and "intelligence" steps both reuse the exact
@@ -370,8 +379,8 @@ class CapabilityExecutor:
                 # never the ORM row or the enum type itself.
                 telegraph_editorial_channel = proposal.editorial_channel.value
 
-        # NINJA PULSE RECAP Phase R2 integration, Phase B.1/B.2: the "synthesize_recap" step of an
-        # EVENT_RECAP workflow. Mirrors the TELEGRAPH_ARTICLE branch above exactly (session-bound
+        # NINJA PULSE RECAP Phase R2 integration, Phase B.1/B.2/G.1: the "synthesize_recap" step of
+        # an EVENT_RECAP workflow. Mirrors the TELEGRAPH_ARTICLE branch above exactly (session-bound
         # Story resolution belongs here, the one place in this whole chain that already holds an
         # AsyncSession - schemas/capability.py's own "no ORM object crosses into a Capability"
         # rule forbids doing this inside EventRecapCapability itself). Deterministic only: reuses
@@ -380,33 +389,55 @@ class CapabilityExecutor:
         # call here (synthesize_event_recap() remains this capability's own job, not this executor
         # hook's - this branch only resolves and threads through the deterministic candidate it
         # needs to call that function).
+        #
+        # Phase G.1: if `self._precomputed_event_recap_candidate` was supplied, it is used AS-IS,
+        # never rebuilt - the race-safe contract services/event_recap_processor.py::
+        # generate_recap_for_story() relies on (it builds the candidate exactly once, before the
+        # EditorialTask even exists, decides readiness from that one snapshot, and this step must
+        # synthesize from that SAME snapshot - a second, independent query here would open a new,
+        # snapshot-inconsistent transaction that could see a Story update the first check never
+        # saw, flipping READY to NOT_READY and permanently poisoning the task via the global
+        # duplicate guard). Absent a precomputed candidate (any future/direct caller bypassing the
+        # processor), this branch falls back to building one itself - fail-closed,
+        # `force_shadow=False` (never True): production/manual EVENT_RECAP no longer bypasses
+        # readiness anywhere.
         event_recap_evidence_text: str | None = None
         event_recap_candidate: Any | None = None
         if step.capability == "event_recap" and state_for_bundle.workflow_name == WorkflowType.EVENT_RECAP:
-            from database.models.story import Story
-            from database.models.story_link import NewsEventStoryLink
             from services.event_recap import build_event_recap_candidate, render_event_recap_bundle_text
 
-            link = await self._session.get(NewsEventStoryLink, news_event.id)
-            if link is None:
-                raise PermanentStepFailureError(
-                    f"EVENT_RECAP task {task.id}: no NewsEventStoryLink for anchor event "
-                    f"{news_event.id} - cannot resolve the Story to recap."
-                )
-            story = await self._session.get(Story, link.story_id)
-            if story is None:
-                raise PermanentStepFailureError(
-                    f"EVENT_RECAP task {task.id}: Story {link.story_id} not found."
-                )
+            if self._precomputed_event_recap_candidate is not None:
+                event_recap_candidate = self._precomputed_event_recap_candidate
+            else:
+                from database.models.story import Story
+                from database.models.story_link import NewsEventStoryLink
 
-            build_result = await build_event_recap_candidate(self._session, story, force_shadow=True)
-            if build_result.rejected or build_result.candidate is None:
-                raise PermanentStepFailureError(
-                    f"EVENT_RECAP task {task.id}: candidate build rejected for Story {story.id} - "
-                    f"{build_result.rejection_reasons}"
+                link = await self._session.get(NewsEventStoryLink, news_event.id)
+                if link is None:
+                    raise PermanentStepFailureError(
+                        f"EVENT_RECAP task {task.id}: no NewsEventStoryLink for anchor event "
+                        f"{news_event.id} - cannot resolve the Story to recap."
+                    )
+                story = await self._session.get(Story, link.story_id)
+                if story is None:
+                    raise PermanentStepFailureError(
+                        f"EVENT_RECAP task {task.id}: Story {link.story_id} not found."
+                    )
+
+                # R2 EVENT_RECAP has no separate recap-research stage; its deterministic evidence
+                # bundle is the complete input contract, therefore readiness treats research as
+                # satisfied for this processor path.
+                build_result = await build_event_recap_candidate(
+                    self._session, story, force_shadow=False, research_complete=True,
                 )
-            event_recap_candidate = build_result.candidate
-            event_recap_evidence_text = render_event_recap_bundle_text(build_result.candidate)
+                if build_result.rejected or build_result.candidate is None:
+                    raise PermanentStepFailureError(
+                        f"EVENT_RECAP task {task.id}: candidate build rejected for Story {story.id} - "
+                        f"{build_result.rejection_reasons}"
+                    )
+                event_recap_candidate = build_result.candidate
+
+            event_recap_evidence_text = render_event_recap_bundle_text(event_recap_candidate)
 
         context = self._build_context(
             task, news_event, step, attempt,
