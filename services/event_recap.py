@@ -946,20 +946,32 @@ class EventRecapSynthesisError(RuntimeError):
     candidate."""
 
 
-def _build_synthesis_request(candidate: EventRecapCandidate, prompt: RenderedPrompt) -> GenerateRequest:
+def _build_synthesis_request(
+    candidate: EventRecapCandidate, prompt: RenderedPrompt, language: str,
+) -> GenerateRequest:
     """Phase R2.5 correction (real production finding): this function's own context/task labels
     previously read "EVIDENCE BUNDLE:"/"the evidence bundle above" - a direct, literal source of
     the "bundle" vocabulary a real synthesis call echoed into its own Russian editorial output.
     Neither label is part of the immutable prompt file (never touched here) - both are plain
     Python string literals this function itself constructs, now reworded to avoid the word
-    entirely."""
+    entirely.
+
+    `language` (Phase F.4.9): appended to `task_text` as a plain instruction line, byte-for-byte
+    the same `f"Target output language: {...}"` convention every other Capability's own
+    `execute()` already appends to its own Gateway request content (e.g. capabilities/
+    research_capability.py, capabilities/copywriting_capability.py) - reusing the codebase's one
+    existing, capability-agnostic language mechanism (`BusinessContext.language`, sourced from
+    `core.config.settings.default_content_language`), never a new one. The immutable prompt file
+    itself (`prompts/event_recap/v3.yaml`) is untouched - this is a plain Python string this
+    function already constructs, exactly like the "SOURCE EVIDENCE:"/"TASK:" labels above it."""
     system_text = prompt.system + "\n\nRULES:\n" + "\n".join(f"- {rule}" for rule in prompt.rules)
     evidence_text = render_event_recap_bundle_text(candidate)
     context_text = f"SOURCE EVIDENCE:\n{evidence_text}"
     task_text = (
         "Synthesize a structured EVENT recap strictly from the source evidence above, for internal "
         "review only. Produce fewer takeaways than the maximum if the evidence supports fewer - "
-        "never pad."
+        "never pad.\n\n"
+        f"Target output language: {language}"
     )
     return GenerateRequest(
         messages=[
@@ -1046,7 +1058,8 @@ def _detect_internal_vocabulary_leak(
 
 async def synthesize_event_recap(
     candidate: EventRecapCandidate, gateway: LLMGateway, prompt_repository: PromptRepository,
-    *, runtime: RuntimeContext, call_observer: Callable[[CapabilityCall], None] | None = None,
+    *, runtime: RuntimeContext, language: str,
+    call_observer: Callable[[CapabilityCall], None] | None = None,
 ) -> EventRecapCandidate:
     """SHADOW ONLY - the returned candidate's `publishable` remains unconditionally `False`
     regardless of the synthesis or verification outcome (module docstring). Makes exactly one
@@ -1055,6 +1068,15 @@ async def synthesize_event_recap(
     any Gateway failure or malformed/incomplete structured output; never returns a partially
     populated candidate on failure - the caller's own `candidate` is untouched until this function
     returns successfully.
+
+    `language` (Phase F.4.9 - required, deliberately no default): the editorial output language,
+    reusing `schemas.capability.BusinessContext.language`'s own existing, codebase-wide contract
+    verbatim - "never left to that schema field's own implicit default" (BusinessContext's own
+    comment). The one production caller (capabilities/event_recap_capability.py) passes
+    `context.business.language` directly, exactly like every sibling Capability's own `execute()`
+    already does for its own Gateway request. Threaded into `_build_synthesis_request()` as a
+    plain appended instruction line - never a second LLM call, never a post-generation translation
+    pass, never a new prompt version (`prompts/event_recap/v3.yaml` is untouched).
 
     `call_observer` (Phase R2 integration, Phase B.2 - purely additive, never changes synthesis
     behavior): optional, called once with the real `CapabilityCall` `call_generate()` itself
@@ -1068,7 +1090,7 @@ async def synthesize_event_recap(
     called with anything else, never influences the synthesis/verification outcome itself - a
     caller that omits it (every caller before Phase B.2) is completely unaffected."""
     prompt = prompt_repository.resolve(EVENT_RECAP_PROMPT_NAME, EVENT_RECAP_PROMPT_VERSION)
-    request = _build_synthesis_request(candidate, prompt)
+    request = _build_synthesis_request(candidate, prompt, language)
     outcome = await call_generate(gateway, request, runtime=runtime, sequence=0)
     if call_observer is not None:
         call_observer(outcome.call)

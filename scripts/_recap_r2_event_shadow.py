@@ -515,7 +515,10 @@ async def main() -> int:
         fallback_logger = logging.getLogger("integrations.llm_gateway.fallback.policy")
         fallback_logger.addHandler(attempt_counter)
         try:
-            candidate = await synthesize_event_recap(candidate, gateway, prompt_repository, runtime=runtime)
+            candidate = await synthesize_event_recap(
+                candidate, gateway, prompt_repository, runtime=runtime,
+                language=settings.default_content_language,
+            )
         finally:
             fallback_logger.removeHandler(attempt_counter)
 

@@ -791,7 +791,7 @@ async def test_synthesis_makes_exactly_one_gateway_call(db_session):
         },
         finish_reason="stop", model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=10, output_tokens=5),
     ))
-    updated = await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime())
+    updated = await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime(), language="ru")
     assert len(gateway.received_requests) == 1
     assert gateway.received_requests[0].response_mode == "json_schema"
     assert updated.recap_title == "Taiwan AI dividend approved"
@@ -812,7 +812,7 @@ async def test_fewer_than_max_takeaways_allowed_no_padding(db_session):
         },
         finish_reason="stop", model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=10, output_tokens=5),
     ))
-    updated = await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime())
+    updated = await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime(), language="ru")
     assert len(updated.key_takeaways) == 1  # not padded up to any minimum
 
 
@@ -834,7 +834,7 @@ async def test_unsupported_claim_flagged_never_silently_published(db_session):
         },
         finish_reason="stop", model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=10, output_tokens=5),
     ))
-    updated = await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime())
+    updated = await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime(), language="ru")
     assert updated.fact_verification.status in ("review", "block")
     assert updated.fact_verification.unsupported >= 1 or updated.fact_verification.uncertain >= 1
     assert updated.publishable is False
@@ -849,7 +849,7 @@ async def test_synthesis_raises_on_gateway_error(db_session):
     # through call_generate() itself, which is out of scope for this test.
     gateway = FakeLLMGateway(generate_error=NoRoutableCandidateError("no routable candidate"))
     with pytest.raises(EventRecapSynthesisError):
-        await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime())
+        await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime(), language="ru")
 
 
 @pytest.mark.asyncio
@@ -860,7 +860,7 @@ async def test_synthesis_raises_on_malformed_output(db_session):
         finish_reason="stop", model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=10, output_tokens=5),
     ))
     with pytest.raises(EventRecapSynthesisError):
-        await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime())
+        await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime(), language="ru")
 
 
 @pytest.mark.asyncio
@@ -874,7 +874,7 @@ async def test_synthesis_raises_when_structured_output_is_not_a_dict(db_session)
         finish_reason="stop", model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=10, output_tokens=5),
     ))
     with pytest.raises(EventRecapSynthesisError):
-        await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime())
+        await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime(), language="ru")
 
 
 @pytest.mark.asyncio
@@ -896,7 +896,7 @@ async def test_synthesis_ignores_unexpected_extra_fields(db_session):
         },
         finish_reason="stop", model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=10, output_tokens=5),
     ))
-    updated = await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime())
+    updated = await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime(), language="ru")
     assert updated.recap_title == "Taiwan AI dividend approved"
     assert updated.publishable is False
     assert not hasattr(updated, "confidence_score")
@@ -944,7 +944,7 @@ async def test_synthesis_flags_internal_vocabulary_leak_but_stays_unpublishable(
         },
         finish_reason="stop", model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=10, output_tokens=5),
     ))
-    updated = await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime())
+    updated = await synthesize_event_recap(candidate, gateway, _prompt_repository(), runtime=_runtime(), language="ru")
     assert any(flag.startswith("internal_vocabulary_leak_detected") for flag in updated.quality_flags)
     assert "bundle" in updated.quality_flags[-1]
     assert updated.publishable is False
@@ -1831,7 +1831,7 @@ async def test_publishable_stays_false_across_every_reachable_r2_path(db_session
         finish_reason="stop", model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=10, output_tokens=5),
     ))
     synthesized = await synthesize_event_recap(
-        deterministic_forced.candidate, gateway, _prompt_repository(), runtime=_runtime(),
+        deterministic_forced.candidate, gateway, _prompt_repository(), runtime=_runtime(), language="ru",
     )
     assert synthesized.publishable is False
     assert synthesized.fact_verification.status in ("pass", "review", "block")
@@ -1848,6 +1848,7 @@ async def test_publishable_stays_false_across_every_reachable_r2_path(db_session
     ))
     unsupported_synthesized = await synthesize_event_recap(
         deterministic_forced.candidate, unsupported_gateway, _prompt_repository(), runtime=_runtime(),
+        language="ru",
     )
     assert unsupported_synthesized.fact_verification.status != "pass"
     assert unsupported_synthesized.publishable is False
@@ -1932,3 +1933,97 @@ def test_telegram_preview_raises_rather_than_silently_truncates_over_limit():
 def test_telegram_preview_is_deterministic():
     candidate = _synthesized_taiwan_candidate()
     assert render_event_recap_telegram_preview(candidate) == render_event_recap_telegram_preview(candidate)
+
+
+# ---------------------------------------------------------------------------
+# Phase F.4.9 - Russian editorial output alignment. `synthesize_event_recap()`/
+# `_build_synthesis_request()` now append the same `f"Target output language: {...}"` line every
+# other Capability's own `execute()` already appends (capabilities/research_capability.py,
+# capabilities/copywriting_capability.py, etc.) - reusing `BusinessContext.language`/
+# `settings.default_content_language` verbatim. `prompts/event_recap/v3.yaml` itself is NOT
+# touched by this phase - these tests prove that directly, not by assumption.
+# ---------------------------------------------------------------------------
+
+
+def test_active_event_recap_prompt_version_is_still_v3():
+    """Phase F.4.9 introduces no new prompt version - the language fix lives entirely in the
+    Python-constructed request text, mirroring every sibling Capability's own identical
+    convention, never a prompt-text edit."""
+    assert EVENT_RECAP_PROMPT_VERSION == "3"
+
+
+def test_event_recap_prompt_v3_file_has_no_hardcoded_language_instruction():
+    """Proves the language fix is NOT baked into the immutable prompt file - v3's own `system`/
+    `rules` text contains no language directive of any kind (unlike e.g. prompts/copywriting/
+    v8.6.yaml's own explicit "Write... in Russian" prose) - confirms this is a pure
+    Python-request-construction fix, reusing the codebase's one existing runtime/context
+    mechanism, never a new immutable prompt version."""
+    from pathlib import Path as _Path
+
+    from integrations.prompts.file_repository import FilePromptRepository
+
+    repo = FilePromptRepository(_Path("prompts"))
+    v3 = repo.resolve(EVENT_RECAP_PROMPT_NAME, EVENT_RECAP_PROMPT_VERSION)
+    assert v3.version == "3"
+    haystack = (v3.system + " " + " ".join(v3.rules)).lower()
+    assert "russian" not in haystack
+    assert "target output language" not in haystack
+
+
+def test_synthesis_request_includes_target_output_language_line():
+    """`_build_synthesis_request()` appends the exact same convention every sibling Capability's
+    own `execute()` already uses - proven directly on the constructed GenerateRequest, never
+    assumed from the model's own eventual (uncontrollable) response language."""
+    from services.event_recap import _build_synthesis_request
+
+    candidate = _candidate_from_titles(
+        ["Vantage Data Centers explores sale or IPO options"], "Vantage Data Centers explores strategic options",
+    )
+    request = _build_synthesis_request(candidate, _PROMPT, "ru")
+    user_text = request.messages[1].content[0].text
+    assert "Target output language: ru" in user_text
+
+
+def test_synthesis_request_language_is_a_real_parameter_not_hardcoded():
+    """Proves `language` is a genuine, threaded parameter - not a hardcoded "ru" string - by
+    passing a different value and observing it verbatim in the constructed request, with no
+    trace of "ru" anywhere the parameter itself did not put it."""
+    from services.event_recap import _build_synthesis_request
+
+    candidate = _candidate_from_titles(
+        ["Vantage Data Centers explores sale or IPO options"], "Vantage Data Centers explores strategic options",
+    )
+    request = _build_synthesis_request(candidate, _PROMPT, "en")
+    user_text = request.messages[1].content[0].text
+    assert "Target output language: en" in user_text
+    assert "Target output language: ru" not in user_text
+
+
+@pytest.mark.asyncio
+async def test_synthesize_event_recap_threads_language_into_the_real_gateway_request():
+    """End-to-end proof through the real, public `synthesize_event_recap()` entry point (not just
+    the private `_build_synthesis_request()` helper) - the exact request FakeLLMGateway received
+    carries the language instruction, using the same fixture shape
+    test_synthesis_makes_exactly_one_gateway_call() already established (still exactly one
+    Gateway call - no second, translation-only call)."""
+    candidate = _candidate_from_titles(
+        ["Vantage Data Centers explores sale or IPO options"], "Vantage Data Centers explores strategic options",
+    )
+    gateway = FakeLLMGateway(generate_response=GenerateResponse(
+        text=None,
+        structured_output={
+            "recap_title": "Vantage Data Centers рассматривает продажу или IPO",
+            "recap_summary": "Компания изучает стратегические варианты, включая продажу или IPO.",
+            "key_takeaways": ["Vantage Data Centers рассматривает продажу или IPO."],
+            "uncertainty_notes": [],
+        },
+        finish_reason="stop", model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=10, output_tokens=5),
+    ))
+    updated = await synthesize_event_recap(
+        candidate, gateway, _prompt_repository(), runtime=_runtime(), language="ru",
+    )
+    assert len(gateway.received_requests) == 1
+    user_text = gateway.received_requests[0].messages[1].content[0].text
+    assert "Target output language: ru" in user_text
+    assert updated.recap_title == "Vantage Data Centers рассматривает продажу или IPO"
+    assert updated.publishable is False

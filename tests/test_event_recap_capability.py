@@ -123,18 +123,22 @@ async def test_execute_calls_synthesize_event_recap_with_the_real_candidate_and_
 ) -> None:
     """Proves the capability calls services.event_recap.synthesize_event_recap() itself (never a
     reimplementation) with exactly the candidate from context.business.event_recap_candidate, the
-    real gateway/prompt_repository this capability holds, context.runtime unchanged, and a
-    callable call_observer."""
+    real gateway/prompt_repository this capability holds, context.runtime unchanged,
+    context.business.language passed through unchanged (Phase F.4.9), and a callable
+    call_observer."""
     import capabilities.event_recap_capability as event_recap_capability_module
 
     candidate = _real_candidate()
     call_kwargs: dict = {}
 
-    async def _fake_synthesize(candidate_arg, gateway_arg, prompt_repository_arg, *, runtime, call_observer=None):
+    async def _fake_synthesize(
+        candidate_arg, gateway_arg, prompt_repository_arg, *, runtime, language, call_observer=None,
+    ):
         call_kwargs["candidate"] = candidate_arg
         call_kwargs["gateway"] = gateway_arg
         call_kwargs["prompt_repository"] = prompt_repository_arg
         call_kwargs["runtime"] = runtime
+        call_kwargs["language"] = language
         call_kwargs["call_observer"] = call_observer
         from dataclasses import replace
         return replace(
@@ -155,6 +159,7 @@ async def test_execute_calls_synthesize_event_recap_with_the_real_candidate_and_
     assert call_kwargs["gateway"] is gateway
     assert call_kwargs["prompt_repository"] is prompt_repository
     assert call_kwargs["runtime"] is context.runtime
+    assert call_kwargs["language"] == context.business.language
     assert callable(call_kwargs["call_observer"])
 
 

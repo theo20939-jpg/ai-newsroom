@@ -51,7 +51,19 @@ This class's own `execute()`:
      from the observer. `publishable` is never read or set here - it stays unconditionally `False`
      on the `EventRecapCandidate` `synthesize_event_recap()` itself returns (services/event_recap.py's
      own module docstring); this class never constructs/publishes anything from that candidate at
-     all, it only reads four plain string/list fields off it into `structured_output`."""
+     all, it only reads four plain string/list fields off it into `structured_output`.
+
+Phase F.4.9 (Russian editorial output alignment): `execute()` now also passes
+`language=context.business.language` to `synthesize_event_recap()` - byte-for-byte the same
+`context.business.language` value every other Capability's own `execute()` already reads (e.g.
+capabilities/research_capability.py, capabilities/copywriting_capability.py), sourced from
+`core.config.settings.default_content_language` (="ru") via `capabilities/executor.py::
+CapabilityExecutor._build_context()`. Previously the only Capability in this codebase that never
+read this field - `services/event_recap.py::_build_synthesis_request()` had no language
+instruction of any kind, so the model defaulted to mirroring the source evidence's own language
+(English, for an English-sourced Story). No new setting, no new prompt version
+(`prompts/event_recap/v3.yaml` untouched), no second LLM call, no translation pass - purely
+reusing the one mechanism this codebase already has."""
 from __future__ import annotations
 
 import logging
@@ -117,7 +129,7 @@ class EventRecapCapability:
         try:
             updated = await synthesize_event_recap(
                 candidate, self._gateway, self._prompt_repository,
-                runtime=context.runtime, call_observer=calls.append,
+                runtime=context.runtime, language=context.business.language, call_observer=calls.append,
             )
         except EventRecapSynthesisError as error:
             raise RetryableCapabilityError(str(error), calls=calls) from error
