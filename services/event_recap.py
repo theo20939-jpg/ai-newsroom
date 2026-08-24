@@ -146,7 +146,7 @@ EVENT_RECAP_PROMPT_NAME = "event_recap"
 # uses "bundle" repeatedly (immutable, never edited - see prompts/event_recap/v2.yaml's own header
 # comment for the full account) AND _build_synthesis_request() below independently labeled its own
 # context text "EVIDENCE BUNDLE:" - both fixed; v2 is the new default.
-EVENT_RECAP_PROMPT_VERSION = "2"
+EVENT_RECAP_PROMPT_VERSION = "3"
 
 # Plain string constants for a small closed vocabulary (mirrors services/recap_event.py's own
 # EVENT_RECAP/WEEKLY_RECAP convention, and services/story_memory.py's NEW_STORY/STORY_UPDATE/... -

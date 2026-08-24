@@ -26,6 +26,8 @@ from integrations.prompts.protocol import RenderedPrompt
 from schemas.capability import RuntimeContext
 from database.models.editorial_task import TaskPriority
 from services.event_recap import (
+    EVENT_RECAP_PROMPT_NAME,
+    EVENT_RECAP_PROMPT_VERSION,
     EventRecapCandidate,
     EventRecapSynthesisError,
     EventRecapTelegramPreviewTooLongError,
@@ -52,7 +54,7 @@ _NOW = datetime(2026, 8, 19, 12, 0, 0, tzinfo=timezone.utc)
 
 _PROMPT = RenderedPrompt(
     name="event_recap",
-    version="2",
+    version="3",
     system="You are a test analyst.",
     rules=["Never invent facts."],
     output_schema={
@@ -971,6 +973,198 @@ def test_prompt_v2_removes_bundle_language_v1_remains_untouched():
     assert len(rules_mentioning_bundle) == 1
     assert "internal" in rules_mentioning_bundle[0].lower() and "pipeline" in rules_mentioning_bundle[0].lower()
     assert any("independent" in rule.lower() for rule in v2.rules)
+
+
+# ---------------------------------------------------------------------------
+# R2.11 prompt-versioning cleanup - prompts/event_recap/v2.yaml was repeatedly edited in place
+# across five real fixes (0beed1d/2cf8b51/9cc7f5a/bfec230/5704b1a), violating this codebase's own
+# "a prompt is immutable once published" discipline (the same discipline v2.yaml's own header
+# comment already states, and prompts/research/v3.yaml already follows). Pure versioning
+# migration, never a behavior change: prompts/event_recap/v3.yaml now carries EXACTLY the content
+# that was active v2 through all five real R2 shadow validations reported in this checkpoint
+# (macOS 27, Nvidia/Poolside, Apple Music, Bryansk, Samsung Galaxy S27 Ultra, VK vs Apple) - only
+# `version` changed 2 -> 3. `prompts/event_recap/v2.yaml` itself was restored, via `git checkout
+# 51feac0 -- prompts/event_recap/v2.yaml` (never retyped by hand), to the exact content it had at
+# 51feac0 - the commit that created it and the last commit before 0beed1d's first in-place edit.
+# `EVENT_RECAP_PROMPT_VERSION` now points at "3" (services/event_recap.py) - v2 stays on disk,
+# unused by any runtime path, purely as an accurate historical record of what was actually
+# published at that version number.
+# ---------------------------------------------------------------------------
+
+# The exact 16 rule strings added across the five real R2 fixes, in the order they were
+# introduced - every one of these must survive, verbatim, in v3 (item G: "no current R2 rule lost
+# in the v2 -> v3 transfer"). Copied from the prompt files themselves, never retyped/paraphrased.
+_R2_SYNTHESIS_RULES_ADDED_AFTER_51FEAC0: tuple[str, ...] = (
+    # 0beed1d - ORIGIN/FOLLOW_UP narrative + anti-itemization
+    "The ORIGIN announcement is the central event of this recap; every FOLLOW_UP announcement is a supporting development of that same event, never an independent story of its own - write one coherent recap of the ORIGIN event, not a list of separate news items.",
+    "Merge FOLLOW_UP announcements that describe related or overlapping developments into a single synthesized point rather than giving each announcement its own separate takeaway.",
+    "key_takeaways must be synthesized developments written in your own editorial words, not source headlines restated or lightly reworded - never produce one takeaway per announcement merely because it exists in the evidence.",
+    "The timeline is evidence chronology only. It must not be copied into key_takeaways.",
+    "key_takeaways must represent synthesized editorial progression, not one bullet per announcement.",
+    "Multiple FOLLOW_UP announcements that describe the same area must be merged into one development.",
+    "Prefer 2-3 meaningful developments over listing every source event.",
+    "A recap with four announcements does not require four key_takeaways.",
+    # 2cf8b51 - editorial boundaries: describe developments, not evidence/reports
+    "key_takeaways must describe the real-world development itself, not the existence, quantity, storage, or provenance of reports/evidence.",
+    "Never mention that something appears in multiple reports, stored reports, evidence, sources, or internal confirmation state.",
+    "Avoid broad market, industry, or societal conclusions unless the evidence explicitly states them.",
+    "Prefer concrete event-level descriptions over abstract interpretations.",
+    # 9cc7f5a - uncertainty_notes provenance leakage (first rule) + qualifier preservation
+    "uncertainty_notes must describe uncertainty of the real-world event itself, not uncertainty about evidence, reports, sources, or internal verification. Never mention limited evidence, stored reports, source counts, or similar provenance details.",
+    "Preserve important qualifiers from the evidence when writing titles and summaries. Do not strengthen \"beta\", \"preview\", \"announced\", \"available to developers\", or similar states into stronger claims such as \"released\" or \"launched\" unless the evidence explicitly states that.",
+    # bfec230 - uncertainty_notes provenance leakage (second, stricter rule)
+    "uncertainty_notes must not describe evidence limitations, source count, number of reports, or how many sources support a claim. Do not write phrases such as \"based on one report\", \"only one source mentions\", \"limited evidence\", or similar provenance statements. Describe only what remains unknown about the real-world event itself.",
+    # 5704b1a - epistemic strength preservation in titles/summaries
+    "Titles and summaries must preserve the epistemic strength of the evidence. If the evidence represents a claim, report, estimate, survey result, or single-source statement, do not rewrite it as an independently verified fact. Keep attribution or uncertainty where required.",
+)
+
+
+def test_a_v1_prompt_untouched_by_versioning_migration():
+    """Item A: v1 must remain exactly what it always was - this migration never reads, resolves,
+    or edits v1 anywhere. "bundle" is v1's own working vocabulary throughout (the R2.5 finding
+    v2 exists to fix) - proof v1's content is the original, pre-R2.5 text, not accidentally
+    touched by this migration."""
+    from pathlib import Path as _Path
+
+    from integrations.prompts.file_repository import FilePromptRepository
+
+    repo = FilePromptRepository(_Path("prompts"))
+    v1 = repo.resolve("event_recap", "1")
+    assert v1.version == "1"
+    assert "bundle" in v1.system.lower()
+
+
+def test_b_restored_v2_matches_its_51feac0_published_baseline():
+    """Item B: the restored v2 must be the ORIGINAL R2.5 content (51feac0) - none of the five
+    later in-place edits' own rules may be present. Distinguishes "restored old v2" from "current
+    v3" unambiguously: none of the R2 synthesis-era rules exist in v2, and v2 has exactly the
+    original 8 rules, not 24."""
+    from pathlib import Path as _Path
+
+    from integrations.prompts.file_repository import FilePromptRepository
+
+    repo = FilePromptRepository(_Path("prompts"))
+    v2 = repo.resolve("event_recap", "2")
+    assert v2.version == "2"
+    assert len(v2.rules) == 8
+    for later_rule in _R2_SYNTHESIS_RULES_ADDED_AFTER_51FEAC0:
+        assert later_rule not in v2.rules
+    assert "ORIGIN" not in v2.system
+    assert "FOLLOW_UP" not in v2.system
+
+
+def test_c_and_g_v3_contains_every_current_r2_synthesis_rule():
+    """Items C + G: v3 must contain every one of the 16 real R2 synthesis rules added across the
+    five fix commits (0beed1d/2cf8b51/9cc7f5a/bfec230/5704b1a), verbatim - nothing lost in the
+    v2 -> v3 transfer."""
+    from pathlib import Path as _Path
+
+    from integrations.prompts.file_repository import FilePromptRepository
+
+    repo = FilePromptRepository(_Path("prompts"))
+    v3 = repo.resolve("event_recap", "3")
+    for rule in _R2_SYNTHESIS_RULES_ADDED_AFTER_51FEAC0:
+        assert rule in v3.rules
+
+
+def test_d_runtime_prompt_version_constant_points_at_v3():
+    """Item D: services/event_recap.py's own runtime constant must select v3, not v2."""
+    assert EVENT_RECAP_PROMPT_NAME == "event_recap"
+    assert EVENT_RECAP_PROMPT_VERSION == "3"
+
+
+def test_e_file_prompt_repository_resolves_event_recap_v3():
+    """Item E: the real FilePromptRepository (never a fake) must resolve ("event_recap", "3")
+    cleanly - name/version on the returned RenderedPrompt must match the file's own declared
+    name/version, and resolving via EVENT_RECAP_PROMPT_VERSION must return the identical object
+    the runtime path (synthesize_event_recap) would actually use."""
+    from pathlib import Path as _Path
+
+    from integrations.prompts.file_repository import FilePromptRepository
+
+    repo = FilePromptRepository(_Path("prompts"))
+    v3 = repo.resolve(EVENT_RECAP_PROMPT_NAME, EVENT_RECAP_PROMPT_VERSION)
+    assert v3.name == "event_recap"
+    assert v3.version == "3"
+
+
+def test_f_v3_output_schema_identical_to_the_stable_working_schema():
+    """Item F: output_schema was never touched by any of the five R2 rule-only fixes - v3's
+    output_schema must be byte-identical to that stable, already-shipped contract (same field
+    names, types, descriptions, required list, additionalProperties)."""
+    from pathlib import Path as _Path
+
+    from integrations.prompts.file_repository import FilePromptRepository
+
+    repo = FilePromptRepository(_Path("prompts"))
+    v3 = repo.resolve("event_recap", "3")
+    assert v3.output_schema == {
+        "type": "object",
+        "properties": {
+            "recap_title": {
+                "type": "string",
+                "description": "A short, factual, non-sensational title for this recap (internal review only).",
+            },
+            "recap_summary": {
+                "type": "string",
+                "description": "A concise (2-4 sentence) factual summary of the event, strictly from the evidence given.",
+            },
+            "key_takeaways": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "At most 8, fewer if evidence is thin - the most important, evidence-backed points.",
+            },
+            "uncertainty_notes": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Notes on what remains single-report, unconfirmed, or genuinely unclear from the evidence given - empty if none.",
+            },
+        },
+        "required": ["recap_title", "recap_summary", "key_takeaways", "uncertainty_notes"],
+        "additionalProperties": False,
+    }
+
+
+# The ONE original v2 rule whose wording changed (0beed1d extended it to also name "ORIGIN"/
+# "FOLLOW_UP" as forbidden internal vocabulary) - transcribed verbatim from prompts/event_recap/
+# v3.yaml, never reconstructed by string concatenation (avoids a subtle wording-join mistake).
+_INTERNAL_VOCABULARY_RULE_AFTER_ORIGIN_FOLLOW_UP_EXTENSION = (
+    "Never mention this newsroom's own internal pipeline, software, or data-processing "
+    "terminology in any of the four output fields (examples of what must never appear, in any "
+    "language - \"bundle\", \"evidence set\", \"prompt\", \"candidate\", \"entity\", \"token\", "
+    "\"parser\", \"fact verification\", or any internal status label, including \"ORIGIN\"/"
+    "\"FOLLOW_UP\" themselves) - write only as a human editor describing the real-world event "
+    "itself, never the process that produced this text."
+)
+
+
+def test_v3_rule_set_is_exactly_v2_originals_plus_r2_additions_nothing_more_nothing_less():
+    """Machine-verified behavioral-equivalence proof (checkpoint item 7, multiset form - order-
+    independent so it never needs to guess the real file's exact interleaving of old vs. new
+    rules): v3's 24 rules must be EXACTLY the restored v2's 8 original rules (7 untouched
+    verbatim, 1 - the internal-vocabulary rule - extended with the ORIGIN/FOLLOW_UP mention) plus
+    the 16 real R2 rule additions - no more, no fewer, nothing silently dropped or duplicated."""
+    from pathlib import Path as _Path
+
+    from integrations.prompts.file_repository import FilePromptRepository
+
+    repo = FilePromptRepository(_Path("prompts"))
+    v2 = repo.resolve("event_recap", "2")
+    v3 = repo.resolve("event_recap", "3")
+
+    untouched_originals = [rule for i, rule in enumerate(v2.rules) if i != 6]
+    expected_pool = (
+        untouched_originals
+        + [_INTERNAL_VOCABULARY_RULE_AFTER_ORIGIN_FOLLOW_UP_EXTENSION]
+        + list(_R2_SYNTHESIS_RULES_ADDED_AFTER_51FEAC0)
+    )
+    assert len(expected_pool) == 24
+    assert len(v3.rules) == 24
+    assert sorted(v3.rules) == sorted(expected_pool)
+    # The pre-extension wording must be fully replaced in v3, never left duplicated alongside the
+    # new one.
+    assert v2.rules[6] not in v3.rules
+    assert v3.version == "3"
 
 
 def test_bundle_text_is_deterministic_and_bounded():
