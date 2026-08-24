@@ -112,3 +112,18 @@ def test_build_registry_resolves_engagement_once_registered() -> None:
 
     assert definition.name == ENGAGEMENT_CAPABILITY_NAME
     assert isinstance(capability, EngagementCapability)
+
+
+def test_build_registry_resolves_event_recap_once_registered() -> None:
+    """NINJA PULSE RECAP Phase R2 integration, Phase A: CapabilityRegistry.resolve("event_recap")
+    succeeds once EventRecapCapability is registered in build_registry() - dormant registration
+    only, mirrors article_generation's own identical precedent."""
+    from capabilities.event_recap_capability import CAPABILITY_NAME as EVENT_RECAP_CAPABILITY_NAME
+    from capabilities.event_recap_capability import EventRecapCapability
+
+    real_registry = _build_registry()
+
+    definition, capability = real_registry.resolve(EVENT_RECAP_CAPABILITY_NAME)
+
+    assert definition.name == EVENT_RECAP_CAPABILITY_NAME
+    assert isinstance(capability, EventRecapCapability)

@@ -49,6 +49,11 @@ _CAPABILITY_NAME_TO_AI_CAPABILITY: dict[str, AICapability] = {
     # copy, just long-form and TELEGRAPH-scoped, mirroring editorial_planning -> INTELLIGENCE's
     # own precedent exactly.
     "article_generation": AICapability.COPYWRITING,
+    # NINJA PULSE RECAP Phase R2 integration, Phase A: an analytical/planning synthesis over an
+    # already-assembled evidence set (services/event_recap.py), never a fresh editorial draft from
+    # raw source text - semantically closest to INTELLIGENCE, mirroring editorial_planning ->
+    # INTELLIGENCE's own precedent exactly, reused rather than adding a new enum value/migration.
+    "event_recap": AICapability.INTELLIGENCE,
 }
 
 

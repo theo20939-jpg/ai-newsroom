@@ -14,6 +14,7 @@ import logging
 from schemas.workflow import WorkflowDefinition, WorkflowType
 from workflows.definitions import (
     content_generation,
+    event_recap,
     meme_generation,
     news_analysis,
     telegraph_article,
@@ -98,6 +99,11 @@ def build_registry() -> WorkflowRegistry:
     # (only services/telegraph_article_processor.py::generate_article_for_researched_proposal()
     # creates a task for it, and nothing calls that automatically).
     registry.register(telegraph_article.DEFINITION)
+    # NINJA PULSE RECAP Phase R2 integration, Phase A: registered dormant, safe for the identical
+    # reason - no processor/scheduler exists yet that creates an EVENT_RECAP task, and
+    # capabilities/event_recap_capability.py's own execute() cannot reach the LLM Gateway even if
+    # a task somehow were created (see that module's own docstring).
+    registry.register(event_recap.DEFINITION)
     registry.seal()
     return registry
 

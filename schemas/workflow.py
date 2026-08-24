@@ -60,6 +60,17 @@ class WorkflowType(str, Enum):
     # the first PAID research call - the guard here plays the identical role for the paid article-
     # generation call).
     TELEGRAPH_ARTICLE = "TELEGRAPH_ARTICLE"
+    # NINJA PULSE RECAP Phase R2 integration, Phase A (dormant registration only - see
+    # workflows/definitions/event_recap.py's own docstring). One step, "synthesize_recap"
+    # (capability="event_recap", a genuinely new Capability - never CopywritingCapability, for the
+    # identical reason TELEGRAPH_ARTICLE's own "article_generation" is its own Capability: avoids
+    # entangling NEWS-only hooks in capabilities/executor.py, all keyed off
+    # step.capability == "copywriting"). Anchored to `story.first_event_id`
+    # (== services.event_recap.EventRecapCandidate.anchor_event_id) - the same single-event-per-
+    # task anchoring TELEGRAPH_ARTICLE already established for a workflow that is conceptually
+    # about a whole Story, not one event; the same services.workflow_service.create_task()
+    # one-task-per-(event_id, workflow_type) guard is this workflow's exactly-once mechanism too.
+    EVENT_RECAP = "EVENT_RECAP"
 
 
 class WorkflowRetryPolicy(BaseModel):

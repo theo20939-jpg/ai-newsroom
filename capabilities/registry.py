@@ -61,6 +61,7 @@ from capabilities.media_vision_review_capability import (
     MediaVisionReviewCapability,
 )
 from capabilities.engagement_capability import ENGAGEMENT_CAPABILITY_DEFINITION, EngagementCapability
+from capabilities.event_recap_capability import EVENT_RECAP_CAPABILITY_DEFINITION, EventRecapCapability
 from capabilities.intelligence_capability import INTELLIGENCE_CAPABILITY_DEFINITION, IntelligenceCapability
 from capabilities.meme_concept_capability import MEME_CONCEPT_CAPABILITY_DEFINITION, MemeConceptCapability
 from capabilities.meme_copywriting_capability import (
@@ -189,5 +190,11 @@ def build_registry(
     # generate_article_for_researched_proposal() is the only caller, and nothing calls that
     # automatically, mirroring meme_concept/editorial_planning's own precedent exactly.
     registry.register(ARTICLE_GENERATION_CAPABILITY_DEFINITION, ArticleGenerationCapability(gateway, prompt_repository))
+    # NINJA PULSE RECAP Phase R2 integration, Phase A: registered like every other capability
+    # (real, resolvable, cost-tracked via capability_mapping.py's "event_recap" ->
+    # AICapability.INTELLIGENCE entry) even though no live/automatic path calls it, and its own
+    # execute() cannot reach the LLM Gateway yet (capabilities/event_recap_capability.py's own
+    # docstring) - mirrors article_generation/meme_concept's own dormant-registration precedent.
+    registry.register(EVENT_RECAP_CAPABILITY_DEFINITION, EventRecapCapability(gateway, prompt_repository))
     registry.seal()
     return registry

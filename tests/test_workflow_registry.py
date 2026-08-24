@@ -71,6 +71,15 @@ def test_news_analysis_and_content_generation_are_registered_in_the_real_registr
     assert default_registry.resolve(WorkflowType.CONTENT_GENERATION).name == WorkflowType.CONTENT_GENERATION
 
 
+def test_event_recap_is_registered_dormant_in_the_real_registry() -> None:
+    """NINJA PULSE RECAP Phase R2 integration, Phase A: registered (like TELEGRAPH_RESEARCH/
+    TELEGRAPH_ARTICLE), one step, capability="event_recap" - dormant, since nothing in this
+    codebase creates an EVENT_RECAP task yet."""
+    definition = default_registry.resolve(WorkflowType.EVENT_RECAP)
+    assert definition.name == WorkflowType.EVENT_RECAP
+    assert [step.capability for step in definition.steps] == ["event_recap"]
+
+
 def test_registration_during_build_succeeds() -> None:
     registry = WorkflowRegistry()
     registry.register(_definition())  # not sealed yet - must succeed
