@@ -833,6 +833,29 @@ def _resolve_money(claim: str) -> tuple[str, float] | None:
     return _normalize_money(claim) or _normalize_ad_hoc_currency(claim)
 
 
+def _entity_suffix_match(shorter: str, longer: str) -> bool:
+    """A shortened later mention of a multi-word entity matches its own fuller form ONLY when the
+    shorter form's words are the exact TRAILING words of the longer form - dropping a LEADING
+    brand/manufacturer qualifier ("Samsung Galaxy S27 Ultra" -> "Galaxy S27 Ultra") never changes
+    which real-world product is meant. Dropping a TRAILING qualifier is deliberately never matched
+    here - "Ultra"/"Pro"/"Max"-style suffixes typically name a genuinely different product tier, so
+    "Galaxy S27" must NOT match "Galaxy S27 Ultra" (a real, different model). Whole-word boundary
+    only (`str.split()` tokens - never a partial-word/raw-substring match); `shorter` must have
+    2+ words - a single word never counts as identifying the same entity as a longer phrase."""
+    shorter_words = shorter.split()
+    longer_words = longer.split()
+    if len(shorter_words) < 2 or len(longer_words) <= len(shorter_words):
+        return False
+    return longer_words[-len(shorter_words):] == shorter_words
+
+
+def _entities_match(a: str, b: str) -> bool:
+    """Exact equality (unchanged, existing behavior) plus the narrow suffix-only containment
+    above, checked in both directions - never a fuzzy/semantic match, never mid-string or
+    prefix-only containment."""
+    return a == b or _entity_suffix_match(a, b) or _entity_suffix_match(b, a)
+
+
 def _claim_matches_any(claim_type: ClaimType, claim: str, evidence_claims: list[str]) -> bool:
     if claim_type == "money":
         normalized_money = _resolve_money(claim)
@@ -880,7 +903,10 @@ def _claim_matches_any(claim_type: ClaimType, claim: str, evidence_claims: list[
         normalized_entity = _normalize_entity(claim)
         if not normalized_entity:
             return False
-        return any(normalized_entity == _normalize_entity(candidate) for candidate in evidence_claims)
+        return any(
+            _entities_match(normalized_entity, _normalize_entity(candidate))
+            for candidate in evidence_claims
+        )
     # quote: exact-normalized-text containment (never fuzzy - M5.3's own "no broad fuzzy
     # matching that can turn unrelated claims into matches" rule applies most strictly here).
     normalized_quote = _normalize_text(claim)

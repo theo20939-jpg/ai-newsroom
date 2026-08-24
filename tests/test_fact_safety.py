@@ -40,6 +40,7 @@ from services.fact_safety import (
     apply_fact_safety,
     evaluate_fact_safety,
     extract_claims,
+    _claim_matches_any,
     _normalize_date,
     _normalize_entity,
     _normalize_money,
@@ -185,6 +186,56 @@ def test_extract_claims_entity_never_spans_a_newline_boundary() -> None:
     a capitalized word starting the next (e.g. body text) into one false multi-word entity."""
     text = "Title\nКомпания продолжает работу."
     assert extract_claims(text)["entity"] == []
+
+
+# ---------------------------------------------------------------------------
+# R2 fact-safety audit - _claim_matches_any() entity-branch shortened-name containment
+# (real production finding, Story 45e627b1-7ac3-4d49-89aa-abc6a2d94d3c): a synthesized draft
+# naturally shortening an already-supported multi-word entity on a later mention ("Samsung Galaxy
+# S27 Ultra" -> "Galaxy S27 Ultra") previously failed the entity branch's own exact-normalized-
+# string-equality check, was classified "unsupported", read as central to the title (substring
+# check in _entity_severity - untouched here), escalated to severity "high", and BLOCKed a
+# synthesis output that invented nothing. Fixed by _entity_suffix_match()/_entities_match(): a
+# narrow, whole-word, SUFFIX-only containment (never prefix, never mid-string, never a raw
+# substring) - dropping a LEADING brand/manufacturer word is safe (same real-world product),
+# dropping a TRAILING qualifier word ("Ultra"/"Pro"/"Max"-style) is NOT, since that usually names a
+# genuinely different product tier. _entity_severity()/_draft_status() are untouched.
+# ---------------------------------------------------------------------------
+
+
+def test_entity_matches_when_shorter_form_is_the_trailing_words_of_evidence() -> None:
+    """PASS: "Galaxy S27 Ultra" is exactly the trailing 3 words of evidence's "Samsung Galaxy S27
+    Ultra" - a leading brand-name drop, same real-world product."""
+    assert _claim_matches_any("entity", "Galaxy S27 Ultra", ["Samsung Galaxy S27 Ultra"]) is True
+
+
+def test_entity_matches_when_shorter_form_drops_leading_manufacturer_word() -> None:
+    """PASS: "iPhone 18 Pro" is exactly the trailing 3 words of evidence's "Apple iPhone 18 Pro" -
+    same generalization, different real example (never Samsung/Galaxy-specific)."""
+    assert _claim_matches_any("entity", "iPhone 18 Pro", ["Apple iPhone 18 Pro"]) is True
+
+
+def test_entity_does_not_match_when_shorter_form_drops_trailing_qualifier() -> None:
+    """FAIL: "Galaxy S27" is the LEADING 2 words of evidence's "Samsung Galaxy S27 Ultra", not the
+    trailing words - dropping "Ultra" names a genuinely different product tier (the non-Ultra
+    Galaxy S27 vs. the Galaxy S27 Ultra are different real phones), so this must never match."""
+    assert _claim_matches_any("entity", "Galaxy S27", ["Samsung Galaxy S27 Ultra"]) is False
+
+
+def test_entity_single_word_claim_never_matches_a_longer_evidence_entity() -> None:
+    """FAIL: a single word ("Pro") never counts as identifying the same entity as a longer phrase,
+    regardless of whether it is a trailing word of the evidence entity."""
+    assert _claim_matches_any("entity", "Pro", ["iPhone 18 Pro"]) is False
+
+
+def test_entity_single_word_evidence_never_matches_a_longer_claim() -> None:
+    """FAIL: the same single-word floor applies to the evidence side too - "Apple" (evidence, one
+    word after legal-suffix stripping) never matches a claim merely because "Apple Inc" normalizes
+    to "apple", which is also a single word - a genuine equality case, not a containment one, and
+    it must still resolve correctly (exact match on the normalized single word)."""
+    assert _claim_matches_any("entity", "Apple", ["Apple Inc"]) is True
+    # But a claim that is NOT itself a single normalized word never matches a single-word entity
+    # via containment - covered above (test_entity_single_word_claim_never_matches_a_longer_evidence_entity).
 
 
 # ---------------------------------------------------------------------------
