@@ -526,3 +526,316 @@ def test_build_context_sets_capability_specific_token_limit_and_reasoning_effort
 
     assert context.execution.max_tokens == expected_max_tokens
     assert context.execution.reasoning_effort == expected_reasoning_effort
+
+
+# ---------------------------------------------------------------------------
+# NINJA PULSE RECAP Phase R2 integration, Phase B.1 - the EVENT_RECAP-only branch in
+# CapabilityExecutor.execute() (mirrors the TELEGRAPH_ARTICLE branch above it exactly): resolves
+# a Story via NewsEventStoryLink, calls the existing, unmodified services.event_recap.
+# build_event_recap_candidate(session, story, force_shadow=True), and threads the existing,
+# unmodified render_event_recap_bundle_text()'s output into context.business.
+# event_recap_evidence_text. The candidate-building/rendering functions themselves are
+# monkeypatched (never a hand-rolled EventRecapCandidate/announcement fixture) - this section
+# proves the EXECUTOR's own plumbing (branch condition, Story resolution, force_shadow=True,
+# error mapping, context threading), not services/event_recap.py's own synthesis/clustering
+# behavior (tests/test_event_recap.py already covers that exhaustively).
+# ---------------------------------------------------------------------------
+
+_PHASE_B1_FAKE_EVIDENCE_TEXT = "Story: Fake Recap Story\n\nANNOUNCEMENT CONTEXT:\n\n- [ORIGIN]\nFake headline"
+
+
+def _event_recap_workflow_registry() -> WorkflowRegistry:
+    registry = WorkflowRegistry()
+    registry.register(
+        WorkflowDefinition(
+            name=WorkflowType.EVENT_RECAP,
+            version=1,
+            steps=[
+                WorkflowStepDefinition(
+                    name="synthesize_recap", capability="event_recap", max_attempts=1, timeout_seconds=10,
+                )
+            ],
+            max_iterations=1,
+            retry_policy=WorkflowRetryPolicy(max_attempts=1, retryable_error_types=["StepExecutionError"]),
+            timeout_seconds=60,
+            required_input=["event_id"],
+            expected_output=["recap_title", "recap_summary", "key_takeaways", "uncertainty_notes"],
+        )
+    )
+    registry.seal()
+    return registry
+
+
+async def _created_event_recap_task(
+    session: AsyncSession, event: NewsEvent, workflow_registry: WorkflowRegistry
+) -> EditorialTaskRead:
+    command = EditorialTaskCreate(event_id=event.id, workflow_type=WorkflowType.EVENT_RECAP, priority=TaskPriority.C)
+    return await workflow_service.create_task(session, command, registry=workflow_registry)
+
+
+async def _seed_story_link(session: AsyncSession, *, anchor_event: NewsEvent):
+    """A minimal, real Story + NewsEventStoryLink row - just enough for the executor's own
+    NewsEventStoryLink -> Story resolution to succeed. build_event_recap_candidate() itself is
+    monkeypatched in every test below, so this Story is never actually clustered/read by it -
+    only resolved by id."""
+    from database.models.news_event import EventCategory as _EventCategory
+    from database.models.story import Story
+    from database.models.story_link import NewsEventStoryLink
+    from services.story_memory import NEW_STORY
+
+    story = Story(
+        title=anchor_event.title, category=_EventCategory.AI, entities=[], keywords=[],
+        topic_bucket="test", first_event_id=anchor_event.id, event_count=1,
+    )
+    session.add(story)
+    await session.flush()
+    session.add(
+        NewsEventStoryLink(
+            news_event_id=anchor_event.id, story_id=story.id, match_type=NEW_STORY, match_score=1.0,
+        )
+    )
+    await session.flush()
+    return story
+
+
+@pytest.mark.asyncio
+async def test_event_recap_branch_populates_evidence_text_and_reaches_capability_success(
+    db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Proves the full deterministic chain: EditorialTask(EVENT_RECAP) -> WorkflowRunner ->
+    CapabilityExecutor -> Story resolution -> build_event_recap_candidate(force_shadow=True) ->
+    render_event_recap_bundle_text() -> CapabilityContext.business.event_recap_evidence_text ->
+    a spy Capability that captures the context it received. build_event_recap_candidate/
+    render_event_recap_bundle_text are monkeypatched to isolate the executor's own plumbing."""
+    import services.event_recap as event_recap_module
+    from services.event_recap import EventRecapBuildResult
+
+    call_kwargs: dict = {}
+    build_call_count = 0
+    render_call_count = 0
+    _SENTINEL_CANDIDATE = object()
+
+    async def _fake_build(session, story, *, force_shadow=False, now=None, research_complete=False):
+        nonlocal build_call_count
+        build_call_count += 1
+        call_kwargs["session"] = session
+        call_kwargs["story"] = story
+        call_kwargs["force_shadow"] = force_shadow
+        return EventRecapBuildResult(candidate=_SENTINEL_CANDIDATE, rejected=False, rejection_reasons=[])
+
+    def _fake_render(candidate):
+        nonlocal render_call_count
+        render_call_count += 1
+        assert candidate is _SENTINEL_CANDIDATE
+        return _PHASE_B1_FAKE_EVIDENCE_TEXT
+
+    monkeypatch.setattr(event_recap_module, "build_event_recap_candidate", _fake_build)
+    monkeypatch.setattr(event_recap_module, "render_event_recap_bundle_text", _fake_render)
+
+    story = await _seed_story_link(db_session, anchor_event=real_news_event)
+    workflow_registry = _event_recap_workflow_registry()
+    task = await _created_event_recap_task(db_session, real_news_event, workflow_registry)
+
+    spy = _SpyCapability()
+    capability_registry = _capability_registry("event_recap", spy)
+    executor = CapabilityExecutor(db_session, task.id, capability_registry)
+
+    result = await WorkflowRunner(executor=executor, registry=workflow_registry).run(db_session, task.id)
+
+    assert result.status == "COMPLETED"
+    assert build_call_count == 1  # build_event_recap_candidate() is actually called, exactly once
+    assert call_kwargs["story"].id == story.id
+    assert call_kwargs["force_shadow"] is True  # non-negotiable per Phase B.1 requirements
+    assert render_call_count == 1  # render_event_recap_bundle_text() is actually called, exactly once
+    assert spy.received_context is not None
+    assert spy.received_context.business.event_recap_evidence_text == _PHASE_B1_FAKE_EVIDENCE_TEXT
+    assert await _ai_execution_count(db_session) == 0  # zero AI calls anywhere in this chain
+
+
+@pytest.mark.asyncio
+async def test_event_recap_branch_delivers_evidence_text_to_the_real_capability(
+    db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Same chain as the test above, but with the REAL EventRecapCapability (never a spy) as the
+    registered capability - proves the deterministic evidence text is not just threaded into
+    CapabilityContext, but actually consumed by the real capability and reflected in the
+    persisted WorkflowStepResult."""
+    import services.event_recap as event_recap_module
+    from capabilities.event_recap_capability import EVENT_RECAP_CAPABILITY_DEFINITION, EventRecapCapability
+    from services.event_recap import EVENT_RECAP_PROMPT_NAME, EVENT_RECAP_PROMPT_VERSION, EventRecapBuildResult
+
+    _SENTINEL_CANDIDATE = object()
+
+    async def _fake_build(session, story, *, force_shadow=False, now=None, research_complete=False):
+        assert force_shadow is True
+        return EventRecapBuildResult(candidate=_SENTINEL_CANDIDATE, rejected=False, rejection_reasons=[])
+
+    def _fake_render(candidate):
+        assert candidate is _SENTINEL_CANDIDATE
+        return _PHASE_B1_FAKE_EVIDENCE_TEXT
+
+    monkeypatch.setattr(event_recap_module, "build_event_recap_candidate", _fake_build)
+    monkeypatch.setattr(event_recap_module, "render_event_recap_bundle_text", _fake_render)
+
+    await _seed_story_link(db_session, anchor_event=real_news_event)
+    workflow_registry = _event_recap_workflow_registry()
+    task = await _created_event_recap_task(db_session, real_news_event, workflow_registry)
+
+    prompt_repository = FakePromptRepository()
+    prompt_repository.register(
+        RenderedPrompt(
+            name=EVENT_RECAP_PROMPT_NAME, version=EVENT_RECAP_PROMPT_VERSION,
+            system="You are a fake recap analyst.", rules=["Never invent facts."], output_schema={},
+        )
+    )
+    capability_registry = CapabilityRegistry()
+    capability_registry.register(
+        EVENT_RECAP_CAPABILITY_DEFINITION, EventRecapCapability(FakeLLMGateway(), prompt_repository),
+    )
+    capability_registry.seal()
+    executor = CapabilityExecutor(db_session, task.id, capability_registry)
+
+    result = await WorkflowRunner(executor=executor, registry=workflow_registry).run(db_session, task.id)
+
+    assert result.status == "COMPLETED"
+    assert len(result.step_results) == 1
+    assert result.step_results[0].status == "SUCCESS"
+    assert result.step_results[0].result == {"event_recap_evidence_preview": _PHASE_B1_FAKE_EVIDENCE_TEXT}
+    assert await _ai_execution_count(db_session) == 0
+
+
+@pytest.mark.asyncio
+async def test_event_recap_branch_missing_story_link_raises_permanent_step_failure(
+    db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No NewsEventStoryLink row exists for this event - the branch must fail closed before ever
+    calling build_event_recap_candidate()."""
+    import services.event_recap as event_recap_module
+
+    async def _fake_build(*args, **kwargs):
+        raise AssertionError("build_event_recap_candidate must not be called when the Story link is missing")
+
+    monkeypatch.setattr(event_recap_module, "build_event_recap_candidate", _fake_build)
+
+    workflow_registry = _event_recap_workflow_registry()
+    task = await _created_event_recap_task(db_session, real_news_event, workflow_registry)
+    capability_registry = _capability_registry("event_recap", _SpyCapability())
+    executor = CapabilityExecutor(db_session, task.id, capability_registry)
+
+    result = await WorkflowRunner(executor=executor, registry=workflow_registry).run(db_session, task.id)
+
+    assert result.status == "FAILED"
+    assert "NewsEventStoryLink" in (result.step_results[0].error or "")
+
+
+@pytest.mark.asyncio
+async def test_event_recap_branch_missing_story_raises_permanent_step_failure(
+    db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """NewsEventStoryLink resolves to a Story id `session.get(Story, ...)` cannot find - the
+    branch must fail closed before ever calling build_event_recap_candidate(). A real orphaned
+    story_id cannot be persisted (news_event_story_links.story_id has a real FK to stories.id,
+    enforced by Postgres itself) - this is defense-in-depth for a state the DB already prevents,
+    exactly mirroring the identical, equally DB-unreachable "Story not found" check the
+    TELEGRAPH_ARTICLE branch above already has. Proven here by intercepting only this one
+    session.get(Story, ...) call on the real db_session - every other session.get() call in the
+    same chain (EditorialTask/NewsEvent/NewsEventStoryLink) passes through unchanged."""
+    from database.models.story import Story
+
+    real_story = await _seed_story_link(db_session, anchor_event=real_news_event)
+    real_get = db_session.get
+
+    async def _get_with_story_missing(model, ident, *args, **kwargs):
+        if model is Story and ident == real_story.id:
+            return None
+        return await real_get(model, ident, *args, **kwargs)
+
+    monkeypatch.setattr(db_session, "get", _get_with_story_missing)
+
+    import services.event_recap as event_recap_module
+
+    async def _fake_build(*args, **kwargs):
+        raise AssertionError("build_event_recap_candidate must not be called when the Story is missing")
+
+    monkeypatch.setattr(event_recap_module, "build_event_recap_candidate", _fake_build)
+
+    workflow_registry = _event_recap_workflow_registry()
+    task = await _created_event_recap_task(db_session, real_news_event, workflow_registry)
+    capability_registry = _capability_registry("event_recap", _SpyCapability())
+    executor = CapabilityExecutor(db_session, task.id, capability_registry)
+
+    result = await WorkflowRunner(executor=executor, registry=workflow_registry).run(db_session, task.id)
+
+    assert result.status == "FAILED"
+    assert "Story" in (result.step_results[0].error or "")
+    assert "not found" in (result.step_results[0].error or "")
+
+
+@pytest.mark.asyncio
+async def test_event_recap_branch_rejected_candidate_raises_permanent_step_failure(
+    db_session: AsyncSession, real_news_event: NewsEvent, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """build_event_recap_candidate() rejecting (e.g. Story Integrity failure) must fail the step
+    closed, surfacing the existing rejection_reasons - never inventing new decision logic here."""
+    import services.event_recap as event_recap_module
+    from services.event_recap import EventRecapBuildResult
+
+    async def _fake_build_rejected(session, story, *, force_shadow=False, now=None, research_complete=False):
+        assert force_shadow is True
+        return EventRecapBuildResult(
+            candidate=None, rejected=True, rejection_reasons=["fake_integrity_failure_reason"],
+        )
+
+    monkeypatch.setattr(event_recap_module, "build_event_recap_candidate", _fake_build_rejected)
+
+    await _seed_story_link(db_session, anchor_event=real_news_event)
+    workflow_registry = _event_recap_workflow_registry()
+    task = await _created_event_recap_task(db_session, real_news_event, workflow_registry)
+    capability_registry = _capability_registry("event_recap", _SpyCapability())
+    executor = CapabilityExecutor(db_session, task.id, capability_registry)
+
+    result = await WorkflowRunner(executor=executor, registry=workflow_registry).run(db_session, task.id)
+
+    assert result.status == "FAILED"
+    assert "fake_integrity_failure_reason" in (result.step_results[0].error or "")
+
+
+def test_build_context_event_recap_evidence_text_defaults_to_none_for_other_capabilities() -> None:
+    """Item 11: for any non-event_recap capability, the new field stays None - byte-identical to
+    every capability's own existing behavior before this field existed."""
+    task = EditorialTask(
+        id=uuid4(), event_id=uuid4(), priority=TaskPriority.B, status=TaskStatus.RUNNING,
+        workflow={"workflow_name": "CONTENT_GENERATION", "workflow_version": 1, "current_step": "research"},
+    )
+    news_event = NewsEvent(
+        id=task.event_id, source_id=uuid4(), title="Headline", summary=None, content="Body",
+        url=None, category=EventCategory.AI, published_at=None,
+    )
+    step = WorkflowStepDefinition(name="research", capability="research", timeout_seconds=30)
+    capability_executor = CapabilityExecutor(session=None, task_id=task.id, registry=None)  # type: ignore[arg-type]
+
+    context = capability_executor._build_context(task, news_event, step, attempt=1)
+
+    assert context.business.event_recap_evidence_text is None
+
+
+def test_build_context_threads_event_recap_evidence_text_when_supplied() -> None:
+    """Pure unit proof that _build_context()'s own new parameter reaches BusinessContext
+    unchanged - no DB, no workflow run, mirrors the existing per-capability token-limit test
+    above in style."""
+    task = EditorialTask(
+        id=uuid4(), event_id=uuid4(), priority=TaskPriority.C, status=TaskStatus.RUNNING,
+        workflow={"workflow_name": "EVENT_RECAP", "workflow_version": 1, "current_step": "synthesize_recap"},
+    )
+    news_event = NewsEvent(
+        id=task.event_id, source_id=uuid4(), title="Headline", summary=None, content="Body",
+        url=None, category=EventCategory.AI, published_at=None,
+    )
+    step = WorkflowStepDefinition(name="synthesize_recap", capability="event_recap", timeout_seconds=30)
+    capability_executor = CapabilityExecutor(session=None, task_id=task.id, registry=None)  # type: ignore[arg-type]
+
+    context = capability_executor._build_context(
+        task, news_event, step, attempt=1, event_recap_evidence_text=_PHASE_B1_FAKE_EVIDENCE_TEXT,
+    )
+
+    assert context.business.event_recap_evidence_text == _PHASE_B1_FAKE_EVIDENCE_TEXT

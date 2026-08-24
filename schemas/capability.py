@@ -136,6 +136,15 @@ class BusinessContext(BaseModel):
     # enum's own `.value`), not the enum type itself, matching every other TELEGRAPH field on
     # this schema's own "no ORM/domain object crosses into a Capability" convention.
     telegraph_editorial_channel: str | None = None
+    # NINJA PULSE RECAP Phase R2 integration, Phase B.1: a bounded, deterministic text rendering
+    # of an EventRecapCandidate (services.event_recap.render_event_recap_bundle_text(), reused
+    # unmodified) - present ONLY for the "synthesize_recap" step of an EVENT_RECAP workflow
+    # (capabilities/executor.py's own workflow_name check), mirroring
+    # telegraph_research_bundle_text's own identical shape/precedent exactly. Deterministic
+    # evidence only - never an LLM-generated result (no EVENT_RECAP synthesis call exists yet;
+    # capabilities/event_recap_capability.py's own docstring documents the exact branch this
+    # field drives).
+    event_recap_evidence_text: str | None = None
 
 
 class RuntimeContext(BaseModel):

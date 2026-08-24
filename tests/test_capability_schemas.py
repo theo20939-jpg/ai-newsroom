@@ -57,6 +57,23 @@ def test_capability_context_builds_from_nested_submodels() -> None:
     assert context.execution.preferred_model is None
 
 
+def test_business_context_event_recap_evidence_text_defaults_to_none() -> None:
+    """NINJA PULSE RECAP Phase R2 integration, Phase B.1: a plain optional field, default None -
+    every existing BusinessContext construction (this file's own _context() helper included)
+    continues to validate unchanged."""
+    context = _context()
+    assert context.business.event_recap_evidence_text is None
+
+
+def test_business_context_accepts_event_recap_evidence_text() -> None:
+    business = BusinessContext(
+        news_event=_news_event_snapshot(), workflow_state=_workflow_state_snapshot(),
+        event_recap_evidence_text="Story: Example\n\nANNOUNCEMENT CONTEXT:\n\n- [ORIGIN]\nExample headline",
+    )
+    assert business.event_recap_evidence_text is not None
+    assert "ANNOUNCEMENT CONTEXT" in business.event_recap_evidence_text
+
+
 def test_capability_context_rejects_unknown_top_level_field() -> None:
     with pytest.raises(ValidationError):
         CapabilityContext(
