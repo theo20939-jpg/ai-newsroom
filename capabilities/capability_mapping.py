@@ -54,6 +54,14 @@ _CAPABILITY_NAME_TO_AI_CAPABILITY: dict[str, AICapability] = {
     # raw source text - semantically closest to INTELLIGENCE, mirroring editorial_planning ->
     # INTELLIGENCE's own precedent exactly, reused rather than adding a new enum value/migration.
     "event_recap": AICapability.INTELLIGENCE,
+    # Phase I.1 (Approved EVENT_RECAP -> Final Post Authoring Core): a genuinely new Capability
+    # (never CopywritingCapability/EventRecapCapability - see capabilities/
+    # final_post_authoring_capability.py's own docstring for why), mapped to the semantically
+    # closest existing value rather than adding a new enum/migration - it IS writing publish-ready
+    # public copy from an already-approved source (unlike "event_recap"'s own internal-review-only
+    # synthesis), mirroring "article_generation" -> COPYWRITING's own precedent exactly ("it IS
+    # writing copy, just long-form/RECAP-authoring-scoped").
+    "final_post_authoring": AICapability.COPYWRITING,
 }
 
 

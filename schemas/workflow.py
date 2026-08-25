@@ -71,6 +71,23 @@ class WorkflowType(str, Enum):
     # about a whole Story, not one event; the same services.workflow_service.create_task()
     # one-task-per-(event_id, workflow_type) guard is this workflow's exactly-once mechanism too.
     EVENT_RECAP = "EVENT_RECAP"
+    # Phase I.1 (Approved EVENT_RECAP -> Final Post Authoring Core): its own, separate workflow
+    # type - NOT an extension of EVENT_RECAP (a COMPLETED task can never gain new steps in this
+    # engine - see TELEGRAPH_RESEARCH's own docstring above for the identical reasoning). One
+    # step, "final_post_authoring" (capability="final_post_authoring", a genuinely new Capability -
+    # never CopywritingCapability/EventRecapCapability - mirrors TELEGRAPH_ARTICLE's own
+    # "article_generation" precedent exactly, avoiding entangling NEWS-only executor hooks keyed
+    # off step.capability == "copywriting"). Anchored to the SAME `event_id` as its source
+    # EVENT_RECAP task (`EditorialTask.event_id`, == `EventRecapCandidate.anchor_event_id`) - this
+    # doubles as the exactly-once mechanism for this anchor (services.workflow_service.
+    # create_task()'s own one-task-per-(event_id, workflow_type) guard), exactly like
+    # TELEGRAPH_ARTICLE's identical anchoring to its own TELEGRAPH_RESEARCH task's event_id.
+    # Precise provenance to the exact approved `EventRecapReview`/EVENT_RECAP task this authoring
+    # run came from is NOT implicit in this shared anchor alone - it is stored explicitly, durably,
+    # inside this task's own `workflow["step_results"]` (`final_post_source` entry - services.
+    # final_post_processor.py) - see that module's own docstring for why event_id/anchor linkage
+    # alone was judged insufficient provenance for a future recap-revision scenario.
+    FINAL_POST_AUTHORING = "FINAL_POST_AUTHORING"
 
 
 class WorkflowRetryPolicy(BaseModel):

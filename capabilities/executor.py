@@ -114,6 +114,11 @@ _MAX_OUTPUT_TOKENS_BY_CAPABILITY: dict[str, int] = {
     # materially larger structured output than any NEWS capability produces - reasoned starting
     # point, not fit to any real output-size data yet.
     "article_generation": 6000,
+    # Phase I.1: a public NEWS post (title + body), structurally similar in scale to "copywriting"
+    # (600) - reasoned starting point with modest headroom for a slightly longer, standalone body
+    # (no separate why_it_matters/quote fields to also fit within the ceiling, unlike copywriting's
+    # own V6/V8 multi-field output), not fit to any real output-size data yet.
+    "final_post_authoring": 900,
 }
 _REASONING_EFFORT_BY_CAPABILITY: dict[str, Literal["none", "low", "medium", "high"]] = {
     "research": "none",
@@ -125,6 +130,10 @@ _REASONING_EFFORT_BY_CAPABILITY: dict[str, Literal["none", "low", "medium", "hig
     # TELEGRAPH Checkpoint 5: real editorial-style judgment (structuring a long-form article from
     # research evidence), closer to "copywriting" than to plain "research" extraction.
     "article_generation": "medium",
+    # Phase I.1: real editorial-style judgment (turning an approved internal recap into cohesive
+    # public news copy while preserving its factual/uncertainty surface exactly) - closer to
+    # "article_generation" than to plain "copywriting" extraction from raw source text.
+    "final_post_authoring": "medium",
 }
 
 # TELEGRAPH Checkpoint 3: reasoned starting points for the "deep_research" step only (see
@@ -154,6 +163,7 @@ class CapabilityExecutor:
         cost_tracker: CostTracker | None = None,
         pricing_catalog: PricingCatalog | None = None,
         precomputed_event_recap_candidate: Any | None = None,
+        precomputed_final_post_source: dict[str, Any] | None = None,
     ) -> None:
         self._session = session
         self._task_id = task_id
@@ -168,6 +178,17 @@ class CapabilityExecutor:
         # event_recap_candidate` already is (services/event_recap.py imports schemas.capability).
         # `None` (every other caller/workflow type) is completely unaffected.
         self._precomputed_event_recap_candidate = precomputed_event_recap_candidate
+        # Phase I.1: optional, FINAL_POST_AUTHORING-only, mirroring
+        # `precomputed_event_recap_candidate` above exactly - the same "build-once, precomputed,
+        # pass-through" race-safety discipline (G.1's own docstring). When supplied by
+        # services/final_post_processor.py::generate_final_post_for_review() - the one real
+        # production caller - this is the EXACT deterministic authoring source bundle already
+        # assembled (and already persisted as this task's own `final_post_source` step_result)
+        # before `WorkflowRunner.run()` was ever called - never rebuilt here. `dict[str, Any]`, not
+        # `Any` - a plain dict has no circular-import concern (see this field's own
+        # `schemas.capability.BusinessContext` docstring). `None` (every other caller/workflow
+        # type) is completely unaffected.
+        self._precomputed_final_post_source = precomputed_final_post_source
         self._attempts: dict[str, int] = {}
         # API cost optimization: memoized per executor instance (one per workflow run) so a
         # CONTENT_GENERATION task's "research" and "intelligence" steps both reuse the exact
@@ -439,6 +460,37 @@ class CapabilityExecutor:
 
             event_recap_evidence_text = render_event_recap_bundle_text(event_recap_candidate)
 
+        # Phase I.1: the "final_post_authoring" step of a FINAL_POST_AUTHORING workflow. Mirrors
+        # the EVENT_RECAP branch above exactly - the deterministic bundle is threaded through, not
+        # rebuilt here. `self._precomputed_final_post_source` (set by services/final_post_processor.
+        # py::generate_final_post_for_review(), the one real production caller) is used AS-IS when
+        # present - the same race-safe "build-once, precomputed, pass-through" contract G.1
+        # established. Absent a precomputed bundle (any future/direct caller bypassing the
+        # processor), this branch falls back to reading the SAME pre-populated `final_post_source`
+        # step_result the processor already wrote onto this exact task's own `workflow` JSON before
+        # `WorkflowRunner.run()` - `task` is already loaded above, so this is not a new DB query,
+        # only a read of data already in hand. Fails closed (`PermanentStepFailureError`, never a
+        # silent Story rebuild) if neither source has anything - there is no safe fallback content
+        # to author a Final Post from.
+        final_post_authoring_bundle: dict[str, Any] | None = None
+        if (
+            step.capability == "final_post_authoring"
+            and state_for_bundle.workflow_name == WorkflowType.FINAL_POST_AUTHORING
+        ):
+            if self._precomputed_final_post_source is not None:
+                final_post_authoring_bundle = self._precomputed_final_post_source
+            else:
+                for step_result in (task.workflow or {}).get("step_results", []):
+                    if step_result.get("step_name") == "final_post_source" and step_result.get("status") == "SUCCESS":
+                        final_post_authoring_bundle = step_result.get("result")
+                        break
+                if final_post_authoring_bundle is None:
+                    raise PermanentStepFailureError(
+                        f"FINAL_POST_AUTHORING task {task.id}: no precomputed source bundle and no "
+                        "'final_post_source' step_result found - services/final_post_processor.py "
+                        "must pre-populate this deterministic bundle before WorkflowRunner.run()."
+                    )
+
         context = self._build_context(
             task, news_event, step, attempt,
             evidence_text=evidence_text, evidence_completeness=evidence_completeness,
@@ -449,6 +501,7 @@ class CapabilityExecutor:
             telegraph_editorial_channel=telegraph_editorial_channel,
             event_recap_evidence_text=event_recap_evidence_text,
             event_recap_candidate=event_recap_candidate,
+            final_post_authoring_bundle=final_post_authoring_bundle,
         )
 
         # API cost optimization (docs/api_cost_optimization_report.md): CONTENT_GENERATION's
@@ -1244,6 +1297,7 @@ class CapabilityExecutor:
         telegraph_editorial_channel: str | None = None,
         event_recap_evidence_text: str | None = None,
         event_recap_candidate: Any | None = None,
+        final_post_authoring_bundle: dict[str, Any] | None = None,
     ) -> CapabilityContext:
         state = WorkflowExecutionState.model_validate(task.workflow)
         is_telegraph_deep_research = telegraph_research_bundle_text is not None
@@ -1284,6 +1338,7 @@ class CapabilityExecutor:
                 telegraph_editorial_channel=telegraph_editorial_channel,
                 event_recap_evidence_text=event_recap_evidence_text,
                 event_recap_candidate=event_recap_candidate,
+                final_post_authoring_bundle=final_post_authoring_bundle,
             ),
             execution=ExecutionContext(
                 # TELEGRAPH Checkpoint 3: deep research reads a materially larger bundle and is

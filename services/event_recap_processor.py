@@ -111,6 +111,7 @@ from services.event_recap import (
     SelectedMediaPlan,
     build_event_recap_candidate,
     serialize_selected_media_plan,
+    serialize_verified_facts,
 )
 from services.image_intelligence import run_shadow_discovery
 from services.image_persistence import EditorialImageCandidate, _get_storage, get_editorial_image_candidates
@@ -145,6 +146,21 @@ _MAX_MEDIA_DISCOVERY_EVENTS = 3
 # corrected here after checking the actual `WorkflowExecutionState.model_validate()` call in
 # `workflows/runner.py::run()`, which would reject an unknown top-level key outright).
 _MEDIA_SELECTION_STEP_NAME = "select_recap_media"
+
+# Phase I.1 (Final Post Authoring - Correction #2 persistence verification): a second, sibling
+# pre-populated `step_results` entry, same mechanism/safety as `_MEDIA_SELECTION_STEP_NAME` above.
+# Added after empirically confirming (a real, read-only DB check of the approved Pixel EVENT_RECAP
+# task, fa24bb17-919a-44e5-ad13-748f59dad3eb) that `EventRecapCandidate.verified_facts`/
+# `.source_refs`/`.story_id`/`.anchor_event_id` were NOT durably persisted anywhere before this
+# change - only the `synthesize_recap` result (recap_title/recap_summary/key_takeaways/
+# uncertainty_notes) and the `select_recap_media` plan were. Written from the SAME single
+# `build_event_recap_candidate()` snapshot this module already built for readiness (never a second
+# Story query, never recomputed) - so a future approved recap's Final Post Authoring source bundle
+# never needs to silently rebuild the Story to answer "what evidence backed this approval".
+# EVENT_RECAP tasks created BEFORE this change have no such entry - services.final_post_processor
+# treats that absence explicitly (legacy fallback: author from the approved recap text alone,
+# never a silent Story rebuild - see that module's own docstring).
+_SOURCE_SNAPSHOT_STEP_NAME = "event_recap_source_snapshot"
 
 EventRecapGenerationStatus = Literal["story_not_found", "not_ready", "already_exists", "generated"]
 
@@ -184,6 +200,37 @@ async def _persist_selected_media(session: AsyncSession, task_id: UUID, candidat
     workflow = dict(task.workflow or {})
     workflow["step_results"] = [
         media_step_result.model_dump(mode="json"), *workflow.get("step_results", []),
+    ]
+    task.workflow = workflow
+    await session.flush()
+
+
+async def _persist_source_snapshot(session: AsyncSession, task_id: UUID, candidate: EventRecapCandidate) -> None:
+    """Phase I.1 (Final Post Authoring - Correction #2 remediation): writes a durable, JSON-safe
+    factual-source snapshot - `story_id`, `anchor_event_id`, `verified_facts`
+    (`serialize_verified_facts()`), `source_refs` - from the SAME single `EventRecapCandidate` this
+    run's readiness/media decisions already used (never recomputed, never a second Story query),
+    as one more pre-populated `step_results` entry, mirroring `_persist_selected_media()`'s own
+    identical mechanism/safety reasoning exactly (see that function's own docstring for why this
+    plain `step_results` entry - never a new top-level `task.workflow` key - is the safe slot).
+    `session.flush()` only, for the identical reason `_persist_selected_media()` already documents:
+    the next thing the caller does is `WorkflowRunner.run()`, which commits this same transaction."""
+    task = await session.get(EditorialTask, task_id)
+    assert task is not None, "task_id came from create_task() in the same session/transaction"
+    now = datetime.now(timezone.utc)
+    snapshot_step_result = WorkflowStepResult(
+        step_name=_SOURCE_SNAPSHOT_STEP_NAME, status="SUCCESS", attempt=1,
+        started_at=now, finished_at=now, error=None,
+        result={
+            "story_id": str(candidate.story_id),
+            "anchor_event_id": str(candidate.anchor_event_id),
+            "verified_facts": serialize_verified_facts(candidate.verified_facts),
+            "source_refs": list(candidate.source_refs),
+        },
+    )
+    workflow = dict(task.workflow or {})
+    workflow["step_results"] = [
+        snapshot_step_result.model_dump(mode="json"), *workflow.get("step_results", []),
     ]
     task.workflow = workflow
     await session.flush()
@@ -424,6 +471,9 @@ async def generate_recap_for_story(
     # other field is byte-identical to the single build() call, before the workflow runs, so it
     # survives regardless of what synthesize_recap itself does.
     await _persist_selected_media(session, task_read.id, candidate)
+
+    # Phase I.1: persisted from the SAME candidate - see _persist_source_snapshot()'s own docstring.
+    await _persist_source_snapshot(session, task_read.id, candidate)
 
     # Phase G.1/H.3B: the SAME candidate object (readiness/evidence untouched, media possibly
     # enriched above) - never rebuilt, never a second build_event_recap_candidate() call.

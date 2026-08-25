@@ -162,6 +162,21 @@ class BusinessContext(BaseModel):
     # field for a "leaf" module's type without creating a runtime dependency cycle - not a new
     # architectural pattern.
     event_recap_candidate: Any | None = None
+    # Phase I.1 (Approved EVENT_RECAP -> Final Post Authoring Core): the deterministic authoring
+    # source bundle (services/final_post_processor.py::build_final_post_source_bundle()) - a plain,
+    # JSON-safe dict (source_event_recap_task_id, source_event_recap_review_id, story_id,
+    # anchor_event_id, approved_recap {recap_title, recap_summary, key_takeaways,
+    # uncertainty_notes}, verified_facts, source_refs, legacy_snapshot_missing, language), present
+    # ONLY for the "final_post_authoring" step of a FINAL_POST_AUTHORING workflow (capabilities/
+    # executor.py's own workflow_name check). Typed `dict[str, Any]`, unlike `event_recap_candidate`
+    # above - this is a plain dict built entirely by services/final_post_processor.py (never a
+    # dataclass from a "leaf" module `schemas.capability` would need to avoid importing), so there
+    # is no circular-import concern here. `capabilities/final_post_authoring_capability.py::
+    # FinalPostAuthoringCapability.execute()` reads this bundle to build its one Gateway request -
+    # it never re-queries the source EVENT_RECAP task/Story itself (schemas/capability.py's own
+    # "no ORM object crosses into a Capability" rule already forbids that; this field is the
+    # complete input contract instead).
+    final_post_authoring_bundle: dict[str, Any] | None = None
 
 
 class RuntimeContext(BaseModel):

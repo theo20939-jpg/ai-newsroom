@@ -62,6 +62,10 @@ from capabilities.media_vision_review_capability import (
 )
 from capabilities.engagement_capability import ENGAGEMENT_CAPABILITY_DEFINITION, EngagementCapability
 from capabilities.event_recap_capability import EVENT_RECAP_CAPABILITY_DEFINITION, EventRecapCapability
+from capabilities.final_post_authoring_capability import (
+    FINAL_POST_AUTHORING_CAPABILITY_DEFINITION,
+    FinalPostAuthoringCapability,
+)
 from capabilities.intelligence_capability import INTELLIGENCE_CAPABILITY_DEFINITION, IntelligenceCapability
 from capabilities.meme_concept_capability import MEME_CONCEPT_CAPABILITY_DEFINITION, MemeConceptCapability
 from capabilities.meme_copywriting_capability import (
@@ -196,5 +200,14 @@ def build_registry(
     # execute() cannot reach the LLM Gateway yet (capabilities/event_recap_capability.py's own
     # docstring) - mirrors article_generation/meme_concept's own dormant-registration precedent.
     registry.register(EVENT_RECAP_CAPABILITY_DEFINITION, EventRecapCapability(gateway, prompt_repository))
+    # Phase I.1 (Approved EVENT_RECAP -> Final Post Authoring Core): registered like every other
+    # capability (real, resolvable, cost-tracked via capability_mapping.py's "final_post_authoring"
+    # -> AICapability.COPYWRITING entry) even though no live/automatic path calls it -
+    # services.final_post_processor.generate_final_post_for_review() is the only caller, and
+    # nothing calls that automatically, mirroring article_generation/event_recap's own identical
+    # dormant-registration precedent.
+    registry.register(
+        FINAL_POST_AUTHORING_CAPABILITY_DEFINITION, FinalPostAuthoringCapability(gateway, prompt_repository),
+    )
     registry.seal()
     return registry

@@ -15,6 +15,7 @@ from schemas.workflow import WorkflowDefinition, WorkflowType
 from workflows.definitions import (
     content_generation,
     event_recap,
+    final_post_authoring,
     meme_generation,
     news_analysis,
     telegraph_article,
@@ -104,6 +105,11 @@ def build_registry() -> WorkflowRegistry:
     # capabilities/event_recap_capability.py's own execute() cannot reach the LLM Gateway even if
     # a task somehow were created (see that module's own docstring).
     registry.register(event_recap.DEFINITION)
+    # Phase I.1 (Approved EVENT_RECAP -> Final Post Authoring Core): registered dormant, safe for
+    # the identical reason - only services/final_post_processor.py::generate_final_post_for_review()
+    # creates a FINAL_POST_AUTHORING task, and nothing calls that automatically (only the manual,
+    # never-auto-run scripts/final_post_authoring_worker.py CLI).
+    registry.register(final_post_authoring.DEFINITION)
     registry.seal()
     return registry
 

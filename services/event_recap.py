@@ -513,6 +513,28 @@ def serialize_selected_media_plan(plan: SelectedMediaPlan) -> dict[str, Any]:
     }
 
 
+def serialize_verified_facts(facts: list[VerifiedFactCandidate]) -> list[dict[str, Any]]:
+    """Phase I.1 (Final Post Authoring - source-snapshot persistence): plain-dict, JSON-safe
+    (UUID -> str) projection of `EventRecapCandidate.verified_facts`, mirroring
+    `serialize_selected_media_plan()`'s own established shape/placement exactly - the one place
+    this dataclass-to-JSON conversion happens for `VerifiedFactCandidate`, kept next to the
+    dataclass it serializes rather than duplicated at each caller. Used by
+    `services.event_recap_processor._persist_source_snapshot()` to make the SAME verified-facts
+    list `synthesize_event_recap()`'s own fact-safety check already used durable, for future Final
+    Post authoring to read without ever rebuilding the Story."""
+    return [
+        {
+            "fact_type": fact.fact_type,
+            "value": fact.value,
+            "source_event_ids": [str(event_id) for event_id in fact.source_event_ids],
+            "source_count": fact.source_count,
+            "status": fact.status,
+            "conflicting_evidence": fact.conflicting_evidence,
+        }
+        for fact in facts
+    ]
+
+
 @dataclass(frozen=True)
 class FactVerificationResult:
     """The result of running `services.fact_safety.evaluate_fact_safety()` (reused, unmodified)

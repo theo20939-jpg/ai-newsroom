@@ -72,6 +72,32 @@ def _copywriting_output(result: WorkflowRunResult) -> dict[str, Any]:
     )
 
 
+# Phase I.1 (Approved EVENT_RECAP -> Final Post Authoring Core): a small, explicit, backward-
+# compatible extension - a genuinely distinct step name ("final_post_authoring", never the literal
+# "copywriting" - that would misrepresent this draft's real provenance for no benefit), with its
+# own narrow `{title, body}` schema (prompts/final_post_authoring/v1.yaml's own output_schema -
+# already exactly the two fields ContentDraft.title/.body need, no V6/V8-style multi-section
+# reduction required). `_copywriting_output()`/`_extract_title_and_body()` above are completely
+# unmodified by this addition.
+def _final_post_authoring_output(result: WorkflowRunResult) -> dict[str, Any]:
+    """Locate the "final_post_authoring" entry in `result.step_results` and return its `.result`
+    dict. Raises ValueError if absent - mirrors `_copywriting_output()`'s own identical "MUST NOT
+    swallow" philosophy."""
+    for step_result in result.step_results:
+        if step_result.step_name == "final_post_authoring" and step_result.status == "SUCCESS":
+            if step_result.result is None:
+                raise ValueError(
+                    f"WorkflowRunResult for task {result.task_id} has a SUCCESS "
+                    "'final_post_authoring' step with no result payload."
+                )
+            return step_result.result
+    raise ValueError(
+        f"WorkflowRunResult for task {result.task_id} has no successful 'final_post_authoring' "
+        "step result - create_from_final_post_authoring_result() MUST only be called on a "
+        "COMPLETED result."
+    )
+
+
 # Phase 23.1C: Copywriting schema versions this module knows how to reduce to the single
 # (title, body) shape ContentDraft.title/.body has always expected - mirrors services/
 # fact_safety.py::_extract_draft_text()'s own identical pattern (Phase 21), the smallest safe
@@ -426,4 +452,56 @@ class ContentDraftService:
                     },
                 )
 
+        return _to_read_schema(draft)
+
+    async def create_from_final_post_authoring_result(
+        self, task_id: UUID, result: WorkflowRunResult,
+    ) -> ContentDraftRead:
+        """Create exactly one ContentDraft row from `result`'s "final_post_authoring" step output
+        (Phase I.1). Deliberately NOT `create_from_result()` extended in place: that method's own
+        quote-verification/story-link/quality-gate machinery is real NEWS-copywriting behavior
+        (article evidence, story-update root-repetition checks, hashtag-era quote objects) that
+        does not apply here - the authoring source is an already-approved internal recap, not raw
+        source text, and Phase I.1's own explicit scope is "ContentDraft.title = authored title,
+        .body = authored body; status = existing safe draft/non-published state" (no quote/story-
+        link/quality-gate concerns are part of that contract). A small, explicit, separate method
+        is safer than teaching `create_from_result()` a second, divergent notion of what a "draft"
+        is assembled from.
+
+        Owns its own, single, deterministic commit, exactly like `create_from_result()`. Always
+        writes `status="draft"` - the same safe, non-published default `create_from_result()`
+        itself always uses outside `fact_safety_mode == "enforce"` (services/final_post_processor.py
+        already gates ContentDraft creation on a non-"block" fact-safety verdict before ever
+        calling this method, so there is no separate enforce-mode status split to reproduce here).
+        Never sends this draft to Telegram - Phase I.1's own explicit "no publication" scope."""
+        authoring_output = _final_post_authoring_output(result)
+        title = authoring_output.get("title")
+        body = authoring_output.get("body")
+        if not isinstance(title, str) or not isinstance(body, str):
+            raise ValueError(
+                f"final_post_authoring_output for task {result.task_id} has a malformed "
+                f"title/body (got keys {sorted(authoring_output.keys())}) - cannot create a "
+                "ContentDraft."
+            )
+
+        if not check_no_hashtags(title, body):
+            raise ValueError(
+                f"QUALITY CHECK FAILED: WorkflowRunResult for task {result.task_id} produced a "
+                "final post title/body containing a hashtag - hashtags are not permitted in "
+                "generated content."
+            )
+
+        draft = ContentDraft(
+            id=uuid4(),
+            task_id=task_id,
+            type=ContentType.POST,
+            title=title,
+            body=body,
+            hashtags=None,
+            version=1,
+            status="draft",
+        )
+        self._session.add(draft)
+        await self._session.commit()
+        await self._session.refresh(draft)
         return _to_read_schema(draft)
