@@ -55,10 +55,20 @@ unaffected) - no workflow definition, worker/scheduler, Telegram, or DB model is
 file still only orchestrates the already-existing EditorialTask/WorkflowRunner/CapabilityExecutor
 machinery for one more WorkflowType, exactly as services/telegraph_article_processor.py already
 does for TELEGRAPH_ARTICLE.
+
+Phase H.1 (Story media foundation): `EventRecapCandidate.selected_media` (services/event_recap.py,
+computed inside the SAME single `build_event_recap_candidate()` call this module already made for
+readiness) is persisted into `EditorialTask.workflow["step_results"]` as one extra, deterministic
+entry - see `_persist_selected_media()`'s own docstring for why that is the safe slot (`workflows/
+runner.py`'s `WorkflowExecutionState.model_validate()` forbids an unknown TOP-LEVEL key, so this is
+not a new `task.workflow["event_recap_media"]` field). No Telegram rendering, no external image
+search, no image generation - this checkpoint only makes the Story-level confirmed-membership pick
+durable and re-derivable later, exactly as Phase G.1 did for the recap text itself.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
@@ -70,10 +80,10 @@ from capabilities.registry import CapabilityRegistry
 from database.models.editorial_task import EditorialTask, TaskPriority
 from database.models.story import Story
 from schemas.editorial_task import EditorialTaskCreate
-from schemas.workflow import WorkflowRunResult, WorkflowType
+from schemas.workflow import WorkflowRunResult, WorkflowStepResult, WorkflowType
 from services import workflow_service
 from services.cost_tracker import CostTracker
-from services.event_recap import build_event_recap_candidate
+from services.event_recap import EventRecapCandidate, build_event_recap_candidate, serialize_selected_media_plan
 from services.pricing_catalog import PricingCatalog
 from workflows.errors import DuplicateActiveTaskError
 from workflows.runner import WorkflowRunner
@@ -81,6 +91,19 @@ from workflows.runner import WorkflowRunner
 # Reasoned default, matching services.telegraph_article_processor's own identical reasoning: a
 # deliberate, human-triggered background task, never time-sensitive.
 _EVENT_RECAP_TASK_PRIORITY = TaskPriority.C
+
+# Phase H.1: NOT a WorkflowDefinition step (workflows/definitions/event_recap.py is untouched -
+# still exactly one real step, "synthesize_recap") - a plain, pre-populated `step_results` entry
+# the processor writes directly, before `WorkflowRunner.run()` is ever called. Safe specifically
+# because `WorkflowRunner._execute_steps()` filters `remaining_steps` by `definition.steps` names
+# only (workflows/runner.py) - an extra `step_results` entry whose `step_name` is not in the
+# definition is simply carried forward untouched, never mistaken for a real step to (re)execute.
+# `WorkflowExecutionState` itself (`extra="forbid"`) only forbids unknown TOP-LEVEL fields, not
+# extra list entries of an already-declared shape - this is why the plan is not (and cannot safely
+# be) a new top-level `task.workflow["event_recap_media"]` key (Phase H.0.2's own proposal,
+# corrected here after checking the actual `WorkflowExecutionState.model_validate()` call in
+# `workflows/runner.py::run()`, which would reject an unknown top-level key outright).
+_MEDIA_SELECTION_STEP_NAME = "select_recap_media"
 
 EventRecapGenerationStatus = Literal["story_not_found", "not_ready", "already_exists", "generated"]
 
@@ -95,6 +118,34 @@ class EventRecapGenerationOutcome:
     # `EventRecapBuildResult.rejection_reasons` the readiness pre-check produced (never a parallel
     # reason-code system). Empty tuple for every other status, including "generated".
     readiness_reasons: tuple[str, ...] = ()
+
+
+async def _persist_selected_media(session: AsyncSession, task_id: UUID, candidate: EventRecapCandidate) -> None:
+    """Phase H.1: writes the SAME `candidate.selected_media` already computed inside the single
+    `build_event_recap_candidate()` call this run made (never recomputed, never a second Story/
+    image query) into `EditorialTask.workflow["step_results"]`, as one extra, pre-populated,
+    deterministic entry - BEFORE `WorkflowRunner.run()` ever touches this task. Keeps
+    `synthesize_recap`'s own result dict exactly `{recap_title, recap_summary, key_takeaways,
+    uncertainty_notes}` (the module's own explicit invariant) - media is a sibling `step_results`
+    entry, never mixed into the LLM-structured-output result. `session.flush()` only (never
+    `commit()` here) - the very next thing this function's caller does is `WorkflowRunner.run()`,
+    which re-reads `task.workflow` from the SAME in-memory, identity-mapped ORM object and commits
+    its own claim-update in the same transaction, so this write is durable without an extra,
+    premature commit boundary."""
+    task = await session.get(EditorialTask, task_id)
+    assert task is not None, "task_id came from create_task() in the same session/transaction"
+    now = datetime.now(timezone.utc)
+    media_step_result = WorkflowStepResult(
+        step_name=_MEDIA_SELECTION_STEP_NAME, status="SUCCESS", attempt=1,
+        started_at=now, finished_at=now, error=None,
+        result=serialize_selected_media_plan(candidate.selected_media),
+    )
+    workflow = dict(task.workflow or {})
+    workflow["step_results"] = [
+        media_step_result.model_dump(mode="json"), *workflow.get("step_results", []),
+    ]
+    task.workflow = workflow
+    await session.flush()
 
 
 async def find_event_recap_task_id(session: AsyncSession, event_id: UUID) -> UUID | None:
@@ -170,6 +221,10 @@ async def generate_recap_for_story(
         return EventRecapGenerationOutcome(
             story_id=story_id, status="already_exists", task_id=existing_task_id, run_result=None,
         )
+
+    # Phase H.1: persisted from the SAME candidate object the readiness decision already used -
+    # before the workflow runs, so it survives regardless of what synthesize_recap itself does.
+    await _persist_selected_media(session, task_read.id, build_result.candidate)
 
     # Phase G.1: the SAME candidate object just used for the readiness decision - never rebuilt.
     executor = CapabilityExecutor(

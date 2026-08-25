@@ -38,6 +38,7 @@ from services.event_recap import (
     _build_verified_facts,
     _is_generic_entity_phrase,
     _publisher_suffix_numbers,
+    _select_representative_media,
     _synthesis_verified_facts,
     _verify_synthesis_facts,
     build_event_recap_candidate,
@@ -45,6 +46,7 @@ from services.event_recap import (
     render_event_recap_telegram_preview,
     synthesize_event_recap,
 )
+from services.image_persistence import EditorialImageCandidate
 from services.recap_event import cluster_announcements
 from services.story_memory import NEW_STORY, STORY_UPDATE, SUPPORTING_SOURCE, UNCERTAIN_MATCH
 from tests.fakes.fake_gateway import FakeLLMGateway
@@ -2027,3 +2029,85 @@ async def test_synthesize_event_recap_threads_language_into_the_real_gateway_req
     assert "Target output language: ru" in user_text
     assert updated.recap_title == "Vantage Data Centers рассматривает продажу или IPO"
     assert updated.publishable is False
+
+
+# ---------------------------------------------------------------------------------------------
+# Phase H.1 - _select_representative_media(): pure, offline, no DB, no LLM
+# ---------------------------------------------------------------------------------------------
+
+
+def _image_candidate(**overrides: object) -> EditorialImageCandidate:
+    """A minimal, eligible-by-default EditorialImageCandidate factory - only the fields these
+    tests actually vary need to be passed; every other field gets a plausible, harmless default."""
+    defaults: dict[str, object] = dict(
+        id=uuid.uuid4(), candidate_id=f"c-{uuid.uuid4()}", rank=1, relevance_score=50,
+        quality_score=80, discovery_method="open_graph_image", source_relationship=None,
+        relevance_reason=None, width=1200, height=800, observed_mime="image/jpeg",
+        image_format="JPEG", storage_status="stored", storage_key="images/x.jpg",
+        telegram_file_id=None, editor_decision=None, source_url="https://example.com/a.jpg",
+        article_url="https://example.com/article", warnings=[], is_expired=False,
+        sha256=None, perceptual_hash=None, final_url=None,
+    )
+    defaults.update(overrides)
+    return EditorialImageCandidate(**defaults)  # type: ignore[arg-type]
+
+
+def test_select_representative_media_returns_none_tier_for_empty_pool() -> None:
+    plan = _select_representative_media([])
+    assert plan.tier == "none"
+    assert plan.representative is None
+
+
+def test_select_representative_media_prefers_strong_editorial_image_over_branded_logo() -> None:
+    """Phase H.1 §11 (bad media filter): mirrors the REAL Twitch/Amazon Story data (Phase G.2's
+    own forensic finding) - a small, `possible_branded_screenshot`-flagged candidate (quality_score
+    45, 128x128) versus a large, clean editorial photo (quality_score 98, 1200x799). The strong one
+    must be selected - reuses the existing rank_media_candidates()/branding-risk policy unmodified,
+    never a new media-ranking rule."""
+    event_a, event_b = uuid.uuid4(), uuid.uuid4()
+    logo_like = _image_candidate(
+        candidate_id="logo-like", quality_score=45, relevance_score=41, width=128, height=128,
+        image_format="GIF", warnings=["possible_branded_screenshot"], sha256="a" * 64,
+    )
+    strong_photo = _image_candidate(
+        candidate_id="strong-photo", quality_score=98, relevance_score=67, width=1200, height=799,
+        warnings=[], sha256="b" * 64,
+    )
+
+    plan = _select_representative_media([(event_a, logo_like), (event_b, strong_photo)])
+
+    assert plan.tier == "story_pool"
+    assert plan.representative is not None
+    assert plan.representative.candidate_id == "strong-photo"
+    assert plan.representative.originating_event_id == event_b
+
+
+def test_select_representative_media_never_selects_two_copies_of_the_same_visual() -> None:
+    """Phase H.1 §13 (duplicate media test): the exact same photo (identical sha256), discovered
+    independently on TWO different confirmed Story events (e.g. syndicated by two outlets) - the
+    pool contains both rows, but `SelectedMediaPlan.representative` is structurally a single item,
+    never a list/album (Phase H.0/H.0.2's own "не увеличивать scope до album curation" scope),
+    so only one of them can ever be selected - this proves the pool never yields two separate
+    primary items for one underlying visual, without rewriting any dedup logic."""
+    event_first, event_second = uuid.uuid4(), uuid.uuid4()
+    same_sha = "c" * 64
+    first_copy = _image_candidate(
+        candidate_id="copy-1", quality_score=80, relevance_score=60, sha256=same_sha,
+        perceptual_hash="0000000000000000",
+    )
+    second_copy = _image_candidate(
+        candidate_id="copy-2", quality_score=80, relevance_score=60, sha256=same_sha,
+        perceptual_hash="0000000000000000",
+    )
+
+    plan = _select_representative_media([(event_first, first_copy), (event_second, second_copy)])
+
+    assert plan.tier == "story_pool"
+    assert plan.representative is not None
+    # Exactly one representative item exists at all (by construction - not a list) and it is the
+    # first-seen copy: the second is flagged is_duplicate_within_event=True by _compute_duplicate_
+    # flags() (same sha256, first-seen-wins), which rank_media_candidates() penalizes in its
+    # composite score (never eligibility itself - `eligible_for_delivery` is independent of
+    # is_duplicate_within_event, only story_reuse_match/quality_score/video-rejection gate it) -
+    # the penalty alone is enough to rank the unpenalized first copy strictly higher.
+    assert plan.representative.candidate_id == "copy-1"

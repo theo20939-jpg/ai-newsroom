@@ -24,7 +24,9 @@ from capabilities.event_recap_capability import EVENT_RECAP_CAPABILITY_DEFINITIO
 from capabilities.executor import CapabilityExecutor
 from capabilities.registry import CapabilityRegistry
 from database.models.editorial_task import EditorialTask
+from database.models.image_candidate_record import ImageCandidateRecord
 from database.models.news_event import EventCategory, NewsEvent
+from database.models.news_source import SourceType
 from database.models.story import Story
 from database.models.story_link import NewsEventStoryLink
 from integrations.llm_gateway.protocol import GenerateResponse
@@ -424,3 +426,144 @@ async def test_ready_story_builds_candidate_exactly_once_and_passes_it_through(
     assert len(built_candidates) == 1
     assert len(captured_precomputed_candidates) == 1
     assert captured_precomputed_candidates[0] is built_candidates[0]
+
+
+# ---------------------------------------------------------------------------------------------
+# Phase H.1 - Story media foundation
+# ---------------------------------------------------------------------------------------------
+
+
+async def _seed_image_candidate(
+    session: AsyncSession, event_id, *, candidate_id: str, quality_score: int, relevance_score: int,  # noqa: ANN001
+    rank: int = 1, width: int = 1200, height: int = 800, image_format: str = "JPEG",
+    warnings: list[str] | None = None, sha256: str | None = None,
+) -> None:
+    """Seeds one real, eligible `ImageCandidateRecord` row for `event_id` - the exact table
+    `services.event_recap._collect_media_candidates()` already reads via `get_editorial_image_
+    candidates()`, unmodified. Mirrors tests/test_media_ranking_story_reuse.py's own established
+    minimal-fields construction pattern."""
+    session.add(
+        ImageCandidateRecord(
+            news_event_id=event_id, candidate_id=candidate_id, source_type=SourceType.RSS,
+            discovery_method="open_graph_image", quality_score=quality_score,
+            relevance_score=relevance_score, rank=rank, width=width, height=height,
+            image_format=image_format, quality_warnings=warnings or [], sha256=sha256,
+            source_url=f"https://example.com/{candidate_id}.jpg", eligible_for_editorial=True,
+        )
+    )
+    await session.flush()
+
+
+def _media_step_result(task: EditorialTask) -> dict:
+    return next(r for r in task.workflow["step_results"] if r["step_name"] == "select_recap_media")
+
+
+@pytest.mark.asyncio
+async def test_zero_media_still_generates_with_tier_none(db_session: AsyncSession) -> None:
+    """Phase H.1 §12 (zero media test): a READY Story with NO eligible image anywhere in its
+    confirmed-membership pool must still synthesize normally - fail-soft, never an exception or a
+    FAILED task."""
+    story, _events = await _seed_ready_story(db_session)
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None, structured_output=_VALID_RECAP_OUTPUT, finish_reason="stop",
+            model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=100, output_tokens=50),
+        )
+    )
+    registry = _registry(gateway)
+
+    outcome = await generate_recap_for_story(db_session, story.id, capability_registry=registry)
+
+    assert outcome.status == "generated"
+    assert len(gateway.received_requests) == 1
+    task = await db_session.get(EditorialTask, outcome.task_id)
+    media_result = _media_step_result(task)
+    assert media_result["status"] == "SUCCESS"
+    assert media_result["result"] == {"tier": "none", "representative": None}
+
+
+@pytest.mark.asyncio
+async def test_media_selection_finds_follow_up_image_when_anchor_has_none(db_session: AsyncSession) -> None:
+    """Phase H.1 §10 (Twitch realistic fixture): mirrors the real, DB-confirmed production shape
+    (Phase G.2's own forensic finding on the real Twitch/Amazon Story) - the anchor event has ZERO
+    image candidates, but a LATER confirmed-membership (`story_update`) event has one strong,
+    eligible image. Story-level selection must find it - proving selection is not limited to
+    `first_event_id`."""
+    story, events = await _seed_ready_story(db_session)
+    anchor = events[0]
+    follow_up = events[3]  # a later confirmed member, not the anchor
+
+    await _seed_image_candidate(
+        db_session, follow_up.id, candidate_id="follow-up-hero", quality_score=98, relevance_score=67,
+    )
+
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None, structured_output=_VALID_RECAP_OUTPUT, finish_reason="stop",
+            model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=100, output_tokens=50),
+        )
+    )
+    registry = _registry(gateway)
+
+    outcome = await generate_recap_for_story(db_session, story.id, capability_registry=registry)
+
+    assert outcome.status == "generated"
+    task = await db_session.get(EditorialTask, outcome.task_id)
+    media_result = _media_step_result(task)
+    assert media_result["result"]["tier"] == "story_pool"
+    representative = media_result["result"]["representative"]
+    assert representative["candidate_id"] == "follow-up-hero"
+    assert representative["originating_event_id"] == str(follow_up.id)
+    assert representative["originating_event_id"] != str(anchor.id)
+
+
+@pytest.mark.asyncio
+async def test_build_once_media_selection_persists_exact_top_ranked_candidate(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase H.1 §9 (build-once test): candidate (and its media ranking) is computed exactly once;
+    the persisted `selected_media_plan` matches the real top-ranked eligible candidate; synthesis
+    still uses the SAME precomputed candidate; exactly one Gateway call."""
+    import services.event_recap_processor as processor_module
+
+    story, events = await _seed_ready_story(db_session)
+    await _seed_image_candidate(
+        db_session, events[1].id, candidate_id="weak-logo", quality_score=45, relevance_score=41,
+        width=128, height=128, image_format="GIF", warnings=["possible_branded_screenshot"],
+    )
+    await _seed_image_candidate(
+        db_session, events[2].id, candidate_id="strong-hero", quality_score=98, relevance_score=67,
+    )
+
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None, structured_output=_VALID_RECAP_OUTPUT, finish_reason="stop",
+            model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=100, output_tokens=50),
+        )
+    )
+    registry = _registry(gateway)
+
+    real_build = processor_module.build_event_recap_candidate
+    build_call_count = 0
+
+    async def _counting_build(*args, **kwargs):
+        nonlocal build_call_count
+        build_call_count += 1
+        return await real_build(*args, **kwargs)
+
+    monkeypatch.setattr(processor_module, "build_event_recap_candidate", _counting_build)
+
+    outcome = await generate_recap_for_story(db_session, story.id, capability_registry=registry)
+
+    assert outcome.status == "generated"
+    assert build_call_count == 1  # media ranking rides the SAME single build() call
+    assert len(gateway.received_requests) == 1
+
+    task = await db_session.get(EditorialTask, outcome.task_id)
+    media_result = _media_step_result(task)
+    assert media_result["result"]["tier"] == "story_pool"
+    assert media_result["result"]["representative"]["candidate_id"] == "strong-hero"
+
+    synth_result = next(r for r in task.workflow["step_results"] if r["step_name"] == "synthesize_recap")
+    assert synth_result["status"] == "SUCCESS"
+    assert synth_result["result"] == _VALID_RECAP_OUTPUT

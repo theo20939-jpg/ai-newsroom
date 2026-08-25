@@ -109,6 +109,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
+from typing import Any, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -120,8 +121,13 @@ from database.models.story import Story
 from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, LLMGateway, Message
 from integrations.prompts.protocol import PromptRepository, RenderedPrompt
 from schemas.capability import CapabilityCall, RuntimeContext
+from schemas.image_candidate import ImageDiscoveryMethod
+from schemas.media_ranking import MediaRankingInput
 from services.fact_safety import FactEvidence, evaluate_fact_safety
-from services.image_persistence import get_editorial_image_candidates
+from services.image_persistence import EditorialImageCandidate, get_editorial_image_candidates
+from services.image_quality import aspect_ratio_band, hamming_distance
+from services.image_relevance import PROVENANCE_TABLE
+from services.media_ranking import _NEAR_DUPLICATE_MAX_HAMMING_DISTANCE, rank_media_candidates
 from services.recap_event import (
     AnnouncementCluster,
     _publisher_suffix_entities,
@@ -400,6 +406,62 @@ class MediaCandidateRef:
 
 
 @dataclass(frozen=True)
+class SelectedMediaItem:
+    """One representative media item, pointed to by reference only - never a copy of
+    `ImageCandidateRecord` (Phase H.1). `candidate_id` + `originating_event_id` is the stable,
+    re-resolvable pointer a future sender re-queries `get_editorial_image_candidates()` with;
+    `storage_key`/`telegram_file_id`/`sha256`/`remote_url` are carried alongside purely for
+    audit/display, never as the sole source of truth."""
+
+    candidate_id: str
+    originating_event_id: UUID
+    media_type: str  # "image" - H.1 scope is images only, mirrors the real NEWS ranking path
+    recommended_role: str  # RecommendedRole.value, e.g. "hero" | "supporting"
+    storage_key: str | None
+    telegram_file_id: str | None
+    sha256: str | None
+    remote_url: str | None  # supplemental fallback only - never the primary resolution path
+
+
+@dataclass(frozen=True)
+class SelectedMediaPlan:
+    """The deterministic H.1 media-selection outcome for one `EventRecapCandidate` build. `tier`
+    is forward-compatible serialization only - "cross_source"/"generated" are valid FUTURE values
+    (Phase H.2+, not executed here); H.1 itself only ever produces "story_pool" or "none". Absence
+    of a representative item is a normal, expected outcome (module docstring's fail-soft-on-media
+    discipline), never an error."""
+
+    tier: Literal["story_pool", "none"]
+    representative: SelectedMediaItem | None
+
+
+_NO_MEDIA_PLAN = SelectedMediaPlan(tier="none", representative=None)
+
+
+def serialize_selected_media_plan(plan: SelectedMediaPlan) -> dict[str, Any]:
+    """Plain-dict, JSON-safe (UUID -> str) projection of a `SelectedMediaPlan` - `dataclasses.
+    dataclass` (unlike this module's Pydantic schemas elsewhere) has no built-in `model_dump(mode=
+    "json")`, so this is the one place that conversion happens, kept next to the dataclasses it
+    serializes rather than duplicated at each caller."""
+    if plan.representative is None:
+        return {"tier": plan.tier, "representative": None}
+    item = plan.representative
+    return {
+        "tier": plan.tier,
+        "representative": {
+            "candidate_id": item.candidate_id,
+            "originating_event_id": str(item.originating_event_id),
+            "media_type": item.media_type,
+            "recommended_role": item.recommended_role,
+            "storage_key": item.storage_key,
+            "telegram_file_id": item.telegram_file_id,
+            "sha256": item.sha256,
+            "remote_url": item.remote_url,
+        },
+    }
+
+
+@dataclass(frozen=True)
 class FactVerificationResult:
     """The result of running `services.fact_safety.evaluate_fact_safety()` (reused, unmodified)
     against the LLM-synthesized text. `status` is that function's own categorical
@@ -465,6 +527,12 @@ class EventRecapCandidate:
     # Story/link semantics are never affected by this flag either way - see services/
     # recap_origin_projection.py's own module docstring for the full contract.
     origin_projection_applied: bool = False
+
+    # Phase H.1: the Story-level confirmed-membership media selection, computed once in the same
+    # pass as `media_candidates` above (never a second Story query) - see `_select_representative_
+    # media()`'s own docstring. Defaulted so every pre-H.1 direct construction site (tests) is
+    # unaffected.
+    selected_media: SelectedMediaPlan = field(default_factory=lambda: _NO_MEDIA_PLAN)
 
 
 @dataclass(frozen=True)
@@ -569,13 +637,126 @@ def _build_verified_facts(announcements: list[AnnouncementSummary]) -> list[Veri
     return facts
 
 
+def _build_media_ranking_input(
+    candidate: EditorialImageCandidate, *, is_duplicate_within_event: bool = False,
+) -> MediaRankingInput:
+    """Phase H.1: duplicated from `worker/content_cycle.py::_build_media_ranking_input()`
+    verbatim (this codebase's own established small-single-purpose-helper duplication convention -
+    see this module's own docstring on `_sanitized_announcement_signature()` for the identical
+    precedent) - never a divergent field mapping, never importing across the services->worker
+    boundary. Assembles `services.media_ranking.MediaRankingInput` from an already-persisted
+    `EditorialImageCandidate`'s own already-computed signals - never recomputes any of them."""
+    try:
+        method = ImageDiscoveryMethod(candidate.discovery_method)
+    except ValueError:
+        method = None
+    warnings = candidate.warnings or []
+    width, height = candidate.width, candidate.height
+    return MediaRankingInput(
+        media_item_id=candidate.id,
+        media_type="image",
+        quality_score=candidate.quality_score if candidate.quality_score is not None else 0,
+        source_priority=round((PROVENANCE_TABLE.get(method, 20) if method is not None else 20) / 100 * 20),
+        relevance_score=candidate.relevance_score,
+        is_duplicate_within_event=is_duplicate_within_event,
+        possible_logo="possible_logo" in warnings,
+        possible_banner="possible_banner" in warnings,
+        possible_watermark="possible_watermark" in warnings,
+        possible_tv_lower_third="possible_tv_lower_third" in warnings,
+        possible_branded_screenshot="possible_branded_screenshot" in warnings,
+        aspect_ratio_band=aspect_ratio_band(width / height).value if width and height else None,
+    )
+
+
+def _compute_duplicate_flags(candidates: list[EditorialImageCandidate]) -> dict[UUID, bool]:
+    """Phase H.1: a deliberately NARROWER sibling of `worker/content_cycle.py::_compute_within_
+    event_duplicate_flags()` - exact `sha256` match or near-duplicate `perceptual_hash` (Hamming
+    distance <= the existing, imported, calibrated `_NEAR_DUPLICATE_MAX_HAMMING_DISTANCE`) only.
+    Deliberately excludes that sibling's own CDN-proxy/origin-URL normalization (Jetpack/Photon
+    etc.) - that logic is real, forensically-tuned, and actively evolving; duplicating it here
+    would violate "не переписывать dedup" in spirit even though it is a real, disclosed, narrower-
+    than-NEWS limitation. Applied across the WHOLE cross-event Story pool at once (not per-event),
+    which is what makes it also catch a cross-event duplicate a purely event-scoped check
+    (`eligible_for_editorial`, already applied upstream) cannot."""
+    seen_sha256: set[str] = set()
+    seen_hashes: list[str] = []
+    flags: dict[UUID, bool] = {}
+    for candidate in candidates:
+        is_duplicate = False
+        if candidate.sha256 and candidate.sha256 in seen_sha256:
+            is_duplicate = True
+        elif candidate.perceptual_hash:
+            for known_hash in seen_hashes:
+                if hamming_distance(candidate.perceptual_hash, known_hash) <= _NEAR_DUPLICATE_MAX_HAMMING_DISTANCE:
+                    is_duplicate = True
+                    break
+        flags[candidate.id] = is_duplicate
+        if not is_duplicate:
+            if candidate.sha256:
+                seen_sha256.add(candidate.sha256)
+            if candidate.perceptual_hash:
+                seen_hashes.append(candidate.perceptual_hash)
+    return flags
+
+
+def _select_representative_media(image_pool: list[tuple[UUID, EditorialImageCandidate]]) -> SelectedMediaPlan:
+    """Pure (no I/O). Phase H.1: ranks the combined, cross-event Story image pool through the
+    existing, unmodified `services.media_ranking.rank_media_candidates()` and returns exactly ONE
+    representative item - H.1 scope is a single HERO/SUPPORTING pick, never an album (Phase H.0/
+    H.0.2's own "не увеличивать scope до album curation" instruction). Video is deliberately not
+    ranked here - mirrors the real, existing NEWS production path (`worker/content_cycle.py`),
+    which never feeds video through `rank_media_candidates()` either; it always just takes the
+    first available video candidate as a structurally separate media type.
+
+    Returns `tier="none"` (never raises, never fails the Story) when the pool is empty or nothing
+    in it clears `MediaRankingResult.eligible_for_delivery` - a Story with no usable image is a
+    normal, expected outcome (Phase H.0.2's fail-soft discipline), not an error."""
+    if not image_pool:
+        return _NO_MEDIA_PLAN
+
+    candidates = [candidate for _event_id, candidate in image_pool]
+    event_by_candidate_id = {candidate.id: event_id for event_id, candidate in image_pool}
+    by_id = {candidate.id: candidate for candidate in candidates}
+    duplicate_flags = _compute_duplicate_flags(candidates)
+
+    inputs = [
+        _build_media_ranking_input(candidate, is_duplicate_within_event=duplicate_flags.get(candidate.id, False))
+        for candidate in candidates
+    ]
+    ranked = rank_media_candidates(inputs)
+
+    for result in ranked:
+        if not result.eligible_for_delivery:
+            continue
+        candidate = by_id[result.media_item_id]
+        return SelectedMediaPlan(
+            tier="story_pool",
+            representative=SelectedMediaItem(
+                candidate_id=candidate.candidate_id,
+                originating_event_id=event_by_candidate_id[candidate.id],
+                media_type="image",
+                recommended_role=result.recommended_role.value,
+                storage_key=candidate.storage_key,
+                telegram_file_id=candidate.telegram_file_id,
+                sha256=candidate.sha256,
+                remote_url=candidate.final_url or candidate.source_url or candidate.article_url,
+            ),
+        )
+    return _NO_MEDIA_PLAN
+
+
 async def _collect_media_candidates(
     session: AsyncSession, events: list[NewsEvent], *, per_event_limit: int = _MAX_MEDIA_PER_EVENT,
-) -> list[MediaCandidateRef]:
+) -> tuple[list[MediaCandidateRef], SelectedMediaPlan]:
     """Read-only. Reuses `get_editorial_image_candidates()`/`get_video_candidates_for_event()`
-    unchanged - no new query, no new ranking, no new architecture (module docstring)."""
+    unchanged - no new query beyond what this function already made before Phase H.1. The same
+    per-event `images` rows already fetched for `MediaCandidateRef` are also fed to `_select_
+    representative_media()` in this same pass - one Story query, one set of per-event media reads,
+    never a second, independent Story-level media query (Phase G.1's build-once discipline,
+    extended to media)."""
     media: list[MediaCandidateRef] = []
     seen: set[tuple[str, str]] = set()
+    image_pool: list[tuple[UUID, EditorialImageCandidate]] = []
     for event in events:
         images = await get_editorial_image_candidates(session, news_event_id=event.id, limit=per_event_limit)
         for image in images:
@@ -585,6 +766,7 @@ async def _collect_media_candidates(
                 continue
             seen.add(key)
             media.append(MediaCandidateRef(kind="image", event_id=event.id, remote_url=url, rank=image.rank))
+            image_pool.append((event.id, image))
 
         videos = await get_video_candidates_for_event(session, event.id, limit=per_event_limit)
         for video in videos:
@@ -593,7 +775,8 @@ async def _collect_media_candidates(
                 continue
             seen.add(key)
             media.append(MediaCandidateRef(kind="video", event_id=event.id, remote_url=video.remote_url, rank=None))
-    return media
+
+    return media, _select_representative_media(image_pool)
 
 
 async def build_event_recap_candidate(
@@ -706,7 +889,7 @@ async def build_event_recap_candidate(
     timeline = _build_timeline(announcements)
     verified_facts = _build_verified_facts(announcements)
     source_refs = list(dict.fromkeys(ref for a in announcements for ref in a.source_refs))
-    media_candidates = await _collect_media_candidates(session, events)
+    media_candidates, selected_media = await _collect_media_candidates(session, events)
 
     evidence_reference_count = len(
         {_evidence_reference_identity(event, canonical_urls.get(event.id)) for event in events}
@@ -720,7 +903,7 @@ async def build_event_recap_candidate(
         evidence_reference_count=evidence_reference_count,
         announcements=announcements, timeline=timeline, verified_facts=verified_facts,
         source_refs=source_refs, media_candidates=media_candidates,
-        origin_projection_applied=origin_projection_applied,
+        origin_projection_applied=origin_projection_applied, selected_media=selected_media,
     )
     return EventRecapBuildResult(candidate=candidate, rejected=False, rejection_reasons=[])
 
