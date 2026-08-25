@@ -4,6 +4,28 @@ Uses the Telegram Client API via Telethon and a pre-generated StringSession.
 This is completely separate from the Telegram Bot API used by bot/
 (aiogram, TELEGRAM_BOT_TOKEN) - different credentials, different client,
 no shared imports between the two.
+
+Phase I.2.1A.4 (real, reproduced production incident): `fetch()` previously used `async with
+client:`, which is Telethon's own shorthand for "connect, then call `self.start()`, then later
+disconnect" - `start()` is an INTERACTIVE login helper that, whenever the configured
+`TELEGRAM_SESSION_STRING` does not (or no longer) authenticate, silently falls back to prompting
+on stdin for a phone number/login code/2FA password. Inside `automation_worker` (a detached,
+non-interactive Docker container with no usable stdin) that prompt's `await` never returns -
+a real, live-reproduced hang that froze an entire collection cycle indefinitely (no timeout
+existed anywhere in the call chain either - see services/collector.py's own
+`news_source_fetch_timeout_seconds` fix for the other half of this incident).
+
+`fetch()` now NEVER calls `client.start()` and NEVER reaches any Telethon code path that can
+prompt for a phone/code/password - only `connect()` (network handshake only, never
+authenticates) and `is_user_authorized()` (a pure read of the existing session's own auth state,
+never a network side-effect beyond a single lightweight RPC). An unauthorized session raises
+`TelegramAuthenticationError` immediately - a small, adapter-local exception mirroring
+`github_source.py`'s own `GitHubConfigError` precedent (subclasses a built-in, never a new
+exception hierarchy) - which flows into `services.collector._fetch_with_retry()`'s existing
+generic `except Exception` retry/skip path unchanged; that in turn already isolates a failed
+source from every other source in the same cycle (`services.collector.run_collection_cycle()`'s
+own per-source `try/except`, unmodified - this was already correct, the previous bug was that the
+hung call never raised anything for it to catch).
 """
 import logging
 
@@ -22,6 +44,14 @@ logger = logging.getLogger(__name__)
 MESSAGE_FETCH_LIMIT = 50
 
 
+class TelegramAuthenticationError(RuntimeError):
+    """Raised by `TelegramSourceAdapter.fetch()` when the configured `TELEGRAM_SESSION_STRING`
+    is not (or no longer) authorized. Never raised as a result of an interactive login attempt -
+    `fetch()` never calls `client.start()` or anything else that could prompt for a phone number,
+    login code, or 2FA password (see this module's own docstring for the full incident this
+    fixes)."""
+
+
 def _reactions_count(message: Message) -> int | None:
     """Deterministic aggregate: sum of every reaction type's count (Phase 15 M3.3) - no
     sentiment/taxonomy, just a total. `None` when the message carries no `reactions` object at
@@ -37,16 +67,29 @@ class TelegramSourceAdapter(SourceAdapter):
     """Fetches recent messages from a Telegram channel via Telethon."""
 
     async def fetch(self, source: NewsSource, context: SourceFetchContext) -> list[RawNewsItem]:
-        """Fetch up to MESSAGE_FETCH_LIMIT recent messages from source.url."""
+        """Fetch up to MESSAGE_FETCH_LIMIT recent messages from source.url.
+
+        Deliberately `connect()` + `is_user_authorized()` + `disconnect()`, never `async with
+        client:` / `client.start()` - see this module's own docstring for the real incident this
+        avoids. `disconnect()` always runs (`finally`), whether authorized, unauthorized, or a mid-
+        fetch network error - never leaks a live Telethon connection."""
         client = self._build_client()
         channel = source.url.lstrip("@") if source.url else source.url
 
         items: list[RawNewsItem] = []
-        async with client:
+        try:
+            await client.connect()
+            if not await client.is_user_authorized():
+                raise TelegramAuthenticationError(
+                    f"Telegram session is not authorized for source {source.name!r} - "
+                    "TELEGRAM_SESSION_STRING is missing, expired, or invalid."
+                )
             async for message in client.iter_messages(channel, limit=MESSAGE_FETCH_LIMIT):
                 item = self._to_raw_item(message, channel)
                 if item is not None:
                     items.append(item)
+        finally:
+            await client.disconnect()
 
         logger.info("Fetched %d messages from %s", len(items), source.url)
         return items

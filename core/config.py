@@ -121,6 +121,24 @@ class Settings(BaseSettings):
     news_collection_enabled: bool = False
     news_collection_interval_seconds: int = Field(default=1800, gt=0)
 
+    # Phase I.2.1A.4: a real, reproduced hang - services/collector.py::_fetch_with_retry() awaited
+    # SourceAdapter.fetch() with no timeout at all, so one broken/hung source (a Telegram user
+    # session that had silently expired, causing Telethon to fall back to an interactive login
+    # prompt no detached container can ever answer) blocked the entire collection cycle
+    # indefinitely - no subsequent RSS/NEWS_API/Telegram source was ever attempted. Every
+    # HTTP-based adapter already bounds itself internally (rss_source.py/github_source.py/
+    # arxiv_source.py/hacker_news_source.py all set their own httpx `FETCH_TIMEOUT_SECONDS =
+    # 15.0`), but nothing previously bounded a non-HTTP adapter (Telegram, via Telethon) or acted
+    # as a defense-in-depth ceiling for any adapter regardless of its own internal timeout. This
+    # single collector-level setting wraps every `adapter.fetch()` call
+    # (`asyncio.wait_for`, this codebase's own established timeout idiom - workflows/runner.py,
+    # services/image_intelligence.py, integrations/http/safe_fetch.py all use the same primitive)
+    # so NO SourceAdapter of any kind can ever hang the cycle again. 30s (double every existing
+    # per-adapter HTTP ceiling) is a reasoned starting default - generous headroom for Telegram's
+    # own uncapped `iter_messages()` fetch of up to MESSAGE_FETCH_LIMIT=50 messages under normal
+    # conditions, while still being a real, finite bound - not fit to production timing data yet.
+    news_source_fetch_timeout_seconds: float = Field(default=30.0, gt=0)
+
     # Phase 13 M4: automatic NEWS_ANALYSIS execution worker. Disabled by default, matching
     # news_collection_enabled's own established convention. No max_daily_ai_cost - cost exposure
     # is bounded entirely by news_analysis_freshness_cutoff_hours/news_analysis_batch_size/no

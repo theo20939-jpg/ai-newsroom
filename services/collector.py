@@ -18,7 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from telethon.errors import FloodWaitError
@@ -93,15 +93,34 @@ async def run_collection_cycle(
 
         async with session_factory() as session:
             sources = await _load_active_sources(session, registry)
+            # Captured once, before any source is processed - not read from `source` again inside
+            # the except branch below, by index rather than by `source.id`. `session.rollback()`
+            # there (necessary to clear a failed source's own uncommitted work) expires every
+            # attribute of every persistent object in the session's identity map (SQLAlchemy's
+            # default rollback behavior, not something this change opts into, and not limited to
+            # primary keys) - not just the source that failed, ALL of them, including ones not yet
+            # reached in this loop. A post-rollback `source.name`/`source.id` access would need a
+            # synchronous lazy-load the async engine can't perform outside an `await`
+            # (`sqlalchemy.exc.MissingGreenlet`), which would escape this except block and abort
+            # the entire cycle after the first failure - exactly the "one failure blocks
+            # everything" bug this phase exists to fix.
+            source_names = [source.name for source in sources]
 
-            for source in sources:
+            for index, source in enumerate(sources):
+                # A prior iteration's `session.rollback()` (below) expires every attribute of
+                # every source loaded above, including ones not yet processed - refresh (a real,
+                # properly-awaited reload, safe inside an async session) before touching this
+                # source's own attributes again, e.g. `_process_item`'s `source.id`/`source.type`.
+                # Only needed once a rollback has actually happened, hence the `expired` check.
+                if inspect(source).expired:
+                    await session.refresh(source)
                 try:
                     await _process_source(session, source, registry, report)
                     report.sources_processed += 1
                 except Exception:
                     await session.rollback()
                     report.sources_failed += 1
-                    logger.exception("Source %s failed, skipping", source.name)
+                    logger.exception("Source %s failed, skipping", source_names[index])
     except Exception:
         logger.exception("Collection cycle aborted - could not connect to the database")
 
@@ -148,13 +167,30 @@ async def _fetch_with_retry(
     with a short backoff would just fail again, since Telegram requires
     waiting out the reported cooldown. It is logged and the source is
     skipped for the current cycle instead.
+
+    Phase I.2.1A.4: every attempt is wrapped in `asyncio.wait_for(..., timeout=settings.
+    news_source_fetch_timeout_seconds)` - a real, reproduced hang (a broken Telegram source
+    blocking `adapter.fetch()` forever, with no source-level exception ever raised) proved this
+    boundary was previously unbounded for any `SourceAdapter`, not just Telegram. A resulting
+    `TimeoutError` is not special-cased - it already flows through the generic `except Exception`
+    branch below exactly like any other transient failure, retried up to `MAX_FETCH_ATTEMPTS`
+    (each attempt now individually bounded, so the source can delay this cycle by at most
+    `MAX_FETCH_ATTEMPTS * news_source_fetch_timeout_seconds` plus backoff, never indefinitely) -
+    deliberately not building a distinct non-retryable-timeout code path for this phase (see this
+    module's own report for the reasoning: a bounded, already-timed-out retry is acceptable, not
+    worth a new retry-policy subsystem). `asyncio.CancelledError` is a `BaseException`, never an
+    `Exception` subclass, so it is never caught by `except Exception` below and always propagates
+    through `asyncio.wait_for` unmodified - worker shutdown semantics (worker/main.py's own
+    documented cancellation-propagation contract) are unaffected by this change.
     """
     delay = RETRY_BACKOFF_SECONDS
     last_error: Exception | None = None
 
     for attempt in range(1, MAX_FETCH_ATTEMPTS + 1):
         try:
-            return await adapter.fetch(source, context)
+            return await asyncio.wait_for(
+                adapter.fetch(source, context), timeout=settings.news_source_fetch_timeout_seconds
+            )
         except FloodWaitError as error:
             logger.warning(
                 "Rate limited on %s, must wait %ds - skipping for this cycle", source.name, error.seconds
