@@ -1,0 +1,252 @@
+"""Phase I.2: Telegram send/edit for the Final Post Preview + publication-review UI. Reuses
+services/telegram_routing.py::send_photo_to_editorial_destination()/send_to_editorial_destination()
+verbatim - the single existing Telegram send boundary this codebase already established, never a
+new HTTP/Bot API call site. Mirrors services/event_recap_review_notifier.py's own two-message
+shape/discipline exactly, adapted for a PUBLIC-LIKE preview instead of an internal review card.
+
+Destination defaults to `EditorialDestination.TELEGRAPH` - mirrors services/event_recap_review_
+notifier.py's own identical reasoning: no dedicated Final Post Review destination exists yet
+(schemas/editorial_route.py's own five-topic enum is deliberately kept small), and this preview is
+INTERNAL - it must never route to the public NEWS destination (Phase I.2's own explicit Part T
+"never accidentally route to the public channel" invariant). `dry_run=True` by default, mirroring
+every other send wrapper in this codebase.
+
+TWO Telegram messages, never one (Phase I.2's own explicit critical product rule):
+
+    MESSAGE 1 (the public-like preview): the representative photo (resolved from `final_post_
+    source.selected_media_plan` - tier-agnostic, reusing services/event_recap_review_notifier.py's
+    own H.2/H.3C resolution semantics, duplicated here rather than imported per this codebase's own
+    established small-helper-duplication convention) with the caption
+    `bot.final_post_review_formatting.render_final_post_preview_caption()` produces (the exact,
+    untruncated future public post - reuses services.news_telegram_presentation.
+    render_v81_news_card_html() verbatim), and reply_markup limited to a single source url= button
+    (`bot.keyboards.image_preview.build_source_only_keyboard()`) - NEVER the ✅/✏️ decision keyboard.
+    Media is REQUIRED at this gate (services/final_post_review_eligibility.py already enforced this
+    before this module is ever reached) - there is no text-only fallback path here, unlike the
+    ordinary NEWS delivery notifiers.
+
+    MESSAGE 2 (the control message): a short, internal-only text
+    (`bot.final_post_review_formatting.render_final_post_review_control_text()`) sent as a reply to
+    MESSAGE 1, carrying the real ✅ К публикации / ✏️ На доработку keyboard
+    (`bot.keyboards.final_post_review.build_final_post_review_keyboard()`). This is the ONLY message
+    this module ever records as `FinalPostReview.telegram_*` (via
+    `services.final_post_review_service.record_telegram_delivery()`) - MESSAGE 1's own message id is
+    never persisted anywhere.
+
+NO SILENT TRUNCATION (Phase I.2's own Part G): if the rendered MESSAGE 1 caption exceeds Telegram's
+photo-caption limit, this module sends NOTHING and returns `"presentation_too_long"` - it never
+shrinks/truncates the body itself (unlike bot/formatting.py::render_editorial_card()'s own
+different, NEWS-editorial-card-specific shrink-loop contract, which is deliberately not reused
+here for exactly this reason).
+
+SEND FAILURE SEMANTICS (Phase I.2's own Part U): a media-resolution failure sends nothing at all
+(no fallback text-only send - media is required at this gate). A live MESSAGE 1 failure never
+attempts MESSAGE 2 (an editor cannot approve an unseen final post). A live MESSAGE 1 success
+followed by a MESSAGE 2 failure is reported as `"control_send_failed"` - never silently treated as
+an actionable, deliverable review, and never auto-retried.
+"""
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from typing import Any, Literal
+from uuid import UUID
+
+from aiogram import Bot
+from aiogram.exceptions import TelegramAPIError
+from aiogram.types import BufferedInputFile
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from bot.final_post_review_formatting import (
+    CAPTION_SAFE_LIMIT,
+    render_final_post_preview_caption,
+    render_final_post_review_control_text,
+    telegram_utf16_length,
+)
+from bot.image_preview_media import resolve_photo_input
+from bot.keyboards.final_post_review import build_final_post_review_keyboard
+from bot.keyboards.image_preview import build_source_only_keyboard
+from database.models.final_post_review import FinalPostReview
+from integrations.storage.image_storage import StorageError
+from schemas.editorial_route import EditorialDestination
+from services.final_post_review_service import record_telegram_delivery
+from services.image_persistence import _get_storage, get_editorial_image_candidates
+from services.telegram_routing import send_photo_to_editorial_destination, send_to_editorial_destination
+
+logger = logging.getLogger(__name__)
+
+FinalPostPreviewSendStatus = Literal[
+    "media_resolution_failed", "presentation_too_long", "dry_run",
+    "preview_send_failed", "control_send_failed", "sent",
+]
+
+
+@dataclass(frozen=True)
+class FinalPostPreviewSendOutcome:
+    status: FinalPostPreviewSendStatus
+    preview_message_id: int | None = None
+    control_message_id: int | None = None
+
+
+def _extension_from_storage_key(storage_key: str) -> str:
+    """Byte-for-byte the same helper services/event_recap_review_notifier.py::
+    _extension_from_storage_key() already established - duplicated, not imported (private,
+    module-scoped helper)."""
+    if "." in storage_key:
+        return storage_key.rsplit(".", 1)[-1]
+    return "jpg"
+
+
+async def _resolve_final_post_photo_input(session: AsyncSession, selected_media: dict[str, Any] | None):
+    """Duplicated from services/event_recap_review_notifier.py::_resolve_selected_media_photo_
+    input() verbatim (the exact same `selected_media_plan` JSON shape - Final Post's own bundle
+    copies it byte-for-byte from the source EVENT_RECAP task, per services/final_post_processor.py)
+    - never imported cross-module (that function is module-private), per this codebase's own
+    established small-helper-duplication convention. Tier-agnostic by construction: branches only
+    on which fields the persisted pointer carries (`candidate_id`+`originating_event_id` vs.
+    `storage_key` alone), never on `tier` itself - see that function's own docstring for the full
+    reasoning. Fail-soft, never raises: returns `None` for every failure mode."""
+    if selected_media is None or selected_media.get("tier") == "none":
+        return None
+    representative = selected_media.get("representative")
+    if not representative:
+        return None
+    try:
+        candidate_id = representative.get("candidate_id")
+        originating_event_id = representative.get("originating_event_id")
+        if candidate_id and originating_event_id:
+            event_id = UUID(originating_event_id)
+            candidates = await get_editorial_image_candidates(session, news_event_id=event_id, limit=10)
+            candidate = next((c for c in candidates if c.candidate_id == candidate_id), None)
+            if candidate is None:
+                logger.warning(
+                    "final_post_review_media_candidate_not_found",
+                    extra={"event_id": str(event_id), "candidate_id": candidate_id},
+                )
+                return None
+            return resolve_photo_input(candidate)
+
+        storage_key = representative.get("storage_key")
+        if storage_key:
+            try:
+                data = _get_storage().read(storage_key)
+            except StorageError:
+                logger.warning(
+                    "final_post_review_branded_fallback_storage_read_failed",
+                    extra={"storage_key": storage_key},
+                )
+                return None
+            extension = _extension_from_storage_key(storage_key)
+            return BufferedInputFile(data, filename=f"final_post_preview.{extension}")
+
+        return None
+    except Exception:  # noqa: BLE001 - fail-soft: caller treats None as media_resolution_failed
+        logger.warning("final_post_review_media_resolution_failed", exc_info=True)
+        return None
+
+
+def _first_usable_source_url(source_refs: list[Any]) -> str | None:
+    """A "usable" source_ref, for keyboard purposes, is one shaped like an actual clickable URL -
+    `final_post_source.source_refs` may in principle contain a bare domain or a non-URL sentinel
+    (services.event_recap._evidence_reference_identity()'s own documented fallback shapes, though
+    `AnnouncementSummary.source_refs` itself is built from real article URLs in the common case).
+    Returns `None` (never raises) if none qualify - build_source_only_keyboard() already degrades
+    gracefully to "no keyboard" in that case."""
+    for ref in source_refs:
+        if isinstance(ref, str) and ref.startswith(("http://", "https://")):
+            return ref
+    return None
+
+
+async def send_final_post_preview(
+    bot: Bot,
+    session: AsyncSession,
+    review: FinalPostReview,
+    *,
+    title: str,
+    body: str,
+    final_post_source: dict[str, Any],
+    authoring_prompt_version: str,
+    fact_safety_status: str,
+    dry_run: bool = True,
+    destination: EditorialDestination = EditorialDestination.TELEGRAPH,
+) -> FinalPostPreviewSendOutcome:
+    """Sends the two-message Final Post Preview (module docstring's own full contract). Makes no
+    publication decision of any kind - `dry_run=True` (the safe default) never actually calls the
+    Telegram API for either message, mirroring services/event_recap_review_notifier.py::
+    send_event_recap_review()'s own identical `dry_run` contract; both messages are still rendered
+    and their `RoutingOutcome.reason == "dry_run"` is surfaced as this function's own `"dry_run"`
+    status, never confused with a real send failure."""
+    media_plan = final_post_source.get("selected_media_plan")
+    photo_input = await _resolve_final_post_photo_input(session, media_plan)
+    if photo_input is None:
+        logger.warning("final_post_preview_media_resolution_failed", extra={"review_id": str(review.id)})
+        return FinalPostPreviewSendOutcome(status="media_resolution_failed")
+
+    caption = render_final_post_preview_caption(title, body)
+    caption_length = telegram_utf16_length(caption)
+    if caption_length > CAPTION_SAFE_LIMIT:
+        logger.warning(
+            "final_post_preview_presentation_too_long",
+            extra={"review_id": str(review.id), "length": caption_length, "limit": CAPTION_SAFE_LIMIT},
+        )
+        return FinalPostPreviewSendOutcome(status="presentation_too_long")
+
+    source_refs = final_post_source.get("source_refs") or []
+    source_url = _first_usable_source_url(source_refs)
+    preview_keyboard = build_source_only_keyboard(source_url)
+
+    preview_outcome = await send_photo_to_editorial_destination(
+        bot, destination, photo_input, caption, dry_run=dry_run, reply_markup=preview_keyboard,
+    )
+    if not preview_outcome.sent and preview_outcome.reason != "dry_run":
+        logger.warning(
+            "final_post_preview_send_failed",
+            extra={"review_id": str(review.id), "reason": preview_outcome.reason},
+        )
+        return FinalPostPreviewSendOutcome(status="preview_send_failed")
+
+    control_text = render_final_post_review_control_text(
+        review, authoring_prompt_version=authoring_prompt_version, fact_safety_status=fact_safety_status,
+    )
+    control_keyboard = build_final_post_review_keyboard(review)
+    control_outcome = await send_to_editorial_destination(
+        bot, destination, control_text, dry_run=dry_run, reply_markup=control_keyboard,
+        reply_to_message_id=preview_outcome.message_id,
+    )
+
+    if control_outcome.reason == "dry_run":
+        return FinalPostPreviewSendOutcome(status="dry_run")
+    if not control_outcome.sent:
+        logger.warning(
+            "final_post_review_control_send_failed",
+            extra={"review_id": str(review.id), "reason": control_outcome.reason},
+        )
+        return FinalPostPreviewSendOutcome(status="control_send_failed", preview_message_id=preview_outcome.message_id)
+
+    if control_outcome.chat_id is not None and control_outcome.message_id is not None:
+        await record_telegram_delivery(
+            session, review.id, chat_id=control_outcome.chat_id, message_id=control_outcome.message_id,
+            thread_id=control_outcome.topic_id,
+        )
+
+    return FinalPostPreviewSendOutcome(
+        status="sent", preview_message_id=preview_outcome.message_id, control_message_id=control_outcome.message_id,
+    )
+
+
+async def update_final_post_review_message(
+    bot: Bot, *, chat_id: int, message_id: int, review: FinalPostReview,
+) -> bool:
+    """Edits the ALREADY-SENT MESSAGE 2 (control message) in place after a decision - never sends a
+    new message, never touches MESSAGE 1 (the public-like preview - Phase I.2's own explicit "Do
+    not edit public-like preview. Do not create new message." Part Q instruction). Returns `True` on
+    success, `False` on a live `TelegramAPIError` (never raises). Mirrors services/event_recap_
+    review_notifier.py::update_event_recap_review_message()'s own identical contract exactly."""
+    text = render_final_post_review_control_text(review)
+    keyboard = build_final_post_review_keyboard(review)
+    try:
+        await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=keyboard)
+    except TelegramAPIError:
+        return False
+    return True

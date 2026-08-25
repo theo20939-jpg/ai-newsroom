@@ -3,6 +3,7 @@ from aiogram import Router
 
 from bot.handlers.digest import router as digest_router
 from bot.handlers.event_recap_review import router as event_recap_review_router
+from bot.handlers.final_post_review import router as final_post_review_router
 from bot.handlers.image_preview import router as image_preview_router
 from bot.handlers.meme_preview import router as meme_preview_router
 from bot.handlers.news import router as news_router
@@ -39,6 +40,14 @@ router.include_router(telegraph_article_review_router)
 # reached once some future, separately-authorized caller actually sends a review message with a
 # real "eventrecap:" callback button - bot/handlers/event_recap_review.py's own docstring.
 router.include_router(event_recap_review_router)
+# Phase I.2: inert until something actually sends a Final Post Preview - no scheduler/worker/
+# bot-command calls services/final_post_review_service.py::create_final_post_review() or
+# services/final_post_review_notifier.py yet (only the manually-invoked, never-auto-run
+# scripts/final_post_review_worker.py CLI). Its own callback handler fully persists approve/
+# needs_revision decisions onto FinalPostReview, but is only ever reached once some future,
+# separately-authorized caller actually sends a review message with a real "finalpost:" callback
+# button - bot/handlers/final_post_review.py's own docstring.
+router.include_router(final_post_review_router)
 # Phase 23.0: temporary diagnostic command (bot/handlers/whereami.py's own docstring has the full
 # safety scope) - reports chat_id/is_forum/message_thread_id only, no other effect.
 router.include_router(whereami_router)

@@ -679,6 +679,14 @@ class Settings(BaseSettings):
     # execution path exists for EVENT_RECAP.
     event_recap_pipeline_enabled: bool = False
 
+    # Phase I.2: the identical double-confirmation flag, for the identical reason, one stage later
+    # in the same pipeline - mirrors event_recap_pipeline_enabled's own docstring exactly. Nothing
+    # in this codebase reads this field yet except scripts/final_post_review_worker.py's own
+    # `--live` guard (a manually-invoked harness only, exactly like scripts/
+    # event_recap_pipeline_worker.py's own established "human invokes this, nothing else does"
+    # convention) - no scheduler, cron, or automatic-execution path exists for Final Post Preview.
+    final_post_review_enabled: bool = False
+
     # Reasoned starting point mirroring news_collection_interval_seconds's own cadence exactly -
     # how often a future scheduler would form a new shortlist batch. Not fit to any real
     # operating data yet.
