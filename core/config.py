@@ -464,6 +464,16 @@ class Settings(BaseSettings):
     # meme_potential) - v6 through v8.5 stay frozen. Still never the settings default.
     copywriting_prompt_version: Literal["4", "5", "6", "7", "8", "8.1", "8.2", "8.3", "8.4", "8.5", "8.6"] = "4"
 
+    # Phase I.1.2 (Final Post Authoring editorial calibration): mirrors copywriting_prompt_version's
+    # own established pattern exactly - v1 (prompts/final_post_authoring/v1.yaml) is Phase I.1's
+    # original, real-validated (Pixel, task f38bee1a-6ccb-4c0e-bbed-b0e3334c29ad) version and stays
+    # the default; v2 (prompts/final_post_authoring/v2.yaml) rewrites the editorial contract to
+    # produce a genuinely composed public post rather than a literal recap repackaging, and is
+    # opt-in only - never set in .env, never the default this phase. Both files are immutable once
+    # published; capabilities/final_post_authoring_capability.py reads this setting at call time,
+    # never a fixed constant, so the active version can change without a code deploy.
+    final_post_authoring_prompt_version: Literal["1", "2"] = "1"
+
     # Phase 19 M5: quote delivery wiring and length safety (docs/phase19_m0_audit.md). Three-
     # state, matching article_acquisition_mode's own convention. "off" (default): worker/
     # content_cycle.py's two Telegram send call sites pass no quote at all - byte-identical to

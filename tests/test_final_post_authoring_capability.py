@@ -70,6 +70,25 @@ def _prompt_repository() -> FakePromptRepository:
     return repository
 
 
+def _versioned_prompt_repository() -> FakePromptRepository:
+    """Phase I.1.2: registers two distinguishable versions ("1" and "2") so a test can prove
+    which one FinalPostAuthoringCapability actually resolved, by system text alone."""
+    repository = FakePromptRepository()
+    repository.register(
+        RenderedPrompt(
+            name=CAPABILITY_NAME, version="1", system="FAKE SYSTEM TEXT V1",
+            rules=["v1 rule."], output_schema=_OUTPUT_SCHEMA,
+        )
+    )
+    repository.register(
+        RenderedPrompt(
+            name=CAPABILITY_NAME, version="2", system="FAKE SYSTEM TEXT V2",
+            rules=["v2 rule."], output_schema=_OUTPUT_SCHEMA,
+        )
+    )
+    return repository
+
+
 def _context(*, bundle: dict | None = _BUNDLE) -> CapabilityContext:
     return CapabilityContext(
         business=BusinessContext(
@@ -215,3 +234,53 @@ async def test_gateway_failure_raises_a_capability_error():
         await capability.execute(_context())
 
     assert len(gateway.received_requests) == 1
+
+
+# ---------------------------------------------------------------------------------------------
+# Phase I.1.2: prompt version selection (mirrors tests/test_copywriting_prompt_version_cutover.py's
+# own established pattern for capabilities/copywriting_capability.py's identical mechanism).
+# ---------------------------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_default_prompt_version_is_v1(monkeypatch: pytest.MonkeyPatch):
+    """settings.final_post_authoring_prompt_version defaults to "1" - byte-identical to Phase
+    I.1's own real-validated (Pixel) behavior."""
+    from core.config import settings
+
+    assert settings.final_post_authoring_prompt_version == "1"
+
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None, structured_output=_VALID_OUTPUT, finish_reason="stop", model_used="fake-model-v1",
+            usage=CapabilityUsage(input_tokens=100, output_tokens=50),
+        )
+    )
+    capability = FinalPostAuthoringCapability(gateway, _versioned_prompt_repository())
+
+    await capability.execute(_context())
+
+    sent_text = gateway.received_requests[0].messages[0].content[0].text
+    assert "FAKE SYSTEM TEXT V1" in sent_text
+    assert "FAKE SYSTEM TEXT V2" not in sent_text
+
+
+@pytest.mark.asyncio
+async def test_opting_into_v2_selects_the_v2_prompt(monkeypatch: pytest.MonkeyPatch):
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "final_post_authoring_prompt_version", "2")
+
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None, structured_output=_VALID_OUTPUT, finish_reason="stop", model_used="fake-model-v1",
+            usage=CapabilityUsage(input_tokens=100, output_tokens=50),
+        )
+    )
+    capability = FinalPostAuthoringCapability(gateway, _versioned_prompt_repository())
+
+    await capability.execute(_context())
+
+    sent_text = gateway.received_requests[0].messages[0].content[0].text
+    assert "FAKE SYSTEM TEXT V2" in sent_text
+    assert "FAKE SYSTEM TEXT V1" not in sent_text

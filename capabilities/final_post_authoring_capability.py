@@ -34,6 +34,7 @@ from typing import Any
 
 from capabilities.errors import CapabilityConfigurationError, RetryableCapabilityError, ValidationCapabilityError
 from capabilities.gateway_call import call_generate
+from core.config import settings
 from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, LLMGateway, Message
 from integrations.prompts.protocol import PromptRepository, RenderedPrompt
 from schemas.capability import CapabilityContext, CapabilityResult
@@ -42,6 +43,12 @@ from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
 logger = logging.getLogger(__name__)
 
 CAPABILITY_NAME = "final_post_authoring"
+# Phase I.1.2: v1 (prompts/final_post_authoring/v1.yaml, real-validated against the Pixel case,
+# task f38bee1a-6ccb-4c0e-bbed-b0e3334c29ad) is the fallback/default only - execute() reads
+# core.config.settings.final_post_authoring_prompt_version at call time, never this fixed
+# constant, mirroring capabilities/copywriting_capability.py's own identical
+# PROMPT_VERSION/settings.copywriting_prompt_version pattern exactly. v2 (prompts/
+# final_post_authoring/v2.yaml) is opt-in only - see that setting's own docstring.
 PROMPT_VERSION = "1"
 
 FINAL_POST_AUTHORING_CAPABILITY_DEFINITION = CapabilityDefinition(
@@ -164,7 +171,11 @@ class FinalPostAuthoringCapability:
                 "populate it).",
             )
 
-        prompt = self._prompt_repository.resolve(CAPABILITY_NAME, PROMPT_VERSION)
+        # Phase I.1.2: read at call time, not the fixed PROMPT_VERSION constant - settings.
+        # final_post_authoring_prompt_version defaults to "1" (byte-identical to Phase I.1's own
+        # real-validated behavior); "2" is opt-in.
+        prompt_version = settings.final_post_authoring_prompt_version
+        prompt = self._prompt_repository.resolve(CAPABILITY_NAME, prompt_version)
         request = _build_request(context, prompt)
 
         outcome = await call_generate(self._gateway, request, runtime=context.runtime, sequence=0)
