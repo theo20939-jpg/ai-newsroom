@@ -426,12 +426,16 @@ class SelectedMediaItem:
 @dataclass(frozen=True)
 class SelectedMediaPlan:
     """The deterministic H.1 media-selection outcome for one `EventRecapCandidate` build. `tier`
-    is forward-compatible serialization only - "cross_source"/"generated" are valid FUTURE values
-    (Phase H.2+, not executed here); H.1 itself only ever produces "story_pool" or "none". Absence
-    of a representative item is a normal, expected outcome (module docstring's fail-soft-on-media
-    discipline), never an error."""
+    is forward-compatible serialization only - "generated" remains a valid FUTURE value (Phase
+    H.3C+, not executed here). Phase H.3B adds "discovered" (Tier 2B - a real, eligible candidate
+    found via `services.event_recap_processor.discover_event_recap_media_if_needed()`'s own
+    re-acquisition of a confirmed/effective event's article page, never Tier 1's own confirmed-pool
+    scan). `_select_representative_media()` below still only ever produces "story_pool" or "none"
+    itself - "discovered" is set by that processor-level caller via `dataclasses.replace()`, never
+    by this module. Absence of a representative item is a normal, expected outcome (module
+    docstring's fail-soft-on-media discipline), never an error."""
 
-    tier: Literal["story_pool", "none"]
+    tier: Literal["story_pool", "discovered", "none"]
     representative: SelectedMediaItem | None
 
 

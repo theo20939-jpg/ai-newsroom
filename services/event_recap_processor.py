@@ -67,30 +67,54 @@ durable and re-derivable later, exactly as Phase G.1 did for the recap text itse
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from capabilities.executor import CapabilityExecutor
 from capabilities.registry import CapabilityRegistry
 from database.models.editorial_task import EditorialTask, TaskPriority
+from database.models.image_candidate_record import ImageCandidateRecord
+from database.models.news_event import NewsEvent
+from database.models.news_source import NewsSource
 from database.models.story import Story
 from schemas.editorial_task import EditorialTaskCreate
 from schemas.workflow import WorkflowRunResult, WorkflowStepResult, WorkflowType
 from services import workflow_service
 from services.cost_tracker import CostTracker
-from services.event_recap import EventRecapCandidate, build_event_recap_candidate, serialize_selected_media_plan
+from services.event_recap import (
+    _MAX_MEDIA_PER_EVENT,
+    _select_representative_media,
+    EventRecapCandidate,
+    SelectedMediaPlan,
+    build_event_recap_candidate,
+    serialize_selected_media_plan,
+)
+from services.image_intelligence import run_shadow_discovery
+from services.image_persistence import EditorialImageCandidate, get_editorial_image_candidates
 from services.pricing_catalog import PricingCatalog
 from workflows.errors import DuplicateActiveTaskError
 from workflows.runner import WorkflowRunner
 
+logger = logging.getLogger(__name__)
+
 # Reasoned default, matching services.telegraph_article_processor's own identical reasoning: a
 # deliberate, human-triggered background task, never time-sensitive.
 _EVENT_RECAP_TASK_PRIORITY = TaskPriority.C
+
+# Phase H.3B: bounded "how many DIFFERENT effective events to attempt discovery for in one Story",
+# not to be confused with services.event_recap._MAX_MEDIA_PER_EVENT (bounded candidates PER event,
+# a distinct concern). No existing config/pattern in this codebase caps "events per Story" for any
+# media purpose, so this is deliberately the smallest reasonable bound (mirrors _MAX_MEDIA_PER_
+# EVENT's own small-bounded-by-design magnitude) rather than a new, larger config surface - never a
+# mass crawler. Only reached at all when Tier 1 (H.1) found zero eligible media across the WHOLE
+# effective evidence set, so 3 real network fetches is a real, disclosed cost, not a hidden one.
+_MAX_MEDIA_DISCOVERY_EVENTS = 3
 
 # Phase H.1: NOT a WorkflowDefinition step (workflows/definitions/event_recap.py is untouched -
 # still exactly one real step, "synthesize_recap") - a plain, pre-populated `step_results` entry
@@ -146,6 +170,94 @@ async def _persist_selected_media(session: AsyncSession, task_id: UUID, candidat
     ]
     task.workflow = workflow
     await session.flush()
+
+
+def _effective_event_ids(candidate: EventRecapCandidate) -> list[UUID]:
+    """Phase H.3B: the exact confirmed/origin-projected evidence-set event ids the SINGLE
+    `build_event_recap_candidate()` call already established - `services.recap_event.
+    cluster_announcements()`'s own `event_ids`, threaded through into every `AnnouncementSummary.
+    member_event_ids` (services/event_recap.py::_build_announcement_summaries()). Union across all
+    announcements, in announcement order, deduped. Never a second Story/NewsEventStoryLink query -
+    an `uncertain_match` event that `build_event_recap_candidate()` itself did not fold into the
+    candidate's own announcements (directly, or via R2.9 origin projection) can never appear here,
+    satisfying the "no automatic uncertain_match use" invariant structurally, not by a new check."""
+    seen: dict[UUID, None] = {}
+    for announcement in candidate.announcements:
+        for event_id in announcement.member_event_ids:
+            seen.setdefault(event_id, None)
+    return list(seen.keys())
+
+
+async def _attempt_media_discovery_for_event(session: AsyncSession, event_id: UUID) -> None:
+    """Phase H.3B (Tier 2B): re-acquires ONE effective event's own already-known article URL
+    through the existing, unmodified `services.image_intelligence.run_shadow_discovery()` - no new
+    HTTP client, HTML parser, quality/relevance logic, or persistence path. Skips outright if this
+    event already has ANY `ImageCandidateRecord` row (eligible or not) - re-fetching the same page
+    would deterministically reproduce the same result, so a prior attempt (successful or not) is
+    never repeated ("не re-fetch все страницы без причины"). Fail-soft, never raises: a missing
+    NewsEvent/NewsSource row, or any exception from `run_shadow_discovery()` itself (timeout, SSRF
+    rejection, fetch failure, malformed HTML, or anything unexpected), is logged and treated as
+    "found nothing" for this event - never escapes to the caller."""
+    try:
+        existing_count = (
+            await session.execute(
+                select(func.count()).select_from(ImageCandidateRecord).where(ImageCandidateRecord.news_event_id == event_id)
+            )
+        ).scalar_one()
+        if existing_count > 0:
+            return
+
+        event = await session.get(NewsEvent, event_id)
+        if event is None:
+            return
+        source = await session.get(NewsSource, event.source_id)
+        if source is None:
+            return
+
+        await run_shadow_discovery(
+            event_id=event.id, source_type=source.type, content=event.content, article_url=event.url,
+            mode="shadow", event_title=event.title, source_name=source.name, session=session,
+        )
+    except Exception:  # noqa: BLE001 - fail-soft Tier-2B boundary, never blocks recap generation
+        logger.warning(
+            "event_recap_media_discovery_attempt_failed", extra={"event_id": str(event_id)}, exc_info=True,
+        )
+
+
+async def discover_event_recap_media_if_needed(
+    session: AsyncSession, candidate: EventRecapCandidate,
+) -> SelectedMediaPlan:
+    """Phase H.3B (Tier 2B): only ever meaningfully called when `candidate.selected_media.tier ==
+    "none"` (the caller's own responsibility - this function does not re-check it, matching the
+    G.1/H.1 precedent of the caller owning its own gating). Attempts real, bounded, SSRF-safe
+    article re-acquisition (`_attempt_media_discovery_for_event()`) for up to
+    `_MAX_MEDIA_DISCOVERY_EVENTS` of the candidate's own effective evidence-set events
+    (`_effective_event_ids()` - never a second Story query), then re-reads whatever
+    `ImageCandidateRecord` rows now exist for that SAME event set and re-ranks them through the
+    existing, unmodified `services.event_recap._select_representative_media()` - no new ranking
+    algorithm. Returns a plan with `tier="discovered"` if a real, eligible candidate resulted, or
+    the ordinary `tier="none"` plan (never raises) if nothing did - the caller decides whether to
+    adopt it via `dataclasses.replace()`."""
+    event_ids = _effective_event_ids(candidate)[:_MAX_MEDIA_DISCOVERY_EVENTS]
+
+    for event_id in event_ids:
+        await _attempt_media_discovery_for_event(session, event_id)
+
+    image_pool: list[tuple[UUID, EditorialImageCandidate]] = []
+    for event_id in event_ids:
+        try:
+            candidates = await get_editorial_image_candidates(session, news_event_id=event_id, limit=_MAX_MEDIA_PER_EVENT)
+        except Exception:  # noqa: BLE001 - fail-soft: a re-query failure is "found nothing" for this event
+            logger.warning(
+                "event_recap_media_discovery_requery_failed", extra={"event_id": str(event_id)}, exc_info=True,
+            )
+            continue
+        image_pool.extend((event_id, candidate) for candidate in candidates)
+
+    plan = _select_representative_media(image_pool)
+    if plan.representative is None:
+        return plan
+    return replace(plan, tier="discovered")
 
 
 async def find_event_recap_task_id(session: AsyncSession, event_id: UUID) -> UUID | None:
@@ -205,6 +317,17 @@ async def generate_recap_for_story(
             readiness_reasons=tuple(build_result.rejection_reasons),
         )
 
+    # Phase H.3B (Tier 2B): build_event_recap_candidate() itself is called exactly once above -
+    # this only ENRICHES the media portion of that SAME candidate when Tier 1 (H.1) found nothing.
+    # dataclasses.replace() produces a new object with every factual/readiness/evidence field
+    # copied verbatim from the single build - never a second build_event_recap_candidate() call,
+    # never a re-evaluated readiness.ready.
+    candidate = build_result.candidate
+    if candidate.selected_media.tier == "none":
+        discovered_plan = await discover_event_recap_media_if_needed(session, candidate)
+        if discovered_plan.representative is not None:
+            candidate = replace(candidate, selected_media=discovered_plan)
+
     try:
         task_read = await workflow_service.create_task(
             session,
@@ -222,14 +345,17 @@ async def generate_recap_for_story(
             story_id=story_id, status="already_exists", task_id=existing_task_id, run_result=None,
         )
 
-    # Phase H.1: persisted from the SAME candidate object the readiness decision already used -
-    # before the workflow runs, so it survives regardless of what synthesize_recap itself does.
-    await _persist_selected_media(session, task_read.id, build_result.candidate)
+    # Phase H.1/H.3B: persisted from the SAME candidate the readiness decision already used - only
+    # `selected_media` may differ from build_result.candidate (Tier 2B enrichment above); every
+    # other field is byte-identical to the single build() call, before the workflow runs, so it
+    # survives regardless of what synthesize_recap itself does.
+    await _persist_selected_media(session, task_read.id, candidate)
 
-    # Phase G.1: the SAME candidate object just used for the readiness decision - never rebuilt.
+    # Phase G.1/H.3B: the SAME candidate object (readiness/evidence untouched, media possibly
+    # enriched above) - never rebuilt, never a second build_event_recap_candidate() call.
     executor = CapabilityExecutor(
         session, task_read.id, capability_registry, cost_tracker=cost_tracker, pricing_catalog=pricing_catalog,
-        precomputed_event_recap_candidate=build_result.candidate,
+        precomputed_event_recap_candidate=candidate,
     )
     runner = WorkflowRunner(executor)
     run_result = await runner.run(session, task_read.id)

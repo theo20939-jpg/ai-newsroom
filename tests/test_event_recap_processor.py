@@ -26,7 +26,7 @@ from capabilities.registry import CapabilityRegistry
 from database.models.editorial_task import EditorialTask
 from database.models.image_candidate_record import ImageCandidateRecord
 from database.models.news_event import EventCategory, NewsEvent
-from database.models.news_source import SourceType
+from database.models.news_source import NewsSource, SourceType
 from database.models.story import Story
 from database.models.story_link import NewsEventStoryLink
 from integrations.llm_gateway.protocol import GenerateResponse
@@ -567,3 +567,353 @@ async def test_build_once_media_selection_persists_exact_top_ranked_candidate(
     synth_result = next(r for r in task.workflow["step_results"] if r["step_name"] == "synthesize_recap")
     assert synth_result["status"] == "SUCCESS"
     assert synth_result["result"] == _VALID_RECAP_OUTPUT
+
+
+# ---------------------------------------------------------------------------------------------
+# Phase H.3B - Tier 2B confirmed-source media discovery fallback
+# ---------------------------------------------------------------------------------------------
+
+
+def _fake_discovery_persisting_on_first_call(call_log: list, *, candidate_id: str = "discovered-hero"):  # noqa: ANN001
+    """A fake `run_shadow_discovery()` (real signature, zero network) - records every event_id it
+    was called with, and, only for the FIRST event it is ever called for (whichever effective
+    event that happens to be - never assumed to be a specific fixture index, since
+    `_MAX_MEDIA_DISCOVERY_EVENTS` bounds and clustering order are an internal detail this test
+    should not couple to), persists one real, strong, eligible ImageCandidateRecord via the SAME
+    session it was given - mirrors what the real function's own Phase 16 M5 persistence step would
+    do, without touching safe_fetch/HTML parsing/quality scoring at all."""
+
+    async def _fake(
+        *, event_id, source_type, content, article_url, mode, event_title=None,  # noqa: ANN001
+        source_name=None, session=None, editorial_task_id=None, now=None,  # noqa: ANN001
+    ):
+        call_log.append(event_id)
+        if len(call_log) == 1 and session is not None:
+            session.add(
+                ImageCandidateRecord(
+                    news_event_id=event_id, candidate_id=candidate_id, source_type=source_type,
+                    discovery_method="open_graph_image", quality_score=95, relevance_score=70,
+                    rank=1, width=1600, height=900, image_format="JPEG", quality_warnings=[],
+                    source_url=article_url or f"https://example.com/{candidate_id}.jpg",
+                    eligible_for_editorial=True,
+                )
+            )
+            await session.flush()
+
+    return _fake
+
+
+async def _fake_discovery_no_op(call_log: list):  # noqa: ANN001
+    async def _fake(
+        *, event_id, source_type, content, article_url, mode, event_title=None,  # noqa: ANN001
+        source_name=None, session=None, editorial_task_id=None, now=None,  # noqa: ANN001
+    ):
+        call_log.append(event_id)
+
+    return _fake
+
+
+async def _fake_discovery_raises(call_log: list):  # noqa: ANN001
+    async def _fake(
+        *, event_id, source_type, content, article_url, mode, event_title=None,  # noqa: ANN001
+        source_name=None, session=None, editorial_task_id=None, now=None,  # noqa: ANN001
+    ):
+        call_log.append(event_id)
+        raise RuntimeError("simulated unexpected discovery failure")
+
+    return _fake
+
+
+@pytest.mark.asyncio
+async def test_pixel_class_discovery_finds_media_when_tier_1_is_empty(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase H.3B §12 (Pixel-class test): READY Story, Tier 1 empty (zero pre-existing
+    ImageCandidateRecord rows across the whole effective evidence set) - a fake, zero-network
+    run_shadow_discovery() persists a strong candidate on one follow-up effective event. Expect:
+    generated, exactly 1 candidate build, discovery actually invoked, tier="discovered", exactly
+    1 fake LLM call."""
+    import services.event_recap_processor as processor_module
+
+    story, _events = await _seed_ready_story(db_session)
+
+    call_log: list = []
+    fake = _fake_discovery_persisting_on_first_call(call_log)
+
+    real_build = processor_module.build_event_recap_candidate
+    build_call_count = 0
+
+    async def _counting_build(*args, **kwargs):
+        nonlocal build_call_count
+        build_call_count += 1
+        return await real_build(*args, **kwargs)
+
+    monkeypatch.setattr(processor_module, "run_shadow_discovery", fake)
+    monkeypatch.setattr(processor_module, "build_event_recap_candidate", _counting_build)
+
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None, structured_output=_VALID_RECAP_OUTPUT, finish_reason="stop",
+            model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=100, output_tokens=50),
+        )
+    )
+    registry = _registry(gateway)
+
+    outcome = await generate_recap_for_story(db_session, story.id, capability_registry=registry)
+
+    assert outcome.status == "generated"
+    assert build_call_count == 1
+    assert len(call_log) > 0  # discovery was actually invoked
+    assert len(gateway.received_requests) == 1  # no second/extra LLM call
+
+    task = await db_session.get(EditorialTask, outcome.task_id)
+    media_result = _media_step_result(task)
+    assert media_result["result"]["tier"] == "discovered"
+    representative = media_result["result"]["representative"]
+    assert representative["candidate_id"] == "discovered-hero"
+    assert representative["originating_event_id"] == str(call_log[0])
+
+
+@pytest.mark.asyncio
+async def test_no_discovery_attempted_when_tier_1_already_has_media(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase H.3B §13: Tier 1 already found a strong eligible image - run_shadow_discovery() must
+    never even be called, and the H.1 result must be preserved exactly."""
+    import services.event_recap_processor as processor_module
+
+    story, events = await _seed_ready_story(db_session)
+    await _seed_image_candidate(
+        db_session, events[2].id, candidate_id="tier1-hero", quality_score=98, relevance_score=67,
+    )
+
+    call_log: list = []
+
+    async def _fail_if_called(**kwargs):
+        call_log.append(kwargs.get("event_id"))
+        raise AssertionError("run_shadow_discovery must not be called when Tier 1 already has media")
+
+    monkeypatch.setattr(processor_module, "run_shadow_discovery", _fail_if_called)
+
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None, structured_output=_VALID_RECAP_OUTPUT, finish_reason="stop",
+            model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=100, output_tokens=50),
+        )
+    )
+    registry = _registry(gateway)
+
+    outcome = await generate_recap_for_story(db_session, story.id, capability_registry=registry)
+
+    assert outcome.status == "generated"
+    assert call_log == []  # never invoked
+
+    task = await db_session.get(EditorialTask, outcome.task_id)
+    media_result = _media_step_result(task)
+    assert media_result["result"]["tier"] == "story_pool"
+    assert media_result["result"]["representative"]["candidate_id"] == "tier1-hero"
+
+
+@pytest.mark.asyncio
+async def test_discovery_finds_nothing_still_generates_with_tier_none(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase H.3B §14: Tier 1 empty, fake discovery runs but persists nothing eligible for any
+    event - generation still completes, tier stays "none", exactly 1 fake LLM call, no task
+    failure."""
+    import services.event_recap_processor as processor_module
+
+    story, _events = await _seed_ready_story(db_session)
+    call_log: list = []
+    fake = await _fake_discovery_no_op(call_log)
+    monkeypatch.setattr(processor_module, "run_shadow_discovery", fake)
+
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None, structured_output=_VALID_RECAP_OUTPUT, finish_reason="stop",
+            model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=100, output_tokens=50),
+        )
+    )
+    registry = _registry(gateway)
+
+    outcome = await generate_recap_for_story(db_session, story.id, capability_registry=registry)
+
+    assert outcome.status == "generated"
+    assert len(call_log) > 0  # discovery WAS attempted
+    assert len(gateway.received_requests) == 1
+
+    task = await db_session.get(EditorialTask, outcome.task_id)
+    assert task.status.value == "COMPLETED"
+    media_result = _media_step_result(task)
+    assert media_result["result"] == {"tier": "none", "representative": None}
+
+
+@pytest.mark.asyncio
+async def test_discovery_exception_fails_soft_and_generation_still_completes(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase H.3B §15: run_shadow_discovery() raises an unexpected exception for every effective
+    event - the Tier-2B boundary swallows it, generation completes normally, tier="none", exactly
+    1 fake LLM call, task COMPLETED (never a PermanentStepFailureError/FAILED task)."""
+    import services.event_recap_processor as processor_module
+
+    story, _events = await _seed_ready_story(db_session)
+    call_log: list = []
+    fake = await _fake_discovery_raises(call_log)
+    monkeypatch.setattr(processor_module, "run_shadow_discovery", fake)
+
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None, structured_output=_VALID_RECAP_OUTPUT, finish_reason="stop",
+            model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=100, output_tokens=50),
+        )
+    )
+    registry = _registry(gateway)
+
+    outcome = await generate_recap_for_story(db_session, story.id, capability_registry=registry)
+
+    assert outcome.status == "generated"
+    assert len(call_log) > 0  # attempted, then failed - never silently skipped
+    assert len(gateway.received_requests) == 1
+
+    task = await db_session.get(EditorialTask, outcome.task_id)
+    assert task.status.value == "COMPLETED"
+    media_result = _media_step_result(task)
+    assert media_result["result"] == {"tier": "none", "representative": None}
+
+
+@pytest.mark.asyncio
+async def test_discovery_never_uses_unrelated_uncertain_match_event(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase H.3B §16 (critical regression test): a Story has confirmed effective events A-F (the
+    proven READY fixture) plus one unrelated `uncertain_match`-linked event D with a perfect,
+    eligible image already persisted. D must never be passed to discovery, and its image must
+    never be selected - proving Tier 2B inherits R2.9's own frozen confirmed/effective-membership
+    boundary structurally, never a new, looser policy."""
+    import services.event_recap_processor as processor_module
+
+    story, _events = await _seed_ready_story(db_session)
+
+    source = NewsSource(
+        name="Test Source", type=SourceType.RSS, url=f"https://example.com/feed-{uuid4()}.xml", active=True,
+    )
+    db_session.add(source)
+    await db_session.flush()
+    event_d = NewsEvent(
+        source_id=source.id, title="Unrelated uncertain-match event", url="https://example.com/unrelated-d",
+        content="Body", category=EventCategory.TECH, hash=f"test-hash-{uuid4()}",
+    )
+    db_session.add(event_d)
+    await db_session.flush()
+    db_session.add(
+        NewsEventStoryLink(news_event_id=event_d.id, story_id=story.id, match_type="uncertain_match", match_score=0.4)
+    )
+    await db_session.flush()
+    await _seed_image_candidate(
+        db_session, event_d.id, candidate_id="unrelated-perfect-image", quality_score=99, relevance_score=95,
+    )
+
+    call_log: list = []
+
+    async def _fake(*, event_id, **kwargs):  # noqa: ANN001
+        call_log.append(event_id)
+
+    monkeypatch.setattr(processor_module, "run_shadow_discovery", _fake)
+
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None, structured_output=_VALID_RECAP_OUTPUT, finish_reason="stop",
+            model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=100, output_tokens=50),
+        )
+    )
+    registry = _registry(gateway)
+
+    outcome = await generate_recap_for_story(db_session, story.id, capability_registry=registry)
+
+    assert outcome.status == "generated"
+    assert event_d.id not in call_log
+
+    task = await db_session.get(EditorialTask, outcome.task_id)
+    media_result = _media_step_result(task)
+    # D's real, strong, eligible image is never usable - D was never in the effective event set.
+    assert media_result["result"]["tier"] == "none"
+    assert media_result["result"]["representative"] is None
+
+
+@pytest.mark.asyncio
+async def test_replaced_candidate_preserves_readiness_and_evidence_identity(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase H.3B §17: proves the race-safe invariant explicitly - build_event_recap_candidate()
+    is called exactly once; the candidate passed into CapabilityExecutor is a dataclasses.replace()
+    of that SAME build, with every factual/readiness/evidence field identical and ONLY
+    selected_media differing."""
+    import services.event_recap_processor as processor_module
+
+    story, _events = await _seed_ready_story(db_session)
+
+    call_log: list = []
+    fake = _fake_discovery_persisting_on_first_call(call_log, candidate_id="identity-check-hero")
+    monkeypatch.setattr(processor_module, "run_shadow_discovery", fake)
+
+    real_build = processor_module.build_event_recap_candidate
+    build_call_count = 0
+    original_candidates: list = []
+
+    async def _counting_build(*args, **kwargs):
+        nonlocal build_call_count
+        build_call_count += 1
+        result = await real_build(*args, **kwargs)
+        original_candidates.append(result.candidate)
+        return result
+
+    monkeypatch.setattr(processor_module, "build_event_recap_candidate", _counting_build)
+
+    captured_precomputed_candidates: list = []
+    real_executor_init = CapabilityExecutor.__init__
+
+    def _spy_executor_init(self, *args, **kwargs):
+        captured_precomputed_candidates.append(kwargs.get("precomputed_event_recap_candidate"))
+        real_executor_init(self, *args, **kwargs)
+
+    monkeypatch.setattr(processor_module.CapabilityExecutor, "__init__", _spy_executor_init)
+
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None, structured_output=_VALID_RECAP_OUTPUT, finish_reason="stop",
+            model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=100, output_tokens=50),
+        )
+    )
+    registry = _registry(gateway)
+
+    outcome = await generate_recap_for_story(db_session, story.id, capability_registry=registry)
+
+    assert outcome.status == "generated"
+    assert build_call_count == 1  # exactly one build_event_recap_candidate() call
+    assert len(original_candidates) == 1
+    assert len(captured_precomputed_candidates) == 1
+
+    original = original_candidates[0]
+    final = captured_precomputed_candidates[0]
+
+    assert final is not original  # dataclasses.replace() produced a new object
+    assert original.selected_media.tier == "none"  # the pre-enrichment snapshot
+    assert final.selected_media.tier == "discovered"  # enriched
+    assert final.selected_media != original.selected_media
+
+    # Every factual/readiness/evidence field is byte-identical to the SINGLE build - only media
+    # was ever touched.
+    assert final.story_id == original.story_id
+    assert final.anchor_event_id == original.anchor_event_id
+    assert final.readiness_state == original.readiness_state
+    assert final.story_integrity_eligible == original.story_integrity_eligible
+    assert final.story_integrity_reasons == original.story_integrity_reasons
+    assert final.announcement_count == original.announcement_count
+    assert final.readiness_source_count == original.readiness_source_count
+    assert final.evidence_reference_count == original.evidence_reference_count
+    assert final.announcements == original.announcements
+    assert final.timeline == original.timeline
+    assert final.verified_facts == original.verified_facts
+    assert final.source_refs == original.source_refs
+    assert final.media_candidates == original.media_candidates
