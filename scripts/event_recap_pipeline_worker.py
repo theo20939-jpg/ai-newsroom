@@ -38,14 +38,22 @@ as every Phase A-D.0 test already does) - this is stated explicitly, not left im
 is the single most consequential fact about invoking this script (byte-for-byte the same warning
 scripts/telegraph_pipeline_worker.py's own docstring already carries for its own pipeline).
 
-Telegram delivery ids (`EventRecapReview.telegram_chat_id`/`telegram_message_id`/
-`telegram_thread_id`) are deliberately NOT recorded by this script - `services.
-event_recap_review_service.record_telegram_delivery()` exists but is never called here, mirroring
-scripts/telegraph_pipeline_worker.py's own identical, already-accepted behavior (that script never
-calls TelegraphArticleReviewService.record_telegram_delivery() either). This is a disclosed,
-inherited gap, not a Phase E.0 regression: bot/handlers/event_recap_review.py's own approve/
-needs_revision callback re-derives `chat_id`/`message_id` from the live Telegram callback object
-itself, never from these columns, so the edit-in-place decision flow is unaffected either way.
+Phase H.2 correction: Telegram delivery ids (`EventRecapReview.telegram_chat_id`/`telegram_
+message_id`/`telegram_thread_id`) are now recorded - `services.event_recap_review_notifier.
+send_event_recap_review()` itself calls `services.event_recap_review_service.
+record_telegram_delivery()` once the canonical text (MESSAGE 2) send succeeds, so this script does
+not need to (and does not) call it separately. This closes the previously-disclosed gap noted here
+before Phase H.2 (mirrors scripts/telegraph_pipeline_worker.py's own still-open, unrelated gap for
+its own sibling workflow - not touched by this phase). bot/handlers/event_recap_review.py's own
+approve/needs_revision callback still re-derives `chat_id`/`message_id` from the live Telegram
+callback object itself for its own edit-in-place, never from these columns - unaffected either way.
+
+Phase H.2: this script also reads the H.1-persisted `select_recap_media` step result
+(`EditorialTask.workflow["step_results"]`, unchanged shape) and passes it through to
+`send_event_recap_review()` as `selected_media` - the representative image (if any) is sent as a
+separate MESSAGE 1, ahead of the full-text canonical review (MESSAGE 2). See that module's own
+docstring for the full two-message contract; this script makes no media selection/resolution
+decision of its own.
 
 This script never creates a ContentDraft, never publishes anything, never touches
 `EventRecapCandidate.publishable` (services/event_recap.py) - that field is not even reachable
@@ -115,11 +123,13 @@ async def run_event_recap_pipeline_for_story(story_id: UUID, *, live: bool) -> N
 
         task = await session.get(EditorialTask, outcome.task_id)
         recap_result = None
+        selected_media = None
         if task is not None:
             for step_result in (task.workflow or {}).get("step_results", []):
                 if step_result.get("step_name") == "synthesize_recap" and step_result.get("status") == "SUCCESS":
                     recap_result = step_result.get("result")
-                    break
+                if step_result.get("step_name") == "select_recap_media" and step_result.get("status") == "SUCCESS":
+                    selected_media = step_result.get("result")
 
         if recap_result is None:
             logger.warning(
@@ -133,13 +143,17 @@ async def run_event_recap_pipeline_for_story(story_id: UUID, *, live: bool) -> N
         dry_run = not (live and settings.event_recap_pipeline_enabled)
         bot = create_bot()
         try:
-            routing_outcome = await send_event_recap_review(bot, review, recap_result, dry_run=dry_run)
+            send_outcome = await send_event_recap_review(
+                bot, session, review, recap_result, selected_media=selected_media, dry_run=dry_run,
+            )
         finally:
             await bot.session.close()
         logger.info(
             "event_recap_pipeline_worker_review_stage",
             extra={
-                "story_id": str(story_id), "review_id": str(review.id), "sent": routing_outcome.sent,
+                "story_id": str(story_id), "review_id": str(review.id),
+                "sent": send_outcome.text_outcome.sent,
+                "media_sent": send_outcome.media_outcome.sent if send_outcome.media_outcome else None,
                 "dry_run": dry_run,
             },
         )
