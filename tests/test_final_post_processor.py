@@ -61,17 +61,29 @@ _VALID_RECAP_OUTPUT = {
 _VALID_FINAL_POST_OUTPUT = {"title": "A public news title", "body": "A public news body, in prose."}
 
 
+_FINAL_POST_AUTHORING_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {"title": {"type": "string"}, "body": {"type": "string"}},
+    "required": ["title", "body"], "additionalProperties": False,
+}
+
+
 def _final_post_authoring_prompt_repository() -> FakePromptRepository:
+    """Phase I.1.4: registers BOTH "1" and "2" - settings.final_post_authoring_prompt_version now
+    defaults to "2" (the production-promoted version), and several tests explicitly override to
+    "1" for rollback/comparison coverage, so both must always resolve regardless of which the
+    active settings value happens to be."""
     repository = FakePromptRepository()
     repository.register(
         RenderedPrompt(
-            name="final_post_authoring", version="1", system="You are a fake final-post copywriter.",
-            rules=["Never invent facts."],
-            output_schema={
-                "type": "object",
-                "properties": {"title": {"type": "string"}, "body": {"type": "string"}},
-                "required": ["title", "body"], "additionalProperties": False,
-            },
+            name="final_post_authoring", version="1", system="You are a fake final-post copywriter V1.",
+            rules=["Never invent facts."], output_schema=_FINAL_POST_AUTHORING_OUTPUT_SCHEMA,
+        )
+    )
+    repository.register(
+        RenderedPrompt(
+            name="final_post_authoring", version="2", system="You are a fake final-post copywriter V2.",
+            rules=["Never invent facts."], output_schema=_FINAL_POST_AUTHORING_OUTPUT_SCHEMA,
         )
     )
     return repository
@@ -515,3 +527,184 @@ async def test_media_plan_is_copied_verbatim_from_the_source_recap_task(db_sessi
     # No resolution/sending happened in I.1 - storage_key never touched real storage.
     sent_text = gateway.received_requests[0].messages[-1].content[0].text
     assert "legacy/fallback.jpg" not in sent_text
+
+
+# -------------------------------------------------------------------------------------------
+# Phase I.1.4: durable prompt-version provenance (Part 12)
+# -------------------------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_actual_prompt_version_is_persisted_in_final_post_source_default_v2(db_session: AsyncSession) -> None:
+    """settings.final_post_authoring_prompt_version defaults to "2" (Phase I.1.4 promotion) - the
+    persisted final_post_source bundle must record that exact value, never a hardcoded "2"."""
+    review, _recap_task_id, _story, _events = await _seed_approved_review(db_session)
+    assert settings.final_post_authoring_prompt_version == "2"
+
+    gateway = _final_post_gateway()
+    outcome = await generate_final_post_for_review(db_session, review.id, capability_registry=_final_post_registry(gateway))
+
+    assert outcome.status == "generated"
+    task = await db_session.get(EditorialTask, outcome.task_id)
+    source_step = next(r for r in task.workflow["step_results"] if r["step_name"] == "final_post_source")
+    assert source_step["result"]["authoring_prompt_version"] == "2"
+
+    sent_text = gateway.received_requests[0].messages[0].content[0].text
+    assert "copywriter V2" in sent_text
+
+
+@pytest.mark.asyncio
+async def test_actual_prompt_version_is_persisted_in_final_post_source_explicit_v1(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An explicit override to "1" (rollback/comparison) must be reflected exactly, not the
+    default "2"."""
+    monkeypatch.setattr(settings, "final_post_authoring_prompt_version", "1")
+    review, _recap_task_id, _story, _events = await _seed_approved_review(db_session)
+
+    gateway = _final_post_gateway()
+    outcome = await generate_final_post_for_review(db_session, review.id, capability_registry=_final_post_registry(gateway))
+
+    assert outcome.status == "generated"
+    task = await db_session.get(EditorialTask, outcome.task_id)
+    source_step = next(r for r in task.workflow["step_results"] if r["step_name"] == "final_post_source")
+    assert source_step["result"]["authoring_prompt_version"] == "1"
+
+    sent_text = gateway.received_requests[0].messages[0].content[0].text
+    assert "copywriter V1" in sent_text
+
+
+# -------------------------------------------------------------------------------------------
+# Phase I.1.4: durable fact-safety provenance (Parts 13-15)
+# -------------------------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_fact_safety_pass_result_is_durably_persisted_and_matches_the_gating_result(
+    db_session: AsyncSession,
+) -> None:
+    review, _recap_task_id, _story, _events = await _seed_approved_review(db_session)
+
+    gateway = _final_post_gateway()
+    outcome = await generate_final_post_for_review(db_session, review.id, capability_registry=_final_post_registry(gateway))
+
+    assert outcome.status == "generated"
+    assert outcome.fact_safety_status in ("pass", "review")
+    assert outcome.content_draft is not None
+
+    task = await db_session.get(EditorialTask, outcome.task_id)
+    step_names = [r["step_name"] for r in task.workflow["step_results"]]
+    assert "final_post_fact_safety" in step_names
+
+    fact_safety_step = next(r for r in task.workflow["step_results"] if r["step_name"] == "final_post_fact_safety")
+    assert fact_safety_step["status"] == "SUCCESS"
+    persisted = fact_safety_step["result"]
+    assert persisted["status"] == outcome.fact_safety_status
+    assert "claims_checked" in persisted
+    assert "supported" in persisted
+    assert "uncertain" in persisted
+    assert "unsupported" in persisted
+    assert "findings" in persisted
+
+
+@pytest.mark.asyncio
+async def test_fact_safety_block_result_is_durably_persisted_even_without_a_contentdraft(
+    db_session: AsyncSession,
+) -> None:
+    review, _recap_task_id, _story, _events = await _seed_approved_review(db_session)
+
+    unsupported_output = {
+        "title": "Marcus Fenwick Announces Major Deal",
+        "body": "Marcus Fenwick made a major announcement today about new plans.",
+    }
+    gateway = _final_post_gateway(unsupported_output)
+    outcome = await generate_final_post_for_review(db_session, review.id, capability_registry=_final_post_registry(gateway))
+
+    assert outcome.status == "fact_safety_blocked"
+    assert outcome.fact_safety_status == "block"
+    assert outcome.content_draft is None
+    assert len(gateway.received_requests) == 1  # no retry on a fact-safety block
+
+    task = await db_session.get(EditorialTask, outcome.task_id)
+    fact_safety_step = next(r for r in task.workflow["step_results"] if r["step_name"] == "final_post_fact_safety")
+    assert fact_safety_step["status"] == "SUCCESS"
+    assert fact_safety_step["result"]["status"] == "block"
+    assert fact_safety_step["result"]["findings"]  # non-empty - the actual audit evidence
+
+    draft_count = (
+        await db_session.execute(
+            select(func.count()).select_from(ContentDraft).where(ContentDraft.task_id == outcome.task_id)
+        )
+    ).scalar_one()
+    assert draft_count == 0
+
+
+@pytest.mark.asyncio
+async def test_contentdraft_invariant_source_authoring_and_passing_fact_safety_all_exist(
+    db_session: AsyncSession,
+) -> None:
+    """Part 15's own invariant, to be consumed by I.2: for a NEW (post-I.1.4) FINAL_POST_AUTHORING
+    task, a ContentDraft existing implies final_post_source, final_post_authoring, and
+    final_post_fact_safety(status == pass|review, i.e. non-blocking) all exist."""
+    review, _recap_task_id, _story, _events = await _seed_approved_review(db_session)
+
+    gateway = _final_post_gateway()
+    outcome = await generate_final_post_for_review(db_session, review.id, capability_registry=_final_post_registry(gateway))
+
+    assert outcome.content_draft is not None
+    task = await db_session.get(EditorialTask, outcome.task_id)
+    step_names = {r["step_name"] for r in task.workflow["step_results"]}
+    assert {"final_post_source", "final_post_authoring", "final_post_fact_safety"} <= step_names
+
+    fact_safety_step = next(r for r in task.workflow["step_results"] if r["step_name"] == "final_post_fact_safety")
+    assert fact_safety_step["result"]["status"] != "block"
+
+
+@pytest.mark.asyncio
+async def test_evaluate_fact_safety_runs_exactly_once_per_authoring_run(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Part 7: persistence must reuse the one existing evaluation - never a second call to
+    evaluate_fact_safety() purely for persistence purposes."""
+    import services.final_post_processor as final_post_processor_module
+
+    call_count = 0
+    real_evaluate = final_post_processor_module.evaluate_fact_safety
+
+    def _counting_evaluate(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return real_evaluate(*args, **kwargs)
+
+    monkeypatch.setattr(final_post_processor_module, "evaluate_fact_safety", _counting_evaluate)
+
+    review, _recap_task_id, _story, _events = await _seed_approved_review(db_session)
+    gateway = _final_post_gateway()
+    outcome = await generate_final_post_for_review(db_session, review.id, capability_registry=_final_post_registry(gateway))
+
+    assert outcome.status == "generated"
+    assert call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_legacy_pre_i114_tasks_are_never_backfilled(db_session: AsyncSession) -> None:
+    """Part 9: a task created before this phase (no final_post_fact_safety step at all) must never
+    be silently mutated/backfilled by this module - generate_final_post_for_review() never revisits
+    an existing task's own step_results after creation."""
+    review, recap_task_id, story, event = await _seed_legacy_task_and_approved_review(db_session)
+
+    gateway = _final_post_gateway()
+    outcome = await generate_final_post_for_review(db_session, review.id, capability_registry=_final_post_registry(gateway))
+
+    assert outcome.status == "generated"
+    task = await db_session.get(EditorialTask, outcome.task_id)
+    step_names = {r["step_name"] for r in task.workflow["step_results"]}
+    # This IS a fresh, new I.1.4 task (the legacy shape only applies to the SOURCE recap task,
+    # never to this new FINAL_POST_AUTHORING task) - final_post_fact_safety is present here.
+    assert "final_post_fact_safety" in step_names
+
+    # The SOURCE EVENT_RECAP task itself (legacy, pre-I.1) was never touched.
+    recap_task = await db_session.get(EditorialTask, recap_task_id)
+    recap_step_names = {r["step_name"] for r in recap_task.workflow["step_results"]}
+    assert "final_post_fact_safety" not in recap_step_names
+    assert "event_recap_source_snapshot" not in recap_step_names

@@ -35,8 +35,9 @@ def test_file_repository_latest_resolution_now_points_at_v2():
     """FilePromptRepository's own `resolve(name)` (no version) always returns the highest declared
     version - this is a property of the repository, not a production default: the real active
     version for FinalPostAuthoringCapability is governed by
-    core.config.settings.final_post_authoring_prompt_version (defaults "1"), read explicitly at
-    call time - see tests/test_final_post_authoring_capability.py's own version-selection tests."""
+    core.config.settings.final_post_authoring_prompt_version (defaults "2" as of Phase I.1.4), read
+    explicitly at call time - see tests/test_final_post_authoring_capability.py's own
+    version-selection tests."""
     repo = _repo()
     assert repo.resolve("final_post_authoring") == repo.resolve("final_post_authoring", "2")
 

@@ -466,13 +466,19 @@ class Settings(BaseSettings):
 
     # Phase I.1.2 (Final Post Authoring editorial calibration): mirrors copywriting_prompt_version's
     # own established pattern exactly - v1 (prompts/final_post_authoring/v1.yaml) is Phase I.1's
-    # original, real-validated (Pixel, task f38bee1a-6ccb-4c0e-bbed-b0e3334c29ad) version and stays
-    # the default; v2 (prompts/final_post_authoring/v2.yaml) rewrites the editorial contract to
-    # produce a genuinely composed public post rather than a literal recap repackaging, and is
-    # opt-in only - never set in .env, never the default this phase. Both files are immutable once
+    # original, real-validated (Pixel, task f38bee1a-6ccb-4c0e-bbed-b0e3334c29ad) version; v2
+    # (prompts/final_post_authoring/v2.yaml) rewrites the editorial contract to produce a genuinely
+    # composed public post rather than a literal recap repackaging. Both files are immutable once
     # published; capabilities/final_post_authoring_capability.py reads this setting at call time,
     # never a fixed constant, so the active version can change without a code deploy.
-    final_post_authoring_prompt_version: Literal["1", "2"] = "1"
+    #
+    # Phase I.1.4: promoted to "2" as the production default, after a real, live-validated V2 run
+    # (Silver Lake/Workday, task 748b6456-56d9-4a1c-b8c0-eddcbab8976b, ContentDraft
+    # 603cfbab-38ea-48f6-a8e1-d9b9335ffed6) confirmed technical PASS + fact-safety PASS +
+    # editorial approval to promote (Phase I.1.3's own report, §32/user decision). "1" remains a
+    # fully supported, explicit-selectable, immutable value - never deleted from the Literal, never
+    # made unreachable - for rollback or comparison.
+    final_post_authoring_prompt_version: Literal["1", "2"] = "2"
 
     # Phase 19 M5: quote delivery wiring and length safety (docs/phase19_m0_audit.md). Three-
     # state, matching article_acquisition_mode's own convention. "off" (default): worker/

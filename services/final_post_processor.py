@@ -53,6 +53,34 @@ call succeeded; authoring is not retried), but this function's own outcome is `"
 blocked"`, never silently downgraded to a normal `"generated"` result. `"review"`/`"pass"` both
 allow ContentDraft creation, mirroring `services.content_draft_service._draft_status_for()`'s own
 established "review does not itself block persistence" semantics.
+
+Phase I.1.4 (durable authoring audit metadata - added after a real, live-validated V1 Pixel run and
+a real, live-validated V2 Silver Lake/Workday run both confirmed the gap empirically): two prior
+gaps are closed here, additively, with no change to the lifecycle above.
+
+(1) PROMPT VERSION PROVENANCE: `capabilities/gateway_call.py`'s `CapabilityCall`/`AIExecution.
+prompt_version` is never populated by any Capability in this codebase (a real, disclosed,
+codebase-wide observability gap - not fixed here, see this module's own final report for that
+phase). For FINAL_POST_AUTHORING specifically, the actual `core.config.settings.
+final_post_authoring_prompt_version` value is snapshotted into the bundle itself
+(`authoring_prompt_version`) at the exact moment this run assembles it - the SAME bundle object is
+both persisted as `final_post_source` and threaded into `CapabilityExecutor` via
+`precomputed_final_post_source`, so the value the capability actually reads moments later (settings
+is a process-wide, request-invariant singleton - nothing in this codebase reconfigures it mid-run)
+is guaranteed identical to what was snapshotted. Never hardcoded, never re-derived later from
+whatever the CURRENT config happens to be at audit time.
+
+(2) FACT-SAFETY DURABILITY: the single `evaluate_fact_safety()` verdict this function already
+computes is now persisted verbatim (never re-evaluated, never narrowed to a hand-picked subset) as
+a new `final_post_fact_safety` step_results entry - on BOTH the "block" and the "generated" path,
+via `_persist_fact_safety_result()`, which commits immediately (unlike `_persist_final_post_
+source()`'s flush-only discipline) since the "block" path has no other guaranteed later commit.
+This gives every FINAL_POST_AUTHORING task an explicit, durable answer to "was this ContentDraft
+(if any) gated by a PASS/review verdict, and what exactly did that verdict say" - never an
+in-memory-only fact that vanishes once this function returns. Pre-I.1.4 tasks (Pixel
+f38bee1a-6ccb-4c0e-bbed-b0e3334c29ad, Silver Lake/Workday 748b6456-56d9-4a1c-b8c0-eddcbab8976b) are
+deliberately NOT backfilled - they remain legacy artifacts missing this step, exactly as the
+EVENT_RECAP source-snapshot legacy policy already established the precedent for.
 """
 from __future__ import annotations
 
@@ -101,6 +129,12 @@ _RECAP_STEP_NAME = "synthesize_recap"
 _RECAP_MEDIA_STEP_NAME = "select_recap_media"
 _RECAP_SOURCE_SNAPSHOT_STEP_NAME = "event_recap_source_snapshot"
 _AUTHORING_STEP_NAME = "final_post_authoring"
+
+# Phase I.1.4: a second, sibling pre-populated `step_results` entry, same mechanism/safety as
+# `_FINAL_POST_SOURCE_STEP_NAME` above - the durable, JSON-safe `evaluate_fact_safety()` verdict
+# this run's own single evaluation already produced. See this module's own docstring's "Phase
+# I.1.4" section for the full reasoning.
+_FACT_SAFETY_STEP_NAME = "final_post_fact_safety"
 
 FinalPostGenerationStatus = Literal[
     "review_not_found", "not_approved", "source_missing", "already_exists",
@@ -222,6 +256,31 @@ async def _persist_final_post_source(session: AsyncSession, task_id: UUID, bundl
     await session.flush()
 
 
+async def _persist_fact_safety_result(session: AsyncSession, task_id: UUID, fact_safety_result: dict[str, Any]) -> None:
+    """Phase I.1.4: durably persists the exact, single `evaluate_fact_safety()` verdict this run
+    already computed - never a second evaluation, never a narrowed/reinvented subset of its real
+    result shape (module docstring's own "never a hand-picked subset" discipline - the real dict
+    `evaluate_fact_safety()` returns is already plain/JSON-safe, stored as-is).
+
+    Unlike `_persist_final_post_source()`'s flush-only discipline, this commits immediately: the
+    "block" outcome path that follows has no other guaranteed subsequent commit (no
+    `ContentDraftService` call happens on that path), so without an explicit commit here the
+    fact-safety verdict for a BLOCKED run would never actually become durable. The "generated" path
+    below still performs its own, separate `ContentDraftService` commit afterward - two independent,
+    safe commits, never a shared/ambiguous transaction boundary."""
+    task = await session.get(EditorialTask, task_id)
+    assert task is not None, "task_id came from create_task() earlier in this same call"
+    now = datetime.now(timezone.utc)
+    step_result = WorkflowStepResult(
+        step_name=_FACT_SAFETY_STEP_NAME, status="SUCCESS", attempt=1,
+        started_at=now, finished_at=now, error=None, result=fact_safety_result,
+    )
+    workflow = dict(task.workflow or {})
+    workflow["step_results"] = [step_result.model_dump(mode="json"), *workflow.get("step_results", [])]
+    task.workflow = workflow
+    await session.commit()
+
+
 def _authored_output(run_result: WorkflowRunResult) -> dict[str, Any] | None:
     for step_result in run_result.step_results:
         if step_result.step_name == _AUTHORING_STEP_NAME and step_result.status == "SUCCESS":
@@ -284,6 +343,13 @@ async def generate_final_post_for_review(
             review_id=review_id, status="source_missing", task_id=None, run_result=None,
         )
 
+    # Phase I.1.4: snapshot the actual prompt version this run will use, at run time - the SAME
+    # `settings.final_post_authoring_prompt_version` value `FinalPostAuthoringCapability.execute()`
+    # itself reads moments later (see this module's own docstring's "Phase I.1.4" section). Added
+    # to the bundle before either persistence or the executor call, so both the durable
+    # `final_post_source` record and the actual authoring call are threaded from this one snapshot.
+    bundle = {**bundle, "authoring_prompt_version": settings.final_post_authoring_prompt_version}
+
     anchor_event_id = UUID(bundle["anchor_event_id"])
 
     # Check for an existing task BEFORE creating one - mirrors generate_recap_for_story()'s own
@@ -334,6 +400,10 @@ async def generate_final_post_for_review(
     evidence = _fact_safety_evidence(bundle)
     fact_safety_result = evaluate_fact_safety(authored.get("title") or "", authored.get("body") or "", evidence)
     fact_safety_status = fact_safety_result.get("status")
+
+    # Phase I.1.4: persisted BEFORE branching on status - both the "block" and the "generated"
+    # path must leave a durable record of the exact verdict used to gate ContentDraft creation.
+    await _persist_fact_safety_result(session, task_read.id, fact_safety_result)
 
     if fact_safety_status == "block":
         logger.warning(

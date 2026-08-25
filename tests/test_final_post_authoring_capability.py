@@ -60,10 +60,20 @@ _BUNDLE = {
 
 
 def _prompt_repository() -> FakePromptRepository:
+    """Phase I.1.4: registers both "1" and "2" - settings.final_post_authoring_prompt_version
+    defaults to "2" (the production-promoted version), so every test in this file that does not
+    explicitly override the setting must still find a resolvable prompt at whichever version is
+    actually active."""
     repository = FakePromptRepository()
     repository.register(
         RenderedPrompt(
             name=CAPABILITY_NAME, version="1", system="You are a fake final-post copywriter.",
+            rules=["Never invent facts."], output_schema=_OUTPUT_SCHEMA,
+        )
+    )
+    repository.register(
+        RenderedPrompt(
+            name=CAPABILITY_NAME, version="2", system="You are a fake final-post copywriter.",
             rules=["Never invent facts."], output_schema=_OUTPUT_SCHEMA,
         )
     )
@@ -237,18 +247,44 @@ async def test_gateway_failure_raises_a_capability_error():
 
 
 # ---------------------------------------------------------------------------------------------
-# Phase I.1.2: prompt version selection (mirrors tests/test_copywriting_prompt_version_cutover.py's
-# own established pattern for capabilities/copywriting_capability.py's identical mechanism).
+# Phase I.1.2/I.1.4: prompt version selection (mirrors tests/test_copywriting_prompt_version_
+# cutover.py's own established pattern for capabilities/copywriting_capability.py's identical
+# mechanism). Phase I.1.4 promoted the settings default from "1" to "2" (real, live-validated V2
+# run - Silver Lake/Workday, task 748b6456-56d9-4a1c-b8c0-eddcbab8976b) - "1" stays fully
+# supported and explicit-selectable, never deleted.
 # ---------------------------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_default_prompt_version_is_v1(monkeypatch: pytest.MonkeyPatch):
-    """settings.final_post_authoring_prompt_version defaults to "1" - byte-identical to Phase
-    I.1's own real-validated (Pixel) behavior."""
+async def test_default_prompt_version_is_v2(monkeypatch: pytest.MonkeyPatch):
+    """Phase I.1.4: settings.final_post_authoring_prompt_version now defaults to "2" - the
+    production-promoted, real-validated (Silver Lake/Workday) version."""
     from core.config import settings
 
-    assert settings.final_post_authoring_prompt_version == "1"
+    assert settings.final_post_authoring_prompt_version == "2"
+
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None, structured_output=_VALID_OUTPUT, finish_reason="stop", model_used="fake-model-v1",
+            usage=CapabilityUsage(input_tokens=100, output_tokens=50),
+        )
+    )
+    capability = FinalPostAuthoringCapability(gateway, _versioned_prompt_repository())
+
+    await capability.execute(_context())
+
+    sent_text = gateway.received_requests[0].messages[0].content[0].text
+    assert "FAKE SYSTEM TEXT V2" in sent_text
+    assert "FAKE SYSTEM TEXT V1" not in sent_text
+
+
+@pytest.mark.asyncio
+async def test_v1_still_explicit_selectable_via_override(monkeypatch: pytest.MonkeyPatch):
+    """Phase I.1.4: v1 remains fully supported for rollback/comparison even though it is no
+    longer the default - an explicit settings override still selects it."""
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "final_post_authoring_prompt_version", "1")
 
     gateway = FakeLLMGateway(
         generate_response=GenerateResponse(
