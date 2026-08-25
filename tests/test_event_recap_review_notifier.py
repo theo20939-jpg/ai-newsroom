@@ -34,9 +34,20 @@ from database.models.news_source import NewsSource, SourceType
 from schemas.editorial_route import EditorialDestination
 from schemas.editorial_task import EditorialTaskCreate
 from schemas.workflow import WorkflowType
-from services import workflow_service
+from services import image_persistence, workflow_service
 from services.event_recap_review_notifier import send_event_recap_review, update_event_recap_review_message
 from services.event_recap_review_service import create_event_recap_review, get_event_recap_review
+
+
+@pytest.fixture(autouse=True)
+def _isolated_image_storage(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """Phase H.3C: the branded_fallback resolution tests below write/read real bytes through
+    `services.image_persistence._get_storage()` - isolated per test, singleton reset, mirrors
+    tests/test_image_persistence.py's own established `_isolated_storage` fixture exactly."""
+    monkeypatch.setattr(settings, "image_storage_root", str(tmp_path))
+    monkeypatch.setattr(image_persistence, "_storage_singleton", None)
+    yield
+    monkeypatch.setattr(image_persistence, "_storage_singleton", None)
 
 _RECAP_RESULT = {
     "recap_title": "Apple Watch Ultra Unveiled",
@@ -452,3 +463,96 @@ async def test_canonical_text_send_failure_is_not_recorded_as_success(db_session
     assert persisted.telegram_message_id is None
     assert persisted.telegram_chat_id is None
     assert persisted.status == EventRecapReviewStatus.PENDING  # no keyboard message exists to act on
+
+
+# ---------------------------------------------------------------------------------------------
+# Phase H.3C - tier-agnostic media resolution (branded_fallback + old-plan compatibility)
+# ---------------------------------------------------------------------------------------------
+
+
+def _seed_branded_fallback_bytes() -> dict:
+    """Writes real bytes through the SAME `services.image_persistence._get_storage()` abstraction
+    `render_branded_fallback_media()` uses, and returns the exact `selected_media` dict shape
+    `services.event_recap.serialize_selected_media_plan()` produces for `tier="branded_fallback"`
+    - `candidate_id`/`originating_event_id` both `None`, by design (no `ImageCandidateRecord` row
+    exists for a rendered card)."""
+    import hashlib
+
+    data = b"fake-branded-fallback-jpeg-bytes-for-h3c-tests"
+    sha256 = hashlib.sha256(data).hexdigest()
+    stored = image_persistence._get_storage().store_validated_image(
+        data, sha256=sha256, image_format="JPEG", max_bytes=10_000_000,
+    )
+    return {
+        "tier": "branded_fallback",
+        "representative": {
+            "candidate_id": None, "originating_event_id": None, "media_type": "image",
+            "recommended_role": "hero", "storage_key": stored.storage_key, "telegram_file_id": None,
+            "sha256": stored.sha256, "remote_url": None,
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_branded_fallback_resolves_from_local_storage_no_candidate_lookup(db_session: AsyncSession) -> None:
+    """Phase H.3C §20: a persisted `tier="branded_fallback"` plan (no `candidate_id`/`originating_
+    event_id` - no `ImageCandidateRecord` row exists at all, deliberately unseeded here) resolves
+    via direct local-storage bytes, never an `ImageCandidateRecord` lookup, never a network call.
+    The two-message contract (§21) is unaffected: the notifier does not know or care that this
+    visual came from Tier 3 rather than Tier 1/2B."""
+    selected_media = _seed_branded_fallback_bytes()
+    review = _pending_review()
+
+    bot = AsyncMock()
+    bot.send_photo.return_value.message_id = 501
+    bot.send_message.return_value.message_id = 502
+    call_order: list[str] = []
+    _attach_call_order(bot, call_order)
+
+    outcome = await send_event_recap_review(
+        bot, db_session, review, _RECAP_RESULT, selected_media=selected_media, dry_run=False,
+    )
+
+    assert call_order == ["photo", "text"]
+    assert outcome.media_outcome is not None and outcome.media_outcome.sent is True
+    assert outcome.text_outcome.sent is True
+
+    photo_kwargs = bot.send_photo.call_args.kwargs
+    assert photo_kwargs["caption"] == ""
+    assert photo_kwargs.get("reply_markup") is None
+    # The actual photo payload is a freshly-read BufferedInputFile (from local storage), never a
+    # bare candidate_id/event_id lookup.
+    from aiogram.types import BufferedInputFile
+
+    assert isinstance(bot.send_photo.call_args.kwargs["photo"], BufferedInputFile)
+
+    text_kwargs = bot.send_message.call_args.kwargs
+    assert text_kwargs["reply_to_message_id"] == 501
+    assert text_kwargs["reply_markup"] is not None
+
+
+@pytest.mark.asyncio
+async def test_old_story_pool_plan_still_resolves_via_image_candidate_record(db_session: AsyncSession) -> None:
+    """Phase H.3C §22 (regression guard): an H.1-shaped `tier="story_pool"` plan (`candidate_id` +
+    `originating_event_id` both present, exactly as every pre-H.3C persisted task still has) must
+    keep resolving through the existing `get_editorial_image_candidates()` path - no branded-
+    fallback/storage-key-only branch ever intercepts it. This is already exercised implicitly by
+    every other `story_pool` test in this file; this test names the guarantee explicitly."""
+    event, selected_media = await _seed_event_with_image(db_session)
+    assert selected_media["tier"] == "story_pool"
+    assert selected_media["representative"]["candidate_id"] is not None
+    assert selected_media["representative"]["originating_event_id"] is not None
+    review = _pending_review()
+
+    bot = AsyncMock()
+    bot.send_photo.return_value.message_id = 501
+    bot.send_message.return_value.message_id = 502
+
+    outcome = await send_event_recap_review(
+        bot, db_session, review, _RECAP_RESULT, selected_media=selected_media, dry_run=False,
+    )
+
+    assert outcome.media_outcome is not None and outcome.media_outcome.sent is True
+    # The seeded candidate has a real telegram_file_id (see _seed_event_with_image) - resolved via
+    # resolve_photo_input()'s existing file_id-first path, a plain string, never BufferedInputFile.
+    assert bot.send_photo.call_args.kwargs["photo"] == "cached-file-id-123"

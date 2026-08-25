@@ -61,12 +61,24 @@ computed inside the SAME single `build_event_recap_candidate()` call this module
 readiness) is persisted into `EditorialTask.workflow["step_results"]` as one extra, deterministic
 entry - see `_persist_selected_media()`'s own docstring for why that is the safe slot (`workflows/
 runner.py`'s `WorkflowExecutionState.model_validate()` forbids an unknown TOP-LEVEL key, so this is
-not a new `task.workflow["event_recap_media"]` field). No Telegram rendering, no external image
-search, no image generation - this checkpoint only makes the Story-level confirmed-membership pick
-durable and re-derivable later, exactly as Phase G.1 did for the recap text itself.
+not a new `task.workflow["event_recap_media"]` field). No Telegram rendering - this checkpoint only
+makes the Story-level confirmed-membership pick durable and re-derivable later, exactly as Phase
+G.1 did for the recap text itself.
+
+Phase H.3B (Tier 2B, `discover_event_recap_media_if_needed()`) and Phase H.3C (Tier 3, `render_
+branded_fallback_media()`) extend Phase H.1's media pick into a three-tier fallback chain, tried in
+order, each only when every earlier tier found nothing: (1) confirmed Story media pool, (2)
+confirmed-source article re-acquisition (real network, zero LLM), (3) a deterministic NINJA PULSE
+branded card (zero network, zero LLM, zero paid image-generation call - Pillow only, `services.
+brand_renderer.render_recap_fallback_card()`). All three run BEFORE `workflow_service.create_task()
+`, against the SAME single `build_event_recap_candidate()` snapshot - `dataclasses.replace()`
+updates only `selected_media`, never re-triggering readiness/evidence. A text-only review remains
+the last-resort fail-soft outcome for a technical failure at every tier, never the expected result
+of an ordinary Story simply lacking a source photo.
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
@@ -78,6 +90,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from capabilities.executor import CapabilityExecutor
 from capabilities.registry import CapabilityRegistry
+from core.config import settings
 from database.models.editorial_task import EditorialTask, TaskPriority
 from database.models.image_candidate_record import ImageCandidateRecord
 from database.models.news_event import NewsEvent
@@ -86,17 +99,21 @@ from database.models.story import Story
 from schemas.editorial_task import EditorialTaskCreate
 from schemas.workflow import WorkflowRunResult, WorkflowStepResult, WorkflowType
 from services import workflow_service
+from services.brand_renderer import render_recap_fallback_card
 from services.cost_tracker import CostTracker
 from services.event_recap import (
     _MAX_MEDIA_PER_EVENT,
+    _NO_MEDIA_PLAN,
     _select_representative_media,
+    derive_recap_visual_subject,
     EventRecapCandidate,
+    SelectedMediaItem,
     SelectedMediaPlan,
     build_event_recap_candidate,
     serialize_selected_media_plan,
 )
 from services.image_intelligence import run_shadow_discovery
-from services.image_persistence import EditorialImageCandidate, get_editorial_image_candidates
+from services.image_persistence import EditorialImageCandidate, _get_storage, get_editorial_image_candidates
 from services.pricing_catalog import PricingCatalog
 from workflows.errors import DuplicateActiveTaskError
 from workflows.runner import WorkflowRunner
@@ -260,6 +277,54 @@ async def discover_event_recap_media_if_needed(
     return replace(plan, tier="discovered")
 
 
+def render_branded_fallback_media(candidate: EventRecapCandidate) -> SelectedMediaPlan:
+    """Phase H.3C (Tier 3): the LAST resort before a text-only review - only ever meaningfully
+    called when both Tier 1 (H.1) and Tier 2B (H.3B) already found nothing (the caller's own
+    responsibility, matching the same "caller owns its own gating" precedent `discover_event_
+    recap_media_if_needed()` already established). A deterministic, zero-network, zero-LLM,
+    zero-paid-image-call branded card - `services.brand_renderer.render_recap_fallback_card()`
+    (Pillow only, official NNJ assets, no AI image generation) fed by `services.event_recap.
+    derive_recap_visual_subject()` (deterministic entity/title extraction off the SAME candidate,
+    no new LLM call). The rendered bytes are stored through the same `integrations.storage.
+    image_storage.ImageStorage` abstraction Tier 1/2B candidates already resolve through (`services.
+    image_persistence._get_storage()`, reused unmodified) - never a new storage mechanism.
+
+    Sync, not async: both the renderer (pure Pillow/CPU) and the local storage write are
+    synchronous, mirroring how `worker/content_cycle.py` already calls `render_branded_media()`
+    directly from async code with no executor wrapping.
+
+    Fail-soft by construction: a missing brand asset, a Pillow exception, or a storage failure is
+    logged and returns the ordinary `tier="none"` plan - never raises, never blocks recap
+    generation, never turns a cosmetic rendering problem into a task failure."""
+    try:
+        subject = derive_recap_visual_subject(candidate)
+        render_result = render_recap_fallback_card(subject)
+        if not render_result.success or render_result.image_bytes is None:
+            logger.warning(
+                "event_recap_branded_fallback_render_failed",
+                extra={"story_id": str(candidate.story_id), "reason": render_result.fallback_reason},
+            )
+            return _NO_MEDIA_PLAN
+
+        image_bytes = render_result.image_bytes
+        sha256 = hashlib.sha256(image_bytes).hexdigest()
+        stored = _get_storage().store_validated_image(
+            image_bytes, sha256=sha256, image_format="JPEG", max_bytes=settings.meme_image_max_bytes,
+        )
+        return SelectedMediaPlan(
+            tier="branded_fallback",
+            representative=SelectedMediaItem(
+                media_type="image", recommended_role="hero",
+                storage_key=stored.storage_key, sha256=stored.sha256,
+            ),
+        )
+    except Exception:  # noqa: BLE001 - fail-soft Tier-3 boundary, never blocks recap generation
+        logger.warning(
+            "event_recap_branded_fallback_failed", extra={"story_id": str(candidate.story_id)}, exc_info=True,
+        )
+        return _NO_MEDIA_PLAN
+
+
 async def find_event_recap_task_id(session: AsyncSession, event_id: UUID) -> UUID | None:
     """The most recent EVENT_RECAP task for this exact event_id, in any status - mirrors
     services.telegraph_article_processor.find_article_task_id()'s own established shape exactly
@@ -327,6 +392,15 @@ async def generate_recap_for_story(
         discovered_plan = await discover_event_recap_media_if_needed(session, candidate)
         if discovered_plan.representative is not None:
             candidate = replace(candidate, selected_media=discovered_plan)
+
+    # Phase H.3C (Tier 3): only reached if Tier 1 AND Tier 2B both found nothing - the LAST
+    # resort before a text-only review. Deterministic, zero-network, zero-LLM, zero-paid-image-
+    # call - never blocks generation on failure (render_branded_fallback_media()'s own fail-soft
+    # contract).
+    if candidate.selected_media.tier == "none":
+        fallback_plan = render_branded_fallback_media(candidate)
+        if fallback_plan.representative is not None:
+            candidate = replace(candidate, selected_media=fallback_plan)
 
     try:
         task_read = await workflow_service.create_task(

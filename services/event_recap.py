@@ -407,46 +407,94 @@ class MediaCandidateRef:
 
 @dataclass(frozen=True)
 class SelectedMediaItem:
-    """One representative media item, pointed to by reference only - never a copy of
-    `ImageCandidateRecord` (Phase H.1). `candidate_id` + `originating_event_id` is the stable,
-    re-resolvable pointer a future sender re-queries `get_editorial_image_candidates()` with;
-    `storage_key`/`telegram_file_id`/`sha256`/`remote_url` are carried alongside purely for
-    audit/display, never as the sole source of truth."""
+    """One representative media item. For `tier="story_pool"`/`"discovered"` (Phase H.1/H.3B),
+    `candidate_id` + `originating_event_id` is the stable, re-resolvable pointer a future sender
+    re-queries `get_editorial_image_candidates()` with - never a copy of `ImageCandidateRecord`
+    itself. For `tier="branded_fallback"` (Phase H.3C) there is no `ImageCandidateRecord` row at
+    all (nothing was discovered from a real source) - `candidate_id`/`originating_event_id` are
+    `None` in that case, and `storage_key`/`sha256` (populated directly by `services.event_recap_
+    processor.render_branded_fallback_media()` via the same `integrations.storage.image_storage.
+    ImageStorage` abstraction Tier 1/2B candidates already use) are the ONLY resolution path.
+    `telegram_file_id`/`remote_url` remain purely audit/display fields for every tier, never the
+    sole source of truth."""
 
-    candidate_id: str
-    originating_event_id: UUID
-    media_type: str  # "image" - H.1 scope is images only, mirrors the real NEWS ranking path
-    recommended_role: str  # RecommendedRole.value, e.g. "hero" | "supporting"
-    storage_key: str | None
-    telegram_file_id: str | None
-    sha256: str | None
-    remote_url: str | None  # supplemental fallback only - never the primary resolution path
+    media_type: str  # "image" - every tier so far is images only
+    recommended_role: str  # RecommendedRole.value ("hero"/"supporting") for story_pool/discovered;
+    # a fixed "hero" for branded_fallback (module docstring - it is always the sole/representative
+    # visual when it exists at all, never ranked against alternatives).
+    candidate_id: str | None = None
+    originating_event_id: UUID | None = None
+    storage_key: str | None = None
+    telegram_file_id: str | None = None
+    sha256: str | None = None
+    remote_url: str | None = None  # supplemental fallback only - never the primary resolution path
 
 
 @dataclass(frozen=True)
 class SelectedMediaPlan:
-    """The deterministic H.1 media-selection outcome for one `EventRecapCandidate` build. `tier`
-    is forward-compatible serialization only - "generated" remains a valid FUTURE value (Phase
-    H.3C+, not executed here). Phase H.3B adds "discovered" (Tier 2B - a real, eligible candidate
-    found via `services.event_recap_processor.discover_event_recap_media_if_needed()`'s own
-    re-acquisition of a confirmed/effective event's article page, never Tier 1's own confirmed-pool
-    scan). `_select_representative_media()` below still only ever produces "story_pool" or "none"
-    itself - "discovered" is set by that processor-level caller via `dataclasses.replace()`, never
-    by this module. Absence of a representative item is a normal, expected outcome (module
-    docstring's fail-soft-on-media discipline), never an error."""
+    """The deterministic media-selection outcome for one `EventRecapCandidate` build. `tier`:
+    "story_pool" (H.1, confirmed Story media pool), "discovered" (H.3B/Tier 2B, re-acquired from a
+    confirmed/effective event's own article page via `services.event_recap_processor.discover_
+    event_recap_media_if_needed()`), "branded_fallback" (H.3C/Tier 3, a deterministic, source-
+    photo-free NINJA PULSE card via `services.event_recap_processor.render_branded_fallback_media
+    ()` - Pillow only, never an AI image-generation call; deliberately NOT named "generated" to
+    avoid ever being confused with a future real AI-generated-background tier, which would get its
+    own distinct value, e.g. "ai_generated", later), or "none" (no usable visual at all - the
+    ordinary, expected fail-soft outcome, never an error). `_select_representative_media()` below
+    still only ever produces "story_pool" or "none" itself - "discovered"/"branded_fallback" are
+    set by their own processor-level callers via `dataclasses.replace()`, never by this module.
+    Absence of a representative item is a normal, expected outcome, never an error."""
 
-    tier: Literal["story_pool", "discovered", "none"]
+    tier: Literal["story_pool", "discovered", "branded_fallback", "none"]
     representative: SelectedMediaItem | None
 
 
 _NO_MEDIA_PLAN = SelectedMediaPlan(tier="none", representative=None)
+
+# Phase H.3C: bounded, deterministic subject text for the branded fallback card - see
+# derive_recap_visual_subject()'s own docstring for the full priority/reasoning.
+_MAX_VISUAL_SUBJECT_ENTITIES = 2
+_MAX_VISUAL_SUBJECT_CHARS = 60
+
+
+def derive_recap_visual_subject(candidate: EventRecapCandidate) -> str:
+    """Phase H.3C: a short, deterministic, LLM-free label for the Tier 3 branded fallback card -
+    never new copywriting, never a semantic rewrite, never a second LLM call. Priority: (1) the
+    ANCHOR announcement's own already-deterministically-extracted `content_entities` (R1's
+    sanitized entity signatures - the exact same field `render_event_recap_bundle_text()` already
+    trusts) - deliberately the anchor's OWN announcement only (found via the same `stable_event_id
+    == candidate.anchor_event_id` check that function already uses to label ORIGIN vs FOLLOW_UP),
+    never a union across every announcement, since a later comparison/follow-up announcement can
+    introduce an unrelated entity (e.g. a competitor named only in a "vs Samsung" headline) that
+    would misrepresent the Story's own real subject; bounded to `_MAX_VISUAL_SUBJECT_ENTITIES`,
+    joined with " × " (matches the Twitch/Amazon-style "two named entities" case). (2) `candidate.
+    story_title` (always non-empty - Story.title is NOT NULL) when the anchor announcement has no
+    usable entities. No further, invented "category" fallback exists below that - `EventRecapCandidate`
+    carries no category field, and adding one here would be exactly the kind of new NLP/signal
+    surface this phase's own "no new subsystem" instruction forbids. Bounded to
+    `_MAX_VISUAL_SUBJECT_CHARS`, truncated with an ellipsis if needed - never a giant phrase."""
+    anchor_announcement = next(
+        (a for a in candidate.announcements if a.stable_event_id == candidate.anchor_event_id), None,
+    )
+    entities: dict[str, None] = {}
+    if anchor_announcement is not None:
+        for entity in anchor_announcement.content_entities:
+            entities.setdefault(entity, None)
+            if len(entities) >= _MAX_VISUAL_SUBJECT_ENTITIES:
+                break
+    subject = " × ".join(entities.keys()) if entities else candidate.story_title
+    if len(subject) > _MAX_VISUAL_SUBJECT_CHARS:
+        subject = subject[: _MAX_VISUAL_SUBJECT_CHARS - 1].rstrip() + "…"
+    return subject
 
 
 def serialize_selected_media_plan(plan: SelectedMediaPlan) -> dict[str, Any]:
     """Plain-dict, JSON-safe (UUID -> str) projection of a `SelectedMediaPlan` - `dataclasses.
     dataclass` (unlike this module's Pydantic schemas elsewhere) has no built-in `model_dump(mode=
     "json")`, so this is the one place that conversion happens, kept next to the dataclasses it
-    serializes rather than duplicated at each caller."""
+    serializes rather than duplicated at each caller. `candidate_id`/`originating_event_id` may
+    both be `None` (Phase H.3C's `tier="branded_fallback"` - see `SelectedMediaItem`'s own
+    docstring)."""
     if plan.representative is None:
         return {"tier": plan.tier, "representative": None}
     item = plan.representative
@@ -454,7 +502,7 @@ def serialize_selected_media_plan(plan: SelectedMediaPlan) -> dict[str, Any]:
         "tier": plan.tier,
         "representative": {
             "candidate_id": item.candidate_id,
-            "originating_event_id": str(item.originating_event_id),
+            "originating_event_id": str(item.originating_event_id) if item.originating_event_id else None,
             "media_type": item.media_type,
             "recommended_role": item.recommended_role,
             "storage_key": item.storage_key,

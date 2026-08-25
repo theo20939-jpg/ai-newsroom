@@ -24,11 +24,10 @@ bearing on and never mutates that field.
 
 Phase H.2 (two-message media contract): `send_event_recap_review()` is no longer DB-free (Phase
 D.0's own original discipline) - it now takes a read-only `AsyncSession` to (1) re-resolve the
-Phase H.1-persisted `selected_media` pointer into an actual sendable photo via the EXISTING
-`get_editorial_image_candidates()`/`bot.image_preview_media.resolve_photo_input()` read contracts
-(never a new resolver, never a media reselection - see `_resolve_selected_media_photo_input()`'s
-own docstring), and (2) call the EXISTING `services.event_recap_review_service.
-record_telegram_delivery()` once the canonical text message actually sends - closing the
+persisted `selected_media` pointer into an actual sendable photo (see `_resolve_selected_media_
+photo_input()`'s own docstring - Phase H.3C extends this to be fully tier-agnostic, never a new
+resolver, never a media reselection), and (2) call the EXISTING `services.event_recap_review_
+service.record_telegram_delivery()` once the canonical text message actually sends - closing the
 previously-disclosed gap where `EventRecapReview.telegram_*` stayed NULL forever (no prior caller
 ever called that function). Deliberately TWO Telegram messages, never one:
 
@@ -68,9 +67,10 @@ from bot.event_recap_review_formatting import render_event_recap_review_text
 from bot.image_preview_media import resolve_photo_input
 from bot.keyboards.event_recap_review import build_event_recap_review_keyboard
 from database.models.event_recap_review import EventRecapReview
+from integrations.storage.image_storage import StorageError
 from schemas.editorial_route import EditorialDestination
 from services.event_recap_review_service import record_telegram_delivery
-from services.image_persistence import get_editorial_image_candidates
+from services.image_persistence import _get_storage, get_editorial_image_candidates
 from services.telegram_routing import RoutingOutcome, send_photo_to_editorial_destination, send_to_editorial_destination
 
 logger = logging.getLogger(__name__)
@@ -89,45 +89,75 @@ class EventRecapReviewSendOutcome:
     media_outcome: RoutingOutcome | None
 
 
+def _extension_from_storage_key(storage_key: str) -> str:
+    if "." in storage_key:
+        return storage_key.rsplit(".", 1)[-1]
+    return "jpg"  # every current tier that writes a bare storage_key (H.3C) writes JPEG
+
+
 async def _resolve_selected_media_photo_input(
     session: AsyncSession, selected_media: dict | None,
 ) -> str | BufferedInputFile | None:
-    """Phase H.2: read-only re-resolution of the H.1-persisted representative-media pointer
-    (`services.event_recap.serialize_selected_media_plan()`'s own JSON shape) into whatever
-    `bot.image_preview_media.resolve_photo_input()` already knows how to send - a cached Telegram
-    `file_id` string, or freshly-read local bytes. Never a media reselection: H.1's ranking is not
-    recomputed, no new Story query happens, only the ONE already-selected event's already-persisted
-    candidate list is re-read via the EXISTING, unmodified `get_editorial_image_candidates()` -
-    the same read contract `bot/image_preview_media.py`'s own established callers already use.
+    """Phase H.2 (extended, Phase H.3C): read-only re-resolution of the persisted representative-
+    media pointer (`services.event_recap.serialize_selected_media_plan()`'s own JSON shape) into
+    whatever Telegram send input is available - tier-agnostic by design (module docstring's own
+    "notifier must not care whether the visual came from story_pool/discovered/branded_fallback"
+    rule): the ONLY thing this function branches on is which fields the persisted pointer actually
+    carries, never `tier` itself.
 
-    Fail-soft, never raises: returns `None` for every failure mode named in Phase H.2's own brief
-    (no tier/representative, candidate no longer found/eligible, unresolvable storage/file_id, or
-    any unexpected exception during the lookup itself) - the caller always falls back to sending
-    the text-only review."""
-    if selected_media is None or selected_media.get("tier") != "story_pool":
+    - `candidate_id` + `originating_event_id` both present (`tier="story_pool"`/`"discovered"`):
+      the EXISTING H.2 path, unchanged - re-reads the ONE already-selected event's already-
+      persisted candidate list via `get_editorial_image_candidates()`, then `bot.image_preview_
+      media.resolve_photo_input()` (cached Telegram `file_id`, or freshly-read local bytes). Never
+      a media reselection: H.1's ranking is not recomputed, no new Story query happens.
+    - `storage_key` present with no `candidate_id`/`originating_event_id` (`tier=
+      "branded_fallback"`, Phase H.3C - there is no `ImageCandidateRecord` row for a rendered
+      card): reads the bytes directly through the SAME `integrations.storage.image_storage.
+      ImageStorage` abstraction Tier 1/2B candidates already resolve through (`services.
+      image_persistence._get_storage()`, reused unmodified) - no `ImageCandidateRecord` lookup, no
+      network, never a second, parallel resolver.
+
+    Fail-soft, never raises: returns `None` for every failure mode (no tier/representative,
+    candidate/file no longer found, unresolvable storage/file_id, or any unexpected exception) -
+    the caller always falls back to sending the text-only review."""
+    if selected_media is None or selected_media.get("tier") == "none":
         return None
     representative = selected_media.get("representative")
     if not representative:
         return None
     try:
-        event_id = UUID(representative["originating_event_id"])
-        candidate_id = representative["candidate_id"]
-        candidates = await get_editorial_image_candidates(session, news_event_id=event_id, limit=10)
-        candidate = next((c for c in candidates if c.candidate_id == candidate_id), None)
-        if candidate is None:
-            logger.warning(
-                "event_recap_review_media_candidate_not_found",
-                extra={"event_id": str(event_id), "candidate_id": candidate_id},
-            )
-            return None
-        photo_input = resolve_photo_input(candidate)
-        # BufferedInputFile is intentionally not attempted here - Phase H.2 scope only ever
-        # resends an ALREADY-STORED-or-file_id-cached candidate (mirrors this module's own "never
-        # a new fetch" discipline); a fresh local-bytes read is exactly what resolve_photo_input()
-        # already does when telegram_file_id is absent, so this is not a limitation introduced
-        # here - str | BufferedInputFile is send_photo_to_editorial_destination()'s own accepted
-        # input type either way.
-        return photo_input
+        candidate_id = representative.get("candidate_id")
+        originating_event_id = representative.get("originating_event_id")
+        if candidate_id and originating_event_id:
+            event_id = UUID(originating_event_id)
+            candidates = await get_editorial_image_candidates(session, news_event_id=event_id, limit=10)
+            candidate = next((c for c in candidates if c.candidate_id == candidate_id), None)
+            if candidate is None:
+                logger.warning(
+                    "event_recap_review_media_candidate_not_found",
+                    extra={"event_id": str(event_id), "candidate_id": candidate_id},
+                )
+                return None
+            # BufferedInputFile is intentionally not attempted here - Phase H.2 scope only ever
+            # resends an ALREADY-STORED-or-file_id-cached candidate (mirrors this module's own
+            # "never a new fetch" discipline); a fresh local-bytes read is exactly what resolve_
+            # photo_input() already does when telegram_file_id is absent.
+            return resolve_photo_input(candidate)
+
+        storage_key = representative.get("storage_key")
+        if storage_key:
+            try:
+                data = _get_storage().read(storage_key)
+            except StorageError:
+                logger.warning(
+                    "event_recap_review_branded_fallback_storage_read_failed",
+                    extra={"storage_key": storage_key},
+                )
+                return None
+            extension = _extension_from_storage_key(storage_key)
+            return BufferedInputFile(data, filename=f"recap_fallback.{extension}")
+
+        return None
     except Exception:  # noqa: BLE001 - fail-soft to a text-only review, never a review-blocking crash
         logger.warning("event_recap_review_media_resolution_failed", exc_info=True)
         return None

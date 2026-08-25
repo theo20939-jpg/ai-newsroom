@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from capabilities.event_recap_capability import EVENT_RECAP_CAPABILITY_DEFINITION, EventRecapCapability
 from capabilities.executor import CapabilityExecutor
 from capabilities.registry import CapabilityRegistry
+from core.config import settings
 from database.models.editorial_task import EditorialTask
 from database.models.image_candidate_record import ImageCandidateRecord
 from database.models.news_event import EventCategory, NewsEvent
@@ -32,7 +33,8 @@ from database.models.story_link import NewsEventStoryLink
 from integrations.llm_gateway.protocol import GenerateResponse
 from integrations.prompts.protocol import RenderedPrompt
 from schemas.capability import CapabilityUsage
-from services.event_recap import EVENT_RECAP_PROMPT_NAME, EVENT_RECAP_PROMPT_VERSION
+from services import image_persistence
+from services.event_recap import EVENT_RECAP_PROMPT_NAME, EVENT_RECAP_PROMPT_VERSION, SelectedMediaPlan
 from services.event_recap_processor import (
     find_event_recap_task_id,
     generate_recap_for_story,
@@ -40,6 +42,19 @@ from services.event_recap_processor import (
 from services.story_memory import NEW_STORY
 from tests.fakes.fake_gateway import FakeLLMGateway
 from tests.fakes.fake_prompt_repository import FakePromptRepository
+
+
+@pytest.fixture(autouse=True)
+def _isolated_image_storage(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """Phase H.3C: Tier 3 (`render_branded_fallback_media()`) writes real bytes through
+    `services.image_persistence._get_storage()` whenever Tier 1/2B found nothing - every test in
+    this file gets its own isolated storage root, and the module-level `_storage_singleton` is
+    reset so it never leaks a prior test's `tmp_path` (mirrors tests/test_image_persistence.py's
+    own established `_isolated_storage` fixture exactly, never a new pattern)."""
+    monkeypatch.setattr(settings, "image_storage_root", str(tmp_path))
+    monkeypatch.setattr(image_persistence, "_storage_singleton", None)
+    yield
+    monkeypatch.setattr(image_persistence, "_storage_singleton", None)
 
 _VALID_RECAP_OUTPUT = {
     "recap_title": "Example Recap Title",
@@ -385,8 +400,22 @@ async def test_ready_story_builds_candidate_exactly_once_and_passes_it_through(
 ) -> None:
     """Race-safety proof (Phase G.0.2): for one READY processor run, build_event_recap_candidate()
     is called exactly once, and the SAME object identity that call returned is what reaches
-    CapabilityExecutor - never a second, independently-requeried candidate."""
+    CapabilityExecutor - never a second, independently-requeried candidate. Media enrichment
+    (Phase H.3B/H.3C) is deliberately disabled here (both return their own "found nothing" plan)
+    so this test keeps proving the ORIGINAL, narrower G.0.2 invariant in isolation, undisturbed by
+    `dataclasses.replace()` - that combined invariant (build once, THEN replace only `selected_
+    media`) has its own dedicated proof in `test_replaced_candidate_preserves_readiness_and_
+    evidence_identity` below."""
     import services.event_recap_processor as processor_module
+
+    async def _no_discovery(session, candidate):  # noqa: ANN001, ARG001
+        return SelectedMediaPlan(tier="none", representative=None)
+
+    def _no_fallback(candidate):  # noqa: ANN001, ARG001
+        return SelectedMediaPlan(tier="none", representative=None)
+
+    monkeypatch.setattr(processor_module, "discover_event_recap_media_if_needed", _no_discovery)
+    monkeypatch.setattr(processor_module, "render_branded_fallback_media", _no_fallback)
 
     story, _events = await _seed_ready_story(db_session)
     gateway = FakeLLMGateway(
@@ -459,10 +488,20 @@ def _media_step_result(task: EditorialTask) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_zero_media_still_generates_with_tier_none(db_session: AsyncSession) -> None:
-    """Phase H.1 §12 (zero media test): a READY Story with NO eligible image anywhere in its
-    confirmed-membership pool must still synthesize normally - fail-soft, never an exception or a
-    FAILED task."""
+async def test_zero_media_falls_back_to_branded_card(db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Phase H.1 §12 (originally "zero media -> tier=none") / Phase H.3C §16 (zero media -> branded
+    fallback): a READY Story with NO eligible image anywhere in its confirmed-membership pool, and
+    Tier 2B (real network discovery) disabled here so this test stays offline/deterministic - must
+    still synthesize normally AND now receives a real, deterministic NINJA PULSE branded card
+    (Tier 3) rather than a bare text-only review, per Phase H.3C's own "text-only is fail-soft
+    only, never the normal zero-source-media outcome" product requirement."""
+    import services.event_recap_processor as processor_module
+
+    async def _no_discovery(session, candidate):  # noqa: ANN001, ARG001
+        return SelectedMediaPlan(tier="none", representative=None)
+
+    monkeypatch.setattr(processor_module, "discover_event_recap_media_if_needed", _no_discovery)
+
     story, _events = await _seed_ready_story(db_session)
     gateway = FakeLLMGateway(
         generate_response=GenerateResponse(
@@ -475,11 +514,20 @@ async def test_zero_media_still_generates_with_tier_none(db_session: AsyncSessio
     outcome = await generate_recap_for_story(db_session, story.id, capability_registry=registry)
 
     assert outcome.status == "generated"
-    assert len(gateway.received_requests) == 1
+    assert len(gateway.received_requests) == 1  # branded rendering makes no LLM/image-gen call
     task = await db_session.get(EditorialTask, outcome.task_id)
     media_result = _media_step_result(task)
     assert media_result["status"] == "SUCCESS"
-    assert media_result["result"] == {"tier": "none", "representative": None}
+    result = media_result["result"]
+    assert result["tier"] == "branded_fallback"
+    representative = result["representative"]
+    assert representative is not None
+    assert representative["candidate_id"] is None
+    assert representative["originating_event_id"] is None
+    assert representative["media_type"] == "image"
+    assert representative["recommended_role"] == "hero"
+    assert representative["storage_key"]
+    assert representative["sha256"]
 
 
 @pytest.mark.asyncio
@@ -632,7 +680,8 @@ async def test_pixel_class_discovery_finds_media_when_tier_1_is_empty(
     ImageCandidateRecord rows across the whole effective evidence set) - a fake, zero-network
     run_shadow_discovery() persists a strong candidate on one follow-up effective event. Expect:
     generated, exactly 1 candidate build, discovery actually invoked, tier="discovered", exactly
-    1 fake LLM call."""
+    1 fake LLM call. Phase H.3C §18: Tier 3 (`render_branded_fallback_media()`) must never even be
+    called - Tier 2B's success short-circuits it."""
     import services.event_recap_processor as processor_module
 
     story, _events = await _seed_ready_story(db_session)
@@ -648,8 +697,17 @@ async def test_pixel_class_discovery_finds_media_when_tier_1_is_empty(
         build_call_count += 1
         return await real_build(*args, **kwargs)
 
+    tier3_call_count = 0
+    real_render_branded_fallback_media = processor_module.render_branded_fallback_media
+
+    def _counting_fallback(candidate):
+        nonlocal tier3_call_count
+        tier3_call_count += 1
+        return real_render_branded_fallback_media(candidate)
+
     monkeypatch.setattr(processor_module, "run_shadow_discovery", fake)
     monkeypatch.setattr(processor_module, "build_event_recap_candidate", _counting_build)
+    monkeypatch.setattr(processor_module, "render_branded_fallback_media", _counting_fallback)
 
     gateway = FakeLLMGateway(
         generate_response=GenerateResponse(
@@ -664,6 +722,7 @@ async def test_pixel_class_discovery_finds_media_when_tier_1_is_empty(
     assert outcome.status == "generated"
     assert build_call_count == 1
     assert len(call_log) > 0  # discovery was actually invoked
+    assert tier3_call_count == 0  # Tier 2B succeeded - Tier 3 never runs
     assert len(gateway.received_requests) == 1  # no second/extra LLM call
 
     task = await db_session.get(EditorialTask, outcome.task_id)
@@ -679,7 +738,8 @@ async def test_no_discovery_attempted_when_tier_1_already_has_media(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Phase H.3B §13: Tier 1 already found a strong eligible image - run_shadow_discovery() must
-    never even be called, and the H.1 result must be preserved exactly."""
+    never even be called, and the H.1 result must be preserved exactly. Phase H.3C §17: Tier 3
+    (`render_branded_fallback_media()`) must never even be called either."""
     import services.event_recap_processor as processor_module
 
     story, events = await _seed_ready_story(db_session)
@@ -693,7 +753,11 @@ async def test_no_discovery_attempted_when_tier_1_already_has_media(
         call_log.append(kwargs.get("event_id"))
         raise AssertionError("run_shadow_discovery must not be called when Tier 1 already has media")
 
+    def _fail_if_fallback_called(candidate):  # noqa: ANN001, ARG001
+        raise AssertionError("render_branded_fallback_media must not be called when Tier 1 already has media")
+
     monkeypatch.setattr(processor_module, "run_shadow_discovery", _fail_if_called)
+    monkeypatch.setattr(processor_module, "render_branded_fallback_media", _fail_if_fallback_called)
 
     gateway = FakeLLMGateway(
         generate_response=GenerateResponse(
@@ -720,8 +784,15 @@ async def test_discovery_finds_nothing_still_generates_with_tier_none(
 ) -> None:
     """Phase H.3B §14: Tier 1 empty, fake discovery runs but persists nothing eligible for any
     event - generation still completes, tier stays "none", exactly 1 fake LLM call, no task
-    failure."""
+    failure. Tier 3 (Phase H.3C) is deliberately disabled here so this test keeps isolating Tier
+    2B's own "found nothing" outcome specifically - the "all three tiers empty" case has its own
+    dedicated test below."""
     import services.event_recap_processor as processor_module
+
+    def _no_fallback(candidate):  # noqa: ANN001, ARG001
+        return SelectedMediaPlan(tier="none", representative=None)
+
+    monkeypatch.setattr(processor_module, "render_branded_fallback_media", _no_fallback)
 
     story, _events = await _seed_ready_story(db_session)
     call_log: list = []
@@ -754,8 +825,15 @@ async def test_discovery_exception_fails_soft_and_generation_still_completes(
 ) -> None:
     """Phase H.3B §15: run_shadow_discovery() raises an unexpected exception for every effective
     event - the Tier-2B boundary swallows it, generation completes normally, tier="none", exactly
-    1 fake LLM call, task COMPLETED (never a PermanentStepFailureError/FAILED task)."""
+    1 fake LLM call, task COMPLETED (never a PermanentStepFailureError/FAILED task). Tier 3 (Phase
+    H.3C) is deliberately disabled here so this test keeps isolating Tier 2B's own exception
+    fail-soft specifically."""
     import services.event_recap_processor as processor_module
+
+    def _no_fallback(candidate):  # noqa: ANN001, ARG001
+        return SelectedMediaPlan(tier="none", representative=None)
+
+    monkeypatch.setattr(processor_module, "render_branded_fallback_media", _no_fallback)
 
     story, _events = await _seed_ready_story(db_session)
     call_log: list = []
@@ -837,8 +915,14 @@ async def test_discovery_never_uses_unrelated_uncertain_match_event(
     task = await db_session.get(EditorialTask, outcome.task_id)
     media_result = _media_step_result(task)
     # D's real, strong, eligible image is never usable - D was never in the effective event set.
-    assert media_result["result"]["tier"] == "none"
-    assert media_result["result"]["representative"] is None
+    # Tier 1/2B both find nothing usable, so Tier 3 (Phase H.3C) rescues it with a deterministic
+    # branded card - critically, NOT D's own real photo.
+    representative = media_result["result"]["representative"]
+    assert media_result["result"]["tier"] == "branded_fallback"
+    assert representative is not None
+    assert representative["candidate_id"] != "unrelated-perfect-image"
+    assert representative["candidate_id"] is None
+    assert representative["originating_event_id"] is None
 
 
 @pytest.mark.asyncio
@@ -917,3 +1001,47 @@ async def test_replaced_candidate_preserves_readiness_and_evidence_identity(
     assert final.verified_facts == original.verified_facts
     assert final.source_refs == original.source_refs
     assert final.media_candidates == original.media_candidates
+
+
+# ---------------------------------------------------------------------------------------------
+# Phase H.3C - Tier 3 deterministic branded media fallback
+# ---------------------------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_branded_fallback_render_failure_leaves_tier_none(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase H.3C §19: Tier 1 and Tier 2B both find nothing, and the Tier 3 renderer itself fails
+    (simulates a Pillow/storage/asset problem) - generation still completes normally, tier stays
+    "none" (the true last-resort outcome), exactly 1 fake LLM call, task COMPLETED, never a
+    PermanentStepFailureError/FAILED task."""
+    import services.event_recap_processor as processor_module
+
+    async def _no_discovery(session, candidate):  # noqa: ANN001, ARG001
+        return SelectedMediaPlan(tier="none", representative=None)
+
+    def _broken_renderer(subject, *, category=None):  # noqa: ANN001, ARG001
+        raise RuntimeError("simulated Pillow/asset failure")
+
+    monkeypatch.setattr(processor_module, "discover_event_recap_media_if_needed", _no_discovery)
+    monkeypatch.setattr(processor_module, "render_recap_fallback_card", _broken_renderer)
+
+    story, _events = await _seed_ready_story(db_session)
+    gateway = FakeLLMGateway(
+        generate_response=GenerateResponse(
+            text=None, structured_output=_VALID_RECAP_OUTPUT, finish_reason="stop",
+            model_used="fake-model-v1", usage=CapabilityUsage(input_tokens=100, output_tokens=50),
+        )
+    )
+    registry = _registry(gateway)
+
+    outcome = await generate_recap_for_story(db_session, story.id, capability_registry=registry)
+
+    assert outcome.status == "generated"
+    assert len(gateway.received_requests) == 1
+
+    task = await db_session.get(EditorialTask, outcome.task_id)
+    assert task.status.value == "COMPLETED"
+    media_result = _media_step_result(task)
+    assert media_result["result"] == {"tier": "none", "representative": None}

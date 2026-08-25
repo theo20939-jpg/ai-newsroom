@@ -8,6 +8,8 @@ from PIL import Image
 
 from services.brand_renderer import (
     RenderResult,
+    _CARD_HEIGHT,
+    _CARD_WIDTH,
     _LOGO_PNG_PATH,
     _OFFICIAL_NNJ_RED,
     load_brand_mark,
@@ -15,6 +17,7 @@ from services.brand_renderer import (
     render_breaking_frame,
     render_news_hero,
     render_quote_card,
+    render_recap_fallback_card,
 )
 from services.presentation_director import BREAKING, DATA, NEWS, QUOTE, DataCandidate, QuoteCandidate
 
@@ -235,3 +238,81 @@ def test_render_performance_well_under_three_seconds():
     )
     assert result.success
     assert result.duration_ms < 3000
+
+
+# ---------------------------------------------------------------------------
+# Phase H.3C - render_recap_fallback_card(): EVENT_RECAP Tier 3 branded fallback card.
+# Structural checks only (dimensions/format/non-empty/no crash) - never OCR, never pixel-perfect
+# typography assertions, per the phase's own explicit instruction.
+# ---------------------------------------------------------------------------
+
+
+def test_recap_fallback_card_produces_valid_dimensions_and_format():
+    result = render_recap_fallback_card("Google Pixel 11 Pro Fold")
+    assert result.success is True
+    assert result.image_bytes is not None
+    assert len(result.image_bytes) > 0
+    img = Image.open(io.BytesIO(result.image_bytes))
+    assert img.format == "JPEG"
+    assert img.size == (_CARD_WIDTH, _CARD_HEIGHT)
+
+
+def test_recap_fallback_card_includes_the_official_nnj_logo_via_existing_helper():
+    # No pixel-diff/OCR assertion (instruction's own explicit prohibition) - this proves the
+    # SAME _paste_logo()/official-asset path render_data_card()/render_quote_card() already use
+    # is reached at all (a missing/unreadable asset raises FileNotFoundError inside the function,
+    # which would show up here as success=False, not a silent skip).
+    result = render_recap_fallback_card("Twitch × Amazon")
+    assert result.success is True
+
+
+def test_recap_fallback_card_with_category_does_not_crash():
+    result = render_recap_fallback_card("Pixel 11 Pro Fold", category="TECH")
+    assert result.success is True
+
+
+def test_recap_fallback_card_handles_long_subject_without_crashing():
+    result = render_recap_fallback_card("A" * 200)
+    assert result.success is True
+    img = Image.open(io.BytesIO(result.image_bytes))
+    assert img.size == (_CARD_WIDTH, _CARD_HEIGHT)  # bounded text wrapping - canvas never grows
+
+
+def test_recap_fallback_card_handles_cyrillic_subject_without_crashing():
+    result = render_recap_fallback_card("Twitch и Amazon: судебный спор о данных стримеров")
+    assert result.success is True
+    assert result.image_bytes is not None
+    assert len(result.image_bytes) > 0
+
+
+def test_recap_fallback_card_handles_empty_subject_without_crashing():
+    result = render_recap_fallback_card("")
+    assert result.success is True
+
+
+def test_recap_fallback_card_is_deterministic_for_the_same_input():
+    first = render_recap_fallback_card("Google Pixel 11 Pro Fold", category="TECH")
+    second = render_recap_fallback_card("Google Pixel 11 Pro Fold", category="TECH")
+    assert first.success and second.success
+    assert first.image_bytes == second.image_bytes  # same input -> byte-identical output
+
+
+def test_recap_fallback_card_never_calls_branded_media_dispatch():
+    """Deliberately called directly, never through render_branded_media()'s presentation_type
+    dispatch (module docstring) - confirmed structurally: no presentation_type/DataCandidate/
+    QuoteCandidate argument exists on this function's own signature at all."""
+    import inspect
+
+    params = inspect.signature(render_recap_fallback_card).parameters
+    assert "presentation_type" not in params
+    assert set(params) == {"subject", "category"}
+
+
+def test_recap_fallback_card_fails_soft_on_missing_logo_asset(monkeypatch: pytest.MonkeyPatch):
+    import services.brand_renderer as brand_renderer_module
+
+    monkeypatch.setattr(brand_renderer_module, "_LOGO_PNG_PATH", brand_renderer_module._LOGO_PNG_PATH.parent / "does-not-exist.png")
+    result = render_recap_fallback_card("Any Subject")
+    assert result.success is False
+    assert result.image_bytes is None
+    assert result.fallback_reason is not None

@@ -384,3 +384,79 @@ def render_branded_media(
             success=False, image_bytes=None, template_version=template_version,
             fallback_reason=str(exc), duration_ms=duration_ms,
         )
+
+
+TEMPLATE_RECAP_FALLBACK = "pulse-recap-fallback-v1"
+
+
+def render_recap_fallback_card(subject: str, *, category: str | None = None) -> RenderResult:
+    """NINJA PULSE RECAP Phase H.3C: a deterministic, source-photo-free branded card - EVENT_RECAP's
+    Tier 3 media fallback, called only when neither the confirmed Story media pool (Tier 1) nor
+    confirmed-source re-acquisition (Tier 2B) produced a usable image (services.event_recap_
+    processor.render_branded_fallback_media()). Reuses this module's own established canvas/logo/
+    pulse-line/typography helpers UNCHANGED - `_paste_logo()`, `_draw_pulse_line()`, `_draw_code_
+    label()`, `_font()`, `_wrap_text()`, `_OFFICIAL_NNJ_*` colors, `_CARD_WIDTH`/`_CARD_HEIGHT` -
+    never a second renderer. No AI image-generation model, no paid provider, no third-party
+    company logo (module docstring's own established "official assets only" rule already forbids
+    drawing a reconstructed brand mark - the same discipline extends here to any OTHER company's
+    mark, never attempted).
+
+    Deliberately called directly, never through `render_branded_media()`'s `presentation_type`
+    dispatch: EVENT_RECAP is a fully separate workflow with its own Tier 1/2B/3 gate (services.
+    event_recap_processor), not a NEWS presentation-treatment decision - this function never reads
+    `settings.presentation_director_mode` and is not gated by it.
+
+    `subject` is `services.event_recap.derive_recap_visual_subject()`'s own deterministic, LLM-free
+    output - this function does no entity extraction or text derivation of its own, mirroring
+    `render_data_card()`'s "text drawn exactly as given, never generative" discipline. Purely a
+    short subject label + brand identity, never the full recap (title/summary/key_takeaways) -
+    Telegram's own MESSAGE 2 already carries the complete factual text (module docstring's own
+    "never a recap screenshot" rule)."""
+    started = time.monotonic()
+    try:
+        if not _LOGO_PNG_PATH.exists():
+            raise FileNotFoundError(f"missing official brand asset: {_LOGO_PNG_PATH}")
+
+        canvas = Image.new("RGB", (_CARD_WIDTH, _CARD_HEIGHT), _OFFICIAL_NNJ_BLACK)
+        draw = ImageDraw.Draw(canvas)
+        margin = 64
+
+        draw.text((margin, margin), "NINJA PULSE / RECAP", font=_font(26), fill=_OFFICIAL_NNJ_RED)
+        if category:
+            draw.text((margin, margin + 38), category.upper(), font=_font(18), fill=_OFFICIAL_NNJ_WHITE)
+
+        subject_font = _font(72)
+        max_text_width = _CARD_WIDTH - margin * 2
+        lines = _wrap_text(draw, subject, subject_font, max_text_width)
+        y = round(_CARD_HEIGHT * 0.38)
+        for line in lines[:4]:
+            draw.text((margin, y), line, font=subject_font, fill=_OFFICIAL_NNJ_WHITE)
+            y += 84
+
+        _draw_pulse_line(draw, x=margin, y=_CARD_HEIGHT - 96, width=220, color=_OFFICIAL_NNJ_RED)
+        _draw_code_label(
+            draw, x=margin, y=_CARD_HEIGHT - 56, text="EVENT RECAP", color=_OFFICIAL_NNJ_WHITE, size=20,
+        )
+
+        canvas_rgba = canvas.convert("RGBA")
+        _paste_logo(canvas_rgba, target_width=90, margin=margin)
+
+        out = io.BytesIO()
+        canvas_rgba.convert("RGB").save(out, format="JPEG", quality=92)
+        image_bytes = out.getvalue()
+
+        duration_ms = (time.monotonic() - started) * 1000
+        return RenderResult(
+            success=True, image_bytes=image_bytes, template_version=TEMPLATE_RECAP_FALLBACK,
+            fallback_reason=None, duration_ms=duration_ms,
+        )
+    except Exception as exc:  # noqa: BLE001 - fail-safe boundary, must never propagate (spec §29)
+        duration_ms = (time.monotonic() - started) * 1000
+        logger.warning(
+            "brand_render_recap_fallback_failed",
+            extra={"template_version": TEMPLATE_RECAP_FALLBACK, "error": str(exc)},
+        )
+        return RenderResult(
+            success=False, image_bytes=None, template_version=TEMPLATE_RECAP_FALLBACK,
+            fallback_reason=str(exc), duration_ms=duration_ms,
+        )
