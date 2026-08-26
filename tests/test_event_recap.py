@@ -2169,6 +2169,93 @@ async def test_synthesize_event_recap_threads_language_into_the_real_gateway_req
 
 
 # ---------------------------------------------------------------------------------------------
+# Phase I.2.2L - Russian editorial output fluency contract (real production finding: hybrid
+# words like "turbulentных"/"disruptive-последствий" from a bare "Target output language: ru"
+# instruction). These test the deterministic PROMPT/STYLE CONTRACT `_build_synthesis_request()`
+# constructs - never a specific LLM output string, since the model's actual wording is never
+# under this codebase's control (matches this file's own established convention above).
+# ---------------------------------------------------------------------------------------------
+
+
+def _synthesis_request_user_text(language: str) -> str:
+    from services.event_recap import _build_synthesis_request
+
+    candidate = _candidate_from_titles(
+        ["Vantage Data Centers explores sale or IPO options"], "Vantage Data Centers explores strategic options",
+    )
+    request = _build_synthesis_request(candidate, _PROMPT, language)
+    return request.messages[1].content[0].text
+
+
+def test_synthesis_request_requires_fluent_natural_output() -> None:
+    """The contract must explicitly demand fluent, natural output in the target language - not
+    just name the language (the bare pre-I.2.2L instruction)."""
+    user_text = _synthesis_request_user_text("ru")
+    assert "fluent, natural ru" in user_text
+
+
+def test_synthesis_request_forbids_hybrid_stem_plus_suffix_constructions() -> None:
+    """The contract must explicitly forbid grafting a target-language grammatical ending directly
+    onto an untranslated English word stem - the exact defect the real canary produced."""
+    user_text = _synthesis_request_user_text("ru")
+    assert "hybrid word" in user_text
+    assert "grammatical ending" in user_text
+    assert "untranslated english word stem" in user_text.lower()
+    # The illustrative counter-examples are present as guidance, never asserted as the only
+    # forbidden shape - the rule itself (above) is the general, testable contract.
+    assert "turbulentных" in user_text
+    assert "disruptive-последствий" in user_text
+
+
+def test_synthesis_request_requires_translating_ordinary_vocabulary() -> None:
+    user_text = _synthesis_request_user_text("ru")
+    assert "translate ordinary descriptive and narrative vocabulary fully" in user_text.lower()
+
+
+def test_synthesis_request_allows_proper_nouns_and_brand_names_to_remain_untranslated() -> None:
+    """Proper nouns/trademarks/product names may stay in their original form - the contract must
+    not be satisfiable by blindly translating everything (which would mistranslate brand names)."""
+    user_text = _synthesis_request_user_text("ru")
+    lowered = user_text.lower()
+    assert "proper nouns" in lowered
+    assert "trademarks" in lowered
+    assert "never invent a ru translation for a brand or product name" in lowered
+
+
+def test_synthesis_request_allows_verbatim_quotations_to_stay_in_original_language() -> None:
+    user_text = _synthesis_request_user_text("ru").lower()
+    assert "exact quotation" in user_text
+    assert "keep that quotation in its original language" in user_text
+
+
+def test_fluency_contract_is_general_not_hardcoded_to_russian() -> None:
+    """Section 3's own explicit requirement: "a general language-generation rule, not a
+    replacement dictionary" - the identical fluency/hybrid-word/proper-noun contract must appear
+    verbatim for any `language` value, not just "ru"."""
+    user_text = _synthesis_request_user_text("en")
+    assert "fluent, natural en" in user_text
+    assert "hybrid word" in user_text
+    assert "never invent a en translation for a brand or product name" in user_text.lower()
+    assert "Target output language: ru" not in user_text
+
+
+def test_fluency_contract_lives_only_in_python_request_construction_not_the_prompt_file() -> None:
+    """Matches this file's own established `test_event_recap_prompt_v3_file_has_no_hardcoded_
+    language_instruction()` precedent directly above: the new fluency/hybrid-word rules must also
+    be absent from the immutable v3.yaml prompt file - confirming the fix lives exclusively in
+    `_build_synthesis_request()`, never a prompt-text edit."""
+    from pathlib import Path as _Path
+
+    from integrations.prompts.file_repository import FilePromptRepository
+
+    repo = FilePromptRepository(_Path("prompts"))
+    v3 = repo.resolve(EVENT_RECAP_PROMPT_NAME, EVENT_RECAP_PROMPT_VERSION)
+    haystack = (v3.system + " " + " ".join(v3.rules)).lower()
+    assert "hybrid word" not in haystack
+    assert "turbulentных" not in haystack.lower()
+
+
+# ---------------------------------------------------------------------------------------------
 # Phase H.1 - _select_representative_media(): pure, offline, no DB, no LLM
 # ---------------------------------------------------------------------------------------------
 

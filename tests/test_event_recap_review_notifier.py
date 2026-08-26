@@ -26,7 +26,7 @@ from aiogram.exceptions import TelegramBadRequest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
-from database.models.editorial_task import TaskPriority
+from database.models.editorial_task import EditorialTask, TaskPriority
 from database.models.event_recap_review import EventRecapReview, EventRecapReviewStatus
 from database.models.image_candidate_record import ImageCandidateRecord
 from database.models.news_event import EventCategory, NewsEvent
@@ -34,6 +34,11 @@ from database.models.news_source import NewsSource, SourceType
 from schemas.editorial_route import EditorialDestination
 from schemas.editorial_task import EditorialTaskCreate
 from schemas.workflow import WorkflowType
+from database.models.news_event_article_acquisition import (
+    ACQUISITION_STATUS_FULL_TEXT,
+    TRIGGERED_BY_CONTENT_GENERATION_SELECTED,
+    NewsEventArticleAcquisition,
+)
 from services import image_persistence, workflow_service
 from services.event_recap_review_notifier import send_event_recap_review, update_event_recap_review_message
 from services.event_recap_review_service import create_event_recap_review, get_event_recap_review
@@ -556,3 +561,131 @@ async def test_old_story_pool_plan_still_resolves_via_image_candidate_record(db_
     # The seeded candidate has a real telegram_file_id (see _seed_event_with_image) - resolved via
     # resolve_photo_input()'s existing file_id-first path, a plain string, never BufferedInputFile.
     assert bot.send_photo.call_args.kwargs["photo"] == "cached-file-id-123"
+
+
+# ---------------------------------------------------------------------------------------------
+# Phase I.2.2L - source-verification button: URL resolution priority + keyboard wiring
+# ---------------------------------------------------------------------------------------------
+
+
+async def _seed_review_with_source_snapshot(
+    db_session: AsyncSession, *, anchor_event: NewsEvent, canonical_url: str | None = None,
+) -> EventRecapReview:
+    """A real EventRecapReview whose EditorialTask.workflow already carries a persisted
+    `event_recap_source_snapshot` step result naming `anchor_event` as the anchor - exactly the
+    shape `services/event_recap_processor.py::_persist_source_snapshot()` writes before synthesis
+    ever runs (see that function's own `result={"story_id": ..., "anchor_event_id": ...}` shape).
+    Optionally also seeds a `NewsEventArticleAcquisition.canonical_url` row for that same event."""
+    task_read = await workflow_service.create_task(
+        db_session,
+        EditorialTaskCreate(event_id=anchor_event.id, workflow_type=WorkflowType.EVENT_RECAP, priority=TaskPriority.C),
+    )
+    task = await db_session.get(EditorialTask, task_read.id)
+    workflow = dict(task.workflow or {})
+    workflow["step_results"] = [
+        {
+            "step_name": "event_recap_source_snapshot", "status": "SUCCESS", "attempt": 1,
+            "started_at": None, "finished_at": None, "error": None,
+            "result": {
+                "story_id": str(uuid.uuid4()), "anchor_event_id": str(anchor_event.id),
+                "verified_facts": [], "source_refs": [],
+            },
+        },
+        *workflow.get("step_results", []),
+    ]
+    task.workflow = workflow
+    await db_session.flush()
+
+    if canonical_url is not None:
+        db_session.add(
+            NewsEventArticleAcquisition(
+                news_event_id=anchor_event.id, canonical_url=canonical_url,
+                acquisition_status=ACQUISITION_STATUS_FULL_TEXT,
+                effective_completeness_status=ACQUISITION_STATUS_FULL_TEXT,
+                cleaning_version="test", triggered_by=TRIGGERED_BY_CONTENT_GENERATION_SELECTED,
+            )
+        )
+        await db_session.flush()
+
+    return await create_event_recap_review(db_session, recap_task_id=task_read.id)
+
+
+@pytest.mark.asyncio
+async def test_source_url_prefers_canonical_over_raw_anchor_url(db_session: AsyncSession) -> None:
+    """Section 10.C: when article acquisition has already resolved a canonical URL for the
+    anchor event, the review keyboard's source button must point to THAT URL, never the raw
+    (possibly aggregator-wrapper) `NewsEvent.url`."""
+    event = await _seed_event(db_session, title="Anchor event")
+    event.url = "https://news.google.com/rss/articles/wrapper-link"
+    await db_session.flush()
+    review = await _seed_review_with_source_snapshot(
+        db_session, anchor_event=event, canonical_url="https://real-publisher.example.com/article",
+    )
+    bot = AsyncMock()
+    bot.send_message.return_value.message_id = 900
+
+    await send_event_recap_review(bot, db_session, review, _RECAP_RESULT, dry_run=False)
+
+    keyboard = bot.send_message.call_args.kwargs["reply_markup"]
+    urls = [button.url for row in keyboard.inline_keyboard for button in row if button.url]
+    assert urls == ["https://real-publisher.example.com/article"]
+
+
+@pytest.mark.asyncio
+async def test_source_url_falls_back_to_raw_anchor_url_without_canonical(db_session: AsyncSession) -> None:
+    """Section 10.C fallback leg: no canonical URL has been resolved yet - the anchor event's own
+    stored `NewsEvent.url` is used (always populated, a required collector field)."""
+    event = await _seed_event(db_session, title="Anchor event, no acquisition yet")
+    event.url = "https://www.techmeme.com/260826/p14#a260826p14"
+    await db_session.flush()
+    review = await _seed_review_with_source_snapshot(db_session, anchor_event=event)
+    bot = AsyncMock()
+    bot.send_message.return_value.message_id = 901
+
+    await send_event_recap_review(bot, db_session, review, _RECAP_RESULT, dry_run=False)
+
+    keyboard = bot.send_message.call_args.kwargs["reply_markup"]
+    urls = [button.url for row in keyboard.inline_keyboard for button in row if button.url]
+    assert urls == ["https://www.techmeme.com/260826/p14#a260826p14"]
+
+
+@pytest.mark.asyncio
+async def test_source_url_absent_without_source_snapshot_omits_button_safely(db_session: AsyncSession) -> None:
+    """Section 10.F: no `event_recap_source_snapshot` step result exists at all (e.g. a review
+    seeded like every pre-I.2.2L test in this file) - the keyboard must still deliver safely, with
+    only the two decision buttons, never a crash and never a placeholder URL."""
+    event = await _seed_event(db_session)
+    review = await _seed_review(db_session, event)
+    bot = AsyncMock()
+    bot.send_message.return_value.message_id = 902
+
+    outcome = await send_event_recap_review(bot, db_session, review, _RECAP_RESULT, dry_run=False)
+
+    assert outcome.text_outcome.sent is True
+    keyboard = bot.send_message.call_args.kwargs["reply_markup"]
+    assert len(keyboard.inline_keyboard) == 1
+    assert len(keyboard.inline_keyboard[0]) == 2
+
+
+@pytest.mark.asyncio
+async def test_source_button_survives_the_two_message_media_contract(db_session: AsyncSession) -> None:
+    """Section 10.G: photo+text delivery still produces the correct keyboard placement - the
+    source button lands on MESSAGE 2 (the text message) only, exactly like the decision buttons,
+    never on MESSAGE 1 (the photo)."""
+    event, selected_media = await _seed_event_with_image(db_session)
+    event.url = "https://example.com/original-anchor-article"
+    await db_session.flush()
+    review = await _seed_review_with_source_snapshot(db_session, anchor_event=event)
+
+    bot = AsyncMock()
+    bot.send_photo.return_value.message_id = 903
+    bot.send_message.return_value.message_id = 904
+
+    await send_event_recap_review(
+        bot, db_session, review, _RECAP_RESULT, selected_media=selected_media, dry_run=False,
+    )
+
+    assert bot.send_photo.call_args.kwargs.get("reply_markup") is None
+    keyboard = bot.send_message.call_args.kwargs["reply_markup"]
+    urls = [button.url for row in keyboard.inline_keyboard for button in row if button.url]
+    assert urls == ["https://example.com/original-anchor-article"]

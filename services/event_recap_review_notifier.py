@@ -61,12 +61,16 @@ from uuid import UUID
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import BufferedInputFile
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.event_recap_review_formatting import render_event_recap_review_text
 from bot.image_preview_media import resolve_photo_input
 from bot.keyboards.event_recap_review import build_event_recap_review_keyboard
+from database.models.editorial_task import EditorialTask
 from database.models.event_recap_review import EventRecapReview
+from database.models.news_event import NewsEvent
+from database.models.news_event_article_acquisition import NewsEventArticleAcquisition
 from integrations.storage.image_storage import StorageError
 from schemas.editorial_route import EditorialDestination
 from services.event_recap_review_service import record_telegram_delivery
@@ -74,6 +78,56 @@ from services.image_persistence import _get_storage, get_editorial_image_candida
 from services.telegram_routing import RoutingOutcome, send_photo_to_editorial_destination, send_to_editorial_destination
 
 logger = logging.getLogger(__name__)
+
+
+async def _resolve_primary_source_url(session: AsyncSession, task_id: UUID) -> str | None:
+    """Phase I.2.2L: the single deterministic source-verification URL for the review keyboard's
+    "Источник" button - read-only, zero new network/LLM calls, reuses only already-persisted data.
+
+    Priority (per this codebase's own existing provenance contracts, never a new one):
+    1. The recap's own `anchor_event_id` - `services/event_recap_processor.py::
+       _persist_source_snapshot()`'s own `event_recap_source_snapshot` step result, already
+       written before synthesis ever runs. This is the SAME anchor the synthesis prompt itself
+       calls the "ORIGIN announcement... the central event this recap is about" - the most
+       semantically correct single URL for a reviewer verifying what the recap's own title/lead
+       claim is centered on, not an arbitrary member event.
+    2. For that anchor event, `NewsEventArticleAcquisition.canonical_url` if article acquisition
+       has already resolved one (the same real-destination-URL mechanism `services.recap_event.
+       count_unique_sources_with_canonical_urls()` already documents) - preferred over a raw
+       aggregator-wrapper URL whenever it exists.
+    3. Falling back to the anchor event's own stored `NewsEvent.url` (always populated - a
+       required collector field) when no canonical URL has been resolved yet.
+
+    Returns `None` only if the source snapshot step result is missing entirely or the anchor
+    event itself cannot be found - `build_source_only_keyboard()`'s own established contract
+    already treats `None` as "omit the button, never crash, never a placeholder URL". Fail-soft,
+    never raises (mirrors `_resolve_selected_media_photo_input()`'s own identical discipline in
+    this same file): any lookup failure falls back to a text-only-keyboard review rather than
+    blocking review delivery."""
+    try:
+        task = await session.get(EditorialTask, task_id)
+        if task is None:
+            return None
+        anchor_event_id: str | None = None
+        for step_result in (task.workflow or {}).get("step_results", []):
+            if step_result.get("step_name") == "event_recap_source_snapshot" and step_result.get("status") == "SUCCESS":
+                anchor_event_id = (step_result.get("result") or {}).get("anchor_event_id")
+                break
+        if not anchor_event_id:
+            return None
+
+        canonical = await session.scalar(
+            select(NewsEventArticleAcquisition.canonical_url).where(
+                NewsEventArticleAcquisition.news_event_id == anchor_event_id
+            )
+        )
+        if canonical:
+            return canonical
+
+        return await session.scalar(select(NewsEvent.url).where(NewsEvent.id == anchor_event_id))
+    except Exception:  # noqa: BLE001 - fail-soft to a keyboard with no source button, never a crash
+        logger.warning("event_recap_review_source_url_resolution_failed", exc_info=True)
+        return None
 
 
 @dataclass(frozen=True)
@@ -188,7 +242,8 @@ async def send_event_recap_review(
             reply_to_message_id = media_outcome.message_id
 
     text = render_event_recap_review_text(review, recap_result)
-    keyboard = build_event_recap_review_keyboard(review)
+    source_url = await _resolve_primary_source_url(session, review.recap_task_id)
+    keyboard = build_event_recap_review_keyboard(review, source_url=source_url)
     text_outcome = await send_to_editorial_destination(
         bot, destination, text, dry_run=dry_run, reply_markup=keyboard,
         reply_to_message_id=reply_to_message_id,

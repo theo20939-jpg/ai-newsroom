@@ -1220,7 +1220,22 @@ def _build_synthesis_request(
     existing, capability-agnostic language mechanism (`BusinessContext.language`, sourced from
     `core.config.settings.default_content_language`), never a new one. The immutable prompt file
     itself (`prompts/event_recap/v3.yaml`) is untouched - this is a plain Python string this
-    function already constructs, exactly like the "SOURCE EVIDENCE:"/"TASK:" labels above it."""
+    function already constructs, exactly like the "SOURCE EVIDENCE:"/"TASK:" labels above it.
+
+    Phase I.2.2L correction (real production finding, first live full-chain canary): a real
+    synthesis call against English-sourced evidence, targeting `language="ru"`, produced hybrid
+    words - a Russian grammatical ending grafted directly onto an untranslated English stem
+    ("turbulentных", "disruptive-последствий") - because the bare "Target output language: ru"
+    instruction said WHICH language to write in but never said anything about HOW to translate
+    ordinary vocabulary fully rather than only conjugating/declining it. The addition below is a
+    general language-quality rule (works for whatever `language` value is passed, never hardcoded
+    to Russian) with one illustrative counter-example of the forbidden SHAPE, not a fixed
+    replacement dictionary - it explicitly still allows proper nouns/brand/product names to stay
+    unchanged and exact quotations to stay in their original language, so it cannot be satisfied
+    by blindly translating everything. This is purely additive to `task_text`, EventRecap-only
+    (this function is called from nowhere but `synthesize_event_recap()`), and does not touch
+    `prompts/event_recap/v3.yaml` or any other capability's own identical language-instruction
+    convention."""
     system_text = prompt.system + "\n\nRULES:\n" + "\n".join(f"- {rule}" for rule in prompt.rules)
     evidence_text = render_event_recap_bundle_text(candidate)
     context_text = f"SOURCE EVIDENCE:\n{evidence_text}"
@@ -1228,7 +1243,17 @@ def _build_synthesis_request(
         "Synthesize a structured EVENT recap strictly from the source evidence above, for internal "
         "review only. Produce fewer takeaways than the maximum if the evidence supports fewer - "
         "never pad.\n\n"
-        f"Target output language: {language}"
+        f"Target output language: {language}. Write in fluent, natural {language} throughout - "
+        f"never construct a hybrid word by attaching a {language} grammatical ending directly onto "
+        "an untranslated English word stem (for example, do not write something shaped like "
+        "\"turbulentных\" or \"disruptive-последствий\" - translate the ordinary descriptive word "
+        f"itself into {language}). Translate ordinary descriptive and narrative vocabulary fully "
+        f"into {language}. Proper nouns, trademarks, product/model names, and established technical "
+        f"terms that have no natural {language} equivalent may remain in their original form "
+        f"unchanged - never invent a {language} translation for a brand or product name. If the "
+        "evidence contains an exact quotation that must be preserved verbatim, you may keep that "
+        "quotation in its original language, clearly marked as a quotation - do not extend that "
+        "exception to ordinary prose."
     )
     return GenerateRequest(
         messages=[
