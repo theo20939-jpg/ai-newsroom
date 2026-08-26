@@ -493,6 +493,143 @@ def test_evidence_contamination_invariant_never_fires_on_real_fixtures():
 
 
 # ---------------------------------------------------------------------------
+# Phase I.2.2F (real production forensic finding, I.2.2E - a real, reproduced
+# EventRecapEvidenceContaminationError on 3 real Stories under build_event_recap_candidate(
+# force_shadow=True, ...); force_shadow=False reaches the identical code path for any genuinely
+# READY Story, so this was a real latent defect, not a diagnostic-only artifact). Two distinct
+# root causes, fixed narrowly in services/recap_event.py:
+#   Defect A - `_publisher_suffix_entities()` only recognized the FINAL trailing "- Publisher"
+#     segment; an isolated "/ Publisher" breadcrumb earlier in a mirrored/syndicated duplicate
+#     title (Google News RU's own Habr-mirror format) survived as if it were core content.
+#   Defect B - the generic trailing-suffix word-count guard could misclassify a genuine
+#     enumerated-series marker ("Part 3: Visualizing insights") as publisher noise.
+# All titles below are real production titles, verbatim, from the three Stories I.2.2E identified
+# (c9f67724-2459-4089-8bda-01a6031370b1, cf821b1d-34a4-4e11-8a7d-43cadd4b5e58,
+# 92e796ea-4b8f-4e94-95ff-0bc0f5a2211c).
+# ---------------------------------------------------------------------------
+
+
+def test_breadcrumb_publisher_duplication_does_not_leak_into_content_entities():
+    """Defect A - real production titles verbatim (Story c9f67724). Before the fix, the isolated
+    "/ Хабр" breadcrumb in the third title survived sanitization and leaked into
+    content_entities, raising EventRecapEvidenceContaminationError. After the fix: the breadcrumb
+    is excluded from content evidence, the real trailing "- Хабр" suffix on the second title
+    remains recognized as publisher metadata (unchanged, pre-existing behavior), and the build
+    completes without raising."""
+    titles = [
+        "6 AI-сервисов, которыми сейчас можно пользоваться бесплатно или почти бесплатно",
+        "6 AI-сервисов, которыми сейчас можно пользоваться бесплатно или почти бесплатно - Хабр",
+        "6 AI-сервисов, которыми сейчас можно пользоваться бесплатно или почти бесплатно / Хабр - Хабр",
+    ]
+    _events, clusters, summaries, _facts = _summaries_and_facts(titles, gap_minutes=0.0)
+    assert len(clusters) == 1  # all three are the same real article, syndicated/mirrored
+
+    all_entities = {entity for s in summaries for entity in s.content_entities}
+    assert "хабр" not in all_entities  # publisher noise from both the suffix AND the breadcrumb
+    assert "ai-сервис" in all_entities  # genuine shared content entity, untouched
+
+
+def test_double_breadcrumb_publisher_duplication_does_not_leak():
+    """Defect A - real production titles verbatim (Story 92e796ea), a second, independent real
+    case: a "/ Комментарии / Хабр" double breadcrumb (comments-thread mirror) immediately
+    preceding the real trailing "- Хабр" suffix. Only the publisher-repeating segment is treated
+    as noise - "комментари" (genuine, unrelated breadcrumb content) must survive."""
+    titles = [
+        "Autodesk добавила в Flow Studio управление 3D-сценой перед AI-генерацией видео - Хабр",
+        "Autodesk добавила в Flow Studio управление 3D-сценой перед AI-генерацией видео / Комментарии / Хабр - Хабр",
+    ]
+    _events, clusters, summaries, _facts = _summaries_and_facts(titles, gap_minutes=0.0)
+    assert len(clusters) == 1
+
+    all_entities = {entity for s in summaries for entity in s.content_entities}
+    assert "хабр" not in all_entities
+    assert "autodesk" in all_entities  # genuine shared content entity, untouched
+
+
+def test_breadcrumb_fix_does_not_over_strip_genuine_mid_title_publisher_mention():
+    """Defect A safety guard: a title that genuinely discusses the same word a DIFFERENT title's
+    real publisher suffix uses, but is not itself a "/"-delimited breadcrumb, must keep that word
+    as content - the fix only ever removes an isolated breadcrumb segment whose own entities are a
+    subset of the SAME title's own real trailing-suffix entities, never any bare mid-title
+    mention."""
+    from services.recap_event import _publisher_suffix_entities
+
+    assert _publisher_suffix_entities("Why Хабр changed its comment policy - TechCrunch") == {"techcrunch"}
+
+
+def test_multi_part_series_titles_part_is_retained_as_content_not_publisher_noise():
+    """Defect B - real production titles verbatim (Story cf821b1d, a real 3-part AWS blog series).
+    Before the fix, the short "Part 3: Visualizing insights" segment satisfied the generic
+    trailing-suffix word-count guard and was misclassified as publisher noise (stripping "part"
+    and "visualizing"), while the longer sibling "Part 1"/"Part 2" segments were left untouched -
+    an inconsistency that raised EventRecapEvidenceContaminationError whenever clustering happened
+    to merge them. After the fix: no sibling's "Part N:" segment is ever treated as a suffix,
+    "part" survives as genuine shared content for all three, and the build completes without
+    raising - regardless of how many announcement clusters result (a single-event cluster can
+    never trigger the contamination check at all - only a multi-event cluster can, and this fix
+    makes every cluster grouping content-safe either way).
+
+    Known, disclosed side effect (confirmed by direct comparison against the pre-fix code): fixing
+    the entity-sanitization bug also changes `cluster_announcements()`'s OWN similarity scoring for
+    this specific real title set, since both consume the same `_sanitized_announcement_signature()`
+    - before the fix, Part 3's signature was missing "part"/"visualizing" entirely, which
+    (incidentally, not by design) inflated its entity-overlap similarity to Part 1/Part 2 enough to
+    reach the 0.75 clustering threshold and merge as one cluster; after the fix, Part 3's signature
+    correctly includes its own distinguishing word too, which dilutes the entity-overlap ratio just
+    below threshold, so these three now form three separate single-event clusters instead of one.
+    This is a downstream consequence of correctly fixing entity hygiene, not a Story Memory / event
+    linking change (`cluster_announcements()` is an ephemeral evidence-layer computation local to
+    one Story's own confirmed events, never persisted, and entirely separate from
+    `services.story_memory`'s NewsEventStoryLink matching)."""
+    titles = [
+        "Build a no-code ML workflow with Snowflake, Amazon SageMaker Canvas and Amazon Quick – Part 1: Setting up your",
+        "Build a no-code ML workflow with Snowflake, Amazon SageMaker Canvas and Amazon Quick – Part 2: Data preparation and",
+        "Build a no-code ML workflow with Snowflake, Amazon SageMaker Canvas and Amazon Quick – Part 3: Visualizing insights",
+    ]
+    _events, clusters, summaries, _facts = _summaries_and_facts(titles, gap_minutes=0.0)
+
+    all_entities = {entity for s in summaries for entity in s.content_entities}
+    assert "part" in all_entities  # genuine series-installment content, never publisher noise
+
+    from services.recap_event import _publisher_suffix_entities
+
+    for title in titles:
+        assert _publisher_suffix_entities(title) == set()  # consistent across all three siblings
+
+
+def test_real_publisher_suffix_still_recognized_after_i2_2f_fix():
+    """Regression guard: I.2.2F's two narrow additions must not weaken ordinary, unrelated
+    publisher-suffix detection - the exact pre-existing Tesla fixture must be unaffected."""
+    titles = ["Tesla unveils new Model Z with major upgrades - Tesla News Network"]
+    _events, _clusters, summaries, _facts = _summaries_and_facts(titles, gap_minutes=0.0)
+    assert "tesla news network" not in summaries[0].content_entities
+    assert "tesla" in summaries[0].content_entities
+
+
+def test_i2_2f_real_reproduced_stories_no_longer_raise_contamination_error():
+    """Defense-in-depth, mirroring test_evidence_contamination_invariant_never_fires_on_real_fixtures
+    exactly: all three real title groups from the three Stories I.2.2E identified as raising
+    EventRecapEvidenceContaminationError must no longer raise it."""
+    for titles in (
+        [
+            "6 AI-сервисов, которыми сейчас можно пользоваться бесплатно или почти бесплатно",
+            "6 AI-сервисов, которыми сейчас можно пользоваться бесплатно или почти бесплатно - Хабр",
+            "6 AI-сервисов, которыми сейчас можно пользоваться бесплатно или почти бесплатно / Хабр - Хабр",
+        ],
+        [
+            "Autodesk добавила в Flow Studio управление 3D-сценой перед AI-генерацией видео - Хабр",
+            "Autodesk добавила в Flow Studio управление 3D-сценой перед AI-генерацией видео / Комментарии / Хабр - Хабр",
+        ],
+        [
+            "Build a no-code ML workflow with Snowflake, Amazon SageMaker Canvas and Amazon Quick – Part 1: Setting up your",
+            "Build a no-code ML workflow with Snowflake, Amazon SageMaker Canvas and Amazon Quick – Part 2: Data preparation and",
+            "Build a no-code ML workflow with Snowflake, Amazon SageMaker Canvas and Amazon Quick – Part 3: Visualizing insights",
+        ],
+    ):
+        _summaries_and_facts(titles, gap_minutes=0.0)  # raises EventRecapEvidenceContaminationError on violation
+
+
+# ---------------------------------------------------------------------------
 # Phase R2.4 - synthesis evidence projection + fact-verification adapter fix (real production
 # finding: a real Sverdlovsk synthesis call leaked the bare SINGLE_SOURCE_ONLY entity token
 # "областн" into the model's own uncertainty_notes, and a separate real false BLOCK on the

@@ -462,6 +462,22 @@ def _announcement_similarity(sig_a: StorySignature, title_a: str, sig_b: StorySi
 _TRAILING_SUFFIX_RE = re.compile(r"\s*[-–—|]\s*([^-–—|]{1,60})$")
 _TRAILING_SUFFIX_MAX_WORDS = 4
 
+# Phase I.2.2F (real production forensic finding, I.2.2E - a real AWS blog series: "... Part 1:
+# Setting up your" / "... Part 2: Data preparation and" / "... Part 3: Visualizing insights"):
+# an enumerated-series installment marker ("Part <N>: ...") can coincidentally satisfy the generic
+# trailing-suffix shape (short, delimiter-introduced segment) exactly like a real "Title -
+# Publisher" suffix does, but it is genuine content - the series numbering IS the distinguishing
+# fact between sibling announcements, never publisher noise. Deliberately narrow (English "Part
+# <digits>:" only, anchored at the START of the candidate segment) - does not touch any other
+# colon-containing suffix shape (e.g. "BREAKING: ... - CNN" still strips "CNN" normally).
+_ENUMERATED_SERIES_SUFFIX_RE = re.compile(r"(?i)^part\s+\d+\s*:")
+
+# Phase I.2.2F: an isolated "/ <short segment>" path/breadcrumb immediately preceding the real
+# trailing publisher suffix - see `_publisher_suffix_entities()`'s own docstring for the exact real
+# case this matches ("... / Хабр - Хабр"). Deliberately a distinct delimiter ("/") from
+# `_TRAILING_SUFFIX_RE`'s own `-–—|` set - breadcrumb-style path segments, never the suffix itself.
+_BREADCRUMB_SEGMENT_RE = re.compile(r"/\s*([^/\-–—|]{1,40})\s*$")
+
 _QUOTE_TRANSLATION = str.maketrans({
     "‘": "'", "’": "'", "“": '"', "”": '"',
     "«": '"', "»": '"', "–": "-", "—": "-",
@@ -561,7 +577,11 @@ def _normalize_announcement_title(title: str) -> str:
 
 def _trailing_suffix_stripped(normalized_title: str) -> str | None:
     match = _TRAILING_SUFFIX_RE.search(normalized_title)
-    if match and len(match.group(1).split()) <= _TRAILING_SUFFIX_MAX_WORDS:
+    if (
+        match
+        and len(match.group(1).split()) <= _TRAILING_SUFFIX_MAX_WORDS
+        and not _ENUMERATED_SERIES_SUFFIX_RE.match(match.group(1))
+    ):
         return normalized_title[: match.start()].rstrip()
     return None
 
@@ -591,16 +611,44 @@ def _publisher_suffix_entities(title: str) -> set[str]:
     suffix-STRIPPED core text. An entity present in the suffix segment but ALSO present in the core
     is real content evidence and is never removed (e.g. a title that genuinely discusses "CNews" as
     its subject, not merely bylines it, would keep "cnews" as a content entity for anyone comparing
-    against it - because it would also appear in the core). An entity present ONLY in the suffix
-    segment is publisher noise. Returns an empty set (no filtering) whenever no title-suffix
-    candidate exists at all - the exact same guard `_trailing_suffix_stripped()` already applies, so
-    a title with no dash/pipe-delimited trailing segment is never touched."""
+    against it - because it would also appear in the core) - UNLESS that core occurrence is itself
+    nothing more than an isolated "/"-delimited breadcrumb repeating the same already-established
+    publisher name immediately before the suffix (Phase I.2.2F - see the breadcrumb-handling block
+    below for the exact real case this covers). An entity present ONLY in the suffix segment (or
+    only via such a breadcrumb) is publisher noise. Returns an empty set (no filtering) whenever no
+    title-suffix candidate exists at all, or the candidate is an enumerated-series marker like
+    "Part 3: ..." (Phase I.2.2F) - the exact same guards `_trailing_suffix_stripped()` already
+    applies, so a title with no dash/pipe-delimited trailing segment, or a genuine series
+    installment, is never touched."""
     display_title = _title_with_normalized_punctuation(title)
     match = _TRAILING_SUFFIX_RE.search(display_title)
-    if not match or len(match.group(1).split()) > _TRAILING_SUFFIX_MAX_WORDS:
+    if (
+        not match
+        or len(match.group(1).split()) > _TRAILING_SUFFIX_MAX_WORDS
+        or _ENUMERATED_SERIES_SUFFIX_RE.match(match.group(1))
+    ):
         return set()
     suffix_entities = set(_extract_entities(match.group(1)))
-    core_entities = set(_extract_entities(display_title[: match.start()]))
+    core_text = display_title[: match.start()]
+    core_entities = set(_extract_entities(core_text))
+
+    # Phase I.2.2F (real production forensic finding, I.2.2E - Google News RU mirrors of Habr
+    # articles: "... / Хабр - Хабр", "... / Комментарии / Хабр - Хабр"): an isolated "/ <segment>"
+    # breadcrumb immediately preceding the real trailing publisher suffix, whose own entities are
+    # already fully accounted for by that suffix's own publisher entity, is itself publisher noise
+    # - a second, differently-positioned mention of the SAME publisher attribution, not genuine
+    # core content that happens to "protect" the entity from removal. Only the single breadcrumb
+    # segment immediately adjacent to the real suffix is ever consumed (search() with a `$` anchor,
+    # never a chained/recursive strip) - deliberately narrow, matching the two real reproduced
+    # cases. A breadcrumb segment containing anything beyond a repeat of the publisher name (its
+    # entities are not a subset of the suffix's own) is left completely untouched - this can never
+    # remove a genuine content entity that merely happens to sit near a "/".
+    breadcrumb_match = _BREADCRUMB_SEGMENT_RE.search(core_text)
+    if breadcrumb_match:
+        breadcrumb_entities = set(_extract_entities(breadcrumb_match.group(1)))
+        if breadcrumb_entities and breadcrumb_entities <= suffix_entities:
+            core_entities -= breadcrumb_entities
+
     return suffix_entities - core_entities
 
 
