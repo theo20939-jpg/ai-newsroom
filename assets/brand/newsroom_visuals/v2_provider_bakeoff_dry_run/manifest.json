@@ -1,0 +1,200 @@
+{
+  "phase": "V2.1 - Provider-Neutral Image Edit Protocol & Three-Model Bake-Off Preparation",
+  "generated_at_utc": "2026-08-27T12:10:48.795551+00:00",
+  "mode": "dry_run",
+  "bake_off_models": [
+    {
+      "provider": "gemini",
+      "model_id": "gemini-3.1-flash-image"
+    },
+    {
+      "provider": "gemini",
+      "model_id": "gemini-3-pro-image"
+    },
+    {
+      "provider": "openai",
+      "model_id": "gpt-image-2"
+    }
+  ],
+  "credential_audit": {
+    "OPENAI_API_KEY": "PRESENT",
+    "GEMINI_API_KEY": "PRESENT"
+  },
+  "cases": [
+    {
+      "case_id": "case1_hero_product_iphone",
+      "label": "Hardware-fidelity test",
+      "file_path": "assets\\brand\\newsroom_visuals\\v2_1_bakeoff_sources\\case1_hero_product_iphone.jpg",
+      "sha256": "c3126a01dac2a15ea045d115e90882d4e3811aa310344e970d601460af1e5a65",
+      "width": 1122,
+      "height": 1402,
+      "mime_type": "image/jpeg",
+      "size_bytes": 180960
+    },
+    {
+      "case_id": "case2_gadget_geometry_detail",
+      "label": "Geometry/detail-preservation test",
+      "file_path": "assets\\brand\\newsroom_visuals\\v2_1_bakeoff_sources\\case2_gadget_geometry_detail.jpg",
+      "sha256": "83761c78b3efe859da1bb1194be7da6e3a765986d1237b0c60390e3c34aa572a",
+      "width": 1920,
+      "height": 1005,
+      "mime_type": "image/jpeg",
+      "size_bytes": 148216
+    },
+    {
+      "case_id": "case3_bright_promotional_scene",
+      "label": "Bright/saturated-background stress test",
+      "file_path": "assets\\brand\\newsroom_visuals\\v2_1_bakeoff_sources\\case3_bright_promotional_scene.jpg",
+      "sha256": "36ccc2bb892c8c2b497ed4068c48a1ea7d0ac512e61c70b6ebb6b9272fe0e207",
+      "width": 1122,
+      "height": 1402,
+      "mime_type": "image/jpeg",
+      "size_bytes": 257480
+    }
+  ],
+  "planned_runs": 9,
+  "max_successful_generations": 9,
+  "max_cost_usd_budget": null,
+  "network_image_generation_calls": 0,
+  "successful_paid_generations": 0,
+  "actual_cost_usd": 0,
+  "estimated_max_cost_usd": 0.753,
+  "canonical_prompt": "ROLE: You are the NNJ Source-Faithful Editorial Visual Composer.\n\nMISSION: Create a cleaner editorial composition from the supplied real source image while preserving the real factual appearance of the subject.\n\nSOURCE FIDELITY: Treat the source image as the source of truth for people, devices, product appearance, event scenes, logos present in evidence, interfaces/screens.\n\nALLOWED: isolate subject; remove clutter; replace background; extend background; re-light subtly; reframe; reposition; rotate slightly; scale subject; create negative space; reserve a calm lower branding zone.\n\nFORBIDDEN: invent product details; change hardware design; change human identity; fabricate UI; alter logos; change official brand appearance; add missing features; create unsupported event details; create fictional scenes that misrepresent the story.\n\nBOTTOM SAFE ZONE: Leave a calm lower area free of crucial detail for deterministic NNJ branding applied downstream.\n\nTEXT RULE: Do not generate headlines, article text, fake interface text, exact statistics, or quote text.\n\nNNJ BRAND RULE: Do not generate NNJ branding, the NNJ logo, or the pulse line - all NNJ branding is deterministic and applied downstream, unchanged.\n\nFAIL-SAFE: If truthful recomposition is not possible, fall back conceptually to a cleaner crop-based treatment of the source image rather than fabricating details.\n\nOUTPUT: Only the recomposed visual. No explanations, no extra text, no branding.",
+  "runs": [
+    {
+      "run_id": "case1_hero_product_iphone__gemini__gemini-3.1-flash-image",
+      "case_id": "case1_hero_product_iphone",
+      "provider": "gemini",
+      "model_id": "gemini-3.1-flash-image",
+      "planned": true,
+      "executed": false,
+      "estimated_cost_usd": 0.067,
+      "request_id": null,
+      "actual_cost_usd": null,
+      "output_path": null,
+      "error": null,
+      "automated_checks": null,
+      "evaluation": null
+    },
+    {
+      "run_id": "case1_hero_product_iphone__gemini__gemini-3-pro-image",
+      "case_id": "case1_hero_product_iphone",
+      "provider": "gemini",
+      "model_id": "gemini-3-pro-image",
+      "planned": true,
+      "executed": false,
+      "estimated_cost_usd": 0.134,
+      "request_id": null,
+      "actual_cost_usd": null,
+      "output_path": null,
+      "error": null,
+      "automated_checks": null,
+      "evaluation": null
+    },
+    {
+      "run_id": "case1_hero_product_iphone__openai__gpt-image-2",
+      "case_id": "case1_hero_product_iphone",
+      "provider": "openai",
+      "model_id": "gpt-image-2",
+      "planned": true,
+      "executed": false,
+      "estimated_cost_usd": 0.05,
+      "request_id": null,
+      "actual_cost_usd": null,
+      "output_path": null,
+      "error": null,
+      "automated_checks": null,
+      "evaluation": null
+    },
+    {
+      "run_id": "case2_gadget_geometry_detail__gemini__gemini-3.1-flash-image",
+      "case_id": "case2_gadget_geometry_detail",
+      "provider": "gemini",
+      "model_id": "gemini-3.1-flash-image",
+      "planned": true,
+      "executed": false,
+      "estimated_cost_usd": 0.067,
+      "request_id": null,
+      "actual_cost_usd": null,
+      "output_path": null,
+      "error": null,
+      "automated_checks": null,
+      "evaluation": null
+    },
+    {
+      "run_id": "case2_gadget_geometry_detail__gemini__gemini-3-pro-image",
+      "case_id": "case2_gadget_geometry_detail",
+      "provider": "gemini",
+      "model_id": "gemini-3-pro-image",
+      "planned": true,
+      "executed": false,
+      "estimated_cost_usd": 0.134,
+      "request_id": null,
+      "actual_cost_usd": null,
+      "output_path": null,
+      "error": null,
+      "automated_checks": null,
+      "evaluation": null
+    },
+    {
+      "run_id": "case2_gadget_geometry_detail__openai__gpt-image-2",
+      "case_id": "case2_gadget_geometry_detail",
+      "provider": "openai",
+      "model_id": "gpt-image-2",
+      "planned": true,
+      "executed": false,
+      "estimated_cost_usd": 0.05,
+      "request_id": null,
+      "actual_cost_usd": null,
+      "output_path": null,
+      "error": null,
+      "automated_checks": null,
+      "evaluation": null
+    },
+    {
+      "run_id": "case3_bright_promotional_scene__gemini__gemini-3.1-flash-image",
+      "case_id": "case3_bright_promotional_scene",
+      "provider": "gemini",
+      "model_id": "gemini-3.1-flash-image",
+      "planned": true,
+      "executed": false,
+      "estimated_cost_usd": 0.067,
+      "request_id": null,
+      "actual_cost_usd": null,
+      "output_path": null,
+      "error": null,
+      "automated_checks": null,
+      "evaluation": null
+    },
+    {
+      "run_id": "case3_bright_promotional_scene__gemini__gemini-3-pro-image",
+      "case_id": "case3_bright_promotional_scene",
+      "provider": "gemini",
+      "model_id": "gemini-3-pro-image",
+      "planned": true,
+      "executed": false,
+      "estimated_cost_usd": 0.134,
+      "request_id": null,
+      "actual_cost_usd": null,
+      "output_path": null,
+      "error": null,
+      "automated_checks": null,
+      "evaluation": null
+    },
+    {
+      "run_id": "case3_bright_promotional_scene__openai__gpt-image-2",
+      "case_id": "case3_bright_promotional_scene",
+      "provider": "openai",
+      "model_id": "gpt-image-2",
+      "planned": true,
+      "executed": false,
+      "estimated_cost_usd": 0.05,
+      "request_id": null,
+      "actual_cost_usd": null,
+      "output_path": null,
+      "error": null,
+      "automated_checks": null,
+      "evaluation": null
+    }
+  ]
+}

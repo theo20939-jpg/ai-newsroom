@@ -1,0 +1,100 @@
+{
+  "phase": "V2.2A - Live Three-Model Protocol Smoke Test",
+  "generated_at_utc": "2026-08-27T12:13:34.416146+00:00",
+  "mode": "live",
+  "credential_audit": {
+    "OPENAI_API_KEY": "PRESENT",
+    "GEMINI_API_KEY": "PRESENT"
+  },
+  "case_id": "case1_hero_product_iphone",
+  "models": [
+    {
+      "provider": "gemini",
+      "model_id": "gemini-3.1-flash-image"
+    },
+    {
+      "provider": "gemini",
+      "model_id": "gemini-3-pro-image"
+    },
+    {
+      "provider": "openai",
+      "model_id": "gpt-image-2"
+    }
+  ],
+  "canonical_prompt": "ROLE: You are the NNJ Source-Faithful Editorial Visual Composer.\n\nMISSION: Create a cleaner editorial composition from the supplied real source image while preserving the real factual appearance of the subject.\n\nSOURCE FIDELITY: Treat the source image as the source of truth for people, devices, product appearance, event scenes, logos present in evidence, interfaces/screens.\n\nALLOWED: isolate subject; remove clutter; replace background; extend background; re-light subtly; reframe; reposition; rotate slightly; scale subject; create negative space; reserve a calm lower branding zone.\n\nFORBIDDEN: invent product details; change hardware design; change human identity; fabricate UI; alter logos; change official brand appearance; add missing features; create unsupported event details; create fictional scenes that misrepresent the story.\n\nBOTTOM SAFE ZONE: Leave a calm lower area free of crucial detail for deterministic NNJ branding applied downstream.\n\nTEXT RULE: Do not generate headlines, article text, fake interface text, exact statistics, or quote text.\n\nNNJ BRAND RULE: Do not generate NNJ branding, the NNJ logo, or the pulse line - all NNJ branding is deterministic and applied downstream, unchanged.\n\nFAIL-SAFE: If truthful recomposition is not possible, fall back conceptually to a cleaner crop-based treatment of the source image rather than fabricating details.\n\nOUTPUT: Only the recomposed visual. No explanations, no extra text, no branding.",
+  "max_successful_generations": 3,
+  "total_attempts": 3,
+  "successful_generations": 3,
+  "retries": [],
+  "actual_cost_usd_total": 0.0,
+  "estimated_cost_usd_total": 0.251,
+  "contact_sheet": "assets\\brand\\newsroom_visuals\\v2_2a_protocol_smoke\\CONTACT_SHEET_V2_2A_SMOKE.jpg",
+  "results": [
+    {
+      "provider": "gemini",
+      "model_id": "gemini-3.1-flash-image",
+      "success": true,
+      "attempts": 1,
+      "retried": false,
+      "retry_reason": null,
+      "request_id": "v1_Chd1eW1RYXVfbEVhcWx2ZElQaU1UdjhBTRIXdXltUWF1X2xFYXFsdmRJUGlNVHY4QU0",
+      "latency_ms": 16782.08979999181,
+      "source_sha256": "c3126a01dac2a15ea045d115e90882d4e3811aa310344e970d601460af1e5a65",
+      "result_sha256": "65597fb133c9e96d52e94ce0ec1c6ca15cc596fa5317d0073981e75a47c129c8",
+      "result_width": 1376,
+      "result_height": 768,
+      "result_mime_type": "image/jpeg",
+      "output_path": "assets\\brand\\newsroom_visuals\\v2_2a_protocol_smoke\\gemini__gemini-3.1-flash-image.jpg",
+      "usage_input_tokens": 552,
+      "usage_output_tokens": 1431,
+      "actual_cost_usd": null,
+      "estimated_cost_usd": 0.067,
+      "error": null,
+      "qualifies_as_future_bakeoff_result": true
+    },
+    {
+      "provider": "gemini",
+      "model_id": "gemini-3-pro-image",
+      "success": true,
+      "attempts": 1,
+      "retried": false,
+      "retry_reason": null,
+      "request_id": "v1_ChYwU21RYXFHRExhSFBzZ0x6amFycERnEhYwU21RYXFHRExhSFBzZ0x6amFycERn",
+      "latency_ms": 22375.499800022226,
+      "source_sha256": "c3126a01dac2a15ea045d115e90882d4e3811aa310344e970d601460af1e5a65",
+      "result_sha256": "3a9905b91f41f34473fe4df74d0a653b6379482289d6a8f33eee623aea7c17d5",
+      "result_width": 1376,
+      "result_height": 768,
+      "result_mime_type": "image/jpeg",
+      "output_path": "assets\\brand\\newsroom_visuals\\v2_2a_protocol_smoke\\gemini__gemini-3-pro-image.jpg",
+      "usage_input_tokens": 552,
+      "usage_output_tokens": 1241,
+      "actual_cost_usd": null,
+      "estimated_cost_usd": 0.134,
+      "error": null,
+      "qualifies_as_future_bakeoff_result": true
+    },
+    {
+      "provider": "openai",
+      "model_id": "gpt-image-2",
+      "success": true,
+      "attempts": 1,
+      "retried": false,
+      "retry_reason": null,
+      "request_id": "req_3f551239906d44749a8138d1d45eb1ed",
+      "latency_ms": 24116.370900010224,
+      "source_sha256": "c3126a01dac2a15ea045d115e90882d4e3811aa310344e970d601460af1e5a65",
+      "result_sha256": "9b7de3c6cae5d2cae20c4dc46336437c3da3571d976974f718c27d4fa2326bdb",
+      "result_width": 1536,
+      "result_height": 1024,
+      "result_mime_type": "image/png",
+      "output_path": "assets\\brand\\newsroom_visuals\\v2_2a_protocol_smoke\\openai__gpt-image-2.png",
+      "usage_input_tokens": 1798,
+      "usage_output_tokens": 158,
+      "actual_cost_usd": null,
+      "estimated_cost_usd": 0.05,
+      "error": null,
+      "qualifies_as_future_bakeoff_result": true
+    }
+  ]
+}

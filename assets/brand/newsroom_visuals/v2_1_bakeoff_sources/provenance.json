@@ -1,0 +1,44 @@
+{
+  "phase": "V2.1 - Provider-Neutral Image Edit Protocol & Three-Model Bake-Off Preparation",
+  "purpose": "The exact 3 real local source images the (not-yet-executed) 3x3=9-run provider bake-off matrix will use. Selected once, reused identically across all 3 candidate models so the comparison is fair - never a different image per model.",
+  "selection_rule": "No human portrait in this first bake-off (explicit instruction). Case 1 = hero product/iPhone for hardware fidelity. Case 2 = a second physical gadget, distinct from Case 1, for geometry/detail preservation. Case 3 = a bright/saturated promotional image.",
+  "cases": [
+    {
+      "case_id": "case1_hero_product_iphone",
+      "file": "case1_hero_product_iphone.jpg",
+      "sha256": "c3126a01dac2a15ea045d115e90882d4e3811aa310344e970d601460af1e5a65",
+      "dimensions": [1122, 1402],
+      "mode": "RGB",
+      "mime_type": "image/jpeg",
+      "size_bytes": 180960,
+      "source": "Reused unchanged from assets/brand/newsroom_visuals/v2_recomposition_local_proof/hero_product_iphone__1_raw_source.jpg (Phase V2 design-only local-proof selection) - a clean iPhone product shot on a solid orange background, zero collision risk, pulled read-only via docker cp from the ai_newsroom_telegram_bot container's shared image_storage_data volume, no network, no DB writes.",
+      "rationale": "Hardware-fidelity test: a clean, unambiguous single-product hero shot with sharp geometric edges (device silhouette, screen bezel) - the model must preserve exact hardware design per the FORBIDDEN clause in the canonical prompt (\"change hardware design\")."
+    },
+    {
+      "case_id": "case2_gadget_geometry_detail",
+      "file": "case2_gadget_geometry_detail.jpg",
+      "sha256": "83761c78b3efe859da1bb1194be7da6e3a765986d1237b0c60390e3c34aa572a",
+      "dimensions": [1920, 1005],
+      "mode": "RGB",
+      "mime_type": "image/jpeg",
+      "size_bytes": 148216,
+      "source": "Selected fresh from the existing local photo pool at scratchpad/real_photo_candidates/ (same read-only docker cp pull, no network, no DB writes) - filename is its own content hash (83761c78...).",
+      "rationale": "Geometry/detail-preservation test: a close macro angle showing a phone screen edge/bezel against a physical keyboard - two distinct hardware objects with fine repeating geometric detail (individual keyboard keys, screen corner radius) that a lossy recomposition would visibly distort or smooth over. Distinct device/brand from Case 1 (a different phone + a keyboard, not another isolated iPhone shot) so the bake-off is not testing the exact same object twice."
+    },
+    {
+      "case_id": "case3_bright_promotional_scene",
+      "file": "case3_bright_promotional_scene.jpg",
+      "sha256": "36ccc2bb892c8c2b497ed4068c48a1ea7d0ac512e61c70b6ebb6b9272fe0e207",
+      "dimensions": [1122, 1402],
+      "mode": "RGB",
+      "mime_type": "image/jpeg",
+      "size_bytes": 257480,
+      "source": "Reused unchanged from assets/brand/newsroom_visuals/v2_recomposition_local_proof/bright_promotional_scene__1_raw_source.jpg (Phase V2 design-only local-proof selection).",
+      "rationale": "Bright/saturated-background stress test: high-chroma promotional colors are the exact condition the V1 graphite-overlay bake-off found hardest to keep legible/faithful against - reused here as the third, deliberately different lighting/color regime."
+    }
+  ],
+  "excluded_by_rule": {
+    "portrait_public_figure__1_raw_source.jpg": "Excluded - contains a human portrait, explicitly forbidden for this first bake-off."
+  },
+  "no_network_no_paid_calls": "This file only records local selection of already-local image bytes. No image-generation provider was called to produce this file."
+}

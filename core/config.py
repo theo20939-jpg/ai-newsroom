@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr | None = None
     openai_api_key: SecretStr | None = None
     anthropic_api_key: SecretStr | None = None
+    # Phase V2.1 (docs/nnj_source_faithful_editorial_visual_recomposition_v1.md): the Gemini image
+    # adapter's own credential - not used by any existing code path (Google/Gemini was never a
+    # provider in this codebase before this phase; ABSENT in the current environment, confirmed by
+    # a presence-only check, never a raw-value check, before this field was added).
+    gemini_api_key: SecretStr | None = None
     max_daily_ai_cost: float | None = None
     max_monthly_ai_cost: float | None = None
 

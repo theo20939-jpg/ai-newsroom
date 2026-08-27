@@ -1,0 +1,298 @@
+# NNJ Editorial Visual System v1 - overlay asset manifest (Stage 2 canonicalization).
+#
+# Asset metadata only - no application architecture.
+#
+# *** SEMANTIC CORRECTION (Phase V1, prototype-driven renderer reconciliation) ***
+# Every entry below is `asset_role: design_reference` - a source of visual-language DIRECTION
+# (palette, motif, restraint level), never a literal file the production renderer composites at
+# runtime. The authoritative production canvas is 1200x675 (16:9, services/brand_renderer.py's own
+# existing _CARD_WIDTH/_CARD_HEIGHT), not this pack's 1122x1402 (4:5) - compositing one onto the
+# other would require either stretching (forbidden) or a canvas migration (explicitly rejected by
+# the Phase V1 product decision: "Do NOT migrate production rendering to 4:5. Do NOT stretch the
+# supplied 1122x1402 overlays into 16:9."). The approved minimal visual language these PNGs
+# demonstrate (thin bottom line + small pulse + small logo, restraint) has instead been
+# RECREATED deterministically inside brand_renderer.py itself (`_draw_pulse_line()`, `_paste_logo
+# ()`, the new `_choose_accent_color()` adaptive RED/WHITE selection) - see
+# docs/nnj_editorial_visual_system_v1.md for the full reconciliation report. `active: true` below
+# is kept only to mean "an approved design reference, not rejected/superseded" - it does NOT mean
+# "wired into runtime selection." `production_runtime_asset: false` on every entry makes this
+# explicit and machine-checkable. If a future exact 16:9 overlay pack is supplied, direct runtime
+# compositing may become a real option in a separate, later phase - not this one.
+#
+# CANONICAL DESIGN REFERENCE (corrective reference audit, post-Stage-2): the approved master
+# prototype was missing from the original Stage 2 incoming batch and has since been added. It is:
+#
+#     assets/brand/newsroom_visuals/v1/references/nnj_editorial_visual_system_master_prototype.png
+#
+# Design-authority hierarchy, highest first:
+#   1. the canonical prototype above
+#   2. the canonical NNJ logos (assets/brand/nnj_logo.png / .svg / _red.svg)
+#   3. approved overlay assets below (this manifest)
+#   4. secondary visual references (everything else under references/)
+#
+# The overlays below were audited and classified BEFORE the real prototype was available and have
+# NOT yet been re-validated against it pixel-by-pixel - see the corrective reference audit report
+# for the conservative style re-read (thin bottom pulse line + minimal restraint confirmed as the
+# dominant, correct device; the BREAKING ribbon and several corner-bracket/quote-mark accents read
+# as heavier than the prototype's own restraint and should get a design pass before being treated
+# as final). Generated overlay files must never redefine the design system if they conflict with
+# the prototype - the prototype wins.
+#
+# IMPORTANT - branding authenticity (Stage 2 Section 6): none of these overlay PNGs contain the
+# real canonical NNJ logo (assets/brand/nnj_logo.png / nnj_logo.svg / nnj_logo_red.svg). Every
+# "nnj" wordmark baked into these files is a soft/glow-rendered approximation - visually close in
+# gesture but not proven pixel/vector-identical (confirmed by direct crop comparison against the
+# canonical PNG: missing the canonical mark's dot-over-"j" accent, softer/blurred edges, slightly
+# different corner geometry and letter proportions). `contains_trusted_branding: false` on every
+# entry below reflects this. Per the master task's own Section 6/21 instruction, these embedded
+# marks must NOT be treated as trusted branding - any production compositor must add the real
+# canonical logo separately (reusing assets/brand/nnj_logo*.{png,svg} directly, never redrawing
+# it) if on-image branding is required; these overlays' own production value is the thin
+# bottom-line pulse device and per-family accent (quote marks / data ticks / breaking ribbon),
+# not the wordmark they happen to carry.
+#
+# aspect_ratio 0.8 == 4:5 (1122x1402 px, the actual dimensions of every asset below).
+
+version: 1
+canvas:
+  width: 1122
+  height: 1402
+  aspect_ratio: 0.8003
+
+overlays:
+  - id: universal_minimal_01
+    path: overlays/universal/universal_minimal_01.png
+    presentation_type: UNIVERSAL
+    priority: 1
+    aspect_ratio: 0.8003
+    has_alpha: true
+    contains_trusted_branding: false
+    active: true
+    asset_role: design_reference
+    production_runtime_asset: false
+    notes: >
+      Plain white pulse line + wordmark only, no other decoration. Cleanest fallback
+      candidate - lightest-touch treatment in the whole pack. Best over dark source images.
+
+  - id: universal_minimal_02
+    path: overlays/universal/universal_minimal_02.png
+    presentation_type: UNIVERSAL
+    priority: 2
+    aspect_ratio: 0.8003
+    has_alpha: true
+    contains_trusted_branding: false
+    active: true
+    asset_role: design_reference
+    production_runtime_asset: false
+    notes: >
+      Red palette variant of universal_minimal_01, adds two restrained top-corner brackets
+      (thin single-line accents, not a frame). Best over light/neutral source images.
+
+  - id: universal_minimal_03
+    path: overlays/universal/universal_minimal_03.png
+    presentation_type: UNIVERSAL
+    priority: 3
+    aspect_ratio: 0.8003
+    has_alpha: true
+    contains_trusted_branding: false
+    active: true
+    asset_role: design_reference
+    production_runtime_asset: false
+    notes: >
+      White palette twin of universal_minimal_02 (same two-corner-bracket treatment). Best
+      over dark source images.
+
+  # Bright/Graphite Overlay Expansion (corrective visual proof round 3): three new design
+  # candidates, added to test a third palette state for bright/saturated/colorful source images
+  # where both existing RED and WHITE variants can lose contrast depending on local color. All
+  # three are structurally identical in shape to the existing universal_minimal_* line device
+  # (thin bottom line + wordmark, non-transparent content confined to roughly the bottom 7-15% of
+  # the 1122x1402 canvas) - they differ ONLY in palette, never in geometry/decoration. None of the
+  # supplied files contained a distinct BREAKING ribbon or QUOTE glyph accent, despite the task
+  # framing anticipating possible "graphite BREAKING"/"graphite QUOTE" variants - none were
+  # actually present in this batch, so none are registered as such (no category is manufactured
+  # here that the actual files do not support). Two of the five files originally placed in
+  # incoming/ were exact byte-identical duplicate downloads (same UUID, "(1)" suffix) - removed,
+  # not registered as separate entries.
+
+  - id: universal_graphite_01
+    path: overlays/universal/universal_graphite_01.png
+    presentation_type: UNIVERSAL
+    palette_family: GRAPHITE
+    priority: 4
+    aspect_ratio: 0.8003
+    has_alpha: true
+    contains_trusted_branding: false
+    active: true
+    asset_role: design_reference
+    production_runtime_asset: false
+    production_approved: false
+    notes: >
+      Pure graphite/charcoal treatment - line, pulse blip, and "nnj" wordmark all in a single
+      dark graphite tone, zero red anywhere. The most monochrome/neutral candidate in the whole
+      pack; intended for bright or highly-saturated source images where a colored (red or white)
+      line risks clashing with local hues.
+
+  - id: universal_graphite_red_pulse_01
+    path: overlays/universal/universal_graphite_red_pulse_01.png
+    presentation_type: UNIVERSAL
+    palette_family: GRAPHITE_RED_PULSE
+    priority: 5
+    aspect_ratio: 0.8003
+    has_alpha: true
+    contains_trusted_branding: false
+    active: true
+    asset_role: design_reference
+    production_runtime_asset: false
+    production_approved: false
+    notes: >
+      Graphite line + graphite wordmark, with only the small ECG pulse blip itself rendered in
+      NNJ red - the single point of brand-color identity on an otherwise neutral line. No
+      endpoint dot, no extra tick marks - the plainest of the three graphite candidates.
+
+  - id: universal_graphite_red_endpoint_01
+    path: overlays/universal/universal_graphite_red_endpoint_01.png
+    presentation_type: UNIVERSAL
+    palette_family: GRAPHITE_RED_ENDPOINT
+    priority: 6
+    aspect_ratio: 0.8003
+    has_alpha: true
+    contains_trusted_branding: false
+    active: true
+    asset_role: design_reference
+    production_runtime_asset: false
+    production_approved: false
+    notes: >
+      Graphite line + graphite wordmark + red pulse blip (as in universal_graphite_red_pulse_01),
+      plus a small red dot immediately after the wordmark and a tiny double-tick accent mark at
+      the line's own start (far left). The wordmark also carries a dot-over-"j" accent closer in
+      shape to the canonical mark than the earlier badge-logo experiment - still not proven
+      pixel/vector-identical, embedded branding remains untrusted for production.
+
+  # RED_GRAPHITE_KEYLINE: no candidate matching this palette family (red-dominant line with a
+  # graphite keyline/accent) was present in this incoming batch. Not fabricated here.
+
+  - id: breaking_minimal_01
+    path: overlays/breaking/breaking_minimal_01.png
+    presentation_type: BREAKING
+    priority: 1
+    aspect_ratio: 0.8003
+    has_alpha: true
+    contains_trusted_branding: false
+    active: true
+    asset_role: design_reference
+    production_runtime_asset: false
+    production_approved: false
+    notes: >
+      Phase V1 re-audit against the real master prototype: NOT approved for production. The
+      prototype's own BREAKING treatment uses the identical thin-bottom-line device as every
+      other type - never a distinct ribbon/banner. This asset's "BREAKING" ribbon badge + ~
+      circuit-bracket glyph is heavier than the prototype supports. brand_renderer.py's own
+      reconciled render_breaking_frame() does NOT use this asset - it recreates the minimal
+      treatment deterministically (stronger pulse + one small urgency dot only). Kept as a
+      reference/design-history artifact, not deleted.
+
+  - id: quote_minimal_01
+    path: overlays/quote/quote_minimal_01.png
+    presentation_type: QUOTE
+    priority: 1
+    aspect_ratio: 0.8003
+    has_alpha: true
+    contains_trusted_branding: false
+    active: true
+    asset_role: design_reference
+    production_runtime_asset: false
+    production_approved: false
+    notes: >
+      Phase V1 re-audit: NOT approved for production. The master prototype's own QUOTE example
+      uses a plain portrait + Telegram-native quote-block text, no decorative quotation-mark
+      glyph. brand_renderer.py's own render_quote_card() already never used this pack at all
+      (module docstring) and needs no reconciliation - it is already the correct treatment.
+      Red opening-quote glyph top-left only (single-sided), pulse line + wordmark bottom.
+
+  - id: quote_minimal_02
+    path: overlays/quote/quote_minimal_02.png
+    presentation_type: QUOTE
+    priority: 2
+    aspect_ratio: 0.8003
+    has_alpha: true
+    contains_trusted_branding: false
+    active: true
+    asset_role: design_reference
+    production_runtime_asset: false
+    production_approved: false
+    notes: >
+      Phase V1 re-audit: NOT approved for production (same reasoning as quote_minimal_01).
+      Red opening-quote (top-left) + closing-quote (bottom-right) pair, small wordmark
+      top-right in addition to the bottom pulse line. More symmetric than quote_minimal_01.
+
+  - id: quote_minimal_03
+    path: overlays/quote/quote_minimal_03.png
+    presentation_type: QUOTE
+    priority: 3
+    aspect_ratio: 0.8003
+    has_alpha: true
+    contains_trusted_branding: false
+    active: true
+    asset_role: design_reference
+    production_runtime_asset: false
+    production_approved: false
+    notes: >
+      Phase V1 re-audit: NOT approved for production (same reasoning as quote_minimal_01).
+      White palette twin of quote_minimal_02 (open+close quote pair, corner bracket top-right).
+      Best over dark source images/portraits.
+
+  - id: data_minimal_01
+    path: overlays/data/data_minimal_01.png
+    presentation_type: DATA
+    priority: 1
+    aspect_ratio: 0.8003
+    has_alpha: true
+    contains_trusted_branding: false
+    active: true
+    asset_role: design_reference
+    production_runtime_asset: false
+    notes: >
+      White palette. Small dot+tick mark top-left, single corner bracket top-right, plain
+      pulse line + wordmark bottom - no embedded chart. Lightest DATA-family option.
+
+  - id: data_minimal_02
+    path: overlays/data/data_minimal_02.png
+    presentation_type: DATA
+    priority: 2
+    aspect_ratio: 0.8003
+    has_alpha: true
+    contains_trusted_branding: false
+    active: true
+    asset_role: design_reference
+    production_runtime_asset: false
+    notes: >
+      Red palette. Small ascending trend-line/data-point chart merged into the left end of the
+      bottom pulse line, single corner bracket top-right. The only asset with an actual
+      chart-like device - reserve for genuinely data/numbers-centered stories per Stage 4
+      Section 14's own "verified numeric typography/charts rendered deterministically, never by
+      the image model" rule (this overlay's own mini-chart is decorative, not a real data
+      renderer, and must never be mistaken for one).
+
+  - id: data_minimal_03
+    path: overlays/data/data_minimal_03.png
+    presentation_type: DATA
+    priority: 3
+    aspect_ratio: 0.8003
+    has_alpha: true
+    contains_trusted_branding: false
+    active: true
+    asset_role: design_reference
+    production_runtime_asset: false
+    notes: >
+      Red palette. Smaller/simpler bar-chart + trend-dot motif at the very bottom-left of the
+      pulse line, no top-corner decoration. More restrained than data_minimal_02.
+
+# RECAP: no valid overlay asset was supplied in this incoming batch. Not manufactured here per
+# the master task's own "do not manufacture missing categories" instruction - RECAP falls back
+# to UNIVERSAL via the standard selection fallback until a dedicated asset is provided.
+#
+# NEWS: no NEWS-specific asset was supplied either. This is architecturally correct, not a gap -
+# the master task's own Stage 4 Section 14 describes NEWS as "the default presentation... same
+# minimal base" as UNIVERSAL, so NEWS is expected to fall back to UNIVERSAL by design (Stage 6
+# Section 18's own fallback chain), never requiring its own dedicated file.

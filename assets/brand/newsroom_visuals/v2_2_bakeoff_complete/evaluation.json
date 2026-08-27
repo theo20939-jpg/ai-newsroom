@@ -1,0 +1,98 @@
+{
+  "phase": "V2.2B - Human Fidelity Review (rubric per docs/phase_v2_2b_complete_bakeoff_report.md)",
+  "note": "Scores below are from careful visual inspection of the CASE_N_DETAIL.jpg sheets and the raw provider originals, not automated/LLM-image-judged (per the bake-off design's own explicit prohibition). All scores are 0-5. edit_strength in {TOO_CONSERVATIVE, APPROPRIATE, TOO_AGGRESSIVE}. fidelity_flag in {NONE, MINOR_VISUAL_MUTATION, MAJOR_VISUAL_MUTATION, CRITICAL_PRODUCT_MUTATION} - a distinct signal from the numeric scores, per the rubric's own rule that a high aesthetic score never rescues a mutation flag.",
+  "results": [
+    {
+      "case_id": "case1_hero_product_iphone", "model_id": "gemini-3.1-flash-image", "provider": "gemini",
+      "factual_product_fidelity": 5, "composition_improvement": 3, "nnj_safe_zone_quality": 4,
+      "photorealism_artifacts": 5, "prompt_adherence": 5, "edit_strength": "APPROPRIATE",
+      "fidelity_flag": "NONE",
+      "notes": "Triple-lens camera module, Apple logo, orange colorway, and device proportions all exactly preserved; background essentially untouched. Composition change is minor (slight reposition/crop only)."
+    },
+    {
+      "case_id": "case1_hero_product_iphone", "model_id": "gemini-3-pro-image", "provider": "gemini",
+      "factual_product_fidelity": 5, "composition_improvement": 4, "nnj_safe_zone_quality": 4,
+      "photorealism_artifacts": 5, "prompt_adherence": 4, "edit_strength": "APPROPRIATE",
+      "fidelity_flag": "NONE",
+      "notes": "Same strong hardware fidelity as Flash. Background swapped to a gold/yellow studio gradient - a bigger, but ALLOWED and well-executed, environmental change; more intentional hero-shot composition."
+    },
+    {
+      "case_id": "case1_hero_product_iphone", "model_id": "gpt-image-2", "provider": "openai",
+      "factual_product_fidelity": 5, "composition_improvement": 3, "nnj_safe_zone_quality": 4,
+      "photorealism_artifacts": 5, "prompt_adherence": 5, "edit_strength": "TOO_CONSERVATIVE",
+      "fidelity_flag": "NONE",
+      "notes": "Closest match to source composition/background of all 3 - very faithful but the least transformative edit."
+    },
+    {
+      "case_id": "case2_gadget_geometry_detail", "model_id": "gemini-3.1-flash-image", "provider": "gemini",
+      "factual_product_fidelity": 5, "composition_improvement": 3, "nnj_safe_zone_quality": 3,
+      "photorealism_artifacts": 5, "prompt_adherence": 5, "edit_strength": "TOO_CONSERVATIVE",
+      "fidelity_flag": "NONE",
+      "notes": "Keyboard geometry (individual key edges, Q/W/A/S/D/Z/X/C, Alt key) fully legible and preserved; Duolingo owl logo/wordmark/tagline text preserved exactly. Best factual result of the whole bake-off for this case."
+    },
+    {
+      "case_id": "case2_gadget_geometry_detail", "model_id": "gemini-3-pro-image", "provider": "gemini",
+      "factual_product_fidelity": 4, "composition_improvement": 4, "nnj_safe_zone_quality": 4,
+      "photorealism_artifacts": 4, "prompt_adherence": 4, "edit_strength": "APPROPRIATE",
+      "fidelity_flag": "MINOR_VISUAL_MUTATION",
+      "notes": "Keyboard is still present and legible (Caps Lock, A/S/D visible) but re-lit/color-graded enough that its material reads slightly differently than the source photo - a reflection/lighting drift, not a geometry or count change."
+    },
+    {
+      "case_id": "case2_gadget_geometry_detail", "model_id": "gpt-image-2", "provider": "openai",
+      "factual_product_fidelity": 3, "composition_improvement": 3, "nnj_safe_zone_quality": 5,
+      "photorealism_artifacts": 3, "prompt_adherence": 3, "edit_strength": "TOO_AGGRESSIVE",
+      "fidelity_flag": "MAJOR_VISUAL_MUTATION",
+      "notes": "The keyboard - the entire point of this case (a second physical gadget for geometry/detail preservation) - is REMOVED, replaced with a flat solid blue background. Duolingo phone content is preserved, but a real, factual physical object was deleted rather than isolated/reframed."
+    },
+    {
+      "case_id": "case3_bright_promotional_scene", "model_id": "gemini-3.1-flash-image", "provider": "gemini",
+      "factual_product_fidelity": 5, "composition_improvement": 3, "nnj_safe_zone_quality": 2,
+      "photorealism_artifacts": 5, "prompt_adherence": 4, "edit_strength": "TOO_CONSERVATIVE",
+      "fidelity_flag": "NONE",
+      "notes": "Snapchat kiosk frame/ghost logo/screen border preserved; kept the real environment and the incidental bystander. Kiosk occupies nearly the full frame, leaving a narrow lower margin - weakest safe-zone score in the bake-off."
+    },
+    {
+      "case_id": "case3_bright_promotional_scene", "model_id": "gemini-3-pro-image", "provider": "gemini",
+      "factual_product_fidelity": 4, "composition_improvement": 4, "nnj_safe_zone_quality": 4,
+      "photorealism_artifacts": 4, "prompt_adherence": 4, "edit_strength": "APPROPRIATE",
+      "fidelity_flag": "MINOR_VISUAL_MUTATION",
+      "notes": "Kiosk/logo/frame preserved; isolated on a clean gradient studio background with good negative space (best safe-zone of the three for this case). The screen's own photo-content is simplified/altered from the source's specific image - a minor, non-hardware content drift. Bystander removed (ALLOWED as clutter removal)."
+    },
+    {
+      "case_id": "case3_bright_promotional_scene", "model_id": "gpt-image-2", "provider": "openai",
+      "factual_product_fidelity": 4, "composition_improvement": 3, "nnj_safe_zone_quality": 4,
+      "photorealism_artifacts": 3, "prompt_adherence": 5, "edit_strength": "TOO_AGGRESSIVE",
+      "fidelity_flag": "NONE",
+      "notes": "Best on-screen UI/text legibility of the three ('LOOK HERE', 'Capture whole body' both readable). Background fully flattened to solid yellow - most graphic/least photorealistic of the three, but no factual hardware loss (unlike its Case 2 result)."
+    }
+  ],
+  "model_aggregates": {
+    "gemini-3.1-flash-image": {
+      "mean_factual_fidelity": 5.0, "worst_factual_fidelity": 5,
+      "critical_product_mutation_count": 0, "major_visual_mutation_count": 0, "minor_visual_mutation_count": 0,
+      "mean_composition_improvement": 3.0, "mean_safe_zone_quality": 3.0,
+      "mean_photorealism": 5.0, "mean_prompt_adherence": 4.67,
+      "edit_strength_counts": {"TOO_CONSERVATIVE": 2, "APPROPRIATE": 1, "TOO_AGGRESSIVE": 0},
+      "total_latency_ms": 42488.79, "average_latency_ms": 14162.93,
+      "successful_outputs": 3, "estimated_cost_usd_total": 0.201, "actual_cost_usd_total": null
+    },
+    "gemini-3-pro-image": {
+      "mean_factual_fidelity": 4.33, "worst_factual_fidelity": 4,
+      "critical_product_mutation_count": 0, "major_visual_mutation_count": 0, "minor_visual_mutation_count": 2,
+      "mean_composition_improvement": 4.0, "mean_safe_zone_quality": 4.0,
+      "mean_photorealism": 4.33, "mean_prompt_adherence": 4.0,
+      "edit_strength_counts": {"TOO_CONSERVATIVE": 0, "APPROPRIATE": 3, "TOO_AGGRESSIVE": 0},
+      "total_latency_ms": 73701.88, "average_latency_ms": 24567.29,
+      "successful_outputs": 3, "estimated_cost_usd_total": 0.402, "actual_cost_usd_total": null
+    },
+    "gpt-image-2": {
+      "mean_factual_fidelity": 4.0, "worst_factual_fidelity": 3,
+      "critical_product_mutation_count": 0, "major_visual_mutation_count": 1, "minor_visual_mutation_count": 0,
+      "mean_composition_improvement": 3.0, "mean_safe_zone_quality": 4.33,
+      "mean_photorealism": 3.67, "mean_prompt_adherence": 4.33,
+      "edit_strength_counts": {"TOO_CONSERVATIVE": 1, "APPROPRIATE": 0, "TOO_AGGRESSIVE": 2},
+      "total_latency_ms": 69871.71, "average_latency_ms": 23290.57,
+      "successful_outputs": 3, "estimated_cost_usd_total": 0.15, "actual_cost_usd_total": null
+    }
+  }
+}
