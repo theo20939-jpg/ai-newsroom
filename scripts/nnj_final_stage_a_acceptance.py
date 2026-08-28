@@ -48,7 +48,12 @@ from schemas.editorial_route import EditorialDestination
 from scripts.run_content_generation import ContentGenerationOutcome, run_content_generation_for_event
 from services.editorial_recomposition import RecompositionResult, maybe_recompose
 from services.image_persistence import EditorialImageCandidate, get_editorial_image_candidates, read_candidate_bytes
-from services.news_telegram_presentation import is_v8_family_output, render_v81_news_card_html
+from services.news_telegram_presentation import (
+    _NINJA_PULSE_TEXT,
+    _NINJA_PULSE_URL,
+    is_v8_family_output,
+    render_v81_news_card_html,
+)
 from services.nnj_master_news_overlay import MasterNewsBrandingDecision, apply_master_news_branding
 from services.quote_lookup import get_quote_for_draft, resolve_display_text
 from services.telegram_routing import RouteTarget, resolve_route
@@ -209,7 +214,7 @@ def render_final_html(outcome: ContentGenerationOutcome) -> tuple[str, str]:
     from services.editorial_treatment import STANDARD
 
     html = render_v81_news_card_html(
-        outcome.copywriting_output, treatment=STANDARD, include_ninja_pulse_footer=True,
+        outcome.copywriting_output, treatment=STANDARD, include_ninja_pulse_footer=False,
     )
     plain_text = ast_strip_html_tags(html)
     return html, plain_text
@@ -296,6 +301,45 @@ def resolve_destination() -> RouteTarget:
             f"chat_id={EXPECTED_CHAT_ID}, topic_id={EXPECTED_TOPIC_ID}"
         )
     return route
+
+
+def validate_final_package_contract(
+    *, html: str, plain_text: str, keyboard: InlineKeyboardMarkup | None,
+    source_url: str | None, destination: RouteTarget,
+) -> None:
+    """Phase V2.12G: the narrow, Stage-A-specific hard-contract gate this harness was missing
+    entirely - `services.content_quality_gates.evaluate_content_quality_gates()` (called for real
+    inside `run_content_generation_for_event()`) validates content-DRAFT text quality and is
+    deliberately non-blocking by this project's own established policy (services/
+    content_draft_service.py's own "assess and record, don't silently reject" comment) - never
+    touched here. This is a completely separate concern: the FINAL, fully-composed NEWS package
+    (text/HTML/keyboard/destination) either matches the approved contract or it does not, and a
+    violation here must never be reported as acceptance success. Reuses the real, single-source
+    constants (`_NINJA_PULSE_TEXT`/`_NINJA_PULSE_URL` from services.news_telegram_presentation,
+    `_NEWS_SOURCE_BUTTON_LABEL` from worker.content_cycle, `EXPECTED_CHAT_ID`/`EXPECTED_TOPIC_ID`
+    from this module) rather than re-declaring the forbidden strings a second time."""
+    for label, text in (("plain text", plain_text), ("HTML", html)):
+        if _NINJA_PULSE_TEXT in text:
+            raise StageAContractError(f"forbidden NINJA PULSE CTA text present in final {label}")
+        if _NINJA_PULSE_URL in text:
+            raise StageAContractError(f"forbidden {_NINJA_PULSE_URL} link present in final {label}")
+
+    if keyboard is None:
+        raise StageAContractError("NEWS package has no keyboard - a source-only button is required")
+    rows = keyboard.inline_keyboard
+    if len(rows) != 1 or len(rows[0]) != 1:
+        raise StageAContractError(f"keyboard is not exactly one row/one button, got rows={rows!r}")
+    button = rows[0][0]
+    if button.text != _NEWS_SOURCE_BUTTON_LABEL:
+        raise StageAContractError(f"button text {button.text!r} != approved {_NEWS_SOURCE_BUTTON_LABEL!r}")
+    if button.url != source_url:
+        raise StageAContractError(f"button url {button.url!r} != event source url {source_url!r}")
+
+    if destination.chat_id != EXPECTED_CHAT_ID or destination.topic_id != EXPECTED_TOPIC_ID:
+        raise StageAContractError(
+            f"destination {destination!r} does not match approved "
+            f"chat_id={EXPECTED_CHAT_ID}, topic_id={EXPECTED_TOPIC_ID}"
+        )
 
 
 def _sha256(data: bytes) -> str:
@@ -449,6 +493,14 @@ async def run_stage_a() -> Path:
         keyboard = build_keyboard(story.url)
         destination = resolve_destination()
 
+        # Phase V2.12G: fail closed BEFORE anything is persisted or reported as success - a
+        # violation here raises StageAContractError, which propagates out of run_stage_a()/main()
+        # unhandled, giving a non-zero process exit. No partial/forensic persistence on failure -
+        # the simplest safe implementation, per this phase's own explicit preference.
+        validate_final_package_contract(
+            html=html, plain_text=plain_text, keyboard=keyboard, source_url=story.url, destination=destination,
+        )
+
         manifest = build_manifest(
             story=story, outcome=outcome, candidate=candidate, recomposition=recomposition,
             visual_path=visual_path, branding=branding, destination=destination, keyboard=keyboard,
@@ -479,7 +531,7 @@ def render_final_html_with_quote(
         raise StageAContractError("copywriting_output became None between the first and quote-aware render")
     html = render_v81_news_card_html(
         outcome.copywriting_output, treatment=treatment_decision.treatment,
-        quote_text=quote_text, quote_speaker=quote_speaker, include_ninja_pulse_footer=True,
+        quote_text=quote_text, quote_speaker=quote_speaker, include_ninja_pulse_footer=False,
     )
     return html, ast_strip_html_tags(html)
 

@@ -1159,10 +1159,17 @@ async def run_content_cycle(
                 assert treatment_decision is not None  # guaranteed: router mode reaches here only past the SKIP gate
                 is_v8 = is_v8_family_output(outcome.copywriting_output)
                 if is_v8:
+                    # Phase V2.12G: Phase 23.1Q's earlier decision to enable the NINJA PULSE
+                    # caption footer for real router-mode NEWS delivery is superseded - the
+                    # current approved NEWS contract forbids any subscription CTA in the final
+                    # text/HTML (source-only "🔗 Источник" keyboard is the sole call to action).
+                    # The renderer's own `include_ninja_pulse_footer` parameter/default and
+                    # services/news_telegram_presentation.py's footer helper are untouched - only
+                    # this one call site's explicit override is removed.
                     html = render_v81_news_card_html(
                         outcome.copywriting_output, treatment=treatment_decision.treatment,
                         quote_text=quote_text, quote_speaker=quote_speaker,
-                        include_ninja_pulse_footer=True,
+                        include_ninja_pulse_footer=False,
                     )
                 else:
                     compact_body = build_compact_news_body(outcome.copywriting_output, treatment=treatment_decision.treatment)

@@ -507,10 +507,9 @@ async def test_router_mode_story_update_with_existing_root_replies_to_it(
     send_to_editorial_destination() call (not the legacy send_editorial_card()), proving
     reply_to_message_id actually reaches the real Bot.send_message call for router-mode NEWS
     delivery, which it silently never did before this phase. Uses V8-family output (not V6) so
-    this also exercises the real render_v81_news_card_html() path - the NINJA PULSE footer
-    (Phase 23.1Q) is wired only into that call site, never the legacy render_editorial_card()
-    fallback V6 output takes, so a V6 fixture here would not actually prove the footer survives
-    an UPDATE reply."""
+    this also exercises the real render_v81_news_card_html() path - Phase V2.12G: the NINJA PULSE
+    caption footer (Phase 23.1Q) is superseded and must be absent from real NEWS delivery; this
+    test now proves that absence survives an UPDATE reply exactly like a root post."""
     _router_settings(monkeypatch)
     monkeypatch.setattr(settings, "story_memory_mode", "shadow")
     monkeypatch.setattr(settings, "telegram_story_reply_mode", "enforce")
@@ -562,12 +561,13 @@ async def test_router_mode_story_update_with_existing_root_replies_to_it(
     assert result.story_fail_closed_review == 0
     assert result.notified == 1
 
-    # Phase 23.1Q: the NINJA PULSE footer must survive an UPDATE reply exactly like a root post -
-    # reply-threading is purely about the send call's reply_to_message_id, never about which
-    # renderer built the HTML, so both use the identical render_v81_news_card_html() output.
+    # Phase V2.12G: Phase 23.1Q's footer is superseded - it must be absent from an UPDATE reply
+    # exactly like it is from a root post (reply-threading is purely about reply_to_message_id,
+    # never about which renderer built the HTML - both use the identical render_v81_news_card_
+    # html() output).
     sent_text = fake_bot.send_message.call_args.args[1]
-    assert sent_text.count("NINJA PULSE. Подписаться 🥷") == 1
-    assert '<a href="https://t.me/nnjvpn">NINJA PULSE. Подписаться 🥷</a>' in sent_text
+    assert "NINJA PULSE. Подписаться 🥷" not in sent_text
+    assert "https://t.me/nnjvpn" not in sent_text
 
     async with factory() as session:
         delivery = (
@@ -625,10 +625,9 @@ async def test_router_mode_verified_quote_renders_in_the_v8_family_card(
     assert "— A Company Spokesperson" in sent_text
     # The mandatory one-paragraph main body must still survive whole, unmodified by the quote.
     assert "OpenAI released a new flagship model" in sent_text
-    # Phase 23.1Q: footer present exactly once, and strictly AFTER the quote block (headline ->
-    # body -> quote -> footer, the required order).
-    assert sent_text.count("NINJA PULSE. Подписаться 🥷") == 1
-    assert sent_text.index("</blockquote>") < sent_text.index("NINJA PULSE. Подписаться 🥷")
+    # Phase V2.12G: Phase 23.1Q's footer is superseded - must be absent here too, quote or no quote.
+    assert "NINJA PULSE. Подписаться 🥷" not in sent_text
+    assert "https://t.me/nnjvpn" not in sent_text
 
 
 @pytest.mark.asyncio

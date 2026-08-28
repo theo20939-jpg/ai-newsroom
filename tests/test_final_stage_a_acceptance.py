@@ -166,6 +166,17 @@ def test_render_final_html_accepts_real_v8_shaped_output() -> None:
     assert "<b>" in html  # real HTML, not the plain-text rendering
 
 
+def test_render_final_html_never_includes_ninja_pulse_cta() -> None:
+    """Phase V2.12G: Phase 23.1Q's footer-enabled decision is superseded - the real renderer call
+    must pass include_ninja_pulse_footer=False."""
+    outcome = SimpleNamespace(copywriting_output={"title": "Real Headline", "main_body": "Real generated body.", "ending": None})
+    html, plain_text = stage_a.render_final_html(outcome)
+    assert "NINJA PULSE. Подписаться 🥷" not in html
+    assert "NINJA PULSE. Подписаться 🥷" not in plain_text
+    assert "https://t.me/nnjvpn" not in html
+    assert "https://t.me/nnjvpn" not in plain_text
+
+
 # ---------------------------------------------------------------------------
 # Recomposition: capped to exactly one call, both success and failure paths
 # ---------------------------------------------------------------------------
@@ -271,3 +282,111 @@ def test_manifest_and_persist_package_roundtrip_hashes(tmp_path: Path) -> None:
     assert hashes["final_image.jpg"] == manifest["final_image_sha256"]
     assert hashes["final_post.html"] == manifest["final_html_sha256"]
     assert "raw_recomposition.jpg" not in hashes  # no recomposition happened for this package
+
+
+# ---------------------------------------------------------------------------
+# Phase V2.12G: the final-package hard-contract gate
+# ---------------------------------------------------------------------------
+
+
+def _valid_destination() -> RouteTarget:
+    return RouteTarget(chat_id=stage_a.EXPECTED_CHAT_ID, topic_id=stage_a.EXPECTED_TOPIC_ID)
+
+
+def _valid_keyboard(url: str = "https://example.com/real-article"):
+    return stage_a.build_keyboard(url)
+
+
+def test_validate_final_package_contract_accepts_a_valid_package() -> None:
+    url = "https://example.com/real-article"
+    stage_a.validate_final_package_contract(
+        html="<b>Headline</b>\nBody.", plain_text="Headline\nBody.",
+        keyboard=_valid_keyboard(url), source_url=url, destination=_valid_destination(),
+    )  # must not raise
+
+
+def test_validate_final_package_contract_rejects_ninja_pulse_text_in_html() -> None:
+    url = "https://example.com/real-article"
+    with pytest.raises(stage_a.StageAContractError):
+        stage_a.validate_final_package_contract(
+            html='<b>Headline</b>\nBody.\n<a href="https://t.me/nnjvpn">NINJA PULSE. Подписаться 🥷</a>',
+            plain_text="Headline\nBody.",
+            keyboard=_valid_keyboard(url), source_url=url, destination=_valid_destination(),
+        )
+
+
+def test_validate_final_package_contract_rejects_ninja_pulse_text_in_plain_text() -> None:
+    url = "https://example.com/real-article"
+    with pytest.raises(stage_a.StageAContractError):
+        stage_a.validate_final_package_contract(
+            html="<b>Headline</b>\nBody.",
+            plain_text="Headline\nBody.\nNINJA PULSE. Подписаться 🥷",
+            keyboard=_valid_keyboard(url), source_url=url, destination=_valid_destination(),
+        )
+
+
+def test_validate_final_package_contract_rejects_bare_ninja_pulse_url() -> None:
+    """Even without the anchor text, the raw t.me/nnjvpn URL alone must be rejected."""
+    url = "https://example.com/real-article"
+    with pytest.raises(stage_a.StageAContractError):
+        stage_a.validate_final_package_contract(
+            html="<b>Headline</b>\nBody.\nhttps://t.me/nnjvpn",
+            plain_text="Headline\nBody.",
+            keyboard=_valid_keyboard(url), source_url=url, destination=_valid_destination(),
+        )
+
+
+def test_validate_final_package_contract_rejects_missing_keyboard() -> None:
+    url = "https://example.com/real-article"
+    with pytest.raises(stage_a.StageAContractError):
+        stage_a.validate_final_package_contract(
+            html="<b>Headline</b>\nBody.", plain_text="Headline\nBody.",
+            keyboard=None, source_url=url, destination=_valid_destination(),
+        )
+
+
+def test_validate_final_package_contract_rejects_wrong_button_text() -> None:
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    url = "https://example.com/real-article"
+    wrong_keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Wrong Label", url=url)]])
+    with pytest.raises(stage_a.StageAContractError):
+        stage_a.validate_final_package_contract(
+            html="<b>Headline</b>\nBody.", plain_text="Headline\nBody.",
+            keyboard=wrong_keyboard, source_url=url, destination=_valid_destination(),
+        )
+
+
+def test_validate_final_package_contract_rejects_wrong_button_url() -> None:
+    url = "https://example.com/real-article"
+    keyboard_for_a_different_url = _valid_keyboard("https://example.com/a-different-article")
+    with pytest.raises(stage_a.StageAContractError):
+        stage_a.validate_final_package_contract(
+            html="<b>Headline</b>\nBody.", plain_text="Headline\nBody.",
+            keyboard=keyboard_for_a_different_url, source_url=url, destination=_valid_destination(),
+        )
+
+
+def test_validate_final_package_contract_rejects_multiple_buttons() -> None:
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    url = "https://example.com/real-article"
+    two_button_keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🔗 Источник", url=url),
+        InlineKeyboardButton(text="NINJA PULSE. Подписаться 🥷", url="https://t.me/nnjvpn"),
+    ]])
+    with pytest.raises(stage_a.StageAContractError):
+        stage_a.validate_final_package_contract(
+            html="<b>Headline</b>\nBody.", plain_text="Headline\nBody.",
+            keyboard=two_button_keyboard, source_url=url, destination=_valid_destination(),
+        )
+
+
+def test_validate_final_package_contract_rejects_wrong_destination() -> None:
+    url = "https://example.com/real-article"
+    wrong_destination = RouteTarget(chat_id=stage_a.EXPECTED_CHAT_ID, topic_id=999)
+    with pytest.raises(stage_a.StageAContractError):
+        stage_a.validate_final_package_contract(
+            html="<b>Headline</b>\nBody.", plain_text="Headline\nBody.",
+            keyboard=_valid_keyboard(url), source_url=url, destination=wrong_destination,
+        )
