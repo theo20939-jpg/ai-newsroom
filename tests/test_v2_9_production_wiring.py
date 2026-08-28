@@ -40,6 +40,8 @@ from tests.test_content_worker_cycle import (
     factory,  # noqa: F401,F811
     test_source,  # noqa: F401,F811
 )
+from services.presentation_director import DATA as PRESENTATION_DATA
+from services.presentation_director import PresentationDecision
 from tests.test_editorial_delivery_mode import _v6_capability_registry
 from worker.content_cycle import run_content_cycle
 
@@ -278,3 +280,155 @@ def test_no_automatic_pro_or_gpt_escalation_in_recomposition_module() -> None:
     }
     assert "GEMINI_3_PRO_IMAGE" not in imported_names
     assert "GPTImageAdapter" not in imported_names
+
+
+# ---------------------------------------------------------------------------
+# 7 - Phase V2.10N: NEWS branding must never imply the legacy CTA keyboard
+# ---------------------------------------------------------------------------
+
+
+async def _seed_eligible_event_with_url(
+    factory_: async_sessionmaker[AsyncSession], source: object, *, url: str,
+) -> None:
+    """Mirrors `_seed_eligible_event()` exactly, except it also sets `NewsEvent.url` - the field
+    `build_source_only_keyboard()`/`build_source_and_cta_keyboard()` both key off - so the real
+    keyboard produced by a real run_content_cycle() pass can be asserted against a known value.
+    `_make_event()` itself never sets `url` (defaults to `None`, which `build_source_only_
+    keyboard()` would turn into "no keyboard at all" - useless for this test's own assertions)."""
+    async with factory_() as session:
+        event = await _make_event(session, source, published_at=datetime.now(timezone.utc))
+        event.url = url
+        session.add(event)
+        await session.commit()
+        await _make_completed_news_analysis_task(session, event, score=settings.content_generation_min_score)
+
+
+@pytest.mark.asyncio
+async def test_news_enforce_keyboard_is_source_only_no_cta(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch, tmp_path, caplog,
+) -> None:
+    """Phase V2.10N §4 assertion A: NEWS + presentation_director_mode=='enforce' +
+    pulse_brand_enabled=True must reach apply_master_news_branding() (proven by the existing
+    branding_records assertion, mirroring the sibling tests above) AND send exactly the
+    source-only "🔗 Источник" keyboard - never the CTA button, never a second button, never the
+    NINJA PULSE URL - closing the real coupling worker/content_cycle.py had before this phase."""
+    _common_settings(monkeypatch)
+    settings.editorial_recomposition_mode = "off"
+    source_url = "https://example.com/real-news-article"
+    await _seed_eligible_event_with_url(factory, test_source, url=source_url)
+    _gateway, registry = _v6_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_photo.return_value.message_id = 111
+    candidate = _stored_candidate(tmp_path, monkeypatch)
+
+    with (
+        patch("worker.content_cycle._classify_event_for_router_treatment", new=AsyncMock(return_value=_standard_decision())),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[candidate])),
+        caplog.at_level("INFO"),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    assert result.notified == 1
+    branding_records = [r for r in caplog.records if r.msg == "master_news_branding_applied"]
+    assert len(branding_records) == 1  # apply_master_news_branding() was genuinely reached
+
+    fake_bot.send_photo.assert_called_once()
+    keyboard = fake_bot.send_photo.call_args.kwargs["reply_markup"]
+    assert keyboard is not None
+    rows = keyboard.inline_keyboard
+    assert len(rows) == 1
+    assert len(rows[0]) == 1
+    button = rows[0][0]
+    assert button.text == "🔗 Источник"
+    assert button.url == source_url
+
+    all_button_text = " ".join(b.text for row in rows for b in row)
+    all_button_urls = [b.url for row in rows for b in row if b.url]
+    assert "NINJA PULSE" not in all_button_text
+    assert "https://t.me/nnjvpn" not in all_button_urls
+
+
+@pytest.mark.asyncio
+async def test_news_off_mode_keyboard_unchanged_source_only(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch, tmp_path, caplog,
+) -> None:
+    """Phase V2.10N §4 assertion B: presentation_director_mode == 'off' (today's real production
+    default) never enters the enforce branch this phase touched at all - the pre-existing
+    source-only keyboard set at the top of the router-mode NEWS branch is untouched, exactly as
+    before this phase's fix."""
+    _common_settings(monkeypatch)
+    settings.presentation_director_mode = "off"
+    settings.editorial_recomposition_mode = "off"
+    source_url = "https://example.com/off-mode-article"
+    await _seed_eligible_event_with_url(factory, test_source, url=source_url)
+    _gateway, registry = _v6_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_photo.return_value.message_id = 111
+    candidate = _stored_candidate(tmp_path, monkeypatch)
+
+    with (
+        patch("worker.content_cycle._classify_event_for_router_treatment", new=AsyncMock(return_value=_standard_decision())),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[candidate])),
+        caplog.at_level("INFO"),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    assert result.notified == 1
+    # presentation_director_mode == "off" never reaches apply_master_news_branding() (documented,
+    # unchanged, pre-existing behavior - not this phase's concern) - only the keyboard is asserted.
+    fake_bot.send_photo.assert_called_once()
+    keyboard = fake_bot.send_photo.call_args.kwargs["reply_markup"]
+    assert keyboard is not None
+    rows = keyboard.inline_keyboard
+    assert len(rows) == 1
+    assert len(rows[0]) == 1
+    assert rows[0][0].text == "🔗 Источник"
+    assert rows[0][0].url == source_url
+
+
+@pytest.mark.asyncio
+async def test_non_news_presentation_type_keeps_cta_keyboard_in_enforce_mode(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch, caplog,
+) -> None:
+    """Phase V2.10N §4 assertion C: this phase's fix is scoped to NEWS only - a non-NEWS
+    presentation_type (DATA/QUOTE/BREAKING) reached in enforce mode must keep receiving the
+    existing CTA keyboard unchanged, proving no regression for those post types. Forces the
+    decision via a direct patch of `decide_presentation()` (the same "swap in a controlled
+    result" technique this suite already uses for `_classify_event_for_router_treatment`) rather
+    than fabricating title/content text that happens to score as DATA - deterministic, not
+    incidental."""
+    _common_settings(monkeypatch)
+    settings.editorial_recomposition_mode = "off"
+    source_url = "https://example.com/data-card-article"
+    await _seed_eligible_event_with_url(factory, test_source, url=source_url)
+    _gateway, registry = _v6_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_message.return_value.message_id = 111
+
+    forced_decision = PresentationDecision(
+        presentation_type=PRESENTATION_DATA, category="TECH", caption_position="BELOW",
+        branding_strength="MINIMAL", brand_media=False, visual_priority=1,
+        data_candidate=None, quote_candidate=None, reason="test_forced_data",
+    )
+
+    with (
+        patch("worker.content_cycle._classify_event_for_router_treatment", new=AsyncMock(return_value=_standard_decision())),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[])),
+        patch("worker.content_cycle.decide_presentation", return_value=forced_decision),
+        caplog.at_level("INFO"),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    assert result.notified == 1
+    branding_records = [r for r in caplog.records if r.msg == "master_news_branding_applied"]
+    assert len(branding_records) == 0  # non-NEWS never reaches the MASTER NEWS director
+
+    fake_bot.send_message.assert_called_once()
+    keyboard = fake_bot.send_message.call_args.kwargs["reply_markup"]
+    assert keyboard is not None
+    rows = keyboard.inline_keyboard
+    all_button_text = " ".join(b.text for row in rows for b in row)
+    assert "NINJA PULSE" in all_button_text  # CTA keyboard unchanged for non-NEWS - no regression

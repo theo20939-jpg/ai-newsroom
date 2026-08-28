@@ -1305,7 +1305,14 @@ async def run_content_cycle(
                         # image_preview.py::NINJA_PULSE_SOURCE_LABEL), deliberately distinct from
                         # `_NEWS_SOURCE_BUTTON_LABEL` ("🔗 Источник") above, which remains the
                         # unchanged legacy/off/shadow-mode label.
-                        keyboard = build_source_and_cta_keyboard(event.url)
+                        #
+                        # Phase V2.10N: scoped to non-NEWS presentation types only. NEWS keeps the
+                        # source-only keyboard already assigned above - the approved NEWS contract
+                        # (MASTER NEWS branding, source-only "🔗 Источник" button, no CTA) has no
+                        # valid combination that also swaps in the CTA button. DATA/QUOTE/BREAKING
+                        # are unaffected: they still receive the CTA keyboard exactly as before.
+                        if presentation_decision.presentation_type != PRESENTATION_NEWS:
+                            keyboard = build_source_and_cta_keyboard(event.url)
 
                         if settings.pulse_brand_enabled:
                             editorial_code = build_editorial_code(outcome.task_id)
