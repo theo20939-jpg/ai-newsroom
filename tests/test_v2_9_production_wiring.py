@@ -24,6 +24,7 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
+from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.config import settings
@@ -77,6 +78,16 @@ def _common_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "newsroom_telegram_chat_id", _REAL_CHAT_ID)
     monkeypatch.setattr(settings, "news_topic_id", _REAL_NEWS_TOPIC_ID)
     monkeypatch.setattr(settings, "content_generation_dry_run", False)
+    # Phase V2.10R: the recomposition tests below patch `GeminiImageAdapter` itself so no real
+    # network call ever happens, but `maybe_recompose()` (services/editorial_recomposition.py)
+    # checks `settings.gemini_api_key` and fail-opens to ORIGINAL_SOURCE with
+    # fallback_reason="gemini_api_key_absent" *before* ever constructing/calling that mock if the
+    # key is falsy - a real, previously-silent dependency on whatever ambient `.env` the test
+    # happened to run under (present and non-empty on this dev machine, confirmed absent on the
+    # VPS ephemeral test container - the actual root cause of the real VPS failure in
+    # test_recomposed_image_receives_adaptive_branding). A dummy, deterministic key here makes
+    # every test in this file self-contained regardless of environment.
+    monkeypatch.setattr(settings, "gemini_api_key", SecretStr("test-gemini-api-key-do-not-use"))
     monkeypatch.setattr(settings, "copywriting_prompt_version", "6")
 
 
@@ -193,7 +204,15 @@ async def test_original_source_receives_adaptive_branding_without_recomposition_
     branding_records = [r for r in caplog.records if r.msg == "master_news_branding_applied"]
     assert len(branding_records) == 1
     assert branding_records[0].visual_path == "ORIGINAL_SOURCE"
-    assert branding_records[0].overlay_mode in ("full_signature", "logo_only", "no_overlay")
+    # Phase V2.10R: `overlay_mode` was never a real field on this log record - the actual
+    # production statement (worker/content_cycle.py, the `master_news_branding_applied` logger.
+    # info() call) only ever attaches `degradation_mode` (services/nnj_master_news_overlay.py::
+    # MasterNewsBrandingDecision.degradation_mode), whose only possible values are
+    # "upper_and_lower"/"lower_signature_only"/"upper_mark_only"/"no_overlay" - a stale assertion
+    # left over from this file's own pre-V2.10H terminology, missed by the V2.10I update pass.
+    assert branding_records[0].degradation_mode in (
+        "upper_and_lower", "lower_signature_only", "upper_mark_only", "no_overlay",
+    )
 
 
 # ---------------------------------------------------------------------------
