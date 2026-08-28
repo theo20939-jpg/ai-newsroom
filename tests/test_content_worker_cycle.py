@@ -853,6 +853,82 @@ async def test_run_content_cycle_sequential_no_gather_and_notifies_after_draft_c
 
 
 @pytest.mark.asyncio
+async def test_event_ids_override_bypasses_eligibility_scan_and_processes_exactly_one_event(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase V2.6 §3 - the exact scoping guarantee the single-story Telegram canary relies on: a
+    story OUTSIDE the normal freshness window (deliberately NOT using `_isolated_freshness_window`
+    here) is invisible to the normal scan, but `event_ids_override` still processes it - and
+    processes ONLY it, never pulling in any other real backlog row via `_select_eligible_events()`.
+
+    Forces the legacy send_editorial_card() path deterministically, regardless of this machine's
+    own local .env value for image_editorial_preview_enabled - this test's own concern is the
+    event-scoping guarantee, not which of the two existing send paths a given environment prefers."""
+    monkeypatch.setattr(settings, "image_editorial_preview_enabled", False)
+    stale_time = datetime.now(timezone.utc) - timedelta(hours=settings.content_generation_freshness_cutoff_hours + 1)
+    async with factory() as session:
+        event = await _make_event(session, test_source, published_at=stale_time)
+        await _make_completed_news_analysis_task(
+            session, event, score=settings.content_generation_min_score, completed_at=stale_time,
+        )
+
+    async with factory() as verify_session:
+        normally_eligible = await _select_eligible_events(verify_session)
+    assert event.id not in normally_eligible  # confirms the story is genuinely outside the normal window
+
+    _gateway, registry = _real_capability_registry()
+    fake_bot = AsyncMock()
+
+    with patch(
+        "worker.content_cycle.send_editorial_card",
+        new=AsyncMock(return_value=NotificationOutcome(chat_id=1, rendered_html="<html>", sent=False)),
+    ) as mock_notify:
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory, event_ids_override=[event.id])
+
+    assert result.eligible_found == 1
+    assert result.event_ids == [event.id]
+    assert result.completed == 1
+    mock_notify.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_precomputed_outcomes_skip_a_second_content_generation_call(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase V2.6 §5 - the exact real scenario the single-story canary needs: content generation
+    already ran once for this event (a real EditorialTask/ContentDraft exist); a second real
+    run_content_generation_for_event() call for the same event would raise DuplicateActiveTaskError
+    (workflow_service._find_active_task() treats a COMPLETED task as "existing" too). Passing the
+    already-produced outcome via `precomputed_outcomes` must let run_content_cycle() proceed straight
+    to delivery for that event, with zero additional content-generation attempts."""
+    monkeypatch.setattr(settings, "image_editorial_preview_enabled", False)
+    async with factory() as session:
+        event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
+
+    _gateway, registry = _real_capability_registry()
+
+    from scripts.run_content_generation import run_content_generation_for_event
+
+    real_outcome = await run_content_generation_for_event(event.id, capability_registry=registry, session_factory=factory)
+    assert real_outcome.content_draft is not None
+
+    with patch(
+        "worker.content_cycle.run_content_generation_for_event", new=AsyncMock(side_effect=AssertionError("must not be called again")),
+    ), patch(
+        "worker.content_cycle.send_editorial_card",
+        new=AsyncMock(return_value=NotificationOutcome(chat_id=1, rendered_html="<html>", sent=False)),
+    ) as mock_notify:
+        fake_bot = AsyncMock()
+        result = await run_content_cycle(
+            registry, fake_bot, session_factory=factory,
+            event_ids_override=[event.id], precomputed_outcomes={event.id: real_outcome},
+        )
+
+    assert result.completed == 1
+    mock_notify.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_run_content_cycle_dry_run_never_calls_bot_send_message(
     factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None
 ) -> None:

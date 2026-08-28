@@ -4,6 +4,7 @@ pipeline, and send a Telegram notification for each resulting ContentDraft. No b
 its own - orchestration only (docs/phase14_autonomous_newsroom_implementation_plan.md §4)."""
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -33,27 +34,31 @@ from schemas.editorial_route import EditorialDestination
 from schemas.image_candidate import ImageDiscoveryMethod, ResolutionBand
 from schemas.media_ranking import MediaRankingInput, MediaRankingResult
 from schemas.workflow import WorkflowType
-from scripts.run_content_generation import run_content_generation_for_event
+from scripts.run_content_generation import ContentGenerationOutcome, run_content_generation_for_event
 from services.cost_tracker import CostTracker
 from services.editorial_treatment import SKIP, EditorialTreatmentDecision, treatment_from_intelligence_and_evidence
 from services.image_quality import aspect_ratio_band, hamming_distance, resolution_band
 from services.image_relevance import PROVENANCE_TABLE
 from services.media_ranking import _NEAR_DUPLICATE_MAX_HAMMING_DISTANCE, rank_media_candidates
 from services.news_editorial_relevance import OUT_OF_SCOPE, classify_editorial_relevance
-from services.brand_renderer import render_branded_media
+from services.brand_renderer import RenderResult, render_branded_media
+from services.nnj_master_news_overlay import apply_master_news_branding
 from services.presentation_director import (
     BREAKING as PRESENTATION_BREAKING,
     CAPTION_ABOVE,
     DATA as PRESENTATION_DATA,
+    NEWS as PRESENTATION_NEWS,
     QUOTE as PRESENTATION_QUOTE,
     build_editorial_code,
     decide_presentation,
 )
+from services.editorial_recomposition import RecompositionResult, maybe_recompose
 from services.story_duplicate_guard import check_duplicate_story_delivery, check_update_would_fail_closed
 from services.image_persistence import (
     EditorialImageCandidate,
     get_editorial_image_candidates,
     get_recently_attached_image_source_urls,
+    read_candidate_bytes,
     sanitize_url,
 )
 from services.image_preview_notifier import build_rich_media_plan, send_news_with_image_preview
@@ -61,6 +66,7 @@ from services.video_discovery_persistence import get_video_candidates_for_event,
 from services.news_telegram_presentation import (
     build_compact_news_body,
     is_v8_family_output,
+    render_compact_news_card_html,
     render_v81_news_card_html,
 )
 from services.pricing_catalog import PricingCatalog
@@ -462,6 +468,59 @@ def _select_top_ranked_image_candidates(
             selected.append(candidate)
     return selected
 
+
+def resolve_recomposition_source_bytes(
+    photo_input: str | BufferedInputFile | None, candidate: EditorialImageCandidate | None,
+) -> bytes | None:
+    """Phase V2.5 §7 - the fix for the real, previously-silent gap this phase set out to close:
+    `photo_input` becoming a cached Telegram `file_id` (a plain `str`, whenever
+    `resolve_photo_input()` finds one) meant `worker/content_cycle.py` could only ever extract
+    `source_bytes` via `isinstance(photo_input, BufferedInputFile)` - so a candidate that had
+    ALREADY been sent once (and so already had a cached file_id) could never reach recomposition
+    again, even though its real bytes remained fully readable via `read_candidate_bytes()`.
+
+    Telegram delivery representation and recomposition source bytes are separate concerns: this
+    function resolves the latter independently, using the SAME already-selected `candidate` row -
+    never a new discovery/ranking/fetch of any kind. `photo_input` already being real bytes
+    (`BufferedInputFile`) is used directly (no redundant storage re-read); only when it is a
+    cached file_id (or nothing was resolved at all) does this fall back to
+    `services.image_persistence.read_candidate_bytes(candidate)`, which itself already returns
+    `None` safely (never raises) for any unavailable/missing/unreadable case."""
+    if isinstance(photo_input, BufferedInputFile):
+        return photo_input.data
+    if candidate is None:
+        return None
+    return read_candidate_bytes(candidate)
+
+
+# Phase V2.7 §8 - the exact same deterministic warning flags services/media_ranking.py's own
+# MediaRankingInput already derives from EditorialImageCandidate.warnings (Phase 16 M3/M4's
+# quality_warnings signal) - never a new ML model, never a new signal invented for this phase.
+_RECOMPOSITION_RISK_WARNINGS = frozenset({
+    "possible_logo", "possible_banner", "possible_watermark",
+    "possible_tv_lower_third", "possible_branded_screenshot",
+})
+
+
+def assess_recomposition_source_risk(candidate: EditorialImageCandidate | None) -> str | None:
+    """Phase V2.7 §8 - the deterministic RECOMPOSE-vs-ORIGINAL_SOURCE risk gate: ORIGINAL_SOURCE
+    is a first-class successful outcome, never merely an error fallback, whenever this already-
+    computed signal flags elevated factual-preservation risk. Returns the first matching risk
+    warning (a disclosed reason string, e.g. `"possible_branded_screenshot"`) when the candidate's
+    own persisted `warnings` list contains one of the signals this project's own image pipeline
+    already treats as reduced delivery trust; recomposition inherits the same caution rather than
+    attempting to edit content already known to carry a logo/banner/watermark/lower-third/
+    branded-screenshot risk. Returns `None` (no elevated risk detected from this signal) when
+    `candidate` is `None` or carries no matching warning - NOT a claim the source is risk-free,
+    only that this one deterministic, already-computed signal found nothing."""
+    if candidate is None or not candidate.warnings:
+        return None
+    for warning in candidate.warnings:
+        if warning in _RECOMPOSITION_RISK_WARNINGS:
+            return warning
+    return None
+
+
 # Phase 23.1E: the label this codebase's Telegram NEWS presentation uses for the inline source
 # button - matches the Russian-language editorial card it accompanies (docs/
 # phase23_1e_telegram_news_compact_profile_report.md §10). bot/keyboards/image_preview.py::
@@ -809,11 +868,24 @@ async def run_content_cycle(
     *,
     cost_tracker: CostTracker | None = None,
     pricing_catalog: PricingCatalog | None = None,
+    event_ids_override: list[UUID] | None = None,
+    precomputed_outcomes: dict[UUID, ContentGenerationOutcome] | None = None,
 ) -> ContentCycleResult:
+    """`event_ids_override` (Phase V2.6 §3): when provided, replaces the normal
+    `_select_eligible_events()` scan entirely - the loop below still runs its exact, unmodified
+    per-event body (content generation, delivery, recomposition, branding), just for exactly the
+    caller-supplied event ids instead of whatever the normal eligibility/freshness/score scan
+    would have found. Every real production caller (`worker/content_main.py`) leaves this `None`,
+    the byte-identical, unchanged default behavior. Exists so a bounded, explicit one-story canary
+    can exercise the SAME real function - never a second, duplicated copy of this loop's body -
+    without risking an unbounded backlog scan or an indefinite service loop."""
     result = ContentCycleResult()
 
-    async with session_factory() as session:
-        event_ids = await _select_eligible_events(session)
+    if event_ids_override is not None:
+        event_ids = event_ids_override
+    else:
+        async with session_factory() as session:
+            event_ids = await _select_eligible_events(session)
     result.eligible_found = len(event_ids)
     result.event_ids = event_ids
 
@@ -880,11 +952,23 @@ async def run_content_cycle(
             )
             continue
 
-        outcome = await run_content_generation_for_event(
-            event_id, capability_registry=capability_registry, session_factory=session_factory,
-            cost_tracker=cost_tracker, pricing_catalog=pricing_catalog,
-        )  # scripts/run_content_generation.py - imported, not copied (Phase 15 M5 extends its
-           # ContentGenerationOutcome with fact_safety_status; the call site here is unchanged)
+        # Phase V2.6 §5: `precomputed_outcomes` lets a caller supply an already-produced
+        # ContentGenerationOutcome for this event_id (from a real, already-run
+        # run_content_generation_for_event() call), skipping a second call here entirely - never a
+        # duplicated content-generation call, and correctly avoids workflow_service.create_task()'s
+        # own DuplicateActiveTaskError (a COMPLETED task still counts as "existing" for the same
+        # event+workflow). Exists so a canary can pause between content generation (which persists
+        # the real image candidates) and delivery/recomposition for a manual visual safety review of
+        # the real selected source image, without ever running content generation twice for the same
+        # event. `None` (every real production caller) - byte-identical unchanged behavior.
+        if precomputed_outcomes is not None and event_id in precomputed_outcomes:
+            outcome = precomputed_outcomes[event_id]
+        else:
+            outcome = await run_content_generation_for_event(
+                event_id, capability_registry=capability_registry, session_factory=session_factory,
+                cost_tracker=cost_tracker, pricing_catalog=pricing_catalog,
+            )  # scripts/run_content_generation.py - imported, not copied (Phase 15 M5 extends its
+               # ContentGenerationOutcome with fact_safety_status; the call site here is unchanged)
         if outcome.content_draft is None:
             result.failed += 1
             continue
@@ -1038,6 +1122,13 @@ async def run_content_cycle(
             # (the disclosed V4/no-structured-output fallback below keeps attaching no image at
             # all - same scope discipline as its own pre-existing "no keyboard either" behavior).
             photo_input: str | BufferedInputFile | None = None
+            # Phase V2.5 §7 - tracks which already-selected EditorialImageCandidate row
+            # `photo_input` resolved from, independent of whether that resolution produced a
+            # cached Telegram file_id (str) or local bytes (BufferedInputFile). Telegram delivery
+            # representation and recomposition source bytes are separate concerns: a cached
+            # file_id is a valid, optimized way to SEND a photo, but it must never be the only
+            # thing recomposition can see - see the recomposition_source_bytes resolution below.
+            resolved_photo_candidate: EditorialImageCandidate | None = None
             media_group_items: list[MediaUnion] = []
             image_candidate_count = 0
             # NINJA PULSE Visual System v1 - reassigned only inside the presentation_director_mode
@@ -1049,6 +1140,20 @@ async def run_content_cycle(
             # optional ending, no "📰 category · date" header row) is a genuinely different
             # template, not a body substitution into the existing one. Stays `None` for V4/V6/V7
             # output, which keep using the exact same `render_editorial_card()` path as always.
+            #
+            # Phase V2.7 forensic finding: that "as always" fallback is `bot/formatting.py::
+            # render_editorial_card()` - the internal `/news` editorial-INBOX-REVIEW template
+            # (services/editorial_inbox_service.py's own original consumer), which unconditionally
+            # prepends a "\U0001F4F0 category · date" header and the raw, UNTRANSLATED source-
+            # language `event.title` before the body. That is a real, reader-facing regression the
+            # moment router-mode delivery is actually used with non-V8 copywriting output (as it
+            # always is today - production `copywriting_prompt_version` is pinned to "4"). Fixed
+            # below: every real copywriting_output shape now gets the same clean, header-free card
+            # `render_v81_news_card_html()` already established for V8 - `render_compact_news_card_
+            # html()` reuses `outcome.content_draft.title`/the same `compact_body` already computed
+            # here, never inventing new copy. `card`/`render_editorial_card()` remain the correct,
+            # unchanged fallback for the one case they were always meant for: copywriting_output
+            # genuinely absent (the `else: include_url = True` branch below).
             html: str | None = None
             if outcome.copywriting_output is not None:
                 assert treatment_decision is not None  # guaranteed: router mode reaches here only past the SKIP gate
@@ -1062,6 +1167,9 @@ async def run_content_cycle(
                 else:
                     compact_body = build_compact_news_body(outcome.copywriting_output, treatment=treatment_decision.treatment)
                     card = card.model_copy(update={"draft_body": compact_body})
+                    html = render_compact_news_card_html(
+                        outcome.content_draft.title or "", compact_body, quote_text=quote_text, quote_speaker=quote_speaker,
+                    )
                 keyboard = build_source_only_keyboard(event.url, label=_NEWS_SOURCE_BUTTON_LABEL)
                 include_url = False
 
@@ -1144,11 +1252,15 @@ async def run_content_cycle(
                         # narrower photo_input convention, hence the isinstance narrowing.
                         single_media = plan.media_group_items[0].media
                         photo_input = single_media if isinstance(single_media, (str, BufferedInputFile)) else None
+                        if photo_input is not None:
+                            resolved_photo_candidate = plan.fallback_single_photo
                 elif eligible_candidates:
                     # Legacy (V4/V6/V7) router-mode output - byte-identical to this branch's own
                     # pre-Phase-23.1Q behavior (never used by any real canary; V8-family output is
                     # the only shape any live send has ever produced), untouched by this phase.
                     photo_input = resolve_photo_input(eligible_candidates[0])
+                    if photo_input is not None:
+                        resolved_photo_candidate = eligible_candidates[0]
 
                 # NINJA PULSE Visual System v1 (services/presentation_director.py,
                 # services/brand_renderer.py). Gated entirely on presentation_director_mode -
@@ -1198,6 +1310,87 @@ async def run_content_cycle(
                         if settings.pulse_brand_enabled:
                             editorial_code = build_editorial_code(outcome.task_id)
                             source_bytes = photo_input.data if isinstance(photo_input, BufferedInputFile) else None
+
+                            # Phase V2.3 (services/editorial_recomposition.py) - NEWS presentation
+                            # only, per that phase's own explicit scope (never DATA/QUOTE/
+                            # BREAKING). A thin consumer of the existing ImageGenerationGateway;
+                            # never touches media selection/ranking/Story Memory - it only ever
+                            # transforms the already-selected source_bytes in place.
+                            # editorial_recomposition_mode defaults to "off", in which case
+                            # maybe_recompose() returns source_bytes completely unchanged with
+                            # zero gateway calls - byte-identical to pre-V2.3 behavior.
+                            #
+                            # Phase V2.5 §7: `source_bytes` above is None whenever photo_input
+                            # resolved to a cached Telegram file_id (str) rather than local bytes -
+                            # a real, previously-silent gap, since resolve_photo_input() prefers
+                            # the cached file_id whenever one exists. Telegram delivery
+                            # representation and recomposition source bytes are separate concerns
+                            # (the cached file_id remains exactly as useful for sending as before -
+                            # untouched below); recomposition gets its own independently-resolved
+                            # bytes for the exact same already-selected candidate, via the existing
+                            # storage abstraction (read_candidate_bytes()), never a new one.
+                            # Phase V2.7 §8: ORIGINAL_SOURCE is a first-class successful outcome,
+                            # never merely an error fallback - a candidate whose own already-
+                            # computed warnings flag logo/banner/watermark/lower-third/branded-
+                            # screenshot risk skips the Gemini call entirely (same reused signal
+                            # services/media_ranking.py already derives from this exact field).
+                            recomposition_source_risk = assess_recomposition_source_risk(resolved_photo_candidate)
+                            if recomposition_source_risk is not None:
+                                logger.info(
+                                    "recomposition_skipped_source_risk",
+                                    extra={
+                                        "draft_id": str(outcome.content_draft.id),
+                                        "recomposition_source_risk_reason": recomposition_source_risk,
+                                    },
+                                )
+
+                            recomposition_result: RecompositionResult | None = None
+                            recomposition_source_bytes = resolve_recomposition_source_bytes(
+                                photo_input, resolved_photo_candidate,
+                            )
+                            if (
+                                presentation_decision.presentation_type == PRESENTATION_NEWS
+                                and recomposition_source_bytes is not None
+                                and recomposition_source_risk is None
+                            ):
+                                recomposition_result = await maybe_recompose(source_image_bytes=recomposition_source_bytes)
+                                logger.info(
+                                    "editorial_recomposition_evaluated",
+                                    extra={
+                                        "draft_id": str(outcome.content_draft.id),
+                                        "recomposition_mode": recomposition_result.mode,
+                                        "recomposition_eligible": recomposition_result.eligibility.eligible,
+                                        "recomposition_eligibility_reason": recomposition_result.eligibility.reason,
+                                        "recomposition_used": recomposition_result.used_recomposed_image,
+                                        "recomposition_provider": recomposition_result.provider,
+                                        "recomposition_model": recomposition_result.model,
+                                        "recomposition_source_sha256": recomposition_result.source_sha256,
+                                        "recomposition_result_sha256": recomposition_result.result_sha256,
+                                        "recomposition_fallback_reason": recomposition_result.fallback_reason,
+                                        "recomposition_latency_ms": (
+                                            round(recomposition_result.latency_ms, 1)
+                                            if recomposition_result.latency_ms is not None else None
+                                        ),
+                                        "recomposition_request_id": recomposition_result.request_id,
+                                        "recomposition_input_tokens": recomposition_result.input_tokens,
+                                        "recomposition_output_tokens": recomposition_result.output_tokens,
+                                        "recomposition_units": recomposition_result.units,
+                                        "recomposition_unit_type": recomposition_result.unit_type,
+                                        "recomposition_bytes_source": (
+                                            "local_buffered_input" if source_bytes is not None
+                                            else "read_candidate_bytes_independent_of_cached_file_id"
+                                        ),
+                                    },
+                                )
+                                # Only overwrite source_bytes when a real recomposition actually
+                                # happened - the pre-existing "no local bytes -> skip branding"
+                                # behavior for a cached-file_id NEWS candidate that recomposition
+                                # did NOT touch (mode off/ineligible/failed) stays byte-identical
+                                # to before this phase; recomposition_source_bytes is a separate,
+                                # local variable never written back into source_bytes on its own.
+                                if recomposition_result.used_recomposed_image:
+                                    source_bytes = recomposition_result.image_bytes
+
                             needs_render = presentation_decision.presentation_type in (
                                 PRESENTATION_DATA, PRESENTATION_QUOTE, PRESENTATION_BREAKING,
                             ) or source_bytes is not None
@@ -1223,15 +1416,82 @@ async def run_content_cycle(
                                     },
                                 )
                             if needs_render:
-                                render_result = render_branded_media(
-                                    presentation_type=presentation_decision.presentation_type,
-                                    source_image_bytes=source_bytes,
-                                    category=presentation_decision.category,
-                                    editorial_code=editorial_code,
-                                    branding_strength=presentation_decision.branding_strength,
-                                    data_candidate=presentation_decision.data_candidate,
-                                    quote_candidate=presentation_decision.quote_candidate,
-                                )
+                                # Phase V2.10H: the locked MASTER NEWS visual contract
+                                # (services.nnj_master_news_overlay) is now the production
+                                # branding path for every NEWS image with real source bytes -
+                                # whether Gemini successfully recomposed it or not. Supersedes
+                                # Phase V2.9's Candidate C path (services.nnj_adaptive_overlay,
+                                # apply_adaptive_nnj_branding) - that module and its locked asset
+                                # remain in the repository as historical/fallback evidence, never
+                                # called from this branch anymore. ORIGINAL_SOURCE is a
+                                # first-class result (Phase V2.7 §8/V2.8 §6/V2.9 §4/V2.10H's own
+                                # explicit product decision) - it must never be silently demoted
+                                # merely because recomposition did not run. Every other case
+                                # (DATA/QUOTE/BREAKING) keeps using render_branded_media()
+                                # completely unchanged - never duplicated, never touched here.
+                                if presentation_decision.presentation_type == PRESENTATION_NEWS and source_bytes is not None:
+                                    started_adaptive_branding = time.monotonic()
+                                    try:
+                                        # Phase V2.10I §7: `recomposition_source_risk` (assigned
+                                        # above, always set whenever this pulse_brand_enabled
+                                        # block runs) is a real, already-computed, WHOLE-IMAGE
+                                        # signal (EditorialImageCandidate.warnings via
+                                        # assess_recomposition_source_risk()) - it cannot say
+                                        # WHERE on the image the risk is, only that the image as a
+                                        # whole carries a flagged logo/banner/watermark/lower-
+                                        # third/branded-screenshot warning. Rather than pretending
+                                        # it supplies coordinates, it vetoes only the LOWER
+                                        # SIGNATURE (the larger, harder-to-earn component) - the
+                                        # UPPER MARK's own independent, spatial, pixel-based
+                                        # evaluation is unaffected.
+                                        branded_bytes, master_decision = apply_master_news_branding(
+                                            source_bytes, disable_lower_signature=recomposition_source_risk is not None,
+                                        )
+                                        render_result = RenderResult(
+                                            success=True, image_bytes=branded_bytes,
+                                            template_version=f"master_news_v1:{master_decision.degradation_mode}",
+                                            fallback_reason=None,
+                                            duration_ms=(time.monotonic() - started_adaptive_branding) * 1000,
+                                        )
+                                        # Phase V2.10H telemetry - never logs raw image bytes,
+                                        # only the decision's own structured provenance fields.
+                                        # Upper mark and lower signature are logged independently
+                                        # (they are independent components - Phase V2.10H §3).
+                                        logger.info(
+                                            "master_news_branding_applied",
+                                            extra={
+                                                "draft_id": str(outcome.content_draft.id),
+                                                "visual_path": (
+                                                    "RECOMPOSE"
+                                                    if recomposition_result is not None and recomposition_result.used_recomposed_image
+                                                    else "ORIGINAL_SOURCE"
+                                                ),
+                                                "degradation_mode": master_decision.degradation_mode,
+                                                "upper_mark_placement": master_decision.upper_mark.placement.value,
+                                                "upper_mark_rejected_candidate_count": len(master_decision.upper_mark.attempts),
+                                                "lower_signature_placement": master_decision.lower_signature.placement.value,
+                                                "lower_signature_rejected_candidate_count": len(master_decision.lower_signature.attempts),
+                                                "lower_signature_disabled_reason": master_decision.lower_signature.disabled_reason,
+                                            },
+                                        )
+                                    except Exception as exc:  # noqa: BLE001 - same fail-safe boundary
+                                        # render_branded_media() itself establishes (spec §29):
+                                        # never let a rendering failure block the send.
+                                        render_result = RenderResult(
+                                            success=False, image_bytes=None, template_version="master_news_v1",
+                                            fallback_reason=str(exc),
+                                            duration_ms=(time.monotonic() - started_adaptive_branding) * 1000,
+                                        )
+                                else:
+                                    render_result = render_branded_media(
+                                        presentation_type=presentation_decision.presentation_type,
+                                        source_image_bytes=source_bytes,
+                                        category=presentation_decision.category,
+                                        editorial_code=editorial_code,
+                                        branding_strength=presentation_decision.branding_strength,
+                                        data_candidate=presentation_decision.data_candidate,
+                                        quote_candidate=presentation_decision.quote_candidate,
+                                    )
                                 logger.info(
                                     "brand_render_attempted",
                                     extra={

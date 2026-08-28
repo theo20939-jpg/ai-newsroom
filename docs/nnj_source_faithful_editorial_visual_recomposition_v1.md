@@ -333,3 +333,44 @@ implementation, not as code, and not yet enforced anywhere:
 - **Gemini Pro escalation stays manual and separately controlled** - e.g. a future explicit,
   human-selected flag or editorial decision per story, never an automatic routing rule triggered
   by image content, difficulty, or a prior model's failure.
+
+## 18. Runtime wiring (V2.3, default OFF) and its known eligibility limitation
+
+`services/editorial_recomposition.py` implements §17's policy as real code, wired into
+`worker/content_cycle.py`'s NEWS presentation path (only reachable when
+`presentation_director_mode == "enforce"` AND `pulse_brand_enabled` are both true - see
+`docs/phase_v2_3_runtime_wiring_report.md`), gated by its own
+`editorial_recomposition_mode` (`off`/`dry_run`/`live`, default `off`).
+
+**Eligibility limitation (LOCKED, explicit, not to be misrepresented)**: the automatic
+`evaluate_eligibility()` check is a **conservative technical pre-filter based only on the
+deterministic signals currently reachable at that call site** -
+`services/image_quality.py`'s own `resolution_band()` (requires the strongest `GOOD` tier) and
+`aspect_ratio_band()` (requires `EDITORIAL_LANDSCAPE`). It does **NOT** prove:
+- no portrait/prominent human face is in frame;
+- the image isn't a UI/screenshot;
+- there is a single, unambiguous physical subject;
+- no important factual source text/logo occupies the frame;
+- the scene isn't an ambiguous multi-object composition.
+
+No face/portrait/UI detector exists anywhere in this codebase today. This is **NOT sufficient for
+broad/automatic live production activation** - it is only a narrowing pre-filter. Before any
+broader-than-single-story live activation, exactly one of the following must happen, in a later,
+separately-scoped phase (never solved by broadening this filter's own thresholds):
+
+**A.** Safely thread the existing `MediaRankingResult` risk signals (`branding_risk`,
+`possible_logo`/`possible_banner`/`possible_watermark`/`possible_tv_lower_third`/
+`possible_branded_screenshot`) forward to the recomposition call site - currently discarded by
+`worker/content_cycle.py::_select_top_ranked_image_candidates()` before that point (V2.3's own
+Stage 2 audit) - without a broader upstream-selection refactor.
+
+**B.** Add another deterministic safety signal (still no new ML classifier) - e.g. a real,
+calibrated face/person detector if one is ever deliberately added as its own scoped phase.
+
+**C.** Retain explicit editorial/manual eligibility (a human confirms each story before
+recomposition runs) rather than fully automatic eligibility, indefinitely.
+
+Phase V2.3A's own one-story canary harness (`scripts/nnj_editorial_recomposition_canary.py`)
+works around this gap for its single, deliberately narrow purpose via a temporary
+`--source-reviewed` developer acknowledgement gate - that gate is canary-only safety, not a
+general eligibility solution, and must not be read as one.

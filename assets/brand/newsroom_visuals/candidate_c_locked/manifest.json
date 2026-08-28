@@ -1,0 +1,34 @@
+{
+  "phase": "V2.4G Stage 3 - Candidate C lock",
+  "source_function": "scripts.nnj_v2_4f_compact_right_overlay.build_candidate(0.33, ...)",
+  "canvas_width": 1280,
+  "canvas_height": 720,
+  "overlay_start_x": 826,
+  "overlay_end_x": 1248,
+  "line_y": 662,
+  "pulse_bbox": [
+    989,
+    623,
+    1033,
+    682
+  ],
+  "logo_bbox": [
+    1212,
+    644,
+    1248,
+    680
+  ],
+  "zone_x_start": 826,
+  "zone_y_start": 623,
+  "zone_x_end": 1248,
+  "zone_y_end": 682,
+  "clearance": 20,
+  "pulse_scale_factor": 0.4472049689440994,
+  "source_overlay": "assets\\brand\\newsroom_visuals\\v1\\overlays\\universal\\universal_minimal_01.png",
+  "canonical_logo_source": "services.brand_renderer.load_brand_mark() -> assets/brand/nnj_logo.png (480x480 RGBA, unmodified)",
+  "embedded_v1_wordmark_included": false,
+  "signal_bars_icon_included": false,
+  "contains_trusted_branding": true,
+  "matches_user_authoritative_geometry": true,
+  "overlay_png_path": "assets\\brand\\newsroom_visuals\\candidate_c_locked\\candidate_c_overlay.png"
+}

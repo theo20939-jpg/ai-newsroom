@@ -1,0 +1,212 @@
+{
+  "phase": "V2.10I - conservative factual-safety hardening, automatic proof V2, >=8 real images",
+  "function_used": "services.nnj_master_news_overlay.apply_master_news_branding() - patch-based worst-case scoring, no subject_bbox, no manual placement",
+  "results": [
+    {
+      "name": "robot_vacuum",
+      "source": "assets/brand/newsroom_visuals/v2_6_telegram_canary/source_original.jpg",
+      "description": "source-branded/watermarked (real 9to5Google watermark)",
+      "upper_mark_placement": "omitted",
+      "lower_signature_placement": "omitted",
+      "lower_signature_attempts": [
+        {
+          "placement": "lower_right",
+          "edge_density": 21.26,
+          "detail_risk_pct": 15.14,
+          "visibility_distance": 104.7,
+          "accepted": false,
+          "rejection_reason": "edge_density_21.26_over_threshold_8.0;detail_risk_pct_15.14_over_threshold_15.0"
+        },
+        {
+          "placement": "lower_left",
+          "edge_density": 26.46,
+          "detail_risk_pct": 18.33,
+          "visibility_distance": 216.8,
+          "accepted": false,
+          "rejection_reason": "edge_density_26.46_over_threshold_8.0;detail_risk_pct_18.33_over_threshold_15.0"
+        },
+        {
+          "placement": "upper_right",
+          "edge_density": 18.0,
+          "detail_risk_pct": 13.48,
+          "visibility_distance": 156.0,
+          "accepted": false,
+          "rejection_reason": "edge_density_18.00_over_threshold_8.0"
+        },
+        {
+          "placement": "upper_left",
+          "edge_density": 8.16,
+          "detail_risk_pct": 2.97,
+          "visibility_distance": 199.9,
+          "accepted": false,
+          "rejection_reason": "edge_density_8.16_over_threshold_8.0"
+        }
+      ],
+      "degradation_mode": "no_overlay",
+      "final_image": "assets\\brand\\newsroom_visuals\\v2_10h_master_news_production\\proof_v2_robot_vacuum_final.jpg"
+    },
+    {
+      "name": "iphone_recomposed",
+      "source": "assets/brand/newsroom_visuals/v2_4_canary_live/raw_recomposed.jpg",
+      "description": "dark, clean background",
+      "upper_mark_placement": "upper_right",
+      "lower_signature_placement": "lower_right",
+      "lower_signature_attempts": [
+        {
+          "placement": "lower_right",
+          "edge_density": 4.02,
+          "detail_risk_pct": 0.0,
+          "visibility_distance": 202.1,
+          "accepted": true,
+          "rejection_reason": null
+        }
+      ],
+      "degradation_mode": "upper_and_lower",
+      "final_image": "assets\\brand\\newsroom_visuals\\v2_10h_master_news_production\\proof_v2_iphone_recomposed_final.jpg"
+    },
+    {
+      "name": "iphone_original_busy_background",
+      "source": "assets/brand/newsroom_visuals/v2_4_canary_live/original.jpg",
+      "description": "busy colorful indoor background (lamp + purple glow)",
+      "upper_mark_placement": "omitted",
+      "lower_signature_placement": "lower_right",
+      "lower_signature_attempts": [
+        {
+          "placement": "lower_right",
+          "edge_density": 1.6,
+          "detail_risk_pct": 0.0,
+          "visibility_distance": 234.1,
+          "accepted": true,
+          "rejection_reason": null
+        }
+      ],
+      "degradation_mode": "lower_signature_only",
+      "final_image": "assets\\brand\\newsroom_visuals\\v2_10h_master_news_production\\proof_v2_iphone_original_busy_background_final.jpg"
+    },
+    {
+      "name": "honor",
+      "source": "assets/brand/newsroom_visuals/v2_7_local_e2e_proof/source_honor_camera.jpg",
+      "description": "bright, subject near top, REAL disclaimer text (the V2.10H failure case)",
+      "upper_mark_placement": "upper_right",
+      "lower_signature_placement": "lower_left",
+      "lower_signature_attempts": [
+        {
+          "placement": "lower_right",
+          "edge_density": 11.65,
+          "detail_risk_pct": 6.67,
+          "visibility_distance": 204.6,
+          "accepted": false,
+          "rejection_reason": "edge_density_11.65_over_threshold_8.0"
+        },
+        {
+          "placement": "lower_left",
+          "edge_density": 7.65,
+          "detail_risk_pct": 4.54,
+          "visibility_distance": 205.9,
+          "accepted": true,
+          "rejection_reason": null
+        }
+      ],
+      "degradation_mode": "upper_and_lower",
+      "final_image": "assets\\brand\\newsroom_visuals\\v2_10h_master_news_production\\proof_v2_honor_final.jpg"
+    },
+    {
+      "name": "hero_product_iphone",
+      "source": "assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg",
+      "description": "medium brightness, busy swirl background",
+      "upper_mark_placement": "omitted",
+      "lower_signature_placement": "lower_left",
+      "lower_signature_attempts": [
+        {
+          "placement": "lower_right",
+          "edge_density": 12.24,
+          "detail_risk_pct": 6.01,
+          "visibility_distance": 128.2,
+          "accepted": false,
+          "rejection_reason": "edge_density_12.24_over_threshold_8.0"
+        },
+        {
+          "placement": "lower_left",
+          "edge_density": 6.1,
+          "detail_risk_pct": 3.36,
+          "visibility_distance": 101.6,
+          "accepted": true,
+          "rejection_reason": null
+        }
+      ],
+      "degradation_mode": "lower_signature_only",
+      "final_image": "assets\\brand\\newsroom_visuals\\v2_10h_master_news_production\\proof_v2_hero_product_iphone_final.jpg"
+    },
+    {
+      "name": "gadget_geometry_detail",
+      "source": "assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case2_gadget_geometry_detail.jpg",
+      "description": "bright, text-heavy/third-party-logo-branded (Duolingo)",
+      "upper_mark_placement": "omitted",
+      "lower_signature_placement": "lower_right",
+      "lower_signature_attempts": [
+        {
+          "placement": "lower_right",
+          "edge_density": 7.69,
+          "detail_risk_pct": 3.62,
+          "visibility_distance": 272.5,
+          "accepted": true,
+          "rejection_reason": null
+        }
+      ],
+      "degradation_mode": "lower_signature_only",
+      "final_image": "assets\\brand\\newsroom_visuals\\v2_10h_master_news_production\\proof_v2_gadget_geometry_detail_final.jpg"
+    },
+    {
+      "name": "bright_promotional_scene",
+      "source": "assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case3_bright_promotional_scene.jpg",
+      "description": "bright promotional scene",
+      "upper_mark_placement": "omitted",
+      "lower_signature_placement": "lower_left",
+      "lower_signature_attempts": [
+        {
+          "placement": "lower_right",
+          "edge_density": 17.23,
+          "detail_risk_pct": 11.68,
+          "visibility_distance": 167.6,
+          "accepted": false,
+          "rejection_reason": "edge_density_17.23_over_threshold_8.0"
+        },
+        {
+          "placement": "lower_left",
+          "edge_density": 5.05,
+          "detail_risk_pct": 1.92,
+          "visibility_distance": 161.0,
+          "accepted": true,
+          "rejection_reason": null
+        }
+      ],
+      "degradation_mode": "lower_signature_only",
+      "final_image": "assets\\brand\\newsroom_visuals\\v2_10h_master_news_production\\proof_v2_bright_promotional_scene_final.jpg"
+    },
+    {
+      "name": "portrait_public_figure",
+      "source": "assets/brand/newsroom_visuals/v2_recomposition_local_proof/portrait_public_figure__1_raw_source.jpg",
+      "description": "real face, near-white background",
+      "upper_mark_placement": "omitted",
+      "lower_signature_placement": "lower_right",
+      "lower_signature_attempts": [
+        {
+          "placement": "lower_right",
+          "edge_density": 3.21,
+          "detail_risk_pct": 0.0,
+          "visibility_distance": 210.6,
+          "accepted": true,
+          "rejection_reason": null
+        }
+      ],
+      "degradation_mode": "lower_signature_only",
+      "final_image": "assets\\brand\\newsroom_visuals\\v2_10h_master_news_production\\proof_v2_portrait_public_figure_final.jpg"
+    }
+  ],
+  "contact_sheet": "assets\\brand\\newsroom_visuals\\v2_10h_master_news_production\\MASTER_NEWS_AUTOMATIC_PLACEMENT_PROOF_V2.png",
+  "debug_map": "assets\\brand\\newsroom_visuals\\v2_10h_master_news_production\\MASTER_NEWS_SAFE_ZONE_DEBUG_V2.png",
+  "gemini_calls": 0,
+  "openai_calls": 0,
+  "anthropic_calls": 0,
+  "telegram_sends": 0
+}

@@ -647,9 +647,16 @@ async def test_v6_output_still_uses_the_legacy_template_unchanged(
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Regression guard: V6 output must still render via the pre-existing `render_editorial_card()`
-    template (with its "📰 CATEGORY · date" header row) - the new V8-family dispatch must never
-    accidentally divert non-V8-family output."""
+    """Regression guard: V6 output must never be accidentally routed through the V8-family
+    dispatch. Phase V2.7 §3-5 forensic + fix: V6 (and V4/V7) output previously fell through to
+    `render_editorial_card()` - the internal `/news` editorial-inbox-preview template, with its
+    "📰 CATEGORY · date" header row and raw source-language title - a real, disclosed reader-
+    facing regression, not an intended contract. It now renders via the same clean, header-free
+    card `render_v81_news_card_html()` already established for V8
+    (`render_compact_news_card_html()`, Phase V2.7's own fix) - this test's own purpose (proving
+    V6 is not silently treated as V8) is preserved by asserting the body text came through
+    unmodified, while the 📰 header/date row - never an intended part of any real reader-facing
+    send - must no longer appear."""
     settings.editorial_delivery_mode = "router"
     monkeypatch.setattr(settings, "newsroom_telegram_chat_id", _REAL_CHAT_ID)
     monkeypatch.setattr(settings, "news_topic_id", _REAL_NEWS_TOPIC_ID)
@@ -670,7 +677,9 @@ async def test_v6_output_still_uses_the_legacy_template_unchanged(
 
     assert result.notified == 1
     sent_text = fake_bot.send_message.call_args.args[1]
-    assert "📰" in sent_text  # legacy header row still present, unchanged
+    assert "📰" not in sent_text  # Phase V2.7 fix: the inbox-preview header never leaks into a real send
+    assert sent_text.startswith("<b>")  # the clean render_compact_news_card_html() shape: headline first
+    assert " · " not in sent_text  # the category/date separator the old inbox card used
 
 
 @pytest.mark.asyncio

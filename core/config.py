@@ -726,6 +726,21 @@ class Settings(BaseSettings):
     # established off/shadow/enforce convention (e.g. article_acquisition_mode) exactly.
     presentation_director_mode: Literal["off", "shadow", "enforce"] = "off"
     pulse_brand_enabled: bool = False
+    # Phase V2.3 (docs/nnj_source_faithful_editorial_visual_recomposition_v1.md §15-17,
+    # services/editorial_recomposition.py) - a separate mode from presentation_director_mode
+    # (that one gates whether the deterministic NNJ brand layer renders at all; this one gates
+    # whether the source photo is optionally recomposed BEFORE that layer runs - two distinct
+    # product behaviors, deliberately not conflated into one flag). Also distinct from
+    # meme_image_generation_mode ("off"/"dry_run" only, no "live" value exists in that type by
+    # design - a completely different consumer/product). "off" (default): zero
+    # ImageGenerationGateway calls, byte-identical to pre-V2.3 behavior. "dry_run": eligibility is
+    # evaluated and the request that WOULD be sent is built, but no network call is made. "live":
+    # a real gemini-3.1-flash-image call is made when eligible; any failure fails open to the
+    # original source bytes (services/editorial_recomposition.py::maybe_recompose(), never a
+    # fallback to gemini-3-pro-image or gpt-image-2). "live" exists in this type after V2.3 but is
+    # NOT exercised by any live call in that phase - a separate, explicitly-authorized canary
+    # phase is required before this is ever set to "live" outside a test.
+    editorial_recomposition_mode: Literal["off", "dry_run", "live"] = "off"
     brand_asset_path: str = "assets/brand/nnj_logo.svg"
     brand_red_asset_path: str = "assets/brand/nnj_logo_red.svg"
     brand_raster_fallback_path: str = "assets/brand/nnj_logo.png"

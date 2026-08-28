@@ -173,24 +173,47 @@ class PlannedRun:
 
 def build_recomposition_prompt() -> str:
     """Pure, deterministic, versionless - mirrors `services/meme_image_generation.py::
-    build_image_prompt()`'s own shape. Transcribes docs/
-    nnj_source_faithful_editorial_visual_recomposition_v1.md §12's "Strict production prompt
-    contract" verbatim (minus the multi-image/story-summary INPUTS this bake-off does not use -
-    each run has exactly one source image and no story context). Identical text for every one of
-    the 9 planned runs - Stage 8's own "one canonical provider-neutral prompt... do not tune
-    per-model" requirement."""
+    build_image_prompt()`'s own shape. Byte-identical to `services/editorial_recomposition.py::
+    build_recomposition_prompt()` - see that copy's own docstring for the Phase V2.7 §6-7
+    forensic finding + fix this text embodies (source-preserving editing, not illustration -
+    tightened after the V2.6 canary's own observed "looks synthetic / concept-render-like"
+    failure). Identical text for every one of the 9 planned runs - Stage 8's own "one canonical
+    provider-neutral prompt... do not tune per-model" requirement."""
     return (
-        "ROLE: You are the NNJ Source-Faithful Editorial Visual Composer.\n\n"
-        "MISSION: Create a cleaner editorial composition from the supplied real source image "
-        "while preserving the real factual appearance of the subject.\n\n"
+        "ROLE: You are the NNJ Source-Preserving Editorial Photo Editor.\n\n"
+        "MISSION: The supplied source image is real, factual photography. Your task is "
+        "source-preserving editing, not illustration or reinterpretation. Treat the photographed "
+        "factual foreground subject as immutable reference content wherever technically "
+        "possible. Preserving factual fidelity has absolute priority over composition.\n\n"
         "SOURCE FIDELITY: Treat the source image as the source of truth for people, devices, "
-        "product appearance, event scenes, logos present in evidence, interfaces/screens.\n\n"
-        "ALLOWED: isolate subject; remove clutter; replace background; extend background; "
-        "re-light subtly; reframe; reposition; rotate slightly; scale subject; create negative "
-        "space; reserve a calm lower branding zone.\n\n"
-        "FORBIDDEN: invent product details; change hardware design; change human identity; "
-        "fabricate UI; alter logos; change official brand appearance; add missing features; "
-        "create unsupported event details; create fictional scenes that misrepresent the story.\n\n"
+        "product appearance, event scenes, logos present in evidence, interfaces/screens, "
+        "materials, colors, and the physical relationships between objects.\n\n"
+        "SOURCE BRANDING PRESERVATION: If a publisher, outlet, or source credit mark - a "
+        "watermark, logo, or credit line - is visible anywhere in the source image, it must "
+        "remain present, in its original form, unchanged. Do not erase it, replace it, redraw "
+        "it, translate it, or clean it up, even if reframing or background extension would "
+        "otherwise make removing it convenient. This applies only to real, visible source/"
+        "editorial branding - it does not forbid ordinary in-frame product screens or interface "
+        "text, which SOURCE FIDELITY above already covers.\n\n"
+        "ALLOWED: extend the existing background; clean minor clutter from the existing "
+        "background; a modest whole-subject translation; a modest whole-subject uniform scale; "
+        "a modest framing change; create negative space around the subject; global photographic "
+        "color/exposure harmonization that does not change the factual appearance of the "
+        "subject; reserve a calm lower branding zone.\n\n"
+        "FORBIDDEN: rebuilding the product from scratch; redesigning the product; replacing the "
+        "product with a visually similar object; changing product geometry; changing "
+        "camera/sensor/button/port geometry; changing logos or labels; erasing, deleting, or "
+        "redrawing a visible source/publisher watermark or credit mark; changing human identity; "
+        "fabricating UI; hallucinating text; deleting real secondary physical objects merely for "
+        "composition; changing hand anatomy; changing grip; inventing fingers; materially "
+        "changing materials or colors; fully replacing the real background with an unrelated "
+        "generic studio backdrop; restyling the photograph as a render, illustration, or concept "
+        "image; changing the real light source direction or character beyond subtle, "
+        "source-consistent harmonization; adding missing features; creating unsupported event "
+        "details; creating fictional scenes that misrepresent the story.\n\n"
+        "UNCERTAINTY RULE: If preserving the factual foreground subject while satisfying the "
+        "requested composition is uncertain, preserve the source subject and make a weaker "
+        "edit. Never sacrifice factual fidelity for a cleaner composition.\n\n"
         "BOTTOM SAFE ZONE: Leave a calm lower area free of crucial detail for deterministic NNJ "
         "branding applied downstream.\n\n"
         "TEXT RULE: Do not generate headlines, article text, fake interface text, exact "

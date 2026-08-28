@@ -677,3 +677,46 @@ def render_v81_news_card_html(
         blocks.append(build_ninja_pulse_footer_html())
 
     return "\n\n".join(blocks)
+
+
+def render_compact_news_card_html(
+    title: str, body: str, *, quote_text: str | None = None, quote_speaker: str | None = None,
+) -> str:
+    """Phase V2.7 §3-5 forensic + fix: the clean, reader-facing card for every copywriting
+    schema `render_v81_news_card_html()` above does NOT cover - V4's plain `title`/`body`, or
+    V6/V7's `build_compact_news_body()`-already-compacted body. Byte-for-byte the same minimal
+    shape Phase 23.1K established for V8 (HEADLINE + body + optional quote - no internal
+    "\U0001F4F0 category · date" header row, no raw source-language title, no event metadata):
+    `worker/content_cycle.py`'s router-mode branch previously left `html=None` for any non-V8
+    shape, which fell through to `bot/formatting.py::render_editorial_card()` - the internal
+    `/news` editorial-INBOX-REVIEW template (`services/editorial_inbox_service.py`'s own
+    original consumer), never designed or intended as a real reader-facing send. That fallthrough
+    was itself an existing, deliberately-commented design choice ("V4/V6/V7 output... keep using
+    the exact same render_editorial_card() path as always") - not a defect introduced by any V2.x
+    phase - but it violates this project's own "reader-facing output must not contain internal/
+    debug/source metadata" contract the moment router-mode delivery is actually used with
+    anything other than V8-family copywriting output (as V2.6's real canary was, since production
+    `copywriting_prompt_version` is pinned to "4"). This function closes that gap without
+    inventing a new editorial style - `title`/`body` are used exactly as already persisted onto
+    `ContentDraft.title`/`.body` (`services/content_draft_service.py::_extract_title_and_body()`),
+    never re-derived or rewritten. The `[\U0001F517 Источник]`
+    source button is NOT part of this string (unchanged - a separate inline keyboard, attached by
+    the caller, exactly as for every other card shape)."""
+    headline = title.strip() if title.strip() else "(no headline generated)"
+    body_block = _v8_escape(body.strip()) if body.strip() else "(no body generated)"
+
+    blocks = [f"<b>{_v8_escape(headline)}</b>", body_block]
+
+    if quote_text and _is_distinct(quote_text, [body] if body else [], threshold=_OPTIONAL_REDUNDANCY_THRESHOLD):
+        candidate_block = _v81_quote_block_html(quote_text, quote_speaker)
+        non_quote_length = _v81_telegram_utf16_length("\n\n".join(blocks))
+        quote_block_length = _v81_telegram_utf16_length("\n\n" + candidate_block)
+        fits = fits_within_budget(
+            non_quote_blocks_length=non_quote_length, quote_block_length=quote_block_length,
+            limit=_V81_QUOTE_SAFE_LIMIT,
+        )
+        selected_text, _ = select_quote_or_omit(quote_text, quote_speaker, fits=fits)
+        if selected_text is not None:
+            blocks.append(candidate_block)
+
+    return "\n\n".join(blocks)
