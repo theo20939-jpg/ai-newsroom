@@ -35,3 +35,17 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app", "core", "database", "bot", "integrations", "services", "schemas", "scripts", "capabilities", "worker"]
+
+[tool.pytest.ini_options]
+# Phase V2.10Q: `tests/` is intentionally NOT in the wheel packages list above (it is test-only
+# source, never shipped) and has no `__init__.py` (a plain PEP 420 namespace package). Locally,
+# `from tests.xxx import ...` only resolves because an editable install happens to put the repo
+# root itself on sys.path - a side effect of editable installs, not something a real `pip install
+# .` (the Dockerfile's non-editable build) ever provides. Without the repo root on sys.path,
+# `import tests.test_content_worker_cycle` fails with "ModuleNotFoundError: No module named
+# 'tests'" - confirmed by reproducing the exact error via a direct sys.path manipulation, the same
+# failure observed on the VPS ephemeral test image. `pythonpath = ["."]` makes pytest itself put
+# the repo root on sys.path before collection, byte-identical fix mechanism, in every invocation
+# context (editable or not, "python -m pytest" or bare "pytest", any working directory this value
+# is relative to) - no new package file, no production behavior change.
+pythonpath = ["."]

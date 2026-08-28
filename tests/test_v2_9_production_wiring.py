@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
@@ -33,15 +33,15 @@ from schemas.capability import CapabilityUsage
 from services import image_persistence
 from services.editorial_treatment import STANDARD, EditorialTreatmentDecision
 from services.image_persistence import EditorialImageCandidate
-from tests.test_content_worker_cycle import (
-    _isolated_freshness_window,  # noqa: F401,F811
-    _make_completed_news_analysis_task,
-    _make_event,
-    factory,  # noqa: F401,F811
-    test_source,  # noqa: F401,F811
-)
 from services.presentation_director import DATA as PRESENTATION_DATA
 from services.presentation_director import PresentationDecision
+from tests.test_content_worker_cycle import (
+    _isolated_freshness_window,  # noqa: F401
+    _make_completed_news_analysis_task,
+    _make_event,
+    factory,  # noqa: F401
+    test_source,  # noqa: F401
+)
 from tests.test_editorial_delivery_mode import _v6_capability_registry
 from worker.content_cycle import run_content_cycle
 
@@ -296,7 +296,7 @@ async def _seed_eligible_event_with_url(
     `_make_event()` itself never sets `url` (defaults to `None`, which `build_source_only_
     keyboard()` would turn into "no keyboard at all" - useless for this test's own assertions)."""
     async with factory_() as session:
-        event = await _make_event(session, source, published_at=datetime.now(timezone.utc))
+        event = await _make_event(session, source, published_at=datetime.now(UTC))
         event.url = url
         session.add(event)
         await session.commit()
