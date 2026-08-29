@@ -44,7 +44,7 @@ from services.story_confidence import compute_confidence_band
 from services.story_delta_engine import compute_story_delta, gate_delta_by_identity
 from services.story_suppression import compute_would_suppress
 from services.text_normalization import (
-    is_google_news_redirect_host,
+    is_google_news_provenance,
     strip_google_news_title_suffix,
 )
 from services.triage import decide_triage
@@ -237,13 +237,17 @@ async def _apply_story_memory(session: AsyncSession, event: NewsEvent, report: T
     linked events (out of scope as more than "the smallest fix")."""
     # Phase 23 shadow calibration: Google News RSS titles append a publisher attribution
     # suffix (e.g. " - Vietnam.vn"). That suffix is source provenance, not Story identity.
-    # Strip it only when the persisted event URL proves this is a Google News wrapper; title
-    # shape alone is intentionally insufficient (same safety rule as Story Delta).
-    story_match_title = (
-        strip_google_news_title_suffix(event.title)
-        if is_google_news_redirect_host(event.url or "")
-        else event.title
-    )
+    # Strip it only when real provenance proves this is a Google News wrapper; title shape
+    # alone is intentionally insufficient (same safety rule as Story Delta).
+    #
+    # Phase V2.22: provenance now also checks the event's own NewsSource feed URL, not only the
+    # article's own (possibly already-redirect-resolved) URL - see services/text_normalization.py
+    # ::is_google_news_provenance()'s own docstring for the real production evidence (a "Google
+    # News RU" NewsSource whose collected articles kept their "- 3DNews"-style suffix uncorrupted
+    # because the per-article URL alone no longer pointed at news.google.com).
+    source = await session.get(NewsSource, event.source_id)
+    is_google_news = is_google_news_provenance(event.url, source.url if source is not None else None)
+    story_match_title = strip_google_news_title_suffix(event.title) if is_google_news else event.title
     signature, result = await match_story(
         session, title=story_match_title, category=event.category
     )
@@ -253,9 +257,16 @@ async def _apply_story_memory(session: AsyncSession, event: NewsEvent, report: T
     )
 
     if creates_own_story:
+        # Phase V2.22: stores the SAME comparison title `signature` (entities/keywords) was
+        # already derived from - previously stored raw `event.title` here while `signature`
+        # came from `story_match_title`, so a Google-News-sourced story-creating event ended up
+        # with clean entities/keywords but a suffix-corrupted `Story.title`, silently degrading
+        # every LATER title_overlap comparison against this Story for its entire lifetime (real
+        # production evidence: V2.22 Cluster B). `Story.title` and `Story.entities`/`keywords`
+        # must always be derived from the same text.
         story = Story(
             id=uuid4(),
-            title=event.title,
+            title=story_match_title,
             category=event.category,
             entities=signature.entities,
             keywords=signature.keywords,

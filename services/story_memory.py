@@ -37,7 +37,16 @@ from core.config import settings
 from database.models.news_event import EventCategory
 from database.models.story import Story
 from services.editorial_content_type import classify_content_type, is_content_type_mismatch
-from services.text_normalization import normalize_for_entity_match, symmetric_token_overlap
+from services.fact_safety import ClaimType, extract_claims
+from services.text_normalization import normalize_for_entity_match, normalize_loose, symmetric_token_overlap
+
+# Phase V2.22A: mirrors services/story_delta_engine.py's own _MATERIAL_CLAIM_TYPES verbatim (never
+# imported directly - story_delta_engine.py already imports FROM this module, so the reverse
+# import would be circular). Kept as a literal duplicate of the same 4 claim types, not
+# independently chosen - see that module's own comment for why "entity"/"quote" are deliberately
+# excluded (a new entity or a quote is often just a different source's own phrasing, never a
+# material development on its own).
+_MATERIAL_CLAIM_TYPES: tuple[ClaimType, ...] = ("date", "money", "percentage", "metric_quantity")
 
 # --- outcomes -----------------------------------------------------------------------------
 
@@ -263,6 +272,64 @@ _TOPIC_BONUS = 0.05
 # auto-suppressed (see services/story_memory.py's own MatchResult docstring). Reasoned starting
 # point, not fit to data yet - explicitly called out as needing M11 replay calibration.
 _RELATED_STORY_ENTITY_FLOOR = 0.2
+
+# Phase V2.22 (Story Memory match-quality fix, real production evidence): a raw entity-Jaccard
+# overlap alone systematically undercounts real identity evidence when the SAME real-world
+# organization/person is captured at different specificity by different headlines (real case:
+# "Warner Chappell" vs. bare "Warner" - two different normalized strings for the same real
+# entity, purely because one outlet's headline dropped "Chappell"). Rather than attempting fuzzy
+# substring/prefix entity matching (rejected - exactly the "broad fuzzy merging" risk this phase's
+# own instructions warn against: "Warner Bros" and "Warner Music" would also share a "Warner"
+# prefix despite being different real companies), this reuses the ALREADY-EXISTING, already-
+# calibrated `_distinctive_shared_entities()` document-frequency check (Phase 20 Checkpoint 6) as
+# an evidence-strength BONUS on the combined score - a shared entity already had to prove itself
+# either multi-word or genuinely rare in the current candidate pool to count here, so this cannot
+# fire on a single common/generic shared word alone (confirmed via the V2.22 negative control:
+# "same lawsuit defendant, different plaintiff/case" shares only one distinctive entity and one
+# bonus unit keeps its combined score below _LOW_THRESHOLD, unchanged from before this fix).
+# Real evidence: Sony Music/Warner Chappell vs. Anthropic lawsuit, two outlets - combined=0.46
+# with 2 distinctive shared entities ("sony music", "anthropic") never reached _HIGH_THRESHOLD
+# under entity/title weighting alone.
+_DISTINCTIVE_ENTITY_MATCH_BONUS = 0.10
+_DISTINCTIVE_ENTITY_MATCH_BONUS_MAX_ENTITIES = 2
+
+# Phase V2.22A (pool-size sensitivity, found during this phase's own negative-control testing):
+# `_distinctive_shared_entities()`'s document-frequency check is a PERCENTAGE of the candidate
+# pool (`_DISTINCTIVE_ENTITY_DF_FRACTION`) - at a very small pool, `max(1, round(pool_size *
+# 0.05))` floors at 1, so a shared entity's df of 1 (the only way it CAN score in a pool this
+# small) trivially clears the bar regardless of whether that entity is actually rare or a generic,
+# ubiquitous brand/topic word. This is not fixable by re-deriving the fraction - it is an
+# information-theoretic floor: distinctiveness cannot be measured from a sample of ~1. Confirmed
+# directly: a synthetic "Apple unveils iPhone 17..." vs. "Apple releases iOS 19.2... for iPhone
+# 16" negative control (two genuinely different real events) incorrectly reached STORY_UPDATE at
+# a small pool size, purely because "apple"/"phone" had nothing to be diluted against - the same
+# entities correctly fail distinctiveness once compared against a realistic-scale pool (confirmed
+# separately). Rather than hardcoding "apple"/"phone" into the existing, calibration-EVIDENCE-
+# ONLY `_CALIBRATED_GENERIC_IDENTITY_ENTITIES` set (this is a synthetic test case, not a real,
+# evidenced calibration finding - hardcoding it there would violate that set's own documented
+# discipline), the BONUS specifically requires a minimum, realistic-scale candidate pool before it
+# is ever applied - conservative fail-closed (no bonus, not "wrong bonus") below this size,
+# matching this whole module's own "false suppression/merge is worse than a duplicate" philosophy.
+# Scoped to the bonus ONLY - the pre-existing, already-validated SUPPORTING_SOURCE/STORY_UPDATE
+# distinctive-entity gate itself (which does not aggregate a NEW combined-score effect, only
+# decides between two already-confident outcomes) is completely unaffected. Reasoned, not fit to
+# data (no real pool-size distribution has been measured yet): 20 is the smallest pool size at
+# which the underlying percentage first has room to mean anything other than "the trivial floor of
+# 1" for more than one shared entity's worth of headroom.
+_DISTINCTIVE_ENTITY_BONUS_MIN_POOL_SIZE = 20
+
+# Phase V2.22: a title_overlap this high (near-syndicated/verbatim wording) is, on its own,
+# strong same-story evidence independent of how many named entities happen to be extractable -
+# real case: "Memory prices climb 500% in 12 months, up to 10x the lowest ever tracked prices"
+# (Hacker News) vs. the same sentence plus a trailing product/price clause (Tom's Hardware) -
+# title_overlap=0.83 but only ONE weak, generic entity ("memory") is extractable from either
+# title, so the 0.6/0.4 entity/title-weighted combined score (0.63) never reached
+# _HIGH_THRESHOLD despite the titles being almost verbatim. Set strictly above the ALREADY-
+# DOCUMENTED real false-positive case this module's own history recorded (Phase 20 Checkpoint 4:
+# two different Fields-of-Mistria guide headlines scored title_overlap=0.75 despite naming a
+# genuinely different subject) - 0.80 keeps real margin above that known-bad case while admitting
+# the real Memory-prices case (0.83).
+_NEAR_VERBATIM_TITLE_OVERLAP_THRESHOLD = 0.80
 
 
 @dataclass(frozen=True)
@@ -604,6 +671,22 @@ async def match_story(
     assert best is not None  # candidates is non-empty, so the loop ran at least once
     combined, entity_overlap, title_overlap, candidate = best
 
+    # Phase V2.22: distinctive-shared-entity bonus, applied to the winning candidate's own
+    # combined score before any threshold check - see _DISTINCTIVE_ENTITY_MATCH_BONUS's own
+    # comment for the real evidence and the false-positive guard this relies on (a shared entity
+    # must already have proven itself multi-word or genuinely rare in this pool via the existing,
+    # unmodified `_distinctive_shared_entities()` check - never a single common word alone).
+    # Computed once here and reused below (the same evidence used later for the SUPPORTING_
+    # SOURCE/STORY_UPDATE gate) rather than recomputed twice.
+    distinctive_at_best = _distinctive_shared_entities(signature.entities, candidate.entities or [], entity_df, len(candidates))
+    # Phase V2.22A: the bonus itself additionally requires a realistic-scale pool (see
+    # _DISTINCTIVE_ENTITY_BONUS_MIN_POOL_SIZE's own comment) - `distinctive_at_best` is still
+    # computed unconditionally above and reused below for the pre-existing, unaffected SUPPORTING_
+    # SOURCE/STORY_UPDATE gate.
+    if distinctive_at_best and len(candidates) >= _DISTINCTIVE_ENTITY_BONUS_MIN_POOL_SIZE:
+        bonus_units = min(len(distinctive_at_best), _DISTINCTIVE_ENTITY_MATCH_BONUS_MAX_ENTITIES)
+        combined = min(1.0, combined + bonus_units * _DISTINCTIVE_ENTITY_MATCH_BONUS)
+
     if combined < _LOW_THRESHOLD:
         if entity_overlap >= _RELATED_STORY_ENTITY_FLOOR:
             reason = (
@@ -622,7 +705,12 @@ async def match_story(
             NEW_STORY, None, 1.0 - combined, reason, entity_overlap=entity_overlap,
         )
 
-    if combined >= _HIGH_THRESHOLD:
+    # Phase V2.22: a near-verbatim title alone (see _NEAR_VERBATIM_TITLE_OVERLAP_THRESHOLD's own
+    # comment) is independently sufficient to enter the confident-match branch, even when the
+    # entity-driven combined score alone would not clear _HIGH_THRESHOLD - real case: a headline
+    # with almost no extractable named entities but near-syndicated wording (V2.22 "Memory prices"
+    # cluster). Never lowers _HIGH_THRESHOLD itself; only adds a second, independent way in.
+    if combined >= _HIGH_THRESHOLD or title_overlap >= _NEAR_VERBATIM_TITLE_OVERLAP_THRESHOLD:
         if title_overlap >= _DUPLICATE_TITLE_OVERLAP_THRESHOLD:
             reason = (
                 f"near-identical title (title_overlap={title_overlap:.2f}) - same event, "
@@ -642,7 +730,7 @@ async def match_story(
         # confirmed false matches shared only a single generic word; confirmed genuine matches
         # always shared something more specific). Absent that, the match downgrades to
         # UNCERTAIN_MATCH rather than being confidently (and wrongly) treated as the same story.
-        distinctive = _distinctive_shared_entities(signature.entities, candidate.entities or [], entity_df, len(candidates))
+        distinctive = distinctive_at_best  # Phase V2.22: already computed above, reused verbatim
         # Phase 20.7: same entity/product does not mean same editorial Story - a review and a
         # guide about the same game are different editorial objects even with a perfect entity
         # match. Gated the same way as the distinctive-entity check (both must clear before a
@@ -664,11 +752,44 @@ async def match_story(
                     SUPPORTING_SOURCE, candidate.id, combined, reason, entity_overlap=entity_overlap,
                     has_distinctive_shared_entity=True,
                 )
+            # Phase V2.22A (real production evidence, Cluster A: Sony Music/Warner Chappell vs.
+            # Anthropic lawsuit, Techmeme vs. TechCrunch): "materially different title" (title_
+            # overlap below the supporting-source bar) is only a PROXY for "new information" - two
+            # outlets can word the exact same event very differently with zero actual new facts.
+            # Confirmed directly: neither real headline here contains any date/money/percentage/
+            # metric_quantity claim (services/fact_safety.py::extract_claims(), the SAME extractor
+            # services/story_delta_engine.py::classify_delta() already uses - never a second,
+            # competing check). STORY_UPDATE is reserved for a REAL new material claim the
+            # candidate's own title does not already carry; absent one, this downgrades to
+            # SUPPORTING_SOURCE (a confirmed same-story corroborating report, not a fresh
+            # development) regardless of how differently the two are worded.
+            new_claims = extract_claims(title)
+            candidate_claims = extract_claims(candidate.title)
+            new_material_claims = [c for t in _MATERIAL_CLAIM_TYPES for c in new_claims.get(t, [])]
+            candidate_material_pool = {
+                normalize_loose(c) for t in _MATERIAL_CLAIM_TYPES for c in candidate_claims.get(t, [])
+            }
+            has_genuine_new_claim = any(
+                normalize_loose(c) not in candidate_material_pool for c in new_material_claims
+            )
+            if not has_genuine_new_claim:
+                reason = (
+                    f"confident match, differently-worded title (entity_overlap={entity_overlap:.2f}, "
+                    f"title_overlap={title_overlap:.2f}, distinctive_shared_entities={distinctive}) but "
+                    f"no material date/money/percentage/quantity claim in the new title beyond what the "
+                    f"candidate's own title already carries - a corroborating report, not new substance "
+                    f"(candidate topic_bucket={candidate.topic_bucket}, category={candidate.category})"
+                )
+                return signature, MatchResult(
+                    SUPPORTING_SOURCE, candidate.id, combined, reason, entity_overlap=entity_overlap,
+                    has_distinctive_shared_entity=True,
+                )
             reason = (
                 f"confident match, materially different title (entity_overlap={entity_overlap:.2f}, "
                 f"title_overlap={title_overlap:.2f}, distinctive_shared_entities={distinctive}, "
-                f"content_type={new_content_type}/{candidate_content_type}, candidate topic_bucket="
-                f"{candidate.topic_bucket}, category={candidate.category})"
+                f"content_type={new_content_type}/{candidate_content_type}, new_material_claims="
+                f"{new_material_claims}, candidate topic_bucket={candidate.topic_bucket}, "
+                f"category={candidate.category})"
             )
             return signature, MatchResult(
                 STORY_UPDATE, candidate.id, combined, reason, entity_overlap=entity_overlap,
@@ -703,5 +824,5 @@ async def match_story(
     )
     return signature, MatchResult(
         UNCERTAIN_MATCH, candidate.id, combined, reason, entity_overlap=entity_overlap,
-        has_distinctive_shared_entity=bool(_distinctive_shared_entities(signature.entities, candidate.entities or [], entity_df, len(candidates))),
+        has_distinctive_shared_entity=bool(distinctive_at_best),
     )

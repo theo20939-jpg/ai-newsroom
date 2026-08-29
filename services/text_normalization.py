@@ -85,6 +85,27 @@ def is_google_news_redirect_host(url: str) -> bool:
     return bool(_GOOGLE_NEWS_HOST_RE.search(host))
 
 
+def is_google_news_provenance(event_url: str | None, source_url: str | None) -> bool:
+    """Phase V2.22 (Story Memory match-quality fix, real production evidence: a "Южная Корея..."
+    story collected via a NewsSource literally named "Google News RU" kept its "- 3DNews" RSS
+    publisher-attribution suffix uncorrupted through Story Memory matching). `is_google_news_
+    redirect_host(event_url)` alone (the pre-existing check) only catches a STILL-LIVE
+    news.google.com redirect link - a real collector commonly resolves that redirect to the
+    publisher's own real article URL before persisting `NewsEvent.url`, so the per-article check
+    can miss a genuine Google-News-sourced item even though its TITLE still carries the feed's own
+    suffix (a Google News RSS item's title always carries it, independent of whether the stored
+    URL happens to still be the aggregator redirect or the already-resolved publisher page). This
+    reuses the exact same, already-tested `is_google_news_redirect_host()` hostname check against
+    the event's OWN `NewsSource.url` (the feed endpoint itself) as a second, independent
+    provenance signal - never a new heuristic, never inferred from title shape (the same "shape
+    alone is insufficient" rule `strip_google_news_title_suffix()`'s own docstring already
+    establishes). True if EITHER URL resolves to a google-news host."""
+    return bool(
+        (event_url and is_google_news_redirect_host(event_url))
+        or (source_url and is_google_news_redirect_host(source_url))
+    )
+
+
 def strip_google_news_title_suffix(title: str) -> str:
     """Pure. Strips a trailing ' - {Publisher}' suffix if present - Google News RSS entries
     reliably append this to the real headline (confirmed empirically against real cases:
