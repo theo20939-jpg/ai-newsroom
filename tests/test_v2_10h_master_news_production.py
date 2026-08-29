@@ -11,6 +11,8 @@ from PIL import Image, ImageDraw
 
 from services.nnj_master_news_mark import rasterize_nnj_mark
 from services.nnj_master_news_overlay import (
+    NEWS_BRANDING_BRANDED,
+    NEWS_BRANDING_NO_OVERLAY_SAFETY,
     ComponentPlacement,
     apply_master_news_branding,
     select_master_news_branding,
@@ -245,18 +247,28 @@ def test_content_cycle_calls_master_news_branding_not_candidate_c() -> None:
     code = _non_comment_lines(source)
     assert "apply_candidate_c_branding" not in code
     assert "apply_adaptive_nnj_branding" not in code
-    assert "from services.nnj_master_news_overlay import apply_master_news_branding" in source
+    # Phase V2.25: the import grew from a single name to three (the branding function plus the
+    # explicit diagnostic-status constants) and is therefore now parenthesized/multi-line - check
+    # for the module and the name independently rather than one exact single-line string.
+    assert "from services.nnj_master_news_overlay import (" in source
+    assert "apply_master_news_branding,\n)" in source
     assert "branded_bytes, master_decision = apply_master_news_branding(" in source
     assert "source_bytes, disable_lower_signature=recomposition_source_risk is not None," in source
 
 
-def test_content_cycle_single_branding_call_site_serves_both_visual_paths() -> None:
-    """There is exactly one call to apply_master_news_branding() in the NEWS branch, reached
-    regardless of whether recomposition succeeded - proven structurally, mirroring the
-    already-established V2.9 test pattern for this exact property."""
+def test_content_cycle_two_branding_call_sites_cover_primary_image_and_media_group() -> None:
+    """Phase V2.10H originally required exactly one call site (reached regardless of whether
+    recomposition succeeded). Phase V2.25 Part B deliberately adds a SECOND, real call site - the
+    real accidental bug this phase fixed was that a NEWS media-group (album) send only ever
+    branded media_group_items[0], leaving every other photo in the group completely unbranded with
+    no diagnostic. The fix independently re-resolves and brands every remaining group photo via
+    its own apply_master_news_branding() call - so the production file now legitimately has two
+    call sites (primary image; remaining media-group images), never duplicated logic inline."""
     source = (_REPO_ROOT / "worker/content_cycle.py").read_text(encoding="utf-8")
-    assert source.count("apply_master_news_branding(") == 1
+    code = _non_comment_lines(source)
+    assert code.count("apply_master_news_branding(") == 2
     assert "visual_path" in source  # ORIGINAL_SOURCE vs RECOMPOSE still distinguished in telemetry
+    assert "news_branding_status" in source  # Phase V2.25 Part B explicit diagnostic vocabulary
 
 
 # ---------------------------------------------------------------------------
@@ -386,10 +398,13 @@ def test_honor_disclaimer_region_no_longer_falsely_accepted() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_rescaled_lower_signature_width_is_in_the_approved_30_to_34_percent_range() -> None:
+def test_rescaled_lower_signature_width_is_in_the_approved_42_to_46_percent_range() -> None:
+    """Phase V2.25: superseded the V2.17-era ~30-34% approved range (see git history for that
+    test) with a materially larger ~44% target - a real, deliberate, user-requested enlargement,
+    not a regression of that earlier calibration."""
     from services.nnj_master_news_overlay import _LOWER_TOTAL_WIDTH_FRAC
 
-    assert 0.30 <= _LOWER_TOTAL_WIDTH_FRAC <= 0.34
+    assert 0.42 <= _LOWER_TOTAL_WIDTH_FRAC <= 0.46
 
 
 def test_rescaled_components_are_all_larger_than_the_pre_v2_17_footprint() -> None:
@@ -414,21 +429,38 @@ def test_rescaled_components_are_all_larger_than_the_pre_v2_17_footprint() -> No
         assert new_px > old_px, f"{name} did not grow: {old_px}px -> {new_px}px"
 
 
-def test_upper_mark_grew_within_the_approved_1_35_to_1_6x_range() -> None:
+def test_upper_mark_grew_within_the_approved_1_35_to_1_6x_range_from_original() -> None:
+    """Cumulative ratio from the ORIGINAL V2.10H lock (32px), across both the V2.17 and V2.25
+    rescales together - still a "same design, larger" enlargement, not a redesign."""
     from services.nnj_master_news_overlay import _CANVAS_W, _UPPER_MARK_W_FRAC
 
     old_px = 32
     new_px = _UPPER_MARK_W_FRAC * _CANVAS_W
     ratio = new_px / old_px
-    assert 1.35 <= ratio <= 1.6
+    assert 1.35 <= ratio <= 2.2
 
 
-def test_safe_inset_deliberately_unchanged() -> None:
-    """No mathematical necessity was found to change the corner inset just because the
-    components drawn inside the box grew - confirms this wasn't silently altered too."""
+def test_upper_mark_grew_within_the_approved_1_3_to_1_45x_range_from_v2_17() -> None:
+    """Phase V2.25's own explicit target range, measured from the immediately-prior V2.17
+    baseline (48px) rather than the original V2.10H lock - the ~1.375x increase this phase asked
+    for specifically."""
+    from services.nnj_master_news_overlay import _CANVAS_W, _UPPER_MARK_W_FRAC
+
+    v2_17_px = 48
+    new_px = _UPPER_MARK_W_FRAC * _CANVAS_W
+    ratio = new_px / v2_17_px
+    assert 1.3 <= ratio <= 1.45
+
+
+def test_safe_inset_deliberately_enlarged_for_v2_25() -> None:
+    """Phase V2.10H originally found no mathematical necessity to change the corner inset just
+    because the components drawn inside the box grew (V2.17 left it at 20px). Phase V2.25
+    deliberately changes that: the user's own explicit instruction enlarges the inset to 24px to
+    match the materially larger overall footprint - a real, intentional change, not a silent
+    drift away from the V2.10H §2 calibration."""
     from services.nnj_master_news_overlay import _CANVAS_W, _SAFE_INSET_FRAC
 
-    assert round(_SAFE_INSET_FRAC * _CANVAS_W) == 20
+    assert round(_SAFE_INSET_FRAC * _CANVAS_W) == 24
 
 
 def test_rescaled_footprint_never_exceeds_canvas_bounds_on_a_quiet_photo() -> None:
@@ -450,8 +482,9 @@ def test_rescaled_footprint_never_exceeds_canvas_bounds_on_a_quiet_photo() -> No
 
 def test_rescaled_safety_scoring_uses_the_new_larger_footprint_not_the_old_one() -> None:
     """Proves the safety evaluation genuinely reads the new constants (not a stale cached size):
-    the scored box width for LOWER_RIGHT must match the new ~410px total width, not the old
-    ~307px one, at the 1280-wide reference canvas."""
+    the scored box width for LOWER_RIGHT must match the current `_LOWER_TOTAL_WIDTH_FRAC` (~563px/
+    44.0% as of Phase V2.25, up from ~410px/32.0% at V2.17 and ~307px/24.0% originally), at the
+    1280-wide reference canvas."""
     from services.nnj_master_news_overlay import _LOWER_TOTAL_WIDTH_FRAC
 
     branded, decision = apply_master_news_branding(_flat_photo())
@@ -472,3 +505,85 @@ def test_degradation_still_reports_only_the_four_valid_modes_after_rescale() -> 
         assert decision.degradation_mode in (
             "upper_and_lower", "lower_signature_only", "upper_mark_only", "no_overlay",
         )
+
+
+# ---------------------------------------------------------------------------
+# Phase V2.25 Part B - the explicit news_branding_status diagnostic (BRANDED / NO_OVERLAY_SAFETY
+# are the two states MasterNewsBrandingDecision can itself represent; the caller in
+# worker/content_cycle.py is responsible for the other two - ORIGINAL_SOURCE_BRANDING_FAILURE and
+# NO_OVERLAY_NO_SOURCE_BYTES - see tests/test_v2_9_production_wiring.py for those).
+# ---------------------------------------------------------------------------
+
+
+def test_news_branding_status_is_branded_for_a_safe_quiet_photo() -> None:
+    """TEST 1 (Phase V2.25 spec): a normal, safe NEWS image must resolve to the BRANDED final
+    asset - at least one component actually composited, and the decision's own explicit status
+    says so."""
+    branded, decision = apply_master_news_branding(_flat_photo())
+    assert decision.news_branding_status == NEWS_BRANDING_BRANDED
+    assert decision.degradation_mode != "no_overlay"
+    # The branded bytes must be a real, valid, full-canvas JPEG - not a bare passthrough.
+    with Image.open(io.BytesIO(branded)) as im:
+        assert im.size == _CANVAS
+
+
+def test_news_branding_status_is_no_overlay_safety_for_an_explicitly_unsafe_photo() -> None:
+    """TEST 2 (Phase V2.25 spec): an explicitly unsafe footprint (every candidate corner rejected
+    on both components) must permit NO_OVERLAY - the safety fallback is never removed - and the
+    decision's own explicit status must say NO_OVERLAY_SAFETY, distinguishable from BRANDED."""
+    branded, decision = apply_master_news_branding(_all_busy_photo())
+    assert decision.degradation_mode == "no_overlay"
+    assert decision.news_branding_status == NEWS_BRANDING_NO_OVERLAY_SAFETY
+    # Still a valid, full-canvas image - the safety fallback degrades branding, never the send.
+    with Image.open(io.BytesIO(branded)) as im:
+        assert im.size == _CANVAS
+
+
+# ---------------------------------------------------------------------------
+# Phase V2.25 TEST 7 - small/portrait source images: _fit_photo_to_canvas() always normalizes to
+# the fixed 1280x720 reference canvas regardless of input shape, but the new, materially larger
+# (~44%) geometry must still fit entirely within that canvas and never crash on an extreme input
+# aspect ratio or a genuinely small source image.
+# ---------------------------------------------------------------------------
+
+
+def _portrait_flat_photo(color=(120, 120, 120)) -> bytes:
+    im = Image.new("RGB", (900, 1600), color)  # tall portrait source, far from the 16:9 canvas
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=95)
+    return buf.getvalue()
+
+
+def _small_flat_photo(color=(120, 120, 120)) -> bytes:
+    im = Image.new("RGB", (320, 180), color)  # well under the 1280x720 reference canvas
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=95)
+    return buf.getvalue()
+
+
+def test_portrait_source_image_bounds_remain_valid_at_the_new_larger_geometry() -> None:
+    branded, decision = apply_master_news_branding(_portrait_flat_photo())
+    with Image.open(io.BytesIO(branded)) as im:
+        assert im.size == _CANVAS
+    for component in (decision.upper_mark, decision.lower_signature):
+        if component.placement is ComponentPlacement.OMITTED:
+            continue
+        accepted = [a for a in component.attempts if a.accepted]
+        assert accepted
+        x0, y0, x1, y1 = accepted[0].box
+        assert 0 <= x0 < x1 <= _CANVAS[0]
+        assert 0 <= y0 < y1 <= _CANVAS[1]
+
+
+def test_small_source_image_bounds_remain_valid_at_the_new_larger_geometry() -> None:
+    branded, decision = apply_master_news_branding(_small_flat_photo())
+    with Image.open(io.BytesIO(branded)) as im:
+        assert im.size == _CANVAS
+    for component in (decision.upper_mark, decision.lower_signature):
+        if component.placement is ComponentPlacement.OMITTED:
+            continue
+        accepted = [a for a in component.attempts if a.accepted]
+        assert accepted
+        x0, y0, x1, y1 = accepted[0].box
+        assert 0 <= x0 < x1 <= _CANVAS[0]
+        assert 0 <= y0 < y1 <= _CANVAS[1]

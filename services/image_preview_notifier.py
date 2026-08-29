@@ -205,6 +205,13 @@ class RichMediaPlan:
     media_group_items: list[MediaUnion]
     hosted_platform_link: str | None  # appended to the caption when a YouTube/Vimeo hint exists
     fallback_single_photo: EditorialImageCandidate | None  # used when < 2 total media items
+    # Phase V2.25: the EditorialImageCandidate each of media_group_items[:len(photo_candidates)]
+    # (the leading photo items, before any trailing video item) was resolved from, in the same
+    # order - lets a caller independently re-resolve and brand EVERY photo in the group, not only
+    # the one it happens to already hold other state for. Always the same length as the photo
+    # portion of media_group_items (photo_inputs that resolved to None are already excluded from
+    # both in lockstep, one candidate per kept photo_input).
+    photo_candidates: list[EditorialImageCandidate]
 
 
 def build_rich_media_plan(
@@ -220,10 +227,12 @@ def build_rich_media_plan(
     actual `InputMedia*` objects are built last, in final order."""
     max_photos = _MEDIA_GROUP_MAX_ITEMS - (1 if video_hint is not None and video_hint.platform == VideoPlatform.DIRECT_HOSTED else 0)
     photo_inputs = []
+    photo_candidates: list[EditorialImageCandidate] = []
     for candidate in image_candidates[:max_photos]:
         photo_input = resolve_photo_input(candidate)
         if photo_input is not None:
             photo_inputs.append(photo_input)
+            photo_candidates.append(candidate)
 
     direct_video_url: str | None = None
     hosted_platform_link: str | None = None
@@ -245,7 +254,7 @@ def build_rich_media_plan(
 
     return RichMediaPlan(
         media_group_items=media_group_items, hosted_platform_link=hosted_platform_link,
-        fallback_single_photo=fallback_single_photo,
+        fallback_single_photo=fallback_single_photo, photo_candidates=photo_candidates,
     )
 
 

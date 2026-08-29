@@ -42,7 +42,11 @@ from services.image_relevance import PROVENANCE_TABLE
 from services.media_ranking import _NEAR_DUPLICATE_MAX_HAMMING_DISTANCE, rank_media_candidates
 from services.news_editorial_relevance import OUT_OF_SCOPE, classify_editorial_relevance
 from services.brand_renderer import RenderResult, render_branded_media
-from services.nnj_master_news_overlay import apply_master_news_branding
+from services.nnj_master_news_overlay import (
+    NEWS_BRANDING_NO_SOURCE_BYTES,
+    NEWS_BRANDING_ORIGINAL_SOURCE_FAILURE,
+    apply_master_news_branding,
+)
 from services.presentation_director import (
     BREAKING as PRESENTATION_BREAKING,
     CAPTION_ABOVE,
@@ -1130,6 +1134,12 @@ async def run_content_cycle(
             # thing recomposition can see - see the recomposition_source_bytes resolution below.
             resolved_photo_candidate: EditorialImageCandidate | None = None
             media_group_items: list[MediaUnion] = []
+            # Phase V2.25 Part B: parallel to media_group_items[:len(media_group_photo_candidates)]
+            # - the EditorialImageCandidate each of those leading photo items came from, so every
+            # image in a real NEWS media group (not just index 0) can independently be re-resolved
+            # to its own real bytes and receive its own apply_master_news_branding() call below.
+            # Stays empty whenever no >=2-item media group was actually built (single-photo path).
+            media_group_photo_candidates: list[EditorialImageCandidate] = []
             image_candidate_count = 0
             # NINJA PULSE Visual System v1 - reassigned only inside the presentation_director_mode
             # != "off" branch below; stays False (today's exact existing behavior) otherwise.
@@ -1246,6 +1256,10 @@ async def run_content_cycle(
                         # caption source link (an earlier, rejected approach), same `html` and
                         # same CAPTION_SAFE_LIMIT budget as every other path.
                         media_group_items = plan.media_group_items
+                        # Phase V2.25 Part B: carried forward so every photo in this real media
+                        # group (not only index 0) can later be independently re-resolved to its
+                        # own bytes and receive its own apply_master_news_branding() call.
+                        media_group_photo_candidates = plan.photo_candidates
                     elif plan.media_group_items:
                         # A single resolved candidate - reuse the already-resolved photo directly
                         # from the plan (never re-resolve) via the existing single-photo path
@@ -1441,6 +1455,11 @@ async def run_content_cycle(
                                         "presentation_type": presentation_decision.presentation_type,
                                         "brand_applied": False,
                                         "brand_skip_reason": skip_reason,
+                                        "news_branding_status": (
+                                            NEWS_BRANDING_NO_SOURCE_BYTES
+                                            if presentation_decision.presentation_type == PRESENTATION_NEWS
+                                            else None
+                                        ),
                                     },
                                 )
                             if needs_render:
@@ -1457,8 +1476,26 @@ async def run_content_cycle(
                                 # merely because recomposition did not run. Every other case
                                 # (DATA/QUOTE/BREAKING) keeps using render_branded_media()
                                 # completely unchanged - never duplicated, never touched here.
+                                # Phase V2.25 Part B: set True below, before any later DATA/QUOTE/
+                                # BREAKING-render-failure demotion can reassign presentation_decision
+                                # to NEWS - the media-group branding loop further below must only
+                                # ever run for a post that was ALREADY NEWS here (media_group_items[0]
+                                # already went through apply_master_news_branding() above), never
+                                # for a demoted post whose primary image never received it at all.
+                                # (Kept as a separate flag, not re-derived from presentation_decision/
+                                # source_bytes at the loop's own site below, specifically so mypy's
+                                # narrowing of `source_bytes: bytes | None` on the `if` condition
+                                # immediately below is preserved unchanged.)
+                                was_news_with_source_bytes = False
                                 if presentation_decision.presentation_type == PRESENTATION_NEWS and source_bytes is not None:
+                                    was_news_with_source_bytes = True
                                     started_adaptive_branding = time.monotonic()
+                                    # Phase V2.25 Part B: the one explicit status this NEWS send
+                                    # will end up recording - assigned in every branch below
+                                    # (success or exception), never left unset, so downstream
+                                    # logging always has a real value instead of an ad hoc re-
+                                    # derivation of render_result.success/template_version.
+                                    news_branding_status: str = NEWS_BRANDING_ORIGINAL_SOURCE_FAILURE
                                     try:
                                         # Phase V2.10I §7: `recomposition_source_risk` (assigned
                                         # above, always set whenever this pulse_brand_enabled
@@ -1475,6 +1512,7 @@ async def run_content_cycle(
                                         branded_bytes, master_decision = apply_master_news_branding(
                                             source_bytes, disable_lower_signature=recomposition_source_risk is not None,
                                         )
+                                        news_branding_status = master_decision.news_branding_status
                                         render_result = RenderResult(
                                             success=True, image_bytes=branded_bytes,
                                             template_version=f"master_news_v1:{master_decision.degradation_mode}",
@@ -1495,6 +1533,7 @@ async def run_content_cycle(
                                                     else "ORIGINAL_SOURCE"
                                                 ),
                                                 "degradation_mode": master_decision.degradation_mode,
+                                                "news_branding_status": news_branding_status,
                                                 "upper_mark_placement": master_decision.upper_mark.placement.value,
                                                 "upper_mark_rejected_candidate_count": len(master_decision.upper_mark.attempts),
                                                 "lower_signature_placement": master_decision.lower_signature.placement.value,
@@ -1505,6 +1544,7 @@ async def run_content_cycle(
                                     except Exception as exc:  # noqa: BLE001 - same fail-safe boundary
                                         # render_branded_media() itself establishes (spec §29):
                                         # never let a rendering failure block the send.
+                                        news_branding_status = NEWS_BRANDING_ORIGINAL_SOURCE_FAILURE
                                         render_result = RenderResult(
                                             success=False, image_bytes=None, template_version="master_news_v1",
                                             fallback_reason=str(exc),
@@ -1531,6 +1571,11 @@ async def run_content_cycle(
                                         "brand_render_duration_ms": round(render_result.duration_ms, 1),
                                         "brand_render_fallback": render_result.fallback_reason,
                                         "brand_template_version": render_result.template_version,
+                                        "news_branding_status": (
+                                            news_branding_status
+                                            if presentation_decision.presentation_type == PRESENTATION_NEWS
+                                            else None
+                                        ),
                                     },
                                 )
                                 if render_result.success and render_result.image_bytes is not None:
@@ -1554,6 +1599,85 @@ async def run_content_cycle(
                                         brand_media=False, visual_priority=1, data_candidate=None,
                                         quote_candidate=None, reason="brand_render_failed_demoted_to_news",
                                     )
+
+                                # Phase V2.25 Part B (real accidental bypass fix): the block above
+                                # only ever brands media_group_items[0] - a real NEWS media-group
+                                # (album) send with 2+ resolved photos previously shipped every
+                                # OTHER photo in the group completely untouched by
+                                # apply_master_news_branding(), with no exception, no safety
+                                # rejection, and no diagnostic - a silent unbranded delivery this
+                                # phase's own rule ("if branding is safe, the final image MUST be
+                                # branded") forbids. Independently re-resolves and brands every
+                                # remaining photo using the SAME deterministic function and the
+                                # SAME per-image recomposition-source-risk gate the primary image
+                                # already receives above - never re-running Gemini recomposition
+                                # (out of this phase's scope; only the primary image, already
+                                # resolved earlier, may carry a recomposed image).
+                                if (
+                                    was_news_with_source_bytes
+                                    and len(media_group_photo_candidates) > 1
+                                    and media_group_items
+                                ):
+                                    rebuilt_group_items = [media_group_items[0]]
+                                    for group_idx in range(1, len(media_group_photo_candidates)):
+                                        group_item = media_group_items[group_idx]
+                                        group_candidate = media_group_photo_candidates[group_idx]
+                                        group_media = group_item.media
+                                        group_source_bytes = resolve_recomposition_source_bytes(
+                                            group_media if isinstance(group_media, (str, BufferedInputFile)) else None,
+                                            group_candidate,
+                                        )
+                                        if group_source_bytes is None:
+                                            logger.info(
+                                                "brand_render_skipped",
+                                                extra={
+                                                    "draft_id": str(outcome.content_draft.id),
+                                                    "presentation_type": presentation_decision.presentation_type,
+                                                    "media_group_index": group_idx,
+                                                    "brand_applied": False,
+                                                    "brand_skip_reason": "no_source_media",
+                                                    "news_branding_status": NEWS_BRANDING_NO_SOURCE_BYTES,
+                                                },
+                                            )
+                                            rebuilt_group_items.append(group_item)
+                                            continue
+                                        group_risk = assess_recomposition_source_risk(group_candidate)
+                                        try:
+                                            group_branded_bytes, group_decision = apply_master_news_branding(
+                                                group_source_bytes, disable_lower_signature=group_risk is not None,
+                                            )
+                                            group_branded_file = BufferedInputFile(group_branded_bytes, filename="pulse.jpg")
+                                            rebuilt_group_items.append(group_item.model_copy(update={"media": group_branded_file}))
+                                            logger.info(
+                                                "master_news_branding_applied",
+                                                extra={
+                                                    "draft_id": str(outcome.content_draft.id),
+                                                    "media_group_index": group_idx,
+                                                    "visual_path": "ORIGINAL_SOURCE",
+                                                    "degradation_mode": group_decision.degradation_mode,
+                                                    "news_branding_status": group_decision.news_branding_status,
+                                                    "upper_mark_placement": group_decision.upper_mark.placement.value,
+                                                    "lower_signature_placement": group_decision.lower_signature.placement.value,
+                                                    "lower_signature_disabled_reason": group_decision.lower_signature.disabled_reason,
+                                                },
+                                            )
+                                        except Exception as exc:  # noqa: BLE001 - same fail-safe boundary as the primary image
+                                            rebuilt_group_items.append(group_item)
+                                            logger.info(
+                                                "brand_render_attempted",
+                                                extra={
+                                                    "draft_id": str(outcome.content_draft.id),
+                                                    "presentation_type": presentation_decision.presentation_type,
+                                                    "media_group_index": group_idx,
+                                                    "brand_applied": False,
+                                                    "brand_skip_reason": str(exc),
+                                                    "news_branding_status": NEWS_BRANDING_ORIGINAL_SOURCE_FAILURE,
+                                                },
+                                            )
+                                    media_group_items = [
+                                        *rebuilt_group_items,
+                                        *media_group_items[len(media_group_photo_candidates):],
+                                    ]
 
                         if presentation_decision.caption_position == CAPTION_ABOVE:
                             show_caption_above_media = True

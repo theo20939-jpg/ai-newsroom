@@ -80,9 +80,9 @@ BoundingBox = tuple[int, int, int, int]
 _CANVAS_W, _CANVAS_H = 1280, 720
 
 # --- Locked MASTER_BALANCED lower-signature geometry (Phase V2.10G user selection, Phase V2.10H
-# §1 lock; Phase V2.17 rescale) - expressed as fractions of the 1280x720 reference canvas so it
-# scales proportionally to any real output canvas size (Phase V2.10H §1's own explicit
-# requirement) - every source photo is fit to this exact reference canvas
+# §1 lock; Phase V2.17 rescale; Phase V2.25 rescale) - expressed as fractions of the 1280x720
+# reference canvas so it scales proportionally to any real output canvas size (Phase V2.10H §1's
+# own explicit requirement) - every source photo is fit to this exact reference canvas
 # (`_fit_photo_to_canvas()`) before compositing, so a fraction-based constant already scales
 # correctly across every supported source resolution without further change.
 #
@@ -91,34 +91,40 @@ _CANVAS_W, _CANVAS_H = 1280, 720
 # Telegram's own client-side photo scaling shrank it further - the SAME approved visual language,
 # scaled up by a uniform ~1.335x factor for every lower-signature component (so proportions among
 # pulse/line/terminal-mark/total-width stay byte-identical to the original design), landing the
-# lower-signature total width at ~32.0% of canvas width - inside the requested ~30-34% range. Line
-# thickness is bumped beyond the uniform factor (2px -> 4px, a full 2x) specifically because a
-# 2px line at the 1280px reference canvas becomes sub-pixel and disappears under Telegram's own
-# downscaling - the one component this phase's own instructions called out as needing an
-# above-proportional increase to remain legible after real-world resizing, not merely detail loss.
-# The upper mark is scaled 1.5x (within the requested 1.35-1.6x range) for the same real-legibility
-# reason. `_SAFE_INSET_FRAC` is deliberately left unchanged - it governs the corner box's distance
-# from the canvas edge, not the box's own internal content size, and no mathematical necessity to
-# change it was found (Phase V2.10H §2's own inset calibration remains valid regardless of what is
-# drawn inside the box).
-_LOWER_TOTAL_WIDTH_FRAC = 410 / _CANVAS_W       # ~32.0% of canvas width (was 307/1280, ~24.0%)
-_LOWER_PULSE_W_FRAC = 48 / _CANVAS_W             # was 36/1280
-_LOWER_PULSE_H_FRAC = 45 / _CANVAS_H             # was 34/720
-_LOWER_LINE_THICKNESS_FRAC = 4 / _CANVAS_H       # was 2/720 - above-proportional, see comment above
-_LOWER_MARK_W_FRAC = 51 / _CANVAS_W              # was 38/1280
+# lower-signature total width at ~32.0% of canvas width.
+#
+# Phase V2.25: still too small on a real Telegram mobile feed once V2.17 shipped - the user's own
+# explicit target scaled every lower-signature component up again by a further uniform ~1.375x
+# from the V2.17 numbers (so proportions among pulse/line/terminal-mark/total-width remain
+# byte-identical to the original V2.10G design, exactly like the V2.17 rescale before it), landing
+# the lower-signature total width at ~44.0% of canvas width. Line thickness is again bumped beyond
+# the uniform factor (4px -> 6px, 1.5x) for the same downscaling-legibility reason V2.17 gave for
+# its own above-proportional line bump. The upper mark is scaled 1.375x (48px -> 66px). Unlike
+# V2.17, `_SAFE_INSET_FRAC` is ALSO increased this time (20px -> 24px) - the user's own explicit
+# V2.25 instruction, not a re-derivation of V2.10H §2's calibration; a materially larger overlay
+# footprint benefits from a proportionally larger clearance from the frame edge.
+#
+# IMPORTANT (Phase V2.25 Part D): `select_master_news_branding()` below computes the exact
+# geometry it scores for safety (`lower_component_w/h`, `upper_mark_w`) directly from these SAME
+# module-level fraction constants - there is no separate, duplicated "safety footprint" constant
+# anywhere in this module. Changing these values therefore changes the real rendered size AND the
+# safety-scored footprint together, atomically - there is no V2.17-era 32%-scale assumption left
+# behind anywhere else to update.
+_LOWER_TOTAL_WIDTH_FRAC = 563 / _CANVAS_W       # ~44.0% of canvas width (was 410/1280, ~32.0%)
+_LOWER_PULSE_W_FRAC = 66 / _CANVAS_W             # was 48/1280
+_LOWER_PULSE_H_FRAC = 62 / _CANVAS_H             # was 45/720
+_LOWER_LINE_THICKNESS_FRAC = 6 / _CANVAS_H       # was 4/720 - above-proportional, see comment above
+_LOWER_MARK_W_FRAC = 70 / _CANVAS_W              # was 51/1280
 
-# --- Locked MEDIUM upper-mark geometry (Phase V2.17: 1.5x rescale, see comment above) ---
-_UPPER_MARK_W_FRAC = 48 / _CANVAS_W              # was 32/1280
+# --- Locked MEDIUM upper-mark geometry (Phase V2.25: further 1.375x rescale, see comment above) ---
+_UPPER_MARK_W_FRAC = 66 / _CANVAS_W              # was 48/1280
 
-# Safe edge inset (Phase V2.10H §2): calibrated by rendering 16/20/24px at the 1280x720 reference
-# and visually inspecting the corner region at each - 16px left the pulse's own glow/anti-aliased
-# edge visually touching the frame boundary on a full-bleed photo; 20px cleared it with a small
-# but real margin; 24px added no further visible improvement over 20px. 20px is therefore the
-# smallest value that reliably prevents visual edge-touching - expressed as a fraction so it scales.
-_SAFE_INSET_FRAC = 20 / _CANVAS_W
+# Safe edge inset (Phase V2.10H §2 original calibration; Phase V2.25 explicit enlargement to match
+# the materially larger overlay footprint - see comment above).
+_SAFE_INSET_FRAC = 24 / _CANVAS_W                # was 20/1280
 
-_GAP_FRAC = 13 / _CANVAS_W  # clearance between the terminal NNJ mark and the pulse (was 10/1280,
-# scaled by the same ~1.335x factor as the other lower-signature components, Phase V2.17)
+_GAP_FRAC = 18 / _CANVAS_W  # clearance between the terminal NNJ mark and the pulse (was 13/1280,
+# scaled by the same ~1.375x factor as the other lower-signature components, Phase V2.25)
 
 # Pixel-occupancy safe-zone threshold (Phase V2.10A's own real-photo calibration, reused here
 # rather than re-derived from scratch: real safe corners on real photos measured edge_mean<=5.83;
@@ -155,6 +161,23 @@ _DETAIL_RISK_EDGE_VALUE_THRESHOLD = 50
 # measured 0%. 15% sits above the observed safe cluster with real margin, well below the observed
 # risky cluster.
 _DETAIL_RISK_MAX_PCT = 15.0
+
+# Phase V2.25 Part B: the explicit, exhaustive final-NEWS-image diagnostic vocabulary. Every real
+# NEWS send must record exactly one of these - `worker/content_cycle.py` is the only place that
+# assigns them (this module has no knowledge of Telegram delivery), but the vocabulary itself is
+# declared here, next to the branding decision it classifies, so both the single-photo path and
+# the media-group path (services/image_preview_notifier.py::build_rich_media_plan() output) use
+# the exact same four literal strings rather than each inventing their own ad hoc log field.
+NEWS_BRANDING_BRANDED = "BRANDED"
+NEWS_BRANDING_NO_OVERLAY_SAFETY = "NO_OVERLAY_SAFETY"
+NEWS_BRANDING_ORIGINAL_SOURCE_FAILURE = "ORIGINAL_SOURCE_BRANDING_FAILURE"
+# A real fourth state, distinct from the three the Phase V2.25 spec named: no candidate bytes were
+# ever available to hand to select_master_news_branding() at all (a cached Telegram file_id with
+# no independently-readable original, or no photo resolved for this draft in the first place) - it
+# would be inaccurate to call this either a safety rejection (safety never ran) or a branding
+# failure (branding was never attempted), so it gets its own explicit name rather than being
+# force-fit into one of the other three and silently misreported.
+NEWS_BRANDING_NO_SOURCE_BYTES = "NO_OVERLAY_NO_SOURCE_BYTES"
 
 
 class ComponentPlacement(str, Enum):
@@ -210,6 +233,15 @@ class MasterNewsBrandingDecision:
         if has_upper:
             return "upper_mark_only"
         return "no_overlay"
+
+    @property
+    def news_branding_status(self) -> str:
+        """Phase V2.25 Part B: the explicit BRANDED / NO_OVERLAY_SAFETY classification for a
+        successful `apply_master_news_branding()` call (i.e. one that did not raise) - the caller
+        is responsible for the two exception/no-bytes states this decision object cannot itself
+        represent (`NEWS_BRANDING_ORIGINAL_SOURCE_FAILURE` / `NEWS_BRANDING_NO_SOURCE_BYTES`),
+        since this object is only ever constructed when branding actually ran to completion."""
+        return NEWS_BRANDING_NO_OVERLAY_SAFETY if self.degradation_mode == "no_overlay" else NEWS_BRANDING_BRANDED
 
 
 def _region_box(canvas_size: tuple[int, int], component_w: int, component_h: int, placement: ComponentPlacement, inset: int) -> BoundingBox:

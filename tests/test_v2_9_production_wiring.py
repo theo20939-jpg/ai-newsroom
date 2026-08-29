@@ -20,7 +20,7 @@ import ast
 import hashlib
 from datetime import UTC, datetime, timezone
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -45,6 +45,7 @@ from tests.test_content_worker_cycle import (
     test_source,  # noqa: F401
 )
 from tests.test_editorial_delivery_mode import _v6_capability_registry
+from tests.test_router_media_integration import _v82_capability_registry
 from worker.content_cycle import run_content_cycle
 
 _REAL_CHAT_ID = -1004297182444
@@ -155,6 +156,32 @@ def _stored_candidate_with_cached_file_id(
     )
 
 
+def _stored_media_group_candidates(tmp_path, monkeypatch: pytest.MonkeyPatch, *, count: int) -> list[EditorialImageCandidate]:
+    """Phase V2.25 Part B: `count` distinct, independently-stored real candidates (distinct pixel
+    content, storage_key, candidate_id, rank, source_url) with no cached telegram_file_id - real
+    enough to drive `services.image_preview_notifier.build_rich_media_plan()`'s own real
+    `resolve_photo_input()` calls into an actual multi-item media group, and real enough for
+    `apply_master_news_branding()` to run on each one's own real bytes (not a fabricated/stubbed
+    result)."""
+    monkeypatch.setattr(settings, "image_storage_root", str(tmp_path))
+    monkeypatch.setattr(image_persistence, "_storage_singleton", None)
+    storage = LocalImageStorage(tmp_path)
+    candidates = []
+    for i in range(count):
+        data = _jpeg_bytes(1600 + i, 900)  # distinct dimensions -> distinct bytes -> distinct storage_key
+        sha = hashlib.sha256(data).hexdigest()
+        stored = storage.store_validated_image(data, sha256=sha, image_format="JPEG", max_bytes=10_000_000)
+        candidates.append(EditorialImageCandidate(
+            id=uuid4(), candidate_id=f"group-cand-{i}", rank=i + 1, relevance_score=90 - i, quality_score=90 - i,
+            discovery_method="og_image", source_relationship="original_article", relevance_reason="high overlap",
+            width=1600 + i, height=900, observed_mime="image/jpeg", image_format="JPEG",
+            storage_status="stored", storage_key=stored.storage_key, telegram_file_id=None,
+            editor_decision=None, source_url=f"https://example.com/group-img-{i}.jpg",
+            article_url="https://example.com/article", warnings=None, is_expired=False,
+        ))
+    return candidates
+
+
 def _valid_response(image_bytes: bytes | None = None) -> ImageGenerationResponse:
     return ImageGenerationResponse(
         image_bytes=image_bytes or _jpeg_bytes(1376, 768), mime_type="image/jpeg",
@@ -185,7 +212,10 @@ def test_master_news_overlay_director_is_the_production_branding_call() -> None:
     content_cycle.py, never reimplemented inline) - only WHICH director satisfies it has changed."""
     source_text = Path("worker/content_cycle.py").read_text(encoding="utf-8")
     assert "apply_master_news_branding" in source_text
-    assert "from services.nnj_master_news_overlay import apply_master_news_branding" in source_text
+    # Phase V2.25: the import grew to three names (the branding function plus the explicit
+    # diagnostic-status constants) and is therefore now parenthesized/multi-line.
+    assert "from services.nnj_master_news_overlay import (" in source_text
+    assert "apply_master_news_branding,\n)" in source_text
 
 
 def test_content_cycle_never_duplicates_placement_selection_logic() -> None:
@@ -566,3 +596,103 @@ async def test_cached_file_id_with_source_risk_still_brands_with_lower_signature
     assert len(branding_records) == 1
     assert branding_records[0].visual_path == "ORIGINAL_SOURCE"
     assert branding_records[0].lower_signature_disabled_reason is not None
+
+
+# ---------------------------------------------------------------------------
+# Phase V2.25 Part B: the real accidental bypass - a NEWS media-group (album) send previously
+# branded only media_group_items[0], leaving every OTHER photo in the group completely untouched
+# by apply_master_news_branding() with no exception, no safety rejection, and no diagnostic.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_all_photos_in_a_real_media_group_receive_master_news_branding(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch, tmp_path, caplog,
+) -> None:
+    """The real production gap this phase fixed: before Phase V2.25 Part B, only
+    media_group_items[0] was ever passed to apply_master_news_branding() - the second (and any
+    later) photo in a real NEWS media group shipped to Telegram completely unbranded, silently.
+    Two independently-stored real candidates, routed through the real is_v8 rich-media path
+    (build_rich_media_plan(), never stubbed), must BOTH produce their own real
+    master_news_branding_applied log record."""
+    _common_settings(monkeypatch)
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
+    settings.editorial_recomposition_mode = "off"
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v82_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_media_group.return_value = [MagicMock(message_id=300), MagicMock(message_id=301)]
+    candidates = _stored_media_group_candidates(tmp_path, monkeypatch, count=2)
+
+    with (
+        patch("worker.content_cycle._classify_event_for_router_treatment", new=AsyncMock(return_value=_standard_decision())),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=candidates)),
+        caplog.at_level("INFO"),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    assert result.notified == 1
+    fake_bot.send_media_group.assert_called_once()
+    _, kwargs = fake_bot.send_media_group.call_args
+    assert len(kwargs["media"]) == 2
+    # Both items sent to Telegram must be real branded bytes, never a bare unbranded resolution.
+    for media_item in kwargs["media"]:
+        assert isinstance(media_item.media, BufferedInputFile)
+
+    branding_records = [r for r in caplog.records if r.msg == "master_news_branding_applied"]
+    assert len(branding_records) == 2, (
+        "both media-group photos must independently reach apply_master_news_branding() - "
+        f"got {len(branding_records)}, proving the fix regressed if this is 1"
+    )
+    group_indices = sorted(getattr(r, "media_group_index", -1) for r in branding_records)
+    assert group_indices == [-1, 1]  # primary image carries no media_group_index; the second is index 1
+    for r in branding_records:
+        assert r.news_branding_status in ("BRANDED", "NO_OVERLAY_SAFETY")
+
+    # No silent-bypass diagnostic for either image - both were genuinely branded or safety-skipped.
+    no_source_records = [
+        r for r in caplog.records
+        if r.msg in ("brand_render_skipped", "brand_render_attempted")
+        and getattr(r, "news_branding_status", None) in ("NO_OVERLAY_NO_SOURCE_BYTES", "ORIGINAL_SOURCE_BRANDING_FAILURE")
+    ]
+    assert no_source_records == []
+
+
+@pytest.mark.asyncio
+async def test_master_news_branding_exception_falls_back_to_original_source_never_blocks_send(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch, tmp_path, caplog,
+) -> None:
+    """TEST 3 (Phase V2.25 spec): a real exception inside apply_master_news_branding() must never
+    block the send (spec §29's own fail-safe boundary, unchanged by this phase) - Telegram must
+    still receive the original (unbranded) source image, and the explicit diagnostic must record
+    ORIGINAL_SOURCE_BRANDING_FAILURE, never a silently-unlabeled skip."""
+    _common_settings(monkeypatch)
+    settings.editorial_recomposition_mode = "off"
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v6_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_photo.return_value.message_id = 111
+    candidate = _stored_candidate(tmp_path, monkeypatch)
+
+    with (
+        patch("worker.content_cycle._classify_event_for_router_treatment", new=AsyncMock(return_value=_standard_decision())),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[candidate])),
+        patch("worker.content_cycle.apply_master_news_branding", side_effect=RuntimeError("synthetic decode failure")),
+        caplog.at_level("INFO"),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    assert result.notified == 1
+    fake_bot.send_photo.assert_called_once()  # the send itself was never blocked
+
+    attempted_records = [r for r in caplog.records if r.msg == "brand_render_attempted"]
+    assert len(attempted_records) == 1
+    assert attempted_records[0].brand_applied is False
+    assert attempted_records[0].news_branding_status == "ORIGINAL_SOURCE_BRANDING_FAILURE"
+    assert "synthetic decode failure" in attempted_records[0].brand_skip_reason
+
+    # The bytes actually sent must be the original candidate's real bytes, not a crash artifact.
+    photo_arg = fake_bot.send_photo.call_args.kwargs["photo"]
+    assert isinstance(photo_arg, BufferedInputFile)
