@@ -1,0 +1,24 @@
+{
+  "version": "v2.20b",
+  "type": "data_visual_reference",
+  "white_template": "data_template_white.png",
+  "red_template": "data_template_red.png",
+  "production_usage": "reference_only",
+  "rules": {
+    "source_image_is_base": true,
+    "one_primary_stat": true,
+    "max_one_descriptor": true,
+    "one_bottom_pulse": true,
+    "one_nnj_logo": true,
+    "upper_nnj_mark": false,
+    "boxed_logo": false,
+    "pulse_tech_label": false,
+    "data_label": false,
+    "np_identifier": false,
+    "full_infographic_panel": false
+  },
+  "canonical_logo_assets": {
+    "white": "assets/brand/nnj_logo.svg",
+    "red": "assets/brand/nnj_logo_red.svg"
+  }
+}

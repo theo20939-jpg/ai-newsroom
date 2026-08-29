@@ -19,8 +19,16 @@ forensic finding, report §"NNJ official asset handling"). No SVG rasterizer is 
 An earlier version of this module attempted to "recolor" the PNG by remapping RGB channels to
 `_OFFICIAL_NNJ_RED` for a red-badge variant - caught by this module's own test suite as producing
 a corrupted flat-red blob (the recolor doesn't distinguish the badge's own red background from its
-white wordmark) and removed; exactly the "fake variant" the spec's own asset rules prohibit. There
-is therefore only ONE brand-mark placement in this module, never a separate white/red choice.
+white wordmark) and removed; exactly the "fake variant" the spec's own asset rules prohibit. NEWS/
+BREAKING/QUOTE/RECAP all still use `nnj_logo.png` strictly AS-IS via `_paste_logo()`, only ONE
+brand-mark placement, never a separate white/red choice - unchanged by the exception below.
+
+Phase V2.20A exception: DATA's own bottom-only pulse+logo signature needs a real adaptive white/
+red choice (the approved DATA template's own explicit requirement), which the pre-composited
+`nnj_logo.png` badge cannot provide. It reuses `services/nnj_master_news_mark.py::
+rasterize_nnj_mark()` instead - the same exact-path-geometry SVG rasterizer MASTER NEWS's own
+lower signature already uses (`assets/brand/nnj_logo.svg` white / `nnj_logo_red.svg` red,
+byte-identical geometry, differing only in fill) - never a redrawn/approximated/generated glyph.
 
 Typography: Pillow's own bundled scalable default font only (`ImageFont.load_default(size=...)`,
 Pillow >=10) - always available, no download, no font file shipped in output, no per-OS system
@@ -36,13 +44,36 @@ from __future__ import annotations
 
 import io
 import logging
+import math
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageStat
 
 from core.config import settings
+from services.nnj_master_news_mark import rasterize_nnj_mark
+from services.nnj_master_news_overlay import (
+    BoundingBox,
+    ComponentPlacement,
+    _CANVAS_H,
+    _CANVAS_W,
+    _EDGE_DENSITY_SAFE_THRESHOLD,
+    _DETAIL_RISK_MAX_PCT,
+    _GAP_FRAC,
+    _LOWER_LINE_THICKNESS_FRAC,
+    _LOWER_MARK_W_FRAC,
+    _LOWER_PULSE_H_FRAC,
+    _LOWER_PULSE_W_FRAC,
+    _SAFE_INSET_FRAC,
+    _SCORE_PAD_PX_FRAC,
+    _VISIBILITY_MIN_DISTANCE,
+    _draw_pulse,
+    _fit_photo_to_canvas,
+    _rects_intersect,
+    _region_box,
+    _score_region,
+)
 from services.presentation_director import BREAKING, DATA, NEWS, QUOTE, DataCandidate, QuoteCandidate
 
 logger = logging.getLogger(__name__)
@@ -238,24 +269,75 @@ def render_breaking_frame(source_image_bytes: bytes | None, *, category: str, ed
     return out.getvalue()
 
 
-# Phase V2.17: real production text-safety fix - the DATA card's `label` (a real Research-fact
-# fragment, up to 80 characters per services/presentation_director.py's own `label[:80]` cap) was
-# drawn with a single unbounded `draw.text()` call and no width check, so a real long Cyrillic
-# sentence ("За один месяц видеокарты GeForce RTX 50 ...") ran past the card's right edge in real
-# production output - `label[:80]` bounds character COUNT, not rendered pixel width, so it does
-# not by itself guarantee the text fits. `value`/`unit` are drawn large (up to 180pt/56pt) with the
-# same unbounded pattern - realistically always short (a regex-captured number+unit token), but
-# bounded here too per this phase's own explicit "check ALL dynamic text fields" instruction,
-# rather than assumed safe. `f"PULSE / {category}"` and `editorial_code` are NOT touched - both
-# come from small, fixed-shape, already-bounded domains (EventCategory's own short string values;
-# build_editorial_code()'s deterministic "NP-XXXX" format) with no realistic overflow path.
-_DATA_VALUE_FONT_MAX = 180
-_DATA_VALUE_FONT_MIN = 100
-_DATA_UNIT_FONT_MAX = 56
-_DATA_UNIT_FONT_MIN = 32
-_DATA_LABEL_FONT_MAX = 32
-_DATA_LABEL_FONT_MIN = 22
-_DATA_LABEL_MAX_LINES = 3
+# Phase V2.17: real production text-safety fix - see _fit_single_line()/_fit_wrapped_block() below,
+# still shared by render_quote_card() and (Phase V2.20) the new DATA stat block.
+
+# Phase V2.20: DATA visual system redesign - retires the standalone dark "infographic card" (the
+# old pulse-data-v1 v1: "PULSE / {category}" label, giant isolated number, boxed logo, NP-xxxx
+# code, full-frame dark panel) entirely. DATA now belongs to the SAME minimal visual family as
+# MASTER NEWS: the real source/editorial image stays the primary visual, and exactly ONE compact
+# stat block (a single fused "value + unit" line, e.g. "2,6 млн $"/"+20%" - never a giant number
+# with a small floating suffix - plus an optional short descriptor beneath it) is placed in a safe
+# corner. No "PULSE / {category}" label, no NP-xxxx code, no dark full-frame card anywhere in this
+# function - `category`/`editorial_code` are still accepted (dispatch-symmetry with NEWS/BREAKING/
+# QUOTE in render_branded_media()) but are never drawn here.
+#
+# Phase V2.20A - approved-template alignment: the approved DATA mockup's own branding is BOTTOM-
+# ONLY (one continuous pulse-line-then-NNJ signature, no separate upper mark at all) - a real,
+# deliberate difference from MASTER NEWS's own two-component (upper mark + lower signature)
+# contract. DATA therefore no longer calls apply_master_news_branding() (which always evaluates
+# and can place BOTH components) - that would necessarily risk introducing the forbidden upper
+# mark. Instead it reuses MASTER's own lower-level, already-tested primitives directly: safe-zone
+# scoring (`_score_region`/`_region_box`/`_rects_intersect`), the canvas-fit helper
+# (`_fit_photo_to_canvas`), the exact locked lower-signature geometry fractions
+# (`_LOWER_TOTAL_WIDTH_FRAC` etc.), the pulse-waveform drawer (`_draw_pulse`), and the canonical
+# SVG rasterizer (`rasterize_nnj_mark`) - restricted to the two BOTTOM corners only, never
+# escalating to an upper corner. MASTER NEWS's own `select_master_news_branding()`/
+# `apply_master_news_branding()` two-component composition is completely untouched by this.
+_DATA_BLOCK_WIDTH_FRAC = 0.30  # a compact corner accent (~30% of canvas width) - never a full-frame panel
+_DATA_BLOCK_MARGIN = 16
+_DATA_LINE_GAP = 10
+_DATA_STAT_FONT_MAX = 88
+_DATA_STAT_FONT_MIN = 48
+_DATA_LABEL_FONT_MAX = 26
+_DATA_LABEL_FONT_MIN = 18
+_DATA_LABEL_MAX_LINES = 2
+# Below this measured local contrast (ImageStat stddev - the same signal nnj_master_news_overlay
+# already computes for its own scoring, reused not reinvented), the source region is quiet enough
+# for direct on-image text (style A, spec's "clean source area"). At/above it, a compact
+# translucent backing sized to the text block only (style B/C, spec's "busy"/"extremely unsafe"
+# treatments - folded into one graduated backing here rather than a 3-way branch, since both call
+# for the same "backing behind the text only, never a large panel" shape) is added for readability.
+_DATA_BACKING_CONTRAST_THRESHOLD = 18.0
+# Approved template's own stated preference: "LEFT side when safe. Then: top-right / lower-right /
+# other safe region only when necessary" - left corners tried first, right corners only as fallback.
+_DATA_STAT_CANDIDATE_PLACEMENTS: tuple[ComponentPlacement, ...] = (
+    ComponentPlacement.UPPER_LEFT, ComponentPlacement.LOWER_LEFT,
+    ComponentPlacement.UPPER_RIGHT, ComponentPlacement.LOWER_RIGHT,
+)
+# Bottom-only, never upper (the approved template's own explicit "no upper NNJ mark" rule).
+# LOWER_RIGHT is the canonical/preferred arrangement - it is the only corner where reading the
+# frame left-to-right actually produces the approved mockup's own stated order ("pulse toward the
+# left portion of the line... NNJ sits at the right end"). LOWER_LEFT is kept only as a same-
+# established-pattern fallback (mirrors MASTER NEWS's own bottom-edge degradation order - glyph
+# never mirrored, only the mark-first-vs-mark-last arrangement flips) for when the bottom-right
+# region is unsafe, rather than dropping the brand signature outright on any bottom-right-busy
+# photo (a real case - the robot-vacuum fixture's own "9to5Google" bottom-right watermark).
+_DATA_SIGNATURE_CANDIDATE_PLACEMENTS: tuple[ComponentPlacement, ...] = (
+    ComponentPlacement.LOWER_RIGHT, ComponentPlacement.LOWER_LEFT,
+)
+# Phase V2.20C - approved-template alignment (real, measured mismatch found during the final
+# alignment audit against assets/brand/newsroom_visuals/v1/references/data/data_template_*.png):
+# the canonical reference PNG's own bottom pulse-then-NNJ line is NOT a short corner accent - it
+# spans ~82-93% of the frame width (measured directly on data_template_white.png: solid line
+# pixels run from x=125 to x=1432 on a 1600px-wide reference canvas, i.e. ~82% of the full canvas
+# / ~93% of the mockup's own "source image" card width) - a deliberately different, much longer
+# treatment than MASTER NEWS's own compact ~32%-width corner accent (_LOWER_TOTAL_WIDTH_FRAC,
+# still used AS-IS for MASTER NEWS itself, never changed). DATA gets its own width fraction here;
+# every other lower-signature geometry constant (pulse size, line thickness, mark width, gap) is
+# still reused UNCHANGED from nnj_master_news_overlay.py - only the total horizontal span (and
+# therefore the straight-line segment's own length) differs for DATA specifically.
+_DATA_SIGNATURE_TOTAL_WIDTH_FRAC = 0.85
 
 
 def _fit_single_line(
@@ -303,52 +385,253 @@ def _fit_wrapped_block(
     return lines, font, size
 
 
-def render_data_card(data_candidate: DataCandidate, *, category: str, editorial_code: str) -> bytes:
-    """Fully programmatic - text/numbers drawn deterministically from `data_candidate`'s own
-    already-verified fields (services/presentation_director.py's cross-verified evidence binding)
-    - never generative typography, never a value not already grounded upstream. Phase V2.17: every
-    dynamic text region now has a strict bounding box (see module comment above this function) -
-    no text may extend outside the card canvas."""
-    canvas = Image.new("RGB", (_CARD_WIDTH, _CARD_HEIGHT), _OFFICIAL_NNJ_BLACK)
-    draw = ImageDraw.Draw(canvas)
-    margin = 64
-    max_width = _CARD_WIDTH - margin * 2
+def _region_mean_rgb(photo: Image.Image, box: BoundingBox) -> tuple[float, float, float]:
+    """Same whole-region mean-color measurement nnj_master_news_overlay's own _score_region()
+    already computes internally for its own red-only visibility check - duplicated here (not
+    imported; it is a private local inside that function's body, not a separate helper) only to
+    get the mean color itself, needed here to choose BETWEEN white and red rather than test
+    visibility against red alone."""
+    x0, y0, x1, y1 = box
+    x0, y0 = max(0, x0), max(0, y0)
+    x1, y1 = min(photo.width, x1), min(photo.height, y1)
+    if x1 <= x0 or y1 <= y0:
+        return (0.0, 0.0, 0.0)
+    mean = ImageStat.Stat(photo.convert("RGB").crop((x0, y0, x1, y1))).mean
+    return (mean[0], mean[1], mean[2])
 
-    draw.text((margin, margin), f"PULSE / {category}", font=_font(28), fill=_OFFICIAL_NNJ_RED)
 
-    value_font, _value_size = _fit_single_line(
-        draw, data_candidate.value, font_max=_DATA_VALUE_FONT_MAX, font_min=_DATA_VALUE_FONT_MIN,
-        max_width=max_width,
+def _pick_adaptive_data_color(mean_rgb: tuple[float, float, float]) -> tuple[int, int, int] | None:
+    """Picks red on light backgrounds / white on dark backgrounds (spec's own adaptive rule),
+    reusing nnj_master_news_overlay's own _VISIBILITY_MIN_DISTANCE contrast gate - never a new
+    threshold. Falls back to the other color if the preferred one can't clear the gate; returns
+    None (caller must then treat this placement as unsafe for TEXT specifically, distinct from
+    unsafe for background content) only if neither color clears it."""
+    luminance = 0.299 * mean_rgb[0] + 0.587 * mean_rgb[1] + 0.114 * mean_rgb[2]
+    preferred = _OFFICIAL_NNJ_RED if luminance >= 128 else _OFFICIAL_NNJ_WHITE
+    fallback = _OFFICIAL_NNJ_WHITE if preferred == _OFFICIAL_NNJ_RED else _OFFICIAL_NNJ_RED
+    for color in (preferred, fallback):
+        if math.dist(mean_rgb, color) >= _VISIBILITY_MIN_DISTANCE:
+            return color
+    return None
+
+
+def _measure_data_stat_block(
+    draw: ImageDraw.ImageDraw, data_candidate: DataCandidate, *, max_width: int,
+) -> tuple[
+    str, ImageFont.FreeTypeFont | ImageFont.ImageFont, tuple[float, float, float, float],
+    list[str], ImageFont.FreeTypeFont | ImageFont.ImageFont | None, int, float,
+]:
+    """Fits the ONE primary stat line (value + unit fused, per the spec's own "2,6 млн $"/"+20%"-
+    style examples - never rendered as a giant number with a small floating suffix) and the
+    optional descriptor beneath it. Returns (primary_text, stat_font, stat_bbox, label_lines,
+    label_font, label_line_height, total_block_height)."""
+    unit = data_candidate.unit.strip()
+    primary_text = f"{data_candidate.value} {unit.upper()}".strip() if unit else data_candidate.value
+    stat_font, _size = _fit_single_line(
+        draw, primary_text, font_max=_DATA_STAT_FONT_MAX, font_min=_DATA_STAT_FONT_MIN, max_width=max_width,
     )
-    draw.text((margin, 180), data_candidate.value, font=value_font, fill=_OFFICIAL_NNJ_WHITE)
-    value_bbox = draw.textbbox((margin, 180), data_candidate.value, font=value_font)
-    unit_x = value_bbox[2] + 24
-    unit_text = data_candidate.unit.upper()
-    unit_font, _unit_size = _fit_single_line(
-        draw, unit_text, font_max=_DATA_UNIT_FONT_MAX, font_min=_DATA_UNIT_FONT_MIN,
-        max_width=max(1, _CARD_WIDTH - margin - unit_x),
-    )
-    draw.text((unit_x, 220), unit_text, font=unit_font, fill=_OFFICIAL_NNJ_RED)
+    stat_bbox = draw.textbbox((0, 0), primary_text, font=stat_font)
+    stat_height = stat_bbox[3] - stat_bbox[1]
 
+    label_lines: list[str] = []
+    label_font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
+    label_line_height = 0
     if data_candidate.label:
         label_lines, label_font, label_size = _fit_wrapped_block(
             draw, data_candidate.label, font_max=_DATA_LABEL_FONT_MAX, font_min=_DATA_LABEL_FONT_MIN,
             max_width=max_width, max_lines=_DATA_LABEL_MAX_LINES,
         )
-        line_height = label_size + 8
-        y = value_bbox[3] + 24
-        for line in label_lines:
-            draw.text((margin, y), line, font=label_font, fill=_OFFICIAL_NNJ_WHITE)
-            y += line_height
+        label_line_height = label_size + 6
 
-    _draw_pulse_line(draw, x=margin, y=_CARD_HEIGHT - 96, width=220, color=_OFFICIAL_NNJ_RED)
-    _draw_code_label(draw, x=margin, y=_CARD_HEIGHT - 56, text=editorial_code, color=_OFFICIAL_NNJ_WHITE, size=20)
+    total_height = stat_height + (_DATA_LINE_GAP + len(label_lines) * label_line_height if label_lines else 0)
+    return primary_text, stat_font, stat_bbox, label_lines, label_font, label_line_height, total_height
 
-    canvas_rgba = canvas.convert("RGBA")
-    _paste_logo(canvas_rgba, target_width=90, margin=margin)
+
+def _select_data_block_placement(
+    canvas: Image.Image, *, block_w: int, block_h: int, inset: int, pad: int, avoid_box: BoundingBox | None,
+) -> tuple[BoundingBox, tuple[int, int, int], bool] | None:
+    """Tries the four corners in the approved template's own stated preference - LEFT side first
+    (upper-left, then lower-left), right side only when necessary - reusing nnj_master_news_
+    overlay's OWN _score_region() edge-density/detail-risk safety gate unchanged: a corner unsafe
+    for the brand mark is unsafe for the stat block too, same real-pixel evidence, no separate
+    safety model invented. A candidate box that would overlap the bottom pulse/logo signature
+    (`avoid_box` - precise rectangle intersection, not a same-corner heuristic, since the two
+    components are different sizes) is skipped outright. Returns (box, text_color, needs_backing)
+    for the first corner that is content-safe, non-colliding, and clears the adaptive-color
+    visibility check, or None when no corner qualifies - the caller must then fail safe to
+    source+branding-only, never forcing the statistic onto the image (spec's own explicit
+    requirement)."""
+    canvas_w, canvas_h = canvas.size
+
+    for placement in _DATA_STAT_CANDIDATE_PLACEMENTS:
+        box = _region_box((canvas_w, canvas_h), block_w, block_h, placement, inset)
+        if avoid_box is not None and _rects_intersect(box, avoid_box):
+            continue
+        score_box = (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
+        edge_density, contrast, _red_visibility, detail_risk = _score_region(canvas, score_box, subject_bbox=None)
+        if edge_density >= _EDGE_DENSITY_SAFE_THRESHOLD or detail_risk >= _DETAIL_RISK_MAX_PCT:
+            continue
+        color = _pick_adaptive_data_color(_region_mean_rgb(canvas, box))
+        if color is None:
+            continue
+        return box, color, contrast >= _DATA_BACKING_CONTRAST_THRESHOLD
+    return None
+
+
+def _lower_signature_component_size(canvas_w: int, canvas_h: int) -> tuple[int, int]:
+    """DATA's own bottom-signature footprint - reuses MASTER NEWS's own mark-width/pulse-height
+    fraction constants unchanged, but uses DATA's own total-width fraction
+    (`_DATA_SIGNATURE_TOTAL_WIDTH_FRAC` - see its own comment for the measured-mismatch rationale),
+    not MASTER's compact `_LOWER_TOTAL_WIDTH_FRAC`. Shared by _select_data_signature()'s own
+    scoring box and render_data_card()'s post-hoc box recompute (for stat-block collision
+    avoidance)."""
+    lower_mark_w = max(1, round(_LOWER_MARK_W_FRAC * canvas_w))
+    lower_pulse_h = max(1, round(_LOWER_PULSE_H_FRAC * canvas_h))
+    total_w = max(10, round(_DATA_SIGNATURE_TOTAL_WIDTH_FRAC * canvas_w))
+    component_h = max(lower_pulse_h, rasterize_nnj_mark(target_width=lower_mark_w).height)
+    return total_w, component_h
+
+
+def _select_data_signature(
+    canvas: Image.Image, *, inset: int, pad: int,
+) -> tuple[ComponentPlacement, bool] | None:
+    """DATA's own bottom-only branding placement search - reuses nnj_master_news_overlay's own
+    _score_region() edge-density/detail-risk safety gate unchanged, restricted to the two BOTTOM
+    corners only (never upper - the approved template has no upper mark). Returns
+    (placement, is_red) for the first bottom corner that is both content-safe and color-safe, or
+    None if neither is - branding is then omitted entirely rather than forced onto unsafe content
+    or escalated to an upper corner."""
+    canvas_w, canvas_h = canvas.size
+    component_w, component_h = _lower_signature_component_size(canvas_w, canvas_h)
+
+    for placement in _DATA_SIGNATURE_CANDIDATE_PLACEMENTS:
+        box = _region_box((canvas_w, canvas_h), component_w, component_h, placement, inset)
+        score_box = (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
+        edge_density, _contrast, _red_visibility, detail_risk = _score_region(canvas, score_box, subject_bbox=None)
+        if edge_density >= _EDGE_DENSITY_SAFE_THRESHOLD or detail_risk >= _DETAIL_RISK_MAX_PCT:
+            continue
+        color = _pick_adaptive_data_color(_region_mean_rgb(canvas, box))
+        if color is None:
+            continue
+        return placement, color == _OFFICIAL_NNJ_RED
+    return None
+
+
+def _build_data_lower_signature_image(
+    canvas_size: tuple[int, int], placement: ComponentPlacement, inset: int, *, red: bool,
+) -> Image.Image:
+    """DATA's own bottom-only pulse+NNJ signature. Reuses nnj_master_news_overlay's own locked
+    MASTER_BALANCED lower-signature pulse/mark/gap/line-thickness fraction constants EXACTLY
+    (imported, never re-derived) - but the total horizontal span uses DATA's OWN
+    `_DATA_SIGNATURE_TOTAL_WIDTH_FRAC` (~85% of frame width), not MASTER's compact ~32%
+    `_LOWER_TOTAL_WIDTH_FRAC` - a real, measured difference confirmed against the canonical
+    reference PNG during the V2.20C alignment audit (see that constant's own comment). Adaptively
+    colored: MASTER's own lower signature is always red by its own locked contract (module
+    docstring); the separately approved DATA template requires white on a dark safe region / red
+    on a light one. Only ever called with LOWER_RIGHT/LOWER_LEFT - DATA has no upper mark and no
+    upper-corner escalation. The mark itself is `rasterize_nnj_mark()`'s real, unmodified canonical
+    SVG rasterization (`nnj_logo.svg` white / `nnj_logo_red.svg` red) - never redrawn,
+    approximated, or substituted with text."""
+    w, h = canvas_size
+    color = (*_OFFICIAL_NNJ_RED, 255) if red else (*_OFFICIAL_NNJ_WHITE, 255)
+    total_w = max(10, round(_DATA_SIGNATURE_TOTAL_WIDTH_FRAC * w))
+    pulse_w, pulse_h = max(1, round(_LOWER_PULSE_W_FRAC * w)), max(1, round(_LOWER_PULSE_H_FRAC * h))
+    line_thick = max(1, round(_LOWER_LINE_THICKNESS_FRAC * h))
+    mark_w = max(1, round(_LOWER_MARK_W_FRAC * w))
+    gap = max(1, round(_GAP_FRAC * w))
+    mark = rasterize_nnj_mark(target_width=mark_w, red=red)
+    line_len = max(10, total_w - pulse_w - mark.width - gap)
+
+    canvas = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(canvas)
+    y = h - inset
+
+    if placement is ComponentPlacement.LOWER_RIGHT:
+        mark_x = w - inset - mark.width
+        mark_y = y - mark.height // 2
+        pulse_end_x = mark_x - gap
+        pulse_start_x = pulse_end_x - pulse_w
+        line_end_x = pulse_start_x
+        line_start_x = line_end_x - line_len
+        draw.line([(line_start_x, y), (line_end_x, y)], fill=color, width=line_thick)
+        _draw_pulse(draw, pulse_start_x, y, pulse_w, pulse_h, color, line_thick)
+        canvas.alpha_composite(mark, (mark_x, mark_y))
+    else:  # LOWER_LEFT - built from primitives, NNJ never mirrored (same rule as MASTER NEWS)
+        mark_x = inset
+        mark_y = y - mark.height // 2
+        pulse_start_x = mark_x + mark.width + gap
+        line_start_x = pulse_start_x + pulse_w
+        line_end_x = line_start_x + line_len
+        canvas.alpha_composite(mark, (mark_x, mark_y))
+        _draw_pulse(draw, pulse_start_x, y, pulse_w, pulse_h, color, line_thick)
+        draw.line([(line_start_x, y), (line_end_x, y)], fill=color, width=line_thick)
+
+    return canvas
+
+
+def render_data_card(
+    data_candidate: DataCandidate, *, category: str, editorial_code: str, source_image_bytes: bytes,
+) -> bytes:
+    """Phase V2.20A - see the module comment above this function's constants for the full
+    approved-template rationale. The source/editorial image is composited directly (via the
+    shared `_fit_photo_to_canvas()` helper - NOT apply_master_news_branding(), which would
+    necessarily risk introducing MASTER's own separate upper mark, forbidden by the approved DATA
+    template). The ONLY branding is one bottom-only pulse+NNJ signature (adaptive red/white,
+    `_select_data_signature()`); exactly one compact stat block is then added in whichever safe,
+    non-colliding corner `_select_data_block_placement()` finds - or none at all, if no corner
+    qualifies, in which case the source+signature-only image is returned as-is (never a forced or
+    clipped overlay). `category`/`editorial_code` are accepted for dispatch-symmetry with the
+    other render_* functions but are not drawn anywhere here."""
+    photo = Image.open(io.BytesIO(source_image_bytes)).convert("RGBA")
+    canvas = _fit_photo_to_canvas(photo, (_CANVAS_W, _CANVAS_H))
+    canvas_w, canvas_h = canvas.size
+    draw = ImageDraw.Draw(canvas)
+
+    inset = max(1, round(_SAFE_INSET_FRAC * canvas_w))
+    pad = max(1, round(_SCORE_PAD_PX_FRAC * canvas_w))
+
+    signature_box: BoundingBox | None = None
+    signature_result = _select_data_signature(canvas, inset=inset, pad=pad)
+    if signature_result is not None:
+        signature_placement, signature_red = signature_result
+        signature_image = _build_data_lower_signature_image(canvas.size, signature_placement, inset, red=signature_red)
+        canvas.alpha_composite(signature_image)
+        signature_w, signature_h = _lower_signature_component_size(canvas_w, canvas_h)
+        signature_box = _region_box((canvas_w, canvas_h), signature_w, signature_h, signature_placement, inset)
+
+    block_w = max(160, round(_DATA_BLOCK_WIDTH_FRAC * canvas_w))
+    inner_max_width = max(1, block_w - _DATA_BLOCK_MARGIN * 2)
+    primary_text, stat_font, stat_bbox, label_lines, label_font, label_line_height, text_height = (
+        _measure_data_stat_block(draw, data_candidate, max_width=inner_max_width)
+    )
+    block_h = round(text_height) + _DATA_BLOCK_MARGIN * 2
+
+    placement_result = _select_data_block_placement(
+        canvas, block_w=block_w, block_h=block_h, inset=inset, pad=pad, avoid_box=signature_box,
+    )
+
+    if placement_result is not None:
+        box, color, needs_backing = placement_result
+        x0, y0, _x1, _y1 = box
+        text_x, text_y = x0 + _DATA_BLOCK_MARGIN, y0 + _DATA_BLOCK_MARGIN
+
+        if needs_backing:
+            backing_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+            backing_draw = ImageDraw.Draw(backing_layer)
+            backing_fill = (0, 0, 0, 140) if color == _OFFICIAL_NNJ_WHITE else (255, 255, 255, 150)
+            backing_draw.rounded_rectangle(list(box), radius=10, fill=backing_fill)
+            canvas = Image.alpha_composite(canvas, backing_layer)
+            draw = ImageDraw.Draw(canvas)
+
+        draw.text((text_x, text_y - stat_bbox[1]), primary_text, font=stat_font, fill=color)
+        if label_lines:
+            y = text_y - stat_bbox[1] + (stat_bbox[3] - stat_bbox[1]) + _DATA_LINE_GAP
+            for line in label_lines:
+                draw.text((text_x, y), line, font=label_font, fill=color)
+                y += label_line_height
 
     out = io.BytesIO()
-    canvas_rgba.convert("RGB").save(out, format="JPEG", quality=92)
+    canvas.convert("RGB").save(out, format="JPEG", quality=95)
     return out.getvalue()
 
 
@@ -439,7 +722,17 @@ def render_branded_media(
         elif presentation_type == DATA:
             if data_candidate is None:
                 raise ValueError("DATA presentation requested with no data_candidate")
-            image_bytes = render_data_card(data_candidate, category=category, editorial_code=editorial_code)
+            if source_image_bytes is None:
+                # Phase V2.20: DATA no longer has a source-photo-free synthetic card form - the
+                # source image is now the primary visual, so a missing one is a genuine fail-safe
+                # case (never renders a dark full-frame fallback card). This existing dispatch's
+                # own unmodified failure path already demotes to ordinary NEWS delivery at the
+                # caller (worker/content_cycle.py) - no new fallback logic needed here.
+                raise ValueError("DATA presentation requested with no source_image_bytes")
+            image_bytes = render_data_card(
+                data_candidate, category=category, editorial_code=editorial_code,
+                source_image_bytes=source_image_bytes,
+            )
         elif presentation_type == QUOTE:
             if quote_candidate is None:
                 raise ValueError("QUOTE presentation requested with no quote_candidate")
