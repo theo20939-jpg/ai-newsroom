@@ -65,6 +65,7 @@ from services.nnj_master_news_overlay import (
     _LOWER_MARK_W_FRAC,
     _LOWER_PULSE_H_FRAC,
     _LOWER_PULSE_W_FRAC,
+    _LOWER_TOTAL_WIDTH_FRAC,
     _SAFE_INSET_FRAC,
     _SCORE_PAD_PX_FRAC,
     _VISIBILITY_MIN_DISTANCE,
@@ -337,7 +338,24 @@ _DATA_SIGNATURE_CANDIDATE_PLACEMENTS: tuple[ComponentPlacement, ...] = (
 # every other lower-signature geometry constant (pulse size, line thickness, mark width, gap) is
 # still reused UNCHANGED from nnj_master_news_overlay.py - only the total horizontal span (and
 # therefore the straight-line segment's own length) differs for DATA specifically.
-_DATA_SIGNATURE_TOTAL_WIDTH_FRAC = 0.85
+_DATA_SIGNATURE_FULL_WIDTH_FRAC = 0.85
+
+# Phase V2.20D - real regression found in V2.20C's own preview evidence: scoring the ENTIRE
+# ~85%-wide signature footprint as one coarse rectangle made the edge-density/detail-risk gate
+# effectively require the whole bottom strip to be quiet - 4 of 6 real preview fixtures lost the
+# signature entirely, even though only a thin 2-4px line actually occupies most of that width. Fix
+# is geometry-aware, not a threshold change: the mark, the pulse, and the connecting line are each
+# scored against their OWN real rendered footprint (see _data_signature_geometry()) - never one
+# tall box for a thin horizontal line. Four-tier graceful degradation (see _select_data_signature()
+# for the full search): FULL (approved ~85% width) -> SHORTENED (line trimmed from its own outer
+# end, away from the mark, until its own narrow band clears) -> COMPACT (MASTER NEWS's own already-
+# approved short accent width, `_LOWER_TOTAL_WIDTH_FRAC`, reused unchanged rather than inventing a
+# third fraction) -> omitted only if even the compact tier's mark+pulse+line all fail. The mark and
+# pulse footprints are identical across every tier and must pass at EVERY tier - only the
+# connecting line's length is ever degraded, matching this phase's own explicit "the mark is the
+# highest-priority protected branding component" instruction.
+_DATA_SIGNATURE_COMPACT_WIDTH_FRAC = _LOWER_TOTAL_WIDTH_FRAC
+_DATA_SIGNATURE_SHORTEN_STEPS = 5  # intermediate line lengths tried between the full and compact tiers
 
 
 def _fit_single_line(
@@ -478,93 +496,208 @@ def _select_data_block_placement(
     return None
 
 
-def _lower_signature_component_size(canvas_w: int, canvas_h: int) -> tuple[int, int]:
-    """DATA's own bottom-signature footprint - reuses MASTER NEWS's own mark-width/pulse-height
-    fraction constants unchanged, but uses DATA's own total-width fraction
-    (`_DATA_SIGNATURE_TOTAL_WIDTH_FRAC` - see its own comment for the measured-mismatch rationale),
-    not MASTER's compact `_LOWER_TOTAL_WIDTH_FRAC`. Shared by _select_data_signature()'s own
-    scoring box and render_data_card()'s post-hoc box recompute (for stat-block collision
-    avoidance)."""
-    lower_mark_w = max(1, round(_LOWER_MARK_W_FRAC * canvas_w))
-    lower_pulse_h = max(1, round(_LOWER_PULSE_H_FRAC * canvas_h))
-    total_w = max(10, round(_DATA_SIGNATURE_TOTAL_WIDTH_FRAC * canvas_w))
-    component_h = max(lower_pulse_h, rasterize_nnj_mark(target_width=lower_mark_w).height)
-    return total_w, component_h
+@dataclass(frozen=True)
+class DataSignaturePlan:
+    placement: ComponentPlacement
+    red: bool
+    line_len: int
+    tier: str  # "full" | "shortened" | "compact"
 
 
-def _select_data_signature(
-    canvas: Image.Image, *, inset: int, pad: int,
-) -> tuple[ComponentPlacement, bool] | None:
-    """DATA's own bottom-only branding placement search - reuses nnj_master_news_overlay's own
-    _score_region() edge-density/detail-risk safety gate unchanged, restricted to the two BOTTOM
-    corners only (never upper - the approved template has no upper mark). Returns
-    (placement, is_red) for the first bottom corner that is both content-safe and color-safe, or
-    None if neither is - branding is then omitted entirely rather than forced onto unsafe content
-    or escalated to an upper corner."""
+def _data_signature_line_length(canvas_w: int, width_frac: float) -> int:
+    """The connecting-line length implied by a given total-signature-width fraction - pulse/mark/
+    gap sizes are identical across every tier (imported MASTER fractions, unchanged); only the
+    line itself grows or shrinks between tiers."""
+    total_w = max(10, round(width_frac * canvas_w))
+    pulse_w = max(1, round(_LOWER_PULSE_W_FRAC * canvas_w))
+    mark_w = max(1, round(_LOWER_MARK_W_FRAC * canvas_w))
+    gap = max(1, round(_GAP_FRAC * canvas_w))
+    return max(10, total_w - pulse_w - mark_w - gap)
+
+
+def _data_signature_length_candidates(full_len: int, compact_len: int) -> list[tuple[int, str]]:
+    """FULL -> up to _DATA_SIGNATURE_SHORTEN_STEPS evenly-spaced intermediate SHORTENED lengths ->
+    COMPACT, longest first. Degrades only the connecting line's own length - never the mark or the
+    pulse - matching the phase's required FULL/SHORTENED/COMPACT/NONE fallback order exactly."""
+    candidates: list[tuple[int, str]] = [(full_len, "full")]
+    if full_len > compact_len:
+        step = (full_len - compact_len) / (_DATA_SIGNATURE_SHORTEN_STEPS + 1)
+        for i in range(1, _DATA_SIGNATURE_SHORTEN_STEPS + 1):
+            length = round(full_len - step * i)
+            if compact_len < length < full_len:
+                candidates.append((length, "shortened"))
+    candidates.append((compact_len, "compact"))
+    return candidates
+
+
+def _data_signature_geometry(
+    canvas_size: tuple[int, int], placement: ComponentPlacement, inset: int, line_len: int,
+) -> tuple[BoundingBox, BoundingBox, BoundingBox]:
+    """(mark_box, pulse_box, line_box) for one DATA bottom-signature placement + connecting-line
+    length - the SINGLE SOURCE OF TRUTH both the safety scorer (_select_data_signature()) and the
+    real compositor (_build_data_lower_signature_image()) use, so a scored box can never silently
+    drift from a drawn one. Phase V2.20D's own fix for the V2.20C regression: `line_box` is a
+    NARROW horizontal band matching only the line's own rendered stroke (+ a small anti-aliasing
+    margin) - never a tall rectangle spanning the mark's full height for a 2-4px line. `mark_box`/
+    `pulse_box` do not depend on `line_len` at all - only the line's own extent does."""
+    w, h = canvas_size
+    pulse_w = max(1, round(_LOWER_PULSE_W_FRAC * w))
+    pulse_h = max(1, round(_LOWER_PULSE_H_FRAC * h))
+    line_thick = max(1, round(_LOWER_LINE_THICKNESS_FRAC * h))
+    mark_w = max(1, round(_LOWER_MARK_W_FRAC * w))
+    gap = max(1, round(_GAP_FRAC * w))
+    mark_h = rasterize_nnj_mark(target_width=mark_w).height  # identical for red/white (same SVG geometry)
+    y = h - inset
+
+    if placement is ComponentPlacement.LOWER_RIGHT:
+        mark_x0 = w - inset - mark_w
+        pulse_end_x = mark_x0 - gap
+        pulse_x0 = pulse_end_x - pulse_w
+        line_end_x = pulse_x0
+        line_x0 = line_end_x - line_len
+    else:  # LOWER_LEFT - mark unmirrored, only the mark-first-vs-mark-last order flips
+        mark_x0 = inset
+        pulse_x0 = mark_x0 + mark_w + gap
+        line_x0 = pulse_x0 + pulse_w
+        line_end_x = line_x0 + line_len
+
+    mark_y0 = y - mark_h // 2
+    mark_box = (mark_x0, mark_y0, mark_x0 + mark_w, mark_y0 + mark_h)
+    pulse_y0 = y - pulse_h // 2
+    pulse_box = (pulse_x0, pulse_y0, pulse_x0 + pulse_w, pulse_y0 + pulse_h)
+    line_margin = max(2, line_thick)
+    line_x_min, line_x_max = min(line_x0, line_end_x), max(line_x0, line_end_x)
+    line_box = (line_x_min, y - line_margin, line_x_max, y + line_margin)
+    return mark_box, pulse_box, line_box
+
+
+def _score_box_safe(canvas: Image.Image, box: BoundingBox, *, pad: int) -> bool:
+    """True iff `box` (padded by `pad` for a statistically meaningful edge-density sample - the
+    same padding nnj_master_news_overlay.py's own scoring already uses) clears the shared edge-
+    density/detail-risk safety gate. Content-safety only; color/visibility is a separate check."""
+    padded = (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
+    edge_density, _contrast, _visibility, detail_risk = _score_region(canvas, padded, subject_bbox=None)
+    return edge_density < _EDGE_DENSITY_SAFE_THRESHOLD and detail_risk < _DETAIL_RISK_MAX_PCT
+
+
+def _data_signature_anchor_box(mark_box: BoundingBox, pulse_box: BoundingBox) -> BoundingBox:
+    """The mark+pulse union - see _select_data_signature()'s own docstring for why these two are
+    scored TOGETHER, not as two fully separate tiny boxes."""
+    return (
+        min(mark_box[0], pulse_box[0]), min(mark_box[1], pulse_box[1]),
+        max(mark_box[2], pulse_box[2]), max(mark_box[3], pulse_box[3]),
+    )
+
+
+def _select_data_signature(canvas: Image.Image, *, inset: int, pad: int) -> DataSignaturePlan | None:
+    """Geometry-aware, four-tier graceful-degradation search for DATA's bottom-only branding
+    (Phase V2.20D - see _DATA_SIGNATURE_COMPACT_WIDTH_FRAC's own comment for the V2.20C coarse-
+    rectangle regression this replaces). Restricted to the two BOTTOM corners only (never upper -
+    the approved template has no upper mark).
+
+    Step 1: for each bottom corner, score the mark+pulse "anchor" (their union box - see
+    _data_signature_anchor_box()) as ONE region, plus the adaptive color at the mark. Corners that
+    fail either check are dropped entirely - this whole anchor is the highest-priority protected
+    branding footprint, never degraded around, never split further.
+
+    IMPORTANT deviation from a naive fully-independent mark/pulse split, found empirically during
+    real-photo validation, not a design preference: nnj_master_news_overlay.py's shared
+    _score_region() (reused unmodified, per this phase's own explicit instruction not to touch
+    MASTER NEWS) always divides whatever box it is given into a fixed 4x2 sub-patch grid for its
+    own worst-case scoring (Phase V2.10I). A box as small as the mark alone (~51x20px at a 1280-
+    wide canvas) or the pulse alone (~48x45px) produces patches only ~12px across - far finer than
+    that grid was ever calibrated for (MASTER's own combined lower-signature box, ~307-410px wide,
+    produces ~77-100px patches). Confirmed directly against a real fixture (assets/brand/
+    newsroom_visuals/v2_10a_overlay_fix/honor_camera_source.jpg): scoring mark and pulse as two
+    separate boxes there FAILED at both bottom corners (edge_density 8-18, over the 8.0 threshold)
+    even though MASTER's own real, unmodified select_master_news_branding() scores the exact same
+    pixels as one combined LOWER_LEFT box and PASSES (edge_density 6.79) - i.e. a naive full split
+    would have made real-photo coverage WORSE than the V2.20C regression this phase exists to fix,
+    the opposite of its own explicit goal. The mark and pulse sit immediately adjacent (only the
+    small `_GAP_FRAC` gap between them) and always move together at the same corner, so scoring
+    their union is not a loosening of protection - it is the same real pixels MASTER's own already-
+    trusted combined-box calibration was built for. The LINE below remains scored completely
+    separately as its own narrow band - THAT is the literal fix this phase asked for: the thin
+    connecting line no longer drags the mark+pulse anchor into one 85%-wide coarse rectangle, and
+    conversely the anchor's own real calibration scale is preserved instead of over-fragmenting it.
+
+    Step 2: for corners whose anchor passed, try line lengths longest-first (FULL -> SHORTENED ->
+    COMPACT, `_data_signature_length_candidates()`), LOWER_RIGHT before LOWER_LEFT at each length -
+    "prefer the orientation whose actual geometry is safer" while never settling for a shorter
+    line at the canonical corner when a longer one is available at the fallback corner. Returns the
+    first (placement, length) whose own narrow line band clears the gate.
+
+    Returns None only when every bottom corner's anchor (or, for corners whose anchor passes, even
+    the compact-tier line) fails - never an upper-corner escalation, never a forced/distorted mark."""
     canvas_w, canvas_h = canvas.size
-    component_w, component_h = _lower_signature_component_size(canvas_w, canvas_h)
+    full_len = _data_signature_line_length(canvas_w, _DATA_SIGNATURE_FULL_WIDTH_FRAC)
+    compact_len = _data_signature_line_length(canvas_w, _DATA_SIGNATURE_COMPACT_WIDTH_FRAC)
 
+    anchor_color: dict[ComponentPlacement, tuple[int, int, int]] = {}
     for placement in _DATA_SIGNATURE_CANDIDATE_PLACEMENTS:
-        box = _region_box((canvas_w, canvas_h), component_w, component_h, placement, inset)
-        score_box = (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
-        edge_density, _contrast, _red_visibility, detail_risk = _score_region(canvas, score_box, subject_bbox=None)
-        if edge_density >= _EDGE_DENSITY_SAFE_THRESHOLD or detail_risk >= _DETAIL_RISK_MAX_PCT:
+        mark_box, pulse_box, _line_box = _data_signature_geometry(canvas.size, placement, inset, full_len)
+        anchor_box = _data_signature_anchor_box(mark_box, pulse_box)
+        if not _score_box_safe(canvas, anchor_box, pad=pad):
             continue
-        color = _pick_adaptive_data_color(_region_mean_rgb(canvas, box))
+        color = _pick_adaptive_data_color(_region_mean_rgb(canvas, mark_box))
         if color is None:
             continue
-        return placement, color == _OFFICIAL_NNJ_RED
+        anchor_color[placement] = color
+
+    if not anchor_color:
+        return None
+
+    for length, tier in _data_signature_length_candidates(full_len, compact_len):
+        for placement in _DATA_SIGNATURE_CANDIDATE_PLACEMENTS:
+            if placement not in anchor_color:
+                continue
+            _mark_box, _pulse_box, line_box = _data_signature_geometry(canvas.size, placement, inset, length)
+            if _score_box_safe(canvas, line_box, pad=pad):
+                return DataSignaturePlan(
+                    placement=placement, red=anchor_color[placement] == _OFFICIAL_NNJ_RED,
+                    line_len=length, tier=tier,
+                )
     return None
 
 
 def _build_data_lower_signature_image(
-    canvas_size: tuple[int, int], placement: ComponentPlacement, inset: int, *, red: bool,
+    canvas_size: tuple[int, int], placement: ComponentPlacement, inset: int, *, red: bool, line_len: int,
 ) -> Image.Image:
     """DATA's own bottom-only pulse+NNJ signature. Reuses nnj_master_news_overlay's own locked
-    MASTER_BALANCED lower-signature pulse/mark/gap/line-thickness fraction constants EXACTLY
-    (imported, never re-derived) - but the total horizontal span uses DATA's OWN
-    `_DATA_SIGNATURE_TOTAL_WIDTH_FRAC` (~85% of frame width), not MASTER's compact ~32%
-    `_LOWER_TOTAL_WIDTH_FRAC` - a real, measured difference confirmed against the canonical
-    reference PNG during the V2.20C alignment audit (see that constant's own comment). Adaptively
-    colored: MASTER's own lower signature is always red by its own locked contract (module
-    docstring); the separately approved DATA template requires white on a dark safe region / red
-    on a light one. Only ever called with LOWER_RIGHT/LOWER_LEFT - DATA has no upper mark and no
-    upper-corner escalation. The mark itself is `rasterize_nnj_mark()`'s real, unmodified canonical
-    SVG rasterization (`nnj_logo.svg` white / `nnj_logo_red.svg` red) - never redrawn,
-    approximated, or substituted with text."""
+    MASTER_BALANCED pulse/mark/gap/line-thickness fraction constants EXACTLY (imported, never re-
+    derived) via `_data_signature_geometry()` - the exact same box math `_select_data_signature()`
+    just scored, so what gets drawn can never silently drift from what was verified safe.
+    `line_len` is supplied by the caller's own tier search (full/shortened/compact) - this function
+    has no opinion about which tier it is. Adaptively colored: MASTER's own lower signature is
+    always red by its own locked contract (module docstring); the separately approved DATA
+    template requires white on a dark safe region / red on a light one. Only ever called with
+    LOWER_RIGHT/LOWER_LEFT - DATA has no upper mark and no upper-corner escalation. The mark itself
+    is `rasterize_nnj_mark()`'s real, unmodified canonical SVG rasterization (`nnj_logo.svg` white /
+    `nnj_logo_red.svg` red) - never redrawn, approximated, stretched, or substituted with text."""
     w, h = canvas_size
     color = (*_OFFICIAL_NNJ_RED, 255) if red else (*_OFFICIAL_NNJ_WHITE, 255)
-    total_w = max(10, round(_DATA_SIGNATURE_TOTAL_WIDTH_FRAC * w))
     pulse_w, pulse_h = max(1, round(_LOWER_PULSE_W_FRAC * w)), max(1, round(_LOWER_PULSE_H_FRAC * h))
     line_thick = max(1, round(_LOWER_LINE_THICKNESS_FRAC * h))
     mark_w = max(1, round(_LOWER_MARK_W_FRAC * w))
-    gap = max(1, round(_GAP_FRAC * w))
     mark = rasterize_nnj_mark(target_width=mark_w, red=red)
-    line_len = max(10, total_w - pulse_w - mark.width - gap)
+
+    mark_box, pulse_box, line_box = _data_signature_geometry(canvas_size, placement, inset, line_len)
+    mark_x, mark_y = mark_box[0], mark_box[1]
+    pulse_x0 = pulse_box[0]
+    y = h - inset
+    line_x0, line_x1 = line_box[0], line_box[2]
 
     canvas = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(canvas)
-    y = h - inset
 
     if placement is ComponentPlacement.LOWER_RIGHT:
-        mark_x = w - inset - mark.width
-        mark_y = y - mark.height // 2
-        pulse_end_x = mark_x - gap
-        pulse_start_x = pulse_end_x - pulse_w
-        line_end_x = pulse_start_x
-        line_start_x = line_end_x - line_len
-        draw.line([(line_start_x, y), (line_end_x, y)], fill=color, width=line_thick)
-        _draw_pulse(draw, pulse_start_x, y, pulse_w, pulse_h, color, line_thick)
+        draw.line([(line_x0, y), (line_x1, y)], fill=color, width=line_thick)
+        _draw_pulse(draw, pulse_x0, y, pulse_w, pulse_h, color, line_thick)
         canvas.alpha_composite(mark, (mark_x, mark_y))
     else:  # LOWER_LEFT - built from primitives, NNJ never mirrored (same rule as MASTER NEWS)
-        mark_x = inset
-        mark_y = y - mark.height // 2
-        pulse_start_x = mark_x + mark.width + gap
-        line_start_x = pulse_start_x + pulse_w
-        line_end_x = line_start_x + line_len
         canvas.alpha_composite(mark, (mark_x, mark_y))
-        _draw_pulse(draw, pulse_start_x, y, pulse_w, pulse_h, color, line_thick)
-        draw.line([(line_start_x, y), (line_end_x, y)], fill=color, width=line_thick)
+        _draw_pulse(draw, pulse_x0, y, pulse_w, pulse_h, color, line_thick)
+        draw.line([(line_x0, y), (line_x1, y)], fill=color, width=line_thick)
 
     return canvas
 
@@ -591,13 +724,21 @@ def render_data_card(
     pad = max(1, round(_SCORE_PAD_PX_FRAC * canvas_w))
 
     signature_box: BoundingBox | None = None
-    signature_result = _select_data_signature(canvas, inset=inset, pad=pad)
-    if signature_result is not None:
-        signature_placement, signature_red = signature_result
-        signature_image = _build_data_lower_signature_image(canvas.size, signature_placement, inset, red=signature_red)
+    signature_plan = _select_data_signature(canvas, inset=inset, pad=pad)
+    if signature_plan is not None:
+        signature_image = _build_data_lower_signature_image(
+            canvas.size, signature_plan.placement, inset, red=signature_plan.red, line_len=signature_plan.line_len,
+        )
         canvas.alpha_composite(signature_image)
-        signature_w, signature_h = _lower_signature_component_size(canvas_w, canvas_h)
-        signature_box = _region_box((canvas_w, canvas_h), signature_w, signature_h, signature_placement, inset)
+        # Tight union of the mark/pulse/line's own REAL drawn boxes (not one coarse rectangle) -
+        # the stat block only needs to avoid what's actually occupied, at whatever tier was used.
+        mark_box, pulse_box, line_box = _data_signature_geometry(
+            canvas.size, signature_plan.placement, inset, signature_plan.line_len,
+        )
+        signature_box = (
+            min(mark_box[0], pulse_box[0], line_box[0]), min(mark_box[1], pulse_box[1], line_box[1]),
+            max(mark_box[2], pulse_box[2], line_box[2]), max(mark_box[3], pulse_box[3], line_box[3]),
+        )
 
     block_w = max(160, round(_DATA_BLOCK_WIDTH_FRAC * canvas_w))
     inner_max_width = max(1, block_w - _DATA_BLOCK_MARGIN * 2)

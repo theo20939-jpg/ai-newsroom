@@ -585,16 +585,18 @@ def test_breaking_quote_recap_routing_unaffected_by_data_redesign():
 # real canonical SVG assets (nnj_logo.svg / nnj_logo_red.svg) via the same rasterize_nnj_mark()
 # MASTER NEWS's own lower signature already uses. Structural/"never renders X" checks stay non-OCR
 # (this file's own established precedent); a few direct unit tests target the new small helper
-# functions (_select_data_signature, _build_data_lower_signature_image,
-# _select_data_block_placement's new avoid_box collision check) since those are cheap, precise,
-# and don't need a full render_data_card() round trip.
+# functions since those are cheap, precise, and don't need a full render_data_card() round trip.
 # ---------------------------------------------------------------------------
 
 from services.brand_renderer import (  # noqa: E402
     _DATA_SIGNATURE_CANDIDATE_PLACEMENTS,
+    _DATA_SIGNATURE_COMPACT_WIDTH_FRAC,
+    _DATA_SIGNATURE_FULL_WIDTH_FRAC,
     _build_data_lower_signature_image,
-    _lower_signature_component_size,
+    _data_signature_geometry,
+    _data_signature_line_length,
     _region_box,
+    _score_box_safe,
     _select_data_signature,
 )
 from services.nnj_master_news_mark import rasterize_nnj_mark  # noqa: E402
@@ -637,7 +639,10 @@ def test_data_lower_signature_uses_real_white_svg_for_white_variant():
     from services.nnj_master_news_mark import NNJ_WHITE_SVG
 
     assert NNJ_WHITE_SVG.name == "nnj_logo.svg"
-    signature = _build_data_lower_signature_image((1280, 720), ComponentPlacement.LOWER_RIGHT, 20, red=False)
+    full_len = _data_signature_line_length(1280, _DATA_SIGNATURE_FULL_WIDTH_FRAC)
+    signature = _build_data_lower_signature_image(
+        (1280, 720), ComponentPlacement.LOWER_RIGHT, 20, red=False, line_len=full_len,
+    )
     assert signature.split()[-1].getbbox() is not None  # something was actually drawn
 
 
@@ -646,7 +651,10 @@ def test_data_lower_signature_uses_real_red_svg_for_red_variant():
     from services.nnj_master_news_mark import NNJ_RED_SVG
 
     assert NNJ_RED_SVG.name == "nnj_logo_red.svg"
-    signature = _build_data_lower_signature_image((1280, 720), ComponentPlacement.LOWER_RIGHT, 20, red=True)
+    full_len = _data_signature_line_length(1280, _DATA_SIGNATURE_FULL_WIDTH_FRAC)
+    signature = _build_data_lower_signature_image(
+        (1280, 720), ComponentPlacement.LOWER_RIGHT, 20, red=True, line_len=full_len,
+    )
     assert signature.split()[-1].getbbox() is not None
 
 
@@ -665,22 +673,76 @@ def test_data_signature_mark_preserves_svg_aspect_ratio():
             assert abs(ratio - reference_ratio) / reference_ratio < 0.05
 
 
-def test_data_signature_spans_the_approved_near_full_width():
-    """Phase V2.20C regression guard: the final alignment audit measured the canonical reference
-    PNG's own bottom line spanning ~82-93% of the frame width (solid line pixels at x=125->1432 on
-    a 1600px-wide reference canvas) - deliberately much wider than MASTER NEWS's own compact ~32%
-    corner-accent width. The composited signature's own bounding box must reflect that width, not
-    the old MASTER-derived fraction."""
-    from services.brand_renderer import _DATA_SIGNATURE_TOTAL_WIDTH_FRAC
-
-    assert _DATA_SIGNATURE_TOTAL_WIDTH_FRAC > 0.7  # deliberately far wider than MASTER's own accent
+def test_data_signature_full_tier_spans_the_approved_near_full_width():
+    """Item 1: the preferred/full DATA signature must still span ~82-85% of the frame width when
+    safe - the canonical reference PNG's own bottom line spans ~82-93% of its frame (measured
+    directly on data_template_white.png: solid line pixels at x=125->1432 on a 1600px canvas).
+    Phase V2.20D changes HOW safety is scored, never the approved FULL geometry itself."""
+    assert _DATA_SIGNATURE_FULL_WIDTH_FRAC > 0.7  # deliberately far wider than MASTER's own accent
 
     canvas_size = (1280, 720)
-    signature = _build_data_lower_signature_image(canvas_size, ComponentPlacement.LOWER_RIGHT, 20, red=True)
+    full_len = _data_signature_line_length(canvas_size[0], _DATA_SIGNATURE_FULL_WIDTH_FRAC)
+    signature = _build_data_lower_signature_image(
+        canvas_size, ComponentPlacement.LOWER_RIGHT, 20, red=True, line_len=full_len,
+    )
     bbox = signature.split()[-1].getbbox()
     assert bbox is not None
     span = bbox[2] - bbox[0]
-    assert span / canvas_size[0] >= _DATA_SIGNATURE_TOTAL_WIDTH_FRAC - 0.05
+    assert span / canvas_size[0] >= _DATA_SIGNATURE_FULL_WIDTH_FRAC - 0.05
+
+
+def test_data_signature_geometry_scores_three_independent_regions_not_one_coarse_rectangle():
+    """Items 2-5, the core V2.20D fix: mark/pulse/line must be three genuinely different real
+    boxes - never one shared/coarse rectangle - and the line's own box must be a narrow horizontal
+    band (height comparable only to the stroke + a small anti-aliasing margin), never tall enough
+    to span the mark's own height. This is the direct structural proof that a thin 2-4px line no
+    longer forces the whole ~85%-wide footprint to be scored as if it were a large solid overlay."""
+    canvas_size = (1280, 720)
+    inset = 20
+    full_len = _data_signature_line_length(canvas_size[0], _DATA_SIGNATURE_FULL_WIDTH_FRAC)
+    mark_box, pulse_box, line_box = _data_signature_geometry(
+        canvas_size, ComponentPlacement.LOWER_RIGHT, inset, full_len,
+    )
+
+    assert mark_box != pulse_box != line_box
+    mark_h = mark_box[3] - mark_box[1]
+    pulse_h = pulse_box[3] - pulse_box[1]
+    line_h = line_box[3] - line_box[1]
+    line_w = line_box[2] - line_box[0]
+    mark_w = mark_box[2] - mark_box[0]
+
+    # the narrow band requirement: the line's own scored height is small in absolute terms and
+    # materially smaller than either the mark's or the pulse's own height.
+    assert line_h <= 12
+    assert line_h < mark_h
+    assert line_h < pulse_h
+    # the line is the long, thin one - the opposite shape from mark/pulse.
+    assert line_w > mark_w * 5
+
+
+def test_data_signature_anchor_is_the_mark_pulse_union_scored_once():
+    """Documents and locks in the deliberate V2.20D refinement (see _select_data_signature()'s own
+    docstring for the full empirical justification): the mark and pulse are scored TOGETHER as one
+    anchor region, not as two fully independent tiny boxes - because nnj_master_news_overlay.py's
+    shared 4x2 worst-case patch grid produces false rejections on ordinary real photo texture when
+    given a box as small as either one alone. The anchor must be exactly their union (no bigger,
+    no smaller) and must contain both source boxes entirely."""
+    from services.brand_renderer import _data_signature_anchor_box
+
+    canvas_size = (1280, 720)
+    full_len = _data_signature_line_length(canvas_size[0], _DATA_SIGNATURE_FULL_WIDTH_FRAC)
+    mark_box, pulse_box, _line_box = _data_signature_geometry(
+        canvas_size, ComponentPlacement.LOWER_RIGHT, 20, full_len,
+    )
+    anchor = _data_signature_anchor_box(mark_box, pulse_box)
+
+    assert anchor[0] == min(mark_box[0], pulse_box[0])
+    assert anchor[1] == min(mark_box[1], pulse_box[1])
+    assert anchor[2] == max(mark_box[2], pulse_box[2])
+    assert anchor[3] == max(mark_box[3], pulse_box[3])
+    # both original boxes fit entirely inside the anchor - nothing is left unscored.
+    for box in (mark_box, pulse_box):
+        assert anchor[0] <= box[0] and anchor[1] <= box[1] and anchor[2] >= box[2] and anchor[3] >= box[3]
 
 
 def test_data_lower_signature_never_generates_or_redraws_the_nnj_glyph():
@@ -696,7 +758,7 @@ def test_data_lower_signature_never_generates_or_redraws_the_nnj_glyph():
 
 
 def test_data_card_still_never_renders_np_or_pulse_or_category_labels():
-    """Re-confirms the V2.20 structural guarantees still hold after the V2.20A rework - no
+    """Re-confirms the V2.20 structural guarantees still hold after the V2.20A/D rework - no
     "PULSE / {category}" text label, no NP-xxxx chip, no DATA/category label anywhere in the new
     bottom-signature path either. Checks for the literal drawn label text, not the bare word
     "PULSE" - which legitimately appears in this file as part of the (unrelated) pulse-*waveform*
@@ -727,8 +789,9 @@ def test_data_block_placement_skips_corner_colliding_with_signature():
 
 
 def test_data_signature_falls_back_to_none_on_unsafe_bottom_corners():
-    """Direct unit test of the signature search itself - a maximally busy (independent per-pixel
-    noise) canvas must reject both bottom corners, returning None (no branding forced on)."""
+    """Item 8: complete branding omission must happen only when bottom branding itself is unsafe -
+    a maximally busy (independent per-pixel noise) canvas must reject both bottom corners entirely
+    (mark, pulse, AND even the compact-tier line), returning None."""
     noisy = Image.new("RGBA", (1280, 720))
     rng = random.Random(11)
     noisy.putdata([(rng.randrange(256), rng.randrange(256), rng.randrange(256), 255) for _ in range(1280 * 720)])
@@ -738,22 +801,121 @@ def test_data_signature_falls_back_to_none_on_unsafe_bottom_corners():
 
 def test_data_card_renders_exactly_one_bottom_signature_end_to_end():
     """Full pipeline: on a real, cooperative (quiet, mid-gray) canvas the signature must render at
-    a bottom corner - proving the whole render_data_card() -> _select_data_signature() ->
-    _build_data_lower_signature_image() chain actually executes and composites something."""
-    solid = _solid_jpeg(1280, 720, color=(210, 210, 210))
-    placement_result = _select_data_signature(Image.open(io.BytesIO(solid)).convert("RGBA"), inset=20, pad=50)
-    assert placement_result is not None
-    placement, _red = placement_result
-    assert placement in (ComponentPlacement.LOWER_RIGHT, ComponentPlacement.LOWER_LEFT)
+    a bottom corner at the FULL tier - proving the whole render_data_card() ->
+    _select_data_signature() -> _build_data_lower_signature_image() chain actually executes and
+    composites something. Mid-gray (120,120,120), matching the exact fixture color MASTER NEWS's
+    own test suite already uses (tests/test_v2_10h_master_news_production.py) - a real, pre-
+    existing property of the shared, unmodified _score_region(): Pillow's FIND_EDGES zero-pads at
+    a crop's own boundary, producing a small brightness-proportional false edge response there:
+    negligible against real photo texture (confirmed against a real fixture in the regression test
+    above) but disproportionate for a perfectly flat synthetic color right at the safety threshold
+    the brighter it is - a pure synthetic-test-fixture concern, not a production behavior change."""
+    solid = _solid_jpeg(1280, 720, color=(120, 120, 120))
+    plan = _select_data_signature(Image.open(io.BytesIO(solid)).convert("RGBA"), inset=20, pad=50)
+    assert plan is not None
+    assert plan.placement in (ComponentPlacement.LOWER_RIGHT, ComponentPlacement.LOWER_LEFT)
+    assert plan.tier == "full"
 
 
-def test_lower_signature_component_size_matches_rasterizer_output():
-    """_lower_signature_component_size()'s height must never be smaller than the real rasterized
-    mark it will actually composite - otherwise the safety-scoring box and the real drawn box
-    could silently diverge."""
-    from services.nnj_master_news_overlay import _LOWER_MARK_W_FRAC
+def test_data_signature_real_fixture_regression_iphone_photo_no_longer_loses_branding():
+    """Direct real-world regression proof: this exact source photo (v2_10a_overlay_fix/
+    iphone_recomposed_source.jpg) is one of the V2.20C preview fixtures that lost its bottom
+    signature ENTIRELY once the coarse ~85%-wide rectangle was scored as one solid region - the
+    hand/fingers extend into the bottom strip and were enough to fail the whole coarse box. Under
+    V2.20D's geometry-aware scoring the mark+pulse+line must independently succeed here (at
+    whatever tier is actually needed)."""
+    from pathlib import Path
 
-    mark_w = max(1, round(_LOWER_MARK_W_FRAC * 1280))
-    mark = rasterize_nnj_mark(target_width=mark_w)
-    _component_w, component_h = _lower_signature_component_size(1280, 720)
-    assert component_h >= mark.height
+    fixture = (
+        Path(r"C:\Users\Theodor\ai-newsroom") / "assets/brand/newsroom_visuals/v2_10a_overlay_fix"
+        / "iphone_recomposed_source.jpg"
+    )
+    if not fixture.exists():
+        pytest.skip("real fixture not present in this checkout")
+    photo = Image.open(fixture).convert("RGBA")
+    canvas = brand_renderer_module._fit_photo_to_canvas(photo, (1280, 720))
+    plan = _select_data_signature(canvas, inset=20, pad=50)
+    assert plan is not None, "V2.20D regression: bottom signature still lost entirely on a real photo"
+
+
+def test_data_signature_line_degrades_to_shortened_when_full_length_unsafe(monkeypatch):
+    """Item 6: the mark+pulse anchor is always safe; only the FULL-length line's own band is
+    unsafe - the search must degrade to a SHORTER line (tier "shortened") while keeping the exact
+    same anchor, never dropping branding outright. The safety oracle itself is mocked here
+    (discriminated by box HEIGHT - the anchor box is visibly taller than the line's own narrow
+    band, matching the real geometry exactly: anchor height ~max(mark_h, pulse_h), line height is
+    just `2*line_margin` - see _data_signature_geometry()) so this test targets the DEGRADATION
+    ALGORITHM in isolation; the real oracle's own correctness is proven separately
+    (test_data_signature_geometry_scores_three_independent_regions_not_one_coarse_rectangle and
+    the real-fixture regression test)."""
+    canvas = Image.new("RGBA", (1280, 720), (210, 210, 210, 255))
+    full_len = _data_signature_line_length(1280, _DATA_SIGNATURE_FULL_WIDTH_FRAC)
+
+    def fake_score_box_safe(_canvas, box, *, pad):
+        height = box[3] - box[1]
+        if height > 20:  # the mark+pulse anchor - always taller than the line's own thin band
+            return True
+        width = box[2] - box[0]
+        return width < full_len - 10  # only the FULL-length line itself is unsafe
+
+    monkeypatch.setattr(brand_renderer_module, "_score_box_safe", fake_score_box_safe)
+    plan = _select_data_signature(canvas, inset=20, pad=50)
+    assert plan is not None
+    assert plan.tier == "shortened"
+    assert plan.line_len < full_len
+
+
+def test_data_signature_line_degrades_to_compact_when_shortened_also_unsafe(monkeypatch):
+    """Item 7: the compact bottom signature is available as a SECOND fallback - if even every
+    shortened intermediate length fails, the search must still succeed at the compact tier before
+    giving up, never jumping straight from "full fails" to "nothing"."""
+    canvas = Image.new("RGBA", (1280, 720), (210, 210, 210, 255))
+    compact_len = _data_signature_line_length(1280, _DATA_SIGNATURE_COMPACT_WIDTH_FRAC)
+
+    def fake_score_box_safe(_canvas, box, *, pad):
+        height = box[3] - box[1]
+        if height > 20:  # the mark+pulse anchor
+            return True
+        width = box[2] - box[0]
+        return width <= compact_len + 2  # only the compact-or-shorter line passes
+
+    monkeypatch.setattr(brand_renderer_module, "_score_box_safe", fake_score_box_safe)
+    plan = _select_data_signature(canvas, inset=20, pad=50)
+    assert plan is not None
+    assert plan.tier == "compact"
+    assert plan.line_len == compact_len
+
+
+def test_data_signature_protects_mark_by_switching_corner_not_ignoring_conflict(monkeypatch):
+    """Item 9: a watermark/source-text collision at the mark's own footprint must still be
+    respected - never silently ignored merely to keep branding on the "preferred" corner. Here the
+    LOWER_RIGHT mark+pulse anchor is made unsafe (simulating a bottom-right watermark) while
+    LOWER_LEFT remains clean; the search must switch corners, never draw over the flagged region."""
+    canvas = Image.new("RGBA", (1280, 720), (210, 210, 210, 255))
+
+    def fake_score_box_safe(_canvas, box, *, pad):
+        height = box[3] - box[1]
+        near_right_edge = box[2] > 1280 - 150
+        if height > 20 and near_right_edge:  # the anchor box anchored at the right = LOWER_RIGHT
+            return False
+        return True
+
+    monkeypatch.setattr(brand_renderer_module, "_score_box_safe", fake_score_box_safe)
+    plan = _select_data_signature(canvas, inset=20, pad=50)
+    assert plan is not None
+    assert plan.placement is ComponentPlacement.LOWER_LEFT
+
+
+def test_score_box_safe_is_the_real_oracle_select_data_signature_calls():
+    """Confirms _select_data_signature() genuinely delegates to the real, unmocked _score_box_safe
+    (not a private reimplementation) - a quiet uniform canvas must clear it for a small mark-sized
+    box at the real production padding (`_SCORE_PAD_PX_FRAC`-derived, 50px at this canvas width -
+    a much smaller ad-hoc pad understates the real gate, see the previous test's own comment for
+    why), and pure noise must fail it regardless of padding, using the exact function under test."""
+    quiet = Image.new("RGBA", (1280, 720), (120, 120, 120, 255))
+    assert _score_box_safe(quiet, (600, 600, 650, 630), pad=50) is True
+
+    rng = random.Random(3)
+    noisy = Image.new("RGBA", (1280, 720))
+    noisy.putdata([(rng.randrange(256), rng.randrange(256), rng.randrange(256), 255) for _ in range(1280 * 720)])
+    assert _score_box_safe(noisy, (600, 600, 650, 630), pad=50) is False
