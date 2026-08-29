@@ -4,17 +4,22 @@ no Telegram, no LLM."""
 import io
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from services.brand_renderer import (
     RenderResult,
     _CARD_HEIGHT,
     _CARD_WIDTH,
+    _DATA_LABEL_FONT_MAX,
+    _DATA_LABEL_FONT_MIN,
+    _DATA_LABEL_MAX_LINES,
     _LOGO_PNG_PATH,
     _OFFICIAL_NNJ_RED,
+    _fit_wrapped_block,
     load_brand_mark,
     render_branded_media,
     render_breaking_frame,
+    render_data_card,
     render_news_hero,
     render_quote_card,
     render_recap_fallback_card,
@@ -316,3 +321,69 @@ def test_recap_fallback_card_fails_soft_on_missing_logo_asset(monkeypatch: pytes
     assert result.success is False
     assert result.image_bytes is None
     assert result.fallback_reason is not None
+
+
+# ---------------------------------------------------------------------------
+# Phase V2.17 - DATA card text safety: no clipping, ever. A real production case (a Russian
+# GeForce RTX 50 pricing story) had its explanatory label run past the card's right edge - direct,
+# non-OCR proof that the deterministic wrap/shrink fitting stays inside the card's own bounding
+# box, using the renderer's own measurement functions (draw.textlength()), never OCR.
+# ---------------------------------------------------------------------------
+
+_LONG_RUSSIAN_LABEL = (
+    "За один месяц видеокарты GeForce RTX 50 подорожали почти на 20% на фоне "
+    "ажиотажного спроса и ограниченных поставок на рынке"
+)
+
+
+def test_data_card_long_russian_label_wraps_within_bounds_no_clipping():
+    """Direct measurement, not OCR: every line the fitting helper actually returns must measure
+    <= the card's own text max_width, using the exact same font it selected."""
+    margin = 64
+    max_width = _CARD_WIDTH - margin * 2
+    scratch = Image.new("RGB", (_CARD_WIDTH, 100))
+    draw = ImageDraw.Draw(scratch)
+
+    lines, font, _size = _fit_wrapped_block(
+        draw, _LONG_RUSSIAN_LABEL, font_max=_DATA_LABEL_FONT_MAX, font_min=_DATA_LABEL_FONT_MIN,
+        max_width=max_width, max_lines=_DATA_LABEL_MAX_LINES,
+    )
+
+    assert lines  # never silently empty
+    assert len(lines) <= _DATA_LABEL_MAX_LINES
+    for line in lines:
+        assert draw.textlength(line, font=font) <= max_width, f"line exceeds max_width: {line!r}"
+
+
+def test_data_card_renders_successfully_with_representative_long_label():
+    """End-to-end: the real render_data_card() call succeeds and stays at the fixed card size for
+    a label as long as the real production case that previously clipped."""
+    candidate = DataCandidate(
+        value="20", unit="%", label=_LONG_RUSSIAN_LABEL[:80],
+        evidence_fact="GeForce RTX 50 подорожали на 20% за месяц.",
+    )
+    out = render_data_card(candidate, category="TECH", editorial_code="NP-6139")
+    with Image.open(io.BytesIO(out)) as img:
+        assert img.size == (_CARD_WIDTH, _CARD_HEIGHT)
+
+
+def test_data_card_short_value_and_unit_still_render_unchanged_in_shape():
+    """Regression guard: an ordinary short value/unit (the common case) must still render at the
+    full approved max font size - the new bounded-fit helper must not shrink text that already
+    fits comfortably."""
+    from services.brand_renderer import _DATA_UNIT_FONT_MAX, _DATA_VALUE_FONT_MAX, _fit_single_line
+
+    scratch = Image.new("RGB", (_CARD_WIDTH, 300))
+    draw = ImageDraw.Draw(scratch)
+    margin = 64
+    max_width = _CARD_WIDTH - margin * 2
+
+    _font_obj, size = _fit_single_line(
+        draw, "20", font_max=_DATA_VALUE_FONT_MAX, font_min=100, max_width=max_width,
+    )
+    assert size == _DATA_VALUE_FONT_MAX
+
+    _font_obj, size = _fit_single_line(
+        draw, "%", font_max=_DATA_UNIT_FONT_MAX, font_min=32, max_width=max_width,
+    )
+    assert size == _DATA_UNIT_FONT_MAX

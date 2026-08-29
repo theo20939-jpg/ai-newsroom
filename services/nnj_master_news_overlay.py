@@ -80,16 +80,35 @@ BoundingBox = tuple[int, int, int, int]
 _CANVAS_W, _CANVAS_H = 1280, 720
 
 # --- Locked MASTER_BALANCED lower-signature geometry (Phase V2.10G user selection, Phase V2.10H
-# §1 lock) - expressed as fractions of the 1280x720 reference canvas so it scales proportionally
-# to any real output canvas size (Phase V2.10H §1's own explicit requirement). ---
-_LOWER_TOTAL_WIDTH_FRAC = 307 / _CANVAS_W       # ~24.0% of canvas width
-_LOWER_PULSE_W_FRAC = 36 / _CANVAS_W
-_LOWER_PULSE_H_FRAC = 34 / _CANVAS_H
-_LOWER_LINE_THICKNESS_FRAC = 2 / _CANVAS_H
-_LOWER_MARK_W_FRAC = 38 / _CANVAS_W
+# §1 lock; Phase V2.17 rescale) - expressed as fractions of the 1280x720 reference canvas so it
+# scales proportionally to any real output canvas size (Phase V2.10H §1's own explicit
+# requirement) - every source photo is fit to this exact reference canvas
+# (`_fit_photo_to_canvas()`) before compositing, so a fraction-based constant already scales
+# correctly across every supported source resolution without further change.
+#
+# Phase V2.17: real production Telegram rendering (mobile + desktop) showed the original
+# MASTER_BALANCED footprint (~24.0% lower-signature width, 32px upper mark) was too subtle once
+# Telegram's own client-side photo scaling shrank it further - the SAME approved visual language,
+# scaled up by a uniform ~1.335x factor for every lower-signature component (so proportions among
+# pulse/line/terminal-mark/total-width stay byte-identical to the original design), landing the
+# lower-signature total width at ~32.0% of canvas width - inside the requested ~30-34% range. Line
+# thickness is bumped beyond the uniform factor (2px -> 4px, a full 2x) specifically because a
+# 2px line at the 1280px reference canvas becomes sub-pixel and disappears under Telegram's own
+# downscaling - the one component this phase's own instructions called out as needing an
+# above-proportional increase to remain legible after real-world resizing, not merely detail loss.
+# The upper mark is scaled 1.5x (within the requested 1.35-1.6x range) for the same real-legibility
+# reason. `_SAFE_INSET_FRAC` is deliberately left unchanged - it governs the corner box's distance
+# from the canvas edge, not the box's own internal content size, and no mathematical necessity to
+# change it was found (Phase V2.10H §2's own inset calibration remains valid regardless of what is
+# drawn inside the box).
+_LOWER_TOTAL_WIDTH_FRAC = 410 / _CANVAS_W       # ~32.0% of canvas width (was 307/1280, ~24.0%)
+_LOWER_PULSE_W_FRAC = 48 / _CANVAS_W             # was 36/1280
+_LOWER_PULSE_H_FRAC = 45 / _CANVAS_H             # was 34/720
+_LOWER_LINE_THICKNESS_FRAC = 4 / _CANVAS_H       # was 2/720 - above-proportional, see comment above
+_LOWER_MARK_W_FRAC = 51 / _CANVAS_W              # was 38/1280
 
-# --- Locked MEDIUM upper-mark geometry ---
-_UPPER_MARK_W_FRAC = 32 / _CANVAS_W
+# --- Locked MEDIUM upper-mark geometry (Phase V2.17: 1.5x rescale, see comment above) ---
+_UPPER_MARK_W_FRAC = 48 / _CANVAS_W              # was 32/1280
 
 # Safe edge inset (Phase V2.10H §2): calibrated by rendering 16/20/24px at the 1280x720 reference
 # and visually inspecting the corner region at each - 16px left the pulse's own glow/anti-aliased
@@ -98,7 +117,8 @@ _UPPER_MARK_W_FRAC = 32 / _CANVAS_W
 # smallest value that reliably prevents visual edge-touching - expressed as a fraction so it scales.
 _SAFE_INSET_FRAC = 20 / _CANVAS_W
 
-_GAP_FRAC = 10 / _CANVAS_W  # clearance between the terminal NNJ mark and the pulse
+_GAP_FRAC = 13 / _CANVAS_W  # clearance between the terminal NNJ mark and the pulse (was 10/1280,
+# scaled by the same ~1.335x factor as the other lower-signature components, Phase V2.17)
 
 # Pixel-occupancy safe-zone threshold (Phase V2.10A's own real-photo calibration, reused here
 # rather than re-derived from scratch: real safe corners on real photos measured edge_mean<=5.83;

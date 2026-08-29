@@ -379,3 +379,96 @@ def test_honor_disclaimer_region_no_longer_falsely_accepted() -> None:
     assert decision.lower_signature.placement is not ComponentPlacement.LOWER_RIGHT
     if lower_right_attempts:
         assert not lower_right_attempts[0].accepted
+
+
+# ---------------------------------------------------------------------------
+# Phase V2.17 - MASTER_BALANCED rescale: same approved visual language, larger footprint
+# ---------------------------------------------------------------------------
+
+
+def test_rescaled_lower_signature_width_is_in_the_approved_30_to_34_percent_range() -> None:
+    from services.nnj_master_news_overlay import _LOWER_TOTAL_WIDTH_FRAC
+
+    assert 0.30 <= _LOWER_TOTAL_WIDTH_FRAC <= 0.34
+
+
+def test_rescaled_components_are_all_larger_than_the_pre_v2_17_footprint() -> None:
+    """Every lower-signature/upper-mark fraction grew relative to the original V2.10H lock - proves
+    this is a uniform enlargement of the same design, not an accidental partial change."""
+    from services.nnj_master_news_overlay import (
+        _CANVAS_H, _CANVAS_W, _GAP_FRAC, _LOWER_LINE_THICKNESS_FRAC, _LOWER_MARK_W_FRAC,
+        _LOWER_PULSE_H_FRAC, _LOWER_PULSE_W_FRAC, _LOWER_TOTAL_WIDTH_FRAC, _UPPER_MARK_W_FRAC,
+    )
+
+    original_px = {
+        "lower_total_width": (307, _CANVAS_W, _LOWER_TOTAL_WIDTH_FRAC),
+        "lower_pulse_w": (36, _CANVAS_W, _LOWER_PULSE_W_FRAC),
+        "lower_pulse_h": (34, _CANVAS_H, _LOWER_PULSE_H_FRAC),
+        "lower_line_thickness": (2, _CANVAS_H, _LOWER_LINE_THICKNESS_FRAC),
+        "lower_mark_w": (38, _CANVAS_W, _LOWER_MARK_W_FRAC),
+        "upper_mark_w": (32, _CANVAS_W, _UPPER_MARK_W_FRAC),
+        "gap": (10, _CANVAS_W, _GAP_FRAC),
+    }
+    for name, (old_px, dimension, new_frac) in original_px.items():
+        new_px = new_frac * dimension
+        assert new_px > old_px, f"{name} did not grow: {old_px}px -> {new_px}px"
+
+
+def test_upper_mark_grew_within_the_approved_1_35_to_1_6x_range() -> None:
+    from services.nnj_master_news_overlay import _CANVAS_W, _UPPER_MARK_W_FRAC
+
+    old_px = 32
+    new_px = _UPPER_MARK_W_FRAC * _CANVAS_W
+    ratio = new_px / old_px
+    assert 1.35 <= ratio <= 1.6
+
+
+def test_safe_inset_deliberately_unchanged() -> None:
+    """No mathematical necessity was found to change the corner inset just because the
+    components drawn inside the box grew - confirms this wasn't silently altered too."""
+    from services.nnj_master_news_overlay import _CANVAS_W, _SAFE_INSET_FRAC
+
+    assert round(_SAFE_INSET_FRAC * _CANVAS_W) == 20
+
+
+def test_rescaled_footprint_never_exceeds_canvas_bounds_on_a_quiet_photo() -> None:
+    """A quiet, safe photo should accept both components in some corner - proves the new, larger
+    footprint still fits entirely within the 1280x720 canvas at every accepted placement."""
+    branded, decision = apply_master_news_branding(_flat_photo())
+    w, h = decision.canvas_size
+    for component in (decision.upper_mark, decision.lower_signature):
+        if component.placement is ComponentPlacement.OMITTED:
+            continue
+        accepted = [a for a in component.attempts if a.accepted]
+        assert accepted, f"{component.placement} reported accepted but no attempt record confirms it"
+        x0, y0, x1, y1 = accepted[0].box
+        assert x0 >= 0 and y0 >= 0 and x1 <= w and y1 <= h, f"box {accepted[0].box} exceeds canvas {w}x{h}"
+    # The branded image itself must also still be exactly the reference canvas size.
+    with Image.open(io.BytesIO(branded)) as im:
+        assert im.size == (w, h)
+
+
+def test_rescaled_safety_scoring_uses_the_new_larger_footprint_not_the_old_one() -> None:
+    """Proves the safety evaluation genuinely reads the new constants (not a stale cached size):
+    the scored box width for LOWER_RIGHT must match the new ~410px total width, not the old
+    ~307px one, at the 1280-wide reference canvas."""
+    from services.nnj_master_news_overlay import _LOWER_TOTAL_WIDTH_FRAC
+
+    branded, decision = apply_master_news_branding(_flat_photo())
+    lower_right_attempts = [
+        a for a in decision.lower_signature.attempts if a.placement is ComponentPlacement.LOWER_RIGHT
+    ]
+    assert lower_right_attempts, "expected LOWER_RIGHT to have been scored on a quiet photo"
+    box = lower_right_attempts[0].box
+    scored_width = box[2] - box[0]
+    expected_width = round(_LOWER_TOTAL_WIDTH_FRAC * 1280)
+    assert scored_width == expected_width
+    assert scored_width > 307  # unambiguously larger than the pre-V2.17 value
+
+
+def test_degradation_still_reports_only_the_four_valid_modes_after_rescale() -> None:
+    for photo_bytes in (_flat_photo(), _all_busy_photo()):
+        _branded, decision = apply_master_news_branding(photo_bytes)
+        assert decision.degradation_mode in (
+            "upper_and_lower", "lower_signature_only", "upper_mark_only", "no_overlay",
+        )

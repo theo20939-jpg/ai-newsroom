@@ -238,24 +238,108 @@ def render_breaking_frame(source_image_bytes: bytes | None, *, category: str, ed
     return out.getvalue()
 
 
+# Phase V2.17: real production text-safety fix - the DATA card's `label` (a real Research-fact
+# fragment, up to 80 characters per services/presentation_director.py's own `label[:80]` cap) was
+# drawn with a single unbounded `draw.text()` call and no width check, so a real long Cyrillic
+# sentence ("За один месяц видеокарты GeForce RTX 50 ...") ran past the card's right edge in real
+# production output - `label[:80]` bounds character COUNT, not rendered pixel width, so it does
+# not by itself guarantee the text fits. `value`/`unit` are drawn large (up to 180pt/56pt) with the
+# same unbounded pattern - realistically always short (a regex-captured number+unit token), but
+# bounded here too per this phase's own explicit "check ALL dynamic text fields" instruction,
+# rather than assumed safe. `f"PULSE / {category}"` and `editorial_code` are NOT touched - both
+# come from small, fixed-shape, already-bounded domains (EventCategory's own short string values;
+# build_editorial_code()'s deterministic "NP-XXXX" format) with no realistic overflow path.
+_DATA_VALUE_FONT_MAX = 180
+_DATA_VALUE_FONT_MIN = 100
+_DATA_UNIT_FONT_MAX = 56
+_DATA_UNIT_FONT_MIN = 32
+_DATA_LABEL_FONT_MAX = 32
+_DATA_LABEL_FONT_MIN = 22
+_DATA_LABEL_MAX_LINES = 3
+
+
+def _fit_single_line(
+    draw: ImageDraw.ImageDraw, text: str, *, font_max: int, font_min: int, max_width: float,
+) -> tuple[ImageFont.FreeTypeFont | ImageFont.ImageFont, int]:
+    """Deterministically shrinks the font (within [font_min, font_max], step 4) until `text` fits
+    `max_width` on one line - never a mid-character pixel clip. Returns the smallest size actually
+    tried even if `font_min` still does not fit (a hard-bound caller is expected to already keep
+    `text` short by construction in that rare case - this never truncates a single-line value)."""
+    size = font_max
+    font = _font(size)
+    for candidate_size in range(font_max, font_min - 1, -4):
+        font = _font(candidate_size)
+        size = candidate_size
+        if draw.textlength(text, font=font) <= max_width:
+            break
+    return font, size
+
+
+def _fit_wrapped_block(
+    draw: ImageDraw.ImageDraw, text: str, *, font_max: int, font_min: int, max_width: int, max_lines: int,
+) -> tuple[list[str], ImageFont.FreeTypeFont | ImageFont.ImageFont, int]:
+    """Deterministically fits `text` inside `max_width`/`max_lines` by shrinking the font within
+    [font_min, font_max] (step 2) and word-wrapping (`_wrap_text()`) at each candidate size. If it
+    still does not fit at `font_min` (content-selection has already bounded `text` upstream via
+    `label[:80]`, so this is a last-resort safety net, not the primary length control), the final
+    line is shortened at a word boundary with a trailing ellipsis until it fits - never a blind
+    pixel clip, never a mid-character cut."""
+    lines: list[str] = []
+    font = _font(font_min)
+    size = font_min
+    for candidate_size in range(font_max, font_min - 1, -2):
+        font = _font(candidate_size)
+        size = candidate_size
+        lines = _wrap_text(draw, text, font, max_width)
+        if len(lines) <= max_lines:
+            return lines, font, size
+
+    lines = _wrap_text(draw, text, font, max_width)[:max_lines]
+    if lines:
+        last = lines[-1]
+        while last and draw.textlength(f"{last}…", font=font) > max_width:
+            last = last.rsplit(" ", 1)[0] if " " in last else last[:-1]
+        lines[-1] = f"{last}…" if last else "…"
+    return lines, font, size
+
+
 def render_data_card(data_candidate: DataCandidate, *, category: str, editorial_code: str) -> bytes:
     """Fully programmatic - text/numbers drawn deterministically from `data_candidate`'s own
     already-verified fields (services/presentation_director.py's cross-verified evidence binding)
-    - never generative typography, never a value not already grounded upstream."""
+    - never generative typography, never a value not already grounded upstream. Phase V2.17: every
+    dynamic text region now has a strict bounding box (see module comment above this function) -
+    no text may extend outside the card canvas."""
     canvas = Image.new("RGB", (_CARD_WIDTH, _CARD_HEIGHT), _OFFICIAL_NNJ_BLACK)
     draw = ImageDraw.Draw(canvas)
     margin = 64
+    max_width = _CARD_WIDTH - margin * 2
 
     draw.text((margin, margin), f"PULSE / {category}", font=_font(28), fill=_OFFICIAL_NNJ_RED)
 
-    value_font = _font(180)
+    value_font, _value_size = _fit_single_line(
+        draw, data_candidate.value, font_max=_DATA_VALUE_FONT_MAX, font_min=_DATA_VALUE_FONT_MIN,
+        max_width=max_width,
+    )
     draw.text((margin, 180), data_candidate.value, font=value_font, fill=_OFFICIAL_NNJ_WHITE)
     value_bbox = draw.textbbox((margin, 180), data_candidate.value, font=value_font)
     unit_x = value_bbox[2] + 24
-    draw.text((unit_x, 220), data_candidate.unit.upper(), font=_font(56), fill=_OFFICIAL_NNJ_RED)
+    unit_text = data_candidate.unit.upper()
+    unit_font, _unit_size = _fit_single_line(
+        draw, unit_text, font_max=_DATA_UNIT_FONT_MAX, font_min=_DATA_UNIT_FONT_MIN,
+        max_width=max(1, _CARD_WIDTH - margin - unit_x),
+    )
+    draw.text((unit_x, 220), unit_text, font=unit_font, fill=_OFFICIAL_NNJ_RED)
 
     if data_candidate.label:
-        draw.text((margin, value_bbox[3] + 24), data_candidate.label, font=_font(32), fill=_OFFICIAL_NNJ_WHITE)
+        label_lines, label_font, label_size = _fit_wrapped_block(
+            draw, data_candidate.label, font_max=_DATA_LABEL_FONT_MAX, font_min=_DATA_LABEL_FONT_MIN,
+            max_width=max_width, max_lines=_DATA_LABEL_MAX_LINES,
+        )
+        line_height = label_size + 8
+        y = value_bbox[3] + 24
+        for line in label_lines:
+            draw.text((margin, y), line, font=label_font, fill=_OFFICIAL_NNJ_WHITE)
+            y += line_height
 
     _draw_pulse_line(draw, x=margin, y=_CARD_HEIGHT - 96, width=220, color=_OFFICIAL_NNJ_RED)
     _draw_code_label(draw, x=margin, y=_CARD_HEIGHT - 56, text=editorial_code, color=_OFFICIAL_NNJ_WHITE, size=20)
