@@ -738,19 +738,20 @@ async def test_v82_output_with_image_sends_photo_with_the_v8_family_caption(
 
 
 # ---------------------------------------------------------------------------
-# Phase V2.12G - Phase 23.1Q's decision to enable the NINJA PULSE caption footer for real
-# router-mode NEWS delivery is SUPERSEDED: the current approved NEWS contract forbids any
-# subscription CTA in the final text/HTML (the source-only "🔗 Источник" keyboard is the sole call
-# to action). tests/test_news_telegram_presentation_v81.py's own renderer-level tests
-# (test_ninja_pulse_footer_is_disabled_by_default_for_v81/test_ninja_pulse_footer_can_still_be_
-# explicitly_enabled) still cover the renderer's own optional capability, unchanged - these two
-# tests cover only the real call-site/integration behavior: does worker/content_cycle.py's real
-# router-mode NEWS path now correctly withhold it.
+# Phase V2.12L - Phase 23.1Q's decision to enable the NINJA PULSE caption footer for real
+# router-mode NEWS delivery is the final, approved contract (V2.12G's temporary removal and
+# V2.12I's restoration are both superseded by this settled state): the footer (text + link)
+# appears exactly once in the final text/HTML, alongside the unchanged source-only "🔗 Источник"
+# keyboard (no separate subscription button). tests/test_news_telegram_presentation_v81.py's own
+# renderer-level tests (test_ninja_pulse_footer_is_disabled_by_default_for_v81/test_ninja_pulse_
+# footer_can_still_be_explicitly_enabled) still cover the renderer's own optional capability,
+# unchanged - these two tests cover only the real call-site/integration behavior: does worker/
+# content_cycle.py's real router-mode NEWS path actually include it.
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_ninja_pulse_cta_absent_from_photo_caption_with_source_button(
+async def test_ninja_pulse_cta_present_once_in_photo_caption_with_source_only_keyboard(
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -787,8 +788,8 @@ async def test_ninja_pulse_cta_absent_from_photo_caption_with_source_button(
     fake_bot.send_photo.assert_called_once()
     _, kwargs = fake_bot.send_photo.call_args
     caption = kwargs["caption"]
-    assert "NINJA PULSE. Подписаться 🥷" not in caption
-    assert "https://t.me/nnjvpn" not in caption
+    assert caption.count("NINJA PULSE. Подписаться 🥷") == 1
+    assert '<a href="https://t.me/nnjvpn">NINJA PULSE. Подписаться 🥷</a>' in caption
     # Source button (a completely separate mechanism - the inline keyboard) must be unaffected.
     keyboard = kwargs["reply_markup"]
     assert keyboard is not None
@@ -800,11 +801,12 @@ async def test_ninja_pulse_cta_absent_from_photo_caption_with_source_button(
 
 
 @pytest.mark.asyncio
-async def test_ninja_pulse_cta_absent_from_text_only_delivery(
+async def test_ninja_pulse_cta_present_once_in_text_only_delivery(
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No image candidates -> plain text send_message path - CTA must be absent here too."""
+    """No image candidates -> plain text send_message path - CTA must still be present exactly
+    once here too."""
     _common_settings(monkeypatch)
     await _seed_eligible_event(factory, test_source)
     monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
@@ -823,8 +825,8 @@ async def test_ninja_pulse_cta_absent_from_text_only_delivery(
 
     fake_bot.send_message.assert_called_once()
     sent_text = fake_bot.send_message.call_args.args[1]
-    assert "NINJA PULSE. Подписаться 🥷" not in sent_text
-    assert "https://t.me/nnjvpn" not in sent_text
+    assert sent_text.count("NINJA PULSE. Подписаться 🥷") == 1
+    assert '<a href="https://t.me/nnjvpn">NINJA PULSE. Подписаться 🥷</a>' in sent_text
     assert result.notified == 1
 
 
