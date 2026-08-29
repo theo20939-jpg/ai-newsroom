@@ -24,6 +24,7 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
+from aiogram.types import BufferedInputFile
 from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -123,6 +124,34 @@ def _stored_candidate(tmp_path, monkeypatch: pytest.MonkeyPatch, *, warnings: li
         storage_status="stored", storage_key=stored.storage_key, telegram_file_id=None,
         editor_decision=None, source_url="https://example.com/img.jpg", article_url="https://example.com/article",
         warnings=warnings, is_expired=False,
+    )
+
+
+def _stored_candidate_with_cached_file_id(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, *, warnings: list | None = None,
+) -> EditorialImageCandidate:
+    """Phase V2.16: the exact mirror-image counterpart to `_stored_candidate()` - a real,
+    locally-stored candidate that ALSO carries a cached `telegram_file_id`, so
+    `resolve_photo_input()` (bot/image_preview_media.py) returns that cached string instead of a
+    `BufferedInputFile`, reproducing the exact real-production condition
+    `worker/content_cycle.py`'s own `source_bytes = photo_input.data if isinstance(photo_input,
+    BufferedInputFile) else None` line left `source_bytes` at `None` for. `read_candidate_bytes()`
+    still resolves real bytes for this same candidate via `storage_key` - Telegram delivery
+    representation and recomposition source bytes are independently resolvable, exactly as
+    `resolve_recomposition_source_bytes()`'s own docstring already documents."""
+    monkeypatch.setattr(settings, "image_storage_root", str(tmp_path))
+    monkeypatch.setattr(image_persistence, "_storage_singleton", None)
+    storage = LocalImageStorage(tmp_path)
+    data = _jpeg_bytes()
+    sha = hashlib.sha256(data).hexdigest()
+    stored = storage.store_validated_image(data, sha256=sha, image_format="JPEG", max_bytes=10_000_000)
+    return EditorialImageCandidate(
+        id=uuid4(), candidate_id="cand-cached-1", rank=1, relevance_score=90, quality_score=90,
+        discovery_method="og_image", source_relationship="original_article", relevance_reason="high overlap",
+        width=1600, height=900, observed_mime="image/jpeg", image_format="JPEG",
+        storage_status="stored", storage_key=stored.storage_key, telegram_file_id="cached-tg-file-id-123",
+        editor_decision=None, source_url="https://example.com/cached-img.jpg",
+        article_url="https://example.com/cached-article", warnings=warnings, is_expired=False,
     )
 
 
@@ -451,3 +480,89 @@ async def test_non_news_presentation_type_keeps_cta_keyboard_in_enforce_mode(
     rows = keyboard.inline_keyboard
     all_button_text = " ".join(b.text for row in rows for b in row)
     assert "NINJA PULSE" in all_button_text  # CTA keyboard unchanged for non-NEWS - no regression
+
+
+# ---------------------------------------------------------------------------
+# Phase V2.16: cached Telegram file_id must not starve MASTER NEWS branding of the
+# already-selected candidate's real original bytes.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_cached_file_id_candidate_still_receives_master_news_branding(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch, tmp_path, caplog,
+) -> None:
+    """The real production gap: `resolve_photo_input()` returns a cached `telegram_file_id`
+    (a plain str) whenever one exists, so `worker/content_cycle.py`'s own `source_bytes =
+    photo_input.data if isinstance(photo_input, BufferedInputFile) else None` line left
+    `source_bytes` at `None` even though `resolve_recomposition_source_bytes()` (a few lines
+    below) had already independently resolved the exact same candidate's real bytes via
+    `read_candidate_bytes()`. With `editorial_recomposition_mode = 'off'`, recomposition fails
+    open (`used_recomposed_image = False`), so the pre-fix code never promoted those bytes and
+    branding was skipped (`brand_render_skipped` / `cached_file_id_no_local_bytes`), sending the
+    raw cached file_id with NO NNJ overlay. Proves the fix: `apply_master_news_branding()` now
+    still runs on `ORIGINAL_SOURCE` bytes, and Telegram receives the branded `BufferedInputFile`
+    (not the cached file_id) as a result."""
+    _common_settings(monkeypatch)
+    settings.editorial_recomposition_mode = "off"
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v6_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_photo.return_value.message_id = 111
+    candidate = _stored_candidate_with_cached_file_id(tmp_path, monkeypatch)
+
+    with (
+        patch("worker.content_cycle._classify_event_for_router_treatment", new=AsyncMock(return_value=_standard_decision())),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[candidate])),
+        caplog.at_level("INFO"),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    assert result.notified == 1
+    fake_bot.send_photo.assert_called_once()
+
+    branding_records = [r for r in caplog.records if r.msg == "master_news_branding_applied"]
+    assert len(branding_records) == 1  # no longer skipped
+    assert branding_records[0].visual_path == "ORIGINAL_SOURCE"
+
+    skip_records = [r for r in caplog.records if r.msg == "brand_render_skipped"]
+    assert skip_records == []  # cached_file_id_no_local_bytes must not fire when bytes exist
+
+    # Telegram must receive the branded bytes, not the cached file_id string.
+    photo_arg = fake_bot.send_photo.call_args.kwargs["photo"]
+    assert isinstance(photo_arg, BufferedInputFile)
+
+
+@pytest.mark.asyncio
+async def test_cached_file_id_with_source_risk_still_brands_with_lower_signature_disabled(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch, tmp_path, caplog,
+) -> None:
+    """Same cached-file_id gap, combined with a real source-risk warning: `maybe_recompose()`
+    must never even be called (zero Gemini calls, the risk gate skips it entirely, unchanged by
+    this phase), yet MASTER NEWS branding must still run on the promoted ORIGINAL_SOURCE bytes,
+    with `disable_lower_signature=True` exactly as the pre-existing risk contract requires."""
+    _common_settings(monkeypatch)  # already sets a dummy gemini_api_key via monkeypatch
+    settings.editorial_recomposition_mode = "live"  # proves the risk gate - not the mode - is why Gemini is skipped
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v6_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_photo.return_value.message_id = 111
+    candidate = _stored_candidate_with_cached_file_id(tmp_path, monkeypatch, warnings=["possible_watermark"])
+
+    with (
+        patch("worker.content_cycle._classify_event_for_router_treatment", new=AsyncMock(return_value=_standard_decision())),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[candidate])),
+        patch("services.editorial_recomposition.GeminiImageAdapter") as mock_adapter_class,
+        caplog.at_level("INFO"),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    assert result.notified == 1
+    mock_adapter_class.assert_not_called()  # zero Gemini calls - the risk gate skips it entirely
+
+    branding_records = [r for r in caplog.records if r.msg == "master_news_branding_applied"]
+    assert len(branding_records) == 1
+    assert branding_records[0].visual_path == "ORIGINAL_SOURCE"
+    assert branding_records[0].lower_signature_disabled_reason is not None

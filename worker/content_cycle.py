@@ -1403,6 +1403,22 @@ async def run_content_cycle(
                                 if recomposition_result.used_recomposed_image:
                                     source_bytes = recomposition_result.image_bytes
 
+                            # Phase V2.16: MASTER NEWS branding must still receive the already-
+                            # selected candidate's real original bytes when photo_input resolved to
+                            # a cached Telegram file_id and Gemini did not produce a new image
+                            # (skipped/ineligible/failed/off, or the source-risk gate above skipped
+                            # recomposition entirely) - recomposition_source_bytes already resolved
+                            # them above via the exact same storage read, no new fetch/call here.
+                            # ORIGINAL_SOURCE remains a first-class result (Phase V2.7 §8/V2.10H) -
+                            # it must not be silently demoted to NO_OVERLAY merely because the
+                            # cached-file_id path has no BufferedInputFile bytes of its own.
+                            if (
+                                presentation_decision.presentation_type == PRESENTATION_NEWS
+                                and source_bytes is None
+                                and recomposition_source_bytes is not None
+                            ):
+                                source_bytes = recomposition_source_bytes
+
                             needs_render = presentation_decision.presentation_type in (
                                 PRESENTATION_DATA, PRESENTATION_QUOTE, PRESENTATION_BREAKING,
                             ) or source_bytes is not None
