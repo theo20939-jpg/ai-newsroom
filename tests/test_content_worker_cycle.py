@@ -135,17 +135,40 @@ async def test_source(factory: async_sessionmaker[AsyncSession]) -> AsyncIterato
                 # ContentDraft/NewsEvent fail entirely, silently leaking a stale COMPLETED
                 # NEWS_ANALYSIS task that a LATER test's run_content_cycle() could then pick up -
                 # a real, confirmed failure mode discovered during Phase 19 M7 validation).
-                story_ids: list = []
+                story_ids: set = set()
                 if content_draft_ids and await _table_exists(session, "content_draft_story_links"):
                     from database.models.content_draft_story_link import ContentDraftStoryLink
 
-                    story_ids = (
-                        await session.execute(
-                            select(ContentDraftStoryLink.story_id)
-                            .where(ContentDraftStoryLink.source_event_id.in_(event_ids))
-                            .distinct()
-                        )
-                    ).scalars().all()
+                    story_ids.update(
+                        (
+                            await session.execute(
+                                select(ContentDraftStoryLink.story_id)
+                                .where(ContentDraftStoryLink.source_event_id.in_(event_ids))
+                                .distinct()
+                            )
+                        ).scalars().all()
+                    )
+
+                # Phase V2.12I: `stories.first_event_id` FK-references `news_events.id` directly
+                # (database/models/story.py) - independent of whether a ContentDraftStoryLink row
+                # was ever created, unlike the block above. A test that constructs a Story via
+                # `_make_story_linked_draft()` (tests/test_content_cycle_story_delivery.py) and
+                # then deliberately never completes content generation (a fail-closed/short-
+                # circuit scenario) never creates a ContentDraftStoryLink at all, so the block
+                # above alone missed exactly these Story rows - the real, confirmed root cause of
+                # a ForeignKeyViolation on stories_first_event_id_fkey at teardown, discovered
+                # against 4 real fail-closed-path tests. Unconditional on content_draft_ids, since
+                # this FK exists regardless of whether a draft/link was ever created.
+                if await _table_exists(session, "stories"):
+                    from database.models.story import Story
+
+                    story_ids.update(
+                        (
+                            await session.execute(
+                                select(Story.id).where(Story.first_event_id.in_(event_ids))
+                            )
+                        ).scalars().all()
+                    )
 
                 if content_draft_ids and await _table_exists(session, "story_context_snapshots"):
                     from database.models.story_context_snapshot import StoryContextSnapshot
