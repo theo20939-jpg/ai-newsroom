@@ -21,7 +21,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Integer, UniqueConstraint, func
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Integer, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -68,6 +68,19 @@ class TelegraphArticleReview(Base):
     telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     telegram_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     telegram_thread_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # TELEGRAPH LIVE PUBLISH: publication outcome, added directly to this row rather than a new
+    # standalone table - structurally the SAME kind of thing as the three telegram_* delivery-
+    # tracking columns immediately above (a post-decision EXECUTION OUTCOME of an already-final
+    # human decision, never a second decision axis of its own - unlike this table's own
+    # relationship to TelegraphTopicProposal, see this class's own module docstring). This table
+    # is low-volume (one row per human-reviewed article, never a hot insert-per-request path like
+    # NewsEventArticleAcquisition), so an additive nullable column carries none of that hot-path
+    # migration risk. `published_url` alone is the idempotency signal
+    # (services/telegraph_publish_orchestrator.py checks it before ever calling the Telegraph API
+    # again) - no separate `path`/external id column is kept because nothing else in this
+    # codebase ever needs to look a publication up by anything other than this review row.
+    published_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

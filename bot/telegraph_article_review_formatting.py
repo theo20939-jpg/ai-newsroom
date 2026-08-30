@@ -2,6 +2,12 @@
 telegraph_shortlist_formatting.py's own "pure functions, no aiogram/Bot type anywhere in this
 module" discipline exactly - testable with zero Telegram mocking, no database access.
 
+TELEGRAPH LIVE PUBLISH: when a review is APPROVED and its `published_url` column is populated
+(services/telegraph_publish_orchestrator.py sets it after a real telegra.ph createPage call),
+render_article_review_text() additionally shows the published link - a small, additive block after
+the existing status line, never replacing "✅ Статья одобрена" (both are independently true and
+independently meaningful: the human APPROVED it, and it IS live).
+
 Operator-facing text is Russian throughout, matching Checkpoint 2's own established convention.
 Unlike the shortlist message (several short topics, fits comfortably under SAFE_LIMIT), a full
 long-form article routinely does NOT fit in one Telegram message - this module deliberately
@@ -100,6 +106,10 @@ def render_article_review_text(
     lines.append("")
     lines.append("Это предпросмотр — полный текст статьи доступен в системе.")
     lines.append(_STATUS_LINE_RU[review.status])
+    if review.status == TelegraphArticleReviewStatus.APPROVED and review.published_url:
+        lines.append("")
+        lines.append("✅ Статья опубликована")
+        lines.append(review.published_url)
 
     text = "\n".join(lines)
     if len(text) > SAFE_LIMIT:

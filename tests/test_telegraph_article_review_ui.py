@@ -28,11 +28,15 @@ _ARTICLE = {
 }
 
 
-def _review(*, status: TelegraphArticleReviewStatus = TelegraphArticleReviewStatus.PENDING) -> TelegraphArticleReview:
+def _review(
+    *, status: TelegraphArticleReviewStatus = TelegraphArticleReviewStatus.PENDING,
+    published_url: str | None = None,
+) -> TelegraphArticleReview:
     return TelegraphArticleReview(
         id=uuid4(), article_task_id=uuid4(), proposal_id=uuid4(), status=status,
         decided_at=None, decided_by_telegram_user_id=None,
         telegram_chat_id=None, telegram_message_id=None, telegram_thread_id=None,
+        published_url=published_url, published_at=None,
         created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
     )
 
@@ -64,6 +68,31 @@ def test_renders_current_status_line() -> None:
         _review(status=TelegraphArticleReviewStatus.NEEDS_REVISION), _ARTICLE, EditorialChannel.NINJA_AI,
     )
     assert "✏️ Требуется доработка" in revision_text
+
+
+def test_shows_published_url_when_approved_and_published() -> None:
+    text = render_article_review_text(
+        _review(status=TelegraphArticleReviewStatus.APPROVED, published_url="https://telegra.ph/Test-08-31"),
+        _ARTICLE, EditorialChannel.NINJA_AI,
+    )
+    assert "✅ Статья опубликована" in text
+    assert "https://telegra.ph/Test-08-31" in text
+    assert "✅ Статья одобрена" in text  # decision status line still present alongside it
+
+
+def test_no_published_line_when_approved_but_not_yet_published() -> None:
+    text = render_article_review_text(
+        _review(status=TelegraphArticleReviewStatus.APPROVED, published_url=None), _ARTICLE, EditorialChannel.NINJA_AI,
+    )
+    assert "Статья опубликована" not in text
+
+
+def test_no_published_line_while_pending_even_if_url_somehow_set() -> None:
+    text = render_article_review_text(
+        _review(status=TelegraphArticleReviewStatus.PENDING, published_url="https://telegra.ph/Should-Not-Show"),
+        _ARTICLE, EditorialChannel.NINJA_AI,
+    )
+    assert "Should-Not-Show" not in text
 
 
 def test_text_within_safe_limit_for_a_normal_article() -> None:

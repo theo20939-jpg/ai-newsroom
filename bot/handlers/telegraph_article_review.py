@@ -15,11 +15,21 @@ established per-module-private-helper convention), never a second, divergent aut
 system. See that module's own docstring for the full reasoning behind this being the strongest
 EXISTING mechanism, not a new one.
 
-APPROVE/REVISE here ONLY sets `TelegraphArticleReview.status` - never republishes, never sends
-the article anywhere else, never calls any external publishing API, never triggers a new LLM
-call. This checkpoint does not build what happens after a decision (a future checkpoint's job) -
-see this module's own structural source-scan tests
-(tests/test_telegraph_article_review_handler.py) for the enforced boundary.
+REVISE here ONLY sets `TelegraphArticleReview.status` - never publishes, never sends the article
+anywhere else, never triggers a new LLM call.
+
+TELEGRAPH LIVE PUBLISH: APPROVE additionally invokes
+`services.telegraph_publish_orchestrator.publish_approved_telegraph_article()` - the one new,
+narrow next-stage side effect this handler triggers - immediately after the decision is durably
+recorded, on the SAME transition (never on an already-final review re-tap). This handler still
+never constructs a Telegraph publish-API request itself (no `access_token`, no Node-format
+content, no direct outbound Telegraph HTTP call site anywhere in this file - see this module's own
+structural source-scan tests, tests/test_telegraph_article_review_handler.py, for the enforced
+boundary);
+every Telegraph-specific detail lives in services/telegraph_publisher.py, reached only through
+that one orchestrator entry point. A publish failure never rolls back the APPROVED decision and
+never raises - the operator sees an explicit alert instead, and the review stays retryable via
+`scripts/publish_telegraph_review.py`.
 """
 import logging
 
@@ -34,6 +44,7 @@ from database.models.telegraph_shortlist import TelegraphTopicProposal
 from database.session import async_session_factory
 from services.telegraph_article_review_notifier import update_article_review_message
 from services.telegraph_article_review_service import TelegraphArticleReviewService
+from services.telegraph_publish_orchestrator import publish_approved_telegraph_article
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +148,19 @@ async def handle_article_review_callback(callback: CallbackQuery) -> None:
             await callback.answer(_ACTION_TO_ACK_RU[action])
             return
 
+        publish_ok = True
+        if action == "approve":
+            publish_outcome = await publish_approved_telegraph_article(session, review_id)
+            publish_ok = publish_outcome.status in ("published", "already_published")
+            if not publish_ok:
+                logger.warning(
+                    "telegraph_article_review_publish_failed",
+                    extra={
+                        "review_id": str(review_id), "publish_status": publish_outcome.status,
+                        "error": publish_outcome.error,
+                    },
+                )
+
         assert message.bot is not None
         edited = await update_article_review_message(
             message.bot, chat_id=message.chat.id, message_id=message.message_id,
@@ -147,4 +171,8 @@ async def handle_article_review_callback(callback: CallbackQuery) -> None:
                 "telegraph_article_review_rerender_failed",
                 extra={"chat_id": message.chat.id, "review_id": str(review_id)},
             )
-        await callback.answer(_ACTION_TO_ACK_RU[action])
+
+        if action == "approve" and not publish_ok:
+            await callback.answer("Статья одобрена, но публикация не удалась.", show_alert=True)
+        else:
+            await callback.answer(_ACTION_TO_ACK_RU[action])
