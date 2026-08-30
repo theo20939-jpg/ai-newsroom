@@ -756,22 +756,6 @@ class Settings(BaseSettings):
     # COMPLETED-and-unreviewed articles to advance. Not fit to any real operating data yet.
     telegraph_pipeline_poll_interval_seconds: int = Field(default=300, gt=0)
 
-    # TELEGRAPH LIVE PUBLISH: real telegra.ph createPage credential (services/telegraph_publisher.
-    # py). Deliberately `SecretStr | None`, mirroring telegram_bot_token/openai_api_key/
-    # anthropic_api_key's own established credential-field convention exactly. Default `None` =>
-    # publishing is disabled and fails closed (TelegraphNotConfiguredError) - never a silent no-op
-    # that looks like success. Populated by an operator running `python -m scripts.
-    # create_telegraph_account` exactly once and pasting the printed access_token into `.env` -
-    # never generated or read anywhere else in this codebase.
-    telegraph_access_token: SecretStr | None = None
-    # Default author_name attached to every created page (Telegraph API: 0-128 chars) - the
-    # per-call `author_name` this Checkpoint's own instruction asked for a sane default value.
-    telegraph_author_name: str = "NINJA PULSE"
-    # Optional default author_url (Telegraph API: 0-512 chars) - `None` simply omits the field
-    # from the createPage/createAccount request, exactly like every other optional field in this
-    # codebase's own established "omit when None" HTTP-payload convention.
-    telegraph_author_url: str | None = None
-
     # NINJA PULSE Visual System v1 (services/presentation_director.py, services/brand_renderer.py)
     # - "off" (default): byte-identical to pre-Visual-System delivery, no presentation decision is
     # even computed. "shadow": decision computed and logged, never rendered/sent. "enforce": the

@@ -17,19 +17,14 @@ from aiogram.methods import AnswerCallbackQuery, EditMessageText, TelegramMethod
 from aiogram.types import CallbackQuery, Chat, InaccessibleMessage
 from aiogram.types import Message as AiogramMessage
 from aiogram.types import User
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import bot.handlers.telegraph_article_review as handler_module
-import services.telegraph_publish_orchestrator as orchestrator_module
 from bot.handlers.telegraph_article_review import handle_article_review_callback
 from bot.keyboards.telegraph_article_review import encode_callback_data
 from core.config import settings
-from database.models.telegraph_article_review import TelegraphArticleReview, TelegraphArticleReviewStatus
+from database.models.telegraph_article_review import TelegraphArticleReviewStatus
 from services.telegraph_article_processor import generate_article_for_researched_proposal
 from services.telegraph_article_review_service import TelegraphArticleReviewService, create_article_review
-from services.telegraph_publish_orchestrator import PublishOutcome
-from services.telegraph_publisher import TelegraphPublishError
 from tests.test_telegraph_article_processor import _DualGateway, _researched_proposal
 
 _FAKE_TOKEN = "123456:FAKE-TEST-TOKEN-AAAAAAAAAAAAAAAAAAAAAAAAAAAA"
@@ -307,136 +302,6 @@ async def test_no_real_telegram_send_beyond_answer_and_edit(
     assert len(session.sent) == 2
 
 
-@pytest.mark.asyncio
-async def test_approve_triggers_publication(
-    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        "bot.handlers.telegraph_article_review.async_session_factory", _fake_session_factory(db_session),
-    )
-    calls: list = []
-
-    async def fake_publish(session, review_id):
-        calls.append(review_id)
-        return PublishOutcome(status="published", url="https://telegra.ph/Test-08-31")
-
-    monkeypatch.setattr(handler_module, "publish_approved_telegraph_article", fake_publish)
-
-    review = await _seed_pending_review(db_session)
-    session = FakeSession()
-    callback = _make_callback(session, data=encode_callback_data("approve", review.id))
-    await handle_article_review_callback(callback)
-
-    assert calls == [review.id]
-    edits = [m for m in session.sent if isinstance(m, EditMessageText)]
-    assert len(edits) == 1
-    assert "✅ Статья опубликована" in (edits[0].text or "")
-    assert "https://telegra.ph/Test-08-31" in (edits[0].text or "")
-    answer = session.sent[-1]
-    assert isinstance(answer, AnswerCallbackQuery)
-    assert answer.show_alert is not True  # normal ack, not a failure alert
-
-
-@pytest.mark.asyncio
-async def test_approve_publication_failure_shows_alert_and_keeps_approved(
-    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        "bot.handlers.telegraph_article_review.async_session_factory", _fake_session_factory(db_session),
-    )
-
-    async def fake_publish(session, review_id):
-        return PublishOutcome(status="failed", url=None, error="boom")
-
-    monkeypatch.setattr(handler_module, "publish_approved_telegraph_article", fake_publish)
-
-    review = await _seed_pending_review(db_session)
-    session = FakeSession()
-    callback = _make_callback(session, data=encode_callback_data("approve", review.id))
-    await handle_article_review_callback(callback)
-
-    answer = session.sent[-1]
-    assert isinstance(answer, AnswerCallbackQuery)
-    assert answer.show_alert is True
-    assert answer.text == "Статья одобрена, но публикация не удалась."
-
-    service = TelegraphArticleReviewService(db_session)
-    reloaded = await service.get_review(review.id)
-    assert reloaded is not None
-    assert reloaded.status == TelegraphArticleReviewStatus.APPROVED  # decision never rolled back
-    assert reloaded.published_url is None  # still retryable
-
-
-@pytest.mark.asyncio
-async def test_approve_decision_committed_before_publish_attempt_and_survives_publish_failure(
-    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Pre-deploy safety property (transaction ordering): the PENDING->APPROVED decision must be
-    durably committed BEFORE the external telegra.ph call is ever attempted, and must survive that
-    call failing. Exercises the REAL orchestrator (only the network call itself,
-    services.telegraph_publish_orchestrator.create_page, is mocked) end to end through the real
-    handler - not a faked orchestrator - and reads back via a real SQL SELECT (bypasses the
-    session's identity-map shortcut `session.get()` can take under `expire_on_commit=False`), the
-    same durability proof this repo's own db_session test harness relies on elsewhere."""
-    monkeypatch.setattr(
-        "bot.handlers.telegraph_article_review.async_session_factory", _fake_session_factory(db_session),
-    )
-    review = await _seed_pending_review(db_session)
-    observed_status_at_publish_time: list[str] = []
-
-    async def fake_create_page(*, title: str, content, author_name=None, author_url=None):
-        stmt = select(TelegraphArticleReview.status).where(TelegraphArticleReview.id == review.id)
-        status = (await db_session.execute(stmt)).scalar_one()
-        observed_status_at_publish_time.append(status.value)
-        raise TelegraphPublishError("simulated createPage outage")
-
-    monkeypatch.setattr(orchestrator_module, "create_page", fake_create_page)
-
-    session = FakeSession()
-    callback = _make_callback(session, data=encode_callback_data("approve", review.id))
-    await handle_article_review_callback(callback)
-
-    # A. Committed BEFORE the network call was ever attempted - a real SELECT executed from
-    # inside the (real, unmocked) network-call site itself already saw "approved".
-    assert observed_status_at_publish_time == ["approved"]
-
-    # B. Survives the failure - re-read via a real round-trip, not the identity-map shortcut.
-    reloaded = (
-        await db_session.execute(select(TelegraphArticleReview).where(TelegraphArticleReview.id == review.id))
-    ).scalar_one()
-    assert reloaded.status == TelegraphArticleReviewStatus.APPROVED
-    assert reloaded.published_url is None
-    assert reloaded.published_at is None
-
-    answer = session.sent[-1]
-    assert isinstance(answer, AnswerCallbackQuery)
-    assert answer.show_alert is True
-    assert answer.text == "Статья одобрена, но публикация не удалась."
-
-
-@pytest.mark.asyncio
-async def test_revise_never_triggers_publication(
-    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        "bot.handlers.telegraph_article_review.async_session_factory", _fake_session_factory(db_session),
-    )
-    calls: list = []
-
-    async def fake_publish(session, review_id):
-        calls.append(review_id)
-        return PublishOutcome(status="published", url="https://telegra.ph/should-not-happen")
-
-    monkeypatch.setattr(handler_module, "publish_approved_telegraph_article", fake_publish)
-
-    review = await _seed_pending_review(db_session)
-    session = FakeSession()
-    callback = _make_callback(session, data=encode_callback_data("revise", review.id))
-    await handle_article_review_callback(callback)
-
-    assert calls == []
-
-
 def test_notifier_only_ever_references_telegraph_destination() -> None:
     for forbidden in (
         "EditorialDestination.NEWS", "EditorialDestination.MEME",
@@ -460,3 +325,38 @@ def test_handler_creates_no_next_stage_side_effect() -> None:
         "CapabilityExecutor", "WorkflowRunner", "call_generate", "LLMGateway",
     ):
         assert forbidden not in _HANDLER_SOURCE, f"unexpected next-stage reference: {forbidden}"
+
+
+def test_no_telegra_ph_publishing_references_remain_in_runtime_path() -> None:
+    """TELEGRAPH EDITORIAL CHAT DELIVERY regression guard: the automatic-publication feature
+    (services/telegraph_publisher.py, services/telegraph_publish_orchestrator.py,
+    scripts/create_telegraph_account.py, scripts/publish_telegraph_review.py,
+    TELEGRAPH_ACCESS_TOKEN) was removed entirely per the corrected product requirement (the editor
+    is the final publisher, manually) - this asserts none of it is reachable from any file still
+    in the delivery path, so a future edit cannot silently reintroduce it."""
+    from pathlib import Path
+
+    runtime_sources = {
+        "bot/handlers/telegraph_article_review.py": _HANDLER_SOURCE,
+        "services/telegraph_article_review_notifier.py": _NOTIFIER_SOURCE,
+        "bot/telegraph_article_review_formatting.py": Path(
+            "bot/telegraph_article_review_formatting.py"
+        ).read_text(encoding="utf-8"),
+        "scripts/telegraph_pipeline_worker.py": Path("scripts/telegraph_pipeline_worker.py").read_text(
+            encoding="utf-8"
+        ),
+        "core/config.py": Path("core/config.py").read_text(encoding="utf-8"),
+    }
+    for forbidden in ("telegra.ph", "createPage", "createAccount", "TELEGRAPH_ACCESS_TOKEN", "telegraph_access_token"):
+        for path, source in runtime_sources.items():
+            assert forbidden not in source, f"unexpected reference {forbidden!r} in {path}"
+
+    for removed_module in (
+        "services.telegraph_publisher", "services.telegraph_publish_orchestrator",
+        "scripts.create_telegraph_account", "scripts.publish_telegraph_review",
+    ):
+        try:
+            __import__(removed_module)
+        except ModuleNotFoundError:
+            continue
+        raise AssertionError(f"{removed_module} still importable - live-publish feature not fully removed")

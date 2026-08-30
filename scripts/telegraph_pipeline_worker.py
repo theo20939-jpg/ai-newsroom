@@ -20,7 +20,13 @@ Chains, in order, reusing every existing, already-reviewed checkpoint unmodified
      (returns "already_exists") if an article was already generated for this proposal's Story.
   3. services.telegraph_article_review_service.create_article_review() +
      services.telegraph_article_review_notifier.send_article_review() - creates the durable
-     review row and sends (or, by default, DRY-RUNS) the Telegram preview message.
+     review row and sends (or, by default, DRY-RUNS) the COMPLETE article as a header/body-chunks/
+     footer message sequence into TELEGRAPH_TOPIC_ID (TELEGRAPH EDITORIAL CHAT DELIVERY - the
+     editor is the final publisher, manually, from this full delivery; no external publishing API
+     is ever called). On a real, successful send, this function now persists the footer message's
+     chat_id/message_id/topic_id onto the review row (TelegraphArticleReviewService.
+     record_telegram_delivery()) - the delivery-completion signal send_article_review()'s own
+     idempotency guard checks before ever re-sending on a later retry for the same proposal.
 
 Real paid LLM calls and real Telegram sends require BOTH `--live` on the command line AND
 `settings.telegraph_pipeline_enabled = True` in the environment - two independent, explicit
@@ -108,7 +114,7 @@ from integrations.prompts.file_repository import FilePromptRepository
 from services.pricing_catalog import ModelRegistryPricingCatalog
 from services.telegraph_article_processor import generate_article_for_researched_proposal
 from services.telegraph_article_review_notifier import send_article_review
-from services.telegraph_article_review_service import create_article_review
+from services.telegraph_article_review_service import TelegraphArticleReviewService, create_article_review
 from services.telegraph_research_processor import process_approved_telegraph_proposal
 
 logger = logging.getLogger(__name__)
@@ -200,9 +206,24 @@ async def run_telegraph_pipeline_for_proposal(proposal_id: UUID, *, live: bool) 
             )
         finally:
             await bot.session.close()
+
+        # TELEGRAPH EDITORIAL CHAT DELIVERY §6: persist the delivery anchor (the footer message's
+        # own chat_id/message_id/topic_id, per send_article_review()'s own contract) the moment a
+        # real send succeeds - this is the ONLY thing that makes send_article_review()'s own
+        # `already_delivered` idempotency guard effective on a later retry for this same proposal.
+        # Previously never wired at all (a pre-existing Checkpoint 6/7 gap, not introduced here).
+        if outcome.sent and outcome.message_id is not None and outcome.chat_id is not None:
+            review_service = TelegraphArticleReviewService(session)
+            await review_service.record_telegram_delivery(
+                review.id, chat_id=outcome.chat_id, message_id=outcome.message_id, thread_id=outcome.topic_id,
+            )
+
         logger.info(
             "telegraph_pipeline_worker_review_stage",
-            extra={"proposal_id": str(proposal_id), "review_id": str(review.id), "sent": outcome.sent, "dry_run": dry_run},
+            extra={
+                "proposal_id": str(proposal_id), "review_id": str(review.id), "sent": outcome.sent,
+                "reason": outcome.reason, "dry_run": dry_run,
+            },
         )
 
 
