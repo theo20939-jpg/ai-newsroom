@@ -589,3 +589,77 @@ async def test_media_group_keyboard_generic_telegram_api_error_still_logged_as_f
     failure_records = [r for r in caplog.records if r.message == "telegram_routing_media_group_keyboard_edit_failed"]
     assert len(failure_records) == 1
     assert failure_records[0].levelname == "ERROR"
+
+
+# ---------------------------------------------------------------------------
+# Phase V2.27 §6/§13 - send_video_to_editorial_destination() (video-only NEWS delivery)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_video_only_dry_run_never_calls_the_bot() -> None:
+    from services.telegram_routing import send_video_to_editorial_destination
+
+    bot = AsyncMock()
+
+    outcome = await send_video_to_editorial_destination(
+        bot, EditorialDestination.NEWS, b"fake-video-bytes", "Caption text", dry_run=True,  # type: ignore[arg-type]
+    )
+
+    assert outcome.sent is False
+    assert outcome.reason == "dry_run"
+    bot.send_video.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_video_only_live_send_reaches_bot_send_video_with_configured_route() -> None:
+    from services.telegram_routing import send_video_to_editorial_destination
+
+    bot = AsyncMock()
+    bot.send_video.return_value.message_id = 950
+
+    outcome = await send_video_to_editorial_destination(
+        bot, EditorialDestination.NEWS, "fake-file-id", "Caption text", dry_run=False,
+    )
+
+    assert outcome.sent is True
+    assert outcome.message_id == 950
+    bot.send_video.assert_called_once()
+    _, kwargs = bot.send_video.call_args
+    assert kwargs["video"] == "fake-file-id"
+    assert kwargs["caption"] == "Caption text"
+    assert kwargs["message_thread_id"] == 11  # the configured NEWS topic id
+
+
+@pytest.mark.asyncio
+async def test_video_only_telegram_api_error_is_caught_never_raised() -> None:
+    """Phase V2.27 TEST 13: a live Telegram video-upload failure must never raise past this
+    function, and must never block the caller's own NEWS-item fallback - the caller (worker/
+    content_cycle.py) treats `sent=False` exactly like any other failed send and falls back to
+    the existing plain-text NEWS delivery, never crashing content_worker."""
+    from services.telegram_routing import send_video_to_editorial_destination
+
+    bot = AsyncMock()
+    bot.send_video.side_effect = TelegramAPIError(method=None, message="upload failed")  # type: ignore[arg-type]
+
+    outcome = await send_video_to_editorial_destination(
+        bot, EditorialDestination.NEWS, "fake-file-id", "Caption text", dry_run=False,
+    )
+
+    assert outcome.sent is False
+    assert outcome.reason == "telegram_api_error"
+
+
+@pytest.mark.asyncio
+async def test_video_only_unknown_destination_fails_safely() -> None:
+    from services.telegram_routing import send_video_to_editorial_destination
+
+    bot = AsyncMock()
+
+    outcome = await send_video_to_editorial_destination(
+        bot, "NOT_A_REAL_DESTINATION", "fake-file-id", "Caption text", dry_run=False,
+    )
+
+    assert outcome.sent is False
+    assert outcome.reason == "unknown_destination"
+    bot.send_video.assert_not_called()

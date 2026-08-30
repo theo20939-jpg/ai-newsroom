@@ -149,3 +149,66 @@ def test_to_native_video_hint_returns_none_for_an_unrecognized_discovery_method_
     candidate = _eligible_candidate(discovery_method="some_future_method")
 
     assert to_native_video_hint(candidate) is None
+
+
+# ---------------------------------------------------------------------------------------------
+# Phase V2.27A TEST 7 - select_best_video_candidate(): DIRECT_HOSTED > YOUTUBE/VIMEO >
+# EMBEDDED_PLAYER resolution order.
+# ---------------------------------------------------------------------------------------------
+
+
+def test_direct_hosted_preferred_over_youtube_and_embedded_player() -> None:
+    from services.video_discovery_persistence import select_best_video_candidate
+
+    direct = _eligible_candidate(platform="direct_hosted", remote_url="https://cdn.example.com/a.mp4")
+    youtube = _eligible_candidate(platform="youtube", remote_url="https://www.youtube.com/watch?v=abc123")
+    embedded = _eligible_candidate(platform="embedded_player", remote_url="https://player.example.com/embed/1")
+
+    # Order in the input list must not matter - only platform-tier priority does.
+    assert select_best_video_candidate([youtube, embedded, direct]) is direct
+    assert select_best_video_candidate([embedded, direct, youtube]) is direct
+
+
+def test_youtube_or_vimeo_preferred_over_embedded_player_when_no_direct_hosted() -> None:
+    """TEST 8 (Phase V2.27A spec): YouTube/Vimeo behavior unchanged - still outranks the new
+    EMBEDDED_PLAYER tier when no DIRECT_HOSTED candidate exists for this event."""
+    from services.video_discovery_persistence import select_best_video_candidate
+
+    vimeo = _eligible_candidate(platform="vimeo", remote_url="https://vimeo.com/76979871")
+    embedded = _eligible_candidate(platform="embedded_player", remote_url="https://player.example.com/embed/1")
+
+    assert select_best_video_candidate([embedded, vimeo]) is vimeo
+
+
+def test_embedded_player_selected_only_when_nothing_stronger_available() -> None:
+    from services.video_discovery_persistence import select_best_video_candidate
+
+    embedded = _eligible_candidate(platform="embedded_player", remote_url="https://player.example.com/embed/1")
+
+    assert select_best_video_candidate([embedded]) is embedded
+
+
+def test_ties_within_a_tier_resolve_to_earliest_discovered() -> None:
+    """Mirrors get_video_candidates_for_event()'s own created_at-ascending ordering - the first
+    item in the input list, within the same priority tier, wins (stable, never re-sorted)."""
+    from services.video_discovery_persistence import select_best_video_candidate
+
+    first = _eligible_candidate(platform="youtube", remote_url="https://www.youtube.com/watch?v=first")
+    second = _eligible_candidate(platform="vimeo", remote_url="https://vimeo.com/22222")
+
+    assert select_best_video_candidate([first, second]) is first
+
+
+def test_empty_candidate_list_returns_none() -> None:
+    from services.video_discovery_persistence import select_best_video_candidate
+
+    assert select_best_video_candidate([]) is None
+
+
+def test_unrecognized_platform_value_sorts_last_never_raises() -> None:
+    from services.video_discovery_persistence import select_best_video_candidate
+
+    unknown = _eligible_candidate(platform="some_future_platform")
+    embedded = _eligible_candidate(platform="embedded_player")
+
+    assert select_best_video_candidate([unknown, embedded]) is embedded

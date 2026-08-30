@@ -18,6 +18,14 @@ dependencies = [
     "pyyaml>=6.0",
     "openai>=2.40",
     "Pillow>=11.0",
+    # Phase V2.27A: services/hosted_video_download.py's own bounded YouTube/Vimeo/embedded-player
+    # downloader (invoked as a subprocess, never imported as a library - this pin only governs
+    # which CLI version `pip install .` provisions into the image). Lower-bound only, matching
+    # this project's own existing convention for every dependency above - yt-dlp ships frequent
+    # CalVer releases with extractor-breakage fixes, so no upper bound is pinned; this is the most
+    # recent version verifiable as of this session's knowledge cutoff (January 2026), not a claim
+    # that it is the actual latest at install time.
+    "yt-dlp>=2024.12.6",
 ]
 
 [project.optional-dependencies]

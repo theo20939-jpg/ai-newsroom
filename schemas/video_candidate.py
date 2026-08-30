@@ -19,6 +19,12 @@ class VideoDiscoveryMethod(str, enum.Enum):
     OPEN_GRAPH_VIDEO = "open_graph_video"
     TWITTER_PLAYER_CARD = "twitter_player_card"
     HOSTED_PLATFORM_LINK_IN_ARTICLE = "hosted_platform_link_in_article"
+    # Phase V2.27A: an <iframe src> or twitter:player (the embed PAGE url, distinct from twitter:
+    # player:stream's own direct-media url - see TWITTER_PLAYER_CARD above) already present in the
+    # fetched article HTML, for a third-party player that is neither YouTube/Vimeo nor a direct
+    # media file - see services/video_discovery.py::is_safe_embed_url()'s own docstring for the
+    # real evidence-source restriction (never a bare body-text <a href>, deliberately excluded).
+    EMBEDDED_PLAYER_URL = "embedded_player_url"
 
 
 class VideoPlatform(str, enum.Enum):
@@ -27,6 +33,12 @@ class VideoPlatform(str, enum.Enum):
     YOUTUBE = "youtube"
     VIMEO = "vimeo"
     DIRECT_HOSTED = "direct_hosted"
+    # Phase V2.27A: a third-party/publisher-site embedded player URL, evidenced by the article's
+    # own HTML (iframe/twitter:player - see VideoDiscoveryMethod.EMBEDDED_PLAYER_URL above) but not
+    # recognized as YouTube/Vimeo/a direct media file - real downloadability is unknown until
+    # services/hosted_video_download.py actually asks yt-dlp to inspect it (yt-dlp's own generic +
+    # site-specific extractors, never a new per-site classifier written here).
+    EMBEDDED_PLAYER = "embedded_player"
     UNKNOWN = "unknown"
 
 

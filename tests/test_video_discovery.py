@@ -298,3 +298,126 @@ def test_unrecognized_bytes_return_none() -> None:
 def test_short_bytes_never_raise() -> None:
     assert _sniff_container(b"") is None
     assert _sniff_container(b"\x00\x00") is None
+
+
+# ---------------------------------------------------------------------------------------------
+# Phase V2.27A - is_safe_embed_url() (third-party embedded-player safety pre-filter)
+# ---------------------------------------------------------------------------------------------
+
+
+def test_plausible_embed_url_accepted() -> None:
+    from services.video_discovery import is_safe_embed_url
+
+    assert is_safe_embed_url("https://player.example-publisher.com/embed/story-12345") is True
+
+
+def test_bare_host_no_path_rejected() -> None:
+    """TEST 3 (Phase V2.27A spec, arbitrary-URL half): too weak evidence of one specific video."""
+    from services.video_discovery import is_safe_embed_url
+
+    assert is_safe_embed_url("https://player.example.com") is False
+    assert is_safe_embed_url("https://player.example.com/") is False
+
+
+def test_channel_and_playlist_shaped_paths_rejected() -> None:
+    from services.video_discovery import is_safe_embed_url
+
+    assert is_safe_embed_url("https://embed.example.com/channel/some-show") is False
+    assert is_safe_embed_url("https://embed.example.com/playlist/weekly-recap") is False
+    assert is_safe_embed_url("https://embed.example.com/search/results") is False
+    assert is_safe_embed_url("https://embed.example.com/watch?list=PL123") is False
+
+
+def test_non_http_scheme_rejected() -> None:
+    from services.video_discovery import is_safe_embed_url
+
+    assert is_safe_embed_url("ftp://embed.example.com/video/1") is False
+    assert is_safe_embed_url("javascript:alert(1)") is False
+
+
+def test_malformed_url_rejected_never_raises() -> None:
+    from services.video_discovery import is_safe_embed_url
+
+    assert is_safe_embed_url("not a url at all :::") is False
+
+
+def test_localhost_and_private_network_urls_rejected() -> None:
+    """TEST 5 (Phase V2.27A spec)."""
+    from services.video_discovery import is_safe_embed_url
+
+    assert is_safe_embed_url("http://localhost/embed/video/1") is False
+    assert is_safe_embed_url("http://127.0.0.1/embed/video/1") is False
+    assert is_safe_embed_url("http://10.0.0.5/embed/video/1") is False
+    assert is_safe_embed_url("http://192.168.1.1/embed/video/1") is False
+    assert is_safe_embed_url("http://169.254.169.254/embed/video/1") is False  # link-local/metadata endpoint
+    assert is_safe_embed_url("http://internal-service.internal/embed/1") is False
+    assert is_safe_embed_url("http://box.local/embed/1") is False
+
+
+def test_public_ip_literal_with_a_specific_path_accepted() -> None:
+    """A public IP literal is not inherently unsafe - only private/loopback/link-local/reserved
+    ranges are rejected."""
+    from services.video_discovery import is_safe_embed_url
+
+    assert is_safe_embed_url("http://93.184.216.34/embed/video/1") is True
+
+
+# ---------------------------------------------------------------------------------------------
+# Phase V2.27A - extract_article_video_metadata() widened to capture a third-party embedded
+# player (Case C - source-site/third-party embedded player).
+# ---------------------------------------------------------------------------------------------
+
+
+def test_third_party_iframe_embed_captured_as_embedded_player() -> None:
+    """TEST 2 (Phase V2.27A spec): an <iframe src> for a real, specific, non-YouTube/Vimeo player
+    URL already present in the article HTML must become a NativeVideoHint with
+    platform=EMBEDDED_PLAYER."""
+    html = '<html><body><iframe src="https://player.example-publisher.com/embed/story-12345"></iframe></body></html>'
+    hints = extract_article_video_metadata(html, base_url="https://example.com/article")
+    assert len(hints) == 1
+    assert hints[0].platform == VideoPlatform.EMBEDDED_PLAYER
+    assert hints[0].discovery_method == VideoDiscoveryMethod.EMBEDDED_PLAYER_URL
+    assert hints[0].remote_url == "https://player.example-publisher.com/embed/story-12345"
+
+
+def test_twitter_player_meta_tag_captured_as_embedded_player() -> None:
+    html = (
+        '<html><head><meta name="twitter:player" '
+        'content="https://player.example-publisher.com/embed/story-99"></head><body></body></html>'
+    )
+    hints = extract_article_video_metadata(html, base_url="https://example.com/article")
+    assert len(hints) == 1
+    assert hints[0].platform == VideoPlatform.EMBEDDED_PLAYER
+    assert hints[0].remote_url == "https://player.example-publisher.com/embed/story-99"
+
+
+def test_ordinary_anchor_link_never_becomes_embedded_player() -> None:
+    """TEST 4 (Phase V2.27A spec): the SAME URL that would qualify as evidence via <iframe src>
+    must NOT qualify via a bare body-text <a href> - deliberately weaker evidence, excluded."""
+    html = '<html><body><a href="https://player.example-publisher.com/embed/story-12345">Watch</a></body></html>'
+    hints = extract_article_video_metadata(html, base_url="https://example.com/article")
+    assert hints == []
+
+
+def test_iframe_channel_or_playlist_shaped_url_not_captured() -> None:
+    """TEST 3 (Phase V2.27A spec, article-evidenced half): even real iframe evidence is rejected
+    when the URL shape itself looks like a listing/channel page, not one specific video."""
+    html = '<html><body><iframe src="https://embed.example.com/channel/some-show"></iframe></body></html>'
+    hints = extract_article_video_metadata(html, base_url="https://example.com/article")
+    assert hints == []
+
+
+def test_iframe_localhost_url_not_captured() -> None:
+    """TEST 5 (Phase V2.27A spec, article-evidenced half)."""
+    html = '<html><body><iframe src="http://localhost:8080/embed/1"></iframe></body></html>'
+    hints = extract_article_video_metadata(html, base_url="https://example.com/article")
+    assert hints == []
+
+
+def test_youtube_iframe_still_classified_as_youtube_not_embedded_player() -> None:
+    """Regression guard: widening the extraction for third-party embeds must never reclassify a
+    real YouTube/Vimeo iframe as the new, lower-confidence EMBEDDED_PLAYER tier."""
+    html = '<html><body><iframe src="https://www.youtube.com/embed/abc123"></iframe></body></html>'
+    hints = extract_article_video_metadata(html, base_url="https://example.com/article")
+    assert len(hints) == 1
+    assert hints[0].platform == VideoPlatform.YOUTUBE

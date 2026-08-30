@@ -412,6 +412,43 @@ class Settings(BaseSettings):
     # separately-reviewed milestone.
     rich_media_mode: Literal["off", "shadow", "enforce"] = "off"
 
+    # Phase V2.27: native Telegram video upload for YouTube/Vimeo hosted-platform hints - before
+    # this, a YouTube/Vimeo NativeVideoHint (services/video_discovery_persistence.py) always
+    # became a plain caption link (services/image_preview_notifier.py::_hosted_platform_link_
+    # line()), never an uploaded video. Two-state, no "shadow" - unlike video_discovery_mode's own
+    # review-only shadow persistence, a download+transcode+discard-without-sending action has real
+    # CPU/bandwidth/disk cost with no product benefit at review time, so there is nothing useful
+    # for a shadow mode to do here. "off" (default): byte-identical to pre-V2.27 behavior -
+    # YouTube/Vimeo hints still become a caption link. "enforce": worker/content_cycle.py attempts
+    # services/hosted_video_download.py::download_hosted_video() for a YouTube/Vimeo hint instead;
+    # on ANY failure (see that module's own docstring for the full list) the video is dropped
+    # entirely for that send - no caption-link fallback in this mode (Phase V2.27 §4's own explicit
+    # instruction). Independent of rich_media_mode - rich_media_mode="enforce" remains the
+    # precondition for a video hint to be looked up/attached at all; this flag only controls
+    # whether a YouTube/Vimeo hint specifically gets downloaded, so it can be turned off without
+    # also disabling DIRECT_HOSTED video attachment (which never needs this flag - Telegram fetches
+    # a direct-hosted URL itself, no local download ever happens for that platform).
+    hosted_video_download_mode: Literal["off", "enforce"] = "off"
+    # Overall wall-clock bound on one yt-dlp invocation (download + mux) - the process is killed
+    # and the attempt treated as HOSTED_VIDEO_DOWNLOAD_FAILED if this elapses.
+    hosted_video_download_timeout_seconds: float = Field(default=45.0, gt=0)
+    # Telegram Bot API's own real, documented upload limit for a bot-uploaded (non-local-server)
+    # file is 50MB - this is not an arbitrary product choice, it is the hard ceiling a larger
+    # upload would fail against regardless of anything this codebase does. Enforced twice: as a
+    # yt-dlp `--max-filesize` pre-check (aborts before finishing an oversized download) and again
+    # as a real on-disk byte-count check after download (the pre-check is a best-effort estimate,
+    # not always accurate for every source format).
+    hosted_video_max_bytes: int = Field(default=50_000_000, gt=0)
+    # A NEWS video attachment is a short illustrative clip, not the article itself - bounded well
+    # under a typical full-length YouTube video. Enforced via yt-dlp's own `--match-filter`
+    # (skips/aborts before downloading anything once declared duration is known), never a
+    # post-download-only check.
+    hosted_video_max_duration_seconds: int = Field(default=180, gt=0)
+    # Separate, tighter bound for the optional compatibility-transcode fallback (services/
+    # hosted_video_download.py) - only ever invoked for the rare case yt-dlp's own format
+    # selection could not produce an already-Telegram-compatible H.264/AAC MP4 directly.
+    hosted_video_ffmpeg_timeout_seconds: float = Field(default=30.0, gt=0)
+
     # Phase 19 M13: final-candidate vision review foundation (docs/phase19_m13_vision_review.md).
     # Two-state, no "enforce" value at all - reaching a real vision call always requires the
     # manually-invoked harness script (scripts/phase19_m13_vision_review_manual.py), never an

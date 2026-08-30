@@ -139,3 +139,26 @@ async def get_video_candidates_for_event(
         )
         for row in rows
     ]
+
+
+# Phase V2.27A resolution order (docs/video_url_classification_checkpoint.md's own real-evidence
+# calibration, extended): DIRECT_HOSTED (already byte-sniffed/validated - the strongest signal) >
+# YouTube/Vimeo (yt-dlp's own high-confidence, purpose-built extractors) > EMBEDDED_PLAYER (yt-dlp
+# generic/site extractor against a third-party embed URL - real downloadability still unknown at
+# this point, lowest confidence, only ever used when nothing stronger is available for this event).
+_VIDEO_PLATFORM_PRIORITY = {"direct_hosted": 0, "youtube": 1, "vimeo": 1, "embedded_player": 2}
+
+
+def select_best_video_candidate(candidates: list[EligibleVideoCandidate]) -> EligibleVideoCandidate | None:
+    """Pure, deterministic. Picks the single best candidate for one NewsEvent by platform-tier
+    priority (see `_VIDEO_PLATFORM_PRIORITY` above), never by re-ranking within a tier - `min()`
+    over a stable sort preserves `candidates`' own incoming order (get_video_candidates_for_event()
+    ranks by `created_at` ascending), so ties within a tier resolve to the earliest-discovered
+    candidate, exactly like every other "first eligible wins" convention already established in
+    this codebase (e.g. services/media_ranking.py's own candidate walk). Any platform value this
+    dict does not recognize sorts last, never crashes - `EligibleVideoCandidate.platform` is a
+    plain string (see this module's own docstring), so a stale/unexpected value degrades safely
+    rather than raising."""
+    if not candidates:
+        return None
+    return min(candidates, key=lambda c: _VIDEO_PLATFORM_PRIORITY.get(c.platform, 99))

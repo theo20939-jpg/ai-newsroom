@@ -13,8 +13,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # docker-compose.yml (they all `build: .` from this one Dockerfile) - only content_worker actually
 # renders branded media, but a single small, official Debian font package in every image is the
 # minimal reproducible fix without a new per-service Dockerfile architecture.
+#
+# Phase V2.27A: ffmpeg added to this SAME layer (never a second apt layer) - services/hosted_
+# video_download.py invokes it as a subprocess only as a bounded compatibility-transcode fallback
+# when yt-dlp's own format selection cannot directly produce an H.264/AAC MP4 (see that module's
+# own docstring). Only content_worker actually calls it, same reasoning as fonts-dejavu-core above
+# for shipping it in every service's image rather than a new per-service Dockerfile.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .

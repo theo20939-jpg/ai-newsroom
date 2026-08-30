@@ -696,3 +696,211 @@ async def test_master_news_branding_exception_falls_back_to_original_source_neve
     # The bytes actually sent must be the original candidate's real bytes, not a crash artifact.
     photo_arg = fake_bot.send_photo.call_args.kwargs["photo"]
     assert isinstance(photo_arg, BufferedInputFile)
+
+
+# ---------------------------------------------------------------------------
+# Phase V2.27 - native Telegram video upload for YouTube/Vimeo, and video-only NEWS delivery.
+# End-to-end via the real worker.content_cycle.run_content_cycle() - errors locally (no reachable
+# local Postgres, an established, disclosed, session-wide limitation - see every other DB-backed
+# test in this file), NOT fabricated as passing; structurally correct for CI/a real database.
+# ---------------------------------------------------------------------------
+
+
+def _eligible_video_candidate(*, platform: str, validation_status: str, remote_url: str):
+    from services.video_discovery_persistence import EligibleVideoCandidate
+
+    return EligibleVideoCandidate(
+        id=uuid4(), event_id=uuid4(), content_draft_id=None, discovery_method="open_graph_video",
+        remote_url=remote_url, platform=platform, declared_width=1280, declared_height=720,
+        declared_mime_type=None, declared_duration_seconds=30, validation_status=validation_status,
+        detected_container=None, byte_size=None, error_code=None,
+    )
+
+
+def _hosted_video_download_result_ready(*, byte_size: int = 500_000, duration: int = 30):
+    from services.hosted_video_download import HOSTED_VIDEO_NATIVE_READY, HostedVideoDownloadResult
+
+    return HostedVideoDownloadResult(
+        outcome=HOSTED_VIDEO_NATIVE_READY, video_bytes=b"x" * byte_size, source_format="avc1/mp4a/mp4",
+        final_format="mp4/h264/aac", remuxed=True, transcoded=False, byte_size=byte_size,
+        duration_seconds=duration, reason=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_video_only_news_dispatches_via_send_video(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch, caplog,
+) -> None:
+    """TEST 9 (Phase V2.27 spec): zero usable images + one downloaded YouTube video must reach
+    Telegram as a real single native video (bot.send_video), never send_photo, never dropped to
+    text-only."""
+    _common_settings(monkeypatch)
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
+    monkeypatch.setattr(settings, "rich_media_mode", "enforce")
+    monkeypatch.setattr(settings, "hosted_video_download_mode", "enforce")
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v82_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_video.return_value.message_id = 500
+    video_candidate = _eligible_video_candidate(
+        platform="youtube", validation_status="unvalidated_hosted_platform",
+        remote_url="https://www.youtube.com/watch?v=abc123",
+    )
+
+    with (
+        patch("worker.content_cycle._classify_event_for_router_treatment", new=AsyncMock(return_value=_standard_decision())),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[])),
+        patch("worker.content_cycle.get_video_candidates_for_event", new=AsyncMock(return_value=[video_candidate])),
+        patch("worker.content_cycle.download_hosted_video", new=AsyncMock(return_value=_hosted_video_download_result_ready())),
+        caplog.at_level("INFO"),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    assert result.notified == 1
+    assert result.router_video_only_sent == 1
+    fake_bot.send_video.assert_called_once()
+    fake_bot.send_photo.assert_not_called()
+    fake_bot.send_media_group.assert_not_called()
+    _, kwargs = fake_bot.send_video.call_args
+    assert isinstance(kwargs["video"], BufferedInputFile)
+
+    branding_records = [r for r in caplog.records if r.msg == "master_news_branding_applied"]
+    assert branding_records == []  # video must never pass through apply_master_news_branding()
+
+
+@pytest.mark.asyncio
+async def test_one_image_plus_downloaded_youtube_video_sends_media_group(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch, tmp_path, caplog,
+) -> None:
+    """TEST 7 (Phase V2.27 spec): 1 image + 1 downloaded video -> a real 2-item Telegram media
+    group, photo branded (Phase V2.25), video native and untouched by branding."""
+    _common_settings(monkeypatch)
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
+    monkeypatch.setattr(settings, "rich_media_mode", "enforce")
+    monkeypatch.setattr(settings, "hosted_video_download_mode", "enforce")
+    settings.editorial_recomposition_mode = "off"
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v82_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_media_group.return_value = [MagicMock(message_id=600), MagicMock(message_id=601)]
+    candidate = _stored_candidate(tmp_path, monkeypatch)
+    video_candidate = _eligible_video_candidate(
+        platform="youtube", validation_status="unvalidated_hosted_platform",
+        remote_url="https://www.youtube.com/watch?v=abc123",
+    )
+
+    with (
+        patch("worker.content_cycle._classify_event_for_router_treatment", new=AsyncMock(return_value=_standard_decision())),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[candidate])),
+        patch("worker.content_cycle.get_video_candidates_for_event", new=AsyncMock(return_value=[video_candidate])),
+        patch("worker.content_cycle.download_hosted_video", new=AsyncMock(return_value=_hosted_video_download_result_ready())),
+        caplog.at_level("INFO"),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    assert result.notified == 1
+    assert result.router_media_group_sent == 1
+    fake_bot.send_media_group.assert_called_once()
+    _, kwargs = fake_bot.send_media_group.call_args
+    assert len(kwargs["media"]) == 2
+    assert isinstance(kwargs["media"][0].media, BufferedInputFile)  # the branded photo
+    assert isinstance(kwargs["media"][1].media, BufferedInputFile)  # the native video
+
+    branding_records = [r for r in caplog.records if r.msg == "master_news_branding_applied"]
+    assert len(branding_records) == 1  # exactly the photo, never the video
+
+
+@pytest.mark.asyncio
+async def test_video_download_failure_falls_back_to_images_only_never_a_link(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch, tmp_path, caplog,
+) -> None:
+    """Phase V2.27 §4/§7 failure policy: with hosted_video_download_mode='enforce', a failed
+    download must drop the video entirely (images-only fallback) - never the old caption-link
+    behavior, and must never block the image send itself."""
+    from services.hosted_video_download import HOSTED_VIDEO_DOWNLOAD_FAILED, HostedVideoDownloadResult
+
+    _common_settings(monkeypatch)
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
+    monkeypatch.setattr(settings, "rich_media_mode", "enforce")
+    monkeypatch.setattr(settings, "hosted_video_download_mode", "enforce")
+    settings.editorial_recomposition_mode = "off"
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v82_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_photo.return_value.message_id = 700
+    candidate = _stored_candidate(tmp_path, monkeypatch)
+    video_candidate = _eligible_video_candidate(
+        platform="youtube", validation_status="unvalidated_hosted_platform",
+        remote_url="https://www.youtube.com/watch?v=abc123",
+    )
+    failed_result = HostedVideoDownloadResult(
+        outcome=HOSTED_VIDEO_DOWNLOAD_FAILED, video_bytes=None, source_format=None, final_format=None,
+        remuxed=False, transcoded=False, byte_size=None, duration_seconds=None, reason="timeout",
+    )
+
+    with (
+        patch("worker.content_cycle._classify_event_for_router_treatment", new=AsyncMock(return_value=_standard_decision())),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[candidate])),
+        patch("worker.content_cycle.get_video_candidates_for_event", new=AsyncMock(return_value=[video_candidate])),
+        patch("worker.content_cycle.download_hosted_video", new=AsyncMock(return_value=failed_result)),
+        caplog.at_level("INFO"),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    assert result.notified == 1
+    fake_bot.send_photo.assert_called_once()  # images-only fallback, never blocked
+    fake_bot.send_media_group.assert_not_called()
+
+    caption = fake_bot.send_photo.call_args.kwargs["caption"]
+    assert "youtube.com" not in caption  # no raw-link fallback once native delivery is opted into
+
+
+@pytest.mark.asyncio
+async def test_direct_hosted_video_still_works_unaffected_by_v2_27(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch, tmp_path, caplog,
+) -> None:
+    """TEST 14 (Phase V2.27 spec): DIRECT_HOSTED non-regression - never touches
+    hosted_video_download_mode/download_hosted_video() at all, Telegram fetches the URL itself."""
+    _common_settings(monkeypatch)
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
+    monkeypatch.setattr(settings, "rich_media_mode", "enforce")
+    monkeypatch.setattr(settings, "hosted_video_download_mode", "enforce")
+    settings.editorial_recomposition_mode = "off"
+    await _seed_eligible_event(factory, test_source)
+    _gateway, registry = _v82_capability_registry()
+    fake_bot = AsyncMock()
+    fake_bot.send_media_group.return_value = [MagicMock(message_id=800), MagicMock(message_id=801)]
+    candidate = _stored_candidate(tmp_path, monkeypatch)
+    video_candidate = _eligible_video_candidate(
+        platform="direct_hosted", validation_status="valid", remote_url="https://cdn.example.com/clip.mp4",
+    )
+
+    with (
+        patch("worker.content_cycle._classify_event_for_router_treatment", new=AsyncMock(return_value=_standard_decision())),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[candidate])),
+        patch("worker.content_cycle.get_video_candidates_for_event", new=AsyncMock(return_value=[video_candidate])),
+        patch("worker.content_cycle.download_hosted_video") as mock_download,
+        caplog.at_level("INFO"),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    assert result.notified == 1
+    fake_bot.send_media_group.assert_called_once()
+    mock_download.assert_not_called()  # never invoked for DIRECT_HOSTED
+    _, kwargs = fake_bot.send_media_group.call_args
+    assert kwargs["media"][1].media == "https://cdn.example.com/clip.mp4"  # URL passed straight through
+
+
+def test_video_only_input_never_reaches_apply_master_news_branding() -> None:
+    """TEST 10 (Phase V2.27 spec) structural proof: video_only_input is a variable completely
+    separate from photo_input/source_bytes in worker/content_cycle.py - grep-verified it is never
+    assigned to photo_input and never passed to apply_master_news_branding()."""
+    source = Path("worker/content_cycle.py").read_text(encoding="utf-8")
+    assert "video_only_input: str | BufferedInputFile | None = None" in source
+    assert "photo_input = video_only_input" not in source
+    assert "apply_master_news_branding(video_only_input" not in source
+    assert "send_video_to_editorial_destination(" in source

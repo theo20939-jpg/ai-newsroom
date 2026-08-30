@@ -464,3 +464,77 @@ async def send_media_group_to_editorial_destination(
         destination=resolved_destination, chat_id=route.chat_id, topic_id=route.topic_id, sent=True,
         message_id=first_message_id,
     )
+
+
+async def send_video_to_editorial_destination(
+    bot: Bot,
+    destination: EditorialDestination | str,
+    video: str | BufferedInputFile,
+    caption: str,
+    *,
+    dry_run: bool = True,
+    parse_mode: ParseMode = ParseMode.HTML,
+    reply_markup: InlineKeyboardMarkup | None = None,
+    reply_to_message_id: int | None = None,
+) -> RoutingOutcome:
+    """Phase V2.27 §6: the video-only sibling to `send_photo_to_editorial_destination()` above -
+    same exact contract (dry-run/unknown/unconfigured-destination safe-failure shapes, `route.
+    topic_id` always passed as `message_thread_id`, a live `TelegramAPIError` caught and returned,
+    never raised), reused verbatim except `bot.send_photo()` -> `bot.send_video()`. Exists because
+    a NEWS event can now legitimately have zero eligible images but one valid video (services/
+    image_preview_notifier.py::build_rich_media_plan()'s own `media_group_items` can be a single
+    `InputMediaVideo` with no photos at all) - `worker/content_cycle.py`'s existing single-photo
+    dispatch cannot be reused for this shape (it would hand raw video bytes/URL to `bot.
+    send_photo()`, which is not a valid Telegram Bot API call), so this is the smallest correct
+    sibling, not a new post architecture (same caption/keyboard/reply-routing semantics as every
+    other NEWS send in this module)."""
+    resolved_destination = (
+        destination if isinstance(destination, EditorialDestination) else parse_editorial_destination(destination)
+    )
+    if resolved_destination is None:
+        logger.warning("telegram_routing_unknown_destination", extra={"destination": str(destination)})
+        return RoutingOutcome(destination=None, chat_id=None, topic_id=None, sent=False, reason="unknown_destination")
+
+    route = resolve_route(resolved_destination)
+    if route is None:
+        logger.warning(
+            "telegram_routing_unconfigured_destination", extra={"destination": resolved_destination.value}
+        )
+        return RoutingOutcome(
+            destination=resolved_destination, chat_id=None, topic_id=None, sent=False,
+            reason="unconfigured_destination",
+        )
+
+    if dry_run:
+        logger.info(
+            "telegram_routing_video_dry_run",
+            extra={
+                "destination": resolved_destination.value, "chat_id": route.chat_id, "topic_id": route.topic_id,
+                "reply_to_message_id": reply_to_message_id,
+            },
+        )
+        return RoutingOutcome(
+            destination=resolved_destination, chat_id=route.chat_id, topic_id=route.topic_id, sent=False,
+            reason="dry_run",
+        )
+
+    try:
+        message = await bot.send_video(
+            route.chat_id, video=video, caption=caption, parse_mode=parse_mode,
+            message_thread_id=route.topic_id, reply_markup=reply_markup,
+            reply_to_message_id=reply_to_message_id,
+        )
+    except TelegramAPIError:
+        logger.exception(
+            "telegram_routing_video_send_failed",
+            extra={"destination": resolved_destination.value, "chat_id": route.chat_id, "topic_id": route.topic_id},
+        )
+        return RoutingOutcome(
+            destination=resolved_destination, chat_id=route.chat_id, topic_id=route.topic_id, sent=False,
+            reason="telegram_api_error",
+        )
+
+    return RoutingOutcome(
+        destination=resolved_destination, chat_id=route.chat_id, topic_id=route.topic_id, sent=True,
+        message_id=message.message_id,
+    )

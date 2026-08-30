@@ -66,7 +66,13 @@ from services.image_persistence import (
     sanitize_url,
 )
 from services.image_preview_notifier import build_rich_media_plan, send_news_with_image_preview
-from services.video_discovery_persistence import get_video_candidates_for_event, to_native_video_hint
+from services.hosted_video_download import download_hosted_video
+from services.video_discovery_persistence import (
+    get_video_candidates_for_event,
+    select_best_video_candidate,
+    to_native_video_hint,
+)
+from schemas.video_candidate import VideoPlatform
 from services.news_telegram_presentation import (
     build_compact_news_body,
     is_v8_family_output,
@@ -87,6 +93,7 @@ from services.telegram_routing import (
     send_media_group_to_editorial_destination,
     send_photo_to_editorial_destination,
     send_to_editorial_destination,
+    send_video_to_editorial_destination,
 )
 
 # Phase 23.1Q (Media Roadmap Recovery step 1): initial product cap on router-mode NEWS media-group
@@ -585,6 +592,10 @@ class ContentCycleResult:
     # `router_image_sent` - counts a router-mode NEWS send delivered as a real Telegram media
     # group (2-3 images, send_media_group), as opposed to a single photo or plain text.
     router_media_group_sent: int = 0
+    # Phase V2.27 §6: a strict subset of `notified`, disjoint from router_image_sent/router_
+    # media_group_sent - counts a router-mode NEWS send delivered as a single native Telegram
+    # video (send_video) with zero images attached at all (send_video_to_editorial_destination()).
+    router_video_only_sent: int = 0
     # Delivery-gap fix (2026-08-16 production forensic - a completed draft's photo send timed
     # out and the whole post was silently dropped, notification_failed only): a strict subset of
     # `notified`, disjoint from router_image_sent/router_media_group_sent - counts a router-mode
@@ -1140,6 +1151,12 @@ async def run_content_cycle(
             # to its own real bytes and receive its own apply_master_news_branding() call below.
             # Stays empty whenever no >=2-item media group was actually built (single-photo path).
             media_group_photo_candidates: list[EditorialImageCandidate] = []
+            # Phase V2.27 §6: set only for a real zero-image, one-video NEWS result (build_rich_
+            # media_plan()'s own media_group_items is a single InputMediaVideo with no photo_
+            # candidates behind it) - kept completely separate from photo_input/source_bytes so
+            # this can never be fed into apply_master_news_branding() (image branding must never
+            # touch a video - Phase V2.27 §5's own explicit requirement).
+            video_only_input: str | BufferedInputFile | None = None
             image_candidate_count = 0
             # NINJA PULSE Visual System v1 - reassigned only inside the presentation_director_mode
             # != "off" branch below; stays False (today's exact existing behavior) otherwise.
@@ -1223,7 +1240,14 @@ async def run_content_cycle(
                         continue
                     eligible_candidates.append(candidate)
 
-                if is_v8 and html is not None and eligible_candidates:
+                # Phase V2.27 §6: the real accidental structural gap this phase closes - this
+                # block used to require `eligible_candidates` (>=1 image) as a hard precondition,
+                # so a NewsEvent with a valid video hint but zero usable images could never reach
+                # build_rich_media_plan() at all. Now also entered whenever rich_media_mode is
+                # "enforce" (a video MIGHT exist), even with zero images - `top_candidates` and
+                # `video_hint` below both correctly degrade to "nothing" if neither is real, which
+                # falls through to the exact same pre-existing text-only fallback as before.
+                if is_v8 and html is not None and (eligible_candidates or settings.rich_media_mode == "enforce"):
                     # Phase 23.1Q (Media Roadmap Recovery step 1): rank -> cap at
                     # _MAX_ROUTER_IMAGES -> build_rich_media_plan() (Phase 19 M11/M12, reused
                     # verbatim, never reimplemented). build_rich_media_plan() itself already
@@ -1232,7 +1256,10 @@ async def run_content_cycle(
                     # opportunity. <2 resolved photos degrades to the existing single-photo
                     # variable below; 0 resolved photos leaves both empty (existing text-only
                     # fallback, unchanged).
-                    top_candidates = _select_top_ranked_image_candidates(eligible_candidates, limit=_MAX_ROUTER_IMAGES)
+                    top_candidates = (
+                        _select_top_ranked_image_candidates(eligible_candidates, limit=_MAX_ROUTER_IMAGES)
+                        if eligible_candidates else []
+                    )
                     # Phase 19 M10/M12 production wiring (docs/video_delivery_wiring_checkpoint.md):
                     # video attachment is opt-in via rich_media_mode - "off"/"shadow" (the current
                     # defaults) skip the lookup entirely and stay byte-identical to the pre-wiring
@@ -1240,12 +1267,61 @@ async def run_content_cycle(
                     # both leave video_hint as None, which build_rich_media_plan() (unmodified)
                     # already treats as "no video" - never a crash, never a blocked image send.
                     video_hint = None
+                    hosted_video_bytes: bytes | None = None
                     if settings.rich_media_mode == "enforce":
                         async with session_factory() as video_session:
-                            video_candidates = await get_video_candidates_for_event(video_session, event.id, limit=1)
-                        if video_candidates:
-                            video_hint = to_native_video_hint(video_candidates[0])
-                    plan = build_rich_media_plan(top_candidates, video_hint, caption=html)
+                            # Phase V2.27A: no longer limit=1 - multiple platform tiers may be
+                            # persisted for the same event (DIRECT_HOSTED, YOUTUBE/VIMEO,
+                            # EMBEDDED_PLAYER), and select_best_video_candidate() below needs to
+                            # see all of them to apply the real DIRECT_HOSTED > YOUTUBE/VIMEO >
+                            # EMBEDDED_PLAYER resolution order rather than just whichever one was
+                            # persisted first.
+                            video_candidates = await get_video_candidates_for_event(video_session, event.id)
+                        best_video_candidate = select_best_video_candidate(video_candidates)
+                        if best_video_candidate is not None:
+                            video_hint = to_native_video_hint(best_video_candidate)
+                        # Phase V2.27/V2.27A: a YOUTUBE/VIMEO/EMBEDDED_PLAYER hint previously
+                        # always became a plain caption link (YOUTUBE/VIMEO) or was discarded
+                        # entirely (EMBEDDED_PLAYER did not exist before V2.27A) - see
+                        # build_rich_media_plan()'s own hosted_platform_link docstring.
+                        # hosted_video_download_mode="enforce" attempts a real, bounded
+                        # server-side download instead - on ANY failure the hint is dropped
+                        # entirely (video_hint = None) rather than falling back to the
+                        # caption-link behavior (Phase V2.27 §4's own explicit instruction: no
+                        # raw-link fallback once native delivery is opted into).
+                        if (
+                            video_hint is not None
+                            and video_hint.platform in (
+                                VideoPlatform.YOUTUBE, VideoPlatform.VIMEO, VideoPlatform.EMBEDDED_PLAYER,
+                            )
+                            and settings.hosted_video_download_mode == "enforce"
+                        ):
+                            download_result = await download_hosted_video(
+                                video_hint.remote_url, video_hint.platform,
+                                event_id=event.id, draft_id=outcome.content_draft.id,
+                            )
+                            logger.info(
+                                "hosted_video_download_result",
+                                extra={
+                                    "draft_id": str(outcome.content_draft.id),
+                                    "outcome": download_result.outcome,
+                                    "platform": video_hint.platform.value,
+                                    "reason": download_result.reason,
+                                    "duration_seconds": download_result.duration_seconds,
+                                    "byte_size": download_result.byte_size,
+                                    "source_format": download_result.source_format,
+                                    "final_format": download_result.final_format,
+                                    "remuxed": download_result.remuxed,
+                                    "transcoded": download_result.transcoded,
+                                },
+                            )
+                            if download_result.video_bytes is not None:
+                                hosted_video_bytes = download_result.video_bytes
+                            else:
+                                video_hint = None
+                    plan = build_rich_media_plan(
+                        top_candidates, video_hint, caption=html, hosted_video_bytes=hosted_video_bytes,
+                    )
                     if len(plan.media_group_items) >= 2:
                         # Phase 23.1Q media-quality corrective phase: the real [🔗 Источник] button
                         # is attached to the group's first message AFTER sending (see the
@@ -1260,6 +1336,15 @@ async def run_content_cycle(
                         # group (not only index 0) can later be independently re-resolved to its
                         # own bytes and receive its own apply_master_news_branding() call.
                         media_group_photo_candidates = plan.photo_candidates
+                    elif len(plan.media_group_items) == 1 and not plan.photo_candidates:
+                        # Phase V2.27 §6: exactly one media item and it did NOT come from any
+                        # image candidate - it can only be the video. Routed as a real single-
+                        # video send (send_video_to_editorial_destination(), never send_photo) -
+                        # never assigned to photo_input, so it can never reach apply_master_news_
+                        # branding() (Phase V2.27 §5's own explicit "video must never pass through
+                        # image branding" requirement).
+                        video_only_media = plan.media_group_items[0].media
+                        video_only_input = video_only_media if isinstance(video_only_media, (str, BufferedInputFile)) else None
                     elif plan.media_group_items:
                         # A single resolved candidate - reuse the already-resolved photo directly
                         # from the plan (never re-resolve) via the existing single-photo path
@@ -1720,13 +1805,22 @@ async def run_content_cycle(
                 # text" precedent above governs this case too, never a new truncation mechanism.
                 fits_caption_budget = _telegram_utf16_length(html) <= CAPTION_SAFE_LIMIT
                 send_as_media_group = len(media_group_items) >= 2 and fits_caption_budget
-                send_as_photo = not send_as_media_group and photo_input is not None and fits_caption_budget
+                # Phase V2.27 §6: a lone video (zero images) is dispatched via send_video_to_
+                # editorial_destination() - never send_photo (video_only_input is never a valid
+                # photo argument) and never the plain-text else branch below (that would silently
+                # drop a successfully-downloaded/validated video).
+                send_as_video_only = not send_as_media_group and video_only_input is not None and fits_caption_budget
+                send_as_photo = (
+                    not send_as_media_group and not send_as_video_only
+                    and photo_input is not None and fits_caption_budget
+                )
                 logger.info(
                     "router_image_decision",
                     extra={
                         "draft_id": str(outcome.content_draft.id), "image_candidate_count": image_candidate_count,
                         "has_resolvable_photo": photo_input is not None, "send_as_photo": send_as_photo,
                         "media_group_item_count": len(media_group_items), "send_as_media_group": send_as_media_group,
+                        "send_as_video_only": send_as_video_only,
                     },
                 )
                 if send_as_media_group:
@@ -1734,6 +1828,17 @@ async def run_content_cycle(
                         bot, EditorialDestination.NEWS, media_group_items,
                         dry_run=effective_dry_run, reply_to_message_id=reply_to_message_id,
                         reply_markup=keyboard,
+                    )
+                elif send_as_video_only:
+                    assert video_only_input is not None  # narrows for mypy; already checked above
+                    routing_outcome = await send_video_to_editorial_destination(
+                        bot, EditorialDestination.NEWS, video_only_input, html,
+                        dry_run=effective_dry_run, reply_markup=keyboard,
+                        reply_to_message_id=reply_to_message_id,
+                    )
+                    logger.info(
+                        "HOSTED_VIDEO_TELEGRAM_SENT" if routing_outcome.sent else "HOSTED_VIDEO_TELEGRAM_FAILED",
+                        extra={"draft_id": str(outcome.content_draft.id), "reason": routing_outcome.reason},
                     )
                 elif send_as_photo:
                     assert photo_input is not None  # narrows for mypy; already checked above
@@ -1772,7 +1877,10 @@ async def run_content_cycle(
                 # never retried, so the worst case stays bounded (at most one extra message),
                 # never an unbounded retry loop.
                 used_text_fallback = False
-                if not effective_dry_run and not routing_outcome.sent and (send_as_media_group or send_as_photo):
+                if (
+                    not effective_dry_run and not routing_outcome.sent
+                    and (send_as_media_group or send_as_photo or send_as_video_only)
+                ):
                     routing_outcome = await send_to_editorial_destination(
                         bot, EditorialDestination.NEWS, html, dry_run=effective_dry_run, reply_markup=keyboard,
                         reply_to_message_id=reply_to_message_id,
@@ -1789,6 +1897,8 @@ async def run_content_cycle(
                         result.router_text_fallback_sent += 1
                     elif send_as_media_group:
                         result.router_media_group_sent += 1
+                    elif send_as_video_only:
+                        result.router_video_only_sent += 1
                     elif send_as_photo:
                         result.router_image_sent += 1
                 else:

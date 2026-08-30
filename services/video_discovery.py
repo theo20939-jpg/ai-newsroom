@@ -15,6 +15,7 @@ Split exactly like services/article_metadata.py/services/image_intelligence.py's
 """
 from __future__ import annotations
 
+import ipaddress
 import logging
 import re
 from collections.abc import Mapping
@@ -100,6 +101,70 @@ def classify_video_url(url: str) -> VideoPlatform:
     if parsed.scheme in ("http", "https") and parsed.path.lower().endswith(_DIRECT_VIDEO_EXTENSIONS):
         return VideoPlatform.DIRECT_HOSTED
     return VideoPlatform.UNKNOWN
+
+
+# ---------------------------------------------------------------------------
+# Phase V2.27A - source-site/third-party embedded player support (Case C from the V2.27 wiring
+# audit): a URL already evidenced by the article's own HTML as an embedded player (<iframe src>,
+# twitter:player - never a bare body-text <a href>, see extract_article_video_metadata() below)
+# but not YouTube/Vimeo/a direct media file. Real downloadability is unknown until services/
+# hosted_video_download.py actually asks yt-dlp to inspect it - this function only gates whether
+# that URL is safe enough to even attempt, never a downloadability check itself.
+# ---------------------------------------------------------------------------
+
+_EMBED_PATH_DENYLIST_SEGMENTS = frozenset({
+    "channel", "channels", "user", "users", "profile", "profiles", "playlist", "playlists",
+    "search", "results", "subscribe", "subscriptions", "tag", "tags", "category", "categories",
+    "feed", "feeds", "topics", "c",
+})
+_EMBED_HOSTNAME_DENYLIST_SUFFIXES = (".local", ".localdomain", ".internal", ".home", ".lan")
+
+
+def is_safe_embed_url(url: str) -> bool:
+    """Best-effort safety pre-filter for a third-party embedded-player URL. Unlike
+    classify_video_url()'s YouTube/Vimeo check (an exact, closed hostname + path-shape allowlist),
+    an arbitrary publisher embed domain cannot be allowlisted the same way - this is necessarily a
+    denylist-based heuristic, not a guarantee, and is disclosed as such rather than oversold.
+
+    NOT a substitute for integrations/http/safe_fetch.py's own DNS-rebinding-resistant, IP-pinned
+    SSRF protection - yt-dlp performs its own networking as a subprocess this codebase does not
+    control the sockets of, so a malicious DNS answer returned only at yt-dlp's own connection
+    time cannot be prevented from here. This function only rejects the cheap, obvious cases: a
+    literal loopback/private/link-local/reserved/multicast IP, a well-known non-routable hostname
+    suffix, and a small set of known non-single-video path markers (channel/playlist/search/etc.,
+    mirroring the same real evidence category _is_youtube_video_path()/_is_vimeo_video_path()
+    above already reject for YouTube/Vimeo specifically) - real, disclosed limitations, never a
+    claim of complete SSRF hardening for an arbitrary third-party host."""
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    hostname = parsed.hostname
+    if not hostname:
+        return False
+    lowered_host = hostname.lower()
+    if lowered_host == "localhost" or lowered_host.endswith(_EMBED_HOSTNAME_DENYLIST_SUFFIXES):
+        return False
+    try:
+        ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        ip = None
+    if ip is not None and (
+        ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved
+        or ip.is_multicast or ip.is_unspecified
+    ):
+        return False
+    if not parsed.path or parsed.path == "/":
+        return False  # bare host, no specific resource - too weak evidence of one specific video
+    path_segments = {s.lower() for s in parsed.path.split("/") if s}
+    if path_segments & _EMBED_PATH_DENYLIST_SEGMENTS:
+        return False
+    query_keys = {k.lower() for k in parse_qs(parsed.query)}
+    if "list" in query_keys or "q" in query_keys:
+        return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -286,10 +351,16 @@ def extract_article_video_metadata(html: str, *, base_url: str) -> list[NativeVi
             )
 
     player_stream: str | None = None
+    player_page: str | None = None
     for tag in parser.meta_tags:
         name = (tag.get("name") or tag.get("property") or "").lower()
         if name == "twitter:player:stream":
             player_stream = tag.get("content")
+        elif name == "twitter:player":
+            # Phase V2.27A: the embed PAGE url (an iframe target), distinct from twitter:player:
+            # stream's own direct-media url above - real evidence of a third-party embedded
+            # player, handled below alongside <iframe src>, never alongside player_stream.
+            player_page = tag.get("content")
     if player_stream:
         url = _resolve_url(player_stream, base_url)
         if url:
@@ -307,6 +378,27 @@ def extract_article_video_metadata(html: str, *, base_url: str) -> list[NativeVi
                 NativeVideoHint(
                     discovery_method=VideoDiscoveryMethod.HOSTED_PLATFORM_LINK_IN_ARTICLE,
                     remote_url=url, source_url=base_url, platform=classify_video_url(url),
+                )
+            )
+
+    # Phase V2.27A (Case C - source-site/third-party embedded player): a URL structurally
+    # evidenced by the article as an embed target (<iframe src>, twitter:player) that is NOT
+    # YouTube/Vimeo/a direct file - deliberately restricted to iframe_srcs + the twitter:player
+    # meta tag ONLY, never anchor_hrefs (a bare body-text <a href> is far weaker evidence - it
+    # could be any link in the article, including navigation/share links, not necessarily an
+    # embedded player at all).
+    for embed_url_raw in [*parser.iframe_srcs, *([player_page] if player_page else [])]:
+        url = _resolve_url(embed_url_raw, base_url)
+        if url is None:
+            continue
+        platform = classify_video_url(url)
+        if platform in (VideoPlatform.YOUTUBE, VideoPlatform.VIMEO):
+            continue  # already captured above with its own real platform, never duplicated here
+        if is_safe_embed_url(url):
+            hints.append(
+                NativeVideoHint(
+                    discovery_method=VideoDiscoveryMethod.EMBEDDED_PLAYER_URL, remote_url=url,
+                    source_url=base_url, platform=VideoPlatform.EMBEDDED_PLAYER,
                 )
             )
 

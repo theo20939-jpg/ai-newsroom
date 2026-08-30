@@ -22,7 +22,7 @@ from dataclasses import dataclass
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
-from aiogram.types import InputMediaPhoto, InputMediaVideo, MediaUnion
+from aiogram.types import BufferedInputFile, InputMediaPhoto, InputMediaVideo, MediaUnion
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.formatting import SAFE_LIMIT, CardTooLongError, render_editorial_card
@@ -216,16 +216,50 @@ class RichMediaPlan:
 
 def build_rich_media_plan(
     image_candidates: list[EditorialImageCandidate], video_hint: NativeVideoHint | None, *, caption: str,
+    hosted_video_bytes: bytes | None = None,
 ) -> RichMediaPlan:
     """Pure (aside from resolve_photo_input()'s local storage read - never a network call).
-    Images first, direct-hosted video last (Phase 19 M12's own explicit ordering requirement).
-    Bounded to Telegram's own 10-item media-group cap - one slot reserved for the video, if any.
+    Images first, video last (Phase 19 M12's own explicit ordering requirement). Bounded to
+    Telegram's own 10-item media-group cap - one slot reserved for the video, if any. Zero image
+    candidates is a fully valid input (Phase V2.27 §6) - `media_group_items` then contains only
+    the video, if one is attached; the caller decides how to send a single-video-only result
+    (never this module's concern - it never calls the Telegram API itself).
+
+    `hosted_video_bytes` (Phase V2.27, additive, default `None` - every existing caller unaffected):
+    already-downloaded, already-Telegram-compatible native video bytes for a YOUTUBE/VIMEO/
+    EMBEDDED_PLAYER (the last added Phase V2.27A) `video_hint` (services/hosted_video_download.py
+    ::download_hosted_video() - never called from here, this function has no opinion about how
+    those bytes were produced). When `None` (the default - `settings.hosted_video_download_mode
+    != "enforce"`, or the caller chose not to download): a YOUTUBE/VIMEO hint falls back to the
+    pre-V2.27 `hosted_platform_link` caption-link behavior, byte-identical to before that phase;
+    an EMBEDDED_PLAYER hint is dropped entirely (never a caption link - see the EMBEDDED_PLAYER
+    branch below for why). `video_hint.platform == DIRECT_HOSTED` is completely unaffected either
+    way - Telegram fetches that URL itself, this parameter is never consulted for it.
 
     `InputMediaPhoto`/`InputMediaVideo` are frozen (Pydantic) - the caption (Telegram's real
     behavior: only the first item's caption is shown as the group's caption) must be passed at
-    construction time, never assigned afterward, so photo/video URLs are resolved first and the
+    construction time, never assigned afterward, so photo/video media are resolved first and the
     actual `InputMedia*` objects are built last, in final order."""
-    max_photos = _MEDIA_GROUP_MAX_ITEMS - (1 if video_hint is not None and video_hint.platform == VideoPlatform.DIRECT_HOSTED else 0)
+    video_media: str | BufferedInputFile | None = None
+    hosted_platform_link: str | None = None
+    if video_hint is not None:
+        if video_hint.platform == VideoPlatform.DIRECT_HOSTED:
+            video_media = video_hint.remote_url
+        elif video_hint.platform in (VideoPlatform.YOUTUBE, VideoPlatform.VIMEO):
+            if hosted_video_bytes is not None:
+                video_media = BufferedInputFile(hosted_video_bytes, filename="video.mp4")
+            else:
+                hosted_platform_link = _hosted_platform_link_line(video_hint)
+        elif video_hint.platform == VideoPlatform.EMBEDDED_PLAYER:
+            # Phase V2.27A: a third-party embed URL is often not directly clickable/meaningful
+            # outside its original page - unlike YOUTUBE/VIMEO, this platform never falls back to
+            # a caption link at all. It either becomes a real native video (hosted_video_bytes
+            # present) or is silently dropped - there is no pre-V2.27A legacy link behavior for
+            # this platform to preserve (it did not exist before this phase).
+            if hosted_video_bytes is not None:
+                video_media = BufferedInputFile(hosted_video_bytes, filename="video.mp4")
+
+    max_photos = _MEDIA_GROUP_MAX_ITEMS - (1 if video_media is not None else 0)
     photo_inputs = []
     photo_candidates: list[EditorialImageCandidate] = []
     for candidate in image_candidates[:max_photos]:
@@ -234,22 +268,18 @@ def build_rich_media_plan(
             photo_inputs.append(photo_input)
             photo_candidates.append(candidate)
 
-    direct_video_url: str | None = None
-    hosted_platform_link: str | None = None
-    if video_hint is not None:
-        if video_hint.platform == VideoPlatform.DIRECT_HOSTED:
-            direct_video_url = video_hint.remote_url
-        elif video_hint.platform in (VideoPlatform.YOUTUBE, VideoPlatform.VIMEO):
-            hosted_platform_link = _hosted_platform_link_line(video_hint)
-
     media_group_items: list[MediaUnion] = []
     is_first = True
     for photo_input in photo_inputs:
         media_group_items.append(InputMediaPhoto(media=photo_input, caption=caption if is_first else None))
         is_first = False
-    if direct_video_url is not None:
-        media_group_items.append(InputMediaVideo(media=direct_video_url, caption=caption if is_first else None))
+    if video_media is not None:
+        media_group_items.append(InputMediaVideo(media=video_media, caption=caption if is_first else None))
 
+    # Phase V2.27 §6: a lone image (no video) still falls back to the existing single-photo path
+    # exactly as before. A lone video (no images) is a NEW valid single-item result - it must NOT
+    # be treated as a "fallback single photo" (there is no image candidate behind it at all), so
+    # this stays scoped to the image_candidates-non-empty case only, unchanged from before.
     fallback_single_photo = image_candidates[0] if len(media_group_items) < _MEDIA_GROUP_MIN_ITEMS and image_candidates else None
 
     return RichMediaPlan(
