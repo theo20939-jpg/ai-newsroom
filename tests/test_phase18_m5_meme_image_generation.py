@@ -18,7 +18,12 @@ from schemas.meme_image import MemeImageStatus
 from services.meme_image_generation import build_image_prompt, generate_meme_image
 
 _CONCEPT = MemeConcept(
-    premise="p", setup="s", punchline="pl", humor_mechanism="irony",
+    # MEME-PROD-2: punchline was a bare "pl" placeholder - too short to be a meaningful "must not
+    # appear in the prompt" check, and coincidentally a substring of ordinary English words (e.g.
+    # "nameplate") that legitimately appear in the prompt's own instructional text once that text
+    # was extended (services/meme_image_generation.py::build_image_prompt()) - a realistic short
+    # phrase removes that false-collision risk while keeping the same intent.
+    premise="p", setup="s", punchline="Jobs are still safe, technically.", humor_mechanism="irony",
     visual_scene="A CEO on stage pointing at a slide reading 'Jobs are safe'.",
     characters_objects=["CEO", "presentation slide"], text_overlay_intent="intent",
     source_fact_links=["fact"], forbidden_interpretations=[], meme_format=MemeFormat.CLASSIC_TOP_BOTTOM,
@@ -191,3 +196,131 @@ async def test_regenerating_the_same_concept_is_idempotent_in_storage(tmp_path) 
 
     assert first.storage_key == second.storage_key
     assert first.sha256 == second.sha256
+
+
+# ---------------------------------------------------------------------------
+# MEME-PROD-2 §10: retry classification - a `retryable=False` exception must stop the bounded
+# loop immediately (exactly 1 attempt), never spend a second paid call retrying an identical
+# request that cannot plausibly succeed differently.
+# ---------------------------------------------------------------------------
+
+
+class _NonRetryableFailingGateway:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def generate_image(self, request: ImageGenerationRequest) -> ImageGenerationResponse:
+        self.calls += 1
+        error = RuntimeError("authentication failed")
+        error.retryable = False  # type: ignore[attr-defined]
+        raise error
+
+
+class _RetryableThenNeverCalledGateway:
+    """Proves the loop only ever makes ONE call when the first fails non-retryably - a second call
+    would mean the classification was ignored."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def generate_image(self, request: ImageGenerationRequest) -> ImageGenerationResponse:
+        self.calls += 1
+        raise AssertionError("must never be called a second time after a non-retryable failure")
+
+
+@pytest.mark.asyncio
+async def test_non_retryable_failure_stops_after_exactly_one_attempt(tmp_path) -> None:
+    storage = LocalImageStorage(tmp_path)
+    gateway = _NonRetryableFailingGateway()
+
+    result = await generate_meme_image(_CONCEPT, gateway=gateway, storage=storage, mode="dry_run")
+
+    assert result.status == MemeImageStatus.FAILED
+    assert result.attempt_count == 1  # never reached the bounded max of 2
+    assert gateway.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_gateway_without_retryable_attribute_keeps_the_prior_always_retry_behavior(tmp_path) -> None:
+    """Backward compatibility: an exception with no `retryable` attribute at all (every gateway
+    that existed before MEME-PROD-2, e.g. MockImageAdapter/GeminiImageAdapter's own errors) must
+    still be retried exactly as before - `getattr(exc, "retryable", True)` defaults to True."""
+    storage = LocalImageStorage(tmp_path)
+    gateway = _FailingGateway()  # RuntimeError with no .retryable attribute at all
+
+    result = await generate_meme_image(_CONCEPT, gateway=gateway, storage=storage, mode="dry_run")
+
+    assert result.status == MemeImageStatus.FAILED
+    assert result.attempt_count == 2  # unchanged - still tries the full bounded max
+
+
+@pytest.mark.asyncio
+async def test_first_successful_generation_never_causes_a_second_provider_call(tmp_path) -> None:
+    storage = LocalImageStorage(tmp_path)
+    gateway = MockImageAdapter()
+
+    class _CountingGateway:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def generate_image(self, request: ImageGenerationRequest) -> ImageGenerationResponse:
+            self.calls += 1
+            return await gateway.generate_image(request)
+
+    counting = _CountingGateway()
+    result = await generate_meme_image(_CONCEPT, gateway=counting, storage=storage, mode="dry_run")
+
+    assert result.status == MemeImageStatus.GENERATED
+    assert counting.calls == 1  # success on attempt 1 - the loop returns immediately, never a 2nd call
+
+
+# ---------------------------------------------------------------------------
+# MEME-PROD-2 §9: image prompt contract - the image model must never be asked to render meme
+# typography, and a visual_scene implying readable text must be resolved to "render it blank/
+# unlabeled," never left as a bare contradiction.
+# ---------------------------------------------------------------------------
+
+
+def test_prompt_never_injects_meme_top_or_bottom_text() -> None:
+    """build_image_prompt() has no top_text/bottom_text parameter at all - MemeCopy (produced by
+    a LATER, separate copywriting step) is structurally impossible to reach this function."""
+    import inspect
+
+    from services.meme_image_generation import build_image_prompt as _build
+
+    params = inspect.signature(_build).parameters
+    assert "top_text" not in params
+    assert "bottom_text" not in params
+    assert "copy" not in params
+
+
+def test_prompt_resolves_contradictory_readable_label_scene_without_banning_the_object() -> None:
+    """The exact production defect: _CONCEPT.visual_scene describes 'a slide reading "Jobs are
+    safe"' - a literal readable-text scene. The prompt must still describe the slide (never delete
+    the concept's own visual content) but must resolve the contradiction by instructing the model
+    to render it blank/unlabeled, never both "reading X" and "no text" as a bare contradiction."""
+    prompt = build_image_prompt(_CONCEPT)
+    assert "slide" in prompt  # the object itself is preserved
+    assert "no text" in prompt.lower()
+    assert "blank" in prompt.lower() or "unlabeled" in prompt.lower()  # the resolution rule
+
+
+def test_prompt_never_asks_for_readable_text_while_also_prohibiting_it_incoherently() -> None:
+    """A softer structural proxy for "not a bare contradiction": the no-text instruction must
+    itself acknowledge label-like objects rather than silently ignoring what visual_scene says."""
+    prompt = build_image_prompt(_CONCEPT)
+    assert "nameplate" in prompt.lower() or "label" in prompt.lower() or "sign" in prompt.lower()
+
+
+def test_real_public_figure_names_pass_through_the_prompt_unmodified() -> None:
+    """§6/§13: no blanket fictionalization or name replacement anywhere in this code - a concept
+    naming a real adult public figure must reach the image prompt byte-for-byte unchanged."""
+    concept = MemeConcept(
+        premise="p", setup="s", punchline="A bold claim, again.", humor_mechanism="irony",
+        visual_scene="Tim Cook standing confidently in front of a large Apple logo on a stage.",
+        characters_objects=["Tim Cook", "Apple logo", "stage"], text_overlay_intent="intent",
+        source_fact_links=["fact"], forbidden_interpretations=[], meme_format=MemeFormat.CLASSIC_TOP_BOTTOM,
+    )
+    prompt = build_image_prompt(concept)
+    assert "Tim Cook" in prompt
+    assert "Apple logo" in prompt

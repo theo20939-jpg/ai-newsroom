@@ -137,8 +137,8 @@ async def handle_meme_generate_callback(callback: CallbackQuery) -> None:
             trigger_source="manual",
             capability_registry=capability_registry,
             # image_gateway omitted - trigger_meme_generation() lazily resolves the real,
-            # production-wired GeminiImageAdapter (settings.meme_image_generation_mode ==
-            # "enforce") or MockImageAdapter (off/dry_run), per services/
+            # production-wired OpenAIImageAdapter (gpt-image-2, settings.meme_image_generation_mode
+            # == "enforce", MEME-PROD-2) or MockImageAdapter (off/dry_run), per services/
             # meme_generation_orchestrator.py::_resolve_default_image_gateway()'s own contract -
             # this handler never needs to know which one, or import anything from
             # integrations.llm_gateway.* to make that choice itself.

@@ -74,6 +74,11 @@ rules:
   - Keep every field concise - this is a brief, not an essay. text_overlay_intent describes what
     the eventual overlay text should communicate, not the literal text itself (that is a separate,
     later copywriting step).
+  - visual_scene describes only what the scene physically SHOWS, never literal readable words,
+    quoted labels, or specific on-screen text (e.g. describe "a presentation slide" or "a
+    nameplate on a desk," never "a slide reading '...'" or "a nameplate that says '...'"). The
+    image-generation step that consumes this field never renders any text at all - every word the
+    audience eventually reads comes from the separate, later copywriting/rendering steps.
 output_schema:
   type: object
   properties:

@@ -201,29 +201,32 @@ def _resolve_default_image_gateway() -> ImageGenerationGateway | None:
     orchestrator's pre-existing behavior byte-for-byte (`dry_run` means "exercise the real
     generate/store/render/watermark pipeline shape safely," never "call a paid provider").
 
-    mode="enforce": constructs the real, already-production-proven `GeminiImageAdapter` (the same
-    adapter `services/editorial_recomposition.py::maybe_recompose()` already constructs for live
-    NEWS photo recomposition), mirroring that call site's exact fail-closed-on-missing-key pattern:
-    `settings.gemini_api_key` absent -> returns `None` (never `MockImageAdapter`) so the caller can
-    fail closed rather than silently downgrading a paid-mode request to a placeholder image.
-    `OpenAIImageAdapter` is deliberately NOT used here - its own `generate_image()` (module
-    docstring, integrations/llm_gateway/providers/openai_image_adapter.py) explicitly rejects any
-    request that is not `ImageGenerationOperation.IMAGE_EDIT`, and meme generation is pure
-    TEXT_TO_IMAGE (services/meme_image_generation.py::build_image_prompt() has no reference image)
-    - OpenAI's adapter cannot serve this seam at all today, independent of its currently-exhausted
-    credit balance."""
+    mode="enforce": constructs the real `OpenAIImageAdapter` (MEME-PROD-2 - real production
+    diagnostics proved `gemini-3.1-flash-image` returns HTTP 400 "Unable to show the generated
+    image... blocked for unspecified reasons" for real editorial meme prompts, even though a
+    minimal request succeeds; rather than building a growing Gemini-specific prompt-rewrite/
+    policy-recovery subsystem, the product decision was to replace the provider). Reuses
+    `settings.openai_api_key` - the SAME already-configured credential the real, working text
+    LLMGateway calls already use in production (confirmed live via MEME-PROD-1B's own production
+    evidence: "OpenAI /v1/responses returned HTTP 200") - never a second, meme-specific secret.
+    `settings.openai_api_key` absent -> returns `None` (never `MockImageAdapter`), mirroring
+    `services/editorial_recomposition.py::maybe_recompose()`'s own fail-closed-on-missing-key
+    pattern exactly, so the caller can fail closed rather than silently downgrading a paid-mode
+    request to a placeholder image. `GeminiImageAdapter` remains fully intact and used elsewhere
+    (`editorial_recomposition.py`'s own live NEWS photo recomposition path) - this function is the
+    ONLY place MEME image generation's own provider choice lives; nothing else changes."""
     from integrations.llm_gateway.providers.mock_image_adapter import MockImageAdapter
 
     if settings.meme_image_generation_mode != "enforce":
         return MockImageAdapter()
 
-    api_key = settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else None
+    api_key = settings.openai_api_key.get_secret_value() if settings.openai_api_key else None
     if not api_key:
         return None
 
-    from integrations.llm_gateway.providers.gemini_image_adapter import GEMINI_3_1_FLASH_IMAGE, GeminiImageAdapter
+    from integrations.llm_gateway.providers.openai_image_adapter import OpenAIImageAdapter
 
-    return GeminiImageAdapter(model_id=GEMINI_3_1_FLASH_IMAGE, api_key=api_key)
+    return OpenAIImageAdapter(api_key=api_key)
 
 
 def _card_from_result(

@@ -719,16 +719,16 @@ class Settings(BaseSettings):
     # injected - untouched by this phase). The distinction is ENTIRELY at the caller
     # (`services/meme_generation_orchestrator.py::_resolve_default_image_gateway()`): "off"/
     # "dry_run" default to `MockImageAdapter` (zero network, zero cost); "enforce" constructs the
-    # real, already-production-proven `GeminiImageAdapter` (the same adapter
-    # `services/editorial_recomposition.py` already uses live for NEWS photo recomposition) keyed
-    # off `gemini_api_key` below - REAL IMAGE PROVIDER FINALIZATION phase (docs/
-    # meme_production_pipeline_report.md's own morning follow-up). If `gemini_api_key` is unset
-    # while this is "enforce", the orchestrator FAILS CLOSED (`MemeGenerationOutcome.status ==
-    # "provider_not_configured"`) rather than silently falling back to Mock. `OpenAIImageAdapter`
-    # is not used for this seam - it only supports IMAGE_EDIT, never TEXT_TO_IMAGE, so it cannot
-    # serve meme generation regardless of its (currently exhausted) credit balance. Still defaults
-    # to "off" - flipping this to "enforce" (with `gemini_api_key` already set) is the explicit
-    # morning activation decision, not made by this phase.
+    # real `OpenAIImageAdapter` (`gpt-image-2`, `n=1`, `quality="medium"`), keyed off the existing
+    # `openai_api_key` below - MEME-PROD-2 (real production diagnostics found `gemini-3.1-flash-
+    # image` returns HTTP 400 "blocked for unspecified reasons" for real editorial meme prompts;
+    # rather than a growing Gemini-specific prompt-rewrite/policy-recovery subsystem, the provider
+    # was replaced). If `openai_api_key` is unset while this is "enforce", the orchestrator FAILS
+    # CLOSED (`MemeGenerationOutcome.status == "provider_not_configured"`) rather than silently
+    # falling back to Mock. `GeminiImageAdapter` remains the live provider for NEWS photo
+    # recomposition (`services/editorial_recomposition.py`) - completely unaffected by this
+    # setting. Still defaults to "off" - flipping this to "enforce" is the explicit morning
+    # activation decision, not made by this phase.
     meme_image_generation_mode: Literal["off", "dry_run", "enforce"] = "off"
     meme_image_max_bytes: int = Field(default=10_000_000, gt=0)
 

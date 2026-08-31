@@ -332,10 +332,11 @@ async def test_watermark_applied_on_every_successful_delivery(db_session: AsyncS
 
 
 # ---------------------------------------------------------------------------
-# REAL IMAGE PROVIDER FINALIZATION: _resolve_default_image_gateway() provider selection.
-# No real network call anywhere below - constructing a GeminiImageAdapter only stores its fields
-# (integrations/llm_gateway/providers/gemini_image_adapter.py::__init__ never touches a socket);
-# these tests prove SEAM SELECTION, never call generate_image() on a real adapter.
+# MEME-PROD-2: _resolve_default_image_gateway() provider selection - OpenAI (gpt-image-2), not
+# Gemini. No real network call anywhere below - constructing an OpenAIImageAdapter only stores its
+# fields (integrations/llm_gateway/providers/openai_image_adapter.py::__init__ constructs a real
+# `AsyncOpenAI()` client object, which itself makes no network call at construction time); these
+# tests prove SEAM SELECTION, never call generate_image() on a real adapter.
 # ---------------------------------------------------------------------------
 
 
@@ -351,30 +352,77 @@ def test_resolve_default_gateway_is_mock_in_dry_run_mode(monkeypatch: pytest.Mon
     assert isinstance(gateway, MockImageAdapter)
 
 
-def test_resolve_default_gateway_is_gemini_in_enforce_mode_with_key(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_default_gateway_is_openai_in_enforce_mode_with_key(monkeypatch: pytest.MonkeyPatch) -> None:
     from pydantic import SecretStr
 
-    from integrations.llm_gateway.providers.gemini_image_adapter import GEMINI_3_1_FLASH_IMAGE, GeminiImageAdapter
+    from integrations.llm_gateway.providers.openai_image_adapter import OpenAIImageAdapter
 
     monkeypatch.setattr(settings, "meme_image_generation_mode", "enforce")
-    monkeypatch.setattr(settings, "gemini_api_key", SecretStr("test-only-fake-key-never-real"))
+    monkeypatch.setattr(settings, "openai_api_key", SecretStr("test-only-fake-key-never-real"))
 
     gateway = _resolve_default_image_gateway()
 
-    assert isinstance(gateway, GeminiImageAdapter)
+    assert isinstance(gateway, OpenAIImageAdapter)
     assert gateway.CAPABILITIES.supports_text_to_image is True  # meme generation is pure TEXT_TO_IMAGE
-    assert gateway._model_id == GEMINI_3_1_FLASH_IMAGE  # noqa: SLF001 - proving the exact model wired, not just the type
+    assert gateway._quality == "medium"  # noqa: SLF001 - §5's own required default production profile
+    assert gateway._text_to_image_size == "1024x1024"  # noqa: SLF001
 
 
 def test_resolve_default_gateway_is_none_in_enforce_mode_without_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """The explicit fail-closed proof required by Section 4: enforce mode with no configured
     credential must return None, never silently fall back to MockImageAdapter."""
     monkeypatch.setattr(settings, "meme_image_generation_mode", "enforce")
-    monkeypatch.setattr(settings, "gemini_api_key", None)
+    monkeypatch.setattr(settings, "openai_api_key", None)
 
     gateway = _resolve_default_image_gateway()
 
     assert gateway is None
+
+
+def test_resolve_default_gateway_ignores_gemini_key_in_enforce_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """MEME-PROD-2 §7/§14: Gemini must no longer be selected for MEME enforce generation, even
+    when a valid gemini_api_key IS configured (e.g. for editorial_recomposition.py's own,
+    unaffected use) - only openai_api_key governs this seam now."""
+    from pydantic import SecretStr
+
+    from integrations.llm_gateway.providers.openai_image_adapter import OpenAIImageAdapter
+
+    monkeypatch.setattr(settings, "meme_image_generation_mode", "enforce")
+    monkeypatch.setattr(settings, "gemini_api_key", SecretStr("a-real-looking-gemini-key"))
+    monkeypatch.setattr(settings, "openai_api_key", SecretStr("a-real-looking-openai-key"))
+
+    gateway = _resolve_default_image_gateway()
+
+    assert isinstance(gateway, OpenAIImageAdapter)
+
+
+def test_resolve_default_gateway_fails_closed_even_when_only_gemini_key_is_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The other half: a configured gemini_api_key must never be used as a fallback credential for
+    the MEME image seam - only openai_api_key counts."""
+    from pydantic import SecretStr
+
+    monkeypatch.setattr(settings, "meme_image_generation_mode", "enforce")
+    monkeypatch.setattr(settings, "gemini_api_key", SecretStr("a-real-looking-gemini-key"))
+    monkeypatch.setattr(settings, "openai_api_key", None)
+
+    gateway = _resolve_default_image_gateway()
+
+    assert gateway is None
+
+
+def test_editorial_recomposition_still_imports_gemini_adapter_unaffected() -> None:
+    """§7/§15: this phase only removes Gemini from the MEME image-generation seam - unrelated
+    Gemini functionality (live NEWS photo recomposition) must remain completely untouched.
+    Structural, source-level proof rather than exercising that whole separate module."""
+    import inspect
+
+    import services.editorial_recomposition as recomposition_module
+
+    source = inspect.getsource(recomposition_module)
+    assert "GeminiImageAdapter" in source
+    assert "GEMINI_3_1_FLASH_IMAGE" in source
 
 
 # ---------------------------------------------------------------------------
@@ -407,11 +455,11 @@ async def test_default_gateway_is_mock_when_not_injected_in_dry_run_mode(db_sess
 async def test_enforce_mode_without_provider_fails_closed_never_falls_back_to_mock(
     db_session: AsyncSession, tmp_path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Section 4's explicit required test: enforce mode with no gemini_api_key configured must
+    """Section 4's explicit required test: enforce mode with no openai_api_key configured must
     fail closed BEFORE any task/candidate is created - never silently deliver a Mock-generated
     placeholder as if it were a real image."""
     monkeypatch.setattr(settings, "meme_image_generation_mode", "enforce")
-    monkeypatch.setattr(settings, "gemini_api_key", None)
+    monkeypatch.setattr(settings, "openai_api_key", None)
     event = await _make_event(db_session)
     gateway = _gateway()
 
@@ -690,3 +738,86 @@ async def test_copy_validation_failure_never_blocks_a_subsequent_manual_retry(
     )
     assert second.status == "delivered"
     assert second.task_id != first.task_id  # a genuinely new attempt, not blocked/reused
+
+
+# ---------------------------------------------------------------------------
+# MEME-PROD-2: full pipeline integration with a REAL OpenAIImageAdapter instance (not Mock) - the
+# underlying AsyncOpenAI client is injected/mocked (test_v2_1_openai_image_adapter.py's own
+# established "AsyncMock-injected client + real SDK Pydantic response types" convention), so this
+# proves the real adapter's own request/response translation integrates correctly with the rest of
+# the pipeline (storage -> render_meme() -> apply_nnj_watermark() -> delivery), never just that
+# Mock happens to work. No real network call anywhere in this section.
+# ---------------------------------------------------------------------------
+
+
+def _openai_gateway_with_valid_png():
+    from tests.test_v2_1_openai_image_adapter import _FakeRawResponse, _images_response, _mock_client
+
+    from integrations.llm_gateway.providers.openai_image_adapter import OpenAIImageAdapter
+
+    # A real, valid, decodable 8x8 PNG (not the test-only opaque bytes test_v2_1's own fixtures
+    # use) - generate_meme_image()'s own Image.open()/.verify() must succeed on it for the
+    # pipeline to actually proceed past image generation into storage/render/watermark.
+    import base64
+    import io as _io
+
+    from PIL import Image as _Image
+
+    buf = _io.BytesIO()
+    _Image.new("RGB", (8, 8), (200, 30, 30)).save(buf, format="PNG")
+    valid_png_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+
+    client = _mock_client(_FakeRawResponse(_images_response(b64_json=valid_png_b64)), method="generate")
+    return OpenAIImageAdapter(api_key="fake-key-never-real", client=client)
+
+
+@pytest.mark.asyncio
+async def test_real_openai_adapter_success_reaches_deterministic_render_and_watermark(
+    db_session: AsyncSession, tmp_path,
+) -> None:
+    """§9/§12/§14 combined proof: a successful REAL OpenAIImageAdapter generation still flows
+    through the completely unchanged storage/render_meme()/apply_nnj_watermark()/delivery chain -
+    the OpenAI adapter never adds branding itself, never renders meme typography itself."""
+    event = await _make_event(db_session)
+    image_gateway = _openai_gateway_with_valid_png()
+
+    outcome = await trigger_meme_generation(
+        db_session, news_event_id=event.id, trigger_source="manual",
+        capability_registry=_full_registry(_gateway()), image_gateway=image_gateway,
+        storage=LocalImageStorage(tmp_path), bot=_bot()[0],
+    )
+
+    assert outcome.status == "delivered"
+    candidate = await db_session.get(MemeCandidate, outcome.candidate_id)
+    assert candidate is not None
+    assert candidate.image_provider == "openai"  # the real adapter's own provider label
+    assert candidate.image_status == "generated"
+    assert candidate.render_storage_key is not None  # render_meme() ran
+    assert candidate.render_storage_key != candidate.image_storage_key  # watermark() produced a distinct, later asset
+
+
+@pytest.mark.asyncio
+async def test_real_openai_adapter_failure_becomes_controlled_outcome_never_crashes(
+    db_session: AsyncSession, tmp_path,
+) -> None:
+    """§11: a real OpenAIImageAdapter failure (e.g. the provider itself returning empty image
+    data) must still resolve to the controlled `image_generation_failed` outcome - never an
+    uncaught exception reaching the manual callback."""
+    from tests.test_v2_1_openai_image_adapter import _FakeRawResponse, _images_response, _mock_client
+
+    from integrations.llm_gateway.providers.openai_image_adapter import OpenAIImageAdapter
+
+    client = _mock_client(_FakeRawResponse(_images_response(b64_json=None)), method="generate")
+    image_gateway = OpenAIImageAdapter(api_key="fake-key-never-real", client=client)
+    event = await _make_event(db_session)
+
+    outcome = await trigger_meme_generation(
+        db_session, news_event_id=event.id, trigger_source="manual",
+        capability_registry=_full_registry(_gateway()), image_gateway=image_gateway,
+        storage=LocalImageStorage(tmp_path), bot=_bot()[0],
+    )
+
+    assert outcome.status == "image_generation_failed"  # controlled, never a raised exception
+    candidate = await db_session.get(MemeCandidate, outcome.candidate_id)
+    assert candidate is not None
+    assert candidate.render_storage_key is None  # never reached rendering

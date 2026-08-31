@@ -10,8 +10,19 @@ from __future__ import annotations
 import base64
 from unittest.mock import AsyncMock
 
+import httpx
 import pytest
-from openai import AsyncOpenAI, OpenAIError
+from openai import (
+    APIConnectionError,
+    AsyncOpenAI,
+    AuthenticationError,
+    BadRequestError,
+    InternalServerError,
+    NotFoundError,
+    OpenAIError,
+    PermissionDeniedError,
+    RateLimitError,
+)
 from openai.types.image import Image
 from openai.types.images_response import ImagesResponse, Usage, UsageInputTokensDetails, UsageOutputTokensDetails
 
@@ -73,15 +84,17 @@ class _FakeRawResponse:
         return self._parsed
 
 
-def _mock_client(raw_response: _FakeRawResponse | BaseException) -> AsyncOpenAI:
+def _mock_client(raw_response: _FakeRawResponse | BaseException, *, method: str = "edit") -> AsyncOpenAI:
     client = AsyncMock(spec=AsyncOpenAI)
     client.images = AsyncMock()
     client.images.with_raw_response = AsyncMock()
-    if isinstance(raw_response, BaseException):
-        client.images.with_raw_response.edit = AsyncMock(side_effect=raw_response)
-    else:
-        client.images.with_raw_response.edit = AsyncMock(return_value=raw_response)
+    mocked = AsyncMock(side_effect=raw_response) if isinstance(raw_response, BaseException) else AsyncMock(return_value=raw_response)
+    setattr(client.images.with_raw_response, method, mocked)
     return client
+
+
+def _text_to_image_request(prompt: str = "a robot at a desk") -> ImageGenerationRequest:
+    return ImageGenerationRequest(prompt=prompt, operation=ImageGenerationOperation.TEXT_TO_IMAGE)
 
 
 # ---------------------------------------------------------------------------
@@ -253,17 +266,216 @@ async def test_openai_error_translates_to_typed_error() -> None:
 
 
 @pytest.mark.asyncio
-async def test_text_to_image_operation_rejected_not_silently_downgraded() -> None:
-    """This phase's own deliberate asymmetry vs. GeminiImageAdapter: TEXT_TO_IMAGE via
-    gpt-image-2 was not verified in this phase, so it is explicitly rejected rather than guessed."""
-    client = _mock_client(_FakeRawResponse(_images_response()))
+async def test_text_to_image_operation_routes_to_generate_not_edit() -> None:
+    """MEME-PROD-2: TEXT_TO_IMAGE is now a real, verified code path (the meme-image production
+    path) - it must call `images.generate()`, never `images.edit()` (no reference image exists)."""
+    client = _mock_client(_FakeRawResponse(_images_response()), method="generate")
     adapter = OpenAIImageAdapter(api_key="fake-key", client=client)
-    request = ImageGenerationRequest(prompt="a scene from text alone", operation=ImageGenerationOperation.TEXT_TO_IMAGE)
 
-    with pytest.raises(OpenAIImageAdapterError, match="IMAGE_EDIT"):
-        await adapter.generate_image(request)
+    await adapter.generate_image(_text_to_image_request())
 
+    client.images.with_raw_response.generate.assert_called_once()
     client.images.with_raw_response.edit.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# MEME-PROD-2: TEXT_TO_IMAGE (gpt-image-2 via images.generate()) - the real meme-image
+# production path (services/meme_generation_orchestrator.py, "enforce" mode).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_text_to_image_uses_gpt_image_2() -> None:
+    client = _mock_client(_FakeRawResponse(_images_response()), method="generate")
+    adapter = OpenAIImageAdapter(api_key="fake-key", client=client)
+
+    await adapter.generate_image(_text_to_image_request())
+
+    assert client.images.with_raw_response.generate.call_args.kwargs["model"] == GPT_IMAGE_2
+
+
+@pytest.mark.asyncio
+async def test_text_to_image_default_quality_is_medium() -> None:
+    client = _mock_client(_FakeRawResponse(_images_response()), method="generate")
+    adapter = OpenAIImageAdapter(api_key="fake-key", client=client)
+
+    await adapter.generate_image(_text_to_image_request())
+
+    assert client.images.with_raw_response.generate.call_args.kwargs["quality"] == "medium"
+
+
+@pytest.mark.asyncio
+async def test_text_to_image_default_size_is_square_1024() -> None:
+    client = _mock_client(_FakeRawResponse(_images_response()), method="generate")
+    adapter = OpenAIImageAdapter(api_key="fake-key", client=client)
+
+    await adapter.generate_image(_text_to_image_request())
+
+    assert client.images.with_raw_response.generate.call_args.kwargs["size"] == "1024x1024"
+
+
+@pytest.mark.asyncio
+async def test_text_to_image_requests_exactly_one_image() -> None:
+    client = _mock_client(_FakeRawResponse(_images_response()), method="generate")
+    adapter = OpenAIImageAdapter(api_key="fake-key", client=client)
+
+    await adapter.generate_image(_text_to_image_request())
+
+    assert client.images.with_raw_response.generate.call_args.kwargs["n"] == 1
+
+
+@pytest.mark.asyncio
+async def test_text_to_image_response_format_never_sent() -> None:
+    client = _mock_client(_FakeRawResponse(_images_response()), method="generate")
+    adapter = OpenAIImageAdapter(api_key="fake-key", client=client)
+
+    await adapter.generate_image(_text_to_image_request())
+
+    assert "response_format" not in client.images.with_raw_response.generate.call_args.kwargs
+
+
+@pytest.mark.asyncio
+async def test_text_to_image_prompt_preserved_verbatim() -> None:
+    """No reference to top_text/bottom_text/meme copy - the prompt passed to the adapter is
+    whatever the caller built (services/meme_image_generation.py::build_image_prompt() is the
+    real caller, tested separately) - the adapter itself never rewrites or augments it."""
+    client = _mock_client(_FakeRawResponse(_images_response()), method="generate")
+    adapter = OpenAIImageAdapter(api_key="fake-key", client=client)
+
+    await adapter.generate_image(_text_to_image_request(prompt="a very specific visual scene description"))
+
+    assert client.images.with_raw_response.generate.call_args.kwargs["prompt"] == "a very specific visual scene description"
+
+
+@pytest.mark.asyncio
+async def test_text_to_image_never_sends_reference_images() -> None:
+    """TEXT_TO_IMAGE has no `image=` parameter at all - .generate() (unlike .edit()) never
+    accepts one."""
+    client = _mock_client(_FakeRawResponse(_images_response()), method="generate")
+    adapter = OpenAIImageAdapter(api_key="fake-key", client=client)
+
+    await adapter.generate_image(_text_to_image_request())
+
+    assert "image" not in client.images.with_raw_response.generate.call_args.kwargs
+
+
+@pytest.mark.asyncio
+async def test_text_to_image_custom_quality_and_size_are_honored() -> None:
+    client = _mock_client(_FakeRawResponse(_images_response()), method="generate")
+    adapter = OpenAIImageAdapter(api_key="fake-key", client=client, quality="high", text_to_image_size="1536x1024")
+
+    await adapter.generate_image(_text_to_image_request())
+
+    kwargs = client.images.with_raw_response.generate.call_args.kwargs
+    assert kwargs["quality"] == "high"
+    assert kwargs["size"] == "1536x1024"
+
+
+@pytest.mark.asyncio
+async def test_text_to_image_decodes_response_into_valid_image_bytes() -> None:
+    client = _mock_client(_FakeRawResponse(_images_response()), method="generate")
+    adapter = OpenAIImageAdapter(api_key="fake-key", client=client)
+
+    response = await adapter.generate_image(_text_to_image_request())
+
+    assert response.image_bytes == base64.b64decode(_OUTPUT_PNG_B64)
+    assert response.model_used == GPT_IMAGE_2
+    assert response.provider == "openai"
+    assert response.mime_type == "image/png"
+
+
+@pytest.mark.asyncio
+async def test_text_to_image_empty_response_data_raises_typed_error() -> None:
+    client = _mock_client(_FakeRawResponse(_images_response(b64_json=None)), method="generate")
+    adapter = OpenAIImageAdapter(api_key="fake-key", client=client)
+
+    with pytest.raises(OpenAIImageAdapterError):
+        await adapter.generate_image(_text_to_image_request())
+
+
+@pytest.mark.asyncio
+async def test_text_to_image_api_key_never_appears_in_a_raised_error_message() -> None:
+    client = _mock_client(OpenAIError("upstream failure"), method="generate")
+    adapter = OpenAIImageAdapter(api_key="secret-api-key-value", client=client)
+
+    with pytest.raises(OpenAIImageAdapterError) as exc_info:
+        await adapter.generate_image(_text_to_image_request())
+
+    assert "secret-api-key-value" not in str(exc_info.value)
+
+
+def test_capabilities_declare_text_to_image_support() -> None:
+    adapter = OpenAIImageAdapter(api_key="fake-key", client=_mock_client(_FakeRawResponse(_images_response())))
+    assert adapter.CAPABILITIES.supports_text_to_image is True
+
+
+# ---------------------------------------------------------------------------
+# MEME-PROD-2 §10: retryable classification - authentication/malformed-request/permission/not-
+# found (4xx client errors retrying the identical request cannot fix) must be marked non-retryable;
+# every other OpenAIError (rate limit, connection, server error, generic) stays retryable, matching
+# the pre-existing "always retry once" behavior exactly.
+# ---------------------------------------------------------------------------
+
+
+def _fake_status_error(cls: type[OpenAIError], *, message: str = "boom", status_code: int = 400) -> OpenAIError:
+    """Constructs a real instance of one of the openai SDK's own typed exception classes - never a
+    hand-rolled stand-in - using its real constructor shape (every `APIStatusError` subclass
+    requires `response`/`body`)."""
+    request = httpx.Request("POST", "https://api.openai.com/v1/images/generations")
+    response = httpx.Response(status_code, request=request, json={"error": {"message": message}})
+    return cls(message=message, response=response, body=None)  # type: ignore[call-arg]
+
+
+def _fake_connection_error() -> OpenAIError:
+    request = httpx.Request("POST", "https://api.openai.com/v1/images/generations")
+    return APIConnectionError(message="connection failed", request=request)
+
+
+@pytest.mark.parametrize(
+    "error_ctor",
+    [
+        lambda: _fake_status_error(AuthenticationError, status_code=401),
+        lambda: _fake_status_error(BadRequestError, status_code=400),
+        lambda: _fake_status_error(PermissionDeniedError, status_code=403),
+        lambda: _fake_status_error(NotFoundError, status_code=404),
+    ],
+)
+@pytest.mark.asyncio
+async def test_client_error_types_are_never_retryable(error_ctor) -> None:
+    client = _mock_client(error_ctor(), method="generate")
+    adapter = OpenAIImageAdapter(api_key="fake-key", client=client)
+
+    with pytest.raises(OpenAIImageAdapterError) as exc_info:
+        await adapter.generate_image(_text_to_image_request())
+
+    assert exc_info.value.retryable is False
+
+
+@pytest.mark.parametrize(
+    "error_ctor",
+    [
+        lambda: _fake_status_error(RateLimitError, status_code=429),
+        lambda: _fake_status_error(InternalServerError, status_code=500),
+        _fake_connection_error,
+        lambda: OpenAIError("a generic, unclassified transport failure"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_transient_error_types_remain_retryable(error_ctor) -> None:
+    client = _mock_client(error_ctor(), method="generate")
+    adapter = OpenAIImageAdapter(api_key="fake-key", client=client)
+
+    with pytest.raises(OpenAIImageAdapterError) as exc_info:
+        await adapter.generate_image(_text_to_image_request())
+
+    assert exc_info.value.retryable is True
+
+
+def test_default_retryable_is_true_when_constructed_directly() -> None:
+    """A caller constructing OpenAIImageAdapterError without an explicit `retryable=` value (e.g.
+    the `.edit()` path's own empty-response-data error) preserves the exact prior "always retry
+    once" default."""
+    assert OpenAIImageAdapterError("some failure").retryable is True
 
 
 # ---------------------------------------------------------------------------

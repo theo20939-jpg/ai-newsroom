@@ -48,13 +48,26 @@ _MAX_GENERATION_ATTEMPTS = 2
 def build_image_prompt(concept: MemeConcept) -> str:
     """Pure, deterministic. Describes only the visual scene - never includes the punchline/copy
     text, and explicitly instructs against rendering any text at all (M6 owns all on-image text,
-    added deterministically after generation - module docstring)."""
+    added deterministically after generation - module docstring).
+
+    MEME-PROD-2 §9: `concept.visual_scene` is free text the concept-generation model wrote, and it
+    can legitimately describe an object that would normally carry text (a nameplate, a slide, a
+    sign, a UI panel) without itself specifying literal readable words - the OLD prompt simply
+    appended a blanket "no text anywhere" instruction after whatever the scene said, which was
+    contradictory whenever the scene DID quote or imply specific readable text ("a nameplate
+    reading 'CEO'"), confusing the image model. This now gives the model an explicit resolution
+    rule instead of a bare contradiction: keep any such object in the scene, but render it
+    blank/unlabeled/generic - never with legible characters - so the deterministic renderer (M6)
+    remains the ONLY place any word ever appears on the final image."""
     parts = [concept.visual_scene]
     if concept.characters_objects:
         parts.append(f"Depicting: {', '.join(concept.characters_objects)}.")
     parts.append(
-        "Photographic or illustrated scene only - no text, no letters, no words, no captions "
-        "anywhere in the image."
+        "Visual scene only - no text, no letters, no words, no captions, no meme punchline or "
+        "caption anywhere in the image. If the scene describes something that would normally "
+        "carry text (a nameplate, sign, screen, slide, or product label), render it blank, "
+        "unlabeled, or with illegible/abstract marks only - never with legible words. All "
+        "on-image text is added separately afterward; do not attempt to render any of it here."
     )
     return " ".join(parts)
 
@@ -74,7 +87,15 @@ async def generate_meme_image(
 
     Never raises - a generation or storage failure after `_MAX_GENERATION_ATTEMPTS` attempts
     returns `MemeImageStatus.FAILED` with an `error_code`, exactly like every other best-effort
-    boundary in this codebase (`_attach_*` hooks, `NotificationOutcome`)."""
+    boundary in this codebase (`_attach_*` hooks, `NotificationOutcome`).
+
+    MEME-PROD-2 §10: a raised exception's own `retryable` attribute (read via `getattr(exc,
+    "retryable", True)` - provider-agnostic, this module never imports any provider's exception
+    types) stops the bounded loop immediately when a provider has classified its own failure as
+    non-retryable (authentication, malformed request, content-policy refusal - retrying the
+    IDENTICAL request cannot plausibly help and would waste a second paid call for nothing). Any
+    gateway whose exceptions don't set this attribute (e.g. `MockImageAdapter`) keeps the exact
+    prior "always retry once" behavior, unchanged."""
     if mode == "off":
         return MemeImageGenerationResult(status=MemeImageStatus.OFF, mode=mode)
 
@@ -87,10 +108,13 @@ async def generate_meme_image(
             response = await gateway.generate_image(request)
         except Exception as exc:  # noqa: BLE001 - translated to a stable, loggable code, never re-raised
             last_error_code = f"generation_failed:{type(exc).__name__}"
+            retryable = getattr(exc, "retryable", True)
             logger.warning(
                 "meme_image_generation_attempt_failed",
-                extra={"attempt": attempt, "error_code": last_error_code},
+                extra={"attempt": attempt, "error_code": last_error_code, "retryable": retryable},
             )
+            if not retryable:
+                break
             continue
 
         try:
@@ -138,9 +162,12 @@ async def generate_meme_image(
 
     logger.warning(
         "meme_image_generation_exhausted_attempts",
-        extra={"max_attempts": _MAX_GENERATION_ATTEMPTS, "error_code": last_error_code},
+        extra={"max_attempts": _MAX_GENERATION_ATTEMPTS, "attempts_made": attempt, "error_code": last_error_code},
     )
     return MemeImageGenerationResult(
         status=MemeImageStatus.FAILED, mode=mode, error_code=last_error_code,
-        attempt_count=_MAX_GENERATION_ATTEMPTS,
+        # MEME-PROD-2: the ACTUAL number of attempts made, not always the bounded max - a
+        # non-retryable failure (§10) can now stop after just 1, and this must be reported
+        # accurately rather than implying a second paid call was made when it wasn't.
+        attempt_count=attempt,
     )
