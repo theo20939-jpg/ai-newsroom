@@ -54,9 +54,11 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     anthropic_api_key: SecretStr | None = None
     # Phase V2.1 (docs/nnj_source_faithful_editorial_visual_recomposition_v1.md): the Gemini image
-    # adapter's own credential - not used by any existing code path (Google/Gemini was never a
-    # provider in this codebase before this phase; ABSENT in the current environment, confirmed by
-    # a presence-only check, never a raw-value check, before this field was added).
+    # adapter's own credential, consumed by `services/editorial_recomposition.py` (live NEWS photo
+    # recomposition, gated by `editorial_recomposition_mode`) and, as of the REAL IMAGE PROVIDER
+    # FINALIZATION phase, also by `services/meme_generation_orchestrator.py` (gated by
+    # `meme_image_generation_mode == "enforce"`) - the same credential, two independent gated
+    # consumers, never a provider-specific key duplicated per feature.
     gemini_api_key: SecretStr | None = None
     max_daily_ai_cost: float | None = None
     max_monthly_ai_cost: float | None = None
@@ -711,15 +713,22 @@ class Settings(BaseSettings):
     # `integrations.llm_gateway.providers.mock_image_adapter.MockImageAdapter`, a deterministic,
     # zero-network, zero-cost placeholder generator.
     #
-    # MEME PRODUCTION PIPELINE: "enforce" is new - functionally identical to "dry_run" inside
+    # MEME PRODUCTION PIPELINE: "enforce" is functionally identical to "dry_run" INSIDE
     # `services/meme_image_generation.py::generate_meme_image()` itself (that function has no
     # opinion about which real value is configured; it simply calls whichever gateway its caller
     # injected - untouched by this phase). The distinction is ENTIRELY at the caller
-    # (`services/meme_generation_orchestrator.py`): "enforce" is the value an operator sets once a
-    # real, paid `ImageGenerationGateway` adapter is actually wired and separately authorized for
-    # this feature - a real provider adapter is NOT built or wired in this phase (no real paid
-    # image generation calls tonight, per explicit instruction); "enforce" exists now purely so
-    # that future wiring needs no further settings migration. Still defaults to "off".
+    # (`services/meme_generation_orchestrator.py::_resolve_default_image_gateway()`): "off"/
+    # "dry_run" default to `MockImageAdapter` (zero network, zero cost); "enforce" constructs the
+    # real, already-production-proven `GeminiImageAdapter` (the same adapter
+    # `services/editorial_recomposition.py` already uses live for NEWS photo recomposition) keyed
+    # off `gemini_api_key` below - REAL IMAGE PROVIDER FINALIZATION phase (docs/
+    # meme_production_pipeline_report.md's own morning follow-up). If `gemini_api_key` is unset
+    # while this is "enforce", the orchestrator FAILS CLOSED (`MemeGenerationOutcome.status ==
+    # "provider_not_configured"`) rather than silently falling back to Mock. `OpenAIImageAdapter`
+    # is not used for this seam - it only supports IMAGE_EDIT, never TEXT_TO_IMAGE, so it cannot
+    # serve meme generation regardless of its (currently exhausted) credit balance. Still defaults
+    # to "off" - flipping this to "enforce" (with `gemini_api_key` already set) is the explicit
+    # morning activation decision, not made by this phase.
     meme_image_generation_mode: Literal["off", "dry_run", "enforce"] = "off"
     meme_image_max_bytes: int = Field(default=10_000_000, gt=0)
 

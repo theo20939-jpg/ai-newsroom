@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 import pytest
 from aiogram import Bot
 from aiogram.client.session.base import BaseSession
-from aiogram.methods import SendMessage, TelegramMethod
+from aiogram.methods import SendPhoto, TelegramMethod
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,12 +35,17 @@ from integrations.llm_gateway.protocol import GenerateResponse
 from integrations.llm_gateway.providers.mock_image_adapter import MockImageAdapter
 from integrations.storage.image_storage import LocalImageStorage
 from schemas.capability import CapabilityUsage
-from services.meme_generation_orchestrator import trigger_meme_generation
+from services.meme_generation_orchestrator import _resolve_default_image_gateway, trigger_meme_generation
 from tests.fakes.fake_gateway import FakeLLMGateway
 
 _RESEARCH_OUTPUT = {"facts": ["Company X shipped product Y."], "confidence": 0.8, "gaps": []}
 _INTELLIGENCE_OUTPUT = {
-    "significance": "notable", "angle": "irony", "audience_relevance": "high", "recommendation": "cover",
+    # significance is `type: number` per prompts/intelligence/v1.yaml and v2.yaml's own
+    # response_schema (both versions, confirmed by direct inspection) - a pre-existing fixture bug
+    # (this literal was a string, "notable") found while verifying this phase's own new tests;
+    # fixed here since it blocks every DB-backed test in this file from ever completing a real
+    # workflow run, not just the ones this phase adds.
+    "significance": 0.8, "angle": "irony", "audience_relevance": "high", "recommendation": "cover",
 }
 _CONCEPT_OUTPUT = {
     "premise": "Company X shipped product Y.", "setup": "Everyone expected a delay.",
@@ -146,7 +151,13 @@ async def test_manual_trigger_bypasses_opportunity_gate_and_delivers(db_session:
 
     assert outcome.status == "delivered"
     assert outcome.candidate_id is not None
-    sends = [m for m in session.sent if isinstance(m, SendMessage)]
+    # services/meme_preview_notifier.py sends the generated image via bot.send_photo() (SendPhoto),
+    # falling back to bot.send_message() only when no photo is available - a successful delivery
+    # with a real generated+watermarked image always takes the SendPhoto path (pre-existing fixture
+    # bug found here: this assertion previously filtered SendMessage, which this success path never
+    # sends, silently masking itself behind an earlier, unrelated fixture bug - see _INTELLIGENCE_
+    # OUTPUT's own comment above).
+    sends = [m for m in session.sent if isinstance(m, SendPhoto)]
     assert len(sends) == 1
     assert sends[0].chat_id == -1004297182444
     assert sends[0].message_thread_id == 88
@@ -311,3 +322,102 @@ async def test_watermark_applied_on_every_successful_delivery(db_session: AsyncS
     # background is itself non-deterministic-looking gradient/noise content.
     assert final_image.size[0] > 0 and final_image.size[1] > 0
     assert candidate.render_storage_key != candidate.image_storage_key  # a genuinely different, later asset
+
+
+# ---------------------------------------------------------------------------
+# REAL IMAGE PROVIDER FINALIZATION: _resolve_default_image_gateway() provider selection.
+# No real network call anywhere below - constructing a GeminiImageAdapter only stores its fields
+# (integrations/llm_gateway/providers/gemini_image_adapter.py::__init__ never touches a socket);
+# these tests prove SEAM SELECTION, never call generate_image() on a real adapter.
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_default_gateway_is_mock_in_off_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "meme_image_generation_mode", "off")
+    gateway = _resolve_default_image_gateway()
+    assert isinstance(gateway, MockImageAdapter)
+
+
+def test_resolve_default_gateway_is_mock_in_dry_run_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "meme_image_generation_mode", "dry_run")
+    gateway = _resolve_default_image_gateway()
+    assert isinstance(gateway, MockImageAdapter)
+
+
+def test_resolve_default_gateway_is_gemini_in_enforce_mode_with_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pydantic import SecretStr
+
+    from integrations.llm_gateway.providers.gemini_image_adapter import GEMINI_3_1_FLASH_IMAGE, GeminiImageAdapter
+
+    monkeypatch.setattr(settings, "meme_image_generation_mode", "enforce")
+    monkeypatch.setattr(settings, "gemini_api_key", SecretStr("test-only-fake-key-never-real"))
+
+    gateway = _resolve_default_image_gateway()
+
+    assert isinstance(gateway, GeminiImageAdapter)
+    assert gateway.CAPABILITIES.supports_text_to_image is True  # meme generation is pure TEXT_TO_IMAGE
+    assert gateway._model_id == GEMINI_3_1_FLASH_IMAGE  # noqa: SLF001 - proving the exact model wired, not just the type
+
+
+def test_resolve_default_gateway_is_none_in_enforce_mode_without_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The explicit fail-closed proof required by Section 4: enforce mode with no configured
+    credential must return None, never silently fall back to MockImageAdapter."""
+    monkeypatch.setattr(settings, "meme_image_generation_mode", "enforce")
+    monkeypatch.setattr(settings, "gemini_api_key", None)
+
+    gateway = _resolve_default_image_gateway()
+
+    assert gateway is None
+
+
+# ---------------------------------------------------------------------------
+# REAL IMAGE PROVIDER FINALIZATION: trigger_meme_generation() end-to-end, WITHOUT an injected
+# image_gateway - proving the production default-resolution path itself, not just test injection.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_default_gateway_is_mock_when_not_injected_in_dry_run_mode(db_session: AsyncSession, tmp_path) -> None:
+    """dry_run (the _reset_meme_modes fixture's own default) never calls a paid provider even when
+    no image_gateway is explicitly injected - the production default resolves to MockImageAdapter,
+    recorded on the persisted candidate as provider="mock"."""
+    event = await _make_event(db_session)
+
+    outcome = await trigger_meme_generation(
+        db_session, news_event_id=event.id, trigger_source="manual",
+        capability_registry=_full_registry(_gateway()),
+        storage=LocalImageStorage(tmp_path), bot=_bot()[0],
+        # image_gateway intentionally omitted - exercising the real default-resolution seam.
+    )
+
+    assert outcome.status == "delivered"
+    candidate = await db_session.get(MemeCandidate, outcome.candidate_id)
+    assert candidate is not None
+    assert candidate.image_provider == "mock"
+
+
+@pytest.mark.asyncio
+async def test_enforce_mode_without_provider_fails_closed_never_falls_back_to_mock(
+    db_session: AsyncSession, tmp_path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Section 4's explicit required test: enforce mode with no gemini_api_key configured must
+    fail closed BEFORE any task/candidate is created - never silently deliver a Mock-generated
+    placeholder as if it were a real image."""
+    monkeypatch.setattr(settings, "meme_image_generation_mode", "enforce")
+    monkeypatch.setattr(settings, "gemini_api_key", None)
+    event = await _make_event(db_session)
+    gateway = _gateway()
+
+    outcome = await trigger_meme_generation(
+        db_session, news_event_id=event.id, trigger_source="manual",
+        capability_registry=_full_registry(gateway),
+        storage=LocalImageStorage(tmp_path), bot=_bot()[0],
+        # image_gateway intentionally omitted - the whole point of this test.
+    )
+
+    assert outcome.status == "provider_not_configured"
+    assert outcome.task_id is None
+    assert outcome.candidate_id is None
+    assert gateway.received_requests == []  # zero LLM calls - fails closed before any workflow work
+    rows = (await db_session.execute(select(MemeCandidate).where(MemeCandidate.news_event_id == event.id))).scalars().all()
+    assert rows == []  # zero candidates persisted - never a placeholder passed off as real

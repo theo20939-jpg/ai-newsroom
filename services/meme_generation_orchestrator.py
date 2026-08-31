@@ -79,9 +79,9 @@ TriggerSource = Literal["automatic", "manual"]
 _NON_TERMINAL_TASK_STATUSES = frozenset({TaskStatus.CREATED, TaskStatus.RUNNING, TaskStatus.WAITING})
 
 MemeGenerationStatus = Literal[
-    "event_not_found", "already_in_progress", "not_meme_worthy", "concept_generation_failed",
-    "safety_blocked", "image_generation_failed", "render_failed", "watermark_failed", "delivered",
-    "delivery_failed",
+    "event_not_found", "already_in_progress", "not_meme_worthy", "provider_not_configured",
+    "concept_generation_failed", "safety_blocked", "image_generation_failed", "render_failed",
+    "watermark_failed", "delivered", "delivery_failed",
 ]
 
 
@@ -151,6 +151,43 @@ async def _create_meme_generation_task(
     return task
 
 
+def _resolve_default_image_gateway() -> ImageGenerationGateway | None:
+    """Constructs the `image_gateway` that `trigger_meme_generation()` uses when a caller does not
+    inject one explicitly - test injection (every test in tests/test_meme_generation_orchestrator.py
+    passes `image_gateway=MockImageAdapter()` explicitly) is completely unaffected by this
+    function; it only governs the two real production call sites' own implicit default
+    (`worker/content_cycle.py`'s automatic trigger, `bot/handlers/meme_generate.py`'s manual
+    trigger), neither of which passes `image_gateway` today.
+
+    mode="off"/"dry_run": always `MockImageAdapter` - zero network, zero cost, matches this
+    orchestrator's pre-existing behavior byte-for-byte (`dry_run` means "exercise the real
+    generate/store/render/watermark pipeline shape safely," never "call a paid provider").
+
+    mode="enforce": constructs the real, already-production-proven `GeminiImageAdapter` (the same
+    adapter `services/editorial_recomposition.py::maybe_recompose()` already constructs for live
+    NEWS photo recomposition), mirroring that call site's exact fail-closed-on-missing-key pattern:
+    `settings.gemini_api_key` absent -> returns `None` (never `MockImageAdapter`) so the caller can
+    fail closed rather than silently downgrading a paid-mode request to a placeholder image.
+    `OpenAIImageAdapter` is deliberately NOT used here - its own `generate_image()` (module
+    docstring, integrations/llm_gateway/providers/openai_image_adapter.py) explicitly rejects any
+    request that is not `ImageGenerationOperation.IMAGE_EDIT`, and meme generation is pure
+    TEXT_TO_IMAGE (services/meme_image_generation.py::build_image_prompt() has no reference image)
+    - OpenAI's adapter cannot serve this seam at all today, independent of its currently-exhausted
+    credit balance."""
+    from integrations.llm_gateway.providers.mock_image_adapter import MockImageAdapter
+
+    if settings.meme_image_generation_mode != "enforce":
+        return MockImageAdapter()
+
+    api_key = settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else None
+    if not api_key:
+        return None
+
+    from integrations.llm_gateway.providers.gemini_image_adapter import GEMINI_3_1_FLASH_IMAGE, GeminiImageAdapter
+
+    return GeminiImageAdapter(model_id=GEMINI_3_1_FLASH_IMAGE, api_key=api_key)
+
+
 def _card_from_result(
     candidate_id: UUID, event: NewsEvent, copy: MemeCopy, *, image_storage_key: str | None,
     safety_summary: str,
@@ -194,20 +231,30 @@ async def trigger_meme_generation(
     orchestration function in this codebase (`process_approved_telegraph_proposal()`,
     `publish_approved_telegraph_article()`).
 
-    `image_gateway` defaults to `None`, in which case a fresh `MockImageAdapter` is constructed
-    HERE (never in a caller) - deliberately so that neither `worker/content_cycle.py` nor
-    `bot/handlers/meme_generate.py` ever needs to import anything from
-    `integrations.llm_gateway.*` directly. `worker/content_cycle.py` in particular has an
+    `image_gateway` defaults to `None`, in which case `_resolve_default_image_gateway()` constructs
+    the real gateway HERE (never in a caller) - deliberately so that neither
+    `worker/content_cycle.py` nor `bot/handlers/meme_generate.py` ever needs to import anything
+    from `integrations.llm_gateway.*` directly. `worker/content_cycle.py` in particular has an
     established structural test (`test_i_content_cycle_module_imports_no_llm_gateway_or_
     capability_execution`) forbidding ANY import referencing `llm_gateway`/`capabilities.executor`
     anywhere in that file, even a local/deferred one - this module is where that boundary is
-    respected on the automatic path's behalf. A real, paid provider adapter is not wired anywhere
-    in this codebase yet (module docstring) - only ever exercised via an explicitly-injected
-    `image_gateway` in a test."""
-    if image_gateway is None:
-        from integrations.llm_gateway.providers.mock_image_adapter import MockImageAdapter
+    respected on the automatic path's behalf.
 
-        image_gateway = MockImageAdapter()
+    "REAL IMAGE PROVIDER FINALIZATION" phase: `_resolve_default_image_gateway()` returns
+    `MockImageAdapter` for `settings.meme_image_generation_mode` "off"/"dry_run" (unchanged), and
+    the real, production-proven `GeminiImageAdapter` for "enforce" - but only when
+    `settings.gemini_api_key` is actually configured. If "enforce" is set with no key, that
+    resolver returns `None` and this function FAILS CLOSED (`status="provider_not_configured"`)
+    rather than silently falling back to `MockImageAdapter` - a paid-mode request must never
+    silently deliver a placeholder image as if it were real."""
+    if image_gateway is None:
+        image_gateway = _resolve_default_image_gateway()
+        if image_gateway is None:
+            logger.error(
+                "meme_image_provider_not_configured",
+                extra={"news_event_id": str(news_event_id), "mode": settings.meme_image_generation_mode},
+            )
+            return MemeGenerationOutcome(status="provider_not_configured", news_event_id=news_event_id)
 
     event = await session.get(NewsEvent, news_event_id)
     if event is None:
