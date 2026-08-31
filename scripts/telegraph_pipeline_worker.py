@@ -17,7 +17,8 @@ Chains, in order, reusing every existing, already-reviewed checkpoint unmodified
      the proposal is not APPROVED-and-unclaimed (idempotent to call on an already-researched
      proposal: the claim simply returns None and this step is skipped).
   2. services.telegraph_article_processor.generate_article_for_researched_proposal() - a no-op
-     (returns "already_exists") if an article was already generated for this proposal's Story.
+     (returns "already_exists", with the existing task's own id) if an article was already
+     generated for this proposal's Story - never a second paid generation call.
   3. services.telegraph_article_review_service.create_article_review() +
      services.telegraph_article_review_notifier.send_article_review() - creates the durable
      review row and sends (or, by default, DRY-RUNS) the COMPLETE article as a header/body-chunks/
@@ -27,6 +28,15 @@ Chains, in order, reusing every existing, already-reviewed checkpoint unmodified
      chat_id/message_id/topic_id onto the review row (TelegraphArticleReviewService.
      record_telegram_delivery()) - the delivery-completion signal send_article_review()'s own
      idempotency guard checks before ever re-sending on a later retry for the same proposal.
+
+  RETRY/RECOVERY FIX: stage 2 returning "already_exists" (a prior run already generated the
+  article, e.g. because that run's own Telegram send was skipped/failed/never attempted) is NOT a
+  stop condition for stage 3 - `_USABLE_ARTICLE_STATUSES` treats "generated" and "already_exists"
+  identically: both resolve the article task, load its result, resolve-or-create the review
+  (idempotent, never a duplicate row), and attempt the send. `send_article_review()`'s own
+  `review.telegram_message_id is not None` guard is what actually prevents a resend of an
+  already-delivered review on yet another retry - this worker never re-checks that condition
+  itself, it only ever needs to reach stage 3 reliably.
 
 Real paid LLM calls and real Telegram sends require BOTH `--live` on the command line AND
 `settings.telegraph_pipeline_enabled = True` in the environment - two independent, explicit
@@ -104,14 +114,18 @@ import logging
 from pathlib import Path
 from uuid import UUID
 
+from aiogram import Bot
+
 from bot.loader import create_bot
+from capabilities.registry import CapabilityRegistry
 from core.config import settings
 from core.logging import setup_logging
 from database.session import async_session_factory
 from integrations.llm_gateway.boot import assemble_ai_integration_layer
 from integrations.llm_gateway.models.catalog import build_model_registry
 from integrations.prompts.file_repository import FilePromptRepository
-from services.pricing_catalog import ModelRegistryPricingCatalog
+from services.cost_tracker import CostTracker
+from services.pricing_catalog import ModelRegistryPricingCatalog, PricingCatalog
 from services.telegraph_article_processor import generate_article_for_researched_proposal
 from services.telegraph_article_review_notifier import send_article_review
 from services.telegraph_article_review_service import TelegraphArticleReviewService, create_article_review
@@ -121,25 +135,68 @@ logger = logging.getLogger(__name__)
 
 _PROMPTS_ROOT = Path(__file__).resolve().parent.parent / "prompts"
 
+# RETRY/RECOVERY FIX: an article task in either of these two ArticleGenerationStatus values has a
+# real, usable EditorialTask - "generated" (a brand new task this exact call just ran) and
+# "already_exists" (a prior call already created and ran one for this Story, per services.
+# telegraph_article_processor's own exactly-once-per-Story guard) are equally valid starting
+# points for review resolution/send. Only "not_researched"/"research_not_complete" (no research
+# evidence yet) are genuine stop conditions.
+_USABLE_ARTICLE_STATUSES = frozenset({"generated", "already_exists"})
 
-async def run_telegraph_pipeline_for_proposal(proposal_id: UUID, *, live: bool) -> None:
+
+def _extract_generate_article_result(workflow: dict | None) -> dict | None:
+    """The one, unchanged source of truth for a completed article's structured output - byte-for-
+    byte the same `step_results` scan this worker has always used (TELEGRAPH EDITORIAL CHAT
+    DELIVERY's own "Preserve this source of truth" requirement), factored out only so the fresh-
+    generation path and the already-exists recovery path share exactly one implementation rather
+    than two copies that could drift. Returns `None` when no successful `generate_article` step
+    exists yet (task still running, or failed before/at that step) - the caller's own signal to
+    fail closed rather than inventing or recomputing anything."""
+    for step_result in (workflow or {}).get("step_results", []):
+        if step_result.get("step_name") == "generate_article" and step_result.get("status") == "SUCCESS":
+            return step_result.get("result")
+    return None
+
+
+async def run_telegraph_pipeline_for_proposal(
+    proposal_id: UUID,
+    *,
+    live: bool,
+    capability_registry: CapabilityRegistry | None = None,
+    cost_tracker: CostTracker | None = None,
+    pricing_catalog: PricingCatalog | None = None,
+    bot: Bot | None = None,
+) -> None:
     """Orchestrate one proposal through research -> article -> review-send. `live=False` (the
     default) still makes real, paid LLM calls (see module docstring) - it only controls whether
-    the final Telegram send is a dry run."""
-    prompt_repository = FilePromptRepository(_PROMPTS_ROOT)
-    ai_layer = assemble_ai_integration_layer(settings, prompt_repository)
-    registry = ai_layer.capability_registry
-    # AIIntegrationLayer does not expose pricing_catalog itself (only gateway/capability_
-    # registry/cost_tracker - integrations/llm_gateway/boot.py's own dataclass) - rebuilt here
-    # exactly as tests/test_cost_recording_integration.py's own established real-call-site
-    # pattern already does, never a second, divergent pricing source (ModelRegistryPricingCatalog
-    # wraps the same build_model_registry() catalog assemble_ai_integration_layer() itself uses).
-    pricing_catalog = ModelRegistryPricingCatalog(build_model_registry())
+    the final Telegram send is a dry run.
+
+    `capability_registry`/`cost_tracker`/`pricing_catalog`/`bot` all default to `None`, in which
+    case the real production layer is assembled/constructed exactly as before (this function's own
+    real-call-site behavior is completely unchanged when a caller omits every one of them, which
+    the CLI entry point below always does). Injectable ONLY for tests - mirrors this codebase's
+    own established "optional param, real default, test-only injection" convention (e.g.
+    services/meme_generation_orchestrator.py::trigger_meme_generation()'s own `image_gateway`
+    parameter) - never a second, divergent code path, just the same real assembly logic moved
+    behind an `if ... is None` guard so tests can supply fakes for the retry/recovery scenarios
+    this fix is about, without ever constructing a real LLM Gateway or a real Telegram session."""
+    if capability_registry is None:
+        prompt_repository = FilePromptRepository(_PROMPTS_ROOT)
+        ai_layer = assemble_ai_integration_layer(settings, prompt_repository)
+        capability_registry = ai_layer.capability_registry
+        cost_tracker = ai_layer.cost_tracker
+        # AIIntegrationLayer does not expose pricing_catalog itself (only gateway/capability_
+        # registry/cost_tracker - integrations/llm_gateway/boot.py's own dataclass) - rebuilt here
+        # exactly as tests/test_cost_recording_integration.py's own established real-call-site
+        # pattern already does, never a second, divergent pricing source (ModelRegistryPricingCatalog
+        # wraps the same build_model_registry() catalog assemble_ai_integration_layer() itself uses).
+        pricing_catalog = ModelRegistryPricingCatalog(build_model_registry())
+    registry = capability_registry
 
     async with async_session_factory() as session:
         research_outcome = await process_approved_telegraph_proposal(
             session, proposal_id, capability_registry=registry,
-            cost_tracker=ai_layer.cost_tracker, pricing_catalog=pricing_catalog,
+            cost_tracker=cost_tracker, pricing_catalog=pricing_catalog,
         )
         logger.info(
             "telegraph_pipeline_worker_research_stage",
@@ -152,7 +209,7 @@ async def run_telegraph_pipeline_for_proposal(proposal_id: UUID, *, live: bool) 
 
         article_outcome = await generate_article_for_researched_proposal(
             session, proposal_id, capability_registry=registry,
-            cost_tracker=ai_layer.cost_tracker, pricing_catalog=pricing_catalog,
+            cost_tracker=cost_tracker, pricing_catalog=pricing_catalog,
         )
         logger.info(
             "telegraph_pipeline_worker_article_stage",
@@ -163,33 +220,45 @@ async def run_telegraph_pipeline_for_proposal(proposal_id: UUID, *, live: bool) 
             },
         )
 
-        if article_outcome.status != "generated" or article_outcome.task_id is None:
+        if article_outcome.status not in _USABLE_ARTICLE_STATUSES or article_outcome.task_id is None:
+            # CASE E: no usable completed article exists (no research yet, research incomplete, or
+            # an "already_exists" lookup that somehow found no task) - fail closed, invent/
+            # recompute nothing.
             logger.info(
                 "telegraph_pipeline_worker_review_stage",
-                extra={"proposal_id": str(proposal_id), "sent": False, "reason": "no_new_article"},
+                extra={
+                    "proposal_id": str(proposal_id), "sent": False,
+                    "reason": f"no_usable_article_task:{article_outcome.status}",
+                },
             )
             return
-
-        review = await create_article_review(
-            session, article_task_id=article_outcome.task_id, proposal_id=proposal_id,
-        )
 
         from database.models.editorial_task import EditorialTask
 
         task = await session.get(EditorialTask, article_outcome.task_id)
-        article_result = None
-        if task is not None:
-            for step_result in (task.workflow or {}).get("step_results", []):
-                if step_result.get("step_name") == "generate_article" and step_result.get("status") == "SUCCESS":
-                    article_result = step_result.get("result")
-                    break
+        article_result = _extract_generate_article_result(task.workflow if task is not None else None)
 
         if article_result is None:
+            # CASE E: the resolved article task exists but has no successful generate_article
+            # result yet (still running, or failed) - fail closed before ever creating a review
+            # row for a result that doesn't exist.
             logger.warning(
                 "telegraph_pipeline_worker_review_stage_missing_result",
-                extra={"proposal_id": str(proposal_id), "review_id": str(review.id)},
+                extra={
+                    "proposal_id": str(proposal_id), "article_task_id": str(article_outcome.task_id),
+                    "article_status": article_outcome.status,
+                },
             )
             return
+
+        # CASES A/B/D converge here: create_article_review() is itself idempotent (services.
+        # telegraph_article_review_service's own docstring - "short-circuits to the existing row
+        # rather than letting a second call raise an IntegrityError") - it resolves the existing
+        # review (CASE B) or creates exactly one (CASE A/D), never a duplicate; the model's own
+        # UNIQUE(article_task_id) constraint is the hard backstop.
+        review = await create_article_review(
+            session, article_task_id=article_outcome.task_id, proposal_id=proposal_id,
+        )
 
         # Editorial channel split: fetched from the proposal itself - classified once at
         # shortlist-creation time (services/editorial_channel_classifier.py), never re-classified.
@@ -199,13 +268,15 @@ async def run_telegraph_pipeline_for_proposal(proposal_id: UUID, *, live: bool) 
         assert proposal is not None  # already resolved successfully by every prior stage above
 
         dry_run = not (live and settings.telegraph_pipeline_enabled)
-        bot = create_bot()
+        owns_bot = bot is None
+        send_bot = bot or create_bot()
         try:
             outcome = await send_article_review(
-                bot, review, article_result, proposal.editorial_channel, dry_run=dry_run,
+                send_bot, review, article_result, proposal.editorial_channel, dry_run=dry_run,
             )
         finally:
-            await bot.session.close()
+            if owns_bot:
+                await send_bot.session.close()
 
         # TELEGRAPH EDITORIAL CHAT DELIVERY §6: persist the delivery anchor (the footer message's
         # own chat_id/message_id/topic_id, per send_article_review()'s own contract) the moment a
