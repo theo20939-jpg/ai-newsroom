@@ -104,11 +104,42 @@ _BREAKING_SIGNAL_PHRASES: tuple[str, ...] = (
     "выпустила", "представила", "анонсировала", "запустила", "приобрела",
 )
 
+_CURRENCY_WORD = r"(?:руб(?:л\w*|\.)?|доллар\w*|usd|eur|евро|₽|\$)"
+_MAGNITUDE_UNIT = r"(?:млн\.?|million|млрд\.?|billion|тыс\.?|thousand|k\b)"
+_CHANGE_UNIT = r"(?:%|percent|процент\w*)"
+
 _NUMBER_UNIT_RE = re.compile(
-    r"(?:\$\s*)?(?P<value>\d[\d,.]*\d|\d)\s*(?P<unit>%|percent|процент\w*|млн\.?|million|млрд\.?|billion|"
-    r"тыс\.?|thousand|k\b)",
+    rf"(?:\$\s*)?(?P<value>\d[\d,.]*\d|\d)\s*(?P<unit>{_CHANGE_UNIT}|{_MAGNITUDE_UNIT})",
     re.IGNORECASE,
 )
+
+# DATA-CARD-1: a story fundamentally about a CHANGE ("+15%", "в 2 раза", "с 25 тыс. до 80 тыс.")
+# is never expressible as a single (value, unit) pair - no unit word directly follows the number
+# in these constructions - so it needs its own pattern, tried BEFORE any plain-magnitude candidate
+# (editorial hierarchy §1: change outranks an absolute/baseline figure whenever both are grounded).
+_MULTIPLIER_RE = re.compile(
+    r"(?:в\s+)?(?P<value>\d[\d,.]*\d|\d)(?:\s*[–—-]\s*(?P<value2>\d[\d,.]*\d|\d))?\s*раз\w*",
+    re.IGNORECASE,
+)
+_RANGE_DELTA_RE = re.compile(
+    rf"\bс\s+(?P<old>\d[\d,.]*\d|\d)\s*{_MAGNITUDE_UNIT}?\s*"
+    rf"до\s+(?P<new>\d[\d,.]*\d|\d)\s*(?P<unit>{_MAGNITUDE_UNIT})?"
+    rf"(?:\s+(?P<currency>{_CURRENCY_WORD}))?",
+    re.IGNORECASE,
+)
+
+# §4: a label built by stripping a matched numeric span out of a fact must never leave a bare
+# preposition directly touching an orphaned currency/unit noun with no number of its own -
+# "за рублей", "до долларов", "на процентов" (and their English equivalents) are never acceptable
+# output, regardless of which extractor produced the label.
+_ORPHANED_LABEL_RE = re.compile(
+    rf"\b(?:за|до|на|в|из|от|for|to|of)\s+(?:{_CURRENCY_WORD}|{_MAGNITUDE_UNIT}|{_CHANGE_UNIT})\b",
+    re.IGNORECASE,
+)
+# §4 (other direction): the SAME preposition left dangling at the very END of the stripped label
+# (e.g. "...можно было купить за." once the number+currency after it is fully removed) is exactly
+# as broken as an orphaned noun - a sentence must never trail off on a bare preposition either.
+_TRAILING_PREPOSITION_RE = re.compile(r"\b(?:за|до|на|в|из|от|for|to|of)\s*[.,;:!?]?\s*$", re.IGNORECASE)
 
 
 def _compile(phrases: tuple[str, ...]) -> re.Pattern[str]:
@@ -215,39 +246,145 @@ def _extract_number_unit_pairs(text: str) -> set[tuple[str, str]]:
     return pairs
 
 
+def _is_change_unit(unit: str) -> bool:
+    """§1: %/percent/процент* are CHANGE signals - the strongest hero-metric candidate per the
+    editorial hierarchy; тыс/млн/млрд/k are absolute-magnitude signals, lower priority. (The
+    multiplier "раза" construction never appears here - it has no unit word for _NUMBER_UNIT_RE
+    to capture at all, and is handled entirely by `_find_multiplier_candidate` instead.)"""
+    normalized = unit.strip(".").lower()
+    return normalized in ("%", "percent") or normalized.startswith("процент")
+
+
+def _safe_label(fact: str, start: int, end: int) -> str:
+    """Removes the matched span `fact[start:end]` verbatim (never generated text) - but only when
+    the result stays a complete, independently readable phrase (§6). Falls back to the fact's own
+    full, untouched sentence whenever stripping would leave a bare preposition orphaned next to a
+    currency/unit noun (§4, e.g. "за рублей") - the number staying visible in the label is always
+    preferable to a grammatically broken one."""
+    stripped = " ".join((fact[:start] + " " + fact[end:]).split())
+    if not stripped or _ORPHANED_LABEL_RE.search(stripped) or _TRAILING_PREPOSITION_RE.search(stripped):
+        return fact.strip()
+    return stripped
+
+
+def _match_pair_in_fact(fact: str, value: str, unit: str) -> re.Match[str] | None:
+    """Finds the SPECIFIC number+unit occurrence in the ORIGINAL (non-normalized) `fact` text that
+    produced the winning (value, unit) pair - re.IGNORECASE makes normalization unnecessary for
+    matching, and matching against the original text (not `_normalize(fact)`) keeps match.start()/
+    .end() valid positions to slice `fact` itself. A fact may contain more than one number+unit
+    pair (e.g. an old AND a new price in the same sentence) - this never assumes the first match
+    in the fact is the right one."""
+    for match in _NUMBER_UNIT_RE.finditer(fact):
+        match_value = match.group("value").replace(",", "").strip(".")
+        match_unit = match.group("unit").rstrip(".").lower()
+        if match_value == value and match_unit == unit:
+            return match
+    return None
+
+
+def _extend_span_with_currency(fact: str, match: re.Match[str]) -> tuple[int, str]:
+    """§5: `metric_value` must retain a semantically required trailing currency word ("25 тыс.
+    рублей", never bare "25 тыс." when the fact itself names a currency) - extends the matched
+    span to also consume an immediately-following currency word, if present, so it is (a) part of
+    the returned unit and (b) never left orphaned in the label by `_safe_label`. Returns the
+    extended end offset and the currency word actually consumed (empty string if none)."""
+    tail = fact[match.end():]
+    currency_match = re.match(rf"\s+({_CURRENCY_WORD})", tail, re.IGNORECASE)
+    if currency_match is None:
+        return match.end(), ""
+    return match.end() + currency_match.end(), currency_match.group(1)
+
+
+def _find_multiplier_candidate(copy_text: str, facts: list[str]) -> DataCandidate | None:
+    for copy_match in _MULTIPLIER_RE.finditer(copy_text):
+        value, value2 = copy_match.group("value"), copy_match.group("value2")
+        for fact in facts:
+            fact_match = _MULTIPLIER_RE.search(fact)
+            if fact_match is None:
+                continue
+            if fact_match.group("value") != value or fact_match.group("value2") != value2:
+                continue
+            display_value = f"{value}–{value2}" if value2 else value
+            label = _safe_label(fact, fact_match.start(), fact_match.end())
+            return DataCandidate(value=display_value, unit="раза", label=label[:80], evidence_fact=fact.strip())
+    return None
+
+
+def _find_range_delta_candidate(copy_text: str, facts: list[str]) -> DataCandidate | None:
+    for copy_match in _RANGE_DELTA_RE.finditer(copy_text):
+        old, new = copy_match.group("old"), copy_match.group("new")
+        for fact in facts:
+            fact_match = _RANGE_DELTA_RE.search(fact)
+            if fact_match is None:
+                continue
+            if fact_match.group("old") != old or fact_match.group("new") != new:
+                continue
+            unit = (fact_match.group("unit") or "").rstrip(".").lower()
+            currency = fact_match.group("currency")
+            unit_display = " ".join(part for part in (unit, currency.rstrip(".").lower() if currency else "") if part)
+            display_value = f"{old} → {new}"
+            label = _safe_label(fact, fact_match.start(), fact_match.end())
+            return DataCandidate(value=display_value, unit=unit_display, label=label[:80], evidence_fact=fact.strip())
+    return None
+
+
+def _find_absolute_candidate(copy_pairs: set[tuple[str, str]], facts: list[str]) -> DataCandidate | None:
+    """The pre-existing magnitude-only extraction (§2/§3: current/record or baseline value),
+    unchanged in spirit - still first-fact-in-list-order among equally-ranked candidates (never a
+    speculative "which value is newer" heuristic) - but now also (a) prefers a grounded CHANGE-kind
+    pair (%, процент) over a plain magnitude pair when both exist, and (b) never orphans a trailing
+    currency word when building the label (§4/§5)."""
+    change_pairs = {p for p in copy_pairs if _is_change_unit(p[1])}
+    for pair_pool in ((change_pairs, copy_pairs) if change_pairs else (copy_pairs,)):
+        for fact in facts:
+            fact_pairs = _extract_number_unit_pairs(fact)
+            common = pair_pool & fact_pairs
+            if not common:
+                continue
+            value, unit = sorted(common)[0]
+            match = _match_pair_in_fact(fact, value, unit)
+            if match is None:
+                return DataCandidate(value=value, unit=unit, label=fact.strip()[:80], evidence_fact=fact.strip())
+            end, currency = _extend_span_with_currency(fact, match)
+            label = _safe_label(fact, match.start(), end)
+            display_unit = f"{unit} {currency.rstrip('.').lower()}" if currency else unit
+            return DataCandidate(value=value, unit=display_unit, label=label[:80], evidence_fact=fact.strip())
+    return None
+
+
 def _find_data_candidate(
     title: str, main_body: str | None, research_facts: list[str] | None,
 ) -> DataCandidate | None:
     """Deterministic evidence binding (no Research fact IDs exist in this schema - see module
-    docstring): a DATA candidate is accepted only when the SAME normalized (value, unit) pair
-    appears BOTH in the copywriting text (what the AI proposed to highlight) AND in a Research
-    fact (independent, already-verified evidence) - cross-verification, never trust in either
-    source alone. No match in both places -> None -> caller falls back to NEWS."""
+    docstring): a DATA candidate is accepted only when the SAME grounded signal appears BOTH in
+    the copywriting text (what the AI proposed to highlight) AND in a Research fact (independent,
+    already-verified evidence) - cross-verification, never trust in either source alone. No match
+    in both places -> None -> caller falls back to NEWS.
+
+    Editorial hierarchy (DATA-CARD-1 §1-3): a grounded multiplier ("в 2 раза"), then a grounded
+    before/after range ("с 25 тыс. до 80 тыс."), then a grounded percentage/change pair, then a
+    plain absolute value - tried strictly in that order; the first one that actually grounds wins.
+    A story with no change/multiplier/range signal anywhere still resolves to whatever absolute
+    value grounds, exactly as before - this only reorders which grounded signal wins when more
+    than one is available, it never invents one that wasn't already present in both texts."""
     if not research_facts:
         return None
+    facts = [f for f in research_facts if isinstance(f, str)]
+    if not facts:
+        return None
     copy_text = f"{title} {main_body or ''}"
+
+    multiplier = _find_multiplier_candidate(copy_text, facts)
+    if multiplier is not None:
+        return multiplier
+    range_delta = _find_range_delta_candidate(copy_text, facts)
+    if range_delta is not None:
+        return range_delta
+
     copy_pairs = _extract_number_unit_pairs(copy_text)
     if not copy_pairs:
         return None
-
-    for fact in research_facts:
-        if not isinstance(fact, str):
-            continue
-        fact_pairs = _extract_number_unit_pairs(fact)
-        common = copy_pairs & fact_pairs
-        if not common:
-            continue
-        value, unit = sorted(common)[0]
-        normalized_fact = _normalize(fact)
-        match = _NUMBER_UNIT_RE.search(normalized_fact)
-        label = fact.strip()
-        if match:
-            # A short surrounding label, taken verbatim from the fact text (never generated) -
-            # the fact's own remainder after the matched number+unit span.
-            label = " ".join((fact[: match.start()] + " " + fact[match.end():]).split())
-            label = label or fact.strip()
-        return DataCandidate(value=value, unit=unit, label=label[:80], evidence_fact=fact.strip())
-    return None
+    return _find_absolute_candidate(copy_pairs, facts)
 
 
 def _find_quote_candidate(quote_text: str | None, quote_speaker: str | None) -> QuoteCandidate | None:
