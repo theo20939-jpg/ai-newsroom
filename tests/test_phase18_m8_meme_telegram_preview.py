@@ -122,23 +122,24 @@ def test_build_decided_keyboard_has_only_source_button() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_render_caption_includes_top_bottom_text_and_summaries() -> None:
+def test_render_caption_is_minimal_meme_and_headline_only() -> None:
+    """MEME PRODUCTION PIPELINE: the caption is now "😂 MEME\\n\\n<headline>" only - on-image
+    text/safety/quality diagnostics are deliberately NOT duplicated in the caption anymore (they
+    remain in structured logs and on the MemeCandidate row itself)."""
     caption = render_meme_preview_caption(_card())
-    assert "AI WON'T TAKE YOUR JOB" in caption
-    assert "SAYS GUY WHOSE JOB IS AI" in caption
-    assert "Safety: PASS" in caption
-    assert "Quality: READY_FOR_EDITOR" in caption
-    assert "Plays on the irony." in caption
+    assert caption == "😂 MEME\n\nNvidia CEO insists AI is not destroying jobs"
+    assert "AI WON'T TAKE YOUR JOB" not in caption
+    assert "Safety: PASS" not in caption
 
 
-def test_render_caption_omits_explanation_block_when_absent() -> None:
-    caption = render_meme_preview_caption(_card(editor_explanation=None))
-    assert "💡" not in caption
+def test_render_caption_never_duplicates_full_article() -> None:
+    caption = render_meme_preview_caption(_card())
+    assert "keynote" not in caption  # telegram_caption's own old text - never shown here anymore
 
 
 def test_render_caption_too_long_raises() -> None:
     with pytest.raises(MemePreviewCaptionTooLongError):
-        render_meme_preview_caption(_card(editor_explanation="x" * 2000))
+        render_meme_preview_caption(_card(news_title="x" * 2000))
 
 
 # ---------------------------------------------------------------------------
@@ -199,36 +200,54 @@ class _NeverCalledBot:
         raise AssertionError(f"Bot.{name}() must never be called when dry_run=True")
 
 
+_MEME_CHAT_ID = -1004297182444
+_MEME_TOPIC_ID = 77
+
+
+@pytest.fixture(autouse=True)
+def _meme_destination_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    """MEME PRODUCTION PIPELINE: send_meme_preview() now resolves EditorialDestination.MEME via
+    services.telegram_routing.resolve_route() instead of taking a raw chat_id parameter - every
+    test in this section needs the destination configured exactly like a real deployment would."""
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "newsroom_telegram_chat_id", _MEME_CHAT_ID)
+    monkeypatch.setattr(settings, "meme_topic_id", _MEME_TOPIC_ID)
+
+
 @pytest.mark.asyncio
 async def test_dry_run_never_touches_the_bot(tmp_path) -> None:
     storage = LocalImageStorage(tmp_path)
-    outcome = await send_meme_preview(
-        _NeverCalledBot(), 12345, storage, _card(), dry_run=True,  # type: ignore[arg-type]
-    )
+    outcome = await send_meme_preview(_NeverCalledBot(), storage, _card(), dry_run=True)  # type: ignore[arg-type]
     assert outcome.sent is False
-    assert outcome.chat_id == 12345
-    assert "AI WON'T TAKE YOUR JOB" in outcome.rendered_caption
+    assert outcome.reason == "dry_run"
+    assert outcome.chat_id == _MEME_CHAT_ID
+    assert "Nvidia CEO insists AI is not destroying jobs" in outcome.rendered_caption
 
 
 @pytest.mark.asyncio
 async def test_dry_run_reports_has_image_false_when_no_storage_key(tmp_path) -> None:
     storage = LocalImageStorage(tmp_path)
     outcome = await send_meme_preview(
-        _NeverCalledBot(), 12345, storage, _card(image_storage_key=None), dry_run=True,  # type: ignore[arg-type]
+        _NeverCalledBot(), storage, _card(image_storage_key=None), dry_run=True,  # type: ignore[arg-type]
     )
     assert outcome.has_image is False
 
 
 @pytest.mark.asyncio
-async def test_dry_run_with_missing_chat_id_still_never_sends(tmp_path) -> None:
-    """dry_run must tolerate chat_id=None (settings not configured yet) - never asserts, never
-    calls the bot, mirrors services.telegram_notifier.send_editorial_card()'s identical
-    tolerance."""
+async def test_dry_run_with_unconfigured_destination_still_never_sends(
+    tmp_path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unconfigured newsroom_telegram_chat_id must never fall back to sending anywhere else -
+    never asserts, never calls the bot, mirrors services.telegram_routing.resolve_route()'s own
+    established "no chat id -> None -> unconfigured_destination" contract."""
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "newsroom_telegram_chat_id", None)
     storage = LocalImageStorage(tmp_path)
-    outcome = await send_meme_preview(
-        _NeverCalledBot(), None, storage, _card(), dry_run=True,  # type: ignore[arg-type]
-    )
+    outcome = await send_meme_preview(_NeverCalledBot(), storage, _card(), dry_run=True)  # type: ignore[arg-type]
     assert outcome.sent is False
+    assert outcome.reason == "unconfigured_destination"
     assert outcome.chat_id is None
 
 
@@ -236,7 +255,60 @@ async def test_dry_run_with_missing_chat_id_still_never_sends(tmp_path) -> None:
 async def test_render_failure_in_dry_run_returns_unsent_outcome(tmp_path) -> None:
     storage = LocalImageStorage(tmp_path)
     outcome = await send_meme_preview(
-        _NeverCalledBot(), 12345, storage, _card(editor_explanation="x" * 2000), dry_run=True,  # type: ignore[arg-type]
+        _NeverCalledBot(), storage, _card(news_title="x" * 2000), dry_run=True,  # type: ignore[arg-type]
     )
     assert outcome.sent is False
+    assert outcome.reason == "caption_too_long"
     assert outcome.rendered_caption == ""
+
+
+@pytest.mark.asyncio
+async def test_dry_run_never_sends_to_a_different_destination(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Explicit destination-isolation proof (MEME PRODUCTION PIPELINE §9's own requirement): even
+    when OTHER editorial topics are configured, the resolved chat_id/topic_id must be exactly the
+    MEME ones, never NEWS/TELEGRAPH/some other topic."""
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "news_topic_id", 111)
+    monkeypatch.setattr(settings, "telegraph_topic_id", 222)
+    storage = LocalImageStorage(tmp_path)
+    outcome = await send_meme_preview(_NeverCalledBot(), storage, _card(), dry_run=True)  # type: ignore[arg-type]
+    assert outcome.chat_id == _MEME_CHAT_ID
+
+
+@pytest.mark.asyncio
+async def test_live_send_routes_to_meme_chat_and_topic_thread(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A real (non-dry-run) send must carry `message_thread_id=meme_topic_id` - the exact gap a
+    prior version of this function had (it never passed message_thread_id at all, so a live send
+    would have landed in the configured chat's root, never the MEMES forum topic specifically)."""
+    from aiogram import Bot
+    from aiogram.client.session.base import BaseSession
+    from aiogram.methods import SendMessage, TelegramMethod
+
+    class _FakeSession(BaseSession):
+        def __init__(self) -> None:
+            super().__init__()
+            self.sent: list[TelegramMethod] = []
+
+        async def close(self) -> None:
+            pass
+
+        async def make_request(self, bot: Bot, method: TelegramMethod, timeout: int | None = None) -> object:
+            self.sent.append(method)
+            return True
+
+        async def stream_content(self, *args: object, **kwargs: object) -> object:
+            raise NotImplementedError
+
+    monkeypatch.setattr("core.config.settings.meme_telegram_preview_mode", "enforce", raising=False)
+    session = _FakeSession()
+    bot = Bot(token="123456:FAKE-TEST-TOKEN-AAAAAAAAAAAAAAAAAAAAAAAAAAAA", session=session)
+    storage = LocalImageStorage(tmp_path)
+
+    outcome = await send_meme_preview(bot, storage, _card(image_storage_key=None), dry_run=False)
+
+    assert outcome.sent is True
+    sends = [m for m in session.sent if isinstance(m, SendMessage)]
+    assert len(sends) == 1
+    assert sends[0].chat_id == _MEME_CHAT_ID
+    assert sends[0].message_thread_id == _MEME_TOPIC_ID

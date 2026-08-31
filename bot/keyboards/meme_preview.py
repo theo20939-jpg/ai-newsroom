@@ -15,6 +15,11 @@ _PREFIX = "memeprev"
 
 _ACTIONS = ("approve", "reject", "regen_concept", "regen_image", "regen_text", "fallback")
 
+# MEME PRODUCTION PIPELINE: RU label, matching the exact "🔗 Источник" text used throughout this
+# phase's other buttons (NEWS keyboard, spec's own preferred MEMES delivery keyboard) - was
+# "🔗 Open source" (EN) prior to this phase.
+_SOURCE_BUTTON_LABEL = "🔗 Источник"
+
 
 def encode_callback_data(action: str, candidate_id: UUID) -> str:
     """`memeprev:<action>:<candidate_id>` - well within Telegram's 64-byte callback_data limit."""
@@ -66,7 +71,7 @@ def build_meme_preview_keyboard(candidate_id: UUID, *, source_url: str | None = 
         ],
     ]
     if source_url:
-        rows.append([InlineKeyboardButton(text="🔗 Open source", url=source_url)])
+        rows.append([InlineKeyboardButton(text=_SOURCE_BUTTON_LABEL, url=source_url)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -75,4 +80,4 @@ def build_decided_keyboard(source_url: str | None) -> InlineKeyboardMarkup | Non
     `bot/keyboards/image_preview.py::build_source_only_keyboard()`'s identical convention."""
     if not source_url:
         return None
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔗 Open source", url=source_url)]])
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=_SOURCE_BUTTON_LABEL, url=source_url)]])

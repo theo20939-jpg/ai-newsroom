@@ -491,6 +491,18 @@ class CapabilityExecutor:
                         "must pre-populate this deterministic bundle before WorkflowRunner.run()."
                     )
 
+        # MEME PRODUCTION PIPELINE (overnight phase): bounded recent-history diversity context,
+        # only for the "meme_concept" step of a MEME_GENERATION workflow - mirrors every other
+        # conditionally-populated context field's own "if step.capability == X and workflow_name
+        # == Y" guard exactly. `None` (the common case before any meme has ever been generated,
+        # or whenever the bounded lookback finds nothing) is a normal, expected value - the
+        # capability itself degrades gracefully (capabilities/meme_concept_capability.py).
+        meme_recent_diversity_context: str | None = None
+        if step.capability == "meme_concept" and state_for_bundle.workflow_name == WorkflowType.MEME_GENERATION:
+            from services.meme_diversity import build_recent_diversity_context
+
+            meme_recent_diversity_context = await build_recent_diversity_context(self._session)
+
         context = self._build_context(
             task, news_event, step, attempt,
             evidence_text=evidence_text, evidence_completeness=evidence_completeness,
@@ -502,6 +514,7 @@ class CapabilityExecutor:
             event_recap_evidence_text=event_recap_evidence_text,
             event_recap_candidate=event_recap_candidate,
             final_post_authoring_bundle=final_post_authoring_bundle,
+            meme_recent_diversity_context=meme_recent_diversity_context,
         )
 
         # API cost optimization (docs/api_cost_optimization_report.md): CONTENT_GENERATION's
@@ -1298,6 +1311,7 @@ class CapabilityExecutor:
         event_recap_evidence_text: str | None = None,
         event_recap_candidate: Any | None = None,
         final_post_authoring_bundle: dict[str, Any] | None = None,
+        meme_recent_diversity_context: str | None = None,
     ) -> CapabilityContext:
         state = WorkflowExecutionState.model_validate(task.workflow)
         is_telegraph_deep_research = telegraph_research_bundle_text is not None
@@ -1339,6 +1353,7 @@ class CapabilityExecutor:
                 event_recap_evidence_text=event_recap_evidence_text,
                 event_recap_candidate=event_recap_candidate,
                 final_post_authoring_bundle=final_post_authoring_bundle,
+                meme_recent_diversity_context=meme_recent_diversity_context,
             ),
             execution=ExecutionContext(
                 # TELEGRAPH Checkpoint 3: deep research reads a materially larger bundle and is

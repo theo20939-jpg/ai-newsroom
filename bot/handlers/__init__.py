@@ -5,6 +5,7 @@ from bot.handlers.digest import router as digest_router
 from bot.handlers.event_recap_review import router as event_recap_review_router
 from bot.handlers.final_post_review import router as final_post_review_router
 from bot.handlers.image_preview import router as image_preview_router
+from bot.handlers.meme_generate import router as meme_generate_router
 from bot.handlers.meme_preview import router as meme_preview_router
 from bot.handlers.news import router as news_router
 from bot.handlers.settings import router as settings_router
@@ -21,8 +22,13 @@ router.include_router(digest_router)
 router.include_router(status_router)
 router.include_router(settings_router)
 router.include_router(image_preview_router)
-# Phase 18 M8: inert until something actually sends a "memeprev:" message - no production code
-# path calls services/meme_preview_notifier.py yet (meme_telegram_preview_mode defaults "off").
+# MEME PRODUCTION PIPELINE (overnight phase): the manual "😂 Сгенерировать мем" NEWS-button
+# callback - real trigger, gated by settings.meme_manual_approver_user_ids (fail-closed, empty by
+# default) and settings.meme_telegram_preview_mode (delivery is dry-run unless "enforce").
+router.include_router(meme_generate_router)
+# Phase 18 M8 (MEME PRODUCTION PIPELINE): the "memeprev:" approve/reject/regen preview callback -
+# reachable once bot/handlers/meme_generate.py above (or a future automatic cycle) actually sends
+# a preview message via services/meme_preview_notifier.py::send_meme_preview().
 router.include_router(meme_preview_router)
 # TELEGRAPH Checkpoint 2: inert until something actually creates+sends a shortlist batch - no
 # scheduler/worker/bot-command calls services/telegraph_shortlist_service.py::

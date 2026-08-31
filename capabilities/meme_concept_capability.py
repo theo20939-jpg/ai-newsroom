@@ -33,7 +33,11 @@ from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
 logger = logging.getLogger(__name__)
 
 CAPABILITY_NAME = "meme_concept"
-PROMPT_VERSION = "1"
+# MEME PRODUCTION PIPELINE: bumped to "2" (prompts/meme_concept/v2.yaml) - broader creative-tone
+# rules, free-text meme_format (format diversity), and consumption of the new optional
+# `context.business.meme_recent_diversity_context` field (see _build_request() below). v1 stays
+# frozen/unmodified per this codebase's own prompt-immutability rule.
+PROMPT_VERSION = "2"
 
 MEME_CONCEPT_CAPABILITY_DEFINITION = CapabilityDefinition(
     name=CAPABILITY_NAME,
@@ -106,6 +110,12 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
         f"Category: {news_event.category}\n\n"
         f"Research output:\n{_format_research_context(research_output)}"
     )
+    # MEME PRODUCTION PIPELINE: additive, optional - populated by capabilities/executor.py from
+    # services/meme_diversity.py's bounded recent-history lookback. Absent (None) for the first
+    # meme of a fresh deployment, or whenever that lookback finds zero prior candidates - the
+    # request is otherwise byte-identical to the no-diversity-context shape.
+    if context.business.meme_recent_diversity_context:
+        context_text += f"\n\nRECENTLY USED FORMATS/MECHANISMS:\n{context.business.meme_recent_diversity_context}"
     task_text = (
         "Invent one original meme concept for the event above, based only on the given "
         "title/category and Research's own output."

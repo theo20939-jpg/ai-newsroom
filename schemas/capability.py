@@ -177,6 +177,14 @@ class BusinessContext(BaseModel):
     # "no ORM object crosses into a Capability" rule already forbids that; this field is the
     # complete input contract instead).
     final_post_authoring_bundle: dict[str, Any] | None = None
+    # MEME PRODUCTION PIPELINE (overnight phase): a short, bounded text summary of recently
+    # created MemeCandidate rows' own `meme_format`/`humor_mechanism` (services/meme_diversity.py::
+    # build_recent_diversity_context()), present ONLY for the "meme_concept" step of a
+    # MEME_GENERATION workflow (capabilities/executor.py's own workflow_name check, mirroring
+    # every other conditionally-populated field above). `None` whenever the bounded lookback finds
+    # zero prior candidates - `capabilities/meme_concept_capability.py::MemeConceptCapability`
+    # degrades gracefully in that case (module docstring), never treating absence as an error.
+    meme_recent_diversity_context: str | None = None
 
 
 class RuntimeContext(BaseModel):

@@ -21,6 +21,7 @@ from bot.formatting import CardTooLongError, render_editorial_card
 from bot.image_preview_formatting import CAPTION_SAFE_LIMIT
 from bot.image_preview_media import resolve_photo_input
 from bot.keyboards.image_preview import build_source_and_cta_keyboard, build_source_only_keyboard
+from bot.keyboards.meme_generate import append_meme_generate_button
 from capabilities.registry import CapabilityRegistry
 from core.config import settings
 from database.models.content_draft_story_link import ContentDraftStoryLink
@@ -539,6 +540,13 @@ def assess_recomposition_source_risk(candidate: EditorialImageCandidate | None) 
 # every pre-existing caller (services/image_preview_notifier.py).
 _NEWS_SOURCE_BUTTON_LABEL = "🔗 Источник"
 
+# MEME PRODUCTION PIPELINE (overnight phase): module-scoped ImageStorage singleton for the
+# automatic meme-generation trigger below - mirrors services/image_persistence.py::
+# _get_storage()'s own identical private singleton pattern (duplicated, not imported - see that
+# call site's own comment). Only ever constructed when settings.meme_opportunity_mode ==
+# "enforce" (default "off") actually reaches the automatic-trigger block.
+_meme_auto_storage_singleton = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -904,6 +912,11 @@ async def run_content_cycle(
     result.eligible_found = len(event_ids)
     result.event_ids = event_ids
 
+    # MEME PRODUCTION PIPELINE (overnight phase): bounded per-cycle cap on automatic meme
+    # generation attempts - inert (settings.meme_auto_max_candidates_per_cycle is never even
+    # read) unless settings.meme_opportunity_mode == "enforce" (default "off").
+    meme_auto_triggered_count = 0
+
     # Attempted one at a time, in selection order - identical convention to
     # worker/analysis_cycle.py, and for the same reason: bounded, predictable work per cycle;
     # no refill if one is skipped/fails.
@@ -992,6 +1005,50 @@ async def run_content_cycle(
         async with session_factory() as session:
             event = await session.get(NewsEvent, event_id)
         assert event is not None  # guaranteed by the FK the selecting query itself already joined on
+
+        # MEME PRODUCTION PIPELINE (overnight phase): the AUTOMATIC meme-generation trigger.
+        # Byte-identical no-op unless settings.meme_opportunity_mode == "enforce" (default "off",
+        # untouched by this phase) - this closest-established-pattern call site (content_worker's
+        # own per-event cycle, per that phase's own explicit "find the closest established
+        # production pattern, do not invent a scheduler" instruction) is otherwise completely
+        # unreachable. Wrapped in its own try/except and never allowed to affect NEWS delivery -
+        # a meme-pipeline failure here must never break or delay the real NEWS post for this
+        # event (mirrors this file's own established "an optional/best-effort step never blocks
+        # the primary deliverable" discipline, e.g. brand_renderer.render_branded_media()'s own
+        # fail-open contract).
+        if settings.meme_opportunity_mode == "enforce" and meme_auto_triggered_count < settings.meme_auto_max_candidates_per_cycle:
+            try:
+                from integrations.storage.image_storage import LocalImageStorage
+                from services.meme_generation_orchestrator import trigger_meme_generation
+
+                # Mirrors services/image_persistence.py::_get_storage()'s own private, module-
+                # scoped singleton pattern - duplicated rather than imported (that function is
+                # private there too, matching this codebase's own established per-module-private-
+                # helper convention, e.g. _extract_article_result() duplicated across three
+                # separate modules this same overnight phase). `image_gateway` is deliberately
+                # OMITTED here (defaults to None inside trigger_meme_generation() itself, which
+                # lazily constructs MockImageAdapter) - this file must never import anything from
+                # integrations.llm_gateway.* directly (test_i_content_cycle_module_imports_no_
+                # llm_gateway_or_capability_execution's own established structural boundary).
+                global _meme_auto_storage_singleton
+                if _meme_auto_storage_singleton is None:
+                    _meme_auto_storage_singleton = LocalImageStorage(settings.image_storage_root)
+
+                async with session_factory() as meme_session:
+                    meme_outcome = await trigger_meme_generation(
+                        meme_session, news_event_id=event.id, trigger_source="automatic",
+                        capability_registry=capability_registry,
+                        storage=_meme_auto_storage_singleton,
+                        bot=bot, cost_tracker=cost_tracker, pricing_catalog=pricing_catalog,
+                    )
+                if meme_outcome.status not in ("not_meme_worthy", "already_in_progress"):
+                    meme_auto_triggered_count += 1
+                logger.info(
+                    "meme_auto_cycle_outcome",
+                    extra={"event_id": str(event.id), "status": meme_outcome.status, "cycle_count": meme_auto_triggered_count},
+                )
+            except Exception:  # noqa: BLE001 - fail-safe boundary, must never break NEWS delivery
+                logger.exception("meme_auto_cycle_failed", extra={"event_id": str(event.id)})
 
         # Phase 15 M5.8 enforcement design: the safest existing non-public mechanism is the
         # notifier's own, already-established dry_run branch (renders and logs, never calls the
@@ -1203,6 +1260,14 @@ async def run_content_cycle(
                         outcome.content_draft.title or "", compact_body, quote_text=quote_text, quote_speaker=quote_speaker,
                     )
                 keyboard = build_source_only_keyboard(event.url, label=_NEWS_SOURCE_BUTTON_LABEL)
+                # MEME PRODUCTION PIPELINE (overnight phase): every NEWS post that reaches this
+                # keyboard-bearing send path also gets the manual "😂 Сгенерировать мем" button,
+                # bound to this event's own canonical NewsEvent.id (never inferred from headline
+                # text) - covers text-only, single-photo, AND media-group NEWS sends alike, since
+                # all three downstream send calls reuse this SAME `keyboard` variable. The
+                # `include_url = True` fallback branch below (copywriting_output is None) has no
+                # keyboard mechanism at all for ANY button - deferred, documented, not touched.
+                keyboard = append_meme_generate_button(keyboard, event.id)
                 include_url = False
 
                 # Phase 23.1H media integration (docs/phase23_1h_text_image_canary_report.md

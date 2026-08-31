@@ -677,34 +677,90 @@ class Settings(BaseSettings):
     # ["quality"] JSON - never read by any Capability, never changes ContentDraft, never blocks a
     # task, never creates a MEME_GENERATION task on its own (that remains a separate, explicit
     # step - this flag governs only whether the shadow assessment itself is computed).
-    meme_opportunity_mode: Literal["off", "shadow"] = "off"
+    #
+    # MEME PRODUCTION PIPELINE (overnight phase): "enforce" is new - real gating for the
+    # AUTOMATIC path only, applied by services/meme_generation_orchestrator.py::
+    # trigger_meme_generation() (never inside capabilities/executor.py's own shadow-annotation
+    # hook above, which stays byte-for-byte unchanged) - a NewsEvent scoring below MEME_READY is
+    # never given a MEME_GENERATION task at all when this is "enforce". The MANUAL path
+    # (an editor pressing "😂 Сгенерировать мем") always bypasses this gate entirely, regardless
+    # of this setting's value - an explicit human request is never second-guessed by the same
+    # heuristic that exists to avoid pestering an editor with LOW-signal automatic candidates.
+    # Still defaults to "off" - this phase does not activate anything; see docs/
+    # meme_production_pipeline_report.md for the exact morning .env change required to go live.
+    meme_opportunity_mode: Literal["off", "shadow", "enforce"] = "off"
 
     # Phase 18 M3: Meme Safety & Originality Gate (docs/
     # phase18_m3_meme_safety_originality_report.md). "off" (default): zero processing. "shadow":
     # a deterministic (zero-LLM-call) MemeSafetyOriginalityGateResult is attached to the
     # "meme_concept" step's own structured output - never blocks, never mutates the concept
     # itself, never publishes anything.
-    meme_safety_gate_mode: Literal["off", "shadow"] = "off"
+    #
+    # MEME PRODUCTION PIPELINE: "enforce" is new - applied by services/
+    # meme_generation_orchestrator.py AFTER concept generation, for BOTH automatic and manual
+    # triggers alike (a human explicitly requesting a meme still never bypasses the safety gate -
+    # only the opportunity/worthiness gate above is bypassable by an explicit request). A
+    # BLOCK decision stops the pipeline before any image is generated; the MemeCandidate row is
+    # still persisted (status=SAFETY_BLOCKED) for durable diagnosis, never silently dropped. Still
+    # defaults to "off".
+    meme_safety_gate_mode: Literal["off", "shadow", "enforce"] = "off"
 
     # Phase 18 M5: Meme Image Generation (docs/phase18_m5_meme_image_generation_report.md). "off"
     # (default): zero calls, zero cost. "dry_run": generates via whichever ImageGenerationGateway
     # was injected - in every call site this codebase wires up today, that is
     # `integrations.llm_gateway.providers.mock_image_adapter.MockImageAdapter`, a deterministic,
-    # zero-network, zero-cost placeholder generator. There is deliberately no "live" value yet -
-    # wiring a real, paid provider adapter is a separate, explicitly-authorized future step (per
-    # the operating rule: no live/paid image-generation call without separate human
-    # authorization) - the mode flag cannot even express "live" until that milestone adds it.
-    meme_image_generation_mode: Literal["off", "dry_run"] = "off"
+    # zero-network, zero-cost placeholder generator.
+    #
+    # MEME PRODUCTION PIPELINE: "enforce" is new - functionally identical to "dry_run" inside
+    # `services/meme_image_generation.py::generate_meme_image()` itself (that function has no
+    # opinion about which real value is configured; it simply calls whichever gateway its caller
+    # injected - untouched by this phase). The distinction is ENTIRELY at the caller
+    # (`services/meme_generation_orchestrator.py`): "enforce" is the value an operator sets once a
+    # real, paid `ImageGenerationGateway` adapter is actually wired and separately authorized for
+    # this feature - a real provider adapter is NOT built or wired in this phase (no real paid
+    # image generation calls tonight, per explicit instruction); "enforce" exists now purely so
+    # that future wiring needs no further settings migration. Still defaults to "off".
+    meme_image_generation_mode: Literal["off", "dry_run", "enforce"] = "off"
     meme_image_max_bytes: int = Field(default=10_000_000, gt=0)
 
     # Phase 18 M8: Telegram Meme Editorial Preview (docs/
     # phase18_m8_telegram_editorial_preview_report.md). "off" (default): the preview is never
     # built or sent. "dry_run": services.meme_preview_notifier.send_meme_preview() renders and
     # logs the exact payload, but never calls the Telegram API - mirrors content_generation_
-    # dry_run's own established discipline. There is deliberately no "live" value yet - a real
-    # Telegram send requires separate, explicit human authorization (operating rule) before that
-    # value is even added.
-    meme_telegram_preview_mode: Literal["off", "dry_run"] = "off"
+    # dry_run's own established discipline.
+    #
+    # MEME PRODUCTION PIPELINE: "enforce" is new - the real live-send value: `send_meme_preview()`
+    # actually calls `bot.send_photo()`/`bot.send_message()`, routed exclusively through
+    # `EditorialDestination.MEME` (services/telegram_routing.py), never any other destination.
+    # Still defaults to "off" - flipping this (plus `meme_opportunity_mode`/
+    # `meme_image_generation_mode` as appropriate) is the explicit morning activation decision,
+    # not made by this phase.
+    meme_telegram_preview_mode: Literal["off", "dry_run", "enforce"] = "off"
+
+    # MEME PRODUCTION PIPELINE (overnight phase): the manual "😂 Сгенерировать мем" NEWS-button
+    # authorization allowlist - byte-for-byte the same fail-closed shape as
+    # `telegraph_approver_user_ids` (core/config.py's own established precedent for a per-feature
+    # editorial-action allowlist), deliberately a SEPARATE setting rather than reusing that one -
+    # the two buttons gate two independent editorial actions in two different parts of the product
+    # (Telegraph article approval vs. meme generation), and this codebase's own convention is one
+    # allowlist per distinct authorized action, never a single shared "is this person an editor at
+    # all" list conflating unrelated permissions. Empty by default: NO Telegram user id is
+    # authorized to press the button until an operator explicitly populates this list.
+    meme_manual_approver_user_ids: list[int] = Field(default_factory=list)
+
+    # MEME PRODUCTION PIPELINE: bounded cap on how many NewsEvent candidates one automatic
+    # meme-worthiness cycle may advance to MEME_GENERATION - mirrors this codebase's own
+    # established "every automatic batch has a bounded cap" convention (news_analysis_batch_size,
+    # content_generation_batch_size). Reasoned starting default, not fit to any real operating
+    # data yet (no automatic cycle has ever run in production).
+    meme_auto_max_candidates_per_cycle: int = Field(default=3, gt=0)
+
+    # MEME PRODUCTION PIPELINE: bounded recent-history lookback for concept-diversity context
+    # (services/meme_diversity.py) - the N most recently created MemeCandidate rows (any status,
+    # across all NewsEvents), never unbounded history, never a new vector-DB/embedding
+    # architecture (none exists in this codebase and none is justified for this feature alone).
+    # Reasoned starting default; not fit to any real repetition data yet.
+    meme_recent_diversity_lookback: int = Field(default=10, gt=0)
 
     # Phase 18.7: Meme Intelligence Calibration Update (docs/phase18_7_calibration_results.md).
     # "v1" (default): the original Phase 18 M1/M3 classifiers run unmodified, exactly as accepted.
@@ -768,8 +824,8 @@ class Settings(BaseSettings):
     # (that one gates whether the deterministic NNJ brand layer renders at all; this one gates
     # whether the source photo is optionally recomposed BEFORE that layer runs - two distinct
     # product behaviors, deliberately not conflated into one flag). Also distinct from
-    # meme_image_generation_mode ("off"/"dry_run" only, no "live" value exists in that type by
-    # design - a completely different consumer/product). "off" (default): zero
+    # meme_image_generation_mode (a completely different consumer/product, its own independent
+    # "off"/"dry_run"/"enforce" values). "off" (default): zero
     # ImageGenerationGateway calls, byte-identical to pre-V2.3 behavior. "dry_run": eligibility is
     # evaluated and the request that WOULD be sent is built, but no network call is made. "live":
     # a real gemini-3.1-flash-image call is made when eligible; any failure fails open to the
