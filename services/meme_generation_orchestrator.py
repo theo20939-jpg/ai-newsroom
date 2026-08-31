@@ -39,11 +39,13 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import unicodedata
 from dataclasses import dataclass
 from typing import Literal
 from uuid import UUID
 
 from aiogram import Bot
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -80,9 +82,45 @@ _NON_TERMINAL_TASK_STATUSES = frozenset({TaskStatus.CREATED, TaskStatus.RUNNING,
 
 MemeGenerationStatus = Literal[
     "event_not_found", "already_in_progress", "not_meme_worthy", "provider_not_configured",
-    "concept_generation_failed", "safety_blocked", "image_generation_failed", "render_failed",
-    "watermark_failed", "delivered", "delivery_failed",
+    "concept_generation_failed", "safety_blocked", "copy_validation_failed", "image_generation_failed",
+    "render_failed", "watermark_failed", "delivered", "delivery_failed",
 ]
+
+# MEME-PROD-1B: mirrors schemas/meme_copy.py's own `_ALT_TEXT_MAX_LENGTH` constraint exactly -
+# duplicated locally rather than importing that module-private constant, matching this codebase's
+# own established per-module-private-constant convention (e.g. services/article_metadata.py's own
+# independently-defined `_MAX_ALT_TEXT_LENGTH`, services/cleaning.py's own `_truncate()`).
+_ALT_TEXT_MAX_LENGTH = 200
+# A stray combining mark, variation selector, or zero-width-joiner half left at the very end of a
+# hard truncation would render as a visibly broken glyph - trimmed defensively before falling back
+# to a word-boundary cut. `‍` (ZWJ) and `️`/`︎` (variation selectors) are the most
+# common offenders in real LLM output (emoji sequences); combining marks are covered generically
+# via `unicodedata.combining()`.
+_ALT_TEXT_DANGLING_MARKS = frozenset({"‍", "️", "︎"})
+# Trailing punctuation that reads as visibly "cut off mid-sentence" once a hard truncation lands on
+# it - deliberately NOT including sentence-final punctuation ("." "!" "?" closing quotes/brackets),
+# which are legitimate, complete endings a word-boundary cut may land on by coincidence.
+_ALT_TEXT_DANGLING_PUNCTUATION = " \t\n,;:–—-("
+
+
+def _normalize_alt_text(alt_text: str) -> str:
+    """§3's own explicit contract: shorten an over-length `alt_text` to `_ALT_TEXT_MAX_LENGTH`
+    without ever truncating a UTF-8 byte sequence in half (a Python `str` is already a sequence of
+    Unicode codepoints, never raw bytes - plain slicing can never split one apart) and without
+    leaving a broken trailing whitespace/punctuation/grapheme fragment where a word-boundary cut
+    can reasonably avoid it. Never touches any other `MemeCopy` field - alt_text is the only field
+    this production incident implicated, and the brief's own "do not alter meme concept/caption/
+    text unless required" instruction forbids normalizing anything else defensively."""
+    if len(alt_text) <= _ALT_TEXT_MAX_LENGTH:
+        return alt_text
+    truncated = alt_text[:_ALT_TEXT_MAX_LENGTH]
+    while truncated and (unicodedata.combining(truncated[-1]) or truncated[-1] in _ALT_TEXT_DANGLING_MARKS):
+        truncated = truncated[:-1]
+    last_space = truncated.rfind(" ")
+    if last_space > 0:
+        truncated = truncated[:last_space]
+    truncated = truncated.rstrip(_ALT_TEXT_DANGLING_PUNCTUATION)
+    return truncated or alt_text[:_ALT_TEXT_MAX_LENGTH]  # never collapse to an empty string
 
 
 @dataclass(frozen=True)
@@ -338,7 +376,41 @@ async def trigger_meme_generation(
     if copy_output is None:
         logger.warning("meme_copy_generation_failed", extra={"candidate_id": str(candidate.id)})
         return MemeGenerationOutcome(status="concept_generation_failed", news_event_id=news_event_id, task_id=task.id, candidate_id=candidate.id)
-    copy = MemeCopy.model_validate(copy_output)
+
+    # MEME-PROD-1B: production canary evidence - the LLM has emitted alt_text past the schema's
+    # own 200-char ceiling despite the (now also schema-constrained, prompts/meme_copywriting/
+    # v1.yaml) contract. alt_text is an optional accessibility description, never load-bearing for
+    # the meme itself - proactively normalizing it here, before validation, lets a request that
+    # would otherwise be a total loss continue exactly as if the LLM had stayed in bounds. Every
+    # other field is left completely untouched (brief's own "do not alter... unless required").
+    raw_alt_text = copy_output.get("alt_text") if isinstance(copy_output, dict) else None
+    if isinstance(raw_alt_text, str) and len(raw_alt_text) > _ALT_TEXT_MAX_LENGTH:
+        copy_output = {**copy_output, "alt_text": _normalize_alt_text(raw_alt_text)}
+        logger.warning(
+            "meme_copy_alt_text_normalized",
+            extra={
+                "candidate_id": str(candidate.id), "original_length": len(raw_alt_text),
+                "normalized_length": len(copy_output["alt_text"]),
+            },
+        )
+
+    try:
+        copy = MemeCopy.model_validate(copy_output)
+    except ValidationError as exc:
+        # Expected content-validation failure (a malformed LLM output, not an infrastructure/
+        # programming error) - handled at this exact seam, per the brief's own instruction, never
+        # swallowed broadly. The candidate row simply stays at whatever status attach_safety_
+        # assessment() already left it (schemas.meme_candidate has no dedicated "copy invalid"
+        # status - adding one would need a migration, out of this fix's scope) - inspectable via
+        # its own missing copy_data, never silently lost.
+        logger.warning(
+            "meme_copy_validation_failed",
+            extra={"candidate_id": str(candidate.id), "error_count": exc.error_count()},
+        )
+        return MemeGenerationOutcome(
+            status="copy_validation_failed", news_event_id=news_event_id, task_id=task.id,
+            candidate_id=candidate.id, error=f"{exc.error_count()} validation error(s)",
+        )
     updated_candidate = await candidate_service.attach_copy(candidate.id, copy)
     assert updated_candidate is not None
     candidate = updated_candidate

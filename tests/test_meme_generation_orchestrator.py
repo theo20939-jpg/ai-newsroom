@@ -8,6 +8,7 @@ workflow (research -> intelligence -> meme_concept -> meme_copywriting).
 """
 from __future__ import annotations
 
+import unicodedata
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,7 +37,12 @@ from integrations.llm_gateway.protocol import GenerateResponse
 from integrations.llm_gateway.providers.mock_image_adapter import MockImageAdapter
 from integrations.storage.image_storage import LocalImageStorage
 from schemas.capability import CapabilityUsage
-from services.meme_generation_orchestrator import _resolve_default_image_gateway, trigger_meme_generation
+from services.meme_generation_orchestrator import (
+    _find_in_progress_meme_task,
+    _normalize_alt_text,
+    _resolve_default_image_gateway,
+    trigger_meme_generation,
+)
 from tests.fakes.fake_gateway import FakeLLMGateway
 
 _RESEARCH_OUTPUT = {"facts": ["Company X shipped product Y."], "confidence": 0.8, "gaps": []}
@@ -83,10 +89,10 @@ def _full_registry(gateway: FakeLLMGateway) -> CapabilityRegistry:
     return registry
 
 
-def _gateway(*, concept_output: dict | None = None) -> FakeLLMGateway:
+def _gateway(*, concept_output: dict | None = None, copy_output: dict | None = None) -> FakeLLMGateway:
     return FakeLLMGateway(generate_responses=[
         _response(_RESEARCH_OUTPUT), _response(_INTELLIGENCE_OUTPUT),
-        _response(concept_output or _CONCEPT_OUTPUT), _response(_COPY_OUTPUT),
+        _response(concept_output or _CONCEPT_OUTPUT), _response(copy_output or _COPY_OUTPUT),
     ])
 
 
@@ -509,3 +515,178 @@ def test_preview_notifier_only_ever_routes_to_the_meme_editorial_destination() -
     for other_destination in ("EditorialDestination.NEWS", "EditorialDestination.TELEGRAPH", "EditorialDestination.INSTAGRAM", "EditorialDestination.REELS"):
         assert other_destination not in _PREVIEW_NOTIFIER_SOURCE, f"unexpected reference: {other_destination}"
     assert "EditorialDestination.MEME" in _PREVIEW_NOTIFIER_SOURCE
+
+
+# ---------------------------------------------------------------------------
+# MEME-PROD-1B: production canary - MemeCopy.alt_text > 200 chars crashed the manual callback with
+# an uncaught pydantic ValidationError. _normalize_alt_text() unit tests first (pure, no DB), then
+# end-to-end orchestrator tests proving generation continues (never crashes) after normalization,
+# other validation failures still fail closed without crashing, and a failed task never blocks a
+# retry through _find_in_progress_meme_task().
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_alt_text_leaves_text_at_or_under_limit_unchanged() -> None:
+    exactly_200 = "x" * 200
+    assert _normalize_alt_text(exactly_200) == exactly_200
+    short = "A short description."
+    assert _normalize_alt_text(short) == short
+
+
+def test_normalize_alt_text_shortens_oversized_text_to_the_limit() -> None:
+    oversized = "word " * 60  # 300 chars
+    result = _normalize_alt_text(oversized)
+    assert len(result) <= 200
+    assert len(result) > 0
+
+
+def test_normalize_alt_text_never_ends_on_broken_whitespace_or_dangling_punctuation() -> None:
+    oversized = ("A photo of a robot, standing, waiting, thinking, wondering, calculating, " * 4)[:250]
+    result = _normalize_alt_text(oversized)
+    assert result == result.rstrip()  # no trailing whitespace
+    assert result[-1] not in ",;:–—-("  # never ends on dangling connective punctuation
+
+
+def test_normalize_alt_text_handles_cyrillic_correctly() -> None:
+    cyrillic = "Скриншот с забавным текстом про ИИ, который заменяет работу программистов совсем скоро, по мнению аналитиков рынка труда " * 2
+    assert len(cyrillic) > 200
+    result = _normalize_alt_text(cyrillic)
+    assert len(result) <= 200
+    assert len(result) > 0
+    assert result == result.rstrip()
+
+
+def test_normalize_alt_text_handles_emoji_and_zwj_sequences_without_breaking() -> None:
+    emoji_text = ("A robot 🤖 typing on a keyboard 💻 while a human watches nervously 😰 in a busy office " * 3) + "👨‍👩‍👧"
+    assert len(emoji_text) > 200
+    result = _normalize_alt_text(emoji_text)
+    assert len(result) <= 200
+    assert len(result) > 0
+    # never ends on a lone zero-width-joiner or variation selector (a half-rendered glyph)
+    assert result[-1] != "‍"
+    assert not unicodedata.combining(result[-1])
+
+
+@pytest.mark.asyncio
+async def test_oversized_alt_text_is_normalized_and_generation_still_delivers(
+    db_session: AsyncSession, tmp_path,
+) -> None:
+    """The exact production defect: MemeCopy.alt_text > 200 chars must never crash
+    trigger_meme_generation() - it is normalized in place and the pipeline completes normally,
+    reaching image generation and delivery."""
+    event = await _make_event(db_session)
+    oversized_copy = {**_COPY_OUTPUT, "alt_text": "A very detailed description of the meme image. " * 6}
+    assert len(oversized_copy["alt_text"]) > 200
+    gateway = _gateway(copy_output=oversized_copy)
+
+    outcome = await trigger_meme_generation(
+        db_session, news_event_id=event.id, trigger_source="manual",
+        capability_registry=_full_registry(gateway), image_gateway=MockImageAdapter(),
+        storage=LocalImageStorage(tmp_path), bot=_bot()[0],
+    )
+
+    assert outcome.status == "delivered"
+    candidate = await db_session.get(MemeCandidate, outcome.candidate_id)
+    assert candidate is not None
+    assert candidate.copy_data is not None
+    assert len(candidate.copy_data["alt_text"]) <= 200
+    assert candidate.image_status == "generated"  # image generation was actually reached
+
+
+@pytest.mark.asyncio
+async def test_valid_alt_text_at_exactly_200_is_never_touched(db_session: AsyncSession, tmp_path) -> None:
+    event = await _make_event(db_session)
+    exact_copy = {**_COPY_OUTPUT, "alt_text": "x" * 200}
+    gateway = _gateway(copy_output=exact_copy)
+
+    outcome = await trigger_meme_generation(
+        db_session, news_event_id=event.id, trigger_source="manual",
+        capability_registry=_full_registry(gateway), image_gateway=MockImageAdapter(),
+        storage=LocalImageStorage(tmp_path), bot=_bot()[0],
+    )
+
+    assert outcome.status == "delivered"
+    candidate = await db_session.get(MemeCandidate, outcome.candidate_id)
+    assert candidate is not None
+    assert candidate.copy_data is not None
+    assert candidate.copy_data["alt_text"] == "x" * 200  # byte-for-byte unchanged
+
+
+@pytest.mark.asyncio
+async def test_normal_valid_copy_completely_unaffected_by_the_normalization_seam(
+    db_session: AsyncSession, tmp_path,
+) -> None:
+    event = await _make_event(db_session)
+    outcome = await trigger_meme_generation(
+        db_session, news_event_id=event.id, trigger_source="manual",
+        capability_registry=_full_registry(_gateway()), image_gateway=MockImageAdapter(),
+        storage=LocalImageStorage(tmp_path), bot=_bot()[0],
+    )
+    assert outcome.status == "delivered"
+    candidate = await db_session.get(MemeCandidate, outcome.candidate_id)
+    assert candidate is not None
+    assert candidate.copy_data is not None
+    assert candidate.copy_data["alt_text"] == _COPY_OUTPUT["alt_text"]
+    assert candidate.copy_data["top_text"] == _COPY_OUTPUT["top_text"]  # untouched
+
+
+@pytest.mark.asyncio
+async def test_other_invalid_required_field_still_fails_closed_without_crashing(
+    db_session: AsyncSession, tmp_path,
+) -> None:
+    """A malformed field OTHER than alt_text (e.g. an empty required top_text) is never
+    auto-repaired (brief's own "do not alter... unless required") - it must still fail closed via
+    a controlled MemeGenerationOutcome, never an uncaught ValidationError."""
+    event = await _make_event(db_session)
+    broken_copy = {**_COPY_OUTPUT, "top_text": ""}  # violates MemeCopy's own min_length=1
+    gateway = _gateway(copy_output=broken_copy)
+
+    outcome = await trigger_meme_generation(
+        db_session, news_event_id=event.id, trigger_source="manual",
+        capability_registry=_full_registry(gateway), image_gateway=MockImageAdapter(),
+        storage=LocalImageStorage(tmp_path), bot=_bot()[0],
+    )
+
+    assert outcome.status == "copy_validation_failed"
+    assert outcome.error is not None
+    candidate = await db_session.get(MemeCandidate, outcome.candidate_id)
+    assert candidate is not None
+    assert candidate.copy_data is None  # attach_copy() was never reached
+
+
+@pytest.mark.asyncio
+async def test_copy_validation_failure_never_blocks_a_subsequent_manual_retry(
+    db_session: AsyncSession, tmp_path,
+) -> None:
+    """Critical debounce-safety proof (§6): WorkflowRunner.run() already commits the EditorialTask
+    as COMPLETED before trigger_meme_generation() ever reaches MemeCopy.model_validate() (workflows/
+    runner.py's own unconditional `task.status = TaskStatus.COMPLETED; await session.commit()` on
+    every exit path) - a copy-validation failure can therefore never leave a non-terminal task.
+    _find_in_progress_meme_task() must report None immediately afterward, and a second manual
+    click must be free to create a genuinely new task/candidate, exactly like any other completed-
+    but-undelivered attempt."""
+    event = await _make_event(db_session)
+    broken_copy = {**_COPY_OUTPUT, "top_text": ""}
+
+    first = await trigger_meme_generation(
+        db_session, news_event_id=event.id, trigger_source="manual",
+        capability_registry=_full_registry(_gateway(copy_output=broken_copy)), image_gateway=MockImageAdapter(),
+        storage=LocalImageStorage(tmp_path), bot=_bot()[0],
+    )
+    assert first.status == "copy_validation_failed"
+    assert first.task_id is not None
+
+    failed_task = await db_session.get(EditorialTask, first.task_id)
+    assert failed_task is not None
+    assert failed_task.status == TaskStatus.COMPLETED  # terminal, never left RUNNING/CREATED/WAITING
+
+    in_progress = await _find_in_progress_meme_task(db_session, event.id)
+    assert in_progress is None  # never blocks the next click
+
+    second = await trigger_meme_generation(
+        db_session, news_event_id=event.id, trigger_source="manual",
+        capability_registry=_full_registry(_gateway()), image_gateway=MockImageAdapter(),
+        storage=LocalImageStorage(tmp_path), bot=_bot()[0],
+    )
+    assert second.status == "delivered"
+    assert second.task_id != first.task_id  # a genuinely new attempt, not blocked/reused

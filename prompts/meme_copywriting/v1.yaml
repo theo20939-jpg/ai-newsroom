@@ -21,7 +21,8 @@ rules:
   - telegram_caption briefly connects the meme back to the source story for the editor reviewing
     it - it is not the meme's on-image text, and may be longer and more descriptive.
   - alt_text is a plain, literal description of what the rendered image will show - written for
-    someone who cannot see the image, never a joke or the punchline restated.
+    someone who cannot see the image, never a joke or the punchline restated. Keep it to at most
+    200 characters - a short sentence or two, never a paragraph.
   - Match the tone for an informed, a little wry technology-news audience - never crude or
     mean-spirited toward a real person.
 output_schema:
@@ -29,16 +30,22 @@ output_schema:
   properties:
     top_text:
       type: string
+      maxLength: 80
     bottom_text:
       type: [string, "null"]
+      maxLength: 80
     punchline_short:
       type: string
+      maxLength: 120
     telegram_caption:
       type: string
+      maxLength: 300
     editor_explanation:
       type: [string, "null"]
+      maxLength: 300
     alt_text:
       type: string
+      maxLength: 200
   required:
     - top_text
     - bottom_text
