@@ -41,6 +41,7 @@ from database.models.news_event import NewsEvent
 from database.models.news_source import SourceType
 from bot.handlers.image_preview import handle_image_preview_callback
 from bot.keyboards.image_preview import encode_callback_data
+from bot.keyboards.meme_generate import encode_callback_data as encode_meme_callback_data
 from integrations.storage.image_storage import LocalImageStorage
 from services import image_persistence
 
@@ -331,8 +332,11 @@ async def test_use_image_keeps_real_news_text_and_reduces_keyboard_to_source_onl
     keyboard = edits[0].reply_markup
     assert keyboard is not None
     buttons = [b for row in keyboard.inline_keyboard for b in row]
-    assert len(buttons) == 1
+    # MEME-PROD-1: the terminal, settled keyboard now also carries the manual meme-generate
+    # button, bound to this exact event's own id, alongside Source.
+    assert len(buttons) == 2
     assert buttons[0].url == "https://example.com/source-article"
+    assert buttons[1].callback_data == encode_meme_callback_data(real_news_event.id)
 
 
 @pytest.mark.asyncio
@@ -402,7 +406,11 @@ async def test_no_image_rejects_every_candidate_shows_real_news_text_no_url_in_b
     keyboard = edits[0].reply_markup
     assert keyboard is not None
     buttons = [b for row in keyboard.inline_keyboard for b in row]
-    assert len(buttons) == 1 and buttons[0].url == "https://example.com/source-article"
+    # MEME-PROD-1: the terminal, settled keyboard now also carries the manual meme-generate
+    # button, bound to this exact event's own id, alongside Source.
+    assert len(buttons) == 2
+    assert buttons[0].url == "https://example.com/source-article"
+    assert buttons[1].callback_data == encode_meme_callback_data(real_news_event.id)
 
 
 @pytest.mark.asyncio

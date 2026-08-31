@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 from aiogram import Bot
@@ -421,3 +422,90 @@ async def test_enforce_mode_without_provider_fails_closed_never_falls_back_to_mo
     assert gateway.received_requests == []  # zero LLM calls - fails closed before any workflow work
     rows = (await db_session.execute(select(MemeCandidate).where(MemeCandidate.news_event_id == event.id))).scalars().all()
     assert rows == []  # zero candidates persisted - never a placeholder passed off as real
+
+
+# ---------------------------------------------------------------------------
+# MEME-PROD-1: automatic-worthy ACCEPT path (the reject path above was already covered; the
+# accept-and-actually-generate path was not), story/news identity preservation, and a structural
+# no-outward-publish proof.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_automatic_trigger_enforce_mode_accepts_high_signal_story_and_delivers(
+    db_session: AsyncSession, tmp_path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A genuinely high-signal story (gold-labeled MEME_READY in tests/test_phase18_m1_meme_
+    opportunity.py's own gold set, empirically confirmed to score >= the READY threshold under the
+    real, unmocked classifier) must actually proceed through the full pipeline under enforce mode -
+    the automatic path is not just capable of REJECTING, it must also actually ACCEPT and deliver."""
+    monkeypatch.setattr(settings, "meme_opportunity_mode", "enforce")
+    event = await _make_event(
+        db_session, title="CEO of Nvidia insists AI is not destroying jobs",
+    )
+    event.content = "The Nvidia chief executive publicly insists artificial intelligence is not destroying jobs."
+    await db_session.flush()
+    gateway = _gateway()
+    bot, session = _bot()
+
+    outcome = await trigger_meme_generation(
+        db_session, news_event_id=event.id, trigger_source="automatic",
+        capability_registry=_full_registry(gateway), image_gateway=MockImageAdapter(),
+        storage=LocalImageStorage(tmp_path), bot=bot,
+    )
+
+    assert outcome.status == "delivered"
+    assert outcome.task_id is not None
+    assert outcome.candidate_id is not None
+    assert len(gateway.received_requests) == 4  # research, intelligence, meme_concept, meme_copywriting
+    sends = [m for m in session.sent if isinstance(m, SendPhoto)]
+    assert len(sends) == 1
+
+
+@pytest.mark.asyncio
+async def test_source_news_identity_preserved_through_the_full_pipeline(db_session: AsyncSession, tmp_path) -> None:
+    """The delivered candidate/card is bound to the EXACT NewsEvent the pipeline started from -
+    never a different or re-derived event - throughout concept generation, candidate persistence,
+    and delivery."""
+    event = await _make_event(db_session, title="A specific, uniquely identifiable news headline")
+    outcome = await trigger_meme_generation(
+        db_session, news_event_id=event.id, trigger_source="manual",
+        capability_registry=_full_registry(_gateway()), image_gateway=MockImageAdapter(),
+        storage=LocalImageStorage(tmp_path), bot=_bot()[0],
+    )
+    assert outcome.status == "delivered"
+    assert outcome.news_event_id == event.id
+
+    candidate = await db_session.get(MemeCandidate, outcome.candidate_id)
+    assert candidate is not None
+    assert candidate.news_event_id == event.id  # bound to the exact event, never a different one
+
+    task = await db_session.get(EditorialTask, outcome.task_id)
+    assert task is not None
+    assert task.event_id == event.id  # the workflow task itself is anchored to the same event
+
+
+# ---------------------------------------------------------------------------
+# MEME-PROD-1: structural - no outward/public publishing path anywhere in the meme delivery chain.
+# Mirrors tests/test_telegraph_article_processor.py's own established
+# test_no_telegram_or_telegraph_publishing_reference_in_processor_source() pattern.
+# ---------------------------------------------------------------------------
+
+_ORCHESTRATOR_SOURCE = Path("services/meme_generation_orchestrator.py").read_text(encoding="utf-8")
+_PREVIEW_NOTIFIER_SOURCE = Path("services/meme_preview_notifier.py").read_text(encoding="utf-8")
+
+
+def test_orchestrator_never_references_an_external_publishing_api() -> None:
+    for forbidden in ("telegra.ph", "createPage", "createAccount", "requests.post", "httpx.post", "urlopen"):
+        assert forbidden not in _ORCHESTRATOR_SOURCE, f"unexpected reference: {forbidden}"
+        assert forbidden not in _PREVIEW_NOTIFIER_SOURCE, f"unexpected reference: {forbidden}"
+
+
+def test_preview_notifier_only_ever_routes_to_the_meme_editorial_destination() -> None:
+    """`EditorialDestination.MEME` is the only destination this module's own send call may ever
+    resolve - proven by scanning for every OTHER destination member name in the source text (a
+    real reference to e.g. `EditorialDestination.NEWS` here would mean a second, un-audited send
+    path exists)."""
+    for other_destination in ("EditorialDestination.NEWS", "EditorialDestination.TELEGRAPH", "EditorialDestination.INSTAGRAM", "EditorialDestination.REELS"):
+        assert other_destination not in _PREVIEW_NOTIFIER_SOURCE, f"unexpected reference: {other_destination}"
+    assert "EditorialDestination.MEME" in _PREVIEW_NOTIFIER_SOURCE

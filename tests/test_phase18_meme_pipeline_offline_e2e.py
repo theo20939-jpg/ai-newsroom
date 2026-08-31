@@ -261,12 +261,21 @@ async def test_complete_offline_meme_pipeline_happy_path(db_session: AsyncSessio
         safety_summary=f"Safety: {safety_gate.safety.decision.value}",
         quality_summary=f"Quality: {bounded_quality.decision.value}",
     )
+    # MEME-PROD-1: send_meme_preview() no longer takes a raw chat_id (it resolves
+    # EditorialDestination.MEME via services/telegram_routing.py internally) - the stray
+    # positional `999999` here was stale since that refactor; a pre-existing bug found while
+    # verifying this phase's own work, fixed here since it was silently breaking this E2E test's
+    # own M8 stage entirely.
     preview_outcome = await send_meme_preview(
-        _NeverCalledBot(), 999999, storage, preview_card, dry_run=True,  # type: ignore[arg-type]
+        _NeverCalledBot(), storage, preview_card, dry_run=True,  # type: ignore[arg-type]
     )
     assert preview_outcome.sent is False
     assert preview_outcome.has_image is True
-    assert "AI WON'T TAKE YOUR JOB" in preview_outcome.rendered_caption
+    # MEME-PROD-1: another stale pre-existing assertion, from before the MEME PRODUCTION PIPELINE
+    # product correction (services/meme_preview_notifier.py's own module docstring: "Do NOT
+    # duplicate the entire NEWS article" - the caption is headline-only, never the on-image
+    # punchline text) - fixed to match the current, intentional caption contract.
+    assert preview_outcome.rendered_caption == f"😂 MEME\n\n{event.title}"
 
     # --- M9: Human decision persistence, idempotency proven with a duplicate call ---
     approved = await service.record_editor_decision(candidate_id, "approved")

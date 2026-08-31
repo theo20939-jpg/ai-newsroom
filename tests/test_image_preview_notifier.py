@@ -21,6 +21,7 @@ from aiogram.types import Message as AiogramMessage
 from aiogram.types import PhotoSize
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.keyboards.meme_generate import encode_callback_data as encode_meme_callback_data
 from core.config import settings
 from database.models.content_draft import ContentDraft, ContentType
 from database.models.editorial_task import EditorialTask, TaskPriority
@@ -145,8 +146,11 @@ async def test_no_candidates_message_has_no_url_in_body_but_has_source_button(
     assert "https://example.com/source-article" not in sent.text
     assert sent.reply_markup is not None
     buttons = [b for row in sent.reply_markup.inline_keyboard for b in row]
-    assert len(buttons) == 1
+    # MEME-PROD-1: the text-only fallback is a terminal NEWS send - it now also carries the
+    # manual meme-generate button, bound to this exact event's own id, alongside Source.
+    assert len(buttons) == 2
     assert buttons[0].url == "https://example.com/source-article"
+    assert buttons[1].callback_data == encode_meme_callback_data(real_news_event.id)
 
 
 @pytest.mark.asyncio

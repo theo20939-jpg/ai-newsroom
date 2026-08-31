@@ -35,6 +35,7 @@ from bot.image_preview_formatting import (
 )
 from bot.image_preview_media import resolve_photo_input
 from bot.keyboards.image_preview import build_image_preview_keyboard, build_source_only_keyboard, parse_callback_data
+from bot.keyboards.meme_generate import append_meme_generate_button
 from database.models.content_draft import ContentDraft
 from database.models.editorial_task import EditorialTask
 from database.models.news_event import NewsEvent
@@ -147,12 +148,18 @@ async def _finalize_decision(
 ) -> None:
     """Terminal state for the message once a decision has been made (docs §8, UX fix) - always
     shows the real news content (never a technical "Image selected"/"No image" confirmation
-    string) with only a single Source button remaining, ending the interactive flow. `keep_photo`
+    string) with only the Source button (plus, MEME-PROD-1, the manual meme-generate button)
+    remaining, ending the interactive Previous/Next/Use/No-image flow. `keep_photo`
     is `False` for "No image" (the message must become text-only - Telegram cannot edit a photo
     message into a text-only one, so this is a delete+resend, the same technique `_render_candidate`
     already uses for a type change) and `True` for "Use image" (the already-attached photo and its
     caption are correct as-is; only the keyboard needs to shrink to just the Source button)."""
-    keyboard = build_source_only_keyboard(event.url)
+    # MEME PRODUCTION PIPELINE (MEME-PROD-1): this IS the message's terminal, settled state
+    # (docstring above) - the same "every NEWS message that ends up with a Source keyboard also
+    # gets the manual meme button" rule services/image_preview_notifier.py's own text-only fallback
+    # and worker/content_cycle.py's primary send path both already apply. Never added to the
+    # earlier, still-interactive Previous/Next/Use/No-image keyboard - only here, once settled.
+    keyboard = append_meme_generate_button(build_source_only_keyboard(event.url), event.id)
     bot = message.bot
     assert bot is not None
     has_photo = bool(message.photo)

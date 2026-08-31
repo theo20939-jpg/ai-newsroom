@@ -70,6 +70,25 @@ def _is_authorized_approver(callback: CallbackQuery) -> bool:
     return callback.from_user.id in settings.meme_manual_approver_user_ids
 
 
+def _build_capability_context():
+    """Builds the real AI integration layer (capability_registry/cost_tracker) plus its pricing
+    catalog - factored out into its own module-scoped function (mirrors `_get_storage()`'s own
+    established convention immediately above) purely so tests can monkeypatch this ONE call rather
+    than the real `assemble_ai_integration_layer()` itself, which also constructs real Redis-backed
+    rate limiters/health/cache stores (integrations/llm_gateway/boot.py) - infrastructure a fast,
+    isolated handler-logic test has no business touching. Zero behavior change for production:
+    this is the exact same construction the handler always performed inline."""
+    from integrations.llm_gateway.boot import assemble_ai_integration_layer
+    from integrations.llm_gateway.models.catalog import build_model_registry
+    from integrations.prompts.file_repository import FilePromptRepository
+    from services.pricing_catalog import ModelRegistryPricingCatalog
+
+    prompt_repository = FilePromptRepository(_PROMPTS_ROOT)
+    ai_layer = assemble_ai_integration_layer(settings, prompt_repository)
+    pricing_catalog = ModelRegistryPricingCatalog(build_model_registry())
+    return ai_layer.capability_registry, ai_layer.cost_tracker, pricing_catalog
+
+
 @router.callback_query(F.data.startswith("memegen:"))
 async def handle_meme_generate_callback(callback: CallbackQuery) -> None:
     news_event_id: UUID | None = parse_callback_data(callback.data or "")
@@ -108,14 +127,7 @@ async def handle_meme_generate_callback(callback: CallbackQuery) -> None:
     # a Telegram callback timeout.
     await callback.answer("Мем отправлен в генерацию")
 
-    from integrations.llm_gateway.boot import assemble_ai_integration_layer
-    from integrations.llm_gateway.models.catalog import build_model_registry
-    from integrations.prompts.file_repository import FilePromptRepository
-    from services.pricing_catalog import ModelRegistryPricingCatalog
-
-    prompt_repository = FilePromptRepository(_PROMPTS_ROOT)
-    ai_layer = assemble_ai_integration_layer(settings, prompt_repository)
-    pricing_catalog = ModelRegistryPricingCatalog(build_model_registry())
+    capability_registry, cost_tracker, pricing_catalog = _build_capability_context()
 
     assert message.bot is not None
     async with async_session_factory() as session:
@@ -123,15 +135,16 @@ async def handle_meme_generate_callback(callback: CallbackQuery) -> None:
             session,
             news_event_id=news_event_id,
             trigger_source="manual",
-            capability_registry=ai_layer.capability_registry,
-            # image_gateway omitted - trigger_meme_generation() lazily constructs a
-            # MockImageAdapter by default (no real, paid image-generation provider is wired
-            # anywhere in this codebase yet, per that function's own module docstring). It is
-            # only ever actually CALLED when settings.meme_image_generation_mode != "off"
-            # (generate_meme_image()'s own gate).
+            capability_registry=capability_registry,
+            # image_gateway omitted - trigger_meme_generation() lazily resolves the real,
+            # production-wired GeminiImageAdapter (settings.meme_image_generation_mode ==
+            # "enforce") or MockImageAdapter (off/dry_run), per services/
+            # meme_generation_orchestrator.py::_resolve_default_image_gateway()'s own contract -
+            # this handler never needs to know which one, or import anything from
+            # integrations.llm_gateway.* to make that choice itself.
             storage=_get_storage(),
             bot=message.bot,
-            cost_tracker=ai_layer.cost_tracker,
+            cost_tracker=cost_tracker,
             pricing_catalog=pricing_catalog,
         )
 

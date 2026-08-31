@@ -29,6 +29,7 @@ from bot.formatting import SAFE_LIMIT, CardTooLongError, render_editorial_card
 from bot.image_preview_formatting import CAPTION_SAFE_LIMIT
 from bot.image_preview_media import resolve_photo_input
 from bot.keyboards.image_preview import build_image_preview_keyboard, build_source_only_keyboard
+from bot.keyboards.meme_generate import append_meme_generate_button
 from database.models.news_event import NewsEvent
 from schemas.content_draft import ContentDraftRead
 from schemas.editorial_inbox import EditorialInboxCard
@@ -112,7 +113,12 @@ async def send_news_with_image_preview(
         except CardTooLongError:
             logger.error("content_notification_render_failed", extra={"draft_id": str(draft.id)})
             return CombinedCardOutcome(chat_id=chat_id, sent=False, has_image=False, candidate_count=0)
-        keyboard = build_source_only_keyboard(event.url)
+        # MEME PRODUCTION PIPELINE (MEME-PROD-1): this text-only fallback is a terminal,
+        # keyboard-bearing NEWS send (no further interactive state follows it) - the same
+        # "every NEWS message that gets a Source keyboard also gets the manual meme button" rule
+        # worker/content_cycle.py's own primary send path already established. Additive only
+        # (mirrors append_meme_generate_button()'s own contract) - never replaces the Source row.
+        keyboard = append_meme_generate_button(build_source_only_keyboard(event.url), event.id)
 
         if dry_run:
             logger.info(
