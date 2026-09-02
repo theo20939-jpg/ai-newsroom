@@ -26,6 +26,13 @@ class AICapability(str, enum.Enum):
     # alias (capabilities/capability_mapping.py). Requires that migration to be applied before
     # any row using this value can be written - see capability_mapping.py's own docstring.
     ENGAGEMENT = "ENGAGEMENT"
+    # PHASE STORY-MEMORY-V2-2 Phase 1 (2026-09-02, database/migrations/versions/
+    # af2aeb69cf67_add_story_memory_v2_phase1_columns.py): reserves the enum value for the future
+    # AI Story Judge capability (PHASE STORY-MEMORY-V2-1 design). Mirrors ENGAGEMENT's own
+    # precedent exactly - adding the value has no runtime execution effect; no capability,
+    # executor wiring, or prompt exists yet, and nothing writes an AIExecution row with this
+    # capability this phase.
+    STORY_JUDGE = "STORY_JUDGE"
 
 
 class AIExecution(Base):
