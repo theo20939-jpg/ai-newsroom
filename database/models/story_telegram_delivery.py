@@ -10,7 +10,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String, func
+from sqlalchemy import JSON, BigInteger, DateTime, Enum, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -78,3 +78,20 @@ class StoryTelegramDelivery(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+    # PHASE STORY-MEMORY-V2-2 Phase 1 (2026-09-02, database/migrations/versions/
+    # af2aeb69cf67_add_story_memory_v2_phase1_columns.py): self-contained per-delivery audit
+    # fields for the approved Story Memory V2 design - a denormalized snapshot of the decision
+    # that produced this send, and (communicated_facts) the future publish-time-extracted set of
+    # facts this specific delivery actually communicated to a reader. `services/
+    # story_telegram_delivery.py::record_delivery()` does NOT populate any of these yet - all stay
+    # NULL for every row this phase, exactly like `Story.published_facts` above never advancing
+    # from them. `source_event_id` intentionally has no `index=True`/hot-path read this phase -
+    # added for future audit-trail completeness, not queried anywhere yet.
+    source_event_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("news_events.id"), nullable=True
+    )
+    final_decision: Mapped[str | None] = mapped_column(String, nullable=True)
+    decision_source: Mapped[str | None] = mapped_column(String, nullable=True)
+    topic_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    communicated_facts: Mapped[list | None] = mapped_column(JSON, nullable=True)

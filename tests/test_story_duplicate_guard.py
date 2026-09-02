@@ -216,9 +216,19 @@ async def test_orchestration_no_story_link_is_never_blocked(
 
 
 @pytest.mark.asyncio
-async def test_orchestration_semantic_duplicate_with_real_root_delivery_is_blocked(
+async def test_orchestration_semantic_duplicate_with_real_root_delivery_would_suppress_but_is_not_blocked(
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
 ) -> None:
+    """PHASE STORY-MEMORY-V2-2 Phase 1 safety fix (2026-09-02) supersedes this test's original
+    Phase 23.1I/23.1P contract (`result.blocked is True`). Legacy blocking is intentionally
+    disabled until Story Memory V2 rollout Step 8: Structural Fix 1 (worker/content_cycle.py)
+    decoupled StoryTelegramDelivery recording from telegram_story_reply_mode, so delivery rows are
+    now collected for durable observability even with telegram_story_reply_mode == "off" (today's
+    real production value) - but their mere existence must not reactivate this pre-V2 suppression
+    path. The underlying V1+V2-delta computation is left completely intact and still reports
+    would_suppress=True here (proving this is a deliberate override of a real, evidenced suppress
+    signal, not a change to the computation itself) - only the returned `blocked` decision is now
+    unconditionally False."""
     story, event = await _make_story_with_link(factory, test_source, match_type=SEMANTIC_DUPLICATE)
 
     # A real, prior, successful root delivery for this same Story - a different draft's send.
@@ -246,14 +256,17 @@ async def test_orchestration_semantic_duplicate_with_real_root_delivery_is_block
     async with factory() as check_session:
         result = await check_duplicate_story_delivery(check_session, event.id)
 
-    assert result.blocked is True
     assert result.story_id == story.id
     assert result.match_type == SEMANTIC_DUPLICATE
-    # Phase 23.1P: V1 (match_type) alone is no longer sufficient - blocked here because the V2
-    # delta engine ALSO agrees (event's title is byte-identical to the story's root title, per
+    # Phase 23.1P: V1 (match_type) alone is no longer sufficient on its own to suppress - the V2
+    # delta engine ALSO agrees here (event's title is byte-identical to the story's root title, per
     # `_make_story_with_link()`'s own default -> NO_NEW_FACTS -> would_suppress=True).
     assert result.delta_classification == "no_new_facts"
-    assert result.would_suppress is True
+    assert result.would_suppress is True  # the legacy computation still confirms it WOULD suppress
+    # PHASE STORY-MEMORY-V2-2 Phase 1 safety fix: legacy blocking is intentionally disabled until
+    # Story Memory V2 rollout Step 8. Delivery rows are now collected for durable observability,
+    # but their existence must not reactivate pre-V2 suppression.
+    assert result.blocked is False
 
 
 @pytest.mark.asyncio
