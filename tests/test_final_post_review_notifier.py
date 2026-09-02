@@ -225,7 +225,12 @@ async def test_two_message_order_and_content(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_message_1_keyboard_is_source_only_never_decision_buttons(db_session: AsyncSession) -> None:
+async def test_message_1_keyboard_is_canonical_source_and_meme_never_decision_buttons(db_session: AsyncSession) -> None:
+    """PRESENTATION RECOVERY (2026-09-02) supersedes this test's original "source-only" contract:
+    WYSIWYG now requires MESSAGE 1's keyboard to be the exact same canonical
+    bot.keyboards.image_preview.build_editorial_send_keyboard() result real publication would
+    send - source button + meme button - never the internal ✅/✏️ decision keyboard (that stays
+    MESSAGE 2-only, unchanged)."""
     event, media_plan = await _seed_event_with_image(db_session)
     review = _pending_review()
     bundle = _bundle(media_plan=media_plan, source_refs=["https://example.com/source-article"])
@@ -242,10 +247,11 @@ async def test_message_1_keyboard_is_source_only_never_decision_buttons(db_sessi
     keyboard = photo_kwargs["reply_markup"]
     assert keyboard is not None
     texts = [button.text for row in keyboard.inline_keyboard for button in row]
-    assert texts == ["🔗 Open source"]
-    urls = [button.url for row in keyboard.inline_keyboard for button in row]
+    assert "🔗 Open source" in texts
+    assert "😂 Сгенерировать мем" in texts
+    urls = [button.url for row in keyboard.inline_keyboard for button in row if button.url]
     assert urls == ["https://example.com/source-article"]
-    for forbidden in ("✅", "✏️", "К публикации", "На доработку"):
+    for forbidden in ("✅", "✏️", "К публикации", "На доработку", "NINJA PULSE", "Подписаться"):
         assert forbidden not in texts
 
 
@@ -271,7 +277,10 @@ async def test_message_2_keyboard_is_decision_only(db_session: AsyncSession) -> 
 
 
 @pytest.mark.asyncio
-async def test_no_source_url_yields_no_message_1_keyboard(db_session: AsyncSession) -> None:
+async def test_no_source_url_yields_meme_only_message_1_keyboard(db_session: AsyncSession) -> None:
+    """PRESENTATION RECOVERY (2026-09-02) supersedes this test's original "no keyboard at all"
+    contract: the canonical keyboard always includes the meme button regardless of source_url
+    (Case 2 of the canonical contract - meme-only), matching real publication's own behavior."""
     event, media_plan = await _seed_event_with_image(db_session)
     review = _pending_review()
     bundle = _bundle(media_plan=media_plan, source_refs=["not-a-url"])
@@ -284,7 +293,12 @@ async def test_no_source_url_yields_no_message_1_keyboard(db_session: AsyncSessi
         authoring_prompt_version="2", fact_safety_status="pass", dry_run=False,
     )
 
-    assert bot.send_photo.call_args.kwargs["reply_markup"] is None
+    keyboard = bot.send_photo.call_args.kwargs["reply_markup"]
+    assert keyboard is not None
+    texts = [button.text for row in keyboard.inline_keyboard for button in row]
+    assert texts == ["😂 Сгенерировать мем"]
+    urls = [button.url for row in keyboard.inline_keyboard for button in row if button.url]
+    assert urls == []
 
 
 @pytest.mark.asyncio

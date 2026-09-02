@@ -80,11 +80,16 @@ async def test_get_final_post_review_by_id(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_final_post_review_returns_none_for_unknown_id() -> None:
-    from database.session import async_session_factory
-
-    async with async_session_factory() as session:
-        found = await get_final_post_review(session, uuid.uuid4())
+async def test_get_final_post_review_returns_none_for_unknown_id(db_session: AsyncSession) -> None:
+    """PRESENTATION RECOVERY (2026-09-02) bugfix: this test previously used `database.session.
+    async_session_factory` directly - the real dev/production database (`settings.database_url`),
+    bypassing the `db_session` fixture every sibling test in this file correctly uses (`tests/
+    conftest.py`'s isolated, rolled-back-at-teardown `ai_newsroom_test` connection). Surfaced by
+    this phase's own additive migration: the real dev DB is (correctly) several revisions behind
+    `ai_newsroom_test`, so a SELECT including this phase's new columns failed against it with
+    `UndefinedColumnError` - a pre-existing test-isolation defect, not a Presentation Recovery
+    regression, fixed here to match this file's own already-correct established convention."""
+    found = await get_final_post_review(db_session, uuid.uuid4())
     assert found is None
 
 

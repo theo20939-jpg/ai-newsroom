@@ -11,6 +11,8 @@ from PIL import Image, ImageDraw, ImageFilter
 import services.brand_renderer as brand_renderer_module
 from services.brand_renderer import (
     RenderResult,
+    _CANVAS_H,
+    _CANVAS_W,
     _CARD_HEIGHT,
     _CARD_WIDTH,
     _DATA_LABEL_FONT_MAX,
@@ -138,6 +140,42 @@ def test_breaking_frame_works_with_no_source_image():
 
 
 # ---------------------------------------------------------------------------
+# PRESENTATION RECOVERY (2026-09-02) - BREAKING/QUOTE mark authority migration: both were
+# migrated off `nnj_logo.png`/`_paste_logo()` onto the canonical SVG-rasterized mark
+# (`_paste_svg_mark()`, the same `rasterize_nnj_mark()` MASTER NEWS and DATA already use),
+# converging every real-production NEWS-family renderer onto one logo asset.
+# ---------------------------------------------------------------------------
+
+
+def test_breaking_frame_no_longer_calls_paste_logo():
+    source = inspect.getsource(render_breaking_frame)
+    assert "_paste_logo(" not in source
+    assert "_paste_svg_mark(" in source
+
+
+def test_quote_card_no_longer_calls_paste_logo():
+    source = inspect.getsource(render_quote_card)
+    assert "_paste_logo(" not in source
+    assert "_paste_svg_mark(" in source
+
+
+def test_breaking_and_quote_survive_a_missing_nnj_logo_png(monkeypatch: pytest.MonkeyPatch):
+    """Real regression guard for the precondition-narrowing fix: BREAKING/QUOTE no longer depend
+    on `nnj_logo.png` at all post-migration, so a missing PNG must not fail them - only NEWS's own
+    `render_news_hero()` path still needs it."""
+    monkeypatch.setattr(brand_renderer_module, "_LOGO_PNG_PATH", brand_renderer_module._BRAND_ASSET_DIR / "does-not-exist.png")
+    breaking = render_branded_media(
+        presentation_type=BREAKING, source_image_bytes=_solid_jpeg(), category="AI", editorial_code="NP-0013",
+    )
+    assert breaking.success is True
+    quote = render_branded_media(
+        presentation_type=QUOTE, source_image_bytes=None, category="AI", editorial_code="NP-0014",
+        quote_candidate=QuoteCandidate(text="Still works.", speaker="A"),
+    )
+    assert quote.success is True
+
+
+# ---------------------------------------------------------------------------
 # DATA/QUOTE exactness (§39/§40)
 # ---------------------------------------------------------------------------
 
@@ -153,6 +191,43 @@ def test_data_card_never_invents_the_evidence_fact_field():
     with Image.open(io.BytesIO(result.image_bytes)) as img:
         assert img.mode in ("RGB", "RGBA")
     assert candidate.evidence_fact == original_evidence_fact  # never rewritten by the renderer
+
+
+def test_data_card_renders_negative_value_without_stripping_the_sign():
+    """PRESENTATION RECOVERY (2026-09-02): negative-value DATA cards were unaudited - the sign is
+    part of `DataCandidate.value` (a plain string, drawn verbatim, never reformatted), so this
+    proves the render path never crashes or silently drops it."""
+    candidate = DataCandidate(value="-8.1", unit="%", label="quarterly revenue change", evidence_fact="Revenue fell 8.1% this quarter.")
+    result = render_branded_media(
+        presentation_type=DATA, source_image_bytes=_solid_jpeg(1600, 900, color=(40, 40, 40)),
+        category="AI", editorial_code="NP-0015", data_candidate=candidate,
+    )
+    assert result.success
+    assert candidate.value == "-8.1"  # never rewritten/sanitized by the renderer
+
+
+def test_data_card_renders_large_plain_integer_without_overflow():
+    candidate = DataCandidate(
+        value="14,500,000", unit="", label="monthly active developers", evidence_fact="14,500,000 monthly active developers.",
+    )
+    result = render_branded_media(
+        presentation_type=DATA, source_image_bytes=_solid_jpeg(1600, 900, color=(40, 40, 40)),
+        category="AI", editorial_code="NP-0016", data_candidate=candidate,
+    )
+    assert result.success
+    with Image.open(io.BytesIO(result.image_bytes)) as img:
+        assert img.size == (_CANVAS_W, _CANVAS_H)  # DATA always fits to MASTER's own canvas size
+
+
+def test_data_card_is_deterministic_for_identical_input():
+    """End-to-end determinism guard (no randomness/timing leakage) - the same DataCandidate +
+    source bytes must always produce byte-identical output, mirroring the same guarantee already
+    proven for render_recap_fallback_card()."""
+    candidate = DataCandidate(value="3.2x", unit="x", label="faster inference", evidence_fact="3.2x faster inference.")
+    source = _solid_jpeg(1600, 900, color=(50, 60, 70))
+    first = render_data_card(candidate, category="AI", editorial_code="NP-0017", source_image_bytes=source)
+    second = render_data_card(candidate, category="AI", editorial_code="NP-0017", source_image_bytes=source)
+    assert first == second
 
 
 def test_quote_card_renders_without_paraphrasing_the_text():

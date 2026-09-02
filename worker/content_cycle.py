@@ -20,8 +20,7 @@ from sqlalchemy.orm import aliased
 from bot.formatting import CardTooLongError, render_editorial_card
 from bot.image_preview_formatting import CAPTION_SAFE_LIMIT
 from bot.image_preview_media import resolve_photo_input
-from bot.keyboards.image_preview import build_source_and_cta_keyboard, build_source_only_keyboard
-from bot.keyboards.meme_generate import append_meme_generate_button
+from bot.keyboards.image_preview import build_editorial_send_keyboard
 from capabilities.registry import CapabilityRegistry
 from core.config import settings
 from database.models.content_draft_story_link import ContentDraftStoryLink
@@ -1271,15 +1270,15 @@ async def run_content_cycle(
                     html = render_compact_news_card_html(
                         outcome.content_draft.title or "", compact_body, quote_text=quote_text, quote_speaker=quote_speaker,
                     )
-                keyboard = build_source_only_keyboard(event.url, label=_NEWS_SOURCE_BUTTON_LABEL)
-                # MEME PRODUCTION PIPELINE (overnight phase): every NEWS post that reaches this
-                # keyboard-bearing send path also gets the manual "😂 Сгенерировать мем" button,
-                # bound to this event's own canonical NewsEvent.id (never inferred from headline
-                # text) - covers text-only, single-photo, AND media-group NEWS sends alike, since
-                # all three downstream send calls reuse this SAME `keyboard` variable. The
-                # `include_url = True` fallback branch below (copywriting_output is None) has no
-                # keyboard mechanism at all for ANY button - deferred, documented, not touched.
-                keyboard = append_meme_generate_button(keyboard, event.id)
+                # PRESENTATION RECOVERY (2026-09-02): canonical NEWS-family editorial-send
+                # keyboard (source + meme, never a subscribe/CTA button) - covers text-only,
+                # single-photo, AND media-group sends alike, since every downstream send call
+                # reuses this SAME `keyboard` variable, and (since nothing downstream overwrites
+                # it - see the deleted enforce-branch overwrite this phase removed) also covers
+                # every non-NEWS presentation_type (BREAKING/DATA/QUOTE) reached further below.
+                # The `include_url = True` fallback branch below (copywriting_output is None) has
+                # no keyboard mechanism at all for ANY button - deferred, documented, not touched.
+                keyboard = build_editorial_send_keyboard(event.url, event.id, label=_NEWS_SOURCE_BUTTON_LABEL)
                 include_url = False
 
                 # Phase 23.1H media integration (docs/phase23_1h_text_image_canary_report.md
@@ -1481,19 +1480,15 @@ async def run_content_cycle(
                     )
 
                     if settings.presentation_director_mode == "enforce":
-                        # Pre-commit correction: no `label=` override here - the exact spec text
-                        # ("Источник ↗") is this function's own default (bot/keyboards/
-                        # image_preview.py::NINJA_PULSE_SOURCE_LABEL), deliberately distinct from
-                        # `_NEWS_SOURCE_BUTTON_LABEL` ("🔗 Источник") above, which remains the
-                        # unchanged legacy/off/shadow-mode label.
-                        #
-                        # Phase V2.10N: scoped to non-NEWS presentation types only. NEWS keeps the
-                        # source-only keyboard already assigned above - the approved NEWS contract
-                        # (MASTER NEWS branding, source-only "🔗 Источник" button, no CTA) has no
-                        # valid combination that also swaps in the CTA button. DATA/QUOTE/BREAKING
-                        # are unaffected: they still receive the CTA keyboard exactly as before.
-                        if presentation_decision.presentation_type != PRESENTATION_NEWS:
-                            keyboard = build_source_and_cta_keyboard(event.url)
+                        # PRESENTATION RECOVERY (2026-09-02): the prior Phase V2.10N behavior here
+                        # unconditionally overwrote `keyboard` with the legacy subscribe/CTA
+                        # button for every non-NEWS presentation_type, discarding the meme button
+                        # in the same step - the confirmed root cause of both the unwanted-
+                        # subscribe-button and missing-meme-button production symptoms. Removed
+                        # outright (not merely re-gated) so the subscribe button is structurally
+                        # unreachable regardless of this flag's value. `keyboard` was already set
+                        # to the canonical source+meme build above and needs no per-type branch -
+                        # NEWS/BREAKING/DATA/QUOTE now all keep that same keyboard unchanged.
 
                         if settings.pulse_brand_enabled:
                             editorial_code = build_editorial_code(outcome.task_id)

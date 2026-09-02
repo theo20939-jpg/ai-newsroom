@@ -99,7 +99,7 @@ from database.models.story import Story
 from schemas.editorial_task import EditorialTaskCreate
 from schemas.workflow import WorkflowRunResult, WorkflowStepResult, WorkflowType
 from services import workflow_service
-from services.brand_renderer import render_recap_fallback_card
+from services.brand_renderer import build_recap_fallback_background
 from services.cost_tracker import CostTracker
 from services.event_recap import (
     _MAX_MEDIA_PER_EVENT,
@@ -345,7 +345,11 @@ def render_branded_fallback_media(candidate: EventRecapCandidate) -> SelectedMed
     generation, never turns a cosmetic rendering problem into a task failure."""
     try:
         subject = derive_recap_visual_subject(candidate)
-        render_result = render_recap_fallback_card(subject)
+        # PRESENTATION RECOVERY (2026-09-02): unbranded background only - real NNJ branding is now
+        # applied once, uniformly, by apply_master_news_branding() at Final Post Review preview and
+        # real publication time (see services.final_post_review_notifier/final_post_publication),
+        # never here, never twice.
+        render_result = build_recap_fallback_background(subject)
         if not render_result.success or render_result.image_bytes is None:
             logger.warning(
                 "event_recap_branded_fallback_render_failed",

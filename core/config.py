@@ -812,6 +812,17 @@ class Settings(BaseSettings):
     # convention) - no scheduler, cron, or automatic-execution path exists for Final Post Preview.
     final_post_review_enabled: bool = False
 
+    # PRESENTATION RECOVERY (2026-09-02), Phase I.3: the identical double-confirmation flag, for
+    # the identical reason, gating ONLY the real Telegram publish call in services/
+    # final_post_publication.py - does NOT alter event_recap_pipeline_enabled's or
+    # final_post_review_enabled's own semantics, which still gate only their own review-stage
+    # sends. Nothing in this codebase reads this field yet except scripts/
+    # final_post_publication_worker.py's own `--live` guard (a manually-invoked harness only,
+    # mirroring the identical "human invokes this, nothing else does" convention every other stage
+    # of this pipeline already established) - no scheduler, cron, or automatic-execution path
+    # exists for real RECAP publication.
+    final_post_publication_enabled: bool = False
+
     # Reasoned starting point mirroring news_collection_interval_seconds's own cadence exactly -
     # how often a future scheduler would form a new shortlist batch. Not fit to any real
     # operating data yet.

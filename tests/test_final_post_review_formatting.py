@@ -49,9 +49,12 @@ def test_preview_caption_never_contains_approve_revision_text():
 
 def test_preview_caption_reuses_the_real_v81_news_card_renderer():
     """Proves this is the SAME renderer NEWS delivery uses, not a second competing formatter -
-    the exact bold-title-then-body shape render_v81_news_card_html() produces."""
+    the exact bold-title-then-body(-then-footer) shape render_v81_news_card_html() produces.
+    PRESENTATION RECOVERY (2026-09-02): now includes the canonical NINJA PULSE caption footer
+    (include_ninja_pulse_footer=True) - the same contract worker/content_cycle.py's own NEWS send
+    already uses, since this exact function is also what real RECAP publication calls."""
     caption = render_final_post_preview_caption("My Title", "My body.")
-    assert caption == "<b>My Title</b>\n\nMy body."
+    assert caption == '<b>My Title</b>\n\nMy body.\n\n<a href="https://t.me/nnjvpn">NINJA PULSE. Подписаться 🥷</a>'
 
 
 def test_control_text_pending_is_short_and_internal():

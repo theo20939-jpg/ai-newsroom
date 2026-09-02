@@ -57,20 +57,22 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.types import BufferedInputFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
 from bot.final_post_review_formatting import (
     CAPTION_SAFE_LIMIT,
     render_final_post_preview_caption,
     render_final_post_review_control_text,
     telegram_utf16_length,
 )
-from bot.image_preview_media import resolve_photo_input
 from bot.keyboards.final_post_review import build_final_post_review_keyboard
-from bot.keyboards.image_preview import build_source_only_keyboard
+from bot.keyboards.image_preview import build_editorial_send_keyboard
 from database.models.final_post_review import FinalPostReview
 from integrations.storage.image_storage import StorageError
 from schemas.editorial_route import EditorialDestination
 from services.final_post_review_service import record_telegram_delivery
 from services.image_persistence import _get_storage, get_editorial_image_candidates
+from services.media_finalizer import finalize_photo_input
+from services.nnj_master_news_overlay import apply_master_news_branding
 from services.telegram_routing import send_photo_to_editorial_destination, send_to_editorial_destination
 
 logger = logging.getLogger(__name__)
@@ -97,15 +99,26 @@ def _extension_from_storage_key(storage_key: str) -> str:
     return "jpg"
 
 
-async def _resolve_final_post_photo_input(session: AsyncSession, selected_media: dict[str, Any] | None):
-    """Duplicated from services/event_recap_review_notifier.py::_resolve_selected_media_photo_
-    input() verbatim (the exact same `selected_media_plan` JSON shape - Final Post's own bundle
-    copies it byte-for-byte from the source EVENT_RECAP task, per services/final_post_processor.py)
-    - never imported cross-module (that function is module-private), per this codebase's own
-    established small-helper-duplication convention. Tier-agnostic by construction: branches only
-    on which fields the persisted pointer carries (`candidate_id`+`originating_event_id` vs.
-    `storage_key` alone), never on `tier` itself - see that function's own docstring for the full
-    reasoning. Fail-soft, never raises: returns `None` for every failure mode."""
+async def resolve_final_post_photo_input(session: AsyncSession, selected_media: dict[str, Any] | None):
+    """PRESENTATION RECOVERY (2026-09-02) WYSIWYG requirement: deliberately made importable
+    (no longer a `_`-prefixed module-private helper) so `services/final_post_publication.py`'s real
+    publish step can call this SAME function - one shared media-resolution implementation for both
+    the Final Post Review preview and real publication, never two independent ones (plan review
+    correction 2's explicit "do not create two independent RECAP presentation implementations for
+    preview vs. publish" requirement overrides this codebase's general small-helper-duplication
+    convention for this one function specifically).
+
+    Tier-agnostic by construction: branches only on which fields the persisted pointer carries
+    (`candidate_id`+`originating_event_id` vs. `storage_key` alone), never on `tier` itself. Both
+    branches now converge on the same canonical branding: the `candidate_id` branch already went
+    through `finalize_photo_input()` (MEDIA-PROD-1, applies `apply_master_news_branding()` when
+    `presentation_director_mode=="enforce"` and `pulse_brand_enabled`); the `storage_key` branch
+    (RECAP Tier 3's own unbranded `build_recap_fallback_background()` output - see services/
+    event_recap_processor.py) now applies the exact same branding call directly, under the exact
+    same gate, so an editor's preview always shows the real branding real publication would send.
+    Fail-soft, never raises: returns `None` for every failure mode; a branding failure falls back
+    to the original unbranded bytes rather than blocking the preview (mirrors `finalize_photo_
+    input()`'s own identical fail-open contract)."""
     if selected_media is None or selected_media.get("tier") == "none":
         return None
     representative = selected_media.get("representative")
@@ -124,7 +137,9 @@ async def _resolve_final_post_photo_input(session: AsyncSession, selected_media:
                     extra={"event_id": str(event_id), "candidate_id": candidate_id},
                 )
                 return None
-            return resolve_photo_input(candidate)
+            # MEDIA-PROD-1: finalize_photo_input() (services/media_finalizer.py) wraps the same
+            # resolution resolve_photo_input() already did, adding the mandatory NNJ branding step.
+            return finalize_photo_input(candidate)
 
         storage_key = representative.get("storage_key")
         if storage_key:
@@ -136,6 +151,11 @@ async def _resolve_final_post_photo_input(session: AsyncSession, selected_media:
                     extra={"storage_key": storage_key},
                 )
                 return None
+            if settings.presentation_director_mode == "enforce" and settings.pulse_brand_enabled:
+                try:
+                    data, _decision = apply_master_news_branding(data)
+                except Exception:  # noqa: BLE001 - branding is best-effort, never blocks the preview
+                    logger.exception("final_post_review_branded_fallback_branding_failed", extra={"storage_key": storage_key})
             extension = _extension_from_storage_key(storage_key)
             return BufferedInputFile(data, filename=f"final_post_preview.{extension}")
 
@@ -145,7 +165,7 @@ async def _resolve_final_post_photo_input(session: AsyncSession, selected_media:
         return None
 
 
-def _first_usable_source_url(source_refs: list[Any]) -> str | None:
+def first_usable_source_url(source_refs: list[Any]) -> str | None:
     """A "usable" source_ref, for keyboard purposes, is one shaped like an actual clickable URL -
     `final_post_source.source_refs` may in principle contain a bare domain or a non-URL sentinel
     (services.event_recap._evidence_reference_identity()'s own documented fallback shapes, though
@@ -178,7 +198,7 @@ async def send_final_post_preview(
     and their `RoutingOutcome.reason == "dry_run"` is surfaced as this function's own `"dry_run"`
     status, never confused with a real send failure."""
     media_plan = final_post_source.get("selected_media_plan")
-    photo_input = await _resolve_final_post_photo_input(session, media_plan)
+    photo_input = await resolve_final_post_photo_input(session, media_plan)
     if photo_input is None:
         logger.warning("final_post_preview_media_resolution_failed", extra={"review_id": str(review.id)})
         return FinalPostPreviewSendOutcome(status="media_resolution_failed")
@@ -193,8 +213,14 @@ async def send_final_post_preview(
         return FinalPostPreviewSendOutcome(status="presentation_too_long")
 
     source_refs = final_post_source.get("source_refs") or []
-    source_url = _first_usable_source_url(source_refs)
-    preview_keyboard = build_source_only_keyboard(source_url)
+    source_url = first_usable_source_url(source_refs)
+    # PRESENTATION RECOVERY (2026-09-02) WYSIWYG requirement: the canonical NEWS-family keyboard
+    # (source + meme, never a subscribe/CTA button) - the same builder and the same identity
+    # (final_post_source["anchor_event_id"], always present per services/final_post_processor.py's
+    # own bundle contract) real publication (services/final_post_publication.py) uses, so an
+    # editor's preview shows the exact keyboard that would actually be sent.
+    anchor_event_id = UUID(final_post_source["anchor_event_id"])
+    preview_keyboard = build_editorial_send_keyboard(source_url, anchor_event_id)
 
     preview_outcome = await send_photo_to_editorial_destination(
         bot, destination, photo_input, caption, dry_run=dry_run, reply_markup=preview_keyboard,

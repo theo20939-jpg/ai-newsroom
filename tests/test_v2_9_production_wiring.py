@@ -369,8 +369,9 @@ async def _seed_eligible_event_with_url(
     factory_: async_sessionmaker[AsyncSession], source: object, *, url: str,
 ) -> None:
     """Mirrors `_seed_eligible_event()` exactly, except it also sets `NewsEvent.url` - the field
-    `build_source_only_keyboard()`/`build_source_and_cta_keyboard()` both key off - so the real
-    keyboard produced by a real run_content_cycle() pass can be asserted against a known value.
+    `build_source_only_keyboard()` (and therefore `build_editorial_send_keyboard()`) keys off - so
+    the real keyboard produced by a real run_content_cycle() pass can be asserted against a known
+    value.
     `_make_event()` itself never sets `url` (defaults to `None`, which `build_source_only_
     keyboard()` would turn into "no keyboard at all" - useless for this test's own assertions)."""
     async with factory_() as session:
@@ -386,11 +387,15 @@ async def test_news_enforce_keyboard_is_source_only_no_cta(
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch, tmp_path, caplog,
 ) -> None:
-    """Phase V2.10N §4 assertion A: NEWS + presentation_director_mode=='enforce' +
-    pulse_brand_enabled=True must reach apply_master_news_branding() (proven by the existing
-    branding_records assertion, mirroring the sibling tests above) AND send exactly the
-    source-only "🔗 Источник" keyboard - never the CTA button, never a second button, never the
-    NINJA PULSE URL - closing the real coupling worker/content_cycle.py had before this phase."""
+    """Phase V2.10N §4 assertion A, corrected by PRESENTATION RECOVERY (2026-09-02): this
+    assertion's original "never a second button" contract predates commit 9240f5d ("deliver
+    generated memes to editorial workflow"), which added an unconditional `append_meme_generate_
+    button()` call to this exact NEWS keyboard path and was never reconciled with this test - a
+    pre-existing gap, confirmed by reading the untouched HEAD version of worker/content_cycle.py
+    (it already called append_meme_generate_button() here before this phase touched anything).
+    The canonical contract this phase establishes matches the meme-button commit's own intent:
+    NEWS + presentation_director_mode=='enforce' must reach apply_master_news_branding() AND send
+    the source button PLUS the meme button - never the legacy CTA/subscribe button."""
     _common_settings(monkeypatch)
     settings.editorial_recomposition_mode = "off"
     source_url = "https://example.com/real-news-article"
@@ -415,16 +420,15 @@ async def test_news_enforce_keyboard_is_source_only_no_cta(
     keyboard = fake_bot.send_photo.call_args.kwargs["reply_markup"]
     assert keyboard is not None
     rows = keyboard.inline_keyboard
-    assert len(rows) == 1
-    assert len(rows[0]) == 1
-    button = rows[0][0]
-    assert button.text == "🔗 Источник"
-    assert button.url == source_url
+    source_button = rows[0][0]
+    assert source_button.text == "🔗 Источник"
+    assert source_button.url == source_url
 
     all_button_text = " ".join(b.text for row in rows for b in row)
     all_button_urls = [b.url for row in rows for b in row if b.url]
     assert "NINJA PULSE" not in all_button_text
     assert "https://t.me/nnjvpn" not in all_button_urls
+    assert "😂 Сгенерировать мем" in all_button_text  # canonical keyboard - present, never dropped
 
 
 @pytest.mark.asyncio
@@ -434,8 +438,9 @@ async def test_news_off_mode_keyboard_unchanged_source_only(
 ) -> None:
     """Phase V2.10N §4 assertion B: presentation_director_mode == 'off' (today's real production
     default) never enters the enforce branch this phase touched at all - the pre-existing
-    source-only keyboard set at the top of the router-mode NEWS branch is untouched, exactly as
-    before this phase's fix."""
+    source+meme keyboard set at the top of the router-mode NEWS branch is untouched, exactly as
+    before this phase's fix (see the sibling enforce-mode test's own docstring for why "source-
+    only, no second button" was a stale pre-meme-button assumption, corrected here too)."""
     _common_settings(monkeypatch)
     settings.presentation_director_mode = "off"
     settings.editorial_recomposition_mode = "off"
@@ -460,24 +465,26 @@ async def test_news_off_mode_keyboard_unchanged_source_only(
     keyboard = fake_bot.send_photo.call_args.kwargs["reply_markup"]
     assert keyboard is not None
     rows = keyboard.inline_keyboard
-    assert len(rows) == 1
-    assert len(rows[0]) == 1
     assert rows[0][0].text == "🔗 Источник"
     assert rows[0][0].url == source_url
+    all_button_text = " ".join(b.text for row in rows for b in row)
+    assert "😂 Сгенерировать мем" in all_button_text
 
 
 @pytest.mark.asyncio
-async def test_non_news_presentation_type_keeps_cta_keyboard_in_enforce_mode(
+async def test_non_news_presentation_type_gets_canonical_source_and_meme_keyboard(
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch, caplog,
 ) -> None:
-    """Phase V2.10N §4 assertion C: this phase's fix is scoped to NEWS only - a non-NEWS
-    presentation_type (DATA/QUOTE/BREAKING) reached in enforce mode must keep receiving the
-    existing CTA keyboard unchanged, proving no regression for those post types. Forces the
-    decision via a direct patch of `decide_presentation()` (the same "swap in a controlled
-    result" technique this suite already uses for `_classify_event_for_router_treatment`) rather
-    than fabricating title/content text that happens to score as DATA - deterministic, not
-    incidental."""
+    """PRESENTATION RECOVERY (2026-09-02) supersedes this test's original Phase V2.10N §4
+    assertion C contract (non-NEWS types keeping the legacy CTA keyboard). That was the exact,
+    confirmed root cause of two real production symptoms: an unwanted subscribe button, and the
+    meme button never being appended for DATA/QUOTE/BREAKING (the CTA-keyboard overwrite at
+    worker/content_cycle.py ran after the source+meme keyboard was already built, discarding it).
+    The overwrite call site is now deleted outright, not merely re-gated, so a non-NEWS
+    presentation_type must now receive the exact same canonical
+    bot.keyboards.image_preview.build_editorial_send_keyboard() result NEWS gets: source button +
+    meme button, never a subscribe/CTA button - proving the fix, not merely its absence."""
     _common_settings(monkeypatch)
     settings.editorial_recomposition_mode = "off"
     source_url = "https://example.com/data-card-article"
@@ -509,7 +516,11 @@ async def test_non_news_presentation_type_keeps_cta_keyboard_in_enforce_mode(
     assert keyboard is not None
     rows = keyboard.inline_keyboard
     all_button_text = " ".join(b.text for row in rows for b in row)
-    assert "NINJA PULSE" in all_button_text  # CTA keyboard unchanged for non-NEWS - no regression
+    all_button_urls = [b.url for row in rows for b in row if b.url]
+    assert "NINJA PULSE" not in all_button_text
+    assert "https://t.me/nnjvpn" not in all_button_urls
+    assert "🔗 Источник" in all_button_text
+    assert "😂 Сгенерировать мем" in all_button_text
 
 
 # ---------------------------------------------------------------------------

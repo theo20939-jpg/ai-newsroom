@@ -78,6 +78,16 @@ class FinalPostReview(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
+    # PRESENTATION RECOVERY (2026-09-02), Phase I.3: durable record of the real Telegram publish -
+    # populated only by services/final_post_publication.py::publish_approved_final_post(), only
+    # for an already-APPROVED_FOR_PUBLICATION row, only on a real successful send. Never touches
+    # status/decided_* (those stay owned by the human-decision gate, services/
+    # final_post_review_service.py::set_decision()) - a row can be APPROVED_FOR_PUBLICATION with
+    # published_at still NULL (approved, not yet actually sent) but never the other way around.
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    published_telegram_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    published_telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
     __table_args__ = (
         UniqueConstraint("content_draft_id", name="uq_final_post_reviews_content_draft"),
     )

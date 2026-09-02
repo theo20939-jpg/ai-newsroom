@@ -48,8 +48,11 @@ def render_final_post_preview_caption(title: str, body: str) -> str:
     result via `telegram_utf16_length()` against `CAPTION_SAFE_LIMIT` itself and returns
     `presentation_too_long` (sending nothing) rather than ever silently cutting this string - Phase
     I.2's own explicit "editor must never approve a truncated version of what publication would
-    actually send" invariant."""
-    return render_v81_news_card_html({"title": title, "main_body": body})
+    actually send" invariant. `include_ninja_pulse_footer=True` (PRESENTATION RECOVERY, 2026-09-02):
+    this exact function is also the one real publication (services/final_post_publication.py) calls
+    - the same canonical caption/footer contract worker/content_cycle.py's own NEWS send already
+    uses, never a second, independent RECAP caption implementation."""
+    return render_v81_news_card_html({"title": title, "main_body": body}, include_ninja_pulse_footer=True)
 
 
 _PENDING_CONTROL_TEXT = "Финальный пост готов к проверке."

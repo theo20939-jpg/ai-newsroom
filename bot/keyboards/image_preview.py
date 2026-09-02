@@ -102,33 +102,26 @@ def build_source_only_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=label, url=source_url)]])
 
 
-# NINJA PULSE Visual System v1 (services/presentation_director.py) - the exact required CTA
-# text/URL, never a caption link (spec's own explicit "CTA: INLINE KEYBOARD BUTTON, not a caption
-# link" instruction - services/news_telegram_presentation.py's own build_ninja_pulse_footer_html()
-# in-text link is a separate, pre-existing mechanism, unmodified, simply not used together with
-# this keyboard by worker/content_cycle.py's own enforce-mode branch).
-NINJA_PULSE_CTA_URL = "https://t.me/nnjvpn"
-NINJA_PULSE_CTA_LABEL = "NINJA PULSE. Подписаться 🥷"
+# PRESENTATION RECOVERY (2026-09-02): canonical NEWS-family editorial-send keyboard authority -
+# the single builder every real production send (NEWS/BREAKING/DATA/QUOTE/RECAP) must use. A prior
+# implementation (build_source_and_cta_keyboard(), removed here) always attached a subscribe
+# button ("NINJA PULSE. Подписаться 🥷" -> https://t.me/nnjvpn) and was reached only for non-NEWS
+# presentation types, silently losing the meme button in the same step - the exact root cause of
+# both the observed unwanted-subscribe-button and missing-meme-button production symptoms. This
+# function is a pure composition of the two already-correct, already-tested primitives below - no
+# new keyboard logic, no new risk surface - so every content type gets byte-identical source+meme
+# behavior. Never include a subscribe/channel CTA as a keyboard button here (docs: the CTA, if
+# used, is a caption-text link only - services/news_telegram_presentation.py's own
+# build_ninja_pulse_footer_html() - never a button, never both).
+def build_editorial_send_keyboard(
+    source_url: str | None, news_event_id: UUID, *, label: str = "🔗 Open source",
+) -> InlineKeyboardMarkup | None:
+    """Case 1 (source + meme): both buttons. Case 2 (no source): meme-only, one fresh row. Case 3
+    (meme disallowed - caller simply omits calling this / uses build_source_only_keyboard directly)
+    is intentionally out of this function's scope; callers that must disallow meme generation for a
+    given type should call `build_source_only_keyboard()` directly instead - this function always
+    appends the meme button when called, by design, mirroring `append_meme_generate_button()`'s own
+    "purely additive" contract."""
+    from bot.keyboards.meme_generate import append_meme_generate_button
 
-# Pre-commit correction: this is the Visual System's OWN exact required source-button text
-# ("Источник ↗", no emoji) - deliberately a separate constant from `build_source_only_keyboard()`'s
-# pre-existing `_NEWS_SOURCE_BUTTON_LABEL` ("🔗 Источник", worker/content_cycle.py), which stays
-# byte-identical for the legacy/off/shadow-mode keyboard it already renders - never touched here.
-NINJA_PULSE_SOURCE_LABEL = "Источник ↗"
-
-
-def build_source_and_cta_keyboard(
-    source_url: str | None, *, label: str = NINJA_PULSE_SOURCE_LABEL,
-) -> InlineKeyboardMarkup:
-    """Preferred single row `[Источник][CTA]` (spec's own preferred layout) - no observed
-    Telegram inline-button width/truncation constraint elsewhere in this codebase justifies the
-    two-row fallback the spec allows as an option, so this always renders one row. The CTA button
-    is always present even when `source_url` is falsy (unlike `build_source_only_keyboard()`,
-    which returns `None` in that case) - the CTA is never conditional on a source URL existing.
-    Never returns an empty, placeholder, or non-clickable "Источник" button: when `source_url` is
-    falsy, the source button is omitted entirely (not rendered with a dummy/missing url) - the row
-    contains only the CTA."""
-    cta_button = InlineKeyboardButton(text=NINJA_PULSE_CTA_LABEL, url=NINJA_PULSE_CTA_URL)
-    if not source_url:
-        return InlineKeyboardMarkup(inline_keyboard=[[cta_button]])
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=label, url=source_url), cta_button]])
+    return append_meme_generate_button(build_source_only_keyboard(source_url, label=label), news_event_id)

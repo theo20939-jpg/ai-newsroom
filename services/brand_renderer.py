@@ -182,6 +182,22 @@ def _paste_logo(canvas: Image.Image, *, target_width: int, margin: int) -> None:
     canvas.alpha_composite(logo, (x, y))
 
 
+def _paste_svg_mark(canvas: Image.Image, *, target_width: int, margin: int) -> None:
+    """PRESENTATION RECOVERY (2026-09-02): the canonical mark authority for BREAKING/QUOTE,
+    replacing `_paste_logo()` - pastes `rasterize_nnj_mark()`'s output (the same SVG rasterizer/
+    path geometry MASTER NEWS's own upper/lower signatures and DATA's adaptive mark already use)
+    instead of the separate, pre-composited `nnj_logo.png` badge, converging every real-production
+    NEWS-family renderer onto one logo asset. Position (bottom-right corner, same margin
+    convention `_paste_logo()` already used) is intentionally unchanged - only the asset/rendering
+    method is unified, never each type's own existing layout choice. `render_news_hero()` (dead/
+    unreachable from the real send path - see its own call-site audit) is left on `_paste_logo()`
+    unchanged; it is out of scope for this migration."""
+    mark = rasterize_nnj_mark(target_width=target_width, red=True)
+    x = canvas.width - mark.width - margin
+    y = canvas.height - mark.height - margin
+    canvas.alpha_composite(mark, (x, y))
+
+
 def _draw_pulse_line(draw: ImageDraw.ImageDraw, *, x: int, y: int, width: int, color: tuple[int, int, int], line_width: int = 3) -> None:
     """A simple abstract heartbeat/pulse waveform - accent only, deliberately not logo-like
     (module docstring's own "never a new logo-like symbol" rule)."""
@@ -263,7 +279,7 @@ def render_breaking_frame(source_image_bytes: bytes | None, *, category: str, ed
         size=max(14, round(canvas.width * 0.02)),
     )
     logo_width = max(48, round(canvas.width * 0.08))
-    _paste_logo(canvas, target_width=logo_width, margin=margin)
+    _paste_svg_mark(canvas, target_width=logo_width, margin=margin)
 
     out = io.BytesIO()
     canvas.convert("RGB").save(out, format="JPEG", quality=92)
@@ -859,7 +875,7 @@ def render_quote_card(
     _draw_code_label(draw, x=margin, y=_CARD_HEIGHT - 56, text=editorial_code, color=_OFFICIAL_NNJ_WHITE, size=20)
 
     canvas_rgba = canvas.convert("RGBA")
-    _paste_logo(canvas_rgba, target_width=90, margin=margin)
+    _paste_svg_mark(canvas_rgba, target_width=90, margin=margin)
 
     out = io.BytesIO()
     canvas_rgba.convert("RGB").save(out, format="JPEG", quality=92)
@@ -883,7 +899,13 @@ def render_branded_media(
     started = time.monotonic()
     template_version = _TEMPLATE_BY_PRESENTATION_TYPE.get(presentation_type, TEMPLATE_NEWS)
     try:
-        if not _LOGO_PNG_PATH.exists():
+        # PRESENTATION RECOVERY (2026-09-02): this precondition is now scoped to NEWS only -
+        # BREAKING/QUOTE were migrated off `nnj_logo.png`/`_paste_logo()` onto the canonical
+        # SVG-rasterized mark (`_paste_svg_mark()`, same rasterizer DATA already uses), so they no
+        # longer depend on this asset at all; checking it for them here would be an unnecessary,
+        # overly broad failure mode. NEWS's own `render_news_hero()` call below is the only
+        # remaining live consumer of `_LOGO_PNG_PATH` in this dispatch.
+        if presentation_type == NEWS and not _LOGO_PNG_PATH.exists():
             raise FileNotFoundError(f"missing official brand asset: {_LOGO_PNG_PATH}")
 
         if presentation_type == BREAKING:
@@ -933,11 +955,63 @@ def render_branded_media(
 
 
 TEMPLATE_RECAP_FALLBACK = "pulse-recap-fallback-v1"
+TEMPLATE_RECAP_FALLBACK_BACKGROUND = "pulse-recap-fallback-background-v1"
+
+
+def build_recap_fallback_background(subject: str, *, category: str | None = None) -> RenderResult:
+    """PRESENTATION RECOVERY (2026-09-02), WYSIWYG requirement: the new Tier 3 media for
+    `services.event_recap_processor.render_branded_fallback_media()`, replacing
+    `render_recap_fallback_card()` below. Deliberately carries NO branding at all (no logo, no
+    pulse line, no "NINJA PULSE"/"EVENT RECAP" labels) - candidate/research-stage media may stay
+    unbranded (plan review correction 2), since the real NNJ identity is now applied exactly once,
+    uniformly across every RECAP media tier, by `apply_master_news_branding()` at Final Post
+    Review preview time AND real publication time (the same canonical call, never duplicated) -
+    never here, never twice. Sized to MASTER's own canvas (`_CANVAS_W`/`_CANVAS_H`, 1280x720) so
+    that later branding step's own geometry assumptions hold unchanged. Purely a plain background +
+    the subject label, so an editor/reviewer can still identify which story this fallback belongs
+    to before real branding is applied."""
+    started = time.monotonic()
+    try:
+        canvas = Image.new("RGB", (_CANVAS_W, _CANVAS_H), _OFFICIAL_NNJ_BLACK)
+        draw = ImageDraw.Draw(canvas)
+        margin = 64
+
+        if category:
+            draw.text((margin, margin), category.upper(), font=_font(20), fill=_OFFICIAL_NNJ_WHITE)
+
+        subject_font = _font(64)
+        max_text_width = _CANVAS_W - margin * 2
+        lines = _wrap_text(draw, subject, subject_font, max_text_width)
+        y = round(_CANVAS_H * 0.4)
+        for line in lines[:4]:
+            draw.text((margin, y), line, font=subject_font, fill=_OFFICIAL_NNJ_WHITE)
+            y += 76
+
+        out = io.BytesIO()
+        canvas.save(out, format="JPEG", quality=92)
+        image_bytes = out.getvalue()
+
+        duration_ms = (time.monotonic() - started) * 1000
+        return RenderResult(
+            success=True, image_bytes=image_bytes, template_version=TEMPLATE_RECAP_FALLBACK_BACKGROUND,
+            fallback_reason=None, duration_ms=duration_ms,
+        )
+    except Exception as exc:  # noqa: BLE001 - fail-safe boundary, mirrors every other render_* function
+        duration_ms = (time.monotonic() - started) * 1000
+        logger.warning("recap_fallback_background_failed", extra={"error": str(exc)})
+        return RenderResult(
+            success=False, image_bytes=None, template_version=TEMPLATE_RECAP_FALLBACK_BACKGROUND,
+            fallback_reason=str(exc), duration_ms=duration_ms,
+        )
 
 
 def render_recap_fallback_card(subject: str, *, category: str | None = None) -> RenderResult:
     """NINJA PULSE RECAP Phase H.3C: a deterministic, source-photo-free branded card - EVENT_RECAP's
-    Tier 3 media fallback, called only when neither the confirmed Story media pool (Tier 1) nor
+    Tier 3 media fallback. Superseded by `build_recap_fallback_background()` above as of
+    PRESENTATION RECOVERY (2026-09-02) - no longer called from services.event_recap_processor's
+    real Tier 3 path (kept, unmodified, only because its own existing test suite still exercises it
+    directly; not deleted, mirrors this module's own `render_news_hero()` precedent for dead-but-
+    harmless code). Was called only when neither the confirmed Story media pool (Tier 1) nor
     confirmed-source re-acquisition (Tier 2B) produced a usable image (services.event_recap_
     processor.render_branded_fallback_media()). Reuses this module's own established canvas/logo/
     pulse-line/typography helpers UNCHANGED - `_paste_logo()`, `_draw_pulse_line()`, `_draw_code_

@@ -1025,7 +1025,10 @@ async def test_branded_fallback_render_failure_leaves_tier_none(
         raise RuntimeError("simulated Pillow/asset failure")
 
     monkeypatch.setattr(processor_module, "discover_event_recap_media_if_needed", _no_discovery)
-    monkeypatch.setattr(processor_module, "render_recap_fallback_card", _broken_renderer)
+    # PRESENTATION RECOVERY (2026-09-02): Tier 3 now calls build_recap_fallback_background()
+    # (unbranded - see that function's own docstring); render_recap_fallback_card() is no longer
+    # the live Tier 3 renderer.
+    monkeypatch.setattr(processor_module, "build_recap_fallback_background", _broken_renderer)
 
     story, _events = await _seed_ready_story(db_session)
     gateway = FakeLLMGateway(

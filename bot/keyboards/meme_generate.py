@@ -49,8 +49,9 @@ def append_meme_generate_button(keyboard, news_event_id: UUID):
     fresh one-row keyboard if `keyboard` is `None`, e.g. a NEWS send path with no Source button at
     all) - never mutates or replaces any existing row (the Source button, wherever present, stays
     exactly as it was). Purely additive: every existing call site of `build_source_only_keyboard()`
-    /`build_source_and_cta_keyboard()` stays completely unmodified; this only wraps their result.
-    """
+    stays completely unmodified; this only wraps their result (also the composition primitive
+    behind `bot.keyboards.image_preview.build_editorial_send_keyboard()`, the canonical NEWS-family
+    keyboard authority)."""
     from aiogram.types import InlineKeyboardMarkup
 
     button = build_meme_generate_button(news_event_id)
