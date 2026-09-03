@@ -179,6 +179,54 @@ _CALIBRATED_GENERIC_PREFIX_ENTITIES = frozenset({
     "в", "от", "отчёт", "компани", "правительств",
 })
 
+# Phase R2.10G1: a second closed, linguistically-principled (NOT calibration-derived) grammatical
+# class, mirroring _GENERIC_DETERMINER_ENTITIES above exactly - common pronouns/prepositions/
+# conjunctions, capitalized only because they open a sentence, never because they denote anything.
+# Kept as its own set rather than merged into _GENERIC_DETERMINER_ENTITIES (whose own docstring
+# specifically says "determiners/demonstratives") - each of this module's exclusion sets stays a
+# truthful, narrow account of its own linguistic category, even though _extract_entities() below
+# treats all of them identically at the exclusion check itself.
+_GENERIC_FUNCTION_WORD_ENTITIES = frozenset({
+    "we", "to", "for", "when",
+})
+
+# Phase R2.10G1 (real forensic finding, RECAP R2.10F: 8 of a 21-Story hand-reviewed sample were
+# incoherent groupings of editorially unrelated events, held together by a single spurious shared
+# "entity" that was really just a generic word capitalized for being sentence-initial - the same
+# failure class Checkpoint 6 already fixed for pure determiners, e.g. two unrelated arXiv abstracts
+# both opening "Accurate ..."/"Recent ..." scoring entity_overlap=1.0 from that one shared token,
+# real member titles spanning dialogue systems, radiotherapy segmentation, and agricultural cold-
+# hardiness forecasting). Confirmed via a real full-corpus scan (every Story with exactly one
+# extracted entity, `select entities, event_count from stories where json_array_length(entities) =
+# 1 order by event_count desc`): each member below was the SOLE entity of a real Story that had
+# accumulated real, editorially-unrelated confirmed-member events (11-22 events each) purely on
+# this token's own strength.
+#
+# Two evidence-backed sub-categories, each member individually confirmed against real title data
+# (mirrors _CALIBRATED_GENERIC_PREFIX_ENTITIES's own per-word discipline - this is NOT a general
+# stopword list):
+#   - English ML-abstract-convention openers, describing the paper's own claimed rigor/scope, never
+#     its actual subject: "accurate", "recent", "many", "large", "deep", "modern", "synthetic",
+#     "autonomous", "multimodal", "robotic", "understanding".
+#   - Russian digest/wire-template markers, in the exact post-normalize_for_entity_match() form
+#     (lowercased; "новости" case-suffix-stripped to "новост", matching this module's own
+#     normalize_for_entity_match()/strip_ru_case_suffix() pipeline - see that module's own
+#     docstring): "утро" ("morning" - a recurring "Утро среды:"/"Утро четверга:" daily-digest
+#     template merged 4 different days' digests into one Story), "новост" ("news" - a recurring
+#     "Новости к этому часу" digest template merged two DIFFERENT digest sources plus one genuinely
+#     unrelated item into one Story), "день" ("day").
+#
+# Deliberately excludes other generic-looking single words the same corpus scan surfaced (e.g.
+# "machine"/"learning"/"language"/"video"/"robot"/"object"/"artificial") where a bare single-word
+# form remains plausibly a real, informative entity on its own - not included without the same
+# per-word confidence the members below already have; a future phase may add any of them
+# individually with its own real-corpus evidence, exactly as this phase did for these.
+_CALIBRATED_GENERIC_DESCRIPTOR_ENTITIES = frozenset({
+    "accurate", "recent", "many", "large", "deep", "modern", "synthetic", "autonomous",
+    "multimodal", "robotic", "understanding",
+    "утро", "новост", "день",
+})
+
 # Capitalized-run entity heuristic: one or more consecutive words each starting with an
 # uppercase Latin/Cyrillic letter, allowing internal digits/hyphens/dots (so "GPT-4", "GPT-5.6",
 # "iPhone"-style would still need the leading capital - a documented, narrow heuristic, not a
@@ -380,10 +428,18 @@ def _strip_leading_determiner(normalized_entity: str) -> str:
     checkpoint.md Sections B/C, the real VK "Отчёт VK" vs "VK" duplicate-story miss): also strips
     a single leading token from `_CALIBRATED_GENERIC_PREFIX_ENTITIES` - the identical mechanism,
     applied to a second, explicitly calibration-derived set kept separate from
-    `_GENERIC_DETERMINER_ENTITIES` itself (see that set's own docstring for why)."""
+    `_GENERIC_DETERMINER_ENTITIES` itself (see that set's own docstring for why).
+
+    Phase R2.10G1 addition: also strips a single leading token from `_GENERIC_FUNCTION_WORD_
+    ENTITIES`/`_CALIBRATED_GENERIC_DESCRIPTOR_ENTITIES` - the identical mechanism again, for the
+    identical reason: "Recent Nvidia announcement..." must normalize to bare "nvidia", the same
+    entity a differently-phrased headline about the same real event would extract on its own."""
     words = normalized_entity.split(" ")
     if len(words) > 1 and (
-        words[0] in _GENERIC_DETERMINER_ENTITIES or words[0] in _CALIBRATED_GENERIC_PREFIX_ENTITIES
+        words[0] in _GENERIC_DETERMINER_ENTITIES
+        or words[0] in _CALIBRATED_GENERIC_PREFIX_ENTITIES
+        or words[0] in _GENERIC_FUNCTION_WORD_ENTITIES
+        or words[0] in _CALIBRATED_GENERIC_DESCRIPTOR_ENTITIES
     ):
         return " ".join(words[1:])
     return normalized_entity
@@ -405,14 +461,26 @@ def _extract_entities(title: str) -> list[str]:
 
     NEWS Output Stability Fix: `_strip_leading_determiner()` handles the adjacent case - a
     determiner GLUED to a following real entity (rather than standing alone) - see that function's
-    own docstring for the real evidence."""
+    own docstring for the real evidence.
+
+    Phase R2.10G1 fix: the same exclusion, extended to `_GENERIC_FUNCTION_WORD_ENTITIES` (a second
+    closed grammatical class - pronouns/prepositions/conjunctions) and
+    `_CALIBRATED_GENERIC_DESCRIPTOR_ENTITIES` (calibration-evidence-backed generic descriptors) -
+    see both sets' own docstrings for the real corpus evidence behind each. Same architecture,
+    same call site, same "excluded outright when a spurious sentence-initial capital is the *only*
+    extracted entity" rationale Checkpoint 6 already established - no new mechanism."""
     seen: dict[str, None] = {}
     for match in _ENTITY_RUN_RE.finditer(title):
         candidate = match.group(0).strip()
         if len(candidate) < _MIN_ENTITY_LEN:
             continue
         normalized = normalize_for_entity_match(candidate)
-        if normalized in _GENERIC_DETERMINER_ENTITIES or normalized in _CALIBRATED_GENERIC_PREFIX_ENTITIES:
+        if (
+            normalized in _GENERIC_DETERMINER_ENTITIES
+            or normalized in _CALIBRATED_GENERIC_PREFIX_ENTITIES
+            or normalized in _GENERIC_FUNCTION_WORD_ENTITIES
+            or normalized in _CALIBRATED_GENERIC_DESCRIPTOR_ENTITIES
+        ):
             continue
         normalized = _strip_leading_determiner(normalized)
         if normalized and normalized not in seen:

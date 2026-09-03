@@ -158,6 +158,149 @@ def test_standalone_the_is_still_fully_excluded() -> None:
     assert "the" not in signature.entities
 
 
+# ---------------------------------------------------------------------------
+# Phase R2.10G1 (RECAP R2.10F forensic finding): generic sentence-initial words beyond pure
+# determiners - English ML-abstract-convention descriptors and Russian digest-template markers -
+# were causing the exact same false-match class Checkpoint 6 fixed for "this"/"that"/"the", just
+# for a different vocabulary. _GENERIC_FUNCTION_WORD_ENTITIES (closed grammatical class) and
+# _CALIBRATED_GENERIC_DESCRIPTOR_ENTITIES (calibration-evidence-backed, see that set's own
+# docstring for the real corpus scan behind each member) extend the identical Checkpoint 6
+# mechanism - same call site, same architecture, no new scoring/threshold change.
+# ---------------------------------------------------------------------------
+
+
+def test_accurate_false_anchor_excluded() -> None:
+    """Test A: two editorially unrelated titles sharing only the generic opener "Accurate" must
+    not produce a shared entity - the real bb7c2272 fixture shape (dialogue systems vs.
+    radiotherapy segmentation, unrelated ML papers)."""
+    sig_a = extract_story_signature(
+        "Accurate and responsive turn-taking is essential for spoken dialogue systems", EventCategory.AI,
+    )
+    sig_b = extract_story_signature(
+        "Accurate organ-at-risk segmentation is essential for radiotherapy planning", EventCategory.AI,
+    )
+    assert "accurate" not in sig_a.entities
+    assert "accurate" not in sig_b.entities
+    assert not (set(sig_a.entities) & set(sig_b.entities))
+
+
+def test_recent_false_anchor_excluded() -> None:
+    """Test B: the real 1d0c7de0 fixture shape (convex optimization vs. autonomous driving)."""
+    sig_a = extract_story_signature(
+        "Recent work has shown that, for smooth convex optimization, plain gradient descent works", EventCategory.AI,
+    )
+    sig_b = extract_story_signature("Recent end-to-end driving systems demonstrate strong performance", EventCategory.AI)
+    assert "recent" not in sig_a.entities
+    assert "recent" not in sig_b.entities
+    assert not (set(sig_a.entities) & set(sig_b.entities))
+
+
+def test_many_false_anchor_excluded() -> None:
+    """Test C: the real e21ba039 fixture shape."""
+    signature = extract_story_signature(
+        "Many machine-learning systems set a threshold at a quantile of a calibration set", EventCategory.AI,
+    )
+    assert "many" not in signature.entities
+
+
+def test_russian_morning_digest_template_excluded() -> None:
+    """Test D: the real d093e4be fixture - 4 different daily digests ("Утро среды"/"Утро
+    четверга"/"Утро понедельника"/"Утро вторника") must not share "утро" as an entity anchor."""
+    sig_wed = extract_story_signature("Утро среды:", EventCategory.UNKNOWN)
+    sig_thu = extract_story_signature("Утро четверга:", EventCategory.UNKNOWN)
+    assert "утро" not in sig_wed.entities
+    assert "утро" not in sig_thu.entities
+    assert not (set(sig_wed.entities) & set(sig_thu.entities))
+
+
+def test_russian_news_digest_template_excluded() -> None:
+    """Test E: the real 77ba3255 fixture - the post-normalize_for_entity_match() stemmed form
+    "новост" (from "Новости") must not act as a sole entity anchor."""
+    signature = extract_story_signature("Новости к этому часу", EventCategory.UNKNOWN)
+    assert "новост" not in signature.entities
+
+
+def test_nvidia_preserved() -> None:
+    """Test F."""
+    signature = extract_story_signature("Nvidia closes in on Hugging Face acquisition", EventCategory.AI)
+    assert "nvidia" in signature.entities
+
+
+def test_openai_preserved() -> None:
+    """Test G."""
+    signature = extract_story_signature("OpenAI announces new model", EventCategory.AI)
+    assert "openai" in signature.entities
+
+
+def test_mixed_headline_strips_generic_prefix_keeps_real_entity() -> None:
+    """Test H: "Recent Nvidia ..." - captured as ONE multi-word run since both words are
+    capitalized and adjacent - must strip the leading generic descriptor via
+    _strip_leading_determiner() and retain the real entity, exactly mirroring the pre-existing
+    "The Witcher" -> "witcher" mechanism above."""
+    signature = extract_story_signature("Recent Nvidia announcement shakes markets", EventCategory.AI)
+    assert "nvidia" in signature.entities
+    assert "recent" not in signature.entities
+    assert "recent nvidia" not in signature.entities
+
+
+def test_multi_word_entity_unaffected() -> None:
+    """Test I: "Hugging Face" is a real two-word entity and must survive untouched - the exclusion
+    sets only ever match a candidate's FULL normalized string, never a substring."""
+    signature = extract_story_signature("Nvidia closes in on Hugging Face acquisition", EventCategory.AI)
+    assert "hugging face" in signature.entities
+
+
+def test_vla_technical_term_preserved() -> None:
+    """Positive control: VLA is a real, specific technical term (R2.10F's own TOPIC_CLUSTER
+    finding was never about extraction correctness) - G1 must not remove it. Confirms G1 does not
+    solve the VLA topic-cluster problem - that remains a known, separate, out-of-scope gap (see
+    the phase's own §20)."""
+    signature = extract_story_signature(
+        "Vision-Language-Action (VLA) models can connect scene understanding and control", EventCategory.AI,
+    )
+    assert "vla" in signature.entities
+    assert "vision-language-action" in signature.entities
+
+
+def test_generic_descriptor_extraction_is_deterministic() -> None:
+    """Test J."""
+    title = "Accurate and responsive turn-taking is essential for spoken dialogue systems"
+    first = extract_story_signature(title, EventCategory.AI)
+    second = extract_story_signature(title, EventCategory.AI)
+    assert first.entities == second.entities
+
+
+@pytest.mark.parametrize(
+    "title,expected_entity",
+    [
+        ("Apple unveils Product X", "apple"),
+        ("Google launches new AI tool", "google"),
+        ("Microsoft partners with startup", "microsoft"),
+        ("Claude gets a new feature", "claude"),
+        ("ChatGPT usage grows among developers", "chatgpt"),
+        ("GTA 6 reveal live coverage", "gta"),
+    ],
+)
+def test_positive_control_entities_survive(title: str, expected_entity: str) -> None:
+    """Additional positive controls beyond Nvidia/OpenAI/Hugging Face/VLA (Tests F/G/I/VLA above) -
+    every real single-word brand name named in the phase's own required calibration set."""
+    signature = extract_story_signature(title, EventCategory.AI)
+    assert expected_entity in signature.entities
+
+
+def test_deliberately_deferred_generic_words_not_yet_excluded() -> None:
+    """Documents a deliberate scope boundary (this module's own _CALIBRATED_GENERIC_DESCRIPTOR_
+    ENTITIES docstring): generic-looking single words the same corpus scan surfaced but where a
+    bare form remains plausibly a real, informative entity on its own are NOT included without
+    their own per-word evidence - guards against silently growing scope in a future edit without
+    updating this test."""
+    from services.story_memory import _CALIBRATED_GENERIC_DESCRIPTOR_ENTITIES, _GENERIC_FUNCTION_WORD_ENTITIES
+
+    deferred = {"machine", "learning", "language", "video", "robot", "object", "artificial"}
+    assert not (deferred & _CALIBRATED_GENERIC_DESCRIPTOR_ENTITIES)
+    assert not (deferred & _GENERIC_FUNCTION_WORD_ENTITIES)
+
+
 def test_real_cd_projekt_pair_entity_overlap_measurably_improves() -> None:
     """Uses the exact real headline pair from the forensic report as the regression case. Honest,
     measured outcome (not an aspirational one): entity_overlap improves from 0.0 (both events
