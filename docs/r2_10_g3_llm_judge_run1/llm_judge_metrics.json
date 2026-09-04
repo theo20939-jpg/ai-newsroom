@@ -1,0 +1,84 @@
+{
+  "metrics": {
+    "total_records": 21,
+    "scored_count": 18,
+    "skipped_count": 0,
+    "uncertain_ground_truth_excluded_count": 3,
+    "parse_error_count": 0,
+    "hard_middle_total": 8,
+    "hard_middle_correct": 8,
+    "hard_middle_wrong": 0,
+    "hard_middle_uncertain": 0,
+    "positive_control_false_rejects": [
+      "nvidia_hf_main",
+      "holdout_pentagon_grok"
+    ],
+    "negative_control_false_accepts": [],
+    "false_accept_ids_overall": [],
+    "false_reject_ids_overall": [
+      "nvidia_hf_main",
+      "holdout_pentagon_grok"
+    ],
+    "correct_accepts": 4,
+    "correct_rejects": 12,
+    "correct_uncertain_count": 0,
+    "correct_uncertain_ids": [],
+    "ambiguous_control_overclaim_ids": [
+      "vk_apple_real_3publisher",
+      "marvell_google",
+      "optimizatsiya_koda"
+    ],
+    "overconfident_wrong_ids": [
+      "nvidia_hf_main",
+      "holdout_pentagon_grok"
+    ]
+  },
+  "cascade": {
+    "deterministic_negatives_filtered": 4,
+    "deterministic_negatives_filtered_ids": [
+      "vla",
+      "vk_apple_synthetic_4publisher_false_ready",
+      "ciflow_ci_noise",
+      "utro_digest"
+    ],
+    "hard_middle_sent_to_llm": 8,
+    "hard_middle_sent_to_llm_ids": [
+      "vlm",
+      "new_york_times_digest",
+      "llm_agents_cluster",
+      "robotic_welding_cluster",
+      "multimodal_medical_cluster",
+      "object_detection_cluster",
+      "us_futures_wire_noise",
+      "holdout_when_predictor_cluster"
+    ],
+    "additional_negatives_caught_by_llm": 8,
+    "additional_negatives_caught_by_llm_ids": [
+      "vlm",
+      "new_york_times_digest",
+      "llm_agents_cluster",
+      "robotic_welding_cluster",
+      "multimodal_medical_cluster",
+      "object_detection_cluster",
+      "us_futures_wire_noise",
+      "holdout_when_predictor_cluster"
+    ],
+    "llm_false_accepts_on_remainder": 0,
+    "llm_false_accepts_on_remainder_ids": [],
+    "llm_false_rejects_on_positives": 2,
+    "llm_false_rejects_on_positives_ids": [
+      "nvidia_hf_main",
+      "holdout_pentagon_grok"
+    ]
+  },
+  "cost": {
+    "input_tokens": 31746,
+    "output_tokens": 1692,
+    "total_tokens": 33438,
+    "models_used": [
+      "gpt-5.6-terra"
+    ],
+    "estimated_cost_usd": 0.1047,
+    "unpriced_record_ids": []
+  }
+}
