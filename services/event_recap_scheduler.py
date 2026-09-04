@@ -2,7 +2,10 @@
 
 Owns exactly four things (never reimplements any of them - always delegates to the real,
 unmodified functions that already decide these questions):
-  1. bounded candidate Story selection (`_select_candidate_story_ids()` - a plain SQL query only);
+  1. bounded candidate Story selection (`_select_candidate_story_ids()` - two small, independently
+     bounded, confirmed-activity-ordered queries, merged and de-duplicated in Python; see
+     R2.10-RUNTIME-3C's own docstring on that function for why plain `Story.updated_at` ordering
+     was replaced);
   2. shadow/readiness-only iteration (`services.event_recap.build_event_recap_candidate()`,
      force_shadow=False - the real, unmodified readiness decision);
   3. generation-mode delegation (`services.event_recap_processor.generate_recap_for_story()` -
@@ -91,18 +94,22 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.sql import Select
 
 from capabilities.registry import CapabilityRegistry
 from core.config import settings
 from database.models.editorial_task import EditorialTask
+from database.models.news_event import NewsEvent
 from database.models.story import Story
+from database.models.story_link import NewsEventStoryLink
 from database.session import async_session_factory
 from schemas.workflow import WorkflowType
 from services.cost_tracker import CostTracker
 from services.event_recap import build_event_recap_candidate
 from services.pricing_catalog import PricingCatalog
+from services.recap_event import _CONFIRMED_MEMBERSHIP_MATCH_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -142,30 +149,122 @@ class EventRecapScanResult:
     eventness_rule_c_triggered: int = 0
 
 
-async def _select_candidate_story_ids(session: AsyncSession, *, limit: int) -> list[UUID]:
-    """Bounded, read-only, network-free. Excludes any Story whose `first_event_id` already has an
-    EVENT_RECAP EditorialTask of ANY status - the exact same any-status exclusion semantics
-    `services.event_recap_processor.find_event_recap_task_id()` already establishes (never a
-    second, differently-scoped duplicate rule), expressed as one set-based EXISTS subquery instead
-    of a per-row lookup - mirrors `worker/content_cycle.py::_select_eligible_events()`'s own
-    `~exists(...)` duplicate-exclusion shape exactly. No full-table scan: ORDER BY + LIMIT are
-    both evaluated DB-side."""
-    stmt = (
-        select(Story.id)
+def _no_existing_event_recap_task_clause():
+    """The exact same any-status exclusion semantics `services.event_recap_processor.
+    find_event_recap_task_id()` already establishes (never a second, differently-scoped duplicate
+    rule) - a single reusable EXISTS clause, applied identically inside BOTH candidate windows
+    below (§10 - the exclusion must not be bypassable via either window)."""
+    return ~exists(
+        select(1)
+        .select_from(EditorialTask)
         .where(
-            ~exists(
-                select(1)
-                .select_from(EditorialTask)
-                .where(
-                    EditorialTask.event_id == Story.first_event_id,
-                    EditorialTask.workflow["workflow_name"].as_string() == WorkflowType.EVENT_RECAP.value,
-                )
-            )
+            EditorialTask.event_id == Story.first_event_id,
+            EditorialTask.workflow["workflow_name"].as_string() == WorkflowType.EVENT_RECAP.value,
         )
-        .order_by(Story.updated_at.desc())
+    )
+
+
+def _confirmed_activity_candidates() -> Select:
+    """R2.10-RUNTIME-3C base query shape, shared by both candidate windows below. Orders/filters
+    by CONFIRMED Story activity only - `NewsEventStoryLink.match_type` restricted to the exact
+    same `_CONFIRMED_MEMBERSHIP_MATCH_TYPES` constant `services.recap_event.load_story_events()`
+    itself uses (imported, never redefined - one canonical definition of "confirmed membership" in
+    this codebase). `UNCERTAIN_MATCH`/`RELATED_STORY` rows are excluded by this same `.in_(...)`
+    filter, so they can never influence `last_confirmed_event_at` - the root-cause fix for the
+    RUNTIME-3A finding: `Story.updated_at` is bumped by those non-confirming match types too, but
+    `last_confirmed_event_at` (this query's own ordering key) structurally cannot be.
+
+    `NewsEvent.published_at` coalesced to `.collected_at` mirrors `services.recap_event.
+    load_story_events()`'s/`build_event_recap_candidate()`'s own `last_event_at` derivation
+    exactly (`max(e.published_at or e.collected_at for e in events)`) - the same freshness anchor
+    readiness itself already uses, not a new one invented for this query."""
+    last_confirmed_event_at = func.max(func.coalesce(NewsEvent.published_at, NewsEvent.collected_at))
+    return (
+        select(Story.id, last_confirmed_event_at.label("last_confirmed_event_at"))
+        .join(NewsEventStoryLink, NewsEventStoryLink.story_id == Story.id)
+        .join(NewsEvent, NewsEvent.id == NewsEventStoryLink.news_event_id)
+        .where(
+            NewsEventStoryLink.match_type.in_(_CONFIRMED_MEMBERSHIP_MATCH_TYPES),
+            _no_existing_event_recap_task_clause(),
+        )
+        .group_by(Story.id)
+        .order_by(last_confirmed_event_at.desc())
+    )
+
+
+async def _select_candidate_story_ids(session: AsyncSession, *, limit: int) -> list[UUID]:
+    """Bounded, read-only, network-free. R2.10-RUNTIME-3C: a Story's plain `updated_at` column is
+    bumped by non-confirming Story-link activity (`UNCERTAIN_MATCH`/`RELATED_STORY`) that never
+    affects `load_story_events()`/readiness at all (RUNTIME-3A's own forensic finding - real, fully
+    READY Stories were empirically found ranked 181st/185th/307th/395th by `updated_at DESC`,
+    invisible to a `limit=50` window, entirely because of this noise). Replaced by a small UNION of
+    two independently-bounded windows, both ordered by CONFIRMED-activity recency only (never
+    `Story.updated_at`):
+
+      WINDOW A ("recently confirmed-active"): any Story with at least one CONFIRMED-type link, no
+        maturity filter - keeps a freshly-created or still-developing Story visible the moment it
+        gets a genuine new confirmed match (§13's own "recent legitimate confirmed event raises
+        scheduling relevance" / "newly evolving confirmed Story remains selectable" requirements),
+        exactly mirroring the old query's own "any Story can appear" breadth, just ordered by a
+        signal noise can no longer distort.
+
+      WINDOW B ("structurally mature"): additionally filtered to `Story.event_count >= settings.
+        recap_min_event_count` - a cheap, EXISTING, denormalized column (no join, no new index),
+        never a reimplementation of readiness (§6): it is more PERMISSIVE than the real gate
+        (`Story.event_count` empirically runs ~1 higher than the true confirmed-member count, since
+        it counts the anchor event too - verified against all 4 known-READY RUNTIME-3A controls),
+        so it can only ever admit a few extra non-candidates for `build_event_recap_candidate()` to
+        correctly reject downstream - it can never hide a genuine one. This window is what makes an
+        already-matured, long-quiet Story (a real READY Story's own defining shape - confirmed
+        activity stopped >= the cooling window ago) visible again despite Window A's own recency
+        bias: empirically, all 4 known-READY controls rank 2nd/3rd/4th/7th within this filtered
+        ~220-Story population (vs. 32nd/38th/44th/68th with no maturity filter at all, vs.
+        181st/185th/307th/395th under the OLD `updated_at`-ordered query) - see this phase's own
+        report for the full empirical derivation.
+
+    Both windows apply the exact same any-status EVENT_RECAP task exclusion (§10) BEFORE their own
+    LIMIT, so an already-processed Story never consumes one of the bounded slots. Each window is
+    independently queried up to the FULL `limit` (not a fixed half each) and the two result lists
+    are then INTERLEAVED (alternating A/B, skipping duplicates) until `limit` unique Story IDs are
+    collected - deliberately not a fixed 50/50 pre-split: when one window is naturally sparse (e.g.
+    very few structurally-mature Stories exist yet), interleaving lets the other window fill the
+    remaining budget instead of leaving slots unused, while a rich corpus (the real production
+    shape) still gives each window a fair, roughly-even share (§12's own fairness requirement) since
+    neither can exhaust the whole budget before the other gets a turn. No SQL UNION of two
+    independently-LIMITed subqueries is used, keeping each window's own query plan simple and
+    independently inspectable (this phase's own EXPLAIN ANALYZE: ~61ms / ~7ms against the current
+    real corpus at limit=50 for each window, using only already-existing indexes - no migration
+    required, §14; the LIMIT value itself does not materially change either query's dominant cost,
+    which is the join/filter below the final top-N sort)."""
+    recent_stmt = _confirmed_activity_candidates().limit(limit)
+    mature_stmt = (
+        _confirmed_activity_candidates()
+        .where(Story.event_count >= settings.recap_min_event_count)
         .limit(limit)
     )
-    return list((await session.execute(stmt)).scalars().all())
+
+    recent_ids = [row.id for row in (await session.execute(recent_stmt)).all()]
+    mature_ids = [row.id for row in (await session.execute(mature_stmt)).all()]
+
+    seen: set[UUID] = set()
+    ordered_ids: list[UUID] = []
+    i = j = 0
+    while len(ordered_ids) < limit and (i < len(recent_ids) or j < len(mature_ids)):
+        if i < len(recent_ids):
+            story_id = recent_ids[i]
+            i += 1
+            if story_id not in seen:
+                seen.add(story_id)
+                ordered_ids.append(story_id)
+                if len(ordered_ids) >= limit:
+                    break
+        if j < len(mature_ids):
+            story_id = mature_ids[j]
+            j += 1
+            if story_id not in seen:
+                seen.add(story_id)
+                ordered_ids.append(story_id)
+    return ordered_ids
 
 
 async def _run_shadow_observation(
