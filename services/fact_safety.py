@@ -652,12 +652,58 @@ _QUOTE_EXTRACT_PATTERN = re.compile(r'"([^"\n]{3,200})"|«([^»\n]{3,200})»|“
 _MULTI_WORD_PATTERN = re.compile(r"\S+\s+\S+")
 
 
+_CYRILLIC_CAPITAL_PATTERN = re.compile(r"^[А-ЯЁ]")
+
+
+def _token_script(token: str) -> Literal["cyrillic", "latin"]:
+    """Classified by the token's own first character, which `_ENTITY_RUN_PATTERN` already
+    guarantees is a capital Latin or Cyrillic letter - the same "check the anchor letter" style
+    every other calibration in this module already uses, never a full-token script scan."""
+    return "cyrillic" if _CYRILLIC_CAPITAL_PATTERN.match(token) else "latin"
+
+
+def _split_by_script(core: str) -> list[str]:
+    """R2.10-FINALIZATION-3 root-cause fix: `_ENTITY_RUN_PATTERN` glues ANY run of adjacent
+    capitalized tokens into one candidate, with nothing distinguishing a genuine same-script
+    multi-word proper-noun phrase ("Kimi K3", "Trip.com Group", "Российская Федерация") from two
+    unrelated single-word proper nouns that happen to sit next to each other with no separating
+    punctuation - a Cyrillic word ending one clause immediately followed by an unrelated Latin
+    brand name starting the next ("...в Техасе Tesla попала...", "...Одновременно Tesla впервые
+    показала...", both live Tesla EVENT_RECAP false positives, R2.10-FINALIZATION-2). A genuine
+    multi-word entity name in this pipeline's real data never mixes scripts across a
+    space-separated boundary (a mixed-script COMPOUND is always one hyphenated token instead, e.g.
+    "ИИ-модель" - already a single token under `_ENTITY_RUN_PATTERN`'s own character class, never
+    two space-separated tokens). Splitting at every script-boundary before the existing
+    generic-prefix-stripping logic runs is strictly narrower than a general Title-Case splitter
+    (G2's own rejected approach): within each same-script group, every existing rule (generic
+    prefix stripping, legal suffixes, single-token qualification) is applied completely
+    unchanged - this only decides which tokens are even eligible to be considered as one run."""
+    words = core.split()
+    groups: list[list[str]] = []
+    for word in words:
+        if groups and _token_script(groups[-1][-1]) == _token_script(word):
+            groups[-1].append(word)
+        else:
+            groups.append([word])
+    return [" ".join(group) for group in groups]
+
+
 def _is_strong_single_token_entity(token: str) -> bool:
     """A lone capitalized word is kept only when it carries a signal stronger than "starts a
     sentence": ALL-CAPS shorthand (NASA, AI), an internal capital past the first letter
     (OpenAI, iPhone), an attached legal suffix (handled separately, before this is called), or an
     explicit, hand-curated alias match (M5.3 - "China"/"China's", "Китай", never a generically
-    guessed acronym)."""
+    guessed acronym).
+
+    R2.10-FINALIZATION-3 note: an earlier version of this fix also tried a "pure-Latin token
+    standing alone in Cyrillic text" signal here, so a bare "Tesla" would re-qualify once
+    `_split_by_script()` isolated it from its false compound ("Техасе Tesla"). Reverted - it
+    reopened exactly the single-bare-Latin-word false-positive class this module's own M7.3 tests
+    already pin as an accepted, out-of-scope limitation (Samsung/Saul: docs/
+    phase17_m7_3_entity_calibration_report.md's own "Option B" - documented, not fixed).
+    `_split_by_script()` alone (removing the false COMPOUND, below) is the actual fix; a standalone
+    brand name that never independently qualified before this phase still doesn't - unchanged, not
+    a regression."""
     if token.isupper() and len(token) >= 2:
         return True
     if _INTERNAL_CAPITAL_PATTERN.match(token[1:]):
@@ -779,17 +825,28 @@ def _extract_entities(text: str) -> list[str]:
             # generic-prefix stripping is not applied alongside a legal suffix (an untested
             # combination in this pipeline's real data, out of scope for M7.3's own narrow fix).
         elif token_count >= 2:
-            stripped = _strip_generic_entity_prefix(core)
-            stripped_tokens = stripped.split()
-            if len(stripped_tokens) >= 2:
-                candidates.append(stripped)  # e.g. "Китайская ИИ-модель Kimi K3" -> "Kimi K3"
-            elif len(stripped_tokens) == 1 and _is_strong_single_token_entity(stripped_tokens[0]):
-                candidates.append(stripped_tokens[0])
-            # else: stripped to nothing, or the one remaining word fails the existing
-            # single-token check (e.g. "Агент Saul" -> "Saul", which does not independently
-            # qualify) - discarded. Disclosed, accepted M7.3 limitation, not a new regression:
-            # the pre-existing single-token rule was already this conservative; this milestone
-            # does not loosen it (that is Option B, explicitly out of scope here).
+            # R2.10-FINALIZATION-3: split at every script boundary FIRST - see
+            # `_split_by_script()`'s own docstring. Each resulting same-script group then goes
+            # through the exact same generic-prefix-stripping/single-token logic as before,
+            # completely unchanged within a group.
+            for group in _split_by_script(core):
+                group_tokens = group.split()
+                if len(group_tokens) >= 2:
+                    stripped = _strip_generic_entity_prefix(group)
+                    stripped_tokens = stripped.split()
+                    if len(stripped_tokens) >= 2:
+                        candidates.append(stripped)  # e.g. "Китайская ИИ-модель Kimi K3" -> "Kimi K3"
+                    elif len(stripped_tokens) == 1 and _is_strong_single_token_entity(stripped_tokens[0]):
+                        candidates.append(stripped_tokens[0])
+                    # else: stripped to nothing, or the one remaining word fails the existing
+                    # single-token check (e.g. "Агент Saul" -> "Saul", which does not
+                    # independently qualify) - discarded. Disclosed, accepted M7.3 limitation,
+                    # not a new regression: the pre-existing single-token rule was already this
+                    # conservative; this milestone does not loosen it (Option B, out of scope).
+                elif _is_strong_single_token_entity(group_tokens[0]):
+                    candidates.append(group_tokens[0])
+                # else: a lone ordinary Title-Case word (or a Cyrillic word with no other
+                # signal) - discarded, most common false-positive source.
         elif _is_strong_single_token_entity(core):
             candidates.append(value)
         # else: a lone ordinary Title-Case word - discarded, most common false-positive source
