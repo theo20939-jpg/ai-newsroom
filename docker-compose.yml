@@ -30,6 +30,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      # R2.10-FINALIZATION-1: EVENT_RECAP Tier-2B media discovery (services/event_recap_processor.py
+      # ::discover_event_recap_media_if_needed()) writes finalist bytes through the same shared
+      # services.image_persistence._get_storage() abstraction content_worker's own M5 persistence
+      # path already writes through (docs/phase16_m5_persistence_and_retention_report.md §10) -
+      # without this mount, those bytes lived only in this container's own ephemeral filesystem
+      # (confirmed via R2.10-RUNTIME-4's own real canary: storage_status=STORED but unreadable by
+      # any other process once the writer container exited). Read-write, same as content_worker -
+      # this is also a writer, not merely a reader.
+      - image_storage_data:/data/image_storage
 
   news_analysis_worker:
     build: .
