@@ -1412,6 +1412,28 @@ async def run_content_cycle(
                         # group (not only index 0) can later be independently re-resolved to its
                         # own bytes and receive its own apply_master_news_branding() call.
                         media_group_photo_candidates = plan.photo_candidates
+                        # R2.10-FINALIZATION-1: this branch never assigned `photo_input` at all -
+                        # unlike the single-item branch just below it (`photo_input = single_media
+                        # if isinstance(...)`), leaving `photo_input`/`source_bytes` at their
+                        # top-of-loop `None` default for every real >=2-item media group. Since
+                        # `source_bytes = photo_input.data if isinstance(photo_input, BufferedInputFile)
+                        # else None` (below) then always produced `None`, the PRIMARY image
+                        # (media_group_items[0], "media_group_index=-1") silently skipped
+                        # apply_master_news_branding() entirely (needs_render=False ->
+                        # brand_render_skipped) - and because the group's own items[1:] branding
+                        # loop further below is itself gated on `was_news_with_source_bytes` (only
+                        # ever True when THIS primary branding ran), every OTHER photo in the group
+                        # was skipped too, cascading from this one missing assignment. Mirrors the
+                        # single-item branch's own exact pattern: the first group item's own real
+                        # media/candidate becomes the primary `photo_input`/`resolved_photo_candidate`
+                        # this function already threads through unchanged from here on - no new
+                        # resolution path, no re-fetch, no behavior change to any other branch.
+                        primary_group_media = media_group_items[0].media
+                        photo_input = (
+                            primary_group_media if isinstance(primary_group_media, (str, BufferedInputFile)) else None
+                        )
+                        if photo_input is not None and media_group_photo_candidates:
+                            resolved_photo_candidate = media_group_photo_candidates[0]
                     elif len(plan.media_group_items) == 1 and not plan.photo_candidates:
                         # Phase V2.27 §6: exactly one media item and it did NOT come from any
                         # image candidate - it can only be the video. Routed as a real single-

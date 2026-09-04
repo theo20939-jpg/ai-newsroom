@@ -533,7 +533,7 @@ class DataSignaturePlan:
     placement: ComponentPlacement
     red: bool
     line_len: int
-    tier: str  # "full" | "shortened" | "compact"
+    tier: str  # "full" | "shortened" | "compact" | "none" (mark+pulse only, zero connecting line)
 
 
 def _data_signature_line_length(canvas_w: int, width_frac: float) -> int:
@@ -689,6 +689,27 @@ def _select_data_signature(canvas: Image.Image, *, inset: int, pad: int) -> Data
                     placement=placement, red=anchor_color[placement] == _OFFICIAL_NNJ_RED,
                     line_len=length, tier=tier,
                 )
+
+    # R2.10-FINALIZATION-1: the module's own docstring above has always claimed a "FULL/SHORTENED/
+    # COMPACT/NONE fallback order", but "NONE" was never actually implemented as a candidate here -
+    # the loop above simply exhausted every line length down to COMPACT and returned None outright,
+    # discarding an anchor (mark+pulse) that had ALREADY independently passed the safety gate,
+    # purely because every tried CONNECTING LINE crossed real busy content (root-caused against the
+    # real assets/brand/newsroom_visuals/v2_10a_overlay_fix/iphone_recomposed_source.jpg fixture -
+    # the hand/fingers span nearly the full width of the bottom strip, so every line length at both
+    # corners failed edge-density, while each corner's own mark+pulse anchor passed comfortably).
+    # "NONE" draws the mark+pulse only, with zero connecting line - `line_len=0` collapses
+    # `_data_signature_geometry()`'s own line_box to a single point (`line_x0 == line_end_x`),
+    # which `_build_data_lower_signature_image()` now skips drawing entirely (never a visible
+    # zero-length line artifact) - so no further safety check is needed for it: nothing is drawn
+    # there. Preserves the approved signature (mark+pulse remains visible, §12/§13's own explicit
+    # requirement) instead of losing branding entirely on a real busy photo.
+    for placement in _DATA_SIGNATURE_CANDIDATE_PLACEMENTS:
+        if placement in anchor_color:
+            return DataSignaturePlan(
+                placement=placement, red=anchor_color[placement] == _OFFICIAL_NNJ_RED,
+                line_len=0, tier="none",
+            )
     return None
 
 
@@ -722,14 +743,21 @@ def _build_data_lower_signature_image(
     canvas = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(canvas)
 
+    # R2.10-FINALIZATION-1 ("none" tier): line_len=0 collapses line_x0/line_x1 to the same point -
+    # skip drawing it outright rather than let Pillow render a degenerate zero-length line segment
+    # (cosmetically near-invisible either way, but explicit is safer than relying on that).
+    draw_line = line_x0 != line_x1
+
     if placement is ComponentPlacement.LOWER_RIGHT:
-        draw.line([(line_x0, y), (line_x1, y)], fill=color, width=line_thick)
+        if draw_line:
+            draw.line([(line_x0, y), (line_x1, y)], fill=color, width=line_thick)
         _draw_pulse(draw, pulse_x0, y, pulse_w, pulse_h, color, line_thick)
         canvas.alpha_composite(mark, (mark_x, mark_y))
     else:  # LOWER_LEFT - built from primitives, NNJ never mirrored (same rule as MASTER NEWS)
         canvas.alpha_composite(mark, (mark_x, mark_y))
         _draw_pulse(draw, pulse_x0, y, pulse_w, pulse_h, color, line_thick)
-        draw.line([(line_x0, y), (line_x1, y)], fill=color, width=line_thick)
+        if draw_line:
+            draw.line([(line_x0, y), (line_x1, y)], fill=color, width=line_thick)
 
     return canvas
 

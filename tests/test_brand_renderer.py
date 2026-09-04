@@ -1020,7 +1020,16 @@ def test_data_signature_real_fixture_regression_iphone_photo_no_longer_loses_bra
     signature ENTIRELY once the coarse ~85%-wide rectangle was scored as one solid region - the
     hand/fingers extend into the bottom strip and were enough to fail the whole coarse box. Under
     V2.20D's geometry-aware scoring the mark+pulse+line must independently succeed here (at
-    whatever tier is actually needed)."""
+    whatever tier is actually needed).
+
+    R2.10-FINALIZATION-1 root cause (confirmed by direct diagnostic against this exact fixture):
+    BOTH bottom corners' mark+pulse anchors pass safety comfortably (edge_density ~3.3-4.3, well
+    under the 8.0 threshold) - but the hand/fingers span nearly the full width of the bottom strip,
+    so EVERY connecting-line candidate at EVERY tier down to compact (edge_density 10.98-15.99, all
+    over threshold) failed at both corners. The module's own docstring always claimed a "FULL/
+    SHORTENED/COMPACT/NONE fallback order", but "NONE" (mark+pulse only, zero connecting line) was
+    never actually implemented - this was the real regression, now fixed. Asserting the specific
+    tier here (not just "not None") locks in the real root cause, not just its symptom."""
     from pathlib import Path
 
     fixture = (
@@ -1033,6 +1042,60 @@ def test_data_signature_real_fixture_regression_iphone_photo_no_longer_loses_bra
     canvas = brand_renderer_module._fit_photo_to_canvas(photo, (1280, 720))
     plan = _select_data_signature(canvas, inset=20, pad=50)
     assert plan is not None, "V2.20D regression: bottom signature still lost entirely on a real photo"
+    assert plan.tier == "none", (
+        f"expected the new NONE tier for this specific busy-line fixture, got tier={plan.tier!r} - "
+        "if a future safety-scoring change lets a real line pass here too, that is a genuine "
+        "improvement, not a bug: update this assertion deliberately, don't just relax it blindly."
+    )
+    assert plan.line_len == 0
+
+
+def test_data_signature_none_tier_renders_mark_and_pulse_with_no_visible_line():
+    """Directly proves the NONE tier's own compositor behavior (mocked safety oracle, mirroring
+    test_data_signature_line_degrades_to_shortened_when_full_length_unsafe's own established
+    pattern): when every line-length candidate is unsafe but the anchor itself is safe, the
+    resulting image must still carry the mark+pulse (§13's own "signature remains visible"
+    requirement) with zero connecting-line pixels drawn - not a degenerate near-invisible artifact,
+    an intentional, explicit skip."""
+    canvas = Image.new("RGBA", (1280, 720), (120, 120, 120, 255))
+
+    def fake_score_box_safe(_canvas, box, *, pad):  # noqa: ANN001
+        height = box[3] - box[1]
+        return height > 20  # only the taller mark+pulse anchor passes; every line band fails
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(brand_renderer_module, "_score_box_safe", fake_score_box_safe)
+        plan = _select_data_signature(canvas, inset=20, pad=50)
+        assert plan is not None
+        assert plan.tier == "none"
+        assert plan.line_len == 0
+
+        signature_image = brand_renderer_module._build_data_lower_signature_image(
+            canvas.size, plan.placement, 20, red=plan.red, line_len=plan.line_len,
+        )
+
+    mark_box, pulse_box, line_box = brand_renderer_module._data_signature_geometry(
+        canvas.size, plan.placement, 20, 0,
+    )
+
+    def _max_alpha(box: tuple[int, int, int, int]) -> int:
+        w, h = signature_image.size
+        x0, y0, x1, y1 = box
+        x0, y0 = max(0, x0), max(0, y0)
+        x1, y1 = min(w, x1), min(h, y1)
+        return max(
+            signature_image.getpixel((x, y))[3]
+            for y in range(y0, y1)
+            for x in range(x0, x1)
+        )
+
+    # The mark+pulse region carries real, non-transparent pixels (the signature is genuinely visible).
+    assert _max_alpha(mark_box) > 0
+    assert _max_alpha(pulse_box) > 0
+    # The (degenerate, zero-width) line band carries no drawn pixels at all - explicitly skipped,
+    # not a near-invisible one-pixel artifact.
+    line_x0, line_x1 = line_box[0], line_box[2]
+    assert line_x0 == line_x1, "line_len=0 must collapse the line box to a single x-coordinate"
 
 
 def test_data_signature_line_degrades_to_shortened_when_full_length_unsafe(monkeypatch):
