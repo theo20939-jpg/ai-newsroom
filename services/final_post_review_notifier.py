@@ -69,9 +69,9 @@ from bot.keyboards.image_preview import build_editorial_send_keyboard
 from database.models.final_post_review import FinalPostReview
 from integrations.storage.image_storage import StorageError
 from schemas.editorial_route import EditorialDestination
+from bot.image_preview_media import resolve_photo_input
 from services.final_post_review_service import record_telegram_delivery
 from services.image_persistence import _get_storage, get_editorial_image_candidates
-from services.media_finalizer import finalize_photo_input
 from services.nnj_master_news_overlay import apply_master_news_branding
 from services.telegram_routing import send_photo_to_editorial_destination, send_to_editorial_destination
 
@@ -137,9 +137,28 @@ async def resolve_final_post_photo_input(session: AsyncSession, selected_media: 
                     extra={"event_id": str(event_id), "candidate_id": candidate_id},
                 )
                 return None
-            # MEDIA-PROD-1: finalize_photo_input() (services/media_finalizer.py) wraps the same
-            # resolution resolve_photo_input() already did, adding the mandatory NNJ branding step.
-            return finalize_photo_input(candidate)
+            # R2.10-FINALIZATION-2: services.media_finalizer never existed anywhere in this repo's
+            # git history (confirmed via git stash against the base commit) - this call has been
+            # broken (ImportError at module load, crashing every real caller including scripts/
+            # final_post_review_worker.py) since Phase I.2 shipped. The fix mirrors the storage_key
+            # branch immediately below, unchanged: resolve_photo_input() (bot/image_preview_media.py
+            # - the SAME resolver services/event_recap_review_notifier.py already calls) gives
+            # either a cached Telegram file_id (str - no local bytes exist to brand, passed through
+            # exactly like that branch's own identical constraint) or fresh local bytes
+            # (BufferedInputFile) - only the latter can receive apply_master_news_branding(), under
+            # the exact same enforce+pulse_brand_enabled gate the storage_key branch already uses,
+            # so both branches converge on the identical branding contract this module's own
+            # docstring already promises.
+            resolved = resolve_photo_input(candidate)
+            if isinstance(resolved, BufferedInputFile) and settings.presentation_director_mode == "enforce" and settings.pulse_brand_enabled:
+                try:
+                    branded_data, _decision = apply_master_news_branding(resolved.data)
+                    return BufferedInputFile(branded_data, filename=resolved.filename or "preview.jpg")
+                except Exception:  # noqa: BLE001 - branding is best-effort, never blocks the preview
+                    logger.exception(
+                        "final_post_review_candidate_branding_failed", extra={"candidate_id": candidate_id},
+                    )
+            return resolved
 
         storage_key = representative.get("storage_key")
         if storage_key:
@@ -234,6 +253,7 @@ async def send_final_post_preview(
 
     control_text = render_final_post_review_control_text(
         review, authoring_prompt_version=authoring_prompt_version, fact_safety_status=fact_safety_status,
+        source_event_recap_review_id=final_post_source.get("source_event_recap_review_id"),
     )
     control_keyboard = build_final_post_review_keyboard(review)
     control_outcome = await send_to_editorial_destination(
