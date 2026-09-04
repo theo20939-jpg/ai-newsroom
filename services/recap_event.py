@@ -525,6 +525,55 @@ _NUMERIC_TOKEN_RE = re.compile(r"\$?\d[\d,.]*\d|\$?\d")
 _ANNOUNCEMENT_WORD_RE = re.compile(r"[\w\-]+", re.UNICODE)
 
 
+def _normalize_numeric_token(raw: str) -> str:
+    """Phase R2.10G3-0 (real forensic finding, R2.11 announcement-identity checkpoint): locale-
+    aware separator normalization for one `_NUMERIC_TOKEN_RE` match, applied here so
+    `_extract_numeric_tokens()`'s numeric-identity comparison (feeding `_has_conflicting_
+    distinctive_facts()`, in turn feeding `cluster_announcements()` and `announcement_count`) can
+    no longer register a false conflict between the identical real figure written in two locales.
+
+    The bug this replaces: blindly stripping every comma treated a Russian-locale decimal comma
+    identically to a thousands-grouping comma - `"$12,2 млрд"` (twelve point two billion) silently
+    became the numeric identity `"122"`, while the equivalent English source `"$12.2 billion"`
+    correctly stayed `"12.2"` - the same real-world number represented as two different, non-
+    matching identity strings, which `_has_conflicting_distinctive_facts()`'s own `numbers_a !=
+    numbers_b` check then read as a genuine conflicting fact. Confirmed live on the real Marvell/
+    Google Story (R2.11's own fixture): the EN/RU pair registered a spurious numeric conflict
+    purely from this artifact, on top of - and independent of - the separate, still-unresolved
+    verb/action-blindness limit R2.11 also found (see `_has_conflicting_distinctive_facts()`'s own
+    docstring; this fix does not and cannot address that).
+
+    DUPLICATED from `services/event_recap.py::_normalize_numeric_token()` verbatim, not imported -
+    `services/event_recap.py` already imports FROM this module, so the reverse import would be
+    circular. Mirrors this codebase's own established per-module-private-helper convention (e.g.
+    `_normalize_domain()` is duplicated between these same two files for the identical reason) -
+    see that module's own docstring for the full disambiguation-rule rationale this copy reuses
+    unchanged:
+      - BOTH a comma and a period present: whichever separator occurs LAST is the decimal
+        separator; every earlier occurrence of the OTHER separator is stripped as thousands
+        grouping.
+      - ONLY commas present, exactly one comma, followed by exactly 1-2 digits (e.g. `"12,2"`,
+        `"1,5"`): a decimal separator, converted to a period.
+      - Any other comma-only shape (multiple commas, or a lone comma followed by exactly 3 digits -
+        conventional thousands grouping, e.g. `"1,234"`): every comma is thousands grouping,
+        stripped entirely - unchanged from the previous behavior for this shape.
+      - Period-only or no separator at all: already unambiguous, left untouched."""
+    body = raw.replace("$", "")
+    has_comma, has_period = "," in body, "." in body
+    if has_comma and has_period:
+        if body.rfind(",") > body.rfind("."):
+            body = body.replace(".", "").replace(",", ".")
+        else:
+            body = body.replace(",", "")
+    elif has_comma:
+        parts = body.split(",")
+        if len(parts) == 2 and 1 <= len(parts[1]) <= 2:
+            body = parts[0] + "." + parts[1]
+        else:
+            body = body.replace(",", "")
+    return body
+
+
 def _entity_excluded_content_overlap(
     sig_a: StorySignature, title_a: str, sig_b: StorySignature, title_b: str,
 ) -> float:
@@ -691,11 +740,12 @@ def _is_near_exact_title_match(title_a: str, title_b: str) -> bool:
 def _extract_numeric_tokens(title: str) -> set[str]:
     """Pure. General distinctive-number extraction (spec §9's own "use general distinctive-token
     logic," never a Taiwan-specific rule) - a 2+-digit number (with an optional leading currency
-    sign, commas/decimals stripped) is distinctive; a single lone digit is too common/weak on its
-    own (e.g. the "3" in "GPT-3") to count as distinctive evidence by itself."""
+    sign, locale-aware decimal/thousands separators normalized - see `_normalize_numeric_token()`)
+    is distinctive; a single lone digit is too common/weak on its own (e.g. the "3" in "GPT-3") to
+    count as distinctive evidence by itself."""
     tokens: set[str] = set()
     for match in _NUMERIC_TOKEN_RE.finditer(title):
-        normalized = match.group(0).replace(",", "").replace("$", "")
+        normalized = _normalize_numeric_token(match.group(0))
         if len(normalized) >= 2:
             tokens.add(normalized)
     return tokens

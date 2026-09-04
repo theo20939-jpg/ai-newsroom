@@ -21,6 +21,8 @@ from services.recap_event import (
     COOLING,
     DISCOVERED,
     READY,
+    _extract_numeric_tokens,
+    _has_conflicting_distinctive_facts,
     build_recap_event_snapshot,
     cluster_announcements,
     count_unique_sources,
@@ -36,6 +38,7 @@ from services.story_memory import (
     STORY_UPDATE,
     SUPPORTING_SOURCE,
     UNCERTAIN_MATCH,
+    extract_story_signature,
 )
 
 _NOW = datetime(2026, 8, 19, 12, 0, 0, tzinfo=timezone.utc)
@@ -815,3 +818,126 @@ def test_four_genuine_announcements_in_one_live_event_produce_announcement_count
         story_integrity_eligible=integrity.eligible, story_integrity_reasons=integrity.reasons,
     )
     assert not any("announcement_count" in reason for reason in result.reasons)
+
+
+# ---------------------------------------------------------------------------
+# R2.10G3-0: _extract_numeric_tokens() decimal-comma bug (real forensic finding, R2.11
+# announcement-identity checkpoint, re-verified live against this exact unmodified function before
+# this phase's own fix). Blindly stripping every comma treats a Russian-locale decimal comma
+# identically to English thousands-grouping - "$12,2 млрд" (twelve-point-two) and "$12.2 billion"
+# (the same real figure) produced two DIFFERENT numeric-identity strings ("122" vs "12.2"),
+# registering a spurious conflict in _has_conflicting_distinctive_facts() for two reports of the
+# exact same number. services/event_recap.py::_normalize_numeric_token() already solved this
+# correctly (Phase R2.10 Night 2) - this test matrix pins the SAME contract now applied locally
+# inside services/recap_event.py (duplicated, not imported - a real circular-import constraint:
+# services/event_recap.py already imports FROM services/recap_event.py, so the reverse import is
+# not possible; this mirrors this codebase's own established per-module-private-helper convention,
+# e.g. _normalize_domain() being duplicated between the same two files for the same reason).
+# ---------------------------------------------------------------------------
+
+
+def test_dot_decimal_unchanged() -> None:
+    """Test A."""
+    assert _extract_numeric_tokens("Deal valued at $12.2 billion") == {"12.2"}
+
+
+def test_comma_decimal_normalizes_to_dot() -> None:
+    """Test B."""
+    assert _extract_numeric_tokens("Сделка на $12,2 млрд") == {"12.2"}
+
+
+def test_dot_and_comma_decimal_are_the_same_identity() -> None:
+    """Test C."""
+    assert _extract_numeric_tokens("$12.2 billion") == _extract_numeric_tokens("$12,2 млрд") == {"12.2"}
+
+
+def test_different_decimal_values_remain_distinct() -> None:
+    """Test D."""
+    assert _extract_numeric_tokens("$12.2 billion") != _extract_numeric_tokens("$12.3 billion")
+    assert _extract_numeric_tokens("$12,2 млрд") != _extract_numeric_tokens("$12,3 млрд")
+
+
+def test_integer_vs_decimal_remain_distinct() -> None:
+    """Test E: the historical bug's own signature - "12,2" must never collapse to bare "122"."""
+    assert _extract_numeric_tokens("$12,2 млрд") != {"122"}
+    assert "122" not in _extract_numeric_tokens("$12,2 млрд")
+
+
+def test_marvell_en_ru_pair_no_longer_falsely_conflicts() -> None:
+    """Test F: the exact real R2.11 fixture. Real production titles - EN and RU reports of the
+    identical $12.2B figure must no longer register as a numeric conflict once notation-only
+    differences are normalized away. Only the numeric-notation artifact is exercised here (both
+    titles carry the identical distinctive entity "Google"/"Marvell" via extract_story_signature,
+    with no other asymmetric entity introduced) - isolating the fix's own effect from the entity
+    check that _has_conflicting_distinctive_facts() ALSO performs."""
+    title_en = "Marvell pops 6% on AI chip deal that lets Google buy up to $12.2 billion in shares - CNBC"
+    title_ru = "Marvell будет разрабатывать чипы для Google и позволит ей купить собственных акций на сумму $12,2 млрд"
+    en_tokens = _extract_numeric_tokens(title_en)
+    ru_tokens = _extract_numeric_tokens(title_ru)
+    assert "12.2" in en_tokens and "12.2" in ru_tokens, (
+        f"expected the same real $12.2B figure on both sides, got EN={en_tokens} RU={ru_tokens}"
+    )
+    assert "122" not in ru_tokens, "the historical bug's own signature must not reappear"
+
+
+def test_58m_shares_vs_12_2b_still_conflicts() -> None:
+    """Test G: the fix must not turn every numeric fact into an equivalence class - a genuinely
+    different distinguishing number (58 vs 12.2) must still register as a real conflict."""
+    sig_a = extract_story_signature(
+        "Marvell and Google expand their chip development deal, with Marvell granting Google a warrant to buy up to 58M+ shares",
+        EventCategory.TECH,
+    )
+    sig_b = extract_story_signature(
+        "Marvell pops 6% on AI chip deal that lets Google buy up to $12.2 billion in shares - CNBC",
+        EventCategory.TECH,
+    )
+    assert _has_conflicting_distinctive_facts(
+        sig_a, "Marvell and Google expand their chip development deal, with Marvell granting Google a warrant to buy up to 58M+ shares",
+        sig_b, "Marvell pops 6% on AI chip deal that lets Google buy up to $12.2 billion in shares - CNBC",
+    ) is True
+
+
+def test_vk_apple_conflict_result_unchanged_by_numeric_fix() -> None:
+    """Test H: the VK/Apple R2.11 fixture has no numbers on either side at all - this fix must not
+    change its outcome, since that risk (verb/action blindness) is explicitly a SEPARATE, still-
+    unresolved defect this phase does not touch."""
+    a = "VK подала в суд на Apple и потребовала вернуть свои приложения в App Store"
+    b = "VK подала иск против Apple в российский суд из-за удаления её приложений из App Store"
+    sig_a, sig_b = extract_story_signature(a, EventCategory.TECH), extract_story_signature(b, EventCategory.TECH)
+    assert _extract_numeric_tokens(a) == _extract_numeric_tokens(b) == set()
+    assert _has_conflicting_distinctive_facts(sig_a, a, sig_b, b) is False
+
+
+def test_apple_sues_settles_samsung_still_shows_no_conflict() -> None:
+    """Critical product invariant (must remain true after this fix - R2.11's own adversarial
+    fixture): _has_conflicting_distinctive_facts() still cannot distinguish "sues" from "settles"
+    for the identical two entities with zero numbers on either side. This fix corrects numeric
+    notation only - it does not and cannot solve verb/action blindness. Documented here as a
+    regression guard against anyone mistaking this fix for a solution to that separate, still-open
+    R2.11 finding."""
+    a = "Apple sues Samsung over patent infringement claims"
+    b = "Apple settles patent dispute with Samsung amicably"
+    sig_a, sig_b = extract_story_signature(a, EventCategory.TECH), extract_story_signature(b, EventCategory.TECH)
+    assert _has_conflicting_distinctive_facts(sig_a, a, sig_b, b) is False
+    assert set(sig_a.entities) == set(sig_b.entities)
+
+
+def test_numeric_token_extraction_is_deterministic() -> None:
+    """Test I."""
+    title = "Marvell pops 6% on AI chip deal that lets Google buy up to $12.2 billion in shares - CNBC"
+    assert _extract_numeric_tokens(title) == _extract_numeric_tokens(title)
+
+
+def test_thousands_grouping_still_stripped_not_treated_as_decimal() -> None:
+    """§10/§11: a lone comma followed by exactly 3 digits is conventional thousands grouping, not
+    a decimal separator - "$1,299" must normalize to "1299", never "1.299". Mirrors services/
+    event_recap.py::_normalize_numeric_token()'s own documented contract exactly."""
+    assert _extract_numeric_tokens("Priced at $1,299 for the base model") == {"1299"}
+
+
+def test_us_thousands_then_decimal_and_eu_thousands_then_decimal_both_handled() -> None:
+    """§10: "1,234.56" (US: thousands-comma, decimal-dot) and "1.234,56" (EU: thousands-dot,
+    decimal-comma) - whichever separator occurs LAST is the decimal separator, mirroring
+    services/event_recap.py::_normalize_numeric_token()'s own documented contract exactly."""
+    assert _extract_numeric_tokens("Revenue of $1,234.56 million reported") == {"1234.56"}
+    assert _extract_numeric_tokens("Выручка составила $1.234,56 млн") == {"1234.56"}

@@ -1661,17 +1661,26 @@ def test_space_separated_thousands_fractional_part_still_preserved():
     assert "23456" not in numbers
 
 
-def test_recap_event_frozen_extractor_has_the_same_unfixed_pattern_documented_not_touched():
-    """Phase R2.10 Night 2 forensic: the FROZEN `services/recap_event.py::_extract_numeric_tokens()`
-    duplicates the exact same pre-fix naive comma-strip behavior this test file's own RECAP-local
-    fix replaces. This is deliberately NOT fixed here (frozen R1 file) - this test only documents
-    and pins the known, disclosed limitation so a future checkpoint has a concrete regression
-    anchor, and so nobody mistakes R1's copy as already fixed by this commit."""
+def test_recap_event_extractor_now_matches_event_recaps_own_locale_aware_fix():
+    """Phase R2.10G3-0 update: `services/recap_event.py::_extract_numeric_tokens()` was frozen
+    (and its matching decimal-comma bug merely documented, not fixed) through Phase R2.10 Night 2 -
+    see git history for the prior version of this test, which pinned `{"122"}` as the then-current,
+    disclosed-buggy output. R2.11's own forensic (docs/r2_11_announcement_identity_findings.md,
+    on branch feature/r2-11-announcement-identity) proved this bug has real consequences beyond
+    documentation: it caused a false numeric conflict on the real Marvell/Google EN/RU Story pair,
+    which `_has_conflicting_distinctive_facts()` (feeding `cluster_announcements()`) read as
+    genuine distinct evidence. R2.10G3-0 ported `services/event_recap.py`'s own already-correct
+    `_normalize_numeric_token()` logic into `services/recap_event.py` as its own duplicated private
+    helper (a real circular-import constraint - `event_recap.py` already imports FROM this module -
+    mirrors this codebase's own established per-module-private-helper convention). Both modules'
+    numeric normalization now agree on this input; see tests/test_recap_event.py's own new R2.10G3-0
+    section for the full regression matrix (Marvell EN/RU no-longer-conflicts, 58M-vs-12.2B still
+    conflicts, VK/Apple and the Apple/Samsung verb-blindness case both explicitly unchanged)."""
     from services.recap_event import _extract_numeric_tokens
 
-    assert _extract_numeric_tokens("$12,2 млрд") == {"122"}, (
-        "if this ever changes, services/recap_event.py was modified - update this pinning test "
-        "and the R2.10 report, since that file is supposed to be frozen this phase"
+    assert _extract_numeric_tokens("$12,2 млрд") == {"12.2"}, (
+        "if this ever changes again, services/recap_event.py's numeric normalization was modified - "
+        "update this pinning test and cross-check tests/test_recap_event.py's own R2.10G3-0 section"
     )
 
 
