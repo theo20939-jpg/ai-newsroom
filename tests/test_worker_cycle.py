@@ -11,6 +11,7 @@ import pytest
 
 import worker.cycle
 from services.collector import CollectionReport
+from services.event_recap_scheduler import EventRecapScanResult
 from services.triage_orchestrator import TriageCycleReport
 from worker.cycle import run_automation_cycle
 
@@ -81,6 +82,33 @@ async def test_cancelled_error_from_triage_propagates_uncaught() -> None:
     ):
         with pytest.raises(asyncio.CancelledError):
             await run_automation_cycle()
+
+
+@pytest.mark.asyncio
+async def test_event_recap_scan_runs_after_triage_and_populates_result() -> None:
+    """R2.10-RUNTIME-2: the new scheduler call is wired in after collection+triage, every cycle,
+    and its (real, default-inert) result is always attached to AutomationCycleResult.event_recap -
+    never None. Uses the REAL run_event_recap_scan() (not mocked) since settings.event_recap_
+    scheduler_enabled defaults False everywhere, so this call is genuinely a no-op query-free
+    no-op - exercising the true default-disabled wiring end to end, not a stand-in."""
+    call_order: list[str] = []
+
+    async def fake_collection() -> CollectionReport:
+        call_order.append("collection")
+        return CollectionReport()
+
+    async def fake_triage() -> TriageCycleReport:
+        call_order.append("triage")
+        return TriageCycleReport()
+
+    with (
+        patch("worker.cycle.run_collection_cycle", side_effect=fake_collection),
+        patch("worker.cycle.run_triage_cycle", side_effect=fake_triage),
+    ):
+        result = await run_automation_cycle()
+
+    assert call_order == ["collection", "triage"]
+    assert result.event_recap == EventRecapScanResult(mode="disabled")
 
 
 def test_worker_cycle_imports_no_downstream_execution_module() -> None:

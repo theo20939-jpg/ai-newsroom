@@ -932,13 +932,53 @@ class Settings(BaseSettings):
     # deterministic eventness rejector signal (RULE_A/RULE_C, validated read-only across
     # R2.10G3-A through G3-D; RULE_D was disqualified and does not exist in production code at
     # all). Default False in every environment - no environment currently sets this. When True,
-    # `build_recap_event_snapshot()` additionally computes and attaches a diagnostic
-    # `EventnessShadowEvaluation` to its own `RecapEventSnapshot.eventness_shadow` field - this
-    # NEVER changes `readiness_state`/`readiness_reason`/`story_integrity_eligible`/anything else
-    # on that snapshot, and there is no code path anywhere that reads this field to reject,
-    # publish, or otherwise act on a Story (R2.10G3-E1's own explicit "no production execution
-    # path capable of rejecting a Story from eventness in this phase" requirement).
+    # `services.event_recap.build_event_recap_candidate()` additionally computes and attaches a
+    # diagnostic `EventnessShadowEvaluation` to its own `EventRecapCandidate.eventness_shadow`
+    # field (corrected reference - an earlier draft of this comment named
+    # `build_recap_event_snapshot()`/`RecapEventSnapshot`, services/recap_event.py's own R1
+    # function; G3-E1's actual wiring is in services/event_recap.py, the function the real
+    # processor/scheduler call chain uses) - this NEVER changes `readiness_state`/
+    # `readiness_reason`/`story_integrity_eligible`/anything else on that candidate, and there is
+    # no code path anywhere that reads this field to reject, publish, or otherwise act on a Story
+    # (R2.10G3-E1's own explicit "no production execution path capable of rejecting a Story from
+    # eventness in this phase" requirement).
     recap_eventness_shadow_enabled: bool = False
+
+    # R2.10-RUNTIME-2 (services/event_recap_scheduler.py) - two INDEPENDENT flags, deliberately
+    # never combined into one (R2.10-RUNTIME-1's own design-correction: a single flag cannot
+    # support "observe real readiness naturally, without ever creating a Story-generation task").
+    #
+    # event_recap_scheduler_enabled gates ONLY whether worker/cycle.py::run_automation_cycle()
+    # calls the scheduler at all, every cycle, after Triage. When True alone (generation False),
+    # the scheduler runs in READ-ONLY shadow/readiness-observation mode: it calls
+    # `services.event_recap.build_event_recap_candidate(force_shadow=False, ...)` directly (the
+    # real, unmodified readiness decision - never a second, divergent readiness implementation)
+    # and creates NO EditorialTask, performs NO synthesis, NO Tier-2B network acquisition, and NO
+    # DB write of any kind - see services/event_recap_scheduler.py's own module docstring for the
+    # full read-only contract and its own test suite for the empirical proof.
+    #
+    # event_recap_generation_enabled gates whether the scheduler additionally calls the existing,
+    # unmodified `services.event_recap_processor.generate_recap_for_story()` once per candidate
+    # Story - this is the only thing that can create a real EVENT_RECAP EditorialTask and run its
+    # one real LLM synthesis call. Fails closed (a structured warning, generation simply does not
+    # run) if this is True while `event_recap_scheduler_enabled` is False, since generation with
+    # no scheduler loop would mean nothing ever calls it - documented invariant: generation
+    # requires scheduler, never the reverse.
+    #
+    # Both default False in every environment; no environment currently sets either. Deliberately
+    # independent of `recap_eventness_shadow_enabled` above (and of
+    # `recap_canonical_source_resolution_enabled`/`recap_article_acquisition_enabled`/
+    # `final_post_publication_enabled`) - no combined master flag anywhere in this system.
+    event_recap_scheduler_enabled: bool = False
+    event_recap_generation_enabled: bool = False
+
+    # Bounded candidate-scan cap for services/event_recap_scheduler.py, mirroring content_
+    # generation_scan_limit's own established precedent/magnitude exactly (same reasoning: a
+    # periodic worker cycle must never issue an unbounded table scan). No cadence setting is
+    # added alongside it - the scheduler reuses automation_worker's own existing
+    # news_collection_interval_seconds cycle interval unchanged, per R2.10-RUNTIME-1's own
+    # finding that this cadence already comfortably subdivides recap_cooling_window_minutes.
+    event_recap_scan_limit: int = Field(default=50, ge=1)
 
     # services/weekly_recap_selection.py::select_weekly_recap_stories() - target Story count
     # (spec's own "Target 5-8 Stories max"), lookback window, and the per-company diversity cap
