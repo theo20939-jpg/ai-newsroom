@@ -50,6 +50,7 @@ from core.config import settings  # noqa: E402
 from database.models.story import Story  # noqa: E402
 from services.event_recap import build_event_recap_candidate  # noqa: E402
 from services.recap_event import load_story_events  # noqa: E402
+from services.recap_eventness_shadow import EventnessShadowEvaluation  # noqa: E402
 from services.recap_origin_projection import ORIGIN_PROJECTION_NOT_NEEDED, resolve_recap_origin_projection  # noqa: E402
 
 STATEMENT_TIMEOUT_MS = 30_000
@@ -94,6 +95,12 @@ class CandidateScanRow:
     rejection_reasons: list[str]
     research_complete_tracked: bool  # always False - see docstring: this signal is not persisted anywhere
     recommended_for_manual_review: bool
+    # R2.10G3-E1 (§19): SHADOW-ONLY diagnostic, carried through verbatim from
+    # EventRecapCandidate.eventness_shadow - None unless settings.recap_eventness_shadow_enabled
+    # is True (default False everywhere) or the candidate itself is None. Never influences
+    # `readiness_state`/`rejection_reasons`/`recommended_for_manual_review` above - those are all
+    # already fully computed before this field is populated.
+    eventness_shadow: EventnessShadowEvaluation | None = None
 
 
 async def scan_story_readiness(session: AsyncSession, story: Story, *, now: datetime) -> CandidateScanRow:
@@ -136,6 +143,7 @@ async def scan_story_readiness(session: AsyncSession, story: Story, *, now: date
         announcement_count=c.announcement_count, readiness_source_count=c.readiness_source_count,
         readiness_state=c.readiness_state, rejection_reasons=[], research_complete_tracked=False,
         recommended_for_manual_review=(c.story_integrity_eligible and c.readiness_state in ("READY", "COOLING")),
+        eventness_shadow=c.eventness_shadow,
     )
 
 

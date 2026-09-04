@@ -116,6 +116,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from capabilities.gateway_call import call_generate
+from core.config import settings
 from database.models.news_event import NewsEvent
 from database.models.story import Story
 from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, LLMGateway, Message
@@ -141,6 +142,11 @@ from services.recap_event import (
     evaluate_recap_story_integrity,
     load_canonical_urls_for_events,
     load_story_events,
+)
+from services.recap_eventness_shadow import (
+    EventnessShadowEvaluation,
+    EventnessShadowFeatures,
+    evaluate_eventness_shadow,
 )
 from services.recap_origin_projection import build_effective_recap_members, resolve_recap_origin_projection
 from services.story_memory import extract_story_signature
@@ -608,6 +614,15 @@ class EventRecapCandidate:
     # unaffected.
     selected_media: SelectedMediaPlan = field(default_factory=lambda: _NO_MEDIA_PLAN)
 
+    # R2.10G3-E1: SHADOW-ONLY diagnostic, additive and default-None. Populated only when
+    # `settings.recap_eventness_shadow_enabled` is True (default False everywhere) - see
+    # services/recap_eventness_shadow.py's own module docstring for the full safety contract.
+    # NEVER read by `readiness_state`/`rejection_reasons`/`publishable`/anything above - it is
+    # computed strictly after readiness is already finalized, from the same `clusters`/
+    # `unique_sources` values readiness itself already used, and attached here purely for
+    # observability.
+    eventness_shadow: EventnessShadowEvaluation | None = None
+
 
 @dataclass(frozen=True)
 class EventRecapBuildResult:
@@ -969,6 +984,20 @@ async def build_event_recap_candidate(
         {_evidence_reference_identity(event, canonical_urls.get(event.id)) for event in events}
     )
 
+    # R2.10G3-E1: SHADOW ONLY - computed from the exact same `clusters`/`unique_sources` values
+    # `readiness` above already used, never a second, divergent feature computation. `readiness`/
+    # `readiness_state`/`readiness_overridden` are already fully finalized above and are never
+    # touched by this block; nothing below this point can change them.
+    eventness_shadow: EventnessShadowEvaluation | None = None
+    if settings.recap_eventness_shadow_enabled:
+        timestamps = [e.published_at or e.collected_at for e in events]
+        span_hours = (max(timestamps) - min(timestamps)).total_seconds() / 3600 if len(timestamps) > 1 else 0.0
+        domains = frozenset(d for e in events if (d := _normalize_domain(e.url)))
+        eventness_shadow = evaluate_eventness_shadow(EventnessShadowFeatures(
+            story_span_hours=span_hours, unique_source_count=unique_sources,
+            announcement_count=len(clusters), source_domains=domains,
+        ))
+
     candidate = EventRecapCandidate(
         story_id=story.id, anchor_event_id=anchor.id, story_title=story.title, generated_at=now,
         readiness_state=readiness.state, readiness_overridden=readiness_overridden,
@@ -978,6 +1007,7 @@ async def build_event_recap_candidate(
         announcements=announcements, timeline=timeline, verified_facts=verified_facts,
         source_refs=source_refs, media_candidates=media_candidates,
         origin_projection_applied=origin_projection_applied, selected_media=selected_media,
+        eventness_shadow=eventness_shadow,
     )
     return EventRecapBuildResult(candidate=candidate, rejected=False, rejection_reasons=[])
 

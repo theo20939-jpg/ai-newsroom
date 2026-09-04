@@ -928,6 +928,18 @@ class Settings(BaseSettings):
     # security incident, a legal case - to stay unflagged), not calibrated against real data yet.
     recap_integrity_max_time_span_hours: float = Field(default=168.0, gt=0)
 
+    # R2.10G3-E1 (services/recap_eventness_shadow.py) - master switch for the SHADOW-ONLY
+    # deterministic eventness rejector signal (RULE_A/RULE_C, validated read-only across
+    # R2.10G3-A through G3-D; RULE_D was disqualified and does not exist in production code at
+    # all). Default False in every environment - no environment currently sets this. When True,
+    # `build_recap_event_snapshot()` additionally computes and attaches a diagnostic
+    # `EventnessShadowEvaluation` to its own `RecapEventSnapshot.eventness_shadow` field - this
+    # NEVER changes `readiness_state`/`readiness_reason`/`story_integrity_eligible`/anything else
+    # on that snapshot, and there is no code path anywhere that reads this field to reject,
+    # publish, or otherwise act on a Story (R2.10G3-E1's own explicit "no production execution
+    # path capable of rejecting a Story from eventness in this phase" requirement).
+    recap_eventness_shadow_enabled: bool = False
+
     # services/weekly_recap_selection.py::select_weekly_recap_stories() - target Story count
     # (spec's own "Target 5-8 Stories max"), lookback window, and the per-company diversity cap
     # (spec's own "recommended default 2").
