@@ -939,6 +939,42 @@ class Settings(BaseSettings):
     # security incident, a legal case - to stay unflagged), not calibrated against real data yet.
     recap_integrity_max_time_span_hours: float = Field(default=168.0, gt=0)
 
+    # R2.10G3-E1 (services/recap_eventness_shadow.py) - master switch for the SHADOW-ONLY
+    # deterministic eventness rejector signal (RULE_A/RULE_C, validated read-only across
+    # R2.10G3-A through G3-D; RULE_D was disqualified and does not exist in production code at
+    # all). Default False in every environment - no environment currently sets this. When True,
+    # `services.event_recap.build_event_recap_candidate()` additionally computes and attaches a
+    # diagnostic `EventnessShadowEvaluation` to its own `EventRecapCandidate.eventness_shadow`
+    # field - this NEVER changes `readiness_state`/`readiness_reason`/`story_integrity_eligible`/
+    # anything else on that candidate, and there is no code path anywhere that reads this field to
+    # reject, publish, or otherwise act on a Story.
+    recap_eventness_shadow_enabled: bool = False
+
+    # R2.10-RUNTIME-2 (services/event_recap_scheduler.py) - two INDEPENDENT flags, deliberately
+    # never combined into one. event_recap_scheduler_enabled gates ONLY whether worker/cycle.py::
+    # run_automation_cycle() calls the scheduler at all, every cycle, after Triage. When True alone
+    # (generation False), the scheduler runs in READ-ONLY shadow/readiness-observation mode: it
+    # calls `services.event_recap.build_event_recap_candidate(force_shadow=False, ...)` directly
+    # (the real, unmodified readiness decision) and creates NO EditorialTask, performs NO
+    # synthesis, NO Tier-2B network acquisition, and NO DB write of any kind.
+    #
+    # event_recap_generation_enabled gates whether the scheduler additionally calls the existing,
+    # unmodified `services.event_recap_processor.generate_recap_for_story()` once per candidate
+    # Story - this is the only thing that can create a real EVENT_RECAP EditorialTask and run its
+    # one real LLM synthesis call. Fails closed if this is True while `event_recap_scheduler_
+    # enabled` is False, since generation with no scheduler loop would mean nothing ever calls it.
+    #
+    # Both default False in every environment; no environment currently sets either. Deliberately
+    # independent of `recap_eventness_shadow_enabled` above and of `final_post_publication_enabled`
+    # - no combined master flag anywhere in this system.
+    event_recap_scheduler_enabled: bool = False
+    event_recap_generation_enabled: bool = False
+
+    # Bounded candidate-scan cap for services/event_recap_scheduler.py, mirroring content_
+    # generation_scan_limit's own established precedent/magnitude exactly - a periodic worker
+    # cycle must never issue an unbounded table scan.
+    event_recap_scan_limit: int = Field(default=50, ge=1)
+
     # services/weekly_recap_selection.py::select_weekly_recap_stories() - target Story count
     # (spec's own "Target 5-8 Stories max"), lookback window, and the per-company diversity cap
     # (spec's own "recommended default 2").

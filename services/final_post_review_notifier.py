@@ -234,6 +234,7 @@ async def send_final_post_preview(
 
     control_text = render_final_post_review_control_text(
         review, authoring_prompt_version=authoring_prompt_version, fact_safety_status=fact_safety_status,
+        source_event_recap_review_id=final_post_source.get("source_event_recap_review_id"),
     )
     control_keyboard = build_final_post_review_keyboard(review)
     control_outcome = await send_to_editorial_destination(

@@ -247,7 +247,7 @@ async def test_message_1_keyboard_is_canonical_source_and_meme_never_decision_bu
     keyboard = photo_kwargs["reply_markup"]
     assert keyboard is not None
     texts = [button.text for row in keyboard.inline_keyboard for button in row]
-    assert "🔗 Open source" in texts
+    assert "🔗 Источник" in texts
     assert "😂 Сгенерировать мем" in texts
     urls = [button.url for row in keyboard.inline_keyboard for button in row if button.url]
     assert urls == ["https://example.com/source-article"]

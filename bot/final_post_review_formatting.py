@@ -65,6 +65,7 @@ _STATUS_LINE_RU: dict[FinalPostReviewStatus, str] = {
 
 def render_final_post_review_control_text(
     review: FinalPostReview, *, authoring_prompt_version: str | None = None, fact_safety_status: str | None = None,
+    source_event_recap_review_id: str | None = None,
 ) -> str:
     """MESSAGE 2's exact control text - called both for the initial PENDING send and for every
     later decision re-render, so it always reflects the CURRENT status, never a stale snapshot
@@ -72,11 +73,26 @@ def render_final_post_review_control_text(
     `fact_safety_status` are shown ONLY while `review.status == PENDING` (Phase I.2's own "minimal,
     only if genuinely useful to the deciding editor" instruction) - the terminal-state text
     (APPROVED_FOR_PUBLICATION/NEEDS_REVISION) is exactly the short line Phase I.2's own instructions
-    specify, with no additional metadata."""
+    specify, with no additional metadata.
+
+    R2.10-FINALIZATION-2 `source_event_recap_review_id` (also PENDING-only, same "minimal, only if
+    genuinely useful to the editor" instruction): the REAL RECAP distinction this pipeline's own
+    product contract requires (see services/final_post_review_eligibility.py's own H/I gate, which
+    already requires `final_post_source.source_event_recap_review_id` to exist and resolve to an
+    APPROVED EventRecapReview for a recap-derived draft - never fabricated, always sourced from
+    that same real, already-persisted field). Deliberately NOT added to `render_final_post_preview_
+    caption()` (MESSAGE 1, the public-like preview / real publish payload) - that function's own
+    docstring already documents the deliberate PRESENTATION RECOVERY decision that the PUBLIC post
+    must stay byte-identical to an ordinary NEWS delivery, with no internal/recap framing bleeding
+    into what a reader sees. The distinction belongs to the EDITOR doing the review, not the public
+    post - so it lives here, in the internal-only control message, never touching MESSAGE 1's own
+    WYSIWYG-critical caption."""
     if review.status != FinalPostReviewStatus.PENDING:
         return _STATUS_LINE_RU[review.status]
 
     lines = [_STATUS_LINE_RU[review.status]]
+    if source_event_recap_review_id is not None:
+        lines.append(f"📋 Источник: EVENT_RECAP-ревью {source_event_recap_review_id}")
     if authoring_prompt_version is not None or fact_safety_status is not None:
         lines.append("")
         meta_parts = []
