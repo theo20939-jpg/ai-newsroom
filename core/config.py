@@ -980,6 +980,27 @@ class Settings(BaseSettings):
     # finding that this cadence already comfortably subdivides recap_cooling_window_minutes.
     event_recap_scan_limit: int = Field(default=50, ge=1)
 
+    # NINJA Social Intelligence Foundation, Part II (General topic / Business Context Command
+    # Center) - reuses the SAME `newsroom_telegram_chat_id` this codebase already established
+    # (Phase 22), never a second, competing chat setting - and follows that same phase's own flat
+    # `<feature>_topic_id` naming exactly (news_topic_id/meme_topic_id/telegraph_topic_id/etc.),
+    # never a `_general_` qualifier. Deliberately `None` by default: Telegram's own "General" topic
+    # in a forum-enabled supergroup carries NO `message_thread_id` at all (confirmed via bot/
+    # handlers/whereami.py's own diagnostic contract) - `None` is itself the correct, permanent
+    # value for "the General topic", not a placeholder awaiting configuration. This setting exists
+    # only as an explicit override escape hatch, never required for normal operation.
+    business_context_topic_id: int | None = None
+    # Explicit, hand-curated Telegram user_id -> role mapping (Business Context §31). No general
+    # role/permission system exists anywhere in this codebase to reuse - the established pattern
+    # (`telegraph_approver_user_ids`, `meme_manual_approver_user_ids`) is a single flat per-feature
+    # `list[int]` allowlist (binary authorized/not), never graded roles. This phase's own spec
+    # explicitly requires graded roles (FOUNDER/PRODUCT_OWNER/MARKETING/EDITOR/VIEWER with
+    # different command sets), so a dict is used here instead of a third flat list - same
+    # fail-closed default (`{}`) as every existing allowlist: a user_id absent from this mapping
+    # receives no role at all (services/business_context_roles.py treats an unmapped user as
+    # having zero permitted commands, never a default role).
+    business_context_role_map: dict[int, str] = Field(default_factory=dict)
+
     # services/weekly_recap_selection.py::select_weekly_recap_stories() - target Story count
     # (spec's own "Target 5-8 Stories max"), lookback window, and the per-company diversity cap
     # (spec's own "recommended default 2").
