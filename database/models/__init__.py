@@ -4,6 +4,7 @@ from database.models.business_context_proposal import BusinessContextProposal
 from database.models.campaign import LaunchCampaign
 from database.models.campaign_milestone import CampaignMilestone
 from database.models.claim_policy import ClaimPolicy
+from database.models.competitor import CompetitorAccount, CompetitorContentObservation
 from database.models.content_draft import ContentDraft
 from database.models.editorial_task import EditorialTask
 from database.models.image_candidate_record import ImageCandidateRecord
@@ -35,4 +36,6 @@ __all__ = [
     "ClaimPolicy",
     "StrategicDirective",
     "BusinessContextProposal",
+    "CompetitorAccount",
+    "CompetitorContentObservation",
 ]
