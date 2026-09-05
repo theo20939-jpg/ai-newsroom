@@ -490,26 +490,42 @@ def _select_data_block_placement(
     for the brand mark is unsafe for the stat block too, same real-pixel evidence, no separate
     safety model invented. A candidate box that would overlap the bottom pulse/logo signature
     (`avoid_box` - precise rectangle intersection, not a same-corner heuristic, since the two
-    components are different sizes) is skipped outright. Returns (box, text_color, needs_backing)
-    for the first corner that is content-safe, non-colliding, and clears the adaptive-color
-    visibility check, or None when no corner qualifies - the caller must then fail safe to
-    source+branding-only, never forcing the statistic onto the image (spec's own explicit
-    requirement)."""
+    components are different sizes) is skipped outright.
+
+    DATA-CARD-2: the approved template (assets/brand/newsroom_visuals/v1/references/data/
+    data_template_manifest.json) has no card/backing element at all - text sits directly on the
+    photo. The translucent backing is a legibility safety net for a corner whose CONTENT is safe
+    (passes edge-density/detail-risk) but whose local CONTRAST is too low for readable text - it
+    must stay a genuine last resort, never the automatic companion of whichever corner happens to
+    be tried first. Two passes over the SAME candidate order/safety gates (no new mechanism): pass
+    1 accepts only a corner that needs NO backing at all; pass 2 (only reached when no corner
+    qualifies backing-free) falls back to the original single-pass behavior. Returns
+    (box, text_color, needs_backing) for the winning corner, or None when no corner qualifies even
+    with backing allowed - the caller must then fail safe to source+branding-only, never forcing
+    the statistic onto the image (spec's own explicit requirement)."""
     canvas_w, canvas_h = canvas.size
 
-    for placement in _DATA_STAT_CANDIDATE_PLACEMENTS:
-        box = _region_box((canvas_w, canvas_h), block_w, block_h, placement, inset)
-        if avoid_box is not None and _rects_intersect(box, avoid_box):
-            continue
-        score_box = (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
-        edge_density, contrast, _red_visibility, detail_risk = _score_region(canvas, score_box, subject_bbox=None)
-        if edge_density >= _EDGE_DENSITY_SAFE_THRESHOLD or detail_risk >= _DETAIL_RISK_MAX_PCT:
-            continue
-        color = _pick_adaptive_data_color(_region_mean_rgb(canvas, box))
-        if color is None:
-            continue
-        return box, color, contrast >= _DATA_BACKING_CONTRAST_THRESHOLD
-    return None
+    def _candidates() -> list[tuple[BoundingBox, tuple[int, int, int], bool]]:
+        found = []
+        for placement in _DATA_STAT_CANDIDATE_PLACEMENTS:
+            box = _region_box((canvas_w, canvas_h), block_w, block_h, placement, inset)
+            if avoid_box is not None and _rects_intersect(box, avoid_box):
+                continue
+            score_box = (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
+            edge_density, contrast, _red_visibility, detail_risk = _score_region(canvas, score_box, subject_bbox=None)
+            if edge_density >= _EDGE_DENSITY_SAFE_THRESHOLD or detail_risk >= _DETAIL_RISK_MAX_PCT:
+                continue
+            color = _pick_adaptive_data_color(_region_mean_rgb(canvas, box))
+            if color is None:
+                continue
+            found.append((box, color, contrast >= _DATA_BACKING_CONTRAST_THRESHOLD))
+        return found
+
+    candidates = _candidates()
+    for box, color, needs_backing in candidates:
+        if not needs_backing:
+            return box, color, False
+    return candidates[0] if candidates else None
 
 
 @dataclass(frozen=True)
@@ -517,7 +533,7 @@ class DataSignaturePlan:
     placement: ComponentPlacement
     red: bool
     line_len: int
-    tier: str  # "full" | "shortened" | "compact"
+    tier: str  # "full" | "shortened" | "compact" | "none" (mark+pulse only, zero connecting line)
 
 
 def _data_signature_line_length(canvas_w: int, width_frac: float) -> int:
@@ -673,6 +689,27 @@ def _select_data_signature(canvas: Image.Image, *, inset: int, pad: int) -> Data
                     placement=placement, red=anchor_color[placement] == _OFFICIAL_NNJ_RED,
                     line_len=length, tier=tier,
                 )
+
+    # R2.10-FINALIZATION-1: the module's own docstring above has always claimed a "FULL/SHORTENED/
+    # COMPACT/NONE fallback order", but "NONE" was never actually implemented as a candidate here -
+    # the loop above simply exhausted every line length down to COMPACT and returned None outright,
+    # discarding an anchor (mark+pulse) that had ALREADY independently passed the safety gate,
+    # purely because every tried CONNECTING LINE crossed real busy content (root-caused against the
+    # real assets/brand/newsroom_visuals/v2_10a_overlay_fix/iphone_recomposed_source.jpg fixture -
+    # the hand/fingers span nearly the full width of the bottom strip, so every line length at both
+    # corners failed edge-density, while each corner's own mark+pulse anchor passed comfortably).
+    # "NONE" draws the mark+pulse only, with zero connecting line - `line_len=0` collapses
+    # `_data_signature_geometry()`'s own line_box to a single point (`line_x0 == line_end_x`),
+    # which `_build_data_lower_signature_image()` now skips drawing entirely (never a visible
+    # zero-length line artifact) - so no further safety check is needed for it: nothing is drawn
+    # there. Preserves the approved signature (mark+pulse remains visible, §12/§13's own explicit
+    # requirement) instead of losing branding entirely on a real busy photo.
+    for placement in _DATA_SIGNATURE_CANDIDATE_PLACEMENTS:
+        if placement in anchor_color:
+            return DataSignaturePlan(
+                placement=placement, red=anchor_color[placement] == _OFFICIAL_NNJ_RED,
+                line_len=0, tier="none",
+            )
     return None
 
 
@@ -689,9 +726,11 @@ def _build_data_signature_fallback(canvas_size: tuple[int, int], *, inset: int) 
     """MEDIA-PROD-1: the guaranteed-always-succeeds branding tier `_select_data_signature()`
     itself deliberately never provides - that function's own docstring contract ("never a forced/
     distorted mark") describes its real-pixel-safety-scored search only, and is intentionally left
-    untouched here. Reached ONLY when that search returns `None` (every bottom corner failed even
-    the smallest compact-tier line) - a DATA card must never ship with zero NNJ branding at all
-    (this phase's own "every image receives final branding layer" requirement).
+    untouched here. Reached ONLY when that search returns `None` (both bottom corners fail even
+    the mark+pulse ANCHOR itself - a strictly deeper failure than the "none" line-length tier
+    above, which already covers "anchor safe, connecting line unsafe" and therefore rarely returns
+    None on its own) - a DATA card must never ship with zero NNJ branding at all (this phase's own
+    "every image receives final branding layer" requirement).
 
     A small white NNJ mark on an opaque dark scrim, sized tightly to the mark alone (no pulse, no
     connecting line - deliberately the smallest possible footprint, visually distinct from the
@@ -745,14 +784,21 @@ def _build_data_lower_signature_image(
     canvas = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(canvas)
 
+    # R2.10-FINALIZATION-1 ("none" tier): line_len=0 collapses line_x0/line_x1 to the same point -
+    # skip drawing it outright rather than let Pillow render a degenerate zero-length line segment
+    # (cosmetically near-invisible either way, but explicit is safer than relying on that).
+    draw_line = line_x0 != line_x1
+
     if placement is ComponentPlacement.LOWER_RIGHT:
-        draw.line([(line_x0, y), (line_x1, y)], fill=color, width=line_thick)
+        if draw_line:
+            draw.line([(line_x0, y), (line_x1, y)], fill=color, width=line_thick)
         _draw_pulse(draw, pulse_x0, y, pulse_w, pulse_h, color, line_thick)
         canvas.alpha_composite(mark, (mark_x, mark_y))
     else:  # LOWER_LEFT - built from primitives, NNJ never mirrored (same rule as MASTER NEWS)
         canvas.alpha_composite(mark, (mark_x, mark_y))
         _draw_pulse(draw, pulse_x0, y, pulse_w, pulse_h, color, line_thick)
-        draw.line([(line_x0, y), (line_x1, y)], fill=color, width=line_thick)
+        if draw_line:
+            draw.line([(line_x0, y), (line_x1, y)], fill=color, width=line_thick)
 
     return canvas
 
@@ -818,10 +864,22 @@ def render_data_card(
         text_x, text_y = x0 + _DATA_BLOCK_MARGIN, y0 + _DATA_BLOCK_MARGIN
 
         if needs_backing:
+            # DATA-CARD-2: the approved template has no card/backing element at all (data_template_
+            # manifest.json) - `_select_data_block_placement()` now only reaches for one as a last
+            # resort when every candidate corner is too visually busy for direct on-image text.
+            # Even then, it must stay the smallest possible legibility aid, never a nominal-block-
+            # sized panel: sized tightly to the REAL measured text content (never wider/taller than
+            # `primary_text`/`label_lines` actually render), not the fixed `block_w`/`block_h`
+            # footprint reserved for corner-safety scoring - a short value like "35%" must never
+            # carry a backing as wide as a long label would need.
+            content_width = draw.textlength(primary_text, font=stat_font)
+            for line in label_lines:
+                content_width = max(content_width, draw.textlength(line, font=label_font))
+            tight_box = (x0, y0, x0 + content_width + _DATA_BLOCK_MARGIN * 2, y0 + block_h)
             backing_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
             backing_draw = ImageDraw.Draw(backing_layer)
             backing_fill = (0, 0, 0, 140) if color == _OFFICIAL_NNJ_WHITE else (255, 255, 255, 150)
-            backing_draw.rounded_rectangle(list(box), radius=10, fill=backing_fill)
+            backing_draw.rounded_rectangle(list(tight_box), radius=10, fill=backing_fill)
             canvas = Image.alpha_composite(canvas, backing_layer)
             draw = ImageDraw.Draw(canvas)
 
