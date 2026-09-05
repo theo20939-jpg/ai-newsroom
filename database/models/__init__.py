@@ -34,6 +34,9 @@ from database.models.telegram_surface import TelegramSurface
 from database.models.telegram_surface_proposal import TelegramSurfaceProposal
 from database.models.telegram_visual_failure import TelegramVisualFailure
 from database.models.user import User
+from database.models.visual_design_attempt import VisualDesignAttempt
+from database.models.visual_designer_brief import VisualDesignerBriefVersion
+from database.models.visual_regression import VisualRegressionCase, VisualRegressionRun
 
 __all__ = [
     "User",
@@ -74,4 +77,8 @@ __all__ = [
     "TelegramExperiment",
     "TelegramSurface",
     "TelegramSurfaceProposal",
+    "VisualDesignAttempt",
+    "VisualDesignerBriefVersion",
+    "VisualRegressionCase",
+    "VisualRegressionRun",
 ]

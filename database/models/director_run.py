@@ -27,6 +27,7 @@ class DirectorType(str, enum.Enum):
     TELEGRAM_ART = "telegram_art"
     TELEGRAM_GROWTH = "telegram_growth"
     TELEGRAM_STRATEGY = "telegram_strategy"
+    TELEGRAM_VISUAL_DESIGN = "telegram_visual_design"
     INSTAGRAM_GROWTH = "instagram_growth"
     INSTAGRAM_FORMAT = "instagram_format"
     INSTAGRAM_CREATIVE = "instagram_creative"

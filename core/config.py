@@ -1070,6 +1070,33 @@ class Settings(BaseSettings):
     # founder explicitly opts in.
     director_run_persistence_enabled: bool = False
 
+    # VISUAL-DESIGN-AUTONOMY-1 §61: everything runtime-impacting defaults False - this phase is
+    # development-only (no production wiring, spec §62). visual_design_director_enabled gates the
+    # Visual Design Director's LLM creative-direction call being reachable from ANY orchestration
+    # path (real or test-invoked outside pytest); visual_design_autonomy_enabled additionally
+    # gates the full attempt/revision loop actually running end to end; visual_design_auto_
+    # revision_enabled gates whether a REWORK verdict is allowed to trigger a next attempt
+    # automatically (vs. always stopping at HUMAN_REVIEW); visual_brief_auto_adaptation_enabled
+    # gates whether repeated-pattern evidence may create a CANDIDATE Designer Brief at all;
+    # visual_brief_auto_promotion_enabled additionally gates whether a validated candidate may be
+    # promoted to ACTIVE without a human action; visual_regression_validation_enabled gates
+    # whether a candidate brief is run against the regression set at all.
+    visual_design_director_enabled: bool = False
+    visual_design_autonomy_enabled: bool = False
+    visual_design_auto_revision_enabled: bool = False
+    visual_brief_auto_adaptation_enabled: bool = False
+    visual_brief_auto_promotion_enabled: bool = False
+    visual_regression_validation_enabled: bool = False
+
+    # VISUAL-DESIGN-AUTONOMY-1 §27/§28: attempt/cost budgets - the hard limits the Visual Design
+    # Director operates inside of. `visual_max_attempts_default` applies unless a presentation-type
+    # override below is set; one initial render counts as attempt 1 (spec §27). All costs are USD.
+    visual_max_attempts_default: int = 2
+    visual_max_attempts_data: int = 3
+    visual_max_attempts_campaign: int = 3
+    visual_max_cost_per_post: float = 0.50
+    visual_max_cost_per_day: float = 20.0
+
     # services/weekly_recap_selection.py::select_weekly_recap_stories() - target Story count
     # (spec's own "Target 5-8 Stories max"), lookback window, and the per-company diversity cap
     # (spec's own "recommended default 2").
