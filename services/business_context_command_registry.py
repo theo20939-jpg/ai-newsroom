@@ -170,6 +170,20 @@ COMMAND_REGISTRY: dict[str, CommandDefinition] = {
             "PUBLIC_* с включённой аналитикой."
         ),
     ),
+    # VISUAL-DESIGN-AUTONOMY-1 §51/§52: /design read is available to every role with director
+    # console access; freeze/unfreeze/rollback additionally require FOUNDER, enforced inside
+    # bot/handlers/visual_design.py itself (same "directive"-allowed proxy pattern as /surface).
+    "design": CommandDefinition(
+        name="design", description="Статус автономной визуальной системы (бриф, здоровье, бюджет).",
+        examples=("/design", "/design news", "/design freeze data"),
+        detailed_help=(
+            "Без аргумента - статус всех scope: версия действующего Designer Brief, здоровье "
+            "(HEALTHY/WATCH/DEGRADED/FROZEN/INSUFFICIENT_DATA), дневной бюджет. С именем scope - "
+            "подробности по нему. FOUNDER дополнительно может: /design freeze <scope>, "
+            "/design unfreeze <scope>, /design rollback <scope> - каждое требует подтверждения. "
+            "Открытие /design никогда не запускает генерацию дизайна и не вызывает AI Gateway."
+        ),
+    ),
 }
 
 

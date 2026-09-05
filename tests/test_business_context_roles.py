@@ -55,6 +55,8 @@ def test_commands_for_role_matches_role_matrix() -> None:
     # SOCIAL-INTELLIGENCE-INTEGRATION-1 §5: Director Console commands are all read-only, so VIEWER
     # gets them alongside the pre-existing /status /help. SOCIAL-INTELLIGENCE-OPS-1 §5: /surface
     # READ is broadly available too - mutation is gated separately inside the handler.
+    # VISUAL-DESIGN-AUTONOMY-1 §54: /design read is broadly available too - mutation
+    # (freeze/unfreeze/rollback) is gated separately inside the handler, same pattern as /surface.
     assert commands_for_role(BusinessContextRole.VIEWER) == frozenset({
-        "status", "help", "directors", "plan", "opportunities", "calendar", "performance", "surface",
+        "status", "help", "directors", "plan", "opportunities", "calendar", "performance", "surface", "design",
     })

@@ -71,7 +71,10 @@ async def _cost_sum(session: AsyncSession, attempts: list[VisualDesignAttempt]) 
     return True, sum(a.total_cost for a in attempts if a.total_cost is not None)
 
 
-async def _daily_cost(session: AsyncSession, *, now: datetime) -> tuple[bool, float]:
+async def daily_cost_summary(session: AsyncSession, *, now: datetime) -> tuple[bool, float]:
+    """Public: (cost_known, sum) of every VisualDesignAttempt cost today - used both by
+    check_budget() below and by services/visual_design_console_service.py's own read-only
+    budget-today display."""
     day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     stmt = select(VisualDesignAttempt).where(VisualDesignAttempt.created_at >= day_start)
     attempts = list((await session.execute(stmt)).scalars().all())
@@ -89,7 +92,7 @@ async def check_budget(
     attempts_used = len(attempts)
 
     post_cost_known, post_cost_so_far = await _cost_sum(session, attempts)
-    daily_cost_known, daily_cost_so_far = await _daily_cost(session, now=now)
+    daily_cost_known, daily_cost_so_far = await daily_cost_summary(session, now=now)
 
     if attempts_used >= max_attempts:
         decision = BudgetDecision.ATTEMPT_LIMIT_REACHED

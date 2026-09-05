@@ -160,6 +160,20 @@ async def unfreeze_brief(session: AsyncSession, scope: str, *, reason: str) -> V
     return frozen
 
 
+async def find_rollback_candidate(session: AsyncSession, scope: str) -> VisualDesignerBriefVersion | None:
+    """The most recent prior validated version other than whatever currently governs the scope -
+    used by the /design rollback confirmation flow so a founder does not need to name an exact
+    version number."""
+    current = await get_active_or_frozen_brief(session, scope)
+    history = await list_history(session, scope)  # already ordered newest-version-first
+    for version in history:
+        if current is not None and version.id == current.id:
+            continue
+        if version.status in (VisualDesignerBriefStatus.SUPERSEDED, VisualDesignerBriefStatus.ROLLED_BACK, VisualDesignerBriefStatus.FROZEN):
+            return version
+    return None
+
+
 async def rollback_to(session: AsyncSession, scope: str, *, target_version_id: UUID, reason: str) -> VisualDesignerBriefVersion:
     """Spec §56: restores a PRIOR VALIDATED version - never deletes anything, the version being
     rolled back FROM moves to ROLLED_BACK (a distinct terminal status from SUPERSEDED, so a reader

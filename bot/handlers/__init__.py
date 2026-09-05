@@ -16,6 +16,7 @@ from bot.handlers.status import router as status_router
 from bot.handlers.telegram_surface import router as telegram_surface_router
 from bot.handlers.telegraph_article_review import router as telegraph_article_review_router
 from bot.handlers.telegraph_shortlist import router as telegraph_shortlist_router
+from bot.handlers.visual_design import router as visual_design_router
 from bot.handlers.whereami import router as whereami_router
 
 router = Router(name="root")
@@ -74,5 +75,9 @@ router.include_router(director_console_router)
 # read available broadly, mutation FOUNDER-only (bot/handlers/telegram_surface.py's own module
 # docstring).
 router.include_router(telegram_surface_router)
+# VISUAL-DESIGN-AUTONOMY-1: /design Visual System status + freeze/unfreeze/rollback - same
+# General-topic gate, read available broadly, mutation FOUNDER-only via confirm/cancel keyboard
+# (bot/handlers/visual_design.py's own module docstring).
+router.include_router(visual_design_router)
 
 __all__ = ["router"]
