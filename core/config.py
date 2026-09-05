@@ -1063,6 +1063,13 @@ class Settings(BaseSettings):
     # way. No enforcement flag, no publication flag exists anywhere alongside this one.
     director_console_enabled: bool = False
 
+    # SOCIAL-INTELLIGENCE-OPS-1 §29-34: gates ONLY the DirectorRun audit-log write that
+    # /plan and /performance perform as a byproduct of their already-free, already-happening
+    # advisory computation - never gates the advisory computation or display itself, and never
+    # triggers any LLM call either way. Default False - no DirectorRun row is persisted until a
+    # founder explicitly opts in.
+    director_run_persistence_enabled: bool = False
+
     # services/weekly_recap_selection.py::select_weekly_recap_stories() - target Story count
     # (spec's own "Target 5-8 Stories max"), lookback window, and the per-company diversity cap
     # (spec's own "recommended default 2").

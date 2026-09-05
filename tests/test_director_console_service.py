@@ -371,6 +371,7 @@ async def test_performance_shows_real_evidence_rows_and_persists_growth_run(
     from services.director_run_service import get_latest_run
 
     monkeypatch.setattr(settings, "telegram_owned_channel_id", -1009999999999)
+    monkeypatch.setattr(settings, "director_run_persistence_enabled", True)
     await create_surface(
         db_session, chat_id=-1009999999999, role=TelegramSurfaceRole.PUBLIC_NEWS_CHANNEL,
         name="NINJA PULSE", analytics_enabled=True, active=True,
@@ -397,12 +398,16 @@ async def test_performance_shows_real_evidence_rows_and_persists_growth_run(
 
 
 @pytest.mark.asyncio
-async def test_plan_persists_telegram_strategy_and_instagram_growth_runs(db_session: AsyncSession) -> None:
+async def test_plan_persists_telegram_strategy_and_instagram_growth_runs(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """/plan's advisory computation is already free/deterministic - persisting it as a DirectorRun
     is an audit-log byproduct, never a newly-triggered paid run."""
+    from core.config import settings
     from database.models.director_run import DirectorType
     from services.director_run_service import get_latest_run
 
+    monkeypatch.setattr(settings, "director_run_persistence_enabled", True)
     _, campaign = await _make_confirmed_campaign(db_session, slug="planrun")
     now = datetime.now(timezone.utc)
     await build_plan_view(db_session, now=now)
@@ -414,3 +419,16 @@ async def test_plan_persists_telegram_strategy_and_instagram_growth_runs(db_sess
     instagram_run = await get_latest_run(db_session, DirectorType.INSTAGRAM_GROWTH)
     assert instagram_run is not None
     assert instagram_run.status.value == "ok"  # a real active campaign exists
+
+
+@pytest.mark.asyncio
+async def test_plan_persists_nothing_when_run_persistence_flag_is_off(db_session: AsyncSession) -> None:
+    """director_run_persistence_enabled defaults False - /plan must not write any DirectorRun row
+    unless a founder has explicitly opted in."""
+    from database.models.director_run import DirectorType
+    from services.director_run_service import get_latest_run
+
+    await _make_confirmed_campaign(db_session, slug="planrunoff")
+    await build_plan_view(db_session, now=datetime.now(timezone.utc))
+    assert await get_latest_run(db_session, DirectorType.TELEGRAM_STRATEGY) is None
+    assert await get_latest_run(db_session, DirectorType.INSTAGRAM_GROWTH) is None

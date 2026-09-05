@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
 from database.models.director_run import DirectorRunEvidenceStage, DirectorRunStatus, DirectorType
 from database.models.instagram_calendar_item import CalendarItemStatus, InstagramContentCalendarItem
 from database.models.strategic_directive import StrategicDirective
@@ -166,22 +167,23 @@ async def build_plan_view(
             telegram_note = "недостаточно данных: нет истории постов канала"
         aggregate = await compute_telegram_performance_aggregate(session, now=now)
         telegram_advisory = derive_strategy_advisory(feed_state, patterns=aggregate.patterns)
-        await create_director_run(
-            session, director_type=DirectorType.TELEGRAM_STRATEGY, platform="telegram", generated_at=now,
-            input_fingerprint=compute_input_fingerprint(
-                feed_state.posts_24h, feed_state.topic_streak, aggregate.total_posts_considered,
-            ),
-            result_payload={
-                "priority_themes": telegram_advisory.priority_themes,
-                "content_gaps": telegram_advisory.content_gaps,
-                "experiment_suggestions": telegram_advisory.experiment_suggestions,
-                "series_opportunities": telegram_advisory.series_opportunities,
-            },
-            status=_AGGREGATE_STATUS_TO_RUN_STATUS.get(aggregate.status, DirectorRunStatus.WAITING_FOR_DATA),
-            decision=_first_or_none(telegram_advisory.priority_themes) or "no priority theme identified",
-            evidence_stage=_best_evidence_stage(aggregate.patterns),
-            business_context_fingerprint=business_context_fingerprint,
-        )
+        if settings.director_run_persistence_enabled:
+            await create_director_run(
+                session, director_type=DirectorType.TELEGRAM_STRATEGY, platform="telegram", generated_at=now,
+                input_fingerprint=compute_input_fingerprint(
+                    feed_state.posts_24h, feed_state.topic_streak, aggregate.total_posts_considered,
+                ),
+                result_payload={
+                    "priority_themes": telegram_advisory.priority_themes,
+                    "content_gaps": telegram_advisory.content_gaps,
+                    "experiment_suggestions": telegram_advisory.experiment_suggestions,
+                    "series_opportunities": telegram_advisory.series_opportunities,
+                },
+                status=_AGGREGATE_STATUS_TO_RUN_STATUS.get(aggregate.status, DirectorRunStatus.WAITING_FOR_DATA),
+                decision=_first_or_none(telegram_advisory.priority_themes) or "no priority theme identified",
+                evidence_stage=_best_evidence_stage(aggregate.patterns),
+                business_context_fingerprint=business_context_fingerprint,
+            )
 
     instagram_strategy: InstagramGrowthStrategy | None = None
     instagram_note = ""
@@ -192,19 +194,20 @@ async def build_plan_view(
         instagram_strategy = generate_growth_strategy(
             opportunity_contexts=contexts, directives=list(snapshot.active_directives),
         )
-        await create_director_run(
-            session, director_type=DirectorType.INSTAGRAM_GROWTH, platform="instagram", generated_at=now,
-            input_fingerprint=compute_input_fingerprint(len(contexts), sorted(c.opportunity.id for c in contexts)),
-            result_payload={
-                "objective_mix": instagram_strategy.objective_mix,
-                "campaign_support": instagram_strategy.campaign_support,
-                "content_gaps": instagram_strategy.content_gaps,
-                "trend_opportunities": instagram_strategy.trend_opportunities,
-            },
-            status=DirectorRunStatus.OK if contexts else DirectorRunStatus.WAITING_FOR_DATA,
-            confidence=instagram_strategy.confidence,
-            business_context_fingerprint=business_context_fingerprint,
-        )
+        if settings.director_run_persistence_enabled:
+            await create_director_run(
+                session, director_type=DirectorType.INSTAGRAM_GROWTH, platform="instagram", generated_at=now,
+                input_fingerprint=compute_input_fingerprint(len(contexts), sorted(c.opportunity.id for c in contexts)),
+                result_payload={
+                    "objective_mix": instagram_strategy.objective_mix,
+                    "campaign_support": instagram_strategy.campaign_support,
+                    "content_gaps": instagram_strategy.content_gaps,
+                    "trend_opportunities": instagram_strategy.trend_opportunities,
+                },
+                status=DirectorRunStatus.OK if contexts else DirectorRunStatus.WAITING_FOR_DATA,
+                confidence=instagram_strategy.confidence,
+                business_context_fingerprint=business_context_fingerprint,
+            )
 
     return PlanView(
         as_of=now, business_context_version=version, active_campaigns=list(snapshot.active_campaigns),
@@ -509,7 +512,7 @@ async def build_performance_view(
             )
             for pattern in aggregate.patterns
         ]
-        if aggregate.status == "OK":
+        if aggregate.status == "OK" and settings.director_run_persistence_enabled:
             growth_advisory = derive_growth_director_advisory(aggregate.patterns)
             await create_director_run(
                 session, director_type=DirectorType.TELEGRAM_GROWTH, platform="telegram", generated_at=now,
