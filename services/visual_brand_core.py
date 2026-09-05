@@ -40,7 +40,8 @@ BRAND_CORE_RULES: tuple[str, ...] = (
 
 _LOGO_REDRAW_PATTERN = re.compile(
     r"\b(ninja\s*pulse|nnj)\b.{0,40}\b(logo|wordmark|mark|watermark|brand(ing)?)\b"
-    r"|\b(logo|wordmark|mark|watermark)\b.{0,40}\b(draw|render|generate|recreate|redraw|include)\b",
+    r"|\b(logo|wordmark|mark|watermark)\b.{0,40}\b(draw|render|generate|recreate|redraw|include)\b"
+    r"|\b(draw|render|generate|recreate|redraw|include)\w*\b.{0,40}\b(logo|wordmark|watermark)\b",
     re.IGNORECASE,
 )
 
