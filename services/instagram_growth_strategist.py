@@ -193,3 +193,19 @@ def generate_growth_strategy(
         trend_opportunities=trend_match_summaries or [], series_recommendations=series_recommendations,
         avoidance_notes=avoidance_notes, risks=risks, confidence=confidence,
     )
+
+
+def suggest_amplification(*, winner_content_id: str, winner_format: ContentFormat) -> list[str]:
+    """Spec §49: a winner may suggest a follow-up, never an automatic cross-platform duplicate
+    (spec §50's own "Telegram and Instagram do NOT share format decisions" principle) - every
+    suggestion here names a human decision to make, not an action this function takes."""
+    suggestions = [f"consider a Stories amplification sequence for content_id={winner_content_id}"]
+    if winner_format == ContentFormat.REEL:
+        suggestions.append(f"consider a Carousel expansion of content_id={winner_content_id} for saves/reference value")
+    elif winner_format == ContentFormat.CAROUSEL:
+        suggestions.append(f"consider a Reel summarizing content_id={winner_content_id} if a real video asset becomes available")
+    suggestions.append(
+        f"a Telegram follow-up on the SAME underlying topic as content_id={winner_content_id} is a "
+        "separate creative decision for the Telegram Director, never an automatic duplicate"
+    )
+    return suggestions
