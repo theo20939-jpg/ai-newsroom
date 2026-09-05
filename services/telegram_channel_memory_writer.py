@@ -9,6 +9,19 @@ CRITICAL: this module is NOT wired into any runtime publication path this phase 
 review()` is a real, tested, callable service, invocable from a future safe post-publication
 bookkeeping step, but nothing in bot/services/worker calls it automatically yet.
 
+SOCIAL-INTELLIGENCE-OPS-1A, spec §10: CHANNEL_MEMORY_RUNTIME_INSERTION_POINT (documented, NOT
+wired) - `services/final_post_publication.py::publish_approved_final_post()`, immediately after
+its own `await session.commit()` on line ~130 (right after it sets `review.published_at` /
+`review.published_telegram_message_id` / `review.published_telegram_chat_id`, itself gated by the
+preceding `if not outcome.sent or outcome.chat_id is None or outcome.message_id is None: return
+PublicationOutcome(status="send_failed")` check a few lines above - so this point is only ever
+reached on a REAL successful send, never an approved-but-unsent draft). A future wiring would add
+one call, `await write_channel_memory_from_final_post_review(session, review)`, right there -
+wrapped in its own try/except mirroring `services/telegram_channel_director_shadow.py::
+run_channel_director_shadow()`'s own "a bug here must never affect the real publish path" pattern
+(that function's result is already returned above this point, so a channel-memory-write failure
+could never change what `publish_approved_final_post()` itself reports back to its caller).
+
 CRITICAL (idempotency, spec §47): repeated calls for the SAME already-recorded review must never
 create a duplicate row - `content_draft_id` is looked up first, and an existing memory row is
 returned unchanged rather than re-inserted.

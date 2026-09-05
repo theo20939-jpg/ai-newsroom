@@ -10,7 +10,22 @@ channel or anyone else's. This mirrors integrations/sources/telegram_source.py's
 `connect()` + `is_user_authorized()` + `disconnect()` pattern (never `client.start()` - see that
 module's own docstring for the real interactive-login-hang incident this avoids) rather than
 importing that module's private helpers directly (this codebase's established convention: small
-adapter-local helpers are duplicated, not cross-coupled, across independent collection paths)."""
+adapter-local helpers are duplicated, not cross-coupled, across independent collection paths).
+
+SOCIAL-INTELLIGENCE-OPS-1A, spec §11: PERFORMANCE_COLLECTION_RUNTIME_INSERTION_POINT (documented,
+NOT wired, collection stays disabled) - `worker/content_cycle.py::run_content_cycle()`, the same
+real periodic cycle that already calls `services/telegram_channel_director_shadow.py::
+run_channel_director_shadow()` (wrapped in its own try/except a few lines below where that call
+happens today). A future wiring would add one step there: select real `TelegramChannelMemory` rows
+with `post_id IS NOT NULL` (i.e. actually published - the precondition
+`collect_snapshot_for_post()` itself already checks) AND whose owned surface passes
+`services/telegram_surface_registry.py::owned_surface_is_public_and_analytics_enabled()` (spec
+§15/§36's own PUBLIC_*-and-analytics-enabled gate - never collect against an internal/unclassified
+chat even if `telegram_performance_collection_enabled` is later turned on), then call
+`collect_snapshot_for_post(session, channel_memory=row, bot=bot, now=now)` per row - itself
+already idempotent per due window (`_nearest_due_window()`) and a pure-read Telegram call
+(never `send_message`/`edit_message`/any write, per this module's own PASSIVE ONLY constraint
+above)."""
 from __future__ import annotations
 
 import logging
