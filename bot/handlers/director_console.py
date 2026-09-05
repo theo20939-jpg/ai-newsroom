@@ -30,7 +30,7 @@ from bot.director_console_formatting import (
 )
 from core.config import settings
 from database.session import async_session_factory
-from services.business_context_roles import is_command_allowed
+from services.business_context_roles import BusinessContextRole, get_role_for_user, is_command_allowed
 from services.director_console_service import (
     build_calendar_view,
     build_opportunities_view,
@@ -93,32 +93,40 @@ async def _send_possibly_long(message: Message, text: str) -> None:
         await message.answer(chunk)
 
 
-async def _authorize(message: Message, command_name: str) -> bool:
+async def _authorize(message: Message, command_name: str) -> BusinessContextRole | None:
+    """Returns the caller's resolved role on success (never None on success - a permitted command
+    always has a real role behind it), or None on any failure (already answered to the user).
+    Callers thread this role straight into their renderer so DirectorConsoleAccessPolicy (spec
+    §54) always sees who is actually asking, never a second, separately-resolved role."""
     if not _is_authorized_chat_and_topic(message):
         await _fail_wrong_location(message)
-        return False
+        return None
     if not settings.director_console_enabled:
         await _fail_console_disabled(message)
-        return False
+        return None
     user_id = message.from_user.id if message.from_user else None
     if user_id is None or not is_command_allowed(user_id, command_name):
         await _fail_no_permission(message, command_name)
-        return False
-    return True
+        return None
+    role = get_role_for_user(user_id)
+    assert role is not None  # is_command_allowed() already required a real role
+    return role
 
 
 @router.message(Command("directors"))
 async def handle_directors(message: Message, command: CommandObject) -> None:
-    if not await _authorize(message, "directors"):
+    role = await _authorize(message, "directors")
+    if role is None:
         return
     async with async_session_factory() as session:
         status = await get_director_console_status(session, now=datetime.now(timezone.utc))
-    await _send_possibly_long(message, render_directors_status(status))
+    await _send_possibly_long(message, render_directors_status(status, role=role))
 
 
 @router.message(Command("plan"))
 async def handle_plan(message: Message, command: CommandObject) -> None:
-    if not await _authorize(message, "plan"):
+    role = await _authorize(message, "plan")
+    if role is None:
         return
     platform, error = _parse_platform_filter(command)
     if error:
@@ -126,12 +134,13 @@ async def handle_plan(message: Message, command: CommandObject) -> None:
         return
     async with async_session_factory() as session:
         view = await build_plan_view(session, now=datetime.now(timezone.utc), platform=platform)
-    await _send_possibly_long(message, render_plan(view, platform=platform))
+    await _send_possibly_long(message, render_plan(view, role=role, platform=platform))
 
 
 @router.message(Command("opportunities"))
 async def handle_opportunities(message: Message, command: CommandObject) -> None:
-    if not await _authorize(message, "opportunities"):
+    role = await _authorize(message, "opportunities")
+    if role is None:
         return
     platform, error = _parse_platform_filter(command)
     if error:
@@ -139,12 +148,13 @@ async def handle_opportunities(message: Message, command: CommandObject) -> None
         return
     async with async_session_factory() as session:
         view = await build_opportunities_view(session, now=datetime.now(timezone.utc), platform=platform)
-    await _send_possibly_long(message, render_opportunities(view, platform=platform))
+    await _send_possibly_long(message, render_opportunities(view, role=role, platform=platform))
 
 
 @router.message(Command("calendar"))
 async def handle_calendar(message: Message, command: CommandObject) -> None:
-    if not await _authorize(message, "calendar"):
+    role = await _authorize(message, "calendar")
+    if role is None:
         return
     platform, error = _parse_platform_filter(command)
     if error:
@@ -152,12 +162,13 @@ async def handle_calendar(message: Message, command: CommandObject) -> None:
         return
     async with async_session_factory() as session:
         view = await build_calendar_view(session, now=datetime.now(timezone.utc), platform=platform)
-    await _send_possibly_long(message, render_calendar(view, platform=platform))
+    await _send_possibly_long(message, render_calendar(view, role=role, platform=platform))
 
 
 @router.message(Command("performance"))
 async def handle_performance(message: Message, command: CommandObject) -> None:
-    if not await _authorize(message, "performance"):
+    role = await _authorize(message, "performance")
+    if role is None:
         return
     platform, error = _parse_platform_filter(command)
     if error:
@@ -165,4 +176,4 @@ async def handle_performance(message: Message, command: CommandObject) -> None:
         return
     async with async_session_factory() as session:
         view = await build_performance_view(session, now=datetime.now(timezone.utc), platform=platform)
-    await _send_possibly_long(message, render_performance(view, platform=platform))
+    await _send_possibly_long(message, render_performance(view, role=role, platform=platform))

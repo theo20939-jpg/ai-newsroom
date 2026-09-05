@@ -157,6 +157,7 @@ class OpportunityRow:
     telegram_note: str
     confidence: float
     evidence: list[str] = field(default_factory=list)
+    embargo_constraints: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -192,6 +193,7 @@ def _row_from_opportunity(opportunity: ContentOpportunity, *, topic: str, telegr
         restricted_claims=list(opportunity.restricted_claims), instagram_objective=recommendation.primary_objective,
         instagram_format=format_decision.recommended_format, telegram_note=telegram_note,
         confidence=opportunity.confidence, evidence=list(opportunity.evidence),
+        embargo_constraints=list(opportunity.embargo_constraints),
     )
 
 
