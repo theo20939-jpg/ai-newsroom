@@ -14,6 +14,7 @@ directive newly appearing should be able to mark even a campaign-less run stale)
 from __future__ import annotations
 
 import hashlib
+import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -29,6 +30,8 @@ from database.models.director_run import (
 from services.business_context_snapshot_service import BusinessContextSnapshot
 from services.campaign_planner import build_campaign_plan
 from services.campaign_service import get_campaign
+
+logger = logging.getLogger(__name__)
 
 
 def compute_input_fingerprint(*parts: object) -> str:
@@ -76,6 +79,10 @@ async def create_director_run(
     session.add(run)
     await session.commit()
     await session.refresh(run)
+    logger.info(
+        "director_run_persisted",
+        extra={"run_id": str(run.id), "director_type": director_type.value, "platform": platform, "status": status.value},
+    )
     return run
 
 
@@ -127,4 +134,7 @@ async def mark_stale(session: AsyncSession, run_id: UUID, *, reason: str) -> Dir
         run.stale_reason = reason
         await session.commit()
         await session.refresh(run)
+        logger.info(
+            "director_run_stale", extra={"run_id": str(run.id), "director_type": run.director_type.value, "reason": reason},
+        )
     return run

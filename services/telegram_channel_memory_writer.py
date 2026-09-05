@@ -23,6 +23,7 @@ noted in this phase's final report as a real gap for a future phase to close onc
 exist somewhere upstream."""
 from __future__ import annotations
 
+import logging
 import uuid
 
 from sqlalchemy import select
@@ -36,6 +37,8 @@ from database.models.news_event import NewsEvent
 from database.models.news_source import NewsSource
 from database.models.story import Story
 from database.models.telegram_channel_memory import StoryRole, TelegramChannelMemory
+
+logger = logging.getLogger(__name__)
 
 
 async def _existing_memory_for_draft(session: AsyncSession, content_draft_id: uuid.UUID) -> TelegramChannelMemory | None:
@@ -91,4 +94,8 @@ async def write_channel_memory_from_final_post_review(
     session.add(memory)
     await session.commit()
     await session.refresh(memory)
+    logger.info(
+        "telegram_channel_memory_written",
+        extra={"memory_id": str(memory.id), "content_draft_id": str(review.content_draft_id)},
+    )
     return memory

@@ -7,6 +7,7 @@ cross-platform import, per the established "shared business truth, separate plat
 architectural boundary."""
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from uuid import UUID
 
@@ -23,6 +24,7 @@ from database.models.telegram_content_calendar_item import (
 _STATUS_CHANGES_TRIGGERING_INVALIDATION = {CampaignStatus.DELAYED, CampaignStatus.CANCELLED}
 _EXACT_DATE_DEPENDENT_PHASES = {"COUNTDOWN", "LAUNCH", "FEATURE_REVEAL"}
 _STATUSES_ALLOWING_EXACT_DATE_DEPENDENT_ITEMS = {CampaignStatus.CONFIRMED.value, CampaignStatus.LAUNCHED.value}
+logger = logging.getLogger(__name__)
 
 
 class UnsafeCalendarAssumptionError(ValueError):
@@ -58,6 +60,10 @@ async def create_calendar_item(
     session.add(item)
     await session.commit()
     await session.refresh(item)
+    logger.info(
+        "telegram_calendar_item_created",
+        extra={"item_id": str(item.id), "content_role": content_role.value, "campaign_id": str(campaign_id) if campaign_id else None},
+    )
     return item
 
 
@@ -113,6 +119,10 @@ async def invalidate_items_for_campaign_change(
         await session.commit()
         for item in changed:
             await session.refresh(item)
+        logger.info(
+            "telegram_calendar_item_invalidated",
+            extra={"campaign_id": str(campaign_id), "count": len(changed), "reason": reason},
+        )
     return changed
 
 
@@ -135,4 +145,8 @@ async def invalidate_items_for_claim_change(
         await session.commit()
         for item in changed:
             await session.refresh(item)
+        logger.info(
+            "telegram_calendar_item_invalidated",
+            extra={"product_id": str(product_id), "count": len(changed), "reason": reason, "new_status": "stale"},
+        )
     return changed

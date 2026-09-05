@@ -19,6 +19,7 @@ proper relocation left as a follow-up (see this phase's own final report)."""
 from __future__ import annotations
 
 import enum
+import logging
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 
@@ -33,6 +34,7 @@ from services.instagram_content_opportunity import resolve_product_mention_permi
 from services.instagram_semantic_matching import SemanticMatchResult, evaluate_semantic_relatedness
 
 _STATUSES_BLOCKING_PRODUCT_MENTION = frozenset({"draft", "tentative", "cancelled"})
+logger = logging.getLogger(__name__)
 
 
 class StoryCampaignMatchType(str, enum.Enum):
@@ -162,7 +164,7 @@ def match_story_to_campaign(
     if embargo_active:
         evidence.append("product still under embargo")
 
-    return StoryCampaignMatch(
+    match = StoryCampaignMatch(
         story_id=story.story_id, campaign_id=campaign_plan.campaign_id, product_id=campaign_plan.product_id,
         topic_relevance=topic_relevance, entity_relevance=entity_relevance, semantic_relevance=None,
         campaign_phase_relevance=campaign_phase_relevance, audience_relevance=None,
@@ -171,6 +173,16 @@ def match_story_to_campaign(
         restricted_claims=[c.claim_text for c in restricted], embargo_constraints=embargo_constraints,
         match_type=match_type, evidence=evidence, confidence=0.3,
     )
+    if match_type != StoryCampaignMatchType.NONE:
+        logger.info(
+            "story_campaign_match_created",
+            extra={
+                "story_id": story.story_id, "campaign_id": campaign_plan.campaign_id,
+                "match_type": match_type.value, "campaign_value": campaign_value,
+                "product_mention_allowed": product_mention_allowed,
+            },
+        )
+    return match
 
 
 async def match_story_to_campaign_with_semantics(

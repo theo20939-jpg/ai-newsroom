@@ -29,6 +29,7 @@ campaign_relation (linked to a campaign or not), publication_hour, publication_d
 deliberately omitted rather than fabricated; noted in this phase's final report."""
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -45,6 +46,7 @@ from services.telegram_surface_registry import owned_surface_is_public_and_analy
 
 _MIN_POSTS_FOR_AGGREGATION = 3
 _MAX_PATTERNS = 30
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -203,6 +205,10 @@ async def compute_telegram_performance_aggregate(
         notes.append(f"показаны {_MAX_PATTERNS} из {len(patterns)} паттернов")
         patterns = patterns[:_MAX_PATTERNS]
 
+    logger.info(
+        "telegram_performance_aggregated",
+        extra={"window": window.value, "total_posts_considered": total_considered, "pattern_count": len(patterns)},
+    )
     return TelegramPerformanceAggregate(
         as_of=now, status="OK", window=window.value, total_posts_considered=total_considered,
         patterns=patterns, notes=notes,
