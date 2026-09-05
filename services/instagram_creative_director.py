@@ -1,0 +1,207 @@
+"""INSTAGRAM-GROWTH-3, item 4/5/6/7: Instagram Creative Director SHADOW pipeline - turns a
+ContentOpportunity + Growth Strategy + ObjectiveRecommendation + AudienceSegment + FormatDecision +
+Hook + Series + evidence into a production-useful creative brief via the existing AI Gateway.
+
+Architecture note (mirrors services/instagram_semantic_matching.py's own, and ultimately
+services/business_context_command_parser.py's original precedent): a one-shot
+`capabilities/gateway_call.py::call_generate()` call with a synthetic `RuntimeContext` - Instagram
+creative shadow-planning has no EditorialTask/Story to bind to, so the full Capability+
+CapabilityExecutor+WorkflowRunner machinery would be a disproportionate graft. Unlike semantic
+matching (item 1), a Gateway failure here has no sensible deterministic fallback - there is no
+simpler algorithm that "generates a creative concept" - so failure is a raised, typed error
+(`CreativeDirectorUnavailableError`), never fabricated placeholder content.
+
+CRITICAL fact-safety contract (item 5): Newsroom owns external factual truth, Business Context
+owns NINJA product truth - the Creative Director may transform PRESENTATION, it may never invent a
+Story fact, invent product functionality, violate a restricted claim, reveal embargoed information,
+or override a Founder Directive. Enforced in THREE deterministic, testable ways, all applied
+AFTER generation (never trusted to prompt discipline alone):
+  1. `assert_evidence_grounded()` - every string in the model's own `evidence_used` output must be
+     a member of the caller-supplied `allowed_evidence` list, exact match. A model that asserts a
+     "fact" not in that list is rejected outright.
+  2. `services.instagram_format_director.validate_package_claims()` (the SAME accepted enforcement
+     point every SinglePostPackage/CarouselPackage/ReelPackage already runs through) is re-run
+     against every generated text field and `restricted_claims`.
+  3. When `product_mention_allowed=False`, `product_name` (if supplied) is folded into the
+     restricted-claims check too - a Founder-Directive-blocked or not-yet-public product can never
+     be named, exactly as if it were itself a restricted claim."""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from uuid import uuid4
+
+from capabilities.gateway_call import call_generate
+from database.models.editorial_task import TaskPriority
+from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, LLMGateway, Message
+from integrations.prompts.protocol import PromptRepository
+from schemas.capability import CapabilityCall, RuntimeContext
+from schemas.instagram_creative import InstagramCarouselCreative, InstagramReelCreative, InstagramSingleCreative
+from services.instagram_format_director import ClaimViolationError, validate_package_claims
+
+SINGLE_PROMPT_NAME = "instagram_creative_director_single"
+CAROUSEL_PROMPT_NAME = "instagram_creative_director_carousel"
+REEL_PROMPT_NAME = "instagram_creative_director_reel"
+_PROMPT_VERSION = "1"
+
+
+class CreativeDirectorUnavailableError(Exception):
+    """Raised when the Gateway call itself fails - no deterministic fallback exists for creative
+    generation; callers must handle this explicitly (e.g. leave the shadow plan without a filled-in
+    creative brief), never fabricate placeholder content in its place."""
+
+
+class UngroundedEvidenceError(ValueError):
+    """Raised when the model's own `evidence_used` names something not in the caller's supplied
+    evidence set - the Creative Director may transform presentation, it may never invent a fact."""
+
+
+class CreativeFactSafetyError(Exception):
+    """Wraps a ClaimViolationError or product-mention violation raised while validating generated
+    creative text - the draft is REJECTED, never silently sanitized."""
+
+
+@dataclass(frozen=True)
+class CreativeDirectorInput:
+    objective: str
+    format: str
+    opportunity_summary: str
+    allowed_evidence: list[str] = field(default_factory=list)
+    audience_summary: str = ""
+    hook_family: str | None = None
+    campaign_theme: str = ""
+    series_context: str = ""
+    fatigue_note: str = ""
+    approved_claims: list[str] = field(default_factory=list)
+    restricted_claims: list[str] = field(default_factory=list)
+    product_mention_allowed: bool = False
+    product_name: str | None = None
+
+
+@dataclass(frozen=True)
+class CreativeGenerationOutcome:
+    """Wraps a validated schema instance with the raw Gateway call, so a caller can persist both
+    the content (services/instagram_creative_plan_service.py) and the cost accounting
+    (services/instagram_ai_cost.py) without re-deriving either."""
+
+    single: InstagramSingleCreative | None = None
+    carousel: InstagramCarouselCreative | None = None
+    reel: InstagramReelCreative | None = None
+    call: CapabilityCall | None = None
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+def assert_evidence_grounded(claimed_evidence: list[str], allowed_evidence: list[str]) -> None:
+    ungrounded = [claim for claim in claimed_evidence if claim not in allowed_evidence]
+    if ungrounded:
+        raise UngroundedEvidenceError(
+            f"Creative Director cited evidence not in the allowed set (possible invented fact): {ungrounded!r}"
+        )
+
+
+def _effective_restricted_claims(director_input: CreativeDirectorInput) -> list[str]:
+    restricted = list(director_input.restricted_claims)
+    if not director_input.product_mention_allowed and director_input.product_name:
+        restricted.append(director_input.product_name)
+    return restricted
+
+
+def _build_user_text(director_input: CreativeDirectorInput) -> str:
+    evidence_block = "\n".join(f"- {item}" for item in director_input.allowed_evidence) or "(no evidence provided)"
+    return (
+        f"OBJECTIVE: {director_input.objective}\n"
+        f"OPPORTUNITY: {director_input.opportunity_summary}\n"
+        f"AUDIENCE: {director_input.audience_summary}\n"
+        f"HOOK FAMILY: {director_input.hook_family or '(none selected)'}\n"
+        f"CAMPAIGN THEME: {director_input.campaign_theme}\n"
+        f"SERIES CONTEXT: {director_input.series_context}\n"
+        f"CREATIVE FATIGUE NOTE: {director_input.fatigue_note}\n"
+        f"APPROVED CLAIMS: {director_input.approved_claims}\n"
+        f"RESTRICTED CLAIMS (never use): {director_input.restricted_claims}\n"
+        f"PRODUCT_MENTION_ALLOWED: {director_input.product_mention_allowed}\n"
+        f"EVIDENCE BULLETS (use ONLY these for any factual claim):\n{evidence_block}"
+    )
+
+
+async def _call_creative_director(
+    gateway: LLMGateway, prompt_repository: PromptRepository, *, prompt_name: str, director_input: CreativeDirectorInput,
+) -> tuple[dict, CapabilityCall]:
+    try:
+        prompt = prompt_repository.resolve(prompt_name, _PROMPT_VERSION)
+    except Exception as exc:
+        raise CreativeDirectorUnavailableError(f"prompt unavailable: {exc}") from exc
+
+    system_text = prompt.system + "\n\nRULES:\n" + "\n".join(f"- {rule}" for rule in prompt.rules)
+    request = GenerateRequest(
+        messages=[
+            Message(role="system", content=[ContentPart(type="text", text=system_text)]),
+            Message(role="user", content=[ContentPart(type="text", text=_build_user_text(director_input))]),
+        ],
+        response_mode="json_schema", response_schema=prompt.output_schema,
+    )
+    runtime = RuntimeContext(
+        task_id=uuid4(), event_id=uuid4(), capability_name=prompt_name, priority=TaskPriority.S,
+        attempt=1, iteration_count=0,
+    )
+
+    try:
+        outcome = await call_generate(gateway, request, runtime=runtime, sequence=0)
+    except Exception as exc:
+        raise CreativeDirectorUnavailableError(f"gateway call failed: {exc}") from exc
+    if outcome.error is not None:
+        raise CreativeDirectorUnavailableError(str(outcome.error))
+
+    response = outcome.response
+    assert response is not None
+    if response.structured_output is None:
+        raise CreativeDirectorUnavailableError("no structured output returned")
+    return response.structured_output, outcome.call
+
+
+def _enforce_fact_safety(*, text_fields: list[str], evidence_used: list[str], director_input: CreativeDirectorInput) -> None:
+    assert_evidence_grounded(evidence_used, director_input.allowed_evidence)
+    try:
+        validate_package_claims(text_fields=text_fields, restricted_claims=_effective_restricted_claims(director_input))
+    except ClaimViolationError as exc:
+        raise CreativeFactSafetyError(str(exc)) from exc
+
+
+async def generate_single_creative(
+    gateway: LLMGateway, prompt_repository: PromptRepository, *, director_input: CreativeDirectorInput,
+) -> CreativeGenerationOutcome:
+    output, call = await _call_creative_director(
+        gateway, prompt_repository, prompt_name=SINGLE_PROMPT_NAME, director_input=director_input,
+    )
+    creative = InstagramSingleCreative.model_validate(output)
+    _enforce_fact_safety(
+        text_fields=[creative.creative_angle, creative.visual_concept, creative.on_image_copy, creative.caption_direction, creative.cta or ""],
+        evidence_used=creative.evidence_used, director_input=director_input,
+    )
+    return CreativeGenerationOutcome(single=creative, call=call)
+
+
+async def generate_carousel_creative(
+    gateway: LLMGateway, prompt_repository: PromptRepository, *, director_input: CreativeDirectorInput,
+) -> CreativeGenerationOutcome:
+    output, call = await _call_creative_director(
+        gateway, prompt_repository, prompt_name=CAROUSEL_PROMPT_NAME, director_input=director_input,
+    )
+    creative = InstagramCarouselCreative.model_validate(output)
+    text_fields = [slide.slide_copy for slide in creative.slides] + [creative.final_cta or ""]
+    _enforce_fact_safety(text_fields=text_fields, evidence_used=creative.evidence_used, director_input=director_input)
+    return CreativeGenerationOutcome(carousel=creative, call=call)
+
+
+async def generate_reel_creative(
+    gateway: LLMGateway, prompt_repository: PromptRepository, *, director_input: CreativeDirectorInput,
+) -> CreativeGenerationOutcome:
+    output, call = await _call_creative_director(
+        gateway, prompt_repository, prompt_name=REEL_PROMPT_NAME, director_input=director_input,
+    )
+    creative = InstagramReelCreative.model_validate(output)
+    text_fields = [
+        creative.hook, creative.caption_direction, creative.voiceover_script or "",
+        *creative.on_screen_text, creative.cta or "", creative.loop_ending_concept or "",
+    ]
+    _enforce_fact_safety(text_fields=text_fields, evidence_used=creative.evidence_used, director_input=director_input)
+    return CreativeGenerationOutcome(reel=creative, call=call)
