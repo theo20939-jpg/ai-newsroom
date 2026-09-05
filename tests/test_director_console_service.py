@@ -1,0 +1,239 @@
+"""SOCIAL-INTELLIGENCE-INTEGRATION-1, spec §33-36: /plan, /opportunities, /calendar, /performance
+service-level tests."""
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from database.models.instagram_calendar_item import CalendarItemStatus
+from database.models.telegram_surface import TelegramSurfaceRole
+from services.campaign_service import create_campaign, update_campaign
+from services.claim_policy_service import create_claim_policy
+from services.director_console_service import (
+    build_calendar_view,
+    build_opportunities_view,
+    build_performance_view,
+    build_plan_view,
+)
+from services.instagram_calendar_service import create_calendar_item
+from services.product_context_service import create_product
+from services.strategic_directive_service import create_directive
+from services.telegram_surface_registry import create_surface
+
+
+async def _make_confirmed_campaign(db_session: AsyncSession, *, slug: str, days_out: int = 2):
+    product = await create_product(db_session, slug=slug, name=f"Product {slug}")
+    now = datetime.now(timezone.utc)
+    campaign = await create_campaign(
+        db_session, product_id=product.id, name=f"{slug} launch",
+        structured_context={
+            "status": "confirmed", "planned_launch_date": (now.date() + timedelta(days=days_out)).isoformat(),
+            "date_confidence": "exact",
+        },
+    )
+    return product, campaign
+
+
+# ---------------------------------------------------------------------------
+# /plan
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_plan_view_produces_separate_telegram_and_instagram_plans(db_session: AsyncSession) -> None:
+    _, campaign = await _make_confirmed_campaign(db_session, slug="plana")
+    now = datetime.now(timezone.utc)
+    plan = await build_plan_view(db_session, now=now)
+
+    assert plan.telegram_advisory is not None
+    assert plan.instagram_strategy is not None
+    # The two are genuinely independent objects derived from different logic paths - never the
+    # same object or a copy of one into the other's shape.
+    assert plan.telegram_advisory is not plan.instagram_strategy
+    assert len(plan.active_campaigns) == 1
+    assert plan.active_campaigns[0].campaign_id == str(campaign.id)
+
+
+@pytest.mark.asyncio
+async def test_plan_view_surfaces_founder_directive(db_session: AsyncSession) -> None:
+    now = datetime.now(timezone.utc)
+    await create_directive(db_session, instruction="Store пока не продвигаем.", priority=1, valid_from=now, created_by=1)
+    plan = await build_plan_view(db_session, now=now)
+    assert len(plan.active_directives) == 1
+    assert "Store" in plan.active_directives[0].instruction
+
+
+@pytest.mark.asyncio
+async def test_plan_view_surfaces_claim_restriction(db_session: AsyncSession) -> None:
+    from database.models.claim_policy import ClaimStatus
+
+    product, _ = await _make_confirmed_campaign(db_session, slug="planb")
+    await create_claim_policy(db_session, product_id=product.id, claim_text="exact price", status=ClaimStatus.RESTRICTED)
+    plan = await build_plan_view(db_session, now=datetime.now(timezone.utc))
+    # Restricted claims are exposed on the opportunity built from the campaign (checked in detail
+    # via /opportunities below) - /plan itself just needs to surface the campaign they attach to.
+    assert plan.active_campaigns
+
+
+@pytest.mark.asyncio
+async def test_business_context_fingerprint_changes_when_campaign_state_changes(db_session: AsyncSession) -> None:
+    """Underlies spec §26/§33's "stale platform plan detected when context version old" - proves
+    the fingerprint a cached consumer would compare against actually changes on real state change."""
+    _, campaign = await _make_confirmed_campaign(db_session, slug="planc")
+    before = await build_plan_view(db_session, now=datetime.now(timezone.utc))
+    await update_campaign(db_session, campaign.id, structured_context={"status": "delayed"})
+    after = await build_plan_view(db_session, now=datetime.now(timezone.utc))
+    assert before.business_context_version != after.business_context_version
+
+
+@pytest.mark.asyncio
+async def test_plan_view_has_no_side_effects(db_session: AsyncSession) -> None:
+    await _make_confirmed_campaign(db_session, slug="pland")
+    before = await build_plan_view(db_session, now=datetime.now(timezone.utc))
+    after = await build_plan_view(db_session, now=datetime.now(timezone.utc))
+    assert before.business_context_version == after.business_context_version
+
+
+# ---------------------------------------------------------------------------
+# /opportunities
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_opportunity_dimensions_stay_separate(db_session: AsyncSession) -> None:
+    await _make_confirmed_campaign(db_session, slug="oppa")
+    view = await build_opportunities_view(db_session, now=datetime.now(timezone.utc))
+    product_rows = [r for r in view.rows if r.source_type == "product"]
+    assert product_rows
+    row = product_rows[0]
+    assert row.campaign_relevance is not None
+    assert row.news_value is None  # never blended into one score
+
+
+@pytest.mark.asyncio
+async def test_opportunity_preserves_product_mention_permission_and_restricted_claims(db_session: AsyncSession) -> None:
+    from database.models.claim_policy import ClaimStatus
+
+    product, _ = await _make_confirmed_campaign(db_session, slug="oppb")
+    await create_claim_policy(db_session, product_id=product.id, claim_text="exact price", status=ClaimStatus.RESTRICTED)
+    view = await build_opportunities_view(db_session, now=datetime.now(timezone.utc))
+    row = next(r for r in view.rows if r.source_type == "product")
+    assert row.product_mention_allowed is True  # confirmed campaign
+    assert "exact price" in row.restricted_claims
+
+
+@pytest.mark.asyncio
+async def test_opportunity_platform_recommendations_are_independent(db_session: AsyncSession) -> None:
+    await _make_confirmed_campaign(db_session, slug="oppc")
+    view = await build_opportunities_view(db_session, now=datetime.now(timezone.utc))
+    row = next(r for r in view.rows if r.source_type == "product")
+    assert row.instagram_objective is not None
+    assert row.instagram_format is not None
+    assert isinstance(row.telegram_note, str) and row.telegram_note
+
+
+@pytest.mark.asyncio
+async def test_no_campaign_no_story_notes_are_honest(db_session: AsyncSession) -> None:
+    view = await build_opportunities_view(db_session, now=datetime.now(timezone.utc))
+    assert view.rows == []
+    assert any("PRODUCT" in n for n in view.notes)
+    assert any("NEWS" in n for n in view.notes)
+    assert any("TREND" in n for n in view.notes)
+
+
+# ---------------------------------------------------------------------------
+# /calendar
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_calendar_shows_active_item(db_session: AsyncSession) -> None:
+    item = await create_calendar_item(
+        db_session, planned_at=datetime.now(timezone.utc), objective="reach", format="reel",
+    )
+    view = await build_calendar_view(db_session, now=datetime.now(timezone.utc))
+    row = next(r for r in view.rows if r.platform == "instagram")
+    assert row.status == CalendarItemStatus.ACTIVE
+    assert row.planned_at == item.planned_at
+
+
+@pytest.mark.asyncio
+async def test_calendar_detects_stale_context_after_delay_not_yet_invalidated(db_session: AsyncSession) -> None:
+    _, campaign = await _make_confirmed_campaign(db_session, slug="cala")
+    await create_calendar_item(
+        db_session, planned_at=datetime.now(timezone.utc), objective="reach", format="reel", campaign_id=campaign.id,
+        depends_on_campaign_phase="LAUNCH", planned_against_campaign_status="confirmed", planned_against_campaign_phase="LAUNCH",
+    )
+    await update_campaign(db_session, campaign.id, structured_context={"status": "delayed"})
+    view = await build_calendar_view(db_session, now=datetime.now(timezone.utc))
+    row = next(r for r in view.rows if r.campaign_id == str(campaign.id))
+    assert row.status == CalendarItemStatus.ACTIVE  # invalidation service never ran
+    assert row.context_stale is True  # but the console still detects the drift
+
+
+@pytest.mark.asyncio
+async def test_calendar_shows_delay_invalidation_after_service_runs(db_session: AsyncSession) -> None:
+    from services.instagram_calendar_service import invalidate_items_for_campaign_change
+    from database.models.campaign import CampaignStatus
+
+    _, campaign = await _make_confirmed_campaign(db_session, slug="calb")
+    await create_calendar_item(
+        db_session, planned_at=datetime.now(timezone.utc), objective="reach", format="reel", campaign_id=campaign.id,
+        depends_on_campaign_phase="LAUNCH", planned_against_campaign_status="confirmed", planned_against_campaign_phase="LAUNCH",
+    )
+    await invalidate_items_for_campaign_change(
+        db_session, campaign_id=campaign.id, new_status=CampaignStatus.DELAYED, new_phase="AWARENESS", reason="delayed",
+    )
+    view = await build_calendar_view(db_session, now=datetime.now(timezone.utc))
+    row = next(r for r in view.rows if r.campaign_id == str(campaign.id))
+    assert row.status == CalendarItemStatus.INVALIDATED
+    assert row.context_stale is False  # already invalidated - not double-flagged
+
+
+@pytest.mark.asyncio
+async def test_calendar_platform_filter(db_session: AsyncSession) -> None:
+    await create_calendar_item(db_session, planned_at=datetime.now(timezone.utc), objective="reach", format="reel")
+    view = await build_calendar_view(db_session, now=datetime.now(timezone.utc), platform="telegram")
+    assert view.rows == []
+    assert any("Telegram" in n for n in view.notes)
+
+
+@pytest.mark.asyncio
+async def test_calendar_view_is_read_only(db_session: AsyncSession) -> None:
+    item = await create_calendar_item(db_session, planned_at=datetime.now(timezone.utc), objective="reach", format="reel")
+    await build_calendar_view(db_session, now=datetime.now(timezone.utc))
+    from services.instagram_calendar_service import list_calendar_items
+    refreshed = await list_calendar_items(db_session)
+    assert next(i for i in refreshed if i.id == item.id).status == CalendarItemStatus.ACTIVE
+
+
+# ---------------------------------------------------------------------------
+# /performance
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_performance_internal_channel_not_shown_as_public(db_session: AsyncSession) -> None:
+    view = await build_performance_view(db_session, now=datetime.now(timezone.utc))
+    assert view.telegram_status == "PUBLIC_CHANNEL_NOT_CONFIGURED"
+
+
+@pytest.mark.asyncio
+async def test_performance_accepts_configured_public_surface(db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "telegram_owned_channel_id", -1009999999999)
+    await create_surface(
+        db_session, chat_id=-1009999999999, role=TelegramSurfaceRole.PUBLIC_NEWS_CHANNEL,
+        name="NINJA PULSE", analytics_enabled=True, active=True,
+    )
+    view = await build_performance_view(db_session, now=datetime.now(timezone.utc))
+    assert view.telegram_status != "PUBLIC_CHANNEL_NOT_CONFIGURED"
+
+
+@pytest.mark.asyncio
+async def test_performance_instagram_is_honest_no_data(db_session: AsyncSession) -> None:
+    view = await build_performance_view(db_session, now=datetime.now(timezone.utc))
+    assert view.instagram_status == "NO_FIRST_PARTY_DATA"
