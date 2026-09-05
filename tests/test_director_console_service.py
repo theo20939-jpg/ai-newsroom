@@ -353,3 +353,64 @@ async def test_performance_accepts_configured_public_surface(db_session: AsyncSe
 async def test_performance_instagram_is_honest_no_data(db_session: AsyncSession) -> None:
     view = await build_performance_view(db_session, now=datetime.now(timezone.utc))
     assert view.instagram_status == "NO_FIRST_PARTY_DATA"
+
+
+@pytest.mark.asyncio
+async def test_performance_shows_real_evidence_rows_and_persists_growth_run(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Spec §35-44: /performance renders real aggregated evidence (not a hardcoded
+    NO_EVIDENCE_YET), and the Growth Director's real, free advisory computation is persisted as a
+    DirectorRun as a byproduct (spec §29-34) - never a second, LLM-costing call."""
+    from uuid import uuid4
+
+    from core.config import settings
+    from database.models.director_run import DirectorType
+    from database.models.telegram_channel_memory import TelegramChannelMemory
+    from database.models.telegram_post_performance import SnapshotWindow, TelegramPostPerformanceSnapshot
+    from services.director_run_service import get_latest_run
+
+    monkeypatch.setattr(settings, "telegram_owned_channel_id", -1009999999999)
+    await create_surface(
+        db_session, chat_id=-1009999999999, role=TelegramSurfaceRole.PUBLIC_NEWS_CHANNEL,
+        name="NINJA PULSE", analytics_enabled=True, active=True,
+    )
+    now = datetime.now(timezone.utc)
+    for i in range(3):
+        memory = TelegramChannelMemory(published_at=now - timedelta(days=1, hours=i), category="news")
+        db_session.add(memory)
+        await db_session.flush()
+        db_session.add(TelegramPostPerformanceSnapshot(
+            id=uuid4(), channel_memory_id=memory.id, telegram_message_id=None, window=SnapshotWindow.H24,
+            captured_at=now - timedelta(hours=i), age_seconds=86400, views=5000 + i * 100,
+            capability_version="v", collector="test",
+        ))
+    await db_session.commit()
+
+    view = await build_performance_view(db_session, now=now)
+    assert view.telegram_status == "OK"
+    assert view.telegram_evidence  # real pattern rows, not an empty placeholder
+
+    run = await get_latest_run(db_session, DirectorType.TELEGRAM_GROWTH)
+    assert run is not None
+    assert run.status.value == "ok"
+
+
+@pytest.mark.asyncio
+async def test_plan_persists_telegram_strategy_and_instagram_growth_runs(db_session: AsyncSession) -> None:
+    """/plan's advisory computation is already free/deterministic - persisting it as a DirectorRun
+    is an audit-log byproduct, never a newly-triggered paid run."""
+    from database.models.director_run import DirectorType
+    from services.director_run_service import get_latest_run
+
+    _, campaign = await _make_confirmed_campaign(db_session, slug="planrun")
+    now = datetime.now(timezone.utc)
+    await build_plan_view(db_session, now=now)
+
+    telegram_run = await get_latest_run(db_session, DirectorType.TELEGRAM_STRATEGY)
+    assert telegram_run is not None
+    assert telegram_run.business_context_fingerprint is not None
+
+    instagram_run = await get_latest_run(db_session, DirectorType.INSTAGRAM_GROWTH)
+    assert instagram_run is not None
+    assert instagram_run.status.value == "ok"  # a real active campaign exists

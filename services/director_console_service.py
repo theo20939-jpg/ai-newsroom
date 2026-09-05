@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from database.models.director_run import DirectorRunEvidenceStage, DirectorRunStatus, DirectorType
 from database.models.instagram_calendar_item import CalendarItemStatus, InstagramContentCalendarItem
 from database.models.strategic_directive import StrategicDirective
 from database.models.story import Story
@@ -29,6 +30,11 @@ from database.models.telegram_content_calendar_item import (
 from services.business_context_snapshot_service import BusinessContextSnapshot, get_business_context_snapshot
 from services.campaign_planner import CampaignPhase, CampaignPlan, build_campaign_plan
 from services.campaign_service import get_campaign
+from services.director_run_service import (
+    compute_business_context_fingerprint,
+    compute_input_fingerprint,
+    create_director_run,
+)
 from services.instagram_calendar_service import list_calendar_items
 from services.instagram_content_opportunity import (
     ContentOpportunity,
@@ -47,9 +53,40 @@ from services.instagram_objectives import ContentObjective
 from services.story_campaign_matcher import StoryCampaignMatchType, StoryInput, match_story_to_campaign
 from services.telegram_calendar_service import list_calendar_items as list_telegram_calendar_items
 from services.telegram_feed_state import compute_feed_state
-from services.telegram_own_channel import owned_chat_id
+from services.telegram_growth_director import derive_growth_director_advisory
+from services.telegram_performance_aggregator import compute_telegram_performance_aggregate
+from services.telegram_performance_memory import EvidenceStage, PerformancePattern
 from services.telegram_strategy_director import StrategyDirectorAdvisory, derive_strategy_advisory
-from services.telegram_surface_registry import owned_surface_is_public_and_analytics_enabled
+
+_AGGREGATE_STATUS_TO_RUN_STATUS: dict[str, DirectorRunStatus] = {
+    "OK": DirectorRunStatus.OK,
+    "WAITING_FOR_DATA": DirectorRunStatus.WAITING_FOR_DATA,
+    "INSUFFICIENT_EVIDENCE": DirectorRunStatus.INSUFFICIENT_EVIDENCE,
+    "PUBLIC_CHANNEL_NOT_CONFIGURED": DirectorRunStatus.BLOCKED,
+}
+_EVIDENCE_STAGE_ORDER = [
+    EvidenceStage.ANOMALY, EvidenceStage.POSSIBLE_SIGNAL, EvidenceStage.REPEATED_PATTERN,
+    EvidenceStage.STABLE_WORKING_RULE,
+]
+_EVIDENCE_STAGE_TO_RUN_STAGE: dict[EvidenceStage, DirectorRunEvidenceStage] = {
+    EvidenceStage.ANOMALY: DirectorRunEvidenceStage.OBSERVATION,
+    EvidenceStage.POSSIBLE_SIGNAL: DirectorRunEvidenceStage.POSSIBLE_SIGNAL,
+    EvidenceStage.REPEATED_PATTERN: DirectorRunEvidenceStage.REPEATED_PATTERN,
+    EvidenceStage.STABLE_WORKING_RULE: DirectorRunEvidenceStage.STABLE_WORKING_RULE,
+}
+
+
+def _best_evidence_stage(patterns: list[PerformancePattern]) -> DirectorRunEvidenceStage | None:
+    """The most evidentially mature stage among the patterns a run actually consumed - a run
+    fed zero patterns records no evidence stage at all, never a fabricated OBSERVATION."""
+    if not patterns:
+        return None
+    best = max(patterns, key=lambda p: _EVIDENCE_STAGE_ORDER.index(p.stage))
+    return _EVIDENCE_STAGE_TO_RUN_STAGE[best.stage]
+
+
+def _first_or_none(values: list[str]) -> str | None:
+    return values[0][:100] if values else None
 
 _PRODUCT_MENTION_ALLOWED_PHASES = frozenset({
     CampaignPhase.PRODUCT_TEASING, CampaignPhase.FEATURE_REVEAL, CampaignPhase.COUNTDOWN,
@@ -119,13 +156,32 @@ async def build_plan_view(
     snapshot = await get_business_context_snapshot(session, now=now)
     version = _business_context_version(snapshot)
 
+    business_context_fingerprint = compute_business_context_fingerprint(snapshot)
+
     telegram_advisory: StrategyDirectorAdvisory | None = None
     telegram_note = ""
     if platform in (None, "telegram"):
         feed_state = await compute_feed_state(session, now=now)
         if feed_state.posts_24h == 0 and not feed_state.topic_distribution:
             telegram_note = "недостаточно данных: нет истории постов канала"
-        telegram_advisory = derive_strategy_advisory(feed_state, patterns=[])
+        aggregate = await compute_telegram_performance_aggregate(session, now=now)
+        telegram_advisory = derive_strategy_advisory(feed_state, patterns=aggregate.patterns)
+        await create_director_run(
+            session, director_type=DirectorType.TELEGRAM_STRATEGY, platform="telegram", generated_at=now,
+            input_fingerprint=compute_input_fingerprint(
+                feed_state.posts_24h, feed_state.topic_streak, aggregate.total_posts_considered,
+            ),
+            result_payload={
+                "priority_themes": telegram_advisory.priority_themes,
+                "content_gaps": telegram_advisory.content_gaps,
+                "experiment_suggestions": telegram_advisory.experiment_suggestions,
+                "series_opportunities": telegram_advisory.series_opportunities,
+            },
+            status=_AGGREGATE_STATUS_TO_RUN_STATUS.get(aggregate.status, DirectorRunStatus.WAITING_FOR_DATA),
+            decision=_first_or_none(telegram_advisory.priority_themes) or "no priority theme identified",
+            evidence_stage=_best_evidence_stage(aggregate.patterns),
+            business_context_fingerprint=business_context_fingerprint,
+        )
 
     instagram_strategy: InstagramGrowthStrategy | None = None
     instagram_note = ""
@@ -135,6 +191,19 @@ async def build_plan_view(
             instagram_note = "недостаточно данных: нет активных кампаний для стратегии"
         instagram_strategy = generate_growth_strategy(
             opportunity_contexts=contexts, directives=list(snapshot.active_directives),
+        )
+        await create_director_run(
+            session, director_type=DirectorType.INSTAGRAM_GROWTH, platform="instagram", generated_at=now,
+            input_fingerprint=compute_input_fingerprint(len(contexts), sorted(c.opportunity.id for c in contexts)),
+            result_payload={
+                "objective_mix": instagram_strategy.objective_mix,
+                "campaign_support": instagram_strategy.campaign_support,
+                "content_gaps": instagram_strategy.content_gaps,
+                "trend_opportunities": instagram_strategy.trend_opportunities,
+            },
+            status=DirectorRunStatus.OK if contexts else DirectorRunStatus.WAITING_FOR_DATA,
+            confidence=instagram_strategy.confidence,
+            business_context_fingerprint=business_context_fingerprint,
         )
 
     return PlanView(
@@ -431,12 +500,29 @@ async def build_performance_view(
     telegram_evidence: list[PerformanceEvidenceRow] = []
 
     if platform in (None, "telegram"):
-        if owned_chat_id() is None:
-            telegram_status = "PUBLIC_CHANNEL_NOT_CONFIGURED"
-        elif not await owned_surface_is_public_and_analytics_enabled(session):
-            telegram_status = "PUBLIC_CHANNEL_NOT_CONFIGURED"
-        else:
-            telegram_status = "NO_EVIDENCE_YET"
+        aggregate = await compute_telegram_performance_aggregate(session, now=now)
+        telegram_status = aggregate.status
+        telegram_evidence = [
+            PerformanceEvidenceRow(
+                description=pattern.description, sample_size=pattern.sample_size,
+                effect_size=pattern.effect_size, stage=pattern.stage.value,
+            )
+            for pattern in aggregate.patterns
+        ]
+        if aggregate.status == "OK":
+            growth_advisory = derive_growth_director_advisory(aggregate.patterns)
+            await create_director_run(
+                session, director_type=DirectorType.TELEGRAM_GROWTH, platform="telegram", generated_at=now,
+                input_fingerprint=compute_input_fingerprint(aggregate.total_posts_considered, aggregate.window),
+                result_payload={
+                    "signals": growth_advisory.signals, "fatigue": growth_advisory.fatigue,
+                    "amplification_candidates": growth_advisory.amplification_candidates,
+                    "experiment_recommendations": growth_advisory.experiment_recommendations,
+                    "warnings": growth_advisory.warnings,
+                },
+                status=DirectorRunStatus.OK, decision=_first_or_none(growth_advisory.signals) or "no actionable signal yet",
+                confidence=growth_advisory.confidence, evidence_stage=_best_evidence_stage(aggregate.patterns),
+            )
 
     instagram_status = "NO_FIRST_PARTY_DATA" if platform in (None, "instagram") else "NOT_APPLICABLE"
 
