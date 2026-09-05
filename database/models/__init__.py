@@ -29,6 +29,7 @@ from database.models.telegram_channel_memory import TelegramChannelMemory
 from database.models.telegram_experiment import TelegramExperiment
 from database.models.telegram_post_performance import TelegramPostPerformanceSnapshot
 from database.models.telegram_surface import TelegramSurface
+from database.models.telegram_surface_proposal import TelegramSurfaceProposal
 from database.models.telegram_visual_failure import TelegramVisualFailure
 from database.models.user import User
 
@@ -68,4 +69,5 @@ __all__ = [
     "TelegramVisualFailure",
     "TelegramExperiment",
     "TelegramSurface",
+    "TelegramSurfaceProposal",
 ]

@@ -10,6 +10,7 @@ from services.telegram_surface_registry import (
     list_public_analytics_surfaces,
     list_surfaces,
     owned_surface_is_public_and_analytics_enabled,
+    upsert_surface,
 )
 
 
@@ -58,3 +59,25 @@ async def test_no_surface_configured_fails_safe(db_session: AsyncSession) -> Non
     (False), never assume the owned channel is public."""
     assert await owned_surface_is_public_and_analytics_enabled(db_session) is False
     assert await list_surfaces(db_session) == []
+
+
+@pytest.mark.asyncio
+async def test_upsert_creates_when_absent(db_session: AsyncSession) -> None:
+    surface = await upsert_surface(
+        db_session, chat_id=-1005010101010, role=TelegramSurfaceRole.PUBLIC_NEWS_CHANNEL, name="NINJA PULSE",
+        analytics_enabled=True,
+    )
+    assert surface.chat_id == -1005010101010
+    assert len(await list_surfaces(db_session)) == 1
+
+
+@pytest.mark.asyncio
+async def test_upsert_updates_in_place_never_duplicates(db_session: AsyncSession) -> None:
+    await upsert_surface(db_session, chat_id=-1005020202020, role=TelegramSurfaceRole.OTHER, name="Unclassified")
+    updated = await upsert_surface(
+        db_session, chat_id=-1005020202020, role=TelegramSurfaceRole.PUBLIC_GAMING_CHANNEL, name="NINJA Games",
+        analytics_enabled=True,
+    )
+    assert updated.role == TelegramSurfaceRole.PUBLIC_GAMING_CHANNEL
+    matching = [s for s in await list_surfaces(db_session) if s.chat_id == -1005020202020]
+    assert len(matching) == 1

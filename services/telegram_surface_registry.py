@@ -28,6 +28,30 @@ async def create_surface(
     return surface
 
 
+async def upsert_surface(
+    session: AsyncSession, *, chat_id: int, role: TelegramSurfaceRole, name: str, username: str | None = None,
+    active: bool = True, analytics_enabled: bool = False,
+) -> TelegramSurface:
+    """SOCIAL-INTELLIGENCE-OPS-1, spec §4's own "repeated confirmation must be idempotent"
+    instruction: confirming the same /surface proposal (or a later one for the same chat_id) twice
+    must never create a duplicate row - updates the existing surface for that chat_id in place if
+    one exists, creates one otherwise."""
+    existing = await get_surface_by_chat_id(session, chat_id)
+    if existing is not None:
+        existing.role = role
+        existing.name = name
+        existing.username = username
+        existing.active = active
+        existing.analytics_enabled = analytics_enabled
+        await session.commit()
+        await session.refresh(existing)
+        return existing
+    return await create_surface(
+        session, chat_id=chat_id, role=role, name=name, username=username, active=active,
+        analytics_enabled=analytics_enabled,
+    )
+
+
 async def get_surface(session: AsyncSession, surface_id: UUID) -> TelegramSurface | None:
     return await session.get(TelegramSurface, surface_id)
 
