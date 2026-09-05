@@ -114,3 +114,43 @@ async def test_design_view_is_fully_read_pure(db_session: AsyncSession) -> None:
     await build_design_scope_detail_view(db_session, "reel", now=datetime.now(timezone.utc))
     after = await _counts()
     assert before == after
+
+
+@pytest.mark.asyncio
+async def test_scope_detail_shows_stable_adaptation_status_with_no_evidence(db_session: AsyncSession) -> None:
+    await create_initial_brief(db_session, scope="stable-scope", brief_text="v1")
+    detail = await build_design_scope_detail_view(db_session, "stable-scope", now=datetime.now(timezone.utc))
+    assert detail is not None
+    assert detail.adaptation_status == "insufficient_data"
+    assert detail.latest_candidate_reason is None
+
+
+@pytest.mark.asyncio
+async def test_scope_detail_shows_repeated_pattern_detected(db_session: AsyncSession) -> None:
+    brief = await create_initial_brief(db_session, scope="rp-scope", brief_text="v1")
+    for _ in range(3):
+        await _attempt(db_session, brief, status=VisualDesignAttemptStatus.REWORK, art_decision="rework", issue_codes=["visual_too_busy"])
+    detail = await build_design_scope_detail_view(db_session, "rp-scope", now=datetime.now(timezone.utc))
+    assert detail is not None
+    assert detail.adaptation_status == "repeated_pattern_detected"
+
+
+@pytest.mark.asyncio
+async def test_scope_detail_shows_candidate_ready_and_reason(db_session: AsyncSession) -> None:
+    from services.visual_designer_brief_service import create_candidate_brief
+
+    await create_initial_brief(db_session, scope="cand-scope", brief_text="v1")
+    await create_candidate_brief(db_session, scope="cand-scope", brief_text="v2", reason="repeated VISUAL_TOO_BUSY on DATA")
+    detail = await build_design_scope_detail_view(db_session, "cand-scope", now=datetime.now(timezone.utc))
+    assert detail is not None
+    assert detail.adaptation_status == "candidate_ready"
+    assert detail.latest_candidate_reason == "repeated VISUAL_TOO_BUSY on DATA"
+
+
+@pytest.mark.asyncio
+async def test_scope_detail_shows_frozen_adaptation_status(db_session: AsyncSession) -> None:
+    await create_initial_brief(db_session, scope="frozen-scope", brief_text="v1")
+    await freeze_brief(db_session, "frozen-scope", reason="founder request")
+    detail = await build_design_scope_detail_view(db_session, "frozen-scope", now=datetime.now(timezone.utc))
+    assert detail is not None
+    assert detail.adaptation_status == "frozen"

@@ -17,6 +17,14 @@ _HEALTH_LABEL = {
     VisualHealthStatus.INSUFFICIENT_DATA: "INSUFFICIENT_DATA",
 }
 
+# VISUAL-DESIGN-AUTONOMY-1A §20: a small, honest vocabulary - never a raw evidence dump. Keys
+# match services/visual_brief_revision_service.py::AdaptationStatusLabel's own values exactly.
+_ADAPTATION_STATUS_LABEL = {
+    "stable": "Stable", "possible_signal": "Possible signal",
+    "repeated_pattern_detected": "Repeated pattern detected", "candidate_ready": "Candidate ready",
+    "candidate_rejected": "Candidate rejected", "frozen": "Frozen", "insufficient_data": "Insufficient data",
+}
+
 
 def render_design_status(view: VisualDesignView, *, role: BusinessContextRole) -> str:
     lines = ["🥷 Visual System", ""]
@@ -62,6 +70,9 @@ def render_design_scope_detail(view: VisualDesignScopeDetailView, *, role: Busin
     lines.append("")
 
     lines.append(f"Откат доступен: {'да' if view.rollback_available else 'нет'}")
+    lines.append(f"Адаптация: {_ADAPTATION_STATUS_LABEL.get(view.adaptation_status, view.adaptation_status)}")
+    if view.latest_candidate_reason and policy.can_see_unreleased_creative_concepts():
+        lines.append(f"Причина последнего кандидата: {view.latest_candidate_reason}")
 
     if view.brief_text is not None:
         if policy.can_see_unreleased_creative_concepts():

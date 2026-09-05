@@ -57,3 +57,28 @@ def test_viewer_never_sees_brief_text() -> None:
 
     founder_text = render_design_scope_detail(detail, role=_FOUNDER)
     assert "secret unreleased creative direction text" in founder_text
+
+
+def test_adaptation_status_shown_with_honest_label() -> None:
+    detail = VisualDesignScopeDetailView(
+        as_of=_NOW, scope="data", active_brief_version=13, active_brief_status="active",
+        last_change_reason=None, last_change_at=None,
+        health=VisualHealthSummary(status=VisualHealthStatus.HEALTHY), rollback_available=False,
+        adaptation_status="repeated_pattern_detected",
+    )
+    text = render_design_scope_detail(detail, role=_FOUNDER)
+    assert "Repeated pattern detected" in text
+
+
+def test_viewer_never_sees_latest_candidate_reason() -> None:
+    detail = VisualDesignScopeDetailView(
+        as_of=_NOW, scope="data", active_brief_version=13, active_brief_status="active",
+        last_change_reason=None, last_change_at=None,
+        health=VisualHealthSummary(status=VisualHealthStatus.HEALTHY), rollback_available=False,
+        adaptation_status="candidate_ready", latest_candidate_reason="repeated VISUAL_TOO_BUSY on DATA",
+    )
+    viewer_text = render_design_scope_detail(detail, role=_VIEWER)
+    assert "VISUAL_TOO_BUSY" not in viewer_text
+
+    founder_text = render_design_scope_detail(detail, role=_FOUNDER)
+    assert "repeated VISUAL_TOO_BUSY on DATA" in founder_text

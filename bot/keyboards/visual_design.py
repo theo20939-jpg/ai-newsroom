@@ -7,7 +7,7 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 _PREFIX = "design"
-_ACTIONS = ("freeze", "unfreeze", "rollback", "cancel")
+_ACTIONS = ("freeze", "unfreeze", "rollback", "reconsider", "cancel")
 
 
 def encode_callback_data(action: str, scope: str) -> str:

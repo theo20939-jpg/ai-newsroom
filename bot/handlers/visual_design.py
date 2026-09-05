@@ -1,14 +1,21 @@
-"""VISUAL-DESIGN-AUTONOMY-1, spec §51-56: /design - read status for every role with console
-access, freeze/unfreeze/rollback mutations for FOUNDER only via a confirm/cancel keyboard (no raw
-prompt editing, spec §57's own explicit "no manual raw prompt edit command in v1" instruction).
+"""VISUAL-DESIGN-AUTONOMY-1/1A, spec §51-56/§21: /design - read status for every role with console
+access, freeze/unfreeze/rollback/reconsider mutations for FOUNDER only via a confirm/cancel
+keyboard (no raw prompt editing, spec §57's own explicit "no manual raw prompt edit command in v1"
+instruction - "reconsider" only ever triggers the SAME bounded revision generator, it never accepts
+replacement prompt text).
 
 Mirrors bot/handlers/director_console.py's own shape exactly (same chat/topic gate, same
 director_console_enabled flag, same role/command authorization) - opening /design never triggers
-design generation and never calls the AI Gateway (spec §52's own explicit instruction)."""
+design generation and never calls the AI Gateway (spec §52's own explicit instruction). "reconsider"
+still respects every existing gate (evidence/frozen/cooldown/budget) unchanged - a manual FOUNDER
+request does not bypass visual_brief_auto_adaptation_enabled (spec §1A-6's own "or explicit
+authorized manual request in future" - deferred, not implemented as a bypass this phase)."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 
 from aiogram import Router
 from aiogram.filters import Command, CommandObject
@@ -18,7 +25,10 @@ from bot.keyboards.visual_design import build_confirm_keyboard, parse_callback_d
 from bot.visual_design_formatting import render_design_scope_detail, render_design_status
 from core.config import settings
 from database.session import async_session_factory
+from integrations.llm_gateway.boot import AIIntegrationLayer, assemble_ai_integration_layer
+from integrations.prompts.file_repository import FilePromptRepository
 from services.business_context_roles import BusinessContextRole, get_role_for_user, is_command_allowed
+from services.visual_brief_revision_service import BriefRevisionStatus, request_brief_revision
 from services.visual_design_console_service import build_design_scope_detail_view, build_design_view
 from services.visual_designer_brief_service import find_rollback_candidate, freeze_brief, rollback_to, unfreeze_brief
 
@@ -26,7 +36,35 @@ logger = logging.getLogger(__name__)
 
 router = Router(name="visual_design")
 
-_MUTATION_ACTIONS = frozenset({"freeze", "unfreeze", "rollback"})
+_MUTATION_ACTIONS = frozenset({"freeze", "unfreeze", "rollback", "reconsider"})
+
+_PROMPTS_ROOT = Path(__file__).resolve().parent.parent.parent / "prompts"
+_ai_layer: AIIntegrationLayer | None = None
+_prompt_repository: FilePromptRepository | None = None
+_ai_layer_lock = asyncio.Lock()
+
+
+async def _get_ai_layer() -> tuple[AIIntegrationLayer, FilePromptRepository]:
+    global _ai_layer, _prompt_repository
+    if _ai_layer is not None and _prompt_repository is not None:
+        return _ai_layer, _prompt_repository
+    async with _ai_layer_lock:
+        if _ai_layer is None or _prompt_repository is None:
+            _prompt_repository = FilePromptRepository(_PROMPTS_ROOT)
+            _ai_layer = assemble_ai_integration_layer(settings, _prompt_repository)
+    return _ai_layer, _prompt_repository
+
+
+_RECONSIDER_RESULT_TEXT: dict[BriefRevisionStatus, str] = {
+    BriefRevisionStatus.CANDIDATE_CREATED: "Кандидат брифа создан (v{version}). Не активирован автоматически.",
+    BriefRevisionStatus.NOT_ELIGIBLE: "Пересмотр невозможен: {reason}",
+    BriefRevisionStatus.BRIEF_FROZEN: "Scope заморожен - пересмотр недоступен.",
+    BriefRevisionStatus.BUDGET_UNKNOWN: "Бюджет неизвестен - пересмотр не выполнен (fail-safe).",
+    BriefRevisionStatus.BUDGET_EXHAUSTED: "Дневной бюджет исчерпан - пересмотр не выполнен.",
+    BriefRevisionStatus.BRIEF_REVISION_UNAVAILABLE: "Генератор недоступен: {reason}",
+    BriefRevisionStatus.REJECTED_BY_BRAND_CORE: "Кандидат отклонён (нарушение Brand Core): {reason}",
+    BriefRevisionStatus.NO_BRIEF_YET: "Для этого scope ещё не создан Designer Brief.",
+}
 
 
 def _is_authorized_chat_and_topic(message: Message) -> bool:
@@ -80,8 +118,12 @@ async def handle_design(message: Message, command: CommandObject) -> None:
         if user_id is None or not is_command_allowed(user_id, "directive"):
             await message.answer("🥷 Изменение визуального брифа доступно только FOUNDER.")
             return
+        confirm_note = (
+            " Это запустит генератор пересмотра брифа (реальный вызов AI Gateway, если evidence "
+            "позволяет)." if first == "reconsider" else ""
+        )
         await message.answer(
-            f"Подтвердите действие: {first.upper()} для scope \"{scope}\".",
+            f"Подтвердите действие: {first.upper()} для scope \"{scope}\".{confirm_note}",
             reply_markup=build_confirm_keyboard(first, scope),
         )
         return
@@ -125,13 +167,19 @@ async def handle_design_callback(callback: CallbackQuery) -> None:
             elif action == "unfreeze":
                 await unfreeze_brief(session, scope, reason=f"unfrozen by user {user_id}")
                 result_text = f"Scope \"{scope}\" разморожен."
-            else:  # rollback
+            elif action == "rollback":
                 candidate = await find_rollback_candidate(session, scope)
                 if candidate is None:
                     result_text = f"Нет валидной версии для отката в scope \"{scope}\"."
                 else:
                     await rollback_to(session, scope, target_version_id=candidate.id, reason=f"rolled back by user {user_id}")
                     result_text = f"Scope \"{scope}\" откачен на версию v{candidate.version}."
+            else:  # reconsider
+                ai_layer, prompt_repository = await _get_ai_layer()
+                revision_result = await request_brief_revision(session, ai_layer.gateway, prompt_repository, scope=scope)
+                template = _RECONSIDER_RESULT_TEXT.get(revision_result.status, "{reason}")
+                version = revision_result.candidate.version if revision_result.candidate is not None else None
+                result_text = template.format(reason=revision_result.reason, version=version)
         except ValueError as exc:
             result_text = f"Не удалось выполнить действие: {exc}"
 

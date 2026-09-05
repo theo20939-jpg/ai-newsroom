@@ -179,9 +179,13 @@ COMMAND_REGISTRY: dict[str, CommandDefinition] = {
         detailed_help=(
             "Без аргумента - статус всех scope: версия действующего Designer Brief, здоровье "
             "(HEALTHY/WATCH/DEGRADED/FROZEN/INSUFFICIENT_DATA), дневной бюджет. С именем scope - "
-            "подробности по нему. FOUNDER дополнительно может: /design freeze <scope>, "
-            "/design unfreeze <scope>, /design rollback <scope> - каждое требует подтверждения. "
-            "Открытие /design никогда не запускает генерацию дизайна и не вызывает AI Gateway."
+            "подробности по нему, включая статус адаптации (Stable/Possible signal/Repeated "
+            "pattern detected/Candidate ready/Candidate rejected/Frozen). FOUNDER дополнительно "
+            "может: /design freeze <scope>, /design unfreeze <scope>, /design rollback <scope>, "
+            "/design reconsider <scope> - каждое требует подтверждения; reconsider запускает тот "
+            "же ограниченный генератор пересмотра брифа (только при наличии REPEATED_PATTERN "
+            "evidence - никогда произвольный текст). Открытие /design никогда не запускает "
+            "генерацию дизайна и не вызывает AI Gateway."
         ),
     ),
 }

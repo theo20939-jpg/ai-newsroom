@@ -67,6 +67,8 @@ class VisualDesignScopeDetailView:
     last_change_at: datetime | None
     health: VisualHealthSummary
     rollback_available: bool
+    adaptation_status: str = "insufficient_data"
+    latest_candidate_reason: str | None = None
     brief_text: str | None = None  # role-based redaction happens in the formatter, not here
 
 
@@ -159,10 +161,18 @@ async def build_design_scope_detail_view(
         and (active is None or v.id != active.id)
     ]
 
+    from services.visual_brief_revision_service import describe_adaptation_status
+
+    adaptation_status = await describe_adaptation_status(session, scope, now=now)
+    latest_candidate = next((v for v in history if v.status == VisualDesignerBriefStatus.CANDIDATE), None)
+    if latest_candidate is None:
+        latest_candidate = next((v for v in history if v.status == VisualDesignerBriefStatus.REJECTED), None)
+
     return VisualDesignScopeDetailView(
         as_of=now, scope=scope, active_brief_version=active.version if active else None,
         active_brief_status=active.status.value if active else "none",
         last_change_reason=active.reason if active else None, last_change_at=active.activated_at if active else None,
-        health=health, rollback_available=bool(rollback_candidates),
+        health=health, rollback_available=bool(rollback_candidates), adaptation_status=adaptation_status.value,
+        latest_candidate_reason=(latest_candidate.reason if latest_candidate is not None else None),
         brief_text=(active.brief_text if (active is not None and include_brief_text) else None),
     )
