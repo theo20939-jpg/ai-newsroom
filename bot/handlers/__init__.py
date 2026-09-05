@@ -1,6 +1,7 @@
 """Aggregates all command routers into a single root router."""
 from aiogram import Router
 
+from bot.handlers.business_context import router as business_context_router
 from bot.handlers.digest import router as digest_router
 from bot.handlers.event_recap_review import router as event_recap_review_router
 from bot.handlers.final_post_review import router as final_post_review_router
@@ -57,5 +58,11 @@ router.include_router(final_post_review_router)
 # Phase 23.0: temporary diagnostic command (bot/handlers/whereami.py's own docstring has the full
 # safety scope) - reports chat_id/is_forum/message_thread_id only, no other effect.
 router.include_router(whereami_router)
+# NINJA Social Intelligence Foundation, Part II: General-topic Business Context Command Center.
+# Gated by its own two-factor chat+topic check on every message/callback (bot/handlers/
+# business_context.py's own module docstring) - a no-op everywhere `newsroom_telegram_chat_id`/
+# `business_context_topic_id` do not match. Fail-closed via `business_context_role_map` (empty by
+# default - nobody has any role until explicitly configured).
+router.include_router(business_context_router)
 
 __all__ = ["router"]
