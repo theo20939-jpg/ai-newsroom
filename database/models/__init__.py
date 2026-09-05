@@ -16,6 +16,9 @@ from database.models.product_event import ProductEvent
 from database.models.strategic_directive import StrategicDirective
 from database.models.telegram_channel import TelegramChannel
 from database.models.telegram_channel_memory import TelegramChannelMemory
+from database.models.telegram_experiment import TelegramExperiment
+from database.models.telegram_post_performance import TelegramPostPerformanceSnapshot
+from database.models.telegram_visual_failure import TelegramVisualFailure
 from database.models.user import User
 
 __all__ = [
@@ -37,4 +40,7 @@ __all__ = [
     "StrategicDirective",
     "BusinessContextProposal",
     "TelegramChannelMemory",
+    "TelegramPostPerformanceSnapshot",
+    "TelegramVisualFailure",
+    "TelegramExperiment",
 ]

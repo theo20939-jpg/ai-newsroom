@@ -1014,6 +1014,22 @@ class Settings(BaseSettings):
     telegram_revision_router_enabled: bool = False
     telegram_art_director_enforcement_enabled: bool = False
 
+    # Telegram Directors Phase 2 §4: explicit OWN-CHANNEL identity - never hardcoded, never
+    # confused with services/collector.py's externally-monitored Source rows (each external
+    # channel is configured per-row in the sources table, not a global setting). Deliberately
+    # optional: real publication already resolves to `newsroom_telegram_chat_id` (Phase 22) - these
+    # settings exist only for a future distinct outward-facing channel separate from the internal
+    # supergroup; until set, services/telegram_own_channel.py::owned_chat_id() falls back to
+    # `newsroom_telegram_chat_id`.
+    telegram_owned_channel_id: int | None = None
+    telegram_owned_channel_username: str | None = None
+
+    # Telegram Directors Phase 2 §6: passive-only first-party performance collection. Default
+    # False - no automatic Telethon call anywhere until explicitly enabled. Even when True,
+    # services/telegram_performance_collection.py only ever reads (iter_messages/get_messages) -
+    # never edits/deletes/sends/reacts/comments (spec §6's own hard constraint).
+    telegram_performance_collection_enabled: bool = False
+
     # services/weekly_recap_selection.py::select_weekly_recap_stories() - target Story count
     # (spec's own "Target 5-8 Stories max"), lookback window, and the per-company diversity cap
     # (spec's own "recommended default 2").

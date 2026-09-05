@@ -10,7 +10,11 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models.telegram_channel_memory import TelegramChannelMemory
+from database.models.telegram_channel_memory import StoryRole, TelegramChannelMemory
+
+# Best-effort proxy only (spec §12) - TelegramChannelMemory has no dedicated commercial/product
+# flag; `content_objective` is the nearest available structural signal.
+_COMMERCIAL_OBJECTIVES = {"product", "commercial", "promotional", "promo"}
 
 
 @dataclass(frozen=True)
@@ -31,6 +35,23 @@ class FeedState:
     recent_story_roles: list[str] = field(default_factory=list)
     recent_visual_families: list[str] = field(default_factory=list)
     recent_campaign_post_count: int = 0
+
+    # Spec §12 extensions - all derived from columns TelegramChannelMemory already has, no new
+    # migration needed. `commercial_content_share` is a best-effort proxy over `content_objective`
+    # (this table has no dedicated commercial/product flag) - documented here rather than silently
+    # treated as authoritative; `campaign_content_share` is structural (campaign_id is not None) and
+    # IS authoritative. `cta_streak` is likewise a best-effort proxy over `content_objective`, since
+    # no dedicated CTA-family column exists either - a future phase should add one if precise CTA
+    # tracking becomes load-bearing.
+    story_role_mix: dict[str, int] = field(default_factory=dict)
+    commercial_content_share: float = 0.0
+    campaign_content_share: float = 0.0
+    recent_update_recap_density: float = 0.0
+    visual_family_streak: int = 0
+    cta_streak: int = 0
+    topic_saturation: float = 0.0
+    entity_saturation: float = 0.0
+    source_saturation: float = 0.0
 
 
 def _longest_leading_streak(values: list[str | None]) -> int:
@@ -72,6 +93,18 @@ async def compute_feed_state(session: AsyncSession, *, now: datetime, lookback_c
     presentation_counter = Counter(r.presentation_type for r in rows if r.presentation_type)
 
     campaign_posts = sum(1 for r in rows if r.campaign_id is not None)
+    commercial_posts = sum(
+        1 for r in rows if (r.content_objective or "").lower() in _COMMERCIAL_OBJECTIVES
+    )
+    update_recap_posts = sum(
+        1 for r in rows if r.story_role in (StoryRole.UPDATE, StoryRole.RECAP)
+    )
+    story_role_counter = Counter(r.story_role.value for r in rows if r.story_role is not None)
+
+    total = len(rows)
+    topic_total = sum(topic_counter.values())
+    entity_total = sum(entity_counter.values())
+    source_total = sum(source_counter.values())
 
     return FeedState(
         as_of=now, posts_1h=posts_1h, posts_6h=posts_6h, posts_24h=posts_24h,
@@ -83,4 +116,13 @@ async def compute_feed_state(session: AsyncSession, *, now: datetime, lookback_c
         recent_story_roles=[r.story_role.value for r in rows[:10] if r.story_role is not None],
         recent_visual_families=[r.visual_family for r in rows[:10] if r.visual_family is not None],
         recent_campaign_post_count=campaign_posts,
+        story_role_mix=dict(story_role_counter),
+        commercial_content_share=(commercial_posts / total) if total else 0.0,
+        campaign_content_share=(campaign_posts / total) if total else 0.0,
+        recent_update_recap_density=(update_recap_posts / total) if total else 0.0,
+        visual_family_streak=_longest_leading_streak([r.visual_family for r in rows]),
+        cta_streak=_longest_leading_streak([r.content_objective for r in rows]),
+        topic_saturation=(max(topic_counter.values()) / topic_total) if topic_total else 0.0,
+        entity_saturation=(max(entity_counter.values()) / entity_total) if entity_total else 0.0,
+        source_saturation=(max(source_counter.values()) / source_total) if source_total else 0.0,
     )
