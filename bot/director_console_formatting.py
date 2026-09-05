@@ -214,8 +214,12 @@ def render_performance(view: PerformanceView, *, role: BusinessContextRole, plat
         if view.telegram_status == "PUBLIC_CHANNEL_NOT_CONFIGURED":
             lines.append("PUBLIC_CHANNEL_NOT_CONFIGURED - публичный канал NINJA PULSE не настроен.")
             lines.append("Метрики внутреннего редакционного чата НЕ являются метриками аудитории.")
-        elif view.telegram_status == "NO_EVIDENCE_YET":
-            lines.append("Публичный канал настроен, но данных ещё недостаточно.")
+        elif view.telegram_status == "WAITING_FOR_DATA":
+            lines.append("WAITING_FOR_DATA - публичный канал настроен, но постов/снапшотов ещё недостаточно.")
+        elif view.telegram_status == "INSUFFICIENT_EVIDENCE":
+            lines.append("INSUFFICIENT_EVIDENCE - данных мало для статистически осмысленного паттерна.")
+        elif view.telegram_status == "OK":
+            lines.append(f"реальные паттерны за сопоставимое окно ({len(view.telegram_evidence)}):")
         else:
             lines.append(view.telegram_status)
         for evidence in view.telegram_evidence:
