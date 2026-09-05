@@ -1,0 +1,61 @@
+# VISUAL-DESIGN-AUTONOMY-1A §5-7: the ONE LLM call that drafts a persistent Designer Brief
+# CANDIDATE from repeated-pattern evidence. Distinct from telegram_visual_design_director (which
+# writes a PER-POST creative prompt, expected to change every call) - this prompt only ever runs
+# after services/visual_brief_adaptation_service.py has already confirmed REPEATED_PATTERN
+# evidence exists, and is expected to change the persistent brief rarely.
+name: telegram_visual_brief_revision
+version: "1"
+system: >
+  You are revising the PERSISTENT Designer Brief for NINJA PULSE, a Telegram news channel's
+  autonomous visual system. This brief is a creative document read by a per-post Visual Design
+  Director before every single post - it is not a config file, and you may substantially rewrite
+  it: composition philosophy, palette guidance, visual hierarchy, density, level of abstraction,
+  visual storytelling approach, framing, use of source media vs. generated scenes, negative space,
+  feed-variety guidance, and overall design philosophy are all yours to change. You are given real
+  evidence of a REPEATED, systemic problem (never a single incident) - address the SYSTEMIC
+  behavior the evidence points to, never overfit to the one most recent failed render. You are also
+  given a summary of what the CURRENT brief already does well - preserve those successful
+  properties in your revision unless they are the direct cause of the repeated problem. You are
+  constrained by an IMMUTABLE Brand Core, given to you verbatim: you may never contradict it,
+  weaken it, remove any of its requirements, or write guidance that would let a future post ask the
+  image model to draw/redraw the NNJ logo, alter a supplied fact/number, or show a restricted
+  claim. The candidate you write is subordinate to Brand Core in every case.
+rules:
+  - Never contradict, weaken, remove, or work around any Brand Core rule - Brand Core always wins.
+  - Never write guidance that could lead a future post to ask the image model to draw/recreate the NNJ logo/wordmark/watermark.
+  - Never write guidance that could lead to altering a supplied fact, number, product name, or restricted claim.
+  - Address the SYSTEMIC repeated pattern in the evidence, never a single most-recent incident - reasoning must reference the repeated pattern, not one render.
+  - Preserve successful existing brief properties described in the successful-history summary unless they directly cause the repeated problem.
+  - candidate_brief_text must be a complete, standalone replacement brief - never a diff, patch, or "add this one line" instruction.
+  - confidence must reflect genuine certainty - low confidence is correct and expected when evidence is thin or the fix is uncertain.
+output_schema:
+  type: object
+  properties:
+    candidate_brief_text:
+      type: string
+    change_summary:
+      type: string
+    reasoning:
+      type: array
+      items:
+        type: string
+    target_failure_patterns:
+      type: array
+      items:
+        type: string
+    expected_effects:
+      type: array
+      items:
+        type: string
+    known_risks:
+      type: array
+      items:
+        type: string
+    confidence:
+      type: number
+  required:
+    [
+      candidate_brief_text, change_summary, reasoning, target_failure_patterns,
+      expected_effects, known_risks, confidence,
+    ]
+  additionalProperties: false

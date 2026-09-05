@@ -100,3 +100,50 @@ def check_creative_prompt_against_brand_core(
     if claim_violation is not None:
         violations.append(claim_violation)
     return BrandCoreCheckResult(violations=violations)
+
+
+# VISUAL-DESIGN-AUTONOMY-1A §10: a candidate PERSISTENT BRIEF is a second, distinct attack surface
+# from a per-post prompt - it could try to WEAKEN a Brand Core rule for every future post rather
+# than merely violate it once. This pattern catches language that tries to override/remove/relax a
+# safety rule, never a creative-taste choice (spec §4's own "no subjective taste in Brand Core"
+# boundary is unaffected - this only ever flags an attempt to touch the immutable rules themselves).
+_WEAKENING_VERBS = (
+    r"ignor(?:e|ing)|overrid(?:e|ing)|disregard|bypass|relax(?:ed)?|waive[d]?|"
+    r"no\s+longer\s+(?:need(?:s|ed)?|require[sd]?|applies|applicable)|"
+    r"(?:is|are|be)\s+no\s+longer\s+required|not?\s+required\s+anymore|"
+    r"remove[sd]?\s+the\s+requirement|no\s+restriction(?:s)?\s+on|"
+    r"may\s+now\s+be\s+(?:altered|changed|approximated|shown|adjusted|redrawn)|"
+    r"(?:can|may)\s+now\s+(?:be\s+)?(?:ignored|skipped|omitted)"
+)
+_SAFETY_SUBJECTS = r"brand\s*core|logo|wordmark|watermark|fact(?:ual|s)?|numbers?|claims?|restrict(?:ed|ions?)?|embargo(?:es)?"
+_SAFETY_WEAKENING_PATTERN = re.compile(
+    rf"\b(?:{_WEAKENING_VERBS})\b.{{0,60}}\b(?:{_SAFETY_SUBJECTS})\b"
+    rf"|\b(?:{_SAFETY_SUBJECTS})\b.{{0,60}}\b(?:{_WEAKENING_VERBS})\b",
+    re.IGNORECASE,
+)
+
+
+def check_brief_text_weakens_safety(brief_text: str) -> BrandCoreViolation | None:
+    match = _SAFETY_WEAKENING_PATTERN.search(brief_text)
+    if match is None:
+        return None
+    return BrandCoreViolation(
+        rule="Brand Core is immutable - a candidate brief may never weaken, override, or remove a Brand Core rule.",
+        detail=f"brief text appears to weaken a safety rule near: {match.group(0)!r}",
+    )
+
+
+def check_brief_text_against_brand_core(brief_text: str) -> BrandCoreCheckResult:
+    """VISUAL-DESIGN-AUTONOMY-1A §10: the one function a caller must run against every freshly
+    generated CANDIDATE brief before it is ever persisted, let alone promoted - deterministic, free,
+    no Gateway call. Checks the persistent-brief-specific attack surface (attempting to weaken a
+    safety rule for every future post) on top of the same logo-redraw check a per-post prompt
+    already gets."""
+    violations: list[BrandCoreViolation] = []
+    logo_violation = check_prompt_never_asks_to_draw_logo(brief_text)
+    if logo_violation is not None:
+        violations.append(logo_violation)
+    weakening_violation = check_brief_text_weakens_safety(brief_text)
+    if weakening_violation is not None:
+        violations.append(weakening_violation)
+    return BrandCoreCheckResult(violations=violations)

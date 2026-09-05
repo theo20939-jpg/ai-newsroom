@@ -39,7 +39,9 @@ class RepeatedPatternEvidence:
     sample_size: int
 
 
-async def _recent_attempts(session: AsyncSession, scope: str) -> list[VisualDesignAttempt]:
+async def recent_attempts_for_scope(session: AsyncSession, scope: str) -> list[VisualDesignAttempt]:
+    """Public: also reused by services/visual_brief_revision_service.py to build the successful-
+    history/issue-distribution summaries for a candidate-generation call."""
     from database.models.visual_designer_brief import VisualDesignerBriefVersion
 
     stmt = (
@@ -73,7 +75,7 @@ def _classify(attempts: list[VisualDesignAttempt]) -> RepeatedPatternEvidence | 
 
 
 async def detect_repeated_pattern(session: AsyncSession, scope: str) -> RepeatedPatternEvidence | None:
-    attempts = await _recent_attempts(session, scope)
+    attempts = await recent_attempts_for_scope(session, scope)
     return _classify(attempts)
 
 
