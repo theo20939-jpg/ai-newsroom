@@ -324,3 +324,49 @@ def test_real_public_figure_names_pass_through_the_prompt_unmodified() -> None:
     prompt = build_image_prompt(concept)
     assert "Tim Cook" in prompt
     assert "Apple logo" in prompt
+
+
+# ---------------------------------------------------------------------------
+# MEME-PROD-3: pseudo-text/fake-UI hardening, composition, humor_mechanism context.
+# ---------------------------------------------------------------------------
+
+
+def test_prompt_no_longer_permits_illegible_or_abstract_marks() -> None:
+    """The exact wording MEME-PROD-2 shipped ("illegible/abstract marks only" as an acceptable
+    rendering) is very likely why gpt-image-2 produced scribble-text/squares - it was explicit
+    permission to draw mark-like texture. That permission must be gone."""
+    prompt = build_image_prompt(_CONCEPT)
+    assert "illegible/abstract marks only" not in prompt
+    assert "abstract symbols" in prompt.lower()  # named only as something to AVOID, not permit
+    assert "not even" in prompt.lower() or "never" in prompt.lower()
+
+
+def test_prompt_names_ui_specific_objects_not_just_signage() -> None:
+    """MEME-PROD-2's object list (nameplate/sign/screen/slide/product label) never named UI
+    elements at all, even though v2's own encouraged meme_format list includes UI-parody formats
+    (fake screenshot/chat, notification/UI parody, gaming HUD/UI parody)."""
+    prompt = build_image_prompt(_CONCEPT).lower()
+    for keyword in ("button", "icon", "hud overlay", "chat bubble", "notification badge"):
+        assert keyword in prompt
+
+
+def test_prompt_forbids_fake_interface_chrome_with_legible_labels() -> None:
+    prompt = build_image_prompt(_CONCEPT).lower()
+    assert "fake interface chrome" in prompt
+
+
+def test_prompt_instructs_centered_subject_and_calm_top_bottom_bands() -> None:
+    """Closes the gap between meme_render.py's own documented assumption ("subject occupies the
+    visual center") and a prompt that never actually said so."""
+    prompt = build_image_prompt(_CONCEPT).lower()
+    assert "centered" in prompt
+    assert "top" in prompt and "bottom" in prompt
+
+
+def test_prompt_includes_humor_mechanism_as_visual_guidance() -> None:
+    """Gives the image model the comedic PRINCIPLE to lean into visually - distinct from
+    punchline (still never included, per test_build_image_prompt_excludes_punchline_and_
+    instructs_no_text above)."""
+    prompt = build_image_prompt(_CONCEPT)
+    assert _CONCEPT.humor_mechanism in prompt
+    assert _CONCEPT.punchline not in prompt

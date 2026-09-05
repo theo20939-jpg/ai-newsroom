@@ -88,7 +88,7 @@ services:
       # to services.image_persistence.read_candidate_bytes() (local disk) whenever a candidate has
       # no cached telegram_file_id yet. Read-only: this service never writes image bytes, only
       # content_worker's M5 persistence path does.
-      - image_storage_data:/data/image_storage:ro
+      - image_storage_data:/data/image_storage
 
   postgres:
     image: postgres:16-alpine

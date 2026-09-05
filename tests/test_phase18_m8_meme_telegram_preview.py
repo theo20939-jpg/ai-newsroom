@@ -99,6 +99,21 @@ def test_build_meme_preview_keyboard_includes_every_action_and_source_link() -> 
     assert "https://example.com/story" in all_urls
 
 
+def test_build_meme_preview_keyboard_labels_are_russian_with_unchanged_callback_data() -> None:
+    """MEME-PROD-2.1: visible button text is localized to Russian; callback_data (the action
+    string every handler decodes) is completely unaffected - only bot/keyboards/meme_preview.py's
+    own InlineKeyboardButton `text=` literals changed, not encode_callback_data()'s output."""
+    keyboard = build_meme_preview_keyboard(_CANDIDATE_ID, source_url="https://example.com/story")
+    buttons = [button for row in keyboard.inline_keyboard for button in row]
+    texts = [button.text for button in buttons]
+    assert "✅ Одобрить" in texts
+    assert "❌ Отклонить" in texts
+    assert "🔗 Источник" in texts
+    assert not any(text in ("Approve", "Reject", "Source") for text in texts)
+    for action in ("approve", "reject", "regen_concept", "regen_image", "regen_text", "fallback"):
+        assert encode_callback_data(action, _CANDIDATE_ID) in [b.callback_data for b in buttons if b.callback_data]
+
+
 def test_build_meme_preview_keyboard_without_source_url_has_no_url_button() -> None:
     keyboard = build_meme_preview_keyboard(_CANDIDATE_ID, source_url=None)
     all_urls = [button.url for row in keyboard.inline_keyboard for button in row if button.url]
@@ -123,11 +138,11 @@ def test_build_decided_keyboard_has_only_source_button() -> None:
 
 
 def test_render_caption_is_minimal_meme_and_headline_only() -> None:
-    """MEME PRODUCTION PIPELINE: the caption is now "😂 MEME\\n\\n<headline>" only - on-image
+    """MEME-PROD-2.1: the caption is now "😂 Мем\\n\\n<headline>" (was "😂 MEME") - on-image
     text/safety/quality diagnostics are deliberately NOT duplicated in the caption anymore (they
     remain in structured logs and on the MemeCandidate row itself)."""
     caption = render_meme_preview_caption(_card())
-    assert caption == "😂 MEME\n\nNvidia CEO insists AI is not destroying jobs"
+    assert caption == "😂 Мем\n\nNvidia CEO insists AI is not destroying jobs"
     assert "AI WON'T TAKE YOUR JOB" not in caption
     assert "Safety: PASS" not in caption
 

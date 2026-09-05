@@ -62,7 +62,9 @@ _CONCEPT_OUTPUT = {
     "forbidden_interpretations": [], "meme_format": "drake_comparison",
 }
 _COPY_OUTPUT = {
-    "top_text": "NOBODY EXPECTED IT ON TIME", "bottom_text": "IT SHIPPED ON TIME",
+    # MEME-PROD-2.1: top_text/bottom_text are Russian (the mandatory on-image language) - every
+    # other field is unaffected by that requirement, so intentionally left in English here.
+    "top_text": "НИКТО НЕ ЖДАЛ ВОВРЕМЯ", "bottom_text": "А ОНО ВЫШЛО ВОВРЕМЯ",
     "punchline_short": "Shipped. On time. Somehow.", "telegram_caption": "When it actually ships on time.",
     "editor_explanation": "Plays on the surprise.", "alt_text": "A calendar with a shocked emoji.",
 }
@@ -700,6 +702,53 @@ async def test_other_invalid_required_field_still_fails_closed_without_crashing(
     candidate = await db_session.get(MemeCandidate, outcome.candidate_id)
     assert candidate is not None
     assert candidate.copy_data is None  # attach_copy() was never reached
+
+
+@pytest.mark.asyncio
+async def test_english_meme_overlay_text_is_rejected(db_session: AsyncSession, tmp_path) -> None:
+    """MEME-PROD-2.1: production incident evidence was English on-image text ("Automation:
+    allegedly seamless") despite the prompt already asking for Russian - the deterministic
+    `_meme_overlay_text_is_russian()` backstop must reject it via the same controlled
+    `copy_validation_failed` outcome a structurally-invalid MemeCopy already uses, never crash and
+    never silently deliver an English meme."""
+    event = await _make_event(db_session)
+    english_copy = {**_COPY_OUTPUT, "top_text": "Automation: allegedly seamless", "bottom_text": "IP check: allegedly missing"}
+    gateway = _gateway(copy_output=english_copy)
+
+    outcome = await trigger_meme_generation(
+        db_session, news_event_id=event.id, trigger_source="manual",
+        capability_registry=_full_registry(gateway), image_gateway=MockImageAdapter(),
+        storage=LocalImageStorage(tmp_path), bot=_bot()[0],
+    )
+
+    assert outcome.status == "copy_validation_failed"
+    assert outcome.error is not None and "Russian" in outcome.error
+    candidate = await db_session.get(MemeCandidate, outcome.candidate_id)
+    assert candidate is not None
+    assert candidate.copy_data is None  # attach_copy() was never reached
+
+
+@pytest.mark.asyncio
+async def test_russian_meme_overlay_text_with_inline_latin_brand_name_passes(
+    db_session: AsyncSession, tmp_path,
+) -> None:
+    """A Latin-script acronym/brand name inline inside otherwise-Russian text (real Russian tech-
+    culture meme style, per the prompt's own rule) must not be misflagged as English."""
+    event = await _make_event(db_session)
+    russian_copy = {**_COPY_OUTPUT, "top_text": "Когда NNJ проверил IP", "bottom_text": None}
+    gateway = _gateway(copy_output=russian_copy)
+
+    outcome = await trigger_meme_generation(
+        db_session, news_event_id=event.id, trigger_source="manual",
+        capability_registry=_full_registry(gateway), image_gateway=MockImageAdapter(),
+        storage=LocalImageStorage(tmp_path), bot=_bot()[0],
+    )
+
+    assert outcome.status != "copy_validation_failed"
+    candidate = await db_session.get(MemeCandidate, outcome.candidate_id)
+    assert candidate is not None
+    assert candidate.copy_data is not None
+    assert candidate.copy_data["top_text"] == "Когда NNJ проверил IP"
 
 
 @pytest.mark.asyncio

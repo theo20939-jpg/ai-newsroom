@@ -114,7 +114,7 @@ def build_source_only_keyboard(
 # used, is a caption-text link only - services/news_telegram_presentation.py's own
 # build_ninja_pulse_footer_html() - never a button, never both).
 def build_editorial_send_keyboard(
-    source_url: str | None, news_event_id: UUID, *, label: str = "🔗 Open source",
+    source_url: str | None, news_event_id: UUID, *, label: str = "🔗 Источник",
 ) -> InlineKeyboardMarkup | None:
     """Case 1 (source + meme): both buttons. Case 2 (no source): meme-only, one fresh row. Case 3
     (meme disallowed - caller simply omits calling this / uses build_source_only_keyboard directly)

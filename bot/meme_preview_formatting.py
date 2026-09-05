@@ -3,8 +3,9 @@ Mirrors `bot/image_preview_formatting.py`'s own "pure functions, no aiogram/Bot 
 this module" discipline exactly - testable with zero Telegram mocking.
 
 MEME PRODUCTION PIPELINE (overnight phase) product correction: the MEMES topic is an editorial
-INBOX, not a diagnostic console - the caption is now the short, minimal "😂 MEME\\n\\n<headline>"
-shape the phase brief explicitly specifies, never a dump of the on-image text plus safety/quality
+INBOX, not a diagnostic console - the caption is now the short, minimal "😂 Мем\\n\\n<headline>"
+(MEME-PROD-2.1: RU label, was "😂 MEME") shape the phase brief explicitly specifies, never a dump
+of the on-image text plus safety/quality
 diagnostic lines (those remain visible in structured logs and on the `MemeCandidate` row itself
 for anyone who needs to debug a specific meme - the caption is what the EDITOR reads, not what a
 developer reads). "Do NOT duplicate the entire NEWS article" - only the headline is shown.
@@ -27,7 +28,7 @@ def render_meme_preview_caption(card: MemePreviewCard) -> str:
     (MEME PRODUCTION PIPELINE's own explicit "do NOT duplicate the entire NEWS article"
     requirement) - the on-image text is already visible IN the delivered photo itself, the source
     link is a separate inline button (bot/keyboards/meme_preview.py), never repeated in text."""
-    caption = f"😂 MEME\n\n{card.news_title}"
+    caption = f"😂 Мем\n\n{card.news_title}"
     if len(caption) > CAPTION_SAFE_LIMIT:
         raise MemePreviewCaptionTooLongError(
             f"Rendered meme preview caption is {len(caption)} chars, exceeds {CAPTION_SAFE_LIMIT}."

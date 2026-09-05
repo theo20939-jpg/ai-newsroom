@@ -41,6 +41,7 @@ from services.image_quality import aspect_ratio_band, hamming_distance, resoluti
 from services.image_relevance import PROVENANCE_TABLE
 from services.media_ranking import _NEAR_DUPLICATE_MAX_HAMMING_DISTANCE, rank_media_candidates
 from services.news_editorial_relevance import OUT_OF_SCOPE, classify_editorial_relevance
+from services.video_quality_gate import VideoContentClassification, assess_video_text_signals
 from services.brand_renderer import RenderResult, render_branded_media
 from services.nnj_master_news_overlay import (
     NEWS_BRANDING_NO_SOURCE_BYTES,
@@ -1356,6 +1357,31 @@ async def run_content_cycle(
                         best_video_candidate = select_best_video_candidate(video_candidates)
                         if best_video_candidate is not None:
                             video_hint = to_native_video_hint(best_video_candidate)
+
+                        # MEDIA-PROD-1: deterministic advertisement-keyword text gate - see
+                        # services/video_quality_gate.py's own module docstring for the full scope
+                        # decision (text-only; visual/frame-based detection is a disclosed future
+                        # extension, not silently skipped). Applied AFTER selection so a rejected
+                        # video degrades exactly like "no video hint resolved" for any other reason
+                        # - no new fallback path.
+                        if video_hint is not None and settings.video_quality_gate_mode != "off":
+                            video_quality_assessment = assess_video_text_signals(
+                                title=event.title, content=event.content,
+                            )
+                            logger.info(
+                                "video_quality_gate_assessed",
+                                extra={
+                                    "draft_id": str(outcome.content_draft.id),
+                                    "classification": video_quality_assessment.classification.value,
+                                    "matched_keywords": list(video_quality_assessment.matched_keywords),
+                                    "mode": settings.video_quality_gate_mode,
+                                },
+                            )
+                            if (
+                                video_quality_assessment.classification == VideoContentClassification.ADVERTISEMENT
+                                and settings.video_quality_gate_mode == "enforce"
+                            ):
+                                video_hint = None
                         # Phase V2.27/V2.27A: a YOUTUBE/VIMEO/EMBEDDED_PLAYER hint previously
                         # always became a plain caption link (YOUTUBE/VIMEO) or was discarded
                         # entirely (EMBEDDED_PLAYER did not exist before V2.27A) - see

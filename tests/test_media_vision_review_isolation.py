@@ -34,6 +34,14 @@ def test_worker_content_cycle_never_imports_media_vision_review() -> None:
     assert not any("media_vision_review" in module for module in imports)
 
 
+def test_media_vision_review_diagnostics_script_never_imports_the_capability() -> None:
+    """MEDIA-PROD-1: scripts/media_vision_review_diagnostics.py is a read-only report over already-
+    persisted rows - it must never import the capability module itself (that would mean it could
+    trigger a real LLM call, not just read), keeping the "manual harness only" fence intact."""
+    imports = _imports_in(Path("scripts/media_vision_review_diagnostics.py"))
+    assert not any("media_vision_review_capability" in module for module in imports)
+
+
 def test_only_the_manual_harness_script_and_its_own_tests_import_the_capability() -> None:
     """A repo-wide sweep: every .py file that imports capabilities.media_vision_review_capability
     (module path, not the registry.py registration line - registering a Capability is required

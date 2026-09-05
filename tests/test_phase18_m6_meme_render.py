@@ -145,7 +145,7 @@ def test_fit_text_to_band_truncates_when_nothing_fits_even_smallest_font() -> No
     font, lines, violated = _fit_text_to_band(draw, long_text, max_width=900, max_height=1)
 
     assert violated is True
-    assert len(lines) <= 3  # _MAX_LINES_PER_BAND - never grows unbounded either
+    assert len(lines) <= 2  # _MAX_LINES_PER_BAND - never grows unbounded either
 
 
 def test_render_reports_truncation_reason_code_when_text_cannot_fit(tmp_path, monkeypatch) -> None:
@@ -176,6 +176,51 @@ def test_deterministic_same_inputs_produce_same_output(tmp_path) -> None:
     assert first.storage_key == second.storage_key
 
 
+def test_reserve_watermark_clearance_keeps_corner_region_untouched() -> None:
+    """MEME-PROD-2.1: real production overlap was confirmed by rendering a long line before this
+    fix - the watermark's own top-right (or bottom-right) footprint must stay pure background when
+    `reserve_watermark_clearance=True` is passed for the band the watermark will occupy."""
+    from PIL import ImageDraw
+
+    from services.meme_render import _draw_band
+
+    background = (200, 200, 200)
+    image = Image.new("RGB", (1024, 1024), background)
+    draw = ImageDraw.Draw(image)
+    long_text = "This is a fairly long top overlay line of meme text that wraps across lines"
+
+    _draw_band(image, draw, long_text, band="top", reserve_watermark_clearance=True)
+
+    watermark_corner_box = (824, 0, 1024, 184)  # top band's own right portion, band_height=184
+    assert list(image.crop(watermark_corner_box).getdata()) == [background] * (200 * 184)
+
+
+def test_without_clearance_long_text_can_reach_the_watermark_corner() -> None:
+    """Negative control proving the clearance reservation above is load-bearing, not a no-op -
+    without it, the same long line's wrapped text does reach into that same corner region."""
+    from PIL import ImageDraw
+
+    from services.meme_render import _draw_band
+
+    background = (200, 200, 200)
+    image = Image.new("RGB", (1024, 1024), background)
+    draw = ImageDraw.Draw(image)
+    long_text = "This is a fairly long top overlay line of meme text that wraps across lines"
+
+    _draw_band(image, draw, long_text, band="top", reserve_watermark_clearance=False)
+
+    watermark_corner_box = (824, 0, 1024, 184)
+    region_pixels = list(image.crop(watermark_corner_box).getdata())
+    assert any(pixel != background for pixel in region_pixels)
+
+
+def test_render_meme_never_exceeds_two_lines_per_band(tmp_path) -> None:
+    """Brief's own explicit rule: top text max 2 lines, bottom text max 2 lines."""
+    from services.meme_render import _MAX_LINES_PER_BAND
+
+    assert _MAX_LINES_PER_BAND == 2
+
+
 def test_malformed_base_image_bytes_return_failed_not_raise(tmp_path) -> None:
     storage = LocalImageStorage(tmp_path)
     result = render_meme(b"not an image", _VALID_COPY, storage=storage)
@@ -183,3 +228,124 @@ def test_malformed_base_image_bytes_return_failed_not_raise(tmp_path) -> None:
     assert result.status == MemeRenderStatus.FAILED
     assert result.error_code is not None
     assert result.storage_key is None
+
+
+# ---------------------------------------------------------------------------
+# MEME-PROD-2.1: Cyrillic-capable font resolution (real production defect - Pillow's own
+# load_default() has no Cyrillic glyphs, renders as ".notdef" tofu boxes).
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _reset_font_path_cache(monkeypatch: pytest.MonkeyPatch):
+    """The module-level `_font_path_resolution` single-element cache must not leak a resolution
+    from one test into another - reset before and after every test in this file, mirroring the
+    isolation every other stateful-cache fixture in this codebase already provides."""
+    import services.meme_render as meme_render_module
+
+    monkeypatch.setattr(meme_render_module, "_font_path_resolution", [])
+    yield
+    monkeypatch.setattr(meme_render_module, "_font_path_resolution", [])
+
+
+def test_resolve_font_path_prefers_brand_font_path_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pathlib import Path
+
+    import services.meme_render as meme_render_module
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "brand_font_path", "/fake/override/font.ttf")
+    monkeypatch.setattr(Path, "exists", lambda self: self.as_posix() == "/fake/override/font.ttf")
+
+    assert meme_render_module._resolve_font_path() == "/fake/override/font.ttf"
+
+
+def test_resolve_font_path_falls_back_through_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pathlib import Path
+
+    import services.meme_render as meme_render_module
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "brand_font_path", None)
+    target = meme_render_module._FONT_CANDIDATE_PATHS[-1]
+    monkeypatch.setattr(Path, "exists", lambda self: self.as_posix() == target)
+
+    assert meme_render_module._resolve_font_path() == target
+
+
+def test_resolve_font_path_returns_none_when_nothing_resolves(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pathlib import Path
+
+    import services.meme_render as meme_render_module
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "brand_font_path", None)
+    monkeypatch.setattr(Path, "exists", lambda self: False)
+
+    assert meme_render_module._resolve_font_path() is None
+
+
+def test_resolve_font_path_is_cached_after_first_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pathlib import Path
+
+    import services.meme_render as meme_render_module
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "brand_font_path", None)
+    calls = []
+
+    def _tracked_exists(self):
+        calls.append(self.as_posix())
+        return self.as_posix() == meme_render_module._FONT_CANDIDATE_PATHS[0]
+
+    monkeypatch.setattr(Path, "exists", _tracked_exists)
+    first = meme_render_module._resolve_font_path()
+    call_count_after_first = len(calls)
+    second = meme_render_module._resolve_font_path()
+
+    assert first == second
+    assert len(calls) == call_count_after_first  # no new filesystem probes on the second call
+
+
+def test_load_font_falls_back_to_default_when_truetype_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pathlib import Path
+
+    import services.meme_render as meme_render_module
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "brand_font_path", None)
+    target = meme_render_module._FONT_CANDIDATE_PATHS[0]
+    monkeypatch.setattr(Path, "exists", lambda self: self.as_posix() == target)
+
+    original_truetype = meme_render_module.ImageFont.truetype
+
+    def _raise_only_for_target(font_path, *args, **kwargs):
+        if font_path == target:
+            raise OSError("cannot open resource")
+        # Pillow's own load_default() calls truetype() internally (with a BytesIO, not a path) to
+        # build its bundled ASCII-only fallback font - that internal call must go through
+        # unmodified, or the fallback path itself would break.
+        return original_truetype(font_path, *args, **kwargs)
+
+    monkeypatch.setattr(meme_render_module.ImageFont, "truetype", _raise_only_for_target)
+    font = meme_render_module._load_font(40)
+    assert font is not None  # degraded (ASCII-only) but never a crash
+
+
+def test_load_font_renders_real_cyrillic_glyphs_not_tofu_boxes() -> None:
+    """Direct empirical proof of the actual production defect this fix addresses: Pillow's own
+    load_default() renders Cyrillic as uniform ".notdef" boxes, all visually identical regardless
+    of which letter they stand in for - a resolved real font must NOT do this."""
+    from PIL import ImageDraw
+
+    from services.meme_render import _load_font
+
+    font = _load_font(48)
+    image = Image.new("RGB", (400, 100), (255, 255, 255))
+    draw = ImageDraw.Draw(image)
+    width_a = draw.textbbox((0, 0), "а", font=font)[2]  # Cyrillic "a"
+    width_zh = draw.textbbox((0, 0), "ж", font=font)[2]  # Cyrillic "zh" - visually much wider
+    # Two different, real Cyrillic glyphs must not measure identically - a tofu-box font renders
+    # every unmapped codepoint as the same fixed-width placeholder glyph, so distinct widths are
+    # direct proof real glyph outlines were used, not a missing-glyph fallback shape.
+    assert width_a != width_zh
