@@ -25,6 +25,8 @@ _CONCEPT = MemeConcept(
     # phrase removes that false-collision risk while keeping the same intent.
     premise="p", setup="s", punchline="Jobs are still safe, technically.", humor_mechanism="irony",
     visual_scene="A CEO on stage pointing at a slide reading 'Jobs are safe'.",
+    visual_punchline="A robot quietly wheels his own desk out the door behind him mid-speech.",
+    visual_style="reaction photo",
     characters_objects=["CEO", "presentation slide"], text_overlay_intent="intent",
     source_fact_links=["fact"], forbidden_interpretations=[], meme_format=MemeFormat.CLASSIC_TOP_BOTTOM,
 )
@@ -318,9 +320,89 @@ def test_real_public_figure_names_pass_through_the_prompt_unmodified() -> None:
     concept = MemeConcept(
         premise="p", setup="s", punchline="A bold claim, again.", humor_mechanism="irony",
         visual_scene="Tim Cook standing confidently in front of a large Apple logo on a stage.",
+        visual_punchline="A single tumbleweed rolls past the Apple logo as products are quietly carried out.",
+        visual_style="documentary-style photo",
         characters_objects=["Tim Cook", "Apple logo", "stage"], text_overlay_intent="intent",
         source_fact_links=["fact"], forbidden_interpretations=[], meme_format=MemeFormat.CLASSIC_TOP_BOTTOM,
     )
     prompt = build_image_prompt(concept)
     assert "Tim Cook" in prompt
     assert "Apple logo" in prompt
+
+
+# ---------------------------------------------------------------------------
+# MEME-PROD-3: pseudo-text/fake-UI hardening, composition. MEME-PROD-4: visual_punchline/style.
+# ---------------------------------------------------------------------------
+
+
+def test_prompt_no_longer_permits_illegible_or_abstract_marks() -> None:
+    """The exact wording MEME-PROD-2 shipped ("illegible/abstract marks only" as an acceptable
+    rendering) is very likely why gpt-image-2 produced scribble-text/squares - it was explicit
+    permission to draw mark-like texture. That permission must be gone."""
+    prompt = build_image_prompt(_CONCEPT)
+    assert "illegible/abstract marks only" not in prompt
+    assert "abstract symbols" in prompt.lower()  # named only as something to AVOID, not permit
+    assert "not even" in prompt.lower() or "never" in prompt.lower()
+
+
+def test_prompt_names_ui_specific_objects_not_just_signage() -> None:
+    """MEME-PROD-2's object list (nameplate/sign/screen/slide/product label) never named UI
+    elements at all, even though v2's own encouraged meme_format list includes UI-parody formats
+    (fake screenshot/chat, notification/UI parody, gaming HUD/UI parody)."""
+    prompt = build_image_prompt(_CONCEPT).lower()
+    for keyword in ("button", "icon", "hud overlay", "chat bubble", "notification badge"):
+        assert keyword in prompt
+
+
+def test_prompt_forbids_fake_interface_chrome_with_legible_labels() -> None:
+    prompt = build_image_prompt(_CONCEPT).lower()
+    assert "fake interface chrome" in prompt
+
+
+def test_prompt_keeps_calm_top_bottom_bands_but_drops_centered_hero_framing() -> None:
+    """MEME-PROD-4: the render-safety requirement (calm top/bottom bands for legible captions,
+    meme_render.py's own genuine need) is kept, but the earlier "centered hero subject" cinematic
+    framing is deliberately dropped per the brief's own §9 instruction - composition should serve
+    the joke, not a hero shot."""
+    prompt = build_image_prompt(_CONCEPT).lower()
+    assert "centered" not in prompt
+    assert "calm" in prompt and "top" in prompt and "bottom" in prompt
+
+
+def test_prompt_explicitly_frames_this_as_a_meme_not_an_illustration() -> None:
+    prompt = build_image_prompt(_CONCEPT).lower()
+    assert "meme" in prompt
+    assert "editorial illustration" in prompt
+    assert "advertisement" in prompt
+
+
+def test_prompt_includes_visual_punchline_and_visual_style_not_humor_mechanism() -> None:
+    """MEME-PROD-4: the image model now receives the SPECIFIC visual joke (visual_punchline) and
+    a visual tone (visual_style) instead of the abstract humor_mechanism label - distinct from
+    punchline (still never included, per test_build_image_prompt_excludes_punchline_and_
+    instructs_no_text above)."""
+    prompt = build_image_prompt(_CONCEPT)
+    assert _CONCEPT.visual_punchline in prompt
+    assert _CONCEPT.visual_style in prompt
+    assert _CONCEPT.punchline not in prompt
+
+
+def test_prompt_adds_panel_composition_instruction_for_multi_panel_concepts() -> None:
+    concept = MemeConcept(
+        premise="p", setup="s", punchline="pl", humor_mechanism="irony",
+        visual_scene="A cat.", visual_punchline="The same cat, increasingly unhinged, across four beats.",
+        visual_style="cartoon", characters_objects=["cat"], text_overlay_intent="intent",
+        source_fact_links=["fact"], forbidden_interpretations=[], meme_format="four_panel_escalation",
+        panel_count=4, panel_beats=["making a plan", "obsessively waiting", "discovering it's sold out", "selling a kidney"],
+    )
+    prompt = build_image_prompt(concept).lower()
+    assert "2x2" in prompt or "four" in prompt
+    assert "same recurring character" in prompt or "same" in prompt
+    assert "making a plan" in prompt
+    assert "selling a kidney" in prompt
+
+
+def test_prompt_has_no_panel_instruction_for_single_panel_concepts() -> None:
+    prompt = build_image_prompt(_CONCEPT).lower()
+    assert "2x2" not in prompt
+    assert "panel 1" not in prompt

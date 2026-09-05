@@ -23,6 +23,8 @@ _VALID_KWARGS = dict(
     premise="p", setup="s", punchline="pl", humor_mechanism="irony", visual_scene="scene",
     characters_objects=["a"], text_overlay_intent="intent", source_fact_links=["fact 1"],
     forbidden_interpretations=[], meme_format=MemeFormat.CLASSIC_TOP_BOTTOM,
+    # MEME-PROD-4 (Meme Director) additions
+    visual_punchline="punchline", visual_style="low-budget internet meme",
 )
 
 

@@ -31,6 +31,8 @@ _BASE_KWARGS = dict(
     source_fact_links=["The CEO publicly stated AI is not destroying jobs."],
     forbidden_interpretations=[],
     meme_format=MemeFormat.CLASSIC_TOP_BOTTOM,
+    visual_punchline="A robot quietly wheels the CEO's own desk out the door mid-speech.",
+    visual_style="reaction photo",
 )
 
 

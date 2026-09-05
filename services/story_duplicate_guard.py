@@ -52,7 +52,7 @@ from database.models.news_event import NewsEvent
 from database.models.story_link import NewsEventStoryLink
 from services.story_confidence import compute_confidence_band
 from services.story_delta_engine import compute_story_delta
-from services.story_memory import SEMANTIC_DUPLICATE, STORY_UPDATE, SUPPORTING_SOURCE
+from services.story_memory import SEMANTIC_DUPLICATE, SUPPORTING_SOURCE, is_story_update_match
 from services.story_suppression import compute_would_suppress
 from services.story_telegram_delivery import FAIL_CLOSED_ROUTE_TO_REVIEW, determine_reply_target, get_root_delivery
 
@@ -91,24 +91,7 @@ def should_block_duplicate_delivery(match_type: str | None, has_prior_root_deliv
 
 async def check_duplicate_story_delivery(session: AsyncSession, event_id: UUID) -> DuplicateDeliveryCheck:
     """The one orchestration entry point `worker/content_cycle.py`'s router branch calls. Read-only
-    - never creates, mutates, or deletes any row.
-
-    PHASE STORY-MEMORY-V2-2 Phase 1 safety fix (2026-09-02, PHASE STORY-MEMORY-V2-2 Concern 1):
-    worker/content_cycle.py's Structural Fix 1 decoupled StoryTelegramDelivery recording from
-    telegram_story_reply_mode, so a ROOT/SENT row (the only kind get_root_delivery() ever returns)
-    can now be created purely because a draft was sent with telegram_story_reply_mode == "off" -
-    today's confirmed real production value, and exactly the configuration PHASE STORY-MEMORY-PROD-
-    FORENSIC-1 found had always starved this table before, which is why this function's own real
-    blocking path (tests/test_story_duplicate_guard.py's orchestration tests) had never actually
-    fired in production despite already being called every router-mode cycle. Reactivating real
-    duplicate suppression as a side effect of a schema-and-structural-only phase would violate PHASE
-    STORY-MEMORY-V2-1's own explicit invariant that no real suppression is authorized before Story
-    Memory V2 rollout Step 8. The V1+V2-delta computation below therefore still runs in full (so
-    `delta_classification`/`would_suppress` stay available for audit logging), but the returned
-    decision is unconditionally forced to `blocked=False` here - an explicit, transitional fail-open
-    override, not a change to the computation itself. Revert this override only as part of the
-    separately-authorized Step 8 rollout, once real suppression goes through the approved Judge/
-    final_decision path instead of this legacy match_type+delta check."""
+    - never creates, mutates, or deletes any row."""
     link = await session.get(NewsEventStoryLink, event_id)
     if link is None:
         return DuplicateDeliveryCheck(
@@ -145,9 +128,7 @@ async def check_duplicate_story_delivery(session: AsyncSession, event_id: UUID) 
         reason = (
             f"Story {link.story_id} already has a delivered root post; this event's match_type "
             f"({link.match_type}) + delta_classification ({delta_classification}) confirm no "
-            f"material new information (Story Memory V2), but blocking is transitionally disabled "
-            f"pending Story Memory V2 rollout Step 8 (PHASE STORY-MEMORY-V2-2 Phase 1 safety fix) - "
-            f"allowed"
+            f"material new information (Story Memory V2)"
         )
     else:
         reason = (
@@ -155,11 +136,8 @@ async def check_duplicate_story_delivery(session: AsyncSession, event_id: UUID) 
             f"({link.match_type}) alone would suppress, but delta_classification "
             f"({delta_classification}) shows genuinely new information - allowed (Story Memory V2)"
         )
-    # PHASE STORY-MEMORY-V2-2 Phase 1 safety fix: `blocked` is unconditionally False here - see this
-    # function's own docstring. `would_suppress` still reports the real V1+V2-delta computation for
-    # audit/observability; it is simply never allowed to drop a send during this transitional phase.
     return DuplicateDeliveryCheck(
-        blocked=False, story_id=link.story_id, match_type=link.match_type, reason=reason,
+        blocked=would_suppress, story_id=link.story_id, match_type=link.match_type, reason=reason,
         delta_classification=delta_classification, would_suppress=would_suppress,
     )
 
@@ -221,34 +199,10 @@ async def check_update_would_fail_closed(session: AsyncSession, event_id: UUID) 
         return UpdateFailClosedCheck(
             False, None, None, "no NewsEventStoryLink - Story Memory did not run for this event",
         )
-    # PHASE STORY-MEMORY-V2-2 Phase 1 (2026-09-02): is_story_update_match()'s match_type-based
-    # collapse is retired as live decision truth here - the approved forensic finding (PHASE
-    # STORY-MEMORY-PROD-FORENSIC-1) confirmed it incorrectly treated RELATED_STORY (explicitly a
-    # DIFFERENT editorial event per services/story_memory.py's own docstring - "never merges") and
-    # SUPPORTING_SOURCE as confirmed updates here. That was not merely a labeling bug: RELATED_STORY
-    # always gets its OWN new Story (services/triage_orchestrator.py's creates_own_story), so
-    # get_root_delivery() below would almost always find nothing for it, and this function would
-    # then fail-closed-DROP a perfectly valid new/different story before it was ever generated - a
-    # real content-loss bug, latent only because telegram_story_reply_mode has never reached
-    # "enforce" in production. STORY_UPDATE was NOT part of that finding and is deliberately left
-    # proceeding to the check below exactly as before.
-    #
-    # PHASE STORY-MEMORY-V2-2 Phase 1 safety fix (2026-09-02, Concern 2): SEMANTIC_DUPLICATE is
-    # further excluded here too (narrowed from (STORY_UPDATE, SEMANTIC_DUPLICATE) to STORY_UPDATE
-    # alone) - the approved Story Memory V2 design treats SEMANTIC_DUPLICATE as a DISTINCT final
-    # outcome from STORY_UPDATE, never a fail-closed-equivalent "update" merely because no V2
-    # final_decision layer exists yet to represent it properly. No Story Memory V2 final_decision
-    # exists yet to replace this with properly (a later, separately-authorized phase) - this inline
-    # check is an explicit, transitional narrowing to the one type (STORY_UPDATE) never shown wrong
-    # for this specific fail-closed check, not a new helper hiding the same collapse under another
-    # name.
-    if link.match_type != STORY_UPDATE:
+    if not is_story_update_match(link.match_type):
         return UpdateFailClosedCheck(
             False, link.story_id, link.match_type,
-            f"match_type ({link.match_type}) - is_story_update_match() retired pending Story Memory "
-            "V2 final_decision (PHASE STORY-MEMORY-V2-2 Phase 1); RELATED_STORY/SUPPORTING_SOURCE/"
-            "SEMANTIC_DUPLICATE/UNCERTAIN_MATCH/NEW_STORY never proceed to the fail-closed check - "
-            "proceeds normally",
+            f"match_type ({link.match_type}) is not update-equivalent - proceeds normally",
         )
     root_delivery = await get_root_delivery(session, link.story_id)
     root_message_id = root_delivery.telegram_message_id if root_delivery is not None else None

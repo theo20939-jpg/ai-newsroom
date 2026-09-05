@@ -41,6 +41,7 @@ from services.image_quality import aspect_ratio_band, hamming_distance, resoluti
 from services.image_relevance import PROVENANCE_TABLE
 from services.media_ranking import _NEAR_DUPLICATE_MAX_HAMMING_DISTANCE, rank_media_candidates
 from services.news_editorial_relevance import OUT_OF_SCOPE, classify_editorial_relevance
+from services.video_quality_gate import VideoContentClassification, assess_video_text_signals
 from services.brand_renderer import RenderResult, render_branded_media
 from services.nnj_master_news_overlay import (
     NEWS_BRANDING_NO_SOURCE_BYTES,
@@ -1068,7 +1069,12 @@ async def run_content_cycle(
 
         # Phase 19 M7 (docs/phase19_m7_story_timeline_and_reply_routing.md, "Correction 1" fix):
         # resolve this draft's story context (if any) and, for a confirmed update, the reply
-        # target - before any Telegram call. "off" (default): no story_link
+        # target - before any Telegram call. Gated on telegram_story_reply_mode alone, never on
+        # story_memory_mode - the Phase 18.10 M3 code this replaces was gated on
+        # `story_memory_mode != "off"` directly, which meant story_memory_mode == "shadow" could
+        # itself change Telegram delivery behavior (reply target, or a fail-closed skip),
+        # contradicting "shadow never changes production behavior" (docs/phase19_m0_audit.md §7,
+        # docs/phase19_m6_story_memory_calibration_report.md §3.1). "off" (default): no story_link
         # query at all, reply_to_message_id stays None - byte-identical to pre-18.10 behavior,
         # regardless of story_memory_mode. "shadow": the decision is computed and persisted
         # (services.story_telegram_delivery.persist_reply_routing_proposal) for review, but the
@@ -1076,71 +1082,54 @@ async def run_content_cycle(
         # fail-closed case is never skipped (only counted, via story_reply_would_fail_closed_
         # shadow). "enforce": applies the decision to the real send, preserving the original
         # fail-closed skip-and-route-to-review guarantee.
-        #
-        # PHASE STORY-MEMORY-V2-2 Phase 1 (2026-09-02, PHASE STORY-MEMORY-V2-1 design §G Fix 1):
-        # the story_link LOOKUP itself is now UNCONDITIONAL - previously nested inside the
-        # telegram_story_reply_mode != "off" branch below, which meant durable delivery recording
-        # (record_delivery(), further below - keyed on `story_link is not None`) was starved
-        # whenever telegram_story_reply_mode == "off" (the confirmed real production value).
-        # Reply-threading (presentation) and delivery recording (enforcement/observability state)
-        # are independent concerns and must not share one gate. Everything below this lookup -
-        # the reply-routing DECISION itself (determine_reply_target/fail-closed skip/
-        # reply_to_message_id/persist_reply_routing_proposal) - remains exactly as gated on
-        # telegram_story_reply_mode as before; only the lookup both branches need moved out from
-        # under that gate. With telegram_story_reply_mode == "off" (unchanged this phase),
-        # reply_to_message_id still always stays None and no fail-closed skip ever fires - byte-
-        # identical Telegram send content/behavior to before this change. The one observable
-        # effect is one additional read query per draft (see the two new session_factory() calls
-        # below), always, regardless of mode - the explicit, intended purpose of this fix, and not
-        # itself an editorial-output change.
-        async with session_factory() as story_session:
-            story_link: ContentDraftStoryLink | None = await story_session.get(
-                ContentDraftStoryLink, outcome.content_draft.id
-            )
+        story_link: ContentDraftStoryLink | None = None
         reply_to_message_id: int | None = None
-        if settings.telegram_story_reply_mode != "off" and story_link is not None:
+        if settings.telegram_story_reply_mode != "off":
             async with session_factory() as story_session:
-                root_delivery = await get_root_delivery(story_session, story_link.story_id)
-                root_message_id = root_delivery.telegram_message_id if root_delivery is not None else None
-            reply_decision = determine_reply_target(
-                is_story_update=story_link.is_story_update, root_message_id=root_message_id,
-            )
-            is_enforce = settings.telegram_story_reply_mode == "enforce"
-
-            try:
-                async with session_factory() as proposal_session:
-                    await persist_reply_routing_proposal(
-                        proposal_session, content_draft_id=outcome.content_draft.id,
-                        story_id=story_link.story_id, decision=reply_decision, applied=is_enforce,
-                    )
-                    await proposal_session.commit()
-            except Exception:
-                logger.warning(
-                    "story_reply_routing_proposal_persistence_failed",
-                    extra={"event_id": str(event_id), "draft_id": str(outcome.content_draft.id)},
+                story_link = await story_session.get(ContentDraftStoryLink, outcome.content_draft.id)
+                if story_link is not None:
+                    root_delivery = await get_root_delivery(story_session, story_link.story_id)
+                    root_message_id = root_delivery.telegram_message_id if root_delivery is not None else None
+            if story_link is not None:
+                reply_decision = determine_reply_target(
+                    is_story_update=story_link.is_story_update, root_message_id=root_message_id,
                 )
+                is_enforce = settings.telegram_story_reply_mode == "enforce"
 
-            if reply_decision.action == FAIL_CLOSED_ROUTE_TO_REVIEW:
-                if is_enforce:
-                    result.story_fail_closed_review += 1
+                try:
+                    async with session_factory() as proposal_session:
+                        await persist_reply_routing_proposal(
+                            proposal_session, content_draft_id=outcome.content_draft.id,
+                            story_id=story_link.story_id, decision=reply_decision, applied=is_enforce,
+                        )
+                        await proposal_session.commit()
+                except Exception:
                     logger.warning(
-                        "story_update_fail_closed_no_root_message_routed_to_review",
+                        "story_reply_routing_proposal_persistence_failed",
+                        extra={"event_id": str(event_id), "draft_id": str(outcome.content_draft.id)},
+                    )
+
+                if reply_decision.action == FAIL_CLOSED_ROUTE_TO_REVIEW:
+                    if is_enforce:
+                        result.story_fail_closed_review += 1
+                        logger.warning(
+                            "story_update_fail_closed_no_root_message_routed_to_review",
+                            extra={
+                                "event_id": str(event_id), "draft_id": str(outcome.content_draft.id),
+                                "story_id": str(story_link.story_id),
+                            },
+                        )
+                        continue  # never sent as a standalone post - explicit, non-negotiable requirement
+                    result.story_reply_would_fail_closed_shadow += 1
+                    logger.info(
+                        "story_update_would_fail_closed_shadow_still_sending_as_standalone",
                         extra={
                             "event_id": str(event_id), "draft_id": str(outcome.content_draft.id),
                             "story_id": str(story_link.story_id),
                         },
                     )
-                    continue  # never sent as a standalone post - explicit, non-negotiable requirement
-                result.story_reply_would_fail_closed_shadow += 1
-                logger.info(
-                    "story_update_would_fail_closed_shadow_still_sending_as_standalone",
-                    extra={
-                        "event_id": str(event_id), "draft_id": str(outcome.content_draft.id),
-                        "story_id": str(story_link.story_id),
-                    },
-                )
-            elif is_enforce:
-                reply_to_message_id = reply_decision.reply_to_message_id
+                elif is_enforce:
+                    reply_to_message_id = reply_decision.reply_to_message_id
 
         # Phase 19 M5 (docs/phase19_m0_audit.md): resolve any persisted, verified quote before
         # either Telegram call - byte-identical to today (neither call site received a quote
@@ -1356,6 +1345,31 @@ async def run_content_cycle(
                         best_video_candidate = select_best_video_candidate(video_candidates)
                         if best_video_candidate is not None:
                             video_hint = to_native_video_hint(best_video_candidate)
+
+                        # MEDIA-PROD-1: deterministic advertisement-keyword text gate - see
+                        # services/video_quality_gate.py's own module docstring for the full scope
+                        # decision (text-only; visual/frame-based detection is a disclosed future
+                        # extension, not silently skipped). Applied AFTER selection so a rejected
+                        # video degrades exactly like "no video hint resolved" for any other reason
+                        # - no new fallback path.
+                        if video_hint is not None and settings.video_quality_gate_mode != "off":
+                            video_quality_assessment = assess_video_text_signals(
+                                title=event.title, content=event.content,
+                            )
+                            logger.info(
+                                "video_quality_gate_assessed",
+                                extra={
+                                    "draft_id": str(outcome.content_draft.id),
+                                    "classification": video_quality_assessment.classification.value,
+                                    "matched_keywords": list(video_quality_assessment.matched_keywords),
+                                    "mode": settings.video_quality_gate_mode,
+                                },
+                            )
+                            if (
+                                video_quality_assessment.classification == VideoContentClassification.ADVERTISEMENT
+                                and settings.video_quality_gate_mode == "enforce"
+                            ):
+                                video_hint = None
                         # Phase V2.27/V2.27A: a YOUTUBE/VIMEO/EMBEDDED_PLAYER hint previously
                         # always became a plain caption link (YOUTUBE/VIMEO) or was discarded
                         # entirely (EMBEDDED_PLAYER did not exist before V2.27A) - see

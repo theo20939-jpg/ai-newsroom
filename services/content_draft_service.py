@@ -30,7 +30,7 @@ from schemas.workflow import WorkflowRunResult
 from services.content_quality_gates import check_quote_is_self_contained, evaluate_content_quality_gates
 from services.evidence_package import build_evidence_package
 from services.quote_verification import verify_quote
-from services.story_memory import STORY_UPDATE
+from services.story_memory import is_story_update_match
 from services.story_telegram_delivery import get_root_delivery
 
 logger = logging.getLogger(__name__)
@@ -329,54 +329,34 @@ class ContentDraftService:
                 )
 
         # NEWS Output Stability Fix (Case C): the story_link lookup (previously only performed
-        # AFTER quality-gate evaluation, purely to drive Telegram reply-routing) happens here,
-        # before evaluate_content_quality_gates(), so check_update_not_repeating_root() can
-        # receive is_update/root_body once a trustworthy source for them exists. `is_update` is
-        # computed once here and reused below for ContentDraftStoryLink.is_story_update - a single
-        # source of truth, never two divergent computations of the same fact.
-        #
-        # PHASE STORY-MEMORY-V2-2 Phase 1 (2026-09-02): is_story_update_match() is retired as live
-        # decision truth here - the approved forensic finding (PHASE STORY-MEMORY-PROD-FORENSIC-1)
-        # confirmed its match_type-based collapse incorrectly treated RELATED_STORY (explicitly a
-        # DIFFERENT editorial event per services/story_memory.py's own docstring - "never merges")
-        # and SUPPORTING_SOURCE as confirmed updates. STORY_UPDATE and SEMANTIC_DUPLICATE were NOT
-        # part of that finding and are deliberately left unchanged here - this phase's own explicit
-        # instruction is "the minimum narrow legacy-safe value only where necessary", not a
-        # blanket False that would also silently change behavior for the two match_types that were
-        # never shown to be wrong. No Story Memory V2 final_decision exists yet to replace this
-        # with properly (that lands in a later, separately-authorized phase) - this inline check is
-        # an explicit, transitional narrowing of the old 4-type collapse to the 2 types it was
-        # never proven wrong for, not a new helper hiding the same collapse under another name.
-        # root_body fetching (get_root_delivery()) is pre-existing "Case C" logic, unrelated to
-        # is_story_update_match()'s retirement - preserved unchanged here, gated on the now-
-        # correctly-narrowed is_update above. Structural Fix 1 (worker/content_cycle.py) means
-        # story_telegram_deliveries can now genuinely be populated regardless of
-        # telegram_story_reply_mode, so this already-existing, non-blocking quality gate can now
-        # observe real root text where it never could before - an explicitly intended consequence
-        # of Structural Fix 1 (it unblocks this exact mechanism), not a new suppression path or an
-        # editorial-output change: check_update_not_repeating_root() only ever logs, never blocks
-        # persistence or delivery.
-        #
-        # PHASE STORY-MEMORY-V2-2 Phase 1 safety fix (2026-09-02, PHASE STORY-MEMORY-V2-2 Concern
-        # 2): narrowed further, from (STORY_UPDATE, SEMANTIC_DUPLICATE) to STORY_UPDATE alone. The
-        # approved Story Memory V2 design (PHASE STORY-MEMORY-V2-1) defines NEW_STORY/SEMANTIC_
-        # DUPLICATE/STORY_UPDATE/UNCERTAIN as four DISTINCT final outcomes - collapsing SEMANTIC_
-        # DUPLICATE into is_story_update=True is exactly the kind of semantic collapse that design
-        # explicitly rejects, merely because no V2 final_decision layer exists yet to represent
-        # SEMANTIC_DUPLICATE properly. is_story_update is used for Telegram reply-threading (a
-        # genuine boolean is required there) and this quality gate; a semantic duplicate is not a
-        # reply-worthy "update" in either sense. SEMANTIC_DUPLICATE gets is_update=False (fail open)
-        # here, same as RELATED_STORY/SUPPORTING_SOURCE/UNCERTAIN_MATCH/NEW_STORY/None - only
-        # STORY_UPDATE, Story Memory's own existing definition of "a materially different title, a
-        # real new development", still sets is_update=True this phase.
+        # AFTER quality-gate evaluation, purely to drive Telegram reply-routing) now happens
+        # here, before evaluate_content_quality_gates(), so check_update_not_repeating_root() can
+        # actually receive is_update/root_body instead of always defaulting to is_update=False -
+        # its previous, silent no-op state (services/content_quality_gates.py's own check already
+        # existed; only this call site was missing the two arguments and the ordering they need).
+        # `is_update` is computed once here and reused below for ContentDraftStoryLink.is_story_
+        # update - a single source of truth, never two divergent computations of the same fact.
         story_link: NewsEventStoryLink | None = None
         is_update = False
         root_body: str | None = None
         if event_id is not None and settings.story_memory_mode != "off":
             story_link = await self._session.get(NewsEventStoryLink, event_id)
             if story_link is not None:
-                is_update = story_link.match_type == STORY_UPDATE
+                # uncertain_match is deliberately never treated as a confirmed update
+                # (services/story_memory.py's own conservative design) - only a confident match
+                # type marks this draft as an update, for both reply-routing and this quality
+                # gate. is_story_update_match() (NEWS Stability Acceptance follow-up, docs/
+                # post_acceptance_followup_checkpoint.md §B) extracts this exact check so
+                # services/story_duplicate_guard.py's pre-generation fail-closed short-circuit can
+                # never silently diverge from it.
+                is_update = is_story_update_match(story_link.match_type)
                 if is_update:
+                    # Reuses services/story_telegram_delivery.py::get_root_delivery() verbatim -
+                    # the same, already-established definition of "the story's root" used for
+                    # reply-threading (a SENT root only; an unsent/failed root has no publicly
+                    # visible text to be "repeating"). root_body stays None (the existing, safe
+                    # default check_update_not_repeating_root() already handles - see its own
+                    # docstring) when no root was ever successfully delivered.
                     root_delivery = await get_root_delivery(self._session, story_link.story_id)
                     if root_delivery is not None:
                         root_draft = await self._session.get(ContentDraft, root_delivery.content_draft_id)

@@ -15,7 +15,11 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from capabilities.article_generation_capability import ARTICLE_GENERATION_CAPABILITY_DEFINITION, ArticleGenerationCapability
+from capabilities.article_generation_capability import (
+    ARTICLE_GENERATION_CAPABILITY_DEFINITION,
+    PROMPT_VERSION as ARTICLE_GENERATION_PROMPT_VERSION,
+    ArticleGenerationCapability,
+)
 from capabilities.registry import CapabilityRegistry
 from capabilities.research_capability import RESEARCH_CAPABILITY_DEFINITION, ResearchCapability
 from database.models.ai_execution import AIExecution
@@ -273,12 +277,36 @@ def test_no_telegram_or_telegraph_publishing_reference_in_processor_source() -> 
         assert forbidden not in _PROCESSOR_SOURCE, f"unexpected reference: {forbidden}"
 
 
-def test_news_copywriting_prompt_v4_default_unaffected() -> None:
-    """The real, active NEWS copywriting prompt version is still "4" - completely untouched by
-    the new article_generation prompt namespace living alongside it."""
+def test_news_copywriting_prompt_version_unaffected_by_telegraph_article_generation() -> None:
+    """The real, active NEWS copywriting prompt version - whatever `settings.
+    copywriting_prompt_version` is currently configured to (core/config.py's own field is this
+    codebase's single canonical source of truth for it, driven by `.env` per deployment - "4" in
+    this dev checkout, "8.6" in accepted production calibration; never duplicated as a hardcoded
+    literal here, and never this test's job to declare which value is "the right one") - is
+    completely untouched by the separate "article_generation" prompt namespace TELEGRAPH_ARTICLE
+    uses (its own independent name and PROMPT_VERSION, capabilities/article_generation_
+    capability.py).
+
+    Asserts the actual invariant this test exists for: resolving/using Telegraph's own
+    article_generation prompt never mutates, shadows, or overrides NEWS's own
+    copywriting_prompt_version setting or its own "copywriting" prompt resolution - regardless of
+    which specific version string either one is currently configured to."""
     from core.config import settings
 
-    assert settings.copywriting_prompt_version == "4"
+    news_prompt_version_before = settings.copywriting_prompt_version
     repo = _prompt_repository()
-    v4 = repo.resolve("copywriting", "4")
-    assert v4.version == "4"
+
+    # Resolve Telegraph's own, entirely separate prompt namespace first - proves the two coexist
+    # in the same FilePromptRepository without collision.
+    telegraph_prompt = repo.resolve("article_generation", ARTICLE_GENERATION_PROMPT_VERSION)
+    assert telegraph_prompt.version == ARTICLE_GENERATION_PROMPT_VERSION
+
+    # NEWS's own setting must be byte-identical to what it was before Telegraph's prompt was ever
+    # touched - never overridden, never mutated as a side effect of the line above.
+    assert settings.copywriting_prompt_version == news_prompt_version_before
+
+    # And NEWS's own "copywriting" prompt, at whatever version is currently configured, still
+    # resolves correctly and reports that same version back - never silently swapped for
+    # Telegraph's "article_generation" version or vice versa.
+    news_prompt = repo.resolve("copywriting", settings.copywriting_prompt_version)
+    assert news_prompt.version == settings.copywriting_prompt_version

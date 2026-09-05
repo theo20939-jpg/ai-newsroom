@@ -33,6 +33,10 @@ class MemeRenderResult(BaseModel):
     # bottom_text) or rendering failed before reaching that band.
     top_text_contrast_ratio: float | None = None
     bottom_text_contrast_ratio: float | None = None
+    # MEME-PROD-4: one entry per panel (in panel order), only for the 4-quadrant panel_texts
+    # render path - None for the classic top/bottom path (mirrors top_text_contrast_ratio/
+    # bottom_text_contrast_ratio's own "None means this path wasn't used" convention).
+    panel_text_contrast_ratios: list[float] | None = None
     # False if EITHER present band's measured ratio fell below the minimum-readability threshold
     # (services/meme_render.py::_MIN_CONTRAST_RATIO) - a real, computed check, never assumed.
     contrast_passed: bool = True

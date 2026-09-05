@@ -46,28 +46,76 @@ _MAX_GENERATION_ATTEMPTS = 2
 
 
 def build_image_prompt(concept: MemeConcept) -> str:
-    """Pure, deterministic. Describes only the visual scene - never includes the punchline/copy
-    text, and explicitly instructs against rendering any text at all (M6 owns all on-image text,
-    added deterministically after generation - module docstring).
+    """Pure, deterministic. Never includes the punchline/copy text, and explicitly instructs
+    against rendering any text at all (M6 owns all on-image text, added deterministically after
+    generation - module docstring).
 
-    MEME-PROD-2 §9: `concept.visual_scene` is free text the concept-generation model wrote, and it
-    can legitimately describe an object that would normally carry text (a nameplate, a slide, a
-    sign, a UI panel) without itself specifying literal readable words - the OLD prompt simply
-    appended a blanket "no text anywhere" instruction after whatever the scene said, which was
-    contradictory whenever the scene DID quote or imply specific readable text ("a nameplate
-    reading 'CEO'"), confusing the image model. This now gives the model an explicit resolution
-    rule instead of a bare contradiction: keep any such object in the scene, but render it
-    blank/unlabeled/generic - never with legible characters - so the deterministic renderer (M6)
-    remains the ONLY place any word ever appears on the final image."""
+    MEME-PROD-4 (Meme Director, production canary: memes are technically clean but consistently
+    read as "polished editorial illustrations with a caption" - a chip-price story became a
+    beautiful chip/toll-road metaphor, a product-discontinuation story became a CEO in a showroom
+    with price tags): the image model was previously only ever given `visual_scene` (a plain scene
+    description) plus `humor_mechanism` (an abstract comedic label) - never a concrete instruction
+    that it is building a MEME, not concept art. This is now rebuilt around `concept.
+    visual_punchline` (the concept prompt's own new required field - the SPECIFIC visual joke,
+    validated distinct from `visual_scene` by `services/meme_shape_gate.py` before this prompt is
+    even built) and `concept.visual_style` (a short visual-tone label, so not every meme defaults
+    to one polished photorealistic look), with an explicit "this is a meme, not an editorial
+    illustration/advertisement/concept art" framing reused from the brief's own §9 wording.
+    `concept.panel_count`/`.panel_beats` (new, MEME-PROD-4) add ONE bounded instruction for a
+    multi-panel comic composition when the Director chose a multi-panel format - still exactly one
+    `generate_image()` call regardless of panel_count, never a cost multiplier.
+
+    MEME-PROD-2 §9/MEME-PROD-3 anti-pseudo-text hardening is preserved VERBATIM below, unchanged -
+    `concept.visual_scene` can legitimately describe an object that would normally carry text (a
+    nameplate, a slide, a sign, a UI panel) without itself specifying literal readable words, and
+    any such object must be rendered blank/unlabeled/turned-away/out-of-focus/obscured, never with
+    any mark that resembles writing (not even "illegible scribbles" - MEME-PROD-3's own confirmed
+    root cause of the pseudo-text/square artifacts) and never as fake interface chrome with
+    legible-looking labels - the deterministic renderer (M6) remains the ONLY place any word ever
+    appears on the final image.
+
+    The composition instruction keeps the genuine render-safety requirement (calm top/bottom bands
+    for legible captions - `services/meme_render.py`'s own fixed-band overlay genuinely needs this)
+    but MEME-PROD-4 drops the earlier "centered hero subject" cinematic framing per the brief's own
+    §9 instruction ("Do not force every image into: centered hero subject + beautiful cinematic
+    scene") - composition beyond band-safety now serves the joke, not a hero shot."""
     parts = [concept.visual_scene]
     if concept.characters_objects:
         parts.append(f"Depicting: {', '.join(concept.characters_objects)}.")
+    parts.append(f"The specific visual joke this image must communicate: {concept.visual_punchline}")
+    parts.append(f"Visual tone: {concept.visual_style}.")
+    if concept.panel_count > 1:
+        panel_layout = "a clean 2x2 grid of four panels" if concept.panel_count == 4 else "two clean side-by-side or stacked halves"
+        panel_beats_text = " ".join(
+            f"Panel {i}: {beat}" for i, beat in enumerate(concept.panel_beats, start=1)
+        )
+        parts.append(
+            f"Compose this as ONE single image containing {panel_layout}, with a clearly visible "
+            f"border/gutter between panels, and the SAME recurring character or subject appearing "
+            f"consistently across every panel. Each panel must visually communicate exactly one "
+            f"beat of the mini-story, in order, building toward the punchline: {panel_beats_text} "
+            f"Do not add panel numbers, border labels, or any other text to the panels themselves."
+        )
     parts.append(
         "Visual scene only - no text, no letters, no words, no captions, no meme punchline or "
         "caption anywhere in the image. If the scene describes something that would normally "
-        "carry text (a nameplate, sign, screen, slide, or product label), render it blank, "
-        "unlabeled, or with illegible/abstract marks only - never with legible words. All "
-        "on-image text is added separately afterward; do not attempt to render any of it here."
+        "carry text (a nameplate, sign, screen, monitor, phone display, slide, product label, "
+        "app interface, button, icon, HUD overlay, chat bubble, or notification badge), render "
+        "it blank, unlabeled, turned away from view, out of focus, or partly obscured by another "
+        "object - never with legible words, letters, or any mark that resembles writing, not even "
+        "illegible scribbles or abstract symbols standing in for text. Do not invent fake "
+        "interface chrome (buttons, icons, menus, dialogs) with legible-looking labels anywhere "
+        "in the scene. All on-image text is added separately afterward; do not attempt to render "
+        "any of it here."
+    )
+    parts.append(
+        "This is an internet meme image, not a polished editorial illustration, concept art, or "
+        "an advertisement - it should be immediately readable as a visual joke, expressive or "
+        "exaggerated rather than cinematic, with a simple visual hierarchy and never a corporate "
+        "key visual. A slightly rough, cheap, or imperfect look is fine as long as the joke reads "
+        "clearly. Keep the top and bottom roughly one-fifth of the frame visually calm and "
+        "uncluttered, since a caption will be overlaid there afterward - beyond that, let the "
+        "composition serve the joke rather than a cinematic hero shot."
     )
     return " ".join(parts)
 

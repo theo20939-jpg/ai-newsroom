@@ -50,6 +50,8 @@ _VALID_CONCEPT_OUTPUT = {
     "source_fact_links": ["The CEO publicly stated AI is not destroying jobs."],
     "forbidden_interpretations": [],
     "meme_format": "classic_top_bottom",
+    "visual_punchline": "A robot quietly wheels the CEO's own desk out the door mid-speech.",
+    "visual_style": "reaction photo",
 }
 
 
@@ -85,6 +87,7 @@ async def test_meme_candidate_full_lifecycle(db_session: AsyncSession) -> None:
         premise="p", setup="s", punchline="pl", humor_mechanism="irony", visual_scene="scene",
         characters_objects=["a"], text_overlay_intent="intent", source_fact_links=["fact"],
         forbidden_interpretations=[], meme_format=MemeFormat.CLASSIC_TOP_BOTTOM,
+        visual_punchline="punchline", visual_style="reaction photo",
     )
     service = MemeCandidateService(db_session)
 
@@ -179,6 +182,7 @@ async def test_repeated_decision_without_notes_overwrites_prior_notes(db_session
         premise="p", setup="s", punchline="pl", humor_mechanism="irony", visual_scene="scene",
         characters_objects=[], text_overlay_intent="intent", source_fact_links=["fact"],
         forbidden_interpretations=[], meme_format=MemeFormat.CLASSIC_TOP_BOTTOM,
+        visual_punchline="punchline", visual_style="reaction photo",
     )
     candidate = await service.create_from_concept(news_event_id=event.id, editorial_task_id=None, concept=concept)  # type: ignore[arg-type]
 

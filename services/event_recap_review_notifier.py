@@ -65,7 +65,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.event_recap_review_formatting import render_event_recap_review_text
-from bot.image_preview_media import resolve_photo_input
 from bot.keyboards.event_recap_review import build_event_recap_review_keyboard
 from database.models.editorial_task import EditorialTask
 from database.models.event_recap_review import EventRecapReview
@@ -75,6 +74,7 @@ from integrations.storage.image_storage import StorageError
 from schemas.editorial_route import EditorialDestination
 from services.event_recap_review_service import record_telegram_delivery
 from services.image_persistence import _get_storage, get_editorial_image_candidates
+from services.media_finalizer import finalize_photo_input
 from services.telegram_routing import RoutingOutcome, send_photo_to_editorial_destination, send_to_editorial_destination
 
 logger = logging.getLogger(__name__)
@@ -195,8 +195,11 @@ async def _resolve_selected_media_photo_input(
             # BufferedInputFile is intentionally not attempted here - Phase H.2 scope only ever
             # resends an ALREADY-STORED-or-file_id-cached candidate (mirrors this module's own
             # "never a new fetch" discipline); a fresh local-bytes read is exactly what resolve_
-            # photo_input() already does when telegram_file_id is absent.
-            return resolve_photo_input(candidate)
+            # photo_input() already does when telegram_file_id is absent. MEDIA-PROD-1:
+            # finalize_photo_input() (services/media_finalizer.py) wraps that same resolution with
+            # the mandatory NNJ branding step - the single choke point every non-router delivery
+            # path in this codebase now goes through.
+            return finalize_photo_input(candidate)
 
         storage_key = representative.get("storage_key")
         if storage_key:

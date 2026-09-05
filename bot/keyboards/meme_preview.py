@@ -48,25 +48,28 @@ def build_meme_preview_keyboard(candidate_id: UUID, *, source_url: str | None = 
     """Every button is always present (unlike `build_image_preview_keyboard`'s Previous/Next,
     which depend on position in a list) - a meme preview is always exactly one candidate, no
     pagination state to reflect."""
+    # MEME-PROD-2.1: RU labels, matching this module's own already-localized `_SOURCE_BUTTON_LABEL`
+    # ("🔗 Источник") - callback_data (action string) is untouched, so `parse_callback_data()` and
+    # every existing handler dispatch keeps working unmodified; only the visible button text changes.
     rows = [
         [
-            InlineKeyboardButton(text="✅ Approve", callback_data=encode_callback_data("approve", candidate_id)),
-            InlineKeyboardButton(text="❌ Reject", callback_data=encode_callback_data("reject", candidate_id)),
+            InlineKeyboardButton(text="✅ Одобрить", callback_data=encode_callback_data("approve", candidate_id)),
+            InlineKeyboardButton(text="❌ Отклонить", callback_data=encode_callback_data("reject", candidate_id)),
         ],
         [
             InlineKeyboardButton(
-                text="🔄 Concept", callback_data=encode_callback_data("regen_concept", candidate_id)
+                text="🔄 Концепция", callback_data=encode_callback_data("regen_concept", candidate_id)
             ),
             InlineKeyboardButton(
-                text="🔄 Image", callback_data=encode_callback_data("regen_image", candidate_id)
+                text="🔄 Изображение", callback_data=encode_callback_data("regen_image", candidate_id)
             ),
             InlineKeyboardButton(
-                text="🔄 Text", callback_data=encode_callback_data("regen_text", candidate_id)
+                text="🔄 Текст", callback_data=encode_callback_data("regen_text", candidate_id)
             ),
         ],
         [
             InlineKeyboardButton(
-                text="📰 Fallback to normal news", callback_data=encode_callback_data("fallback", candidate_id)
+                text="📰 В обычную новость", callback_data=encode_callback_data("fallback", candidate_id)
             ),
         ],
     ]

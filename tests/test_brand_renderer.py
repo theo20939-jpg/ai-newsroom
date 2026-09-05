@@ -6,7 +6,7 @@ import io
 import random
 
 import pytest
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw
 
 import services.brand_renderer as brand_renderer_module
 from services.brand_renderer import (
@@ -621,128 +621,6 @@ def test_data_card_no_source_image_fails_safe_via_render_branded_media():
     assert result.fallback_reason is not None
 
 
-# ---------------------------------------------------------------------------
-# DATA-CARD-2: restore the approved "no card background" template - a translucent backing is a
-# last-resort legibility aid only, never the automatic companion of the first candidate corner,
-# and even then sized to the real rendered content, never the full nominal block footprint.
-# ---------------------------------------------------------------------------
-
-
-def _textured_patch(size: tuple[int, int] = (500, 260), seed: int = 11) -> Image.Image:
-    """A real, blurred (edge-density-safe) noise texture with genuine local luminance variance -
-    unlike a flat solid color, this clears the busyness safety gate but still measures ABOVE
-    `_DATA_BACKING_CONTRAST_THRESHOLD`, exactly the "safe corner, but too low-contrast for direct
-    text" case the backing mechanism exists for."""
-    w, h = 1280, 720
-    rng = random.Random(seed)
-    noise = Image.new("RGB", (w, h))
-    noise.putdata([(rng.randrange(256), rng.randrange(256), rng.randrange(256)) for _ in range(w * h)])
-    return noise.filter(ImageFilter.GaussianBlur(radius=6)).crop((0, 0, *size))
-
-
-def test_data_card_prefers_a_backing_free_corner_over_the_first_safe_one():
-    """The approved template (data_template_manifest.json) has no card/backing element - a corner
-    that needs one must never win over a later, genuinely quiet corner, even though the pre-
-    existing per-corner search order tries it first."""
-    w, h = 1280, 720
-    patch = _textured_patch()
-    canvas = Image.new("RGB", (w, h), (30, 30, 30))
-    canvas.paste(patch, (0, 0))  # UPPER_LEFT only - textured, safe, but needs backing
-    canvas_rgba = canvas.convert("RGBA")
-
-    inset = max(1, round(brand_renderer_module._SAFE_INSET_FRAC * w))
-    pad = max(1, round(brand_renderer_module._SCORE_PAD_PX_FRAC * w))
-    block_w = max(160, round(brand_renderer_module._DATA_BLOCK_WIDTH_FRAC * w))
-
-    result = _select_data_block_placement(canvas_rgba, block_w=block_w, block_h=200, inset=inset, pad=pad, avoid_box=None)
-    assert result is not None
-    box, _color, needs_backing = result
-    assert needs_backing is False
-    assert box[0] != 24 or box[1] != 24  # never the UPPER_LEFT box - a later, backing-free corner won instead
-
-
-def test_data_card_falls_back_to_backing_when_every_corner_needs_one():
-    """The other half: when NO corner is naturally quiet, the pre-existing backing fallback still
-    engages (never silently omits the stat entirely just because every corner is textured) -
-    matches the original, pre-DATA-CARD-2 single-pass contract for this specific case."""
-    w, h = 1280, 720
-    patch = _textured_patch()
-    canvas = Image.new("RGB", (w, h), (30, 30, 30))
-    for xy in ((0, 0), (0, h - 260), (w - 500, 0), (w - 500, h - 260)):
-        canvas.paste(patch, xy)
-    canvas_rgba = canvas.convert("RGBA")
-
-    inset = max(1, round(brand_renderer_module._SAFE_INSET_FRAC * w))
-    pad = max(1, round(brand_renderer_module._SCORE_PAD_PX_FRAC * w))
-    block_w = max(160, round(brand_renderer_module._DATA_BLOCK_WIDTH_FRAC * w))
-
-    result = _select_data_block_placement(canvas_rgba, block_w=block_w, block_h=200, inset=inset, pad=pad, avoid_box=None)
-    assert result is not None
-    _box, _color, needs_backing = result
-    assert needs_backing is True
-
-
-def test_data_card_backing_is_sized_to_content_not_the_full_block_when_unavoidable():
-    """When a backing genuinely cannot be avoided, it must stay the smallest possible legibility
-    aid - sized to the REAL rendered text, never the fixed nominal block width reserved for
-    corner-safety scoring. A short "5%" value must leave the far edge of that nominal footprint
-    completely untouched (matching the original photo pixels there), while pixels right next to
-    the actual text are visibly tinted."""
-    w, h = 1280, 720
-    patch = _textured_patch()
-    canvas = Image.new("RGB", (w, h), (30, 30, 30))
-    for xy in ((0, 0), (0, h - 260), (w - 500, 0), (w - 500, h - 260)):
-        canvas.paste(patch, xy)
-    buf = io.BytesIO()
-    canvas.save(buf, format="JPEG", quality=95)
-
-    short_candidate = DataCandidate(value="5", unit="%", label="", evidence_fact="x")
-    out = render_data_card(short_candidate, category="TECH", editorial_code="NP-1", source_image_bytes=buf.getvalue())
-    rendered = Image.open(io.BytesIO(out)).convert("RGB")
-
-    block_w = max(160, round(brand_renderer_module._DATA_BLOCK_WIDTH_FRAC * w))
-    far_x, near_x, sample_y = block_w - 10, 40, 50
-    original_far = canvas.getpixel((far_x, sample_y))
-    rendered_far = rendered.getpixel((far_x, sample_y))
-    rendered_near = rendered.getpixel((near_x, sample_y))
-
-    far_diff = sum(abs(a - b) for a, b in zip(original_far, rendered_far))
-    near_diff = sum(abs(a - b) for a, b in zip(original_far, rendered_near))
-    assert far_diff < 15, f"backing leaked past the actual text content: far edge diff={far_diff}"
-    assert near_diff > far_diff  # near the real text, a real tint is visible
-
-
-def test_samsung_ssd_data_card_end_to_end_regression():
-    """DATA-CARD-1 + DATA-CARD-2 together, on the real production story (docs of both phases): the
-    DATA-CARD-1 semantic fix picks the multiplier over the old baseline price; DATA-CARD-2 renders
-    it as a compact, grammatically complete stat block - never the old giant-metric/broken-label
-    composition this production incident was actually filed against."""
-    from services.presentation_director import _find_data_candidate
-
-    candidate = _find_data_candidate(
-        title="Некоторые серверные SSD в России подорожали втрое с конца 2025 года",
-        main_body=(
-            "Серверные накопители Samsung PM9A3 подорожали в 2-2,5 раза с конца 2025 года. "
-            "Диск объёмом 960 GB можно было купить за 25 тыс. рублей, теперь он стоит 80 тыс. рублей."
-        ),
-        research_facts=[
-            "SSD Samsung PM9A3 в 2025 году можно было купить за 25 тыс. рублей.",
-            "Цены на серверные SSD Samsung PM9A3 выросли в 2-2,5 раза с конца 2025 года.",
-            "Samsung PM9A3 960 GB подорожал с 25 тыс. до 80 тыс. рублей.",
-        ],
-    )
-    assert candidate is not None
-    assert candidate.value != "25"  # the old baseline price never wins (DATA-CARD-1)
-    assert "за рубл" not in candidate.label.lower()  # never an orphaned unit (DATA-CARD-1)
-
-    out = render_data_card(
-        candidate, category="TECH", editorial_code="NP-4821", source_image_bytes=_solid_jpeg(1600, 900, color=(40, 30, 20)),
-    )
-    with Image.open(io.BytesIO(out)) as img:
-        assert img.format == "JPEG"
-        assert img.size == (1280, 720)
-
-
 def test_news_renderer_unaffected_by_data_redesign():
     """Explicit V2.20 regression guard: NEWS's own render path (render_news_hero /
     apply_master_news_branding is never even imported by NEWS's own code path) is untouched by
@@ -790,6 +668,7 @@ from services.brand_renderer import (  # noqa: E402
     _DATA_SIGNATURE_COMPACT_WIDTH_FRAC,
     _DATA_SIGNATURE_FULL_WIDTH_FRAC,
     _build_data_lower_signature_image,
+    _build_data_signature_fallback,
     _data_signature_geometry,
     _data_signature_line_length,
     _region_box,
@@ -994,6 +873,47 @@ def test_data_signature_falls_back_to_none_on_unsafe_bottom_corners():
     noisy.putdata([(rng.randrange(256), rng.randrange(256), rng.randrange(256), 255) for _ in range(1280 * 720)])
     result = _select_data_signature(noisy, inset=20, pad=50)
     assert result is None
+
+
+def test_data_signature_fallback_always_succeeds_where_scored_search_fails():
+    """MEDIA-PROD-1: on the exact same maximally-busy canvas that makes _select_data_signature()
+    itself return None above, _build_data_signature_fallback() must still return a real, non-empty
+    composited layer - the guaranteed branding tier that scored search deliberately never
+    provides."""
+    noisy = Image.new("RGBA", (1280, 720))
+    rng = random.Random(11)
+    noisy.putdata([(rng.randrange(256), rng.randrange(256), rng.randrange(256), 255) for _ in range(1280 * 720)])
+    assert _select_data_signature(noisy, inset=20, pad=50) is None  # precondition
+
+    layer, box = _build_data_signature_fallback(noisy.size, inset=20)
+    alpha = list(layer.split()[-1].getdata())
+    assert any(a > 0 for a in alpha)  # something was actually drawn
+    assert box[2] > box[0] and box[3] > box[1]  # a real, non-degenerate box
+
+
+def test_data_card_never_ships_with_zero_branding_on_a_maximally_busy_photo():
+    """End-to-end MEDIA-PROD-1 regression: a DATA card rendered against a photo so busy that BOTH
+    the signature and (potentially) the stat block placement fail their own real-pixel safety
+    scoring must still carry the NNJ mark somewhere on the image - "every image receives final
+    branding layer" is this phase's own explicit success criterion, and a silent all-corners-fail
+    skip (the pre-MEDIA-PROD-1 behavior) violates it."""
+    noisy = Image.new("RGB", (1280, 720))
+    rng = random.Random(11)
+    noisy.putdata([(rng.randrange(256), rng.randrange(256), rng.randrange(256)) for _ in range(1280 * 720)])
+    buf = io.BytesIO()
+    noisy.save(buf, format="JPEG")
+
+    candidate = DataCandidate(value="1", unit="million", label="users", evidence_fact="1 million users")
+    out = render_data_card(candidate, category="TECH", editorial_code="NP-1", source_image_bytes=buf.getvalue())
+    rendered = Image.open(io.BytesIO(out)).convert("RGB")
+
+    # The fallback's own fixed footprint: a solid dark scrim in the bottom-right corner - a random-
+    # noise background can never coincidentally produce this large a solid-color region on its own.
+    inset = 20
+    corner = rendered.crop((rendered.width - 140, rendered.height - 60, rendered.width - inset, rendered.height - inset))
+    pixels = list(corner.getdata())
+    dark_pixel_count = sum(1 for r, g, b in pixels if r < 40 and g < 40 and b < 40)
+    assert dark_pixel_count > len(pixels) * 0.3  # a real, substantial dark scrim, not noise
 
 
 def test_data_card_renders_exactly_one_bottom_signature_end_to_end():

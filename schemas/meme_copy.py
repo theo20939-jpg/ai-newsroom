@@ -47,10 +47,29 @@ class MemeCopy(BaseModel):
     telegram_caption: str = Field(min_length=1, max_length=_CAPTION_MAX_LENGTH)
     editor_explanation: str | None = Field(default=None, max_length=_CAPTION_MAX_LENGTH)
     alt_text: str = Field(min_length=1, max_length=_ALT_TEXT_MAX_LENGTH)
+    # MEME-PROD-4: per-panel on-image captions for MemeConcept.panel_count == 4 (services/
+    # meme_render.py's new quadrant-caption path) - None for panel_count 1/2, which continue to
+    # use top_text/bottom_text exactly as before (zero behavior change for the common case).
+    # Never both populated and unused - the orchestrator/renderer branch on whichever is present.
+    panel_texts: list[str] | None = Field(default=None, min_length=4, max_length=4)
 
     @field_validator("top_text", "bottom_text", "punchline_short")
     @classmethod
     def _no_url_in_on_image_text(cls, value: str | None) -> str | None:
         if value is not None and _URL_RE.search(value):
             raise ValueError("on-image text (top_text/bottom_text/punchline_short) must not contain a URL")
+        return value
+
+    @field_validator("panel_texts")
+    @classmethod
+    def _panel_texts_valid(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return value
+        for panel_text in value:
+            if not panel_text or len(panel_text) > _OVERLAY_TEXT_MAX_LENGTH:
+                raise ValueError(
+                    f"each panel_texts entry must be 1-{_OVERLAY_TEXT_MAX_LENGTH} characters, got {panel_text!r}"
+                )
+            if _URL_RE.search(panel_text):
+                raise ValueError("panel_texts must not contain a URL")
         return value

@@ -16,8 +16,9 @@ capability to *state* its grounding and exclusions, never silently omit them.
 from __future__ import annotations
 
 from enum import Enum
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 MEME_CONCEPT_SCHEMA_VERSION = "v1"
 
@@ -95,3 +96,35 @@ class MemeConcept(BaseModel):
     # format vocabulary the model actually uses over time, rather than being capped at whatever
     # enum values existed when this schema was written.
     meme_format: str = Field(min_length=1, max_length=64)
+
+    # MEME-PROD-4 (Meme Director): the specific VISUAL joke, distinct from `visual_scene`'s plain
+    # description of what the scene physically shows - answers "what visual situation makes the
+    # joke work even before the caption," never a restatement of `visual_scene` or the news
+    # premise itself (services/meme_shape_gate.py checks this deterministically before the image
+    # call). `characters_objects`/`visual_scene` are unchanged and still flow into the image
+    # prompt exactly as before - this field is additive, not a replacement.
+    visual_punchline: str = Field(min_length=1)
+    # 1 = today's single-scene shape (unchanged rendering). 2 = a two-half visual contrast
+    # (expectation/reality, before/after, two-panel comparison) rendered through the EXISTING
+    # top_text/bottom_text band renderer - the image itself is composed as two halves by the image
+    # model, no renderer change needed. 4 = a real four-panel mini-story (services/meme_render.py's
+    # new quadrant-caption path, schemas/meme_copy.py::MemeCopy.panel_texts).
+    panel_count: Literal[1, 2, 4] = 1
+    # One short beat per panel, in panel order - required (non-empty, length == panel_count) only
+    # when panel_count > 1; always empty for the single-scene case (validated below).
+    panel_beats: list[str] = Field(default_factory=list)
+    # Short free-text visual tone - e.g. "reaction photo", "low-budget internet meme", "cartoon",
+    # "mock product shot", "documentary-style photo", "overdramatic cinematic", "surreal realism",
+    # "photorealistic absurdity" - never validated against a closed list, same free-text
+    # philosophy as `meme_format` above. Threaded into the image prompt to steer overall visual
+    # tone away from default "polished editorial illustration."
+    visual_style: str = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def _panel_beats_match_panel_count_when_multi_panel(self) -> "MemeConcept":
+        if self.panel_count > 1 and len(self.panel_beats) != self.panel_count:
+            raise ValueError(
+                f"panel_beats must have exactly {self.panel_count} entries when panel_count == "
+                f"{self.panel_count} (got {len(self.panel_beats)})"
+            )
+        return self

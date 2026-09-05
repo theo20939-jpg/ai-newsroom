@@ -29,11 +29,17 @@ async def _make_event(db_session: AsyncSession) -> NewsEvent:
     return event
 
 
-async def _make_candidate(db_session: AsyncSession, event: NewsEvent, *, meme_format: str, humor_mechanism: str) -> MemeCandidate:
+async def _make_candidate(
+    db_session: AsyncSession, event: NewsEvent, *, meme_format: str, humor_mechanism: str,
+    visual_punchline: str | None = None,
+) -> MemeCandidate:
+    concept_data = {"meme_format": meme_format, "humor_mechanism": humor_mechanism}
+    if visual_punchline is not None:
+        concept_data["visual_punchline"] = visual_punchline
     candidate = MemeCandidate(
         news_event_id=event.id, status=MemeCandidateStatus.CONCEPT_GENERATED,
         concept_schema_version="v1",
-        concept_data={"meme_format": meme_format, "humor_mechanism": humor_mechanism},
+        concept_data=concept_data,
         concept_regeneration_count=0,
     )
     db_session.add(candidate)
@@ -96,3 +102,37 @@ async def test_malformed_concept_data_row_skipped_not_raised(db_session: AsyncSe
 
     context = await build_recent_diversity_context(db_session, limit=10)
     assert context is None  # the one row has neither meme_format nor humor_mechanism - skipped
+
+
+@pytest.mark.asyncio
+async def test_includes_truncated_visual_punchline_snippet(db_session: AsyncSession) -> None:
+    """MEME-PROD-4: visual_punchline is a stronger repetition signal than format/mechanism alone
+    (two concepts can share a format label while telling a different joke) - surfaced truncated,
+    never the full sentence."""
+    event = await _make_event(db_session)
+    long_punchline = "A" * 120
+    await _make_candidate(
+        db_session, event, meme_format="reaction", humor_mechanism="irony", visual_punchline=long_punchline,
+    )
+
+    context = await build_recent_diversity_context(db_session, limit=10)
+    assert context is not None
+    assert "visual_punchline~=" in context
+    assert long_punchline not in context  # truncated, not the full sentence
+    assert "A" * 60 in context  # the truncated prefix is present
+
+
+@pytest.mark.asyncio
+async def test_row_with_only_visual_punchline_is_not_skipped(db_session: AsyncSession) -> None:
+    event = await _make_event(db_session)
+    candidate = MemeCandidate(
+        news_event_id=event.id, status=MemeCandidateStatus.CONCEPT_GENERATED,
+        concept_schema_version="v1", concept_data={"visual_punchline": "A cat in sunglasses."},
+        concept_regeneration_count=0,
+    )
+    db_session.add(candidate)
+    await db_session.commit()
+
+    context = await build_recent_diversity_context(db_session, limit=10)
+    assert context is not None
+    assert "A cat in sunglasses" in context

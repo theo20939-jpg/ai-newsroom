@@ -38,12 +38,3 @@ class ContentDraftStoryLink(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-
-    # PHASE STORY-MEMORY-V2-2 Phase 1 (2026-09-02, database/migrations/versions/
-    # af2aeb69cf67_add_story_memory_v2_phase1_columns.py): reserved for a future, separately-
-    # authorized phase - whether this draft was generated with Story.published_facts empty (no
-    # prior reader-visible coverage), which drives which candidate fact set that future phase's
-    # publish-time extraction step compares against (PHASE STORY-MEMORY-V2-1 §H correction).
-    # services/content_draft_service.py does not set this yet - stays NULL for every row this
-    # phase.
-    generated_as_standalone: Mapped[bool | None] = mapped_column(Boolean, nullable=True)

@@ -54,13 +54,23 @@ async def build_recent_diversity_context(session: AsyncSession, *, limit: int | 
             continue
         meme_format = concept_data.get("meme_format")
         humor_mechanism = concept_data.get("humor_mechanism")
-        if not meme_format and not humor_mechanism:
+        # MEME-PROD-4: visual_punchline (the Meme Director's own specific-visual-joke field,
+        # schemas/meme_concept.py) is a stronger repetition signal than format/mechanism alone -
+        # two concepts can share a format/mechanism label while telling a genuinely different
+        # joke, but a near-identical visual_punchline is real evidence of the same protagonist/
+        # metaphor being reused. Truncated (never the full sentence) - this stays a short diversity
+        # hint, not a second copy of the concept's own text for the model to quote back verbatim.
+        visual_punchline = concept_data.get("visual_punchline")
+        if not meme_format and not humor_mechanism and not visual_punchline:
             continue
         parts = []
         if meme_format:
             parts.append(f"format={meme_format}")
         if humor_mechanism:
             parts.append(f"mechanism={humor_mechanism}")
+        if visual_punchline:
+            snippet = str(visual_punchline)[:60]
+            parts.append(f"visual_punchline~={snippet}")
         lines.append("- " + ", ".join(parts))
 
     if not lines:

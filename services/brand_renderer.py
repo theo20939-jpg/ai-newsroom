@@ -490,42 +490,26 @@ def _select_data_block_placement(
     for the brand mark is unsafe for the stat block too, same real-pixel evidence, no separate
     safety model invented. A candidate box that would overlap the bottom pulse/logo signature
     (`avoid_box` - precise rectangle intersection, not a same-corner heuristic, since the two
-    components are different sizes) is skipped outright.
-
-    DATA-CARD-2: the approved template (assets/brand/newsroom_visuals/v1/references/data/
-    data_template_manifest.json) has no card/backing element at all - text sits directly on the
-    photo. The translucent backing is a legibility safety net for a corner whose CONTENT is safe
-    (passes edge-density/detail-risk) but whose local CONTRAST is too low for readable text - it
-    must stay a genuine last resort, never the automatic companion of whichever corner happens to
-    be tried first. Two passes over the SAME candidate order/safety gates (no new mechanism): pass
-    1 accepts only a corner that needs NO backing at all; pass 2 (only reached when no corner
-    qualifies backing-free) falls back to the original single-pass behavior. Returns
-    (box, text_color, needs_backing) for the winning corner, or None when no corner qualifies even
-    with backing allowed - the caller must then fail safe to source+branding-only, never forcing
-    the statistic onto the image (spec's own explicit requirement)."""
+    components are different sizes) is skipped outright. Returns (box, text_color, needs_backing)
+    for the first corner that is content-safe, non-colliding, and clears the adaptive-color
+    visibility check, or None when no corner qualifies - the caller must then fail safe to
+    source+branding-only, never forcing the statistic onto the image (spec's own explicit
+    requirement)."""
     canvas_w, canvas_h = canvas.size
 
-    def _candidates() -> list[tuple[BoundingBox, tuple[int, int, int], bool]]:
-        found = []
-        for placement in _DATA_STAT_CANDIDATE_PLACEMENTS:
-            box = _region_box((canvas_w, canvas_h), block_w, block_h, placement, inset)
-            if avoid_box is not None and _rects_intersect(box, avoid_box):
-                continue
-            score_box = (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
-            edge_density, contrast, _red_visibility, detail_risk = _score_region(canvas, score_box, subject_bbox=None)
-            if edge_density >= _EDGE_DENSITY_SAFE_THRESHOLD or detail_risk >= _DETAIL_RISK_MAX_PCT:
-                continue
-            color = _pick_adaptive_data_color(_region_mean_rgb(canvas, box))
-            if color is None:
-                continue
-            found.append((box, color, contrast >= _DATA_BACKING_CONTRAST_THRESHOLD))
-        return found
-
-    candidates = _candidates()
-    for box, color, needs_backing in candidates:
-        if not needs_backing:
-            return box, color, False
-    return candidates[0] if candidates else None
+    for placement in _DATA_STAT_CANDIDATE_PLACEMENTS:
+        box = _region_box((canvas_w, canvas_h), block_w, block_h, placement, inset)
+        if avoid_box is not None and _rects_intersect(box, avoid_box):
+            continue
+        score_box = (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
+        edge_density, contrast, _red_visibility, detail_risk = _score_region(canvas, score_box, subject_bbox=None)
+        if edge_density >= _EDGE_DENSITY_SAFE_THRESHOLD or detail_risk >= _DETAIL_RISK_MAX_PCT:
+            continue
+        color = _pick_adaptive_data_color(_region_mean_rgb(canvas, box))
+        if color is None:
+            continue
+        return box, color, contrast >= _DATA_BACKING_CONTRAST_THRESHOLD
+    return None
 
 
 @dataclass(frozen=True)
@@ -692,6 +676,45 @@ def _select_data_signature(canvas: Image.Image, *, inset: int, pad: int) -> Data
     return None
 
 
+# MEDIA-PROD-1: fixed, never-sampled scrim behind the guaranteed-branding fallback below - the
+# entire reason every real corner failed _select_data_signature()'s own scoring is that no sampled
+# color could be trusted there, so legibility here is guaranteed by construction instead. Same
+# alpha-blended-scrim idiom render_data_card()'s own stat-block backing already established
+# (DATA-CARD-2's `backing_fill`), reused for consistency, not redesigned.
+_SIGNATURE_FALLBACK_SCRIM_FILL = (0, 0, 0, 190)
+_SIGNATURE_FALLBACK_SCRIM_PADDING_FRAC = 0.012
+
+
+def _build_data_signature_fallback(canvas_size: tuple[int, int], *, inset: int) -> tuple[Image.Image, BoundingBox]:
+    """MEDIA-PROD-1: the guaranteed-always-succeeds branding tier `_select_data_signature()`
+    itself deliberately never provides - that function's own docstring contract ("never a forced/
+    distorted mark") describes its real-pixel-safety-scored search only, and is intentionally left
+    untouched here. Reached ONLY when that search returns `None` (every bottom corner failed even
+    the smallest compact-tier line) - a DATA card must never ship with zero NNJ branding at all
+    (this phase's own "every image receives final branding layer" requirement).
+
+    A small white NNJ mark on an opaque dark scrim, sized tightly to the mark alone (no pulse, no
+    connecting line - deliberately the smallest possible footprint, visually distinct from the
+    real signature's full form) at the fixed, canonical LOWER_RIGHT corner - no scoring, no color
+    sampling, so it cannot itself fail the way every scored candidate just did. Returns the
+    composited layer plus its own real drawn bounding box, for the caller to feed to
+    `_select_data_block_placement()`'s `avoid_box` exactly like the scored signature's own box."""
+    w, h = canvas_size
+    mark_w = max(1, round(_LOWER_MARK_W_FRAC * w))
+    mark = rasterize_nnj_mark(target_width=mark_w, red=False)
+    padding = max(1, round(_SIGNATURE_FALLBACK_SCRIM_PADDING_FRAC * w))
+
+    x1, y1 = w - inset, h - inset
+    x0, y0 = x1 - mark.width, y1 - mark.height
+    scrim_box: BoundingBox = (x0 - padding, y0 - padding, x1 + padding, y1 + padding)
+
+    layer = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    draw.rectangle(list(scrim_box), fill=_SIGNATURE_FALLBACK_SCRIM_FILL)
+    layer.alpha_composite(mark, (x0, y0))
+    return layer, scrim_box
+
+
 def _build_data_lower_signature_image(
     canvas_size: tuple[int, int], placement: ComponentPlacement, inset: int, *, red: bool, line_len: int,
 ) -> Image.Image:
@@ -771,6 +794,12 @@ def render_data_card(
             min(mark_box[0], pulse_box[0], line_box[0]), min(mark_box[1], pulse_box[1], line_box[1]),
             max(mark_box[2], pulse_box[2], line_box[2]), max(mark_box[3], pulse_box[3], line_box[3]),
         )
+    else:
+        # MEDIA-PROD-1: every bottom corner failed _select_data_signature()'s own scored search -
+        # never ship a DATA card with zero NNJ branding (see _build_data_signature_fallback()'s
+        # own docstring for why this is a deliberately different, scoring-free guarantee).
+        fallback_image, signature_box = _build_data_signature_fallback(canvas.size, inset=inset)
+        canvas.alpha_composite(fallback_image)
 
     block_w = max(160, round(_DATA_BLOCK_WIDTH_FRAC * canvas_w))
     inner_max_width = max(1, block_w - _DATA_BLOCK_MARGIN * 2)
@@ -789,22 +818,10 @@ def render_data_card(
         text_x, text_y = x0 + _DATA_BLOCK_MARGIN, y0 + _DATA_BLOCK_MARGIN
 
         if needs_backing:
-            # DATA-CARD-2: the approved template has no card/backing element at all (data_template_
-            # manifest.json) - `_select_data_block_placement()` now only reaches for one as a last
-            # resort when every candidate corner is too visually busy for direct on-image text.
-            # Even then, it must stay the smallest possible legibility aid, never a nominal-block-
-            # sized panel: sized tightly to the REAL measured text content (never wider/taller than
-            # `primary_text`/`label_lines` actually render), not the fixed `block_w`/`block_h`
-            # footprint reserved for corner-safety scoring - a short value like "35%" must never
-            # carry a backing as wide as a long label would need.
-            content_width = draw.textlength(primary_text, font=stat_font)
-            for line in label_lines:
-                content_width = max(content_width, draw.textlength(line, font=label_font))
-            tight_box = (x0, y0, x0 + content_width + _DATA_BLOCK_MARGIN * 2, y0 + block_h)
             backing_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
             backing_draw = ImageDraw.Draw(backing_layer)
             backing_fill = (0, 0, 0, 140) if color == _OFFICIAL_NNJ_WHITE else (255, 255, 255, 150)
-            backing_draw.rounded_rectangle(list(tight_box), radius=10, fill=backing_fill)
+            backing_draw.rounded_rectangle(list(box), radius=10, fill=backing_fill)
             canvas = Image.alpha_composite(canvas, backing_layer)
             draw = ImageDraw.Draw(canvas)
 

@@ -75,7 +75,11 @@ _CONCEPT_OUTPUT = {
     "punchline": "Meanwhile the CEO's own job is the one AI can't replace.",
     "humor_mechanism": "self_referential_irony",
     "visual_scene": "A CEO on stage pointing at a slide reading 'Jobs are safe'.",
-    "characters_objects": ["CEO", "presentation slide"],
+    # MEME-PROD-4 (Meme Director) fields - visual_punchline deliberately distinct from
+    # visual_scene/premise so services/meme_shape_gate.py's own restatement check passes.
+    "visual_punchline": "A robot quietly wheels the CEO's own desk out the door mid-speech.",
+    "characters_objects": ["CEO", "presentation slide"], "panel_count": 1, "panel_beats": [],
+    "visual_style": "reaction photo",
     "text_overlay_intent": "Contrast reassurance with public skepticism.",
     "source_fact_links": ["The CEO publicly stated AI is not destroying jobs."],
     "forbidden_interpretations": [],
@@ -85,6 +89,7 @@ _CONCEPT_OUTPUT = {
 _COPY_OUTPUT = {
     "top_text": "AI WON'T TAKE YOUR JOB",
     "bottom_text": "SAYS GUY WHOSE JOB IS AI",
+    "panel_texts": None,
     "punchline_short": "The one job AI can't replace.",
     "telegram_caption": "From today's keynote - CEO addresses job-loss fears.",
     "editor_explanation": "Plays on the irony of an AI CEO reassuring workers about AI.",
@@ -275,7 +280,7 @@ async def test_complete_offline_meme_pipeline_happy_path(db_session: AsyncSessio
     # product correction (services/meme_preview_notifier.py's own module docstring: "Do NOT
     # duplicate the entire NEWS article" - the caption is headline-only, never the on-image
     # punchline text) - fixed to match the current, intentional caption contract.
-    assert preview_outcome.rendered_caption == f"😂 MEME\n\n{event.title}"
+    assert preview_outcome.rendered_caption == f"😂 Мем\n\n{event.title}"  # MEME-PROD-2.1: RU label
 
     # --- M9: Human decision persistence, idempotency proven with a duplicate call ---
     approved = await service.record_editor_decision(candidate_id, "approved")

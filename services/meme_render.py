@@ -2,11 +2,21 @@
 bottom text onto a generated meme image, then persists the final asset (docs/
 phase18_m6_meme_rendering_report.md).
 
-No LLM call, no network call, no external font file (Pillow's own built-in scalable default font
-- `PIL.ImageFont.load_default(size=...)` - is used, so this module has zero new binary asset
-dependency; a licensed display font is a disclosed future improvement, not a blocker - see the M6
-report §5). Deterministic: the same (image bytes, MemeCopy) pair always produces the same output
-bytes, since nothing here is randomized.
+No LLM call, no network call. MEME-PROD-2.1 requires Russian on-image text, and Pillow's own
+built-in default font (`PIL.ImageFont.load_default()`) has NO Cyrillic glyphs - confirmed
+empirically (real production evidence + reproduced locally: Cyrillic renders as ".notdef" tofu
+boxes). `_load_font()` below reuses `services/brand_renderer.py`'s own already-established,
+already-working font-resolution mechanism verbatim (never downloaded, never bundled: common
+OS-provided font paths only - Windows always ships Arial; DejaVu Sans/Liberation Sans are the
+typical Linux-server-distro defaults, commonly pre-installed via `fonts-dejavu-core`/
+`fonts-liberation` - `settings.brand_font_path` can pin an exact path). Falls back to Pillow's own
+ASCII-only default font only if no candidate path resolves (degraded Cyrillic rendering, never a
+crash, never blocked delivery) - disclosed production prerequisite: the VPS must actually have one
+of these fonts installed for Cyrillic meme text to render correctly (this exact caveat is already
+disclosed, unresolved, for `brand_renderer.py`'s identical mechanism - "VPS Cyrillic rendering is
+UNVERIFIED, no VPS access" - the same disclosed limitation applies here, now duplicated rather than
+newly introduced). Deterministic: the same (image bytes, MemeCopy) pair always produces the same
+output bytes, since nothing here is randomized.
 
 Safe zones (brief's own "не закрывает ключевой объект" requirement): only the top ~18% and
 bottom ~18% horizontal bands of the canvas ever receive text - the center ~64% is never drawn
@@ -25,6 +35,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from io import BytesIO
+from pathlib import Path
 from typing import Literal
 
 from PIL import Image, ImageDraw, ImageFont
@@ -36,22 +47,73 @@ from schemas.meme_render import MemeRenderResult, MemeRenderStatus
 
 logger = logging.getLogger(__name__)
 
+# MEME-PROD-2.1: byte-for-byte the same candidate list services/brand_renderer.py::
+# _FONT_CANDIDATE_PATHS already established - duplicated locally per this codebase's own
+# established per-module-private-helper convention, not imported (that module's own list is
+# module-private too). Reuses the SAME `settings.brand_font_path` override, so one operator-set
+# path pins the font for both NEWS/DATA/QUOTE cards and memes at once.
+_FONT_CANDIDATE_PATHS: tuple[str, ...] = (
+    "C:/Windows/Fonts/arial.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+)
+
+_font_path_resolution: list[str | None] = []  # single-element cache; [] means "not yet resolved"
+
+
+def _resolve_font_path() -> str | None:
+    if _font_path_resolution:
+        return _font_path_resolution[0]
+    candidates = ([settings.brand_font_path] if settings.brand_font_path else []) + list(_FONT_CANDIDATE_PATHS)
+    for candidate in candidates:
+        if candidate and Path(candidate).exists():
+            logger.info("meme_render_font_resolved", extra={"font_path": candidate})
+            _font_path_resolution.append(candidate)
+            return candidate
+    logger.warning("meme_render_no_cyrillic_font_found_using_ascii_only_default")
+    _font_path_resolution.append(None)
+    return None
+
 # Fractions of canvas height reserved for text - the remaining center band is never drawn into
 # (module docstring's own safe-zone discipline).
 _BAND_HEIGHT_FRACTION = 0.18
 _BAND_HORIZONTAL_MARGIN_FRACTION = 0.06
-_MAX_LINES_PER_BAND = 3
-_FONT_SIZES_DESCENDING = (72, 60, 48, 40, 32)
+# MEME-PROD-2.1: was 3 - the brief's own "top text max 2 lines; bottom text max 2 lines" rule.
+_MAX_LINES_PER_BAND = 2
+# MEME-PROD-2.1: ~17% smaller than the prior (72, 60, 48, 40, 32) - brief's own "reduce meme text
+# size approximately 15-20%" typography-polish request; still descending in the same five steps
+# `_fit_text_to_band()` shrinks through.
+_FONT_SIZES_DESCENDING = (60, 50, 40, 33, 27)
 _STROKE_WIDTH = 4
 _MIN_CONTRAST_RATIO = 3.0
+# MEME-PROD-2.1: mirrors `meme_watermark.py`'s own `_WATERMARK_WIDTH_FRACTION` (0.16) +
+# `_MARGIN_FRACTION` (0.035) footprint, duplicated locally per this codebase's established
+# per-module-private-helper convention (that module is watermark-only and these are private).
+# Reserved as extra right-side clearance, canvas-width-relative, ONLY in the one band the
+# watermark actually occupies (brief's own "no overlap with watermark" rule) - real overlap was
+# confirmed by rendering a long top/bottom line before this fix (watermark composites AFTER this
+# module's own text, so an overlap would draw the mark on top of - i.e. obscuring - the text).
+_WATERMARK_CLEARANCE_FRACTION = 0.22
 
 
 def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    """Return type is a real union, not just `FreeTypeFont` - the fallback branch (only reachable
-    on a Pillow build predating the `size=` kwarg) returns Pillow's own base `ImageFont` type
-    instead. Both are accepted transparently by every `ImageDraw` method this module calls
-    (`textbbox`/`text`), so callers never need to distinguish them (found by mypy during Phase 18
-    final acceptance - the original narrower annotation was simply inaccurate, not a real bug)."""
+    """MEME-PROD-2.1: tries `_resolve_font_path()`'s real Cyrillic-capable TrueType font first
+    (mirrors `brand_renderer.py::_font()`'s own identical try/except-fallback shape) - only falls
+    back to Pillow's own ASCII-only `load_default()` if no OS font path resolved, or if loading the
+    resolved path fails for any reason (never a crash, never blocked delivery).
+
+    Return type is a real union, not just `FreeTypeFont` - the fallback branch returns Pillow's own
+    base `ImageFont` type instead. Both are accepted transparently by every `ImageDraw` method this
+    module calls (`textbbox`/`text`), so callers never need to distinguish them (found by mypy
+    during Phase 18 final acceptance - the original narrower annotation was simply inaccurate, not
+    a real bug)."""
+    font_path = _resolve_font_path()
+    if font_path is not None:
+        try:
+            return ImageFont.truetype(font_path, size)
+        except Exception:  # noqa: BLE001 - a font-load failure must degrade, never crash rendering
+            logger.warning("meme_render_font_load_failed", extra={"font_path": font_path})
     try:
         return ImageFont.load_default(size=size)
     except TypeError:  # pragma: no cover - only reachable on a Pillow build predating `size=`
@@ -142,6 +204,7 @@ def _fit_text_to_band(
 
 def _draw_band(
     image: Image.Image, draw: ImageDraw.ImageDraw, text: str | None, *, band: Literal["top", "bottom"],
+    reserve_watermark_clearance: bool = False,
 ) -> tuple[float | None, list[str]]:
     if not text:
         return None, []
@@ -149,7 +212,11 @@ def _draw_band(
     width, height = image.size
     band_height = int(height * _BAND_HEIGHT_FRACTION)
     margin = int(width * _BAND_HORIZONTAL_MARGIN_FRACTION)
-    max_width = width - 2 * margin
+    # MEME-PROD-2.1: the watermark-side right margin is widened (never the left) so wrapped lines
+    # stay clear of the mark's own footprint in whichever corner it will occupy.
+    right_margin = margin + (round(width * _WATERMARK_CLEARANCE_FRACTION) if reserve_watermark_clearance else 0)
+    usable_width = width - margin - right_margin
+    max_width = usable_width
 
     box = (0, 0, width, band_height) if band == "top" else (0, height - band_height, width, height)
     background_luminance = _measure_band_luminance(image, box)
@@ -170,13 +237,73 @@ def _draw_band(
     for line in lines:
         bbox = draw.textbbox((0, 0), line, font=font, stroke_width=_STROKE_WIDTH)
         line_width = bbox[2] - bbox[0]
-        x = (width - line_width) // 2
+        x = margin + (usable_width - line_width) // 2
         draw.text(
             (x, y), line, font=font, fill=fill_color, stroke_width=_STROKE_WIDTH, stroke_fill=stroke_color,
         )
         y += line_height
 
     return contrast_ratio, violations
+
+
+def _draw_panel_captions(
+    image: Image.Image, draw: ImageDraw.ImageDraw, panel_texts: list[str],
+) -> tuple[list[float | None], list[str]]:
+    """MEME-PROD-4: caption path for a `MemeCopy.panel_texts`-carrying (panel_count==4) meme -
+    the image itself is generated as a single 2x2 grid comic (services/meme_image_generation.py::
+    build_image_prompt()'s own panel-composition instruction), so each quadrant gets its own short
+    caption strip along its bottom edge, using the EXACT same font-fitting/wrapping/contrast
+    helpers `_draw_band()` already established (`_fit_text_to_band()`, `_measure_band_luminance()`,
+    `_choose_text_colors()`) - only the box-boundary math is new, mirroring `_draw_band()`'s own
+    "everything else already takes an arbitrary box" shape. Reading order matches `panel_texts`'
+    own 1-4 order: top-left, top-right, bottom-left, bottom-right.
+
+    Watermark clearance is reserved only in the bottom-right quadrant - `apply_nnj_watermark()`
+    defaults to the bottom-right corner of the WHOLE canvas whenever `copy.bottom_text` is absent
+    (always true for a panel_texts meme, per prompts/meme_copywriting/v2.yaml's own contract), so
+    only that one quadrant's own bottom-right corner can ever collide with it."""
+    width, height = image.size
+    quad_w, quad_h = width // 2, height // 2
+    margin = int(quad_w * _BAND_HORIZONTAL_MARGIN_FRACTION)
+    caption_height = int(quad_h * _BAND_HEIGHT_FRACTION)
+    # Reading order: top-left, top-right, bottom-left, bottom-right - matches panel_texts[0..3].
+    quadrant_origins = [(0, 0), (quad_w, 0), (0, quad_h), (quad_w, quad_h)]
+
+    ratios: list[float | None] = []
+    violations: list[str] = []
+    for index, (text, (ox, oy)) in enumerate(zip(panel_texts, quadrant_origins)):
+        if not text:
+            ratios.append(None)
+            continue
+
+        is_bottom_right_quadrant = index == 3
+        right_margin = margin + (round(quad_w * _WATERMARK_CLEARANCE_FRACTION) if is_bottom_right_quadrant else 0)
+        usable_width = quad_w - margin - right_margin
+
+        box_top = oy + quad_h - caption_height
+        box = (ox, box_top, ox + quad_w, oy + quad_h)
+        background_luminance = _measure_band_luminance(image, box)
+        fill_color, stroke_color, contrast_ratio = _choose_text_colors(background_luminance)
+
+        font, lines, violated = _fit_text_to_band(draw, text, max_width=usable_width, max_height=caption_height)
+        if violated:
+            violations.append(f"panel_{index + 1}_text_truncated_to_fit_safe_zone")
+
+        line_height = draw.textbbox((0, 0), "Ag", font=font, stroke_width=_STROKE_WIDTH)[3]
+        total_text_height = line_height * len(lines)
+        y = box_top + (caption_height - total_text_height) // 2
+        for line in lines:
+            bbox = draw.textbbox((0, 0), line, font=font, stroke_width=_STROKE_WIDTH)
+            line_width = bbox[2] - bbox[0]
+            x = ox + margin + (usable_width - line_width) // 2
+            draw.text(
+                (x, y), line, font=font, fill=fill_color, stroke_width=_STROKE_WIDTH, stroke_fill=stroke_color,
+            )
+            y += line_height
+
+        ratios.append(contrast_ratio)
+
+    return ratios, violations
 
 
 def render_meme(image_bytes: bytes, copy: MemeCopy, *, storage: ImageStorage) -> MemeRenderResult:
@@ -190,10 +317,30 @@ def render_meme(image_bytes: bytes, copy: MemeCopy, *, storage: ImageStorage) ->
         logger.warning("meme_render_decode_failed", extra={"error_code": error_code})
         return MemeRenderResult(status=MemeRenderStatus.FAILED, error_code=error_code)
 
+    panel_ratios: list[float | None] | None = None
     try:
         draw = ImageDraw.Draw(image)
-        top_ratio, top_violations = _draw_band(image, draw, copy.top_text, band="top")
-        bottom_ratio, bottom_violations = _draw_band(image, draw, copy.bottom_text, band="bottom")
+        if copy.panel_texts:
+            # MEME-PROD-4: the 4-quadrant panel path - top_text/bottom_text are NOT drawn at all
+            # for this shape (prompts/meme_copywriting/v2.yaml's own contract: bottom_text is
+            # always null when panel_texts is set, and top_text is set equal to panel_texts[0]
+            # purely to satisfy the schema, never separately rendered here).
+            panel_ratios, panel_violations = _draw_panel_captions(image, draw, copy.panel_texts)
+            top_ratio: float | None = None
+            bottom_ratio: float | None = None
+            top_violations: list[str] = []
+            bottom_violations = panel_violations
+        else:
+            # MEME-PROD-2.1: same decision `meme_watermark.py::apply_nnj_watermark()` makes from
+            # the same `copy.bottom_text` presence - watermark goes top-right when the bottom band
+            # is in use, bottom-right otherwise - so the matching band reserves clearance for it.
+            bottom_band_in_use = bool(copy.bottom_text)
+            top_ratio, top_violations = _draw_band(
+                image, draw, copy.top_text, band="top", reserve_watermark_clearance=bottom_band_in_use,
+            )
+            bottom_ratio, bottom_violations = _draw_band(
+                image, draw, copy.bottom_text, band="bottom", reserve_watermark_clearance=not bottom_band_in_use,
+            )
 
         buffer = BytesIO()
         image.save(buffer, format="PNG")
@@ -213,7 +360,8 @@ def render_meme(image_bytes: bytes, copy: MemeCopy, *, storage: ImageStorage) ->
         logger.warning("meme_render_storage_failed", extra={"error_code": error_code})
         return MemeRenderResult(status=MemeRenderStatus.FAILED, error_code=error_code)
 
-    contrast_passed = all(ratio is None or ratio >= _MIN_CONTRAST_RATIO for ratio in (top_ratio, bottom_ratio))
+    all_ratios = [top_ratio, bottom_ratio, *(panel_ratios or [])]
+    contrast_passed = all(ratio is None or ratio >= _MIN_CONTRAST_RATIO for ratio in all_ratios)
     violations = [*top_violations, *bottom_violations]
 
     logger.info(
@@ -232,6 +380,7 @@ def render_meme(image_bytes: bytes, copy: MemeCopy, *, storage: ImageStorage) ->
         sha256=stored.sha256,
         top_text_contrast_ratio=top_ratio,
         bottom_text_contrast_ratio=bottom_ratio,
+        panel_text_contrast_ratios=[r for r in panel_ratios if r is not None] if panel_ratios is not None else None,
         contrast_passed=contrast_passed,
         safe_zone_violations=violations,
     )

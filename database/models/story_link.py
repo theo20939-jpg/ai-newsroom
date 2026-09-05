@@ -13,7 +13,7 @@ per event" as a hard database constraint, not just an application-level conventi
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, Float, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,24 +29,16 @@ class NewsEventStoryLink(Base):
     Phase 20 M10 note: database/migrations/versions/3c22be05f4e5_add_story_memory_v2_shadow_
     columns.py adds three nullable columns (delta_classification, confidence_band, would_suppress)
     for services/story_delta_engine.py, services/story_confidence.py, and services/
-    story_suppression.py's outputs. PHASE STORY-MEMORY-V2-2 preflight (2026-09-02) confirmed this
-    migration - despite its own docstring's "deliberately NOT applied" note - is in fact already
-    applied (it sits inside the linear alembic history other, later-shipped migrations already
-    build on, and its three columns were confirmed present via direct information_schema
-    inspection). Those three columns are still intentionally NOT declared on this ORM class here -
-    out of scope for the Phase 1 change that added the block below; still governed by the same
-    "model and migration land together" rule this docstring documents.
-
-    PHASE STORY-MEMORY-V2-2 (2026-09-02), rollout step 1 of the approved Story Memory V2 design
-    (PHASE STORY-MEMORY-V2-1): the seven columns below (database/migrations/versions/
-    af2aeb69cf67_add_story_memory_v2_phase1_columns.py, applied together with this model change,
-    per the exact same discipline the note above describes) reserve storage for the future AI
-    Story Judge's final, actionable decision - distinct from `match_type` above (six legacy,
-    retrieval-only values: new_story/story_update/supporting_source/semantic_duplicate/
-    uncertain_match/related_story) and distinct from the three V2 shadow columns. No runtime code
-    reads or writes any of these seven columns yet - `final_decision` computation, the AI Judge
-    itself, and every downstream consumer are out of scope for this phase and land in a later,
-    separately-authorized phase."""
+    story_suppression.py's outputs - created but deliberately NOT applied to any real database
+    this phase (Phase 20's explicit shadow-neutrality/no-migration-application guardrail). This
+    ORM class is intentionally NOT updated to declare those columns yet: SQLAlchemy includes every
+    mapped column in every generated INSERT regardless of whether it was explicitly set on the
+    instance (confirmed empirically - an unset nullable column still appears as a NULL parameter
+    in the INSERT), so declaring them here before the migration is applied would break every real
+    INSERT against this table (verified: it does, with `UndefinedColumnError`). The model and
+    migration are updated together, in the same future, separately-authorized change that applies
+    the migration - exactly the precedent every prior shadow-infra migration in this codebase
+    follows (model + migration land and apply in the same authorized step, never split apart)."""
 
     __tablename__ = "news_event_story_links"
 
@@ -65,13 +57,3 @@ class NewsEventStoryLink(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-
-    # --- PHASE STORY-MEMORY-V2-2 Phase 1 (2026-09-02) - reserved for the future AI Story Judge,
-    # unread/unwritten by any runtime code this phase (see class docstring above). ---
-    final_decision: Mapped[str | None] = mapped_column(String, nullable=True)
-    decision_source: Mapped[str | None] = mapped_column(String, nullable=True)
-    decision_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
-    judge_error_category: Mapped[str | None] = mapped_column(String, nullable=True)
-    new_facts: Mapped[list | None] = mapped_column(JSON, nullable=True)
-    material_delta: Mapped[list | None] = mapped_column(JSON, nullable=True)
-    decision_reason: Mapped[str | None] = mapped_column(Text, nullable=True)

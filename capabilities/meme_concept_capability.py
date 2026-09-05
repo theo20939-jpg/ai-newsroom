@@ -1,10 +1,11 @@
-"""MemeConceptCapability - Phase 18 M2: invents one original meme concept (premise/setup/
-punchline/humor mechanism/visual scene/text overlay intent), grounded in Research's already-
-extracted facts (docs/phase18_m2_meme_concept_report.md).
+"""MemeConceptCapability - Phase 18 M2, evolved by MEME-PROD-4 into a "Meme Director": invents one
+original meme concept (premise/setup/punchline/humor mechanism/visual scene/visual punchline/panel
+structure/visual style/text overlay intent), grounded in Research's already-extracted facts
+(docs/phase18_m2_meme_concept_report.md).
 
 An ordinary Phase 8 `Capability`, identical construction shape to every existing one
 (`CopywritingCapability`/`ResearchCapability`/`IntelligenceCapability`/`QualityCapability`):
-`__init__(gateway, prompt_repository)` only, one `call_generate()` invocation, no retry.
+`__init__(gateway, prompt_repository)` only.
 
 Binding rule (mirrors Contract §5's own CopywritingCapability rule): `MemeConceptCapability` MUST
 NOT hold a direct reference to `ResearchCapability`/`IntelligenceCapability`, import either, or
@@ -16,7 +17,18 @@ degradation).
 This module intentionally duplicates the floor-validation/step-result-formatting helpers other
 capability modules already duplicate independently, per this codebase's own established rationale
 (§19.2 Q1 of the Phase 9 contract, restated in every sibling capability's own docstring).
-"""
+
+MEME-PROD-4: real production canary evidence showed technically clean but "editorial illustration,
+not a meme" output - `services/meme_shape_gate.py::assess_meme_shape_risk()` is a cheap,
+deterministic pre-filter (never the semantic judge itself - see that module's own docstring) that
+decides whether to spend exactly ONE bounded correction retry, mirroring `capabilities/
+scoring_capability.py`'s own §10 schema-correction-retry shape exactly: call once (sequence=0) →
+if the shape gate flags risk, append a correction message quoting the brief's own bad/good
+examples and re-call (sequence=1) → accept the second result UNCONDITIONALLY regardless of the
+gate's second-pass verdict, never a third attempt. Schema-floor validation is unchanged and still
+hard on both attempts (raises `ValidationCapabilityError`, no retry added for that axis - out of
+this phase's scope). Incremental cost: at most one extra text-only concept-generation call, only
+when the shape gate actually flags risk; the image-generation call downstream is never duplicated."""
 from __future__ import annotations
 
 import logging
@@ -24,20 +36,23 @@ from datetime import datetime, timezone
 from typing import Any
 
 from capabilities.errors import ValidationCapabilityError
-from capabilities.gateway_call import call_generate
-from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, LLMGateway, Message
+from capabilities.gateway_call import GatewayCallOutcome, call_generate
+from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, GenerateResponse, LLMGateway, Message
 from integrations.prompts.protocol import PromptRepository, RenderedPrompt
 from schemas.capability import CapabilityContext, CapabilityResult
 from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
+from services.meme_shape_gate import assess_meme_shape_risk
 
 logger = logging.getLogger(__name__)
 
 CAPABILITY_NAME = "meme_concept"
-# MEME PRODUCTION PIPELINE: bumped to "2" (prompts/meme_concept/v2.yaml) - broader creative-tone
-# rules, free-text meme_format (format diversity), and consumption of the new optional
-# `context.business.meme_recent_diversity_context` field (see _build_request() below). v1 stays
-# frozen/unmodified per this codebase's own prompt-immutability rule.
-PROMPT_VERSION = "2"
+# MEME-PROD-4: bumped to "4" (prompts/meme_concept/v4.yaml) - the Meme Director prompt: a new
+# required `visual_punchline` field (the specific visual joke, distinct from `visual_scene`),
+# `panel_count`/`panel_beats` (real multi-panel format support), `visual_style`, and explicit
+# meme-vs-illustration framing with bad/good examples. v1/v2/v3 stay frozen/unmodified per this
+# codebase's own prompt-immutability rule (previous bump comment, still accurate for v3 itself:
+# visual_scene must depict the comedic exaggeration/incongruity, plus a UI-density note).
+PROMPT_VERSION = "4"
 
 MEME_CONCEPT_CAPABILITY_DEFINITION = CapabilityDefinition(
     name=CAPABILITY_NAME,
@@ -45,9 +60,9 @@ MEME_CONCEPT_CAPABILITY_DEFINITION = CapabilityDefinition(
     config=CapabilityConfig(timeout_seconds=30),
     required_context=["news_event"],
     expected_output_keys=[
-        "premise", "setup", "punchline", "humor_mechanism", "visual_scene",
-        "characters_objects", "text_overlay_intent", "source_fact_links",
-        "forbidden_interpretations", "meme_format",
+        "premise", "setup", "punchline", "humor_mechanism", "visual_scene", "visual_punchline",
+        "characters_objects", "panel_count", "panel_beats", "visual_style", "text_overlay_intent",
+        "source_fact_links", "forbidden_interpretations", "meme_format",
     ],
 )
 
@@ -139,6 +154,44 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
     )
 
 
+def _build_shape_correction_request(
+    original_request: GenerateRequest, response: GenerateResponse, risk_reason: str,
+) -> GenerateRequest:
+    """MEME-PROD-4: mirrors capabilities/scoring_capability.py::_build_correction_request() shape
+    exactly - append a new, separate correction Message (never replacing the message list) and pin
+    `preferred_model` to the same resolved model (no re-routing). Quotes the prompt's own bad/good
+    examples so the model has concrete guidance for what "distinct visual joke" actually means,
+    rather than a bare "try again" instruction."""
+    correction_message = Message(
+        role="user",
+        content=[
+            ContentPart(
+                type="text",
+                text=(
+                    f"Your previous concept's visual_punchline failed a quality check: {risk_reason}. "
+                    "visual_punchline must be a specific visual joke, reaction, contrast, or "
+                    "absurdity that is genuinely DIFFERENT from visual_scene's plain description "
+                    "and from the news premise - never a restatement of either. For example, if "
+                    "the news is a chip price increase, a weak visual_punchline just re-describes "
+                    "the price increase visually (e.g. chips passing through an expensive toll "
+                    "booth) - a strong one shows a human cost or reaction instead (e.g. a gamer "
+                    "handing over a wallet, then a watch, then reaching for a kidney-transplant "
+                    "folder just to buy one processor). Rewrite the concept - especially "
+                    "visual_punchline, and visual_scene/panel_beats if needed to support it - so "
+                    "the visual joke is clear and distinct, and respond again matching the schema "
+                    "exactly."
+                ),
+            )
+        ],
+    )
+    return original_request.model_copy(
+        update={
+            "messages": [*original_request.messages, correction_message],
+            "preferred_model": response.model_used,
+        }
+    )
+
+
 class MemeConceptCapability:
     """Implements the `Capability` Protocol (`capabilities.registry.Capability`). Holds only
     `LLMGateway` and `PromptRepository` (§4.2 of the frozen Phase 8 contract) - no `BudgetGuard`,
@@ -149,6 +202,19 @@ class MemeConceptCapability:
         self._gateway = gateway
         self._prompt_repository = prompt_repository
 
+    def _log_failed_call(self, outcome: GatewayCallOutcome) -> None:
+        logger.info(
+            "capability_call_failed",
+            extra={
+                "capability_name": CAPABILITY_NAME,
+                "call_id": str(outcome.call.call_id),
+                "sequence": outcome.call.sequence,
+                "gateway_method": outcome.call.gateway_method,
+                "status": outcome.call.status,
+                "error": outcome.call.error,
+            },
+        )
+
     async def execute(self, context: CapabilityContext) -> CapabilityResult:
         started_at = datetime.now(timezone.utc)
 
@@ -158,17 +224,7 @@ class MemeConceptCapability:
         outcome = await call_generate(self._gateway, request, runtime=context.runtime, sequence=0)
 
         if outcome.error is not None:
-            logger.info(
-                "capability_call_failed",
-                extra={
-                    "capability_name": CAPABILITY_NAME,
-                    "call_id": str(outcome.call.call_id),
-                    "sequence": outcome.call.sequence,
-                    "gateway_method": outcome.call.gateway_method,
-                    "status": outcome.call.status,
-                    "error": outcome.call.error,
-                },
-            )
+            self._log_failed_call(outcome)
             raise outcome.error
 
         response = outcome.response
@@ -178,12 +234,64 @@ class MemeConceptCapability:
         if violation is not None:
             raise ValidationCapabilityError(violation)
 
+        structured_output = response.structured_output
+        assert structured_output is not None  # floor_validate already confirmed this
+
+        # MEME-PROD-4: cheap deterministic pre-filter, not the semantic judge itself - see
+        # services/meme_shape_gate.py's own docstring. Missing string fields default to "" rather
+        # than raising here - a genuinely missing required field was already caught by
+        # _floor_validate() above; this check is purely an additional quality signal on top of an
+        # already-schema-valid response.
+        shape_risk = assess_meme_shape_risk(
+            visual_scene=str(structured_output.get("visual_scene", "")),
+            visual_punchline=str(structured_output.get("visual_punchline", "")),
+            premise=str(structured_output.get("premise", "")),
+        )
+
+        if shape_risk.risk_reason is None:
+            finished_at = datetime.now(timezone.utc)
+            return CapabilityResult(
+                status="SUCCESS",
+                structured_output=structured_output,
+                calls=[outcome.call],
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_seconds=(finished_at - started_at).total_seconds(),
+            )
+
+        # MEME-PROD-4: exactly one bounded correction retry, mirroring scoring_capability.py's
+        # own §10 shape - a provider failure on the retry still raises (never silently swallowed);
+        # a schema-floor failure on the retry still raises (structural validity stays hard); but a
+        # SECOND shape-risk verdict is accepted unconditionally - shape is a soft quality signal,
+        # never grounds for a third attempt or a hard failure.
+        correction_request = _build_shape_correction_request(request, response, shape_risk.risk_reason)
+        retry_outcome = await call_generate(self._gateway, correction_request, runtime=context.runtime, sequence=1)
+
+        if retry_outcome.error is not None:
+            self._log_failed_call(retry_outcome)
+            raise retry_outcome.error
+
+        retry_response = retry_outcome.response
+        assert retry_response is not None
+
+        retry_violation = _floor_validate(retry_response.structured_output, prompt.output_schema)
+        if retry_violation is not None:
+            raise ValidationCapabilityError(
+                f"structured_output failed schema validation on the MEME-PROD-4 shape-correction "
+                f"retry: {retry_violation}"
+            )
+
         finished_at = datetime.now(timezone.utc)
         return CapabilityResult(
             status="SUCCESS",
-            structured_output=response.structured_output,
-            calls=[outcome.call],
+            structured_output=retry_response.structured_output,
+            calls=[outcome.call, retry_outcome.call],
             started_at=started_at,
             finished_at=finished_at,
             duration_seconds=(finished_at - started_at).total_seconds(),
+            metadata={
+                "retry_reason": "meme_shape_risk",
+                "retried_call_id": str(outcome.call.call_id),
+                "shape_risk_reason": shape_risk.risk_reason,
+            },
         )

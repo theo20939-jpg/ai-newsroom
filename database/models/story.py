@@ -53,17 +53,3 @@ class Story(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False, index=True
     )
-
-    # PHASE STORY-MEMORY-V2-2 Phase 1 (2026-09-02, database/migrations/versions/
-    # af2aeb69cf67_add_story_memory_v2_phase1_columns.py): reserved storage for the approved Story
-    # Memory V2 design's observed/published factual-state split (PHASE STORY-MEMORY-V2-1 §F and
-    # its correction rounds) - `observed_facts` is Judge/candidate-evidence state (everything the
-    # system has seen); `published_facts` is reader-visible state, intended to advance ONLY on a
-    # confirmed successful Telegram delivery, never merely because something was observed/
-    # generated. No runtime code reads or writes either column this phase - both stay NULL for
-    # every row until a later, separately-authorized phase implements the AI Story Judge and the
-    # publish-time extraction mechanism that populates them.
-    observed_facts: Mapped[list | None] = mapped_column(JSON, nullable=True)
-    observed_facts_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    published_facts: Mapped[list | None] = mapped_column(JSON, nullable=True)
-    published_facts_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -32,13 +32,14 @@ _MEME_COPY_OUTPUT_SCHEMA = {
     "properties": {
         "top_text": {"type": "string"},
         "bottom_text": {"type": ["string", "null"]},
+        "panel_texts": {"type": ["array", "null"]},
         "punchline_short": {"type": "string"},
         "telegram_caption": {"type": "string"},
         "editor_explanation": {"type": ["string", "null"]},
         "alt_text": {"type": "string"},
     },
     "required": [
-        "top_text", "bottom_text", "punchline_short", "telegram_caption",
+        "top_text", "bottom_text", "panel_texts", "punchline_short", "telegram_caption",
         "editor_explanation", "alt_text",
     ],
 }
@@ -46,6 +47,7 @@ _MEME_COPY_OUTPUT_SCHEMA = {
 _VALID_OUTPUT = {
     "top_text": "AI WON'T TAKE YOUR JOB",
     "bottom_text": "SAYS GUY WHOSE JOB IS AI",
+    "panel_texts": None,
     "punchline_short": "The one job AI can't replace: reassuring you about AI.",
     "telegram_caption": "From today's Nvidia keynote - CEO addresses job-loss fears.",
     "editor_explanation": "Plays on the irony of an AI CEO reassuring workers about AI.",
@@ -58,7 +60,11 @@ _CONCEPT_OUTPUT = {
     "punchline": "Meanwhile the CEO's own job is the one AI can't replace.",
     "humor_mechanism": "self_referential_irony",
     "visual_scene": "A CEO on stage pointing at a slide reading 'Jobs are safe'.",
+    "visual_punchline": "A robot quietly wheels the CEO's own desk out the door mid-speech.",
     "characters_objects": ["CEO", "presentation slide"],
+    "panel_count": 1,
+    "panel_beats": [],
+    "visual_style": "reaction photo",
     "text_overlay_intent": "Contrast reassurance with public skepticism.",
     "source_fact_links": ["The CEO publicly stated AI is not destroying jobs."],
     "forbidden_interpretations": [],
@@ -71,7 +77,7 @@ def _prompt_repository() -> FakePromptRepository:
     repository.register(
         RenderedPrompt(
             name=CAPABILITY_NAME,
-            version="1",
+            version="2",
             system="You are a fake meme copywriter for tests.",
             rules=["Never put a URL in on-image text."],
             output_schema=_MEME_COPY_OUTPUT_SCHEMA,
@@ -195,13 +201,32 @@ def test_non_coupling_never_imports_meme_concept_capability() -> None:
 
 
 def test_real_v1_prompt_file_loads_and_matches_the_meme_copy_schema() -> None:
+    """v1 predates MEME-PROD-4's panel_texts field - frozen, hardcoded expected set here rather
+    than the live MemeCopy.model_fields, mirroring test_meme_concept_capability.py's own identical
+    "frozen historical prompt vs. ever-evolving live schema" precedent."""
+    from integrations.prompts.file_repository import FilePromptRepository
+
+    prompts_root = Path(__file__).resolve().parent.parent / "prompts"
+    repository = FilePromptRepository(prompts_root)
+
+    prompt = repository.resolve(CAPABILITY_NAME, "1")
+    assert set(prompt.output_schema["required"]) == {
+        "top_text", "bottom_text", "punchline_short", "telegram_caption",
+        "editor_explanation", "alt_text",
+    }
+
+
+def test_real_v2_prompt_file_loads_and_matches_the_meme_copy_schema() -> None:
+    """MEME-PROD-4: the currently-active prompt version (capabilities/meme_copywriting_
+    capability.py::PROMPT_VERSION == "2") - v1 stays frozen and separately tested above."""
     from integrations.prompts.file_repository import FilePromptRepository
     from schemas.meme_copy import MemeCopy
 
     prompts_root = Path(__file__).resolve().parent.parent / "prompts"
     repository = FilePromptRepository(prompts_root)
 
-    prompt = repository.resolve(CAPABILITY_NAME, "1")
+    prompt = repository.resolve(CAPABILITY_NAME, "2")
     schema_required = set(prompt.output_schema["required"])
     copy_fields = set(MemeCopy.model_fields) - {"schema_version"}
     assert schema_required == copy_fields
+    assert prompt.output_schema["properties"]["panel_texts"]["minItems"] == 4

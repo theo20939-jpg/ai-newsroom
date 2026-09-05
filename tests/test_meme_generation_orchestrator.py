@@ -39,6 +39,7 @@ from integrations.storage.image_storage import LocalImageStorage
 from schemas.capability import CapabilityUsage
 from services.meme_generation_orchestrator import (
     _find_in_progress_meme_task,
+    _meme_overlay_text_is_russian,
     _normalize_alt_text,
     _resolve_default_image_gateway,
     trigger_meme_generation,
@@ -57,12 +58,20 @@ _INTELLIGENCE_OUTPUT = {
 _CONCEPT_OUTPUT = {
     "premise": "Company X shipped product Y.", "setup": "Everyone expected a delay.",
     "punchline": "It shipped on time, somehow.", "humor_mechanism": "subverted expectation",
-    "visual_scene": "A calendar with a shocked face emoji.", "characters_objects": ["calendar"],
+    "visual_scene": "A calendar with a shocked face emoji.",
+    # MEME-PROD-4 (Meme Director) fields - visual_punchline is deliberately distinct from
+    # visual_scene/premise so services/meme_shape_gate.py's own restatement check passes.
+    "visual_punchline": "The calendar itself looks more shocked than anyone in the room.",
+    "characters_objects": ["calendar"], "panel_count": 1, "panel_beats": [],
+    "visual_style": "reaction photo",
     "text_overlay_intent": "Express disbelief.", "source_fact_links": ["Company X shipped product Y."],
     "forbidden_interpretations": [], "meme_format": "drake_comparison",
 }
 _COPY_OUTPUT = {
-    "top_text": "NOBODY EXPECTED IT ON TIME", "bottom_text": "IT SHIPPED ON TIME",
+    # MEME-PROD-2.1: top_text/bottom_text are Russian (the mandatory on-image language) - every
+    # other field is unaffected by that requirement, so intentionally left in English here.
+    "top_text": "НИКТО НЕ ЖДАЛ ВОВРЕМЯ", "bottom_text": "А ОНО ВЫШЛО ВОВРЕМЯ",
+    "panel_texts": None,  # MEME-PROD-4: null for panel_count==1 (this fixture's shape)
     "punchline_short": "Shipped. On time. Somehow.", "telegram_caption": "When it actually ships on time.",
     "editor_explanation": "Plays on the surprise.", "alt_text": "A calendar with a shocked emoji.",
 }
@@ -700,6 +709,74 @@ async def test_other_invalid_required_field_still_fails_closed_without_crashing(
     candidate = await db_session.get(MemeCandidate, outcome.candidate_id)
     assert candidate is not None
     assert candidate.copy_data is None  # attach_copy() was never reached
+
+
+@pytest.mark.asyncio
+async def test_english_meme_overlay_text_is_rejected(db_session: AsyncSession, tmp_path) -> None:
+    """MEME-PROD-2.1: production incident evidence was English on-image text ("Automation:
+    allegedly seamless") despite the prompt already asking for Russian - the deterministic
+    `_meme_overlay_text_is_russian()` backstop must reject it via the same controlled
+    `copy_validation_failed` outcome a structurally-invalid MemeCopy already uses, never crash and
+    never silently deliver an English meme."""
+    event = await _make_event(db_session)
+    english_copy = {**_COPY_OUTPUT, "top_text": "Automation: allegedly seamless", "bottom_text": "IP check: allegedly missing"}
+    gateway = _gateway(copy_output=english_copy)
+
+    outcome = await trigger_meme_generation(
+        db_session, news_event_id=event.id, trigger_source="manual",
+        capability_registry=_full_registry(gateway), image_gateway=MockImageAdapter(),
+        storage=LocalImageStorage(tmp_path), bot=_bot()[0],
+    )
+
+    assert outcome.status == "copy_validation_failed"
+    assert outcome.error is not None and "Russian" in outcome.error
+    candidate = await db_session.get(MemeCandidate, outcome.candidate_id)
+    assert candidate is not None
+    assert candidate.copy_data is None  # attach_copy() was never reached
+
+
+def test_meme_overlay_text_is_russian_checks_every_panel_text() -> None:
+    """MEME-PROD-4: panel_texts (panel_count==4 shape) must be checked entry-by-entry - top_text
+    alone (equal to panel_texts[0] per the copywriting prompt's own contract) would otherwise
+    leave panels 2-4 completely unchecked."""
+    from schemas.meme_copy import MemeCopy
+
+    all_russian = MemeCopy(
+        top_text="Строит план", bottom_text=None,
+        panel_texts=["Строит план", "Ждёт GTA 6", "PS5 Pro распродан", "Продаёт почку"],
+        punchline_short="p", telegram_caption="c", alt_text="a",
+    )
+    assert _meme_overlay_text_is_russian(all_russian) is True
+
+    one_english_panel = MemeCopy(
+        top_text="Строит план", bottom_text=None,
+        panel_texts=["Строит план", "Ждёт GTA 6", "Sold out", "Продаёт почку"],
+        punchline_short="p", telegram_caption="c", alt_text="a",
+    )
+    assert _meme_overlay_text_is_russian(one_english_panel) is False
+
+
+@pytest.mark.asyncio
+async def test_russian_meme_overlay_text_with_inline_latin_brand_name_passes(
+    db_session: AsyncSession, tmp_path,
+) -> None:
+    """A Latin-script acronym/brand name inline inside otherwise-Russian text (real Russian tech-
+    culture meme style, per the prompt's own rule) must not be misflagged as English."""
+    event = await _make_event(db_session)
+    russian_copy = {**_COPY_OUTPUT, "top_text": "Когда NNJ проверил IP", "bottom_text": None}
+    gateway = _gateway(copy_output=russian_copy)
+
+    outcome = await trigger_meme_generation(
+        db_session, news_event_id=event.id, trigger_source="manual",
+        capability_registry=_full_registry(gateway), image_gateway=MockImageAdapter(),
+        storage=LocalImageStorage(tmp_path), bot=_bot()[0],
+    )
+
+    assert outcome.status != "copy_validation_failed"
+    candidate = await db_session.get(MemeCandidate, outcome.candidate_id)
+    assert candidate is not None
+    assert candidate.copy_data is not None
+    assert candidate.copy_data["top_text"] == "Когда NNJ проверил IP"
 
 
 @pytest.mark.asyncio

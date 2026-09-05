@@ -30,11 +30,12 @@ def _copy(*, bottom_text: str | None = None) -> MemeCopy:
 def _region_has_any_changed_pixel(
     image: Image.Image, *, box: tuple[int, int, int, int], background: tuple[int, int, int],
 ) -> bool:
-    """The official NNJ mark (assets/brand/nnj_logo.png) is a wordmark/badge shape with real
-    transparent padding around it within its own square canvas - a single exact corner pixel can
-    legitimately land on that transparent padding rather than the visible glyph. Scanning the
-    whole expected footprint region for ANY changed pixel is the correct, non-flaky proof that
-    compositing actually happened there."""
+    """The official NNJ mark (rasterized from `assets/brand/nnj_logo.svg`/`nnj_logo_red.svg`) is
+    a wordmark shape cropped tightly to its own visible bbox, but the requested footprint box
+    below is intentionally larger than the mark itself - a single exact corner pixel can
+    legitimately land just outside the glyph strokes. Scanning the whole expected footprint region
+    for ANY changed pixel is the correct, non-flaky proof that compositing actually happened
+    there."""
     x0, y0, x1, y1 = box
     region = image.crop((x0, y0, x1, y1))
     return any(pixel != background for pixel in list(region.getdata()))
@@ -130,19 +131,44 @@ def test_watermark_works_on_small_image() -> None:
     assert out.size == (64, 64)
 
 
-def test_uses_the_canonical_brand_asset_not_a_redrawn_logo(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Proves this module reuses services.brand_renderer.load_brand_mark() - the official,
-    already-shipped nnj_logo.png - never a separately drawn/approximated mark. Monkeypatches
-    load_brand_mark() itself and asserts it was actually called."""
+def test_uses_the_canonical_svg_asset_not_the_png_badge(monkeypatch: pytest.MonkeyPatch) -> None:
+    """MEME-PROD-2.1: proves this module now sources the watermark from
+    services.nnj_master_news_mark.rasterize_nnj_mark() (the official SVG rasterizer) rather than
+    services.brand_renderer.load_brand_mark() (the old flat PNG badge) - no PNG fallback anywhere
+    in this call path. Monkeypatches rasterize_nnj_mark() itself and asserts it was actually
+    called, at least once for each of the two color variants the adaptive logic can request."""
     import services.meme_watermark as watermark_module
 
     calls: list[bool] = []
-    original = watermark_module.load_brand_mark
+    original = watermark_module.rasterize_nnj_mark
 
-    def _spy():
-        calls.append(True)
-        return original()
+    def _spy(*, target_width: int, red: bool = True):
+        calls.append(red)
+        return original(target_width=target_width, red=red)
 
-    monkeypatch.setattr(watermark_module, "load_brand_mark", _spy)
+    monkeypatch.setattr(watermark_module, "rasterize_nnj_mark", _spy)
     apply_nnj_watermark(_solid_png())
-    assert calls == [True]
+    assert calls  # rasterize_nnj_mark was actually invoked - never a PNG fallback
+
+
+def test_light_background_picks_red_mark_dark_background_picks_white_mark(monkeypatch: pytest.MonkeyPatch) -> None:
+    """MEME-PROD-2.1 adaptive variant selection: mirrors brand_renderer.py's own luminance
+    threshold - a light background gets the red mark, a dark one gets the white mark, so the
+    watermark stays visible against the AI-generated image's own unpredictable background."""
+    import services.meme_watermark as watermark_module
+
+    calls: list[bool] = []
+    original = watermark_module.rasterize_nnj_mark
+
+    def _spy(*, target_width: int, red: bool = True):
+        calls.append(red)
+        return original(target_width=target_width, red=red)
+
+    monkeypatch.setattr(watermark_module, "rasterize_nnj_mark", _spy)
+
+    apply_nnj_watermark(_solid_png(color=(250, 250, 250)))
+    assert calls[-1] is True  # last variant rasterized (the one actually composited) is red
+
+    calls.clear()
+    apply_nnj_watermark(_solid_png(color=(5, 5, 5)))
+    assert calls[-1] is False  # white

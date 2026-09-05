@@ -35,7 +35,11 @@ from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
 logger = logging.getLogger(__name__)
 
 CAPABILITY_NAME = "meme_copywriting"
-PROMPT_VERSION = "1"
+# MEME-PROD-4: bumped to "2" (prompts/meme_copywriting/v2.yaml) - panel-aware output (panel_texts
+# for panel_count==4, top_text/bottom_text captioning each half for panel_count==2, unchanged for
+# panel_count==1) plus a "human framing over headline restatement" rule. v1 stays frozen/
+# unmodified per this codebase's own prompt-immutability rule.
+PROMPT_VERSION = "2"
 
 MEME_COPYWRITING_CAPABILITY_DEFINITION = CapabilityDefinition(
     name=CAPABILITY_NAME,
@@ -43,7 +47,7 @@ MEME_COPYWRITING_CAPABILITY_DEFINITION = CapabilityDefinition(
     config=CapabilityConfig(timeout_seconds=30),
     required_context=["news_event"],
     expected_output_keys=[
-        "top_text", "bottom_text", "punchline_short", "telegram_caption",
+        "top_text", "bottom_text", "panel_texts", "punchline_short", "telegram_caption",
         "editor_explanation", "alt_text",
     ],
 )
@@ -94,11 +98,21 @@ def _floor_validate(structured_output: dict[str, Any] | None, output_schema: dic
 def _format_concept_context(concept_output: dict[str, Any]) -> str:
     if not concept_output:
         return "(meme_concept did not run, or produced no output - cannot write copy without a concept.)"
+    # MEME-PROD-4: visual_punchline/panel_count/panel_beats are new Meme Director fields
+    # (schemas/meme_concept.py) - the copy step needs panel_count to decide whether to produce
+    # top_text/bottom_text (panel_count 1/2) or panel_texts (panel_count 4), and panel_beats/
+    # visual_punchline to write copy that matches what the image itself actually shows.
+    panel_count = concept_output.get("panel_count", 1)
+    panel_beats = concept_output.get("panel_beats") or []
+    panel_beats_text = "; ".join(f"panel {i}: {beat}" for i, beat in enumerate(panel_beats, start=1))
     return (
         f"Premise: {concept_output.get('premise')}\n"
         f"Setup: {concept_output.get('setup')}\n"
         f"Punchline: {concept_output.get('punchline')}\n"
         f"Visual scene: {concept_output.get('visual_scene')}\n"
+        f"Visual punchline (the specific visual joke the image shows): {concept_output.get('visual_punchline')}\n"
+        f"Panel count: {panel_count}\n"
+        f"Panel beats: {panel_beats_text or '(none - single scene)'}\n"
         f"Text overlay intent: {concept_output.get('text_overlay_intent')}\n"
         f"Meme format: {concept_output.get('meme_format')}"
     )

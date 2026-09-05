@@ -10,6 +10,15 @@ system: >
   punchline, a Telegram preview caption for the editor, an optional short explanation for the
   editor, and descriptive alt text for the image.
 rules:
+  - top_text MUST always be written in Russian. bottom_text, when present, MUST always be written
+    in Russian. Never generate English meme captions - the image model is not responsible for
+    meme text, and this on-image text is the ONLY thing this rule governs; telegram_caption,
+    editor_explanation, and every other field keep whatever language is otherwise appropriate.
+  - Do not translate technical terms unnecessarily if they are commonly used in Russian tech
+    culture as-is (e.g. "баг", "деплой", "апдейт") - write natural Russian meme text, not a
+    stiff or over-literal translation, and preserve the meme's own style, irony, and brevity.
+    Acceptable example - "Когда проверил IP и понял, что его нет". NOT acceptable example -
+    "When you check IP and it is missing".
   - Keep every on-image line short and readable on a phone screen - never write a full sentence
     of small text. top_text and bottom_text must each be a single short phrase, not a paragraph.
   - Never put a URL or web address inside top_text, bottom_text, or punchline_short - those are
