@@ -790,6 +790,7 @@ from services.brand_renderer import (  # noqa: E402
     _DATA_SIGNATURE_COMPACT_WIDTH_FRAC,
     _DATA_SIGNATURE_FULL_WIDTH_FRAC,
     _build_data_lower_signature_image,
+    _build_data_signature_fallback,
     _data_signature_geometry,
     _data_signature_line_length,
     _region_box,
@@ -994,6 +995,47 @@ def test_data_signature_falls_back_to_none_on_unsafe_bottom_corners():
     noisy.putdata([(rng.randrange(256), rng.randrange(256), rng.randrange(256), 255) for _ in range(1280 * 720)])
     result = _select_data_signature(noisy, inset=20, pad=50)
     assert result is None
+
+
+def test_data_signature_fallback_always_succeeds_where_scored_search_fails():
+    """MEDIA-PROD-1: on the exact same maximally-busy canvas that makes _select_data_signature()
+    itself return None above, _build_data_signature_fallback() must still return a real, non-empty
+    composited layer - the guaranteed branding tier that scored search deliberately never
+    provides."""
+    noisy = Image.new("RGBA", (1280, 720))
+    rng = random.Random(11)
+    noisy.putdata([(rng.randrange(256), rng.randrange(256), rng.randrange(256), 255) for _ in range(1280 * 720)])
+    assert _select_data_signature(noisy, inset=20, pad=50) is None  # precondition
+
+    layer, box = _build_data_signature_fallback(noisy.size, inset=20)
+    alpha = list(layer.split()[-1].getdata())
+    assert any(a > 0 for a in alpha)  # something was actually drawn
+    assert box[2] > box[0] and box[3] > box[1]  # a real, non-degenerate box
+
+
+def test_data_card_never_ships_with_zero_branding_on_a_maximally_busy_photo():
+    """End-to-end MEDIA-PROD-1 regression: a DATA card rendered against a photo so busy that BOTH
+    the signature and (potentially) the stat block placement fail their own real-pixel safety
+    scoring must still carry the NNJ mark somewhere on the image - "every image receives final
+    branding layer" is this phase's own explicit success criterion, and a silent all-corners-fail
+    skip (the pre-MEDIA-PROD-1 behavior) violates it."""
+    noisy = Image.new("RGB", (1280, 720))
+    rng = random.Random(11)
+    noisy.putdata([(rng.randrange(256), rng.randrange(256), rng.randrange(256)) for _ in range(1280 * 720)])
+    buf = io.BytesIO()
+    noisy.save(buf, format="JPEG")
+
+    candidate = DataCandidate(value="1", unit="million", label="users", evidence_fact="1 million users")
+    out = render_data_card(candidate, category="TECH", editorial_code="NP-1", source_image_bytes=buf.getvalue())
+    rendered = Image.open(io.BytesIO(out)).convert("RGB")
+
+    # The fallback's own fixed footprint: a solid dark scrim in the bottom-right corner - a random-
+    # noise background can never coincidentally produce this large a solid-color region on its own.
+    inset = 20
+    corner = rendered.crop((rendered.width - 140, rendered.height - 60, rendered.width - inset, rendered.height - inset))
+    pixels = list(corner.getdata())
+    dark_pixel_count = sum(1 for r, g, b in pixels if r < 40 and g < 40 and b < 40)
+    assert dark_pixel_count > len(pixels) * 0.3  # a real, substantial dark scrim, not noise
 
 
 def test_data_card_renders_exactly_one_bottom_signature_end_to_end():

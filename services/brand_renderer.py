@@ -713,6 +713,47 @@ def _select_data_signature(canvas: Image.Image, *, inset: int, pad: int) -> Data
     return None
 
 
+# MEDIA-PROD-1: fixed, never-sampled scrim behind the guaranteed-branding fallback below - the
+# entire reason every real corner failed _select_data_signature()'s own scoring is that no sampled
+# color could be trusted there, so legibility here is guaranteed by construction instead. Same
+# alpha-blended-scrim idiom render_data_card()'s own stat-block backing already established
+# (DATA-CARD-2's `backing_fill`), reused for consistency, not redesigned.
+_SIGNATURE_FALLBACK_SCRIM_FILL = (0, 0, 0, 190)
+_SIGNATURE_FALLBACK_SCRIM_PADDING_FRAC = 0.012
+
+
+def _build_data_signature_fallback(canvas_size: tuple[int, int], *, inset: int) -> tuple[Image.Image, BoundingBox]:
+    """MEDIA-PROD-1: the guaranteed-always-succeeds branding tier `_select_data_signature()`
+    itself deliberately never provides - that function's own docstring contract ("never a forced/
+    distorted mark") describes its real-pixel-safety-scored search only, and is intentionally left
+    untouched here. Reached ONLY when that search returns `None` (both bottom corners fail even
+    the mark+pulse ANCHOR itself - a strictly deeper failure than the "none" line-length tier
+    above, which already covers "anchor safe, connecting line unsafe" and therefore rarely returns
+    None on its own) - a DATA card must never ship with zero NNJ branding at all (this phase's own
+    "every image receives final branding layer" requirement).
+
+    A small white NNJ mark on an opaque dark scrim, sized tightly to the mark alone (no pulse, no
+    connecting line - deliberately the smallest possible footprint, visually distinct from the
+    real signature's full form) at the fixed, canonical LOWER_RIGHT corner - no scoring, no color
+    sampling, so it cannot itself fail the way every scored candidate just did. Returns the
+    composited layer plus its own real drawn bounding box, for the caller to feed to
+    `_select_data_block_placement()`'s `avoid_box` exactly like the scored signature's own box."""
+    w, h = canvas_size
+    mark_w = max(1, round(_LOWER_MARK_W_FRAC * w))
+    mark = rasterize_nnj_mark(target_width=mark_w, red=False)
+    padding = max(1, round(_SIGNATURE_FALLBACK_SCRIM_PADDING_FRAC * w))
+
+    x1, y1 = w - inset, h - inset
+    x0, y0 = x1 - mark.width, y1 - mark.height
+    scrim_box: BoundingBox = (x0 - padding, y0 - padding, x1 + padding, y1 + padding)
+
+    layer = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    draw.rectangle(list(scrim_box), fill=_SIGNATURE_FALLBACK_SCRIM_FILL)
+    layer.alpha_composite(mark, (x0, y0))
+    return layer, scrim_box
+
+
 def _build_data_lower_signature_image(
     canvas_size: tuple[int, int], placement: ComponentPlacement, inset: int, *, red: bool, line_len: int,
 ) -> Image.Image:
@@ -799,6 +840,12 @@ def render_data_card(
             min(mark_box[0], pulse_box[0], line_box[0]), min(mark_box[1], pulse_box[1], line_box[1]),
             max(mark_box[2], pulse_box[2], line_box[2]), max(mark_box[3], pulse_box[3], line_box[3]),
         )
+    else:
+        # MEDIA-PROD-1: every bottom corner failed _select_data_signature()'s own scored search -
+        # never ship a DATA card with zero NNJ branding (see _build_data_signature_fallback()'s
+        # own docstring for why this is a deliberately different, scoring-free guarantee).
+        fallback_image, signature_box = _build_data_signature_fallback(canvas.size, inset=inset)
+        canvas.alpha_composite(fallback_image)
 
     block_w = max(160, round(_DATA_BLOCK_WIDTH_FRAC * canvas_w))
     inner_max_width = max(1, block_w - _DATA_BLOCK_MARGIN * 2)
