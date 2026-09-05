@@ -131,10 +131,12 @@ def test_visual_failure_memory_evidence_stage_progression() -> None:
 
 
 def test_platform_capabilities_unknown_is_preserved_not_fabricated() -> None:
-    """Spec §50: never fabricate availability - views/reactions/reposts/comments are honestly
-    UNKNOWN (the read mechanism exists for external channels only, never wired to NNJ's own
-    channel), link_clicks is honestly UNAVAILABLE (no such Telegram API exists at all)."""
-    assert TELEGRAM_PLATFORM_CAPABILITIES["views"].status == CapabilityStatus.UNKNOWN
+    """Spec §50/§3 (Phase 2 re-classification): never fabricate availability - views/reactions/
+    reposts/comments are honestly AVAILABLE_WITH_EXISTING_MTPROTO (the read mechanism and its auth
+    both already exist, proven for external channels; only wiring + channel membership are
+    missing - not "unknown" and not a plain "available"), link_clicks is honestly UNAVAILABLE (no
+    such Telegram API exists at all)."""
+    assert TELEGRAM_PLATFORM_CAPABILITIES["views"].status == CapabilityStatus.AVAILABLE_WITH_EXISTING_MTPROTO
     assert TELEGRAM_PLATFORM_CAPABILITIES["link_clicks"].status == CapabilityStatus.UNAVAILABLE
     for capability in TELEGRAM_PLATFORM_CAPABILITIES.values():
         assert capability.evidence, f"{capability.name} capability must carry real evidence, never a bare guess"
