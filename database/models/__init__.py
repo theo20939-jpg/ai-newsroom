@@ -6,6 +6,7 @@ from database.models.campaign_milestone import CampaignMilestone
 from database.models.claim_policy import ClaimPolicy
 from database.models.competitor import CompetitorAccount, CompetitorContentObservation
 from database.models.content_draft import ContentDraft
+from database.models.director_run import DirectorRun
 from database.models.editorial_task import EditorialTask
 from database.models.image_candidate_record import ImageCandidateRecord
 from database.models.instagram_ai_call_record import InstagramAICallRecord
@@ -42,6 +43,7 @@ __all__ = [
     "EditorialTask",
     "AIExecution",
     "ContentDraft",
+    "DirectorRun",
     "ImageCandidateRecord",
     "MemeCandidate",
     "Product",
