@@ -8,6 +8,7 @@ from database.models.competitor import CompetitorAccount, CompetitorContentObser
 from database.models.content_draft import ContentDraft
 from database.models.editorial_task import EditorialTask
 from database.models.image_candidate_record import ImageCandidateRecord
+from database.models.instagram_calendar_item import InstagramContentCalendarItem
 from database.models.meme_candidate import MemeCandidate
 from database.models.news_event import NewsEvent
 from database.models.news_source import NewsSource
@@ -38,4 +39,5 @@ __all__ = [
     "BusinessContextProposal",
     "CompetitorAccount",
     "CompetitorContentObservation",
+    "InstagramContentCalendarItem",
 ]
