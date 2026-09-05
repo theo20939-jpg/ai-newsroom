@@ -72,6 +72,7 @@ from services.video_discovery_persistence import (
     select_best_video_candidate,
     to_native_video_hint,
 )
+from services.video_quality_gate import VideoContentClassification, assess_video_text_signals
 from schemas.video_candidate import VideoPlatform
 from services.news_telegram_presentation import (
     build_compact_news_body,
@@ -1395,6 +1396,31 @@ async def run_content_cycle(
                             if download_result.video_bytes is not None:
                                 hosted_video_bytes = download_result.video_bytes
                             else:
+                                video_hint = None
+
+                        # MEDIA-PROD-1: deterministic advertisement-keyword text gate - see
+                        # services/video_quality_gate.py's own module docstring for the full scope
+                        # decision (text-only; visual/frame-based detection is a disclosed future
+                        # extension, not silently skipped). Applied AFTER selection so a rejected
+                        # video degrades exactly like "no video hint resolved" for any other reason
+                        # - no new fallback path.
+                        if video_hint is not None and settings.video_quality_gate_mode != "off":
+                            video_quality_assessment = assess_video_text_signals(
+                                title=event.title, content=event.content,
+                            )
+                            logger.info(
+                                "video_quality_gate_assessed",
+                                extra={
+                                    "draft_id": str(outcome.content_draft.id),
+                                    "classification": video_quality_assessment.classification.value,
+                                    "matched_keywords": list(video_quality_assessment.matched_keywords),
+                                    "mode": settings.video_quality_gate_mode,
+                                },
+                            )
+                            if (
+                                video_quality_assessment.classification == VideoContentClassification.ADVERTISEMENT
+                                and settings.video_quality_gate_mode == "enforce"
+                            ):
                                 video_hint = None
                     plan = build_rich_media_plan(
                         top_candidates, video_hint, caption=html, hosted_video_bytes=hosted_video_bytes,

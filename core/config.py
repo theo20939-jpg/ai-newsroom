@@ -414,6 +414,17 @@ class Settings(BaseSettings):
     # separately-reviewed milestone.
     rich_media_mode: Literal["off", "shadow", "enforce"] = "off"
 
+    # MEDIA-PROD-1: deterministic (no LLM) advertisement-keyword text scan over the NewsEvent's own
+    # title/content, applied to whichever video hint rich_media_mode="enforce" would otherwise
+    # attach (services/video_quality_gate.py::assess_video_text_signals()). "off" (default):
+    # byte-identical to before this gate existed. "shadow": computes and logs the classification,
+    # never drops the video hint. "enforce": a flagged ADVERTISEMENT classification drops the video
+    # hint entirely (worker/content_cycle.py falls back to its existing image-only/text-only send,
+    # exactly as it already does whenever no video hint resolves for any other reason - no new
+    # fallback mechanism). Independent of rich_media_mode - rich_media_mode="enforce" remains the
+    # precondition for a video hint to be looked up/attached at all.
+    video_quality_gate_mode: Literal["off", "shadow", "enforce"] = "off"
+
     # Phase V2.27: native Telegram video upload for YouTube/Vimeo hosted-platform hints - before
     # this, a YouTube/Vimeo NativeVideoHint (services/video_discovery_persistence.py) always
     # became a plain caption link (services/image_preview_notifier.py::_hosted_platform_link_
