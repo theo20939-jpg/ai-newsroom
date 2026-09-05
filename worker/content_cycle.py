@@ -88,6 +88,7 @@ from services.story_telegram_delivery import (
     persist_reply_routing_proposal,
     record_delivery,
 )
+from services.telegram_channel_director_shadow import run_channel_director_shadow
 from services.telegram_notifier import send_editorial_card, to_editorial_card
 from services.telegram_routing import (
     send_media_group_to_editorial_destination,
@@ -1500,6 +1501,25 @@ async def run_content_cycle(
                             "reason": presentation_decision.reason,
                         },
                     )
+
+                    # NINJA Social Intelligence Foundation, Telegram Directors Phase 2 §9-11:
+                    # Channel Director shadow evaluation. Flag-gated (default False,
+                    # run_channel_director_shadow() itself no-ops when disabled) and wrapped in its
+                    # own try/except - a bug here can never affect the real presentation/publish
+                    # decision above, which is already fully computed by this point. Reuses
+                    # `presentation_score` already fetched for presentation_decision rather than
+                    # issuing a second query; skips entirely when no real score exists rather than
+                    # fabricating a news_importance value from nothing.
+                    if presentation_score is not None:
+                        try:
+                            async with session_factory() as channel_director_session:
+                                await run_channel_director_shadow(
+                                    channel_director_session,
+                                    news_importance=presentation_score / 100.0,
+                                    now=datetime.now(timezone.utc),
+                                )
+                        except Exception:
+                            logger.warning("telegram_channel_director_shadow failed (shadow only, non-fatal)", exc_info=True)
 
                     if settings.presentation_director_mode == "enforce":
                         # PRESENTATION RECOVERY (2026-09-02): the prior Phase V2.10N behavior here
