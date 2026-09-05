@@ -275,7 +275,7 @@ async def test_complete_offline_meme_pipeline_happy_path(db_session: AsyncSessio
     # product correction (services/meme_preview_notifier.py's own module docstring: "Do NOT
     # duplicate the entire NEWS article" - the caption is headline-only, never the on-image
     # punchline text) - fixed to match the current, intentional caption contract.
-    assert preview_outcome.rendered_caption == f"😂 MEME\n\n{event.title}"
+    assert preview_outcome.rendered_caption == f"😂 Мем\n\n{event.title}"  # MEME-PROD-2.1: RU label
 
     # --- M9: Human decision persistence, idempotency proven with a duplicate call ---
     approved = await service.record_editor_decision(candidate_id, "approved")

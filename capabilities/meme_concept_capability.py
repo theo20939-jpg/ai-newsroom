@@ -33,11 +33,15 @@ from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
 logger = logging.getLogger(__name__)
 
 CAPABILITY_NAME = "meme_concept"
-# MEME PRODUCTION PIPELINE: bumped to "2" (prompts/meme_concept/v2.yaml) - broader creative-tone
-# rules, free-text meme_format (format diversity), and consumption of the new optional
-# `context.business.meme_recent_diversity_context` field (see _build_request() below). v1 stays
-# frozen/unmodified per this codebase's own prompt-immutability rule.
-PROMPT_VERSION = "2"
+# MEME-PROD-3: bumped to "3" (prompts/meme_concept/v3.yaml) - visual_scene must now itself depict
+# the meme's comedic exaggeration/incongruity (production canary: generated memes often read as
+# ordinary news illustrations, not memes), plus a UI-density note reinforcing services/
+# meme_image_generation.py::build_image_prompt()'s own MEME-PROD-3 pseudo-text hardening. v1/v2
+# stay frozen/unmodified per this codebase's own prompt-immutability rule (previous bump comment,
+# still accurate for v2 itself: broader creative-tone rules, free-text meme_format (format
+# diversity), and consumption of the optional `context.business.meme_recent_diversity_context`
+# field, see _build_request() below).
+PROMPT_VERSION = "3"
 
 MEME_CONCEPT_CAPABILITY_DEFINITION = CapabilityDefinition(
     name=CAPABILITY_NAME,

@@ -55,19 +55,51 @@ def build_image_prompt(concept: MemeConcept) -> str:
     sign, a UI panel) without itself specifying literal readable words - the OLD prompt simply
     appended a blanket "no text anywhere" instruction after whatever the scene said, which was
     contradictory whenever the scene DID quote or imply specific readable text ("a nameplate
-    reading 'CEO'"), confusing the image model. This now gives the model an explicit resolution
-    rule instead of a bare contradiction: keep any such object in the scene, but render it
-    blank/unlabeled/generic - never with legible characters - so the deterministic renderer (M6)
-    remains the ONLY place any word ever appears on the final image."""
+    reading 'CEO'"), confusing the image model. This gives the model an explicit resolution rule
+    instead of a bare contradiction: keep any such object in the scene, but render it
+    blank/unlabeled/generic - so the deterministic renderer (M6) remains the ONLY place any word
+    ever appears on the final image.
+
+    MEME-PROD-3 (production canary: gpt-image-2 sometimes renders pseudo-text - squares, garbled
+    symbols, fake UI chrome): MEME-PROD-2's own resolution rule named "illegible/abstract marks"
+    as an acceptable rendering for a text-bearing object - that is very likely exactly what was
+    inviting the scribble-text/square artifacts (an explicit license to draw mark-like texture, on
+    an object a text-to-image model already has a strong learned prior to cover in glyph-like
+    detail). That permission is removed below in favor of a strictly negative framing (blank/
+    turned-away/out-of-focus/obscured only, never any mark that resembles writing), and the named
+    object list is extended from signage/screens/documents/plaques to UI-specific objects
+    (buttons, icons, HUD overlays, chat bubbles, notification badges) that `prompts/meme_concept/
+    v3.yaml`'s own encouraged UI-parody meme formats can put in a scene.
+
+    MEME-PROD-3 also closes a real, previously-undocumented gap between `services/meme_render.py`'s
+    own module docstring (which already ASSUMES "the subject occupies the visual center" as the
+    reason its fixed top/bottom ~18% text bands are safe) and this function, which never actually
+    told the image model to compose that way - a composition instruction is added below to make
+    that assumption real instead of merely hoped-for. `concept.humor_mechanism` (the comedic
+    *principle*, never quotable punchline text - kept structurally distinct from `punchline`,
+    which still never reaches this prompt) is threaded in as supporting context, so the image model
+    has something to visually lean into beyond a flat literal scene description."""
     parts = [concept.visual_scene]
     if concept.characters_objects:
         parts.append(f"Depicting: {', '.join(concept.characters_objects)}.")
+    if concept.humor_mechanism:
+        parts.append(f"The comedic angle to visually lean into: {concept.humor_mechanism}.")
     parts.append(
         "Visual scene only - no text, no letters, no words, no captions, no meme punchline or "
         "caption anywhere in the image. If the scene describes something that would normally "
-        "carry text (a nameplate, sign, screen, slide, or product label), render it blank, "
-        "unlabeled, or with illegible/abstract marks only - never with legible words. All "
-        "on-image text is added separately afterward; do not attempt to render any of it here."
+        "carry text (a nameplate, sign, screen, monitor, phone display, slide, product label, "
+        "app interface, button, icon, HUD overlay, chat bubble, or notification badge), render "
+        "it blank, unlabeled, turned away from view, out of focus, or partly obscured by another "
+        "object - never with legible words, letters, or any mark that resembles writing, not even "
+        "illegible scribbles or abstract symbols standing in for text. Do not invent fake "
+        "interface chrome (buttons, icons, menus, dialogs) with legible-looking labels anywhere "
+        "in the scene. All on-image text is added separately afterward; do not attempt to render "
+        "any of it here."
+    )
+    parts.append(
+        "Compose the shot with the main subject/action centered in the frame - keep the top and "
+        "bottom roughly one-fifth of the frame visually calm and uncluttered, since a caption will "
+        "be overlaid there afterward."
     )
     return " ".join(parts)
 

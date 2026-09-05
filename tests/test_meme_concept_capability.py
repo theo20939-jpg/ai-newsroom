@@ -78,12 +78,12 @@ def _prompt_repository(*, rules: list[str] | None = None) -> FakePromptRepositor
     repository = FakePromptRepository()
     repository.register(
         RenderedPrompt(
-            # MEME PRODUCTION PIPELINE: matches capabilities/meme_concept_capability.py's own
-            # PROMPT_VERSION ("2" as of that phase) - a unit-tier fake, never the real
-            # prompts/meme_concept/v2.yaml file (test_real_v2_prompt_file_loads_and_matches_the_
-            # meme_concept_schema below is what exercises that real file).
+            # MEME-PROD-3: matches capabilities/meme_concept_capability.py's own PROMPT_VERSION
+            # ("3" as of this phase) - a unit-tier fake, never the real prompts/meme_concept/
+            # v3.yaml file (test_real_v3_prompt_file_loads_and_matches_the_meme_concept_schema
+            # below is what exercises that real file).
             name=CAPABILITY_NAME,
-            version="2",
+            version="3",
             system="You are a fake meme-concept assistant for tests.",
             rules=rules if rules is not None else ["Never invent facts not present in Research."],
             output_schema=_MEME_CONCEPT_OUTPUT_SCHEMA,
@@ -294,3 +294,24 @@ def test_real_v2_prompt_file_loads_and_matches_the_meme_concept_schema() -> None
     assert schema_required == concept_fields
     # The whole point of v2: meme_format must NOT be enum-restricted anymore.
     assert "enum" not in prompt.output_schema["properties"]["meme_format"]
+
+
+def test_real_v3_prompt_file_loads_and_matches_the_meme_concept_schema() -> None:
+    """MEME-PROD-3: the currently-active prompt version (capabilities/meme_concept_capability.py::
+    PROMPT_VERSION == "3") - v1/v2 stay frozen and separately tested above."""
+    from integrations.prompts.file_repository import FilePromptRepository
+    from schemas.meme_concept import MemeConcept
+
+    prompts_root = Path(__file__).resolve().parent.parent / "prompts"
+    repository = FilePromptRepository(prompts_root)
+
+    prompt = repository.resolve(CAPABILITY_NAME, "3")
+    schema_required = set(prompt.output_schema["required"])
+    concept_fields = set(MemeConcept.model_fields) - {"schema_version"}
+    assert schema_required == concept_fields
+    assert "enum" not in prompt.output_schema["properties"]["meme_format"]
+    # The whole point of v3: visual_scene must be required to visually encode the joke itself, not
+    # merely avoid literal text - both the requirement and its concrete good/bad example pair.
+    rules_text = " ".join(prompt.rules).lower()
+    assert "comedic exaggeration" in rules_text or "visually depict" in rules_text
+    assert "podium" in rules_text  # the concrete bad/good example pair

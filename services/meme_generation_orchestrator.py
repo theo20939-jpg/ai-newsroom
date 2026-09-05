@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import unicodedata
 from dataclasses import dataclass
 from typing import Literal
@@ -121,6 +122,29 @@ def _normalize_alt_text(alt_text: str) -> str:
         truncated = truncated[:last_space]
     truncated = truncated.rstrip(_ALT_TEXT_DANGLING_PUNCTUATION)
     return truncated or alt_text[:_ALT_TEXT_MAX_LENGTH]  # never collapse to an empty string
+
+
+# MEME-PROD-2.1: product localization requirement - meme overlay text (top_text/bottom_text,
+# rendered directly onto the image by services/meme_render.py) must always be Russian
+# (prompts/meme_copywriting/v1.yaml's own rule). The prompt is the primary defense; this is the
+# deterministic backstop that actually enforces it, mirroring _normalize_alt_text()'s own
+# established "prompt says it, code enforces it" precedent from the MEME-PROD-1B incident. Only
+# top_text/bottom_text are checked - telegram_caption, editor_explanation, and every other field
+# are explicitly untouched (brief's own scope limit).
+_CYRILLIC_PATTERN = re.compile(r"[Ѐ-ӿ]")
+
+
+def _meme_overlay_text_is_russian(copy: MemeCopy) -> bool:
+    """A simple presence check (at least one Cyrillic codepoint), not a full language classifier -
+    good enough to catch the actual production incident (fully English captions like "Automation:
+    allegedly seamless") without misflagging legitimate Russian text that borrows a Latin-script
+    brand name or acronym (e.g. "IP", "NNJ") inline, which real Russian tech-culture meme text
+    routinely does per the prompt's own rule."""
+    if not _CYRILLIC_PATTERN.search(copy.top_text):
+        return False
+    if copy.bottom_text and not _CYRILLIC_PATTERN.search(copy.bottom_text):
+        return False
+    return True
 
 
 @dataclass(frozen=True)
@@ -414,6 +438,21 @@ async def trigger_meme_generation(
             status="copy_validation_failed", news_event_id=news_event_id, task_id=task.id,
             candidate_id=candidate.id, error=f"{exc.error_count()} validation error(s)",
         )
+
+    if not _meme_overlay_text_is_russian(copy):
+        # MEME-PROD-2.1: same rejection outcome as a structural ValidationError above - a
+        # copywriting response is not usable if it violates the mandatory language rule, and this
+        # codebase has no dedicated "wrong language" status (schemas.meme_candidate) to add
+        # without a migration, out of this fix's narrow scope.
+        logger.warning(
+            "meme_copy_text_not_russian",
+            extra={"candidate_id": str(candidate.id), "top_text": copy.top_text, "bottom_text": copy.bottom_text},
+        )
+        return MemeGenerationOutcome(
+            status="copy_validation_failed", news_event_id=news_event_id, task_id=task.id,
+            candidate_id=candidate.id, error="meme overlay text (top_text/bottom_text) must be Russian",
+        )
+
     updated_candidate = await candidate_service.attach_copy(candidate.id, copy)
     assert updated_candidate is not None
     candidate = updated_candidate
