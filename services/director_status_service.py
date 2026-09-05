@@ -79,6 +79,42 @@ async def _business_status(session: AsyncSession, *, now: datetime) -> list[Dire
     )]
 
 
+_ART_DIRECTOR_LOOKBACK = 20
+
+
+async def _art_director_summary(session: AsyncSession) -> str | None:
+    """Spec §19: reads PERSISTED findings only - never evaluates a new image just because
+    `/directors` was called. A clean PASS is never persisted (database/models/telegram_visual_
+    failure.py's own docstring), so a PASS count is never fabricated here either - only the
+    decision types that genuinely have rows, plus the most frequent recent issue codes, exactly
+    like `/directors`' own required example shape minus the one number this codebase cannot
+    honestly produce."""
+    stmt = (
+        select(TelegramVisualFailure)
+        .order_by(TelegramVisualFailure.created_at.desc())
+        .limit(_ART_DIRECTOR_LOOKBACK)
+    )
+    rows = list((await session.execute(stmt)).scalars().all())
+    if not rows:
+        return None
+
+    decision_counts: dict[str, int] = {}
+    issue_counts: dict[str, int] = {}
+    for row in rows:
+        decision_counts[row.art_director_decision.value] = decision_counts.get(row.art_director_decision.value, 0) + 1
+        for code in row.issue_codes:
+            issue_counts[code] = issue_counts.get(code, 0) + 1
+
+    decisions_text = ", ".join(f"{name.upper()} {count}" for name, count in decision_counts.items())
+    top_issues = sorted(issue_counts.items(), key=lambda kv: kv[1], reverse=True)[:3]
+    issues_text = ", ".join(f"{name} ×{count}" for name, count in top_issues)
+
+    summary = f"последние {len(rows)} находок: {decisions_text}"
+    if issues_text:
+        summary += f"; частые проблемы: {issues_text}"
+    return summary
+
+
 async def _telegram_status(session: AsyncSession, *, now: datetime) -> list[DirectorStatusEntry]:
     entries: list[DirectorStatusEntry] = []
 
@@ -88,11 +124,11 @@ async def _telegram_status(session: AsyncSession, *, now: datetime) -> list[Dire
         detail="оценивает соответствие поста ленте (без влияния на публикацию)",
     ))
 
-    visual_failure_count = (await session.execute(select(func.count()).select_from(TelegramVisualFailure))).scalar_one()
+    art_director_detail = await _art_director_summary(session)
     entries.append(DirectorStatusEntry(
         name="Art Director",
-        status=DirectorStatus.SHADOW if visual_failure_count > 0 else DirectorStatus.WAITING_FOR_DATA,
-        detail=f"{visual_failure_count} зафиксированных находок" if visual_failure_count > 0 else "нет накопленных оценок рендера",
+        status=DirectorStatus.SHADOW if art_director_detail is not None else DirectorStatus.WAITING_FOR_DATA,
+        detail=art_director_detail or "нет накопленных оценок рендера",
     ))
 
     entries.append(DirectorStatusEntry(

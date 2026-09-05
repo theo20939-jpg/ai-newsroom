@@ -67,6 +67,29 @@ async def test_real_active_campaign_reflected_in_business_and_instagram_status(d
 
 
 @pytest.mark.asyncio
+async def test_art_director_summary_reflects_real_persisted_findings_never_a_pass_count(db_session: AsyncSession) -> None:
+    """Spec §19's own example shape (decision breakdown + top issue codes) - minus a fabricated
+    PASS count, since a clean PASS is never persisted at all."""
+    from database.models.telegram_visual_failure import ArtDirectorDecisionEnum, TelegramVisualFailure
+
+    db_session.add(TelegramVisualFailure(
+        issue_codes=["subject_crop_bad"], severity="medium", art_director_decision=ArtDirectorDecisionEnum.PASS_WITH_NOTES, confidence=0.5,
+    ))
+    db_session.add(TelegramVisualFailure(
+        issue_codes=["subject_crop_bad"], severity="high", art_director_decision=ArtDirectorDecisionEnum.REWORK, confidence=0.6,
+    ))
+    await db_session.commit()
+
+    status = await get_director_console_status(db_session, now=datetime.now(timezone.utc))
+    art_director = next(e for e in status.telegram if e.name == "Art Director")
+    assert art_director.status == DirectorStatus.SHADOW
+    assert "PASS_WITH_NOTES 1" in art_director.detail
+    assert "REWORK 1" in art_director.detail
+    assert "subject_crop_bad ×2" in art_director.detail
+    assert "PASS 16" not in art_director.detail  # never a fabricated clean-pass count
+
+
+@pytest.mark.asyncio
 async def test_status_check_never_mutates_the_database(db_session: AsyncSession) -> None:
     before = await get_director_console_status(db_session, now=datetime.now(timezone.utc))
     after = await get_director_console_status(db_session, now=datetime.now(timezone.utc))
