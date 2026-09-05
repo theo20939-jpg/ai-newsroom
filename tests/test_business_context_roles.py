@@ -52,4 +52,8 @@ def test_unknown_role_string_in_map_is_treated_as_no_role(monkeypatch) -> None:
 def test_commands_for_role_matches_role_matrix() -> None:
     assert "directive" in commands_for_role(BusinessContextRole.FOUNDER)
     assert "directive" not in commands_for_role(BusinessContextRole.MARKETING)
-    assert commands_for_role(BusinessContextRole.VIEWER) == frozenset({"status", "help"})
+    # SOCIAL-INTELLIGENCE-INTEGRATION-1 §5: Director Console commands are all read-only, so VIEWER
+    # gets them alongside the pre-existing /status /help.
+    assert commands_for_role(BusinessContextRole.VIEWER) == frozenset({
+        "status", "help", "directors", "plan", "opportunities", "calendar", "performance",
+    })

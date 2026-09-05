@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from bot.business_context_formatting import render_help, render_help_detail
 from services.business_context_command_registry import COMMAND_REGISTRY, get_command
-from services.business_context_command_registry import commands_for_role as registry_commands_for_role
 from services.business_context_roles import BusinessContextRole, DEFAULT_ROLE_COMMANDS
 from services.business_context_roles import commands_for_role as role_commands_for_role
 
-_ALL_COMMAND_NAMES = frozenset({"product", "campaign", "milestone", "directive", "claim", "context", "status", "help"})
+_ALL_COMMAND_NAMES = frozenset({
+    "product", "campaign", "milestone", "directive", "claim", "context", "status", "help",
+    # SOCIAL-INTELLIGENCE-INTEGRATION-1 §6-12: Director Console, added through this SAME registry.
+    "directors", "plan", "opportunities", "calendar", "performance",
+})
 
 
 def test_registry_covers_every_spec_command() -> None:

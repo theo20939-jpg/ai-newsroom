@@ -103,6 +103,53 @@ COMMAND_REGISTRY: dict[str, CommandDefinition] = {
         examples=("/help", "/help campaign"),
         detailed_help="Показывает список доступных вам команд, или подробную справку по одной команде.",
     ),
+    # SOCIAL-INTELLIGENCE-INTEGRATION-1 §6-12/§21/§24: Director Console - all read-only, no
+    # confirmation flow, no proposal (is_mutation=False, mirroring /status). Filters
+    # ("/plan telegram") only trim which platform's section is shown - never a separate DSL.
+    "directors": CommandDefinition(
+        name="directors", description="Состояние AI-директоров (что реально работает).", is_mutation=False,
+        examples=("/directors",),
+        detailed_help=(
+            "Показывает реальное состояние директоров бизнеса, Telegram и Instagram - на основе "
+            "фактических feature-флагов, накопленных данных и реализованных сервисов. Никогда не "
+            "показывает ACTIVE, если реального включённого воздействия на продакшн нет."
+        ),
+    ),
+    "plan": CommandDefinition(
+        name="plan", description="Текущий кросс-платформенный контент-план.", is_mutation=False,
+        examples=("/plan", "/plan telegram", "/plan instagram"),
+        detailed_help=(
+            "Показывает бизнес-приоритет, фазу кампании, действующие директивы основателя, и "
+            "отдельные (не идентичные) планы для Telegram и Instagram."
+        ),
+    ),
+    "opportunities": CommandDefinition(
+        name="opportunities", description="Актуальные возможности для контента.", is_mutation=False,
+        examples=("/opportunities", "/opportunities telegram", "/opportunities instagram"),
+        detailed_help=(
+            "Показывает объединённый список NEWS/PRODUCT/TREND-возможностей с их измерениями "
+            "(новостная ценность, релевантность кампании, релевантность тренда) - без единой "
+            "\"магической\" оценки."
+        ),
+    ),
+    "calendar": CommandDefinition(
+        name="calendar", description="Будущий запланированный контент и его статус.", is_mutation=False,
+        examples=("/calendar", "/calendar instagram"),
+        detailed_help=(
+            "Показывает запланированный контент (сейчас - только Instagram, у Telegram ещё нет "
+            "персистентного календаря) со статусами ACTIVE/STALE/INVALIDATED/RESCHEDULED/DONE/"
+            "CANCELLED."
+        ),
+    ),
+    "performance": CommandDefinition(
+        name="performance", description="Реальные сигналы эффективности (не тщеславные метрики).", is_mutation=False,
+        examples=("/performance", "/performance telegram", "/performance instagram"),
+        detailed_help=(
+            "Показывает только подтверждённые данными сигналы - никогда не показывает метрики "
+            "внутреннего редакционного чата как метрики публичной аудитории, и никогда не "
+            "показывает 0 вместо \"данные недоступны\"."
+        ),
+    ),
 }
 
 

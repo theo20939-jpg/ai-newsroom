@@ -106,7 +106,8 @@ def render_proposal_preview(proposal: BusinessContextProposal) -> str:
 
 
 def render_quickstart_manual() -> str:
-    """Spec §36 - Russian, user-facing, renderer-only (never auto-pinned by this phase)."""
+    """Spec §36 (Business Context) / SOCIAL-INTELLIGENCE-INTEGRATION-1 §22 (Director Console
+    section) - Russian, user-facing, renderer-only (never auto-pinned by this phase)."""
     return (
         "NINJA Command Center\n\n"
         "General — точка управления бизнес-контекстом NINJA.\n\n"
@@ -118,5 +119,11 @@ def render_quickstart_manual() -> str:
         "подтверждения.\n\n"
         "Обычные сообщения General не являются командами.\n\n"
         "/status — текущая картина.\n"
-        "/help — инструкция."
+        "/help — инструкция.\n\n"
+        "Директора:\n\n"
+        "/directors — состояние AI-директоров\n"
+        "/plan — текущий Telegram + Instagram контент-план\n"
+        "/opportunities — актуальные новости/тренды/кампании для контента\n"
+        "/calendar — будущий контент и его статус\n"
+        "/performance — реальные сигналы эффективности"
     )

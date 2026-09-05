@@ -24,16 +24,28 @@ class BusinessContextRole(str, enum.Enum):
 # only, as the spec explicitly requires. Kept as a plain module-level dict (not a DB table) so it
 # is configurable only by editing/deploying code, never by an in-chat command - permissions
 # themselves are not something any Telegram command can ever propose or confirm a change to.
+
+# SOCIAL-INTELLIGENCE-INTEGRATION-1 §5's own suggested matrix, preserved verbatim: Director
+# Console commands are all read-only (spec §5's own "All console actions are READ ONLY in this
+# phase" instruction), so VIEWER gets them too - the same reasoning that already gives VIEWER
+# /status (also read-only) extends naturally to /directors/opportunities/performance (read-only
+# director state); /plan and /calendar are withheld from EDITOR specifically because spec §5 only
+# lists "directors/opportunities/performance where appropriate" for that role, not the full set.
+_DIRECTOR_CONSOLE_COMMANDS = frozenset({"directors", "plan", "opportunities", "calendar", "performance"})
+
 DEFAULT_ROLE_COMMANDS: dict[BusinessContextRole, frozenset[str]] = {
     BusinessContextRole.FOUNDER: frozenset(
         {"product", "campaign", "milestone", "directive", "claim", "context", "status", "help"}
+        | _DIRECTOR_CONSOLE_COMMANDS
     ),
     BusinessContextRole.PRODUCT_OWNER: frozenset(
-        {"product", "campaign", "milestone", "claim", "context", "status", "help"}
+        {"product", "campaign", "milestone", "claim", "context", "status", "help"} | _DIRECTOR_CONSOLE_COMMANDS
     ),
-    BusinessContextRole.MARKETING: frozenset({"campaign", "milestone", "context", "status", "help"}),
-    BusinessContextRole.EDITOR: frozenset({"status", "help"}),
-    BusinessContextRole.VIEWER: frozenset({"status", "help"}),
+    BusinessContextRole.MARKETING: frozenset(
+        {"campaign", "milestone", "context", "status", "help"} | _DIRECTOR_CONSOLE_COMMANDS
+    ),
+    BusinessContextRole.EDITOR: frozenset({"status", "help", "directors", "opportunities", "performance"}),
+    BusinessContextRole.VIEWER: frozenset({"status", "help"} | _DIRECTOR_CONSOLE_COMMANDS),
 }
 
 

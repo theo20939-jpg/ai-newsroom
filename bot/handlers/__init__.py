@@ -3,6 +3,7 @@ from aiogram import Router
 
 from bot.handlers.business_context import router as business_context_router
 from bot.handlers.digest import router as digest_router
+from bot.handlers.director_console import router as director_console_router
 from bot.handlers.event_recap_review import router as event_recap_review_router
 from bot.handlers.final_post_review import router as final_post_review_router
 from bot.handlers.image_preview import router as image_preview_router
@@ -64,5 +65,9 @@ router.include_router(whereami_router)
 # `business_context_topic_id` do not match. Fail-closed via `business_context_role_map` (empty by
 # default - nobody has any role until explicitly configured).
 router.include_router(business_context_router)
+# SOCIAL-INTELLIGENCE-INTEGRATION-1: NINJA Director Console (/directors /plan /opportunities
+# /calendar /performance) - same General-topic gate, additionally off by default via
+# settings.director_console_enabled (bot/handlers/director_console.py's own module docstring).
+router.include_router(director_console_router)
 
 __all__ = ["router"]

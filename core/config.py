@@ -1057,6 +1057,12 @@ class Settings(BaseSettings):
     # never edits/deletes/sends/reacts/comments (spec §6's own hard constraint).
     telegram_performance_collection_enabled: bool = False
 
+    # SOCIAL-INTELLIGENCE-INTEGRATION-1 §28: the Director Console itself (read-only /directors,
+    # /plan, /opportunities, /calendar, /performance). Default False - no console handler runs
+    # until this is explicitly turned on; individual director flags above are unaffected either
+    # way. No enforcement flag, no publication flag exists anywhere alongside this one.
+    director_console_enabled: bool = False
+
     # services/weekly_recap_selection.py::select_weekly_recap_stories() - target Story count
     # (spec's own "Target 5-8 Stories max"), lookback window, and the per-company diversity cap
     # (spec's own "recommended default 2").
