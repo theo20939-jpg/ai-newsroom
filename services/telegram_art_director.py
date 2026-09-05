@@ -69,7 +69,7 @@ class ArtDirectorResult:
     confidence: float = 0.3
 
 
-def _renderer_reports_safe_degradation(renderer_decision_metadata: dict[str, Any]) -> bool:
+def renderer_reports_safe_degradation(renderer_decision_metadata: dict[str, Any]) -> bool:
     """Recognizes the real production shape (services/brand_renderer.py): a `DataSignaturePlan`
     with `tier == "none"`, or a `MasterNewsBrandingDecision` where a component's own `placement`
     is `"omitted"` - both are DELIBERATE safety-scoring outcomes, never a rendering bug. Accepts
@@ -102,7 +102,7 @@ def evaluate_art_direction_shadow(pixel_input: PixelInputContract) -> ArtDirecto
             instructions="No rendered bytes provided - cannot evaluate an empty render.", confidence=1.0,
         )
 
-    if _renderer_reports_safe_degradation(pixel_input.renderer_decision_metadata):
+    if renderer_reports_safe_degradation(pixel_input.renderer_decision_metadata):
         # §46: never flag this as a failure - a deliberate, already-safety-scored decision.
         return ArtDirectorResult(
             decision=ArtDirectorDecision.PASS, severity="none", issue_codes=[],
