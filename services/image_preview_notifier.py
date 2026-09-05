@@ -27,7 +27,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.formatting import SAFE_LIMIT, CardTooLongError, render_editorial_card
 from bot.image_preview_formatting import CAPTION_SAFE_LIMIT
-from bot.image_preview_media import resolve_photo_input
 from bot.keyboards.image_preview import build_image_preview_keyboard, build_source_only_keyboard
 from bot.keyboards.meme_generate import append_meme_generate_button
 from database.models.news_event import NewsEvent
@@ -39,6 +38,7 @@ from services.image_persistence import (
     get_editorial_image_candidates,
     record_telegram_file_id,
 )
+from services.media_finalizer import finalize_photo_input
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +143,7 @@ async def send_news_with_image_preview(
         )
 
     candidate = candidates[0]
-    photo_input = resolve_photo_input(candidate)
+    photo_input = finalize_photo_input(candidate)
     caption_limit = CAPTION_SAFE_LIMIT if photo_input is not None else SAFE_LIMIT
     try:
         caption = render_editorial_card(card, limit=caption_limit, include_url=False)
@@ -269,7 +269,7 @@ def build_rich_media_plan(
     photo_inputs = []
     photo_candidates: list[EditorialImageCandidate] = []
     for candidate in image_candidates[:max_photos]:
-        photo_input = resolve_photo_input(candidate)
+        photo_input = finalize_photo_input(candidate)
         if photo_input is not None:
             photo_inputs.append(photo_input)
             photo_candidates.append(candidate)

@@ -33,7 +33,6 @@ from bot.image_preview_formatting import (
     render_expired_candidate_alert_text,
     render_unavailable_candidate_alert_text,
 )
-from bot.image_preview_media import resolve_photo_input
 from bot.keyboards.image_preview import build_image_preview_keyboard, build_source_only_keyboard, parse_callback_data
 from bot.keyboards.meme_generate import append_meme_generate_button
 from database.models.content_draft import ContentDraft
@@ -48,6 +47,7 @@ from services.image_persistence import (
     reject_all_candidates,
     set_editor_decision,
 )
+from services.media_finalizer import finalize_photo_input
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +99,7 @@ async def _render_candidate(
     message into a photo message or vice versa, so a type change is handled by deleting the old
     message and sending a fresh one (docs §9's own documented approach)."""
     candidate = candidates[index]
-    photo_input = resolve_photo_input(candidate)
+    photo_input = finalize_photo_input(candidate)
     caption_limit = CAPTION_SAFE_LIMIT if photo_input is not None else _SAFE_LIMIT
     try:
         caption = render_editorial_card(card, limit=caption_limit, include_url=False)
