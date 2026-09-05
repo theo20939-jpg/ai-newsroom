@@ -1001,6 +1001,19 @@ class Settings(BaseSettings):
     # having zero permitted commands, never a default role).
     business_context_role_map: dict[int, str] = Field(default_factory=dict)
 
+    # NINJA Social Intelligence Foundation, Part IV §96: Instagram Growth Engine flags. All
+    # default False - no Meta/Instagram credentials exist anywhere in this codebase (forensic
+    # sweep: zero references to a Graph API client or Instagram credential setting), so even the
+    # concept of "enabling" one of these today changes nothing observable - each flag exists only
+    # for the future phase that actually implements the capability it names. No publication flag
+    # exists at all in this phase (spec §92/§96's own "no ad spend, no Meta Ads API" instruction) -
+    # there is nothing here that could ever be flipped to make this codebase publish to Instagram.
+    instagram_growth_engine_enabled: bool = False
+    instagram_story_opportunity_shadow_enabled: bool = False
+    instagram_trend_intelligence_enabled: bool = False
+    instagram_performance_memory_enabled: bool = False
+    instagram_format_director_shadow_enabled: bool = False
+
     # services/weekly_recap_selection.py::select_weekly_recap_stories() - target Story count
     # (spec's own "Target 5-8 Stories max"), lookback window, and the per-company diversity cap
     # (spec's own "recommended default 2").
