@@ -15,12 +15,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from services.campaign_planner import CampaignPlan
+from services.instagram_audience_intelligence import AudienceSegment, FunnelStage
 from services.instagram_content_opportunity import ContentOpportunity
 from services.instagram_format_director import ContentFormat, FormatDecision
 from services.instagram_hook_intelligence import FatigueState, Hook
 from services.instagram_objectives import ContentObjective
 from services.instagram_series import ContentSeries, SeriesStatus
 from services.instagram_trend_radar import Trend, TrendLifecycleStage
+
+_EARLY_FUNNEL_STAGES = (FunnelStage.UNAWARE, FunnelStage.PROBLEM_AWARE)
+_LATE_FUNNEL_STAGES = (FunnelStage.PRODUCT_AWARE, FunnelStage.CONSIDERING)
 
 
 @dataclass(frozen=True)
@@ -32,12 +36,20 @@ class AssetConstraints:
 
 def evaluate_format_v2(
     *, objective: ContentObjective, assets: AssetConstraints, opportunity: ContentOpportunity | None = None,
-    trend: Trend | None = None, campaign_plan: CampaignPlan | None = None, hook: Hook | None = None,
-    series: ContentSeries | None = None,
+    audience: AudienceSegment | None = None, trend: Trend | None = None, campaign_plan: CampaignPlan | None = None,
+    hook: Hook | None = None, series: ContentSeries | None = None,
 ) -> FormatDecision:
     evidence: list[str] = [f"objective={objective.value}"]
     risks: list[str] = []
     alternatives: list[ContentFormat] = []
+
+    # Spec §30: audience funnel stage feeds the decision - an early-funnel audience (has not yet
+    # framed the problem) is steered toward carousel/education over a discovery-only Reel, a
+    # late-funnel audience toward whatever format actually carries the CTA.
+    audience_favors_education = audience is not None and audience.funnel_stage in _EARLY_FUNNEL_STAGES
+    audience_favors_conversion_format = audience is not None and audience.funnel_stage in _LATE_FUNNEL_STAGES
+    if audience is not None:
+        evidence.append(f"audience.funnel_stage={audience.funnel_stage.value}")
 
     # Spec §69: campaign constraints propagate - a campaign that has NOT approved a product
     # mention should not be steered toward a hard-CTA-carrying format when a safer educational
@@ -71,24 +83,30 @@ def evaluate_format_v2(
         recommended = ContentFormat.CAROUSEL
 
     # REACH/FOLLOWS does NOT always force Reel (spec §69) - only when a real video asset exists
-    # AND no stronger reason (a fatigued hook, a blocked conversion push) argues against it.
-    elif objective in (ContentObjective.REACH, ContentObjective.FOLLOWS) and assets.has_video_asset and not hook_fatigued:
+    # AND no stronger reason (a fatigued hook, a blocked conversion push, an early-funnel audience
+    # that needs education first) argues against it.
+    elif objective in (ContentObjective.REACH, ContentObjective.FOLLOWS) and assets.has_video_asset and not hook_fatigued and not audience_favors_education:
         evidence.append("reach/follow objective with a real video asset available" + (" and trend supports video" if trend_favors_video else ""))
         alternatives = [ContentFormat.CAROUSEL]
         confidence = 0.5 if trend_favors_video else 0.4
         recommended = ContentFormat.REEL
 
-    elif objective in (ContentObjective.REACH, ContentObjective.FOLLOWS) and not assets.has_video_asset:
-        evidence.append("reach/follow objective but no real video asset - Reel feasibility is reduced")
-        risks.append("no video asset available for a video-favored objective")
+    elif objective in (ContentObjective.REACH, ContentObjective.FOLLOWS) and (not assets.has_video_asset or audience_favors_education):
+        if audience_favors_education:
+            evidence.append("early-funnel audience favors an educational carousel over a pure-discovery Reel")
+        else:
+            evidence.append("reach/follow objective but no real video asset - Reel feasibility is reduced")
+            risks.append("no video asset available for a video-favored objective")
         alternatives = [ContentFormat.REEL] if assets.has_multi_step_narrative else [ContentFormat.CAROUSEL]
-        confidence = 0.2
+        confidence = 0.25 if audience_favors_education else 0.2
         recommended = ContentFormat.SINGLE if not assets.has_multi_step_narrative else ContentFormat.CAROUSEL
 
     elif objective == ContentObjective.PRODUCT_CLICK and not campaign_blocks_conversion_push:
         evidence.append("product-click objective with product mention allowed")
+        if audience_favors_conversion_format:
+            evidence.append("late-funnel audience supports a direct conversion format")
         alternatives = [ContentFormat.CAROUSEL]
-        confidence = 0.35
+        confidence = 0.45 if audience_favors_conversion_format else 0.35
         recommended = ContentFormat.SINGLE
 
     else:
