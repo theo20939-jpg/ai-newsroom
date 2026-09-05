@@ -1001,6 +1001,19 @@ class Settings(BaseSettings):
     # having zero permitted commands, never a default role).
     business_context_role_map: dict[int, str] = Field(default_factory=dict)
 
+    # NINJA Social Intelligence Foundation, Part III §57: Telegram Director shadow flags. All
+    # default False - no enforcement, no automatic delay/deprioritization/rework tonight (spec
+    # §111's own "no production wiring" instruction). Each gates only whether its OWN advisory
+    # evaluation function is ever called from a live cycle - none of these functions exist in any
+    # automatic call path yet in this phase, so even "enabling" one today changes nothing; the
+    # flag exists for the future phase that actually wires one in.
+    telegram_channel_director_shadow_enabled: bool = False
+    telegram_art_director_shadow_enabled: bool = False
+    telegram_growth_memory_enabled: bool = False
+    telegram_strategy_director_enabled: bool = False
+    telegram_revision_router_enabled: bool = False
+    telegram_art_director_enforcement_enabled: bool = False
+
     # services/weekly_recap_selection.py::select_weekly_recap_stories() - target Story count
     # (spec's own "Target 5-8 Stories max"), lookback window, and the per-company diversity cap
     # (spec's own "recommended default 2").

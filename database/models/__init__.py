@@ -15,6 +15,7 @@ from database.models.product_context_version import ProductContextVersion
 from database.models.product_event import ProductEvent
 from database.models.strategic_directive import StrategicDirective
 from database.models.telegram_channel import TelegramChannel
+from database.models.telegram_channel_memory import TelegramChannelMemory
 from database.models.user import User
 
 __all__ = [
@@ -35,4 +36,5 @@ __all__ = [
     "ClaimPolicy",
     "StrategicDirective",
     "BusinessContextProposal",
+    "TelegramChannelMemory",
 ]
