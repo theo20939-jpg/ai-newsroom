@@ -9,7 +9,6 @@ DirectorConsoleAccessPolicy (services/director_console_access_policy.py) for eve
 decision - never an ad hoc `if role == VIEWER` check invented locally per renderer."""
 from __future__ import annotations
 
-from database.models.instagram_calendar_item import CalendarItemStatus
 from services.business_context_roles import BusinessContextRole
 from services.director_console_access_policy import REDACTED_LABEL, DirectorConsoleAccessPolicy
 from services.director_console_service import CalendarView, OpportunitiesView, PerformanceView, PlanView
@@ -171,9 +170,8 @@ def render_opportunities(view: OpportunitiesView, *, role: BusinessContextRole, 
 
 
 _CALENDAR_STATUS_LABEL = {
-    CalendarItemStatus.ACTIVE: "ACTIVE", CalendarItemStatus.STALE: "STALE",
-    CalendarItemStatus.INVALIDATED: "INVALIDATED", CalendarItemStatus.RESCHEDULED: "RESCHEDULED",
-    CalendarItemStatus.DONE: "DONE", CalendarItemStatus.CANCELLED: "CANCELLED",
+    "active": "ACTIVE", "stale": "STALE", "invalidated": "INVALIDATED",
+    "rescheduled": "RESCHEDULED", "done": "DONE", "cancelled": "CANCELLED",
 }
 
 
@@ -190,7 +188,7 @@ def render_calendar(view: CalendarView, *, role: BusinessContextRole, platform: 
     if not shown and not view.notes:
         lines.append("Нет запланированного контента.")
     for row in shown:
-        status_label = _CALENDAR_STATUS_LABEL.get(row.status, row.status.value)
+        status_label = _CALENDAR_STATUS_LABEL.get(row.status, row.status.upper())
         if row.context_stale:
             status_label += " (STALE_CONTEXT)"
         lines.append(f"{row.planned_at.strftime('%Y-%m-%d %H:%M UTC')} · {row.platform.upper()}")

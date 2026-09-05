@@ -22,6 +22,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.models.instagram_calendar_item import CalendarItemStatus, InstagramContentCalendarItem
 from database.models.strategic_directive import StrategicDirective
 from database.models.story import Story
+from database.models.telegram_content_calendar_item import (
+    TelegramCalendarItemStatus,
+    TelegramContentCalendarItem,
+)
 from services.business_context_snapshot_service import BusinessContextSnapshot, get_business_context_snapshot
 from services.campaign_planner import CampaignPhase, CampaignPlan, build_campaign_plan
 from services.campaign_service import get_campaign
@@ -41,6 +45,7 @@ from services.instagram_growth_strategist import (
 from services.instagram_objective_selection import ObjectiveRecommendation, recommend_objective
 from services.instagram_objectives import ContentObjective
 from services.story_campaign_matcher import StoryCampaignMatchType, StoryInput, match_story_to_campaign
+from services.telegram_calendar_service import list_calendar_items as list_telegram_calendar_items
 from services.telegram_feed_state import compute_feed_state
 from services.telegram_own_channel import owned_chat_id
 from services.telegram_strategy_director import StrategyDirectorAdvisory, derive_strategy_advisory
@@ -295,6 +300,10 @@ _LIVE_TERMINAL_ITEM_STATUSES = frozenset({
     CalendarItemStatus.INVALIDATED, CalendarItemStatus.CANCELLED, CalendarItemStatus.DONE,
     CalendarItemStatus.RESCHEDULED,
 })
+_LIVE_TERMINAL_TELEGRAM_ITEM_STATUSES = frozenset({
+    TelegramCalendarItemStatus.INVALIDATED, TelegramCalendarItemStatus.CANCELLED,
+    TelegramCalendarItemStatus.DONE, TelegramCalendarItemStatus.RESCHEDULED,
+})
 
 
 @dataclass(frozen=True)
@@ -304,7 +313,7 @@ class CalendarRow:
     concept: str
     objective: str
     campaign_id: str | None
-    status: CalendarItemStatus
+    status: str
     context_stale: bool = False
 
 
@@ -338,6 +347,26 @@ async def _is_context_stale(session: AsyncSession, item: InstagramContentCalenda
     return False
 
 
+async def _is_telegram_context_stale(
+    session: AsyncSession, item: TelegramContentCalendarItem, *, now: datetime,
+) -> bool:
+    """Mirrors `_is_context_stale` exactly (spec §26/§28), against the separate Telegram calendar
+    model - a display-time freshness check independent of `item.status` itself."""
+    if item.status in _LIVE_TERMINAL_TELEGRAM_ITEM_STATUSES:
+        return False
+    if item.campaign_id is None:
+        return False
+    campaign = await get_campaign(session, item.campaign_id)
+    if campaign is None:
+        return False
+    live_plan = build_campaign_plan(campaign, now=now)
+    if item.planned_against_campaign_status is not None and item.planned_against_campaign_status != live_plan.status:
+        return True
+    if item.planned_against_campaign_phase is not None and item.planned_against_campaign_phase != live_plan.phase:
+        return True
+    return False
+
+
 async def build_calendar_view(
     session: AsyncSession, *, now: datetime | None = None, platform: str | None = None,
 ) -> CalendarView:
@@ -346,19 +375,29 @@ async def build_calendar_view(
     notes: list[str] = []
 
     if platform in (None, "instagram"):
-        items: list[InstagramContentCalendarItem] = await list_calendar_items(session)
-        for item in sorted(items, key=lambda i: i.planned_at):
+        ig_items: list[InstagramContentCalendarItem] = await list_calendar_items(session)
+        for item in sorted(ig_items, key=lambda i: i.planned_at):
             rows.append(CalendarRow(
                 platform="instagram", planned_at=item.planned_at,
                 concept=item.opportunity_id or item.creative_concept_id or f"format={item.format}",
                 objective=item.objective, campaign_id=str(item.campaign_id) if item.campaign_id else None,
-                status=item.status, context_stale=await _is_context_stale(session, item, now=now),
+                status=item.status.value, context_stale=await _is_context_stale(session, item, now=now),
             ))
-        if not items:
+        if not ig_items:
             notes.append("Instagram: нет запланированного контента")
 
     if platform in (None, "telegram"):
-        notes.append("Telegram: календарь публикаций не реализован (нет персистентной модели) - записи не показаны")
+        tg_items: list[TelegramContentCalendarItem] = await list_telegram_calendar_items(session)
+        for t_item in sorted(tg_items, key=lambda i: i.planned_at):
+            rows.append(CalendarRow(
+                platform="telegram", planned_at=t_item.planned_at,
+                concept=t_item.presentation_hint or t_item.source_opportunity_id or f"role={t_item.content_role.value}",
+                objective=t_item.objective, campaign_id=str(t_item.campaign_id) if t_item.campaign_id else None,
+                status=t_item.status.value,
+                context_stale=await _is_telegram_context_stale(session, t_item, now=now),
+            ))
+        if not tg_items:
+            notes.append("Telegram: нет запланированного контента")
 
     return CalendarView(as_of=now, rows=rows, notes=notes)
 

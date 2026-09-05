@@ -267,6 +267,56 @@ async def test_calendar_platform_filter(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
+async def test_calendar_shows_real_telegram_item(db_session: AsyncSession) -> None:
+    """Spec §28: /calendar must show real Telegram entries when present - no fabricated platform
+    parity, and no more "not implemented" placeholder note once a real item exists."""
+    from database.models.telegram_content_calendar_item import TelegramCalendarItemStatus, TelegramContentRole
+    from services.telegram_calendar_service import create_calendar_item as create_telegram_calendar_item
+
+    item = await create_telegram_calendar_item(
+        db_session, planned_at=datetime.now(timezone.utc), objective="reach", content_role=TelegramContentRole.NEWS,
+        presentation_hint="digest",
+    )
+    view = await build_calendar_view(db_session, now=datetime.now(timezone.utc), platform="telegram")
+    row = next(r for r in view.rows if r.platform == "telegram")
+    assert row.status == TelegramCalendarItemStatus.ACTIVE.value
+    assert row.planned_at == item.planned_at
+    assert row.concept == "digest"
+    assert not any("не реализован" in n for n in view.notes)
+
+
+@pytest.mark.asyncio
+async def test_calendar_shows_both_platforms_without_filter(db_session: AsyncSession) -> None:
+    from database.models.telegram_content_calendar_item import TelegramContentRole
+    from services.telegram_calendar_service import create_calendar_item as create_telegram_calendar_item
+
+    await create_calendar_item(db_session, planned_at=datetime.now(timezone.utc), objective="reach", format="reel")
+    await create_telegram_calendar_item(
+        db_session, planned_at=datetime.now(timezone.utc), objective="reach", content_role=TelegramContentRole.NEWS,
+    )
+    view = await build_calendar_view(db_session, now=datetime.now(timezone.utc))
+    platforms = {r.platform for r in view.rows}
+    assert platforms == {"instagram", "telegram"}
+
+
+@pytest.mark.asyncio
+async def test_calendar_detects_telegram_stale_context(db_session: AsyncSession) -> None:
+    from services.telegram_calendar_service import create_calendar_item as create_telegram_calendar_item
+    from database.models.telegram_content_calendar_item import TelegramContentRole
+
+    _, campaign = await _make_confirmed_campaign(db_session, slug="tgcalstale")
+    await create_telegram_calendar_item(
+        db_session, planned_at=datetime.now(timezone.utc), objective="product_click",
+        content_role=TelegramContentRole.CAMPAIGN, campaign_id=campaign.id, depends_on_campaign_phase="LAUNCH",
+        planned_against_campaign_status="confirmed", planned_against_campaign_phase="LAUNCH",
+    )
+    await update_campaign(db_session, campaign.id, structured_context={"status": "delayed"})
+    view = await build_calendar_view(db_session, now=datetime.now(timezone.utc))
+    row = next(r for r in view.rows if r.platform == "telegram" and r.campaign_id == str(campaign.id))
+    assert row.context_stale is True
+
+
+@pytest.mark.asyncio
 async def test_calendar_view_is_read_only(db_session: AsyncSession) -> None:
     item = await create_calendar_item(db_session, planned_at=datetime.now(timezone.utc), objective="reach", format="reel")
     await build_calendar_view(db_session, now=datetime.now(timezone.utc))
