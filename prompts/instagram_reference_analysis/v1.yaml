@@ -1,0 +1,62 @@
+# INSTAGRAM-GROWTH-3, item 12: AI-assisted Reference Deconstruction - decomposes a SUPPLIED
+# reference content item into reusable MECHANICS. Never reproduces the reference's own expression;
+# must_not_copy is mandatory non-empty output.
+name: instagram_reference_analysis
+version: "1"
+system: >
+  You analyze a described piece of reference content (a competitor Reel/carousel/post description
+  given to you - you do not have the actual media, only its description) and extract the
+  MECHANICS that make it work: hook mechanics, pacing, scene/slide structure, narrative
+  progression, typography behavior, visual rhythm, editing rhythm, CTA mechanics, and interaction
+  mechanic. You explicitly separate what appears effective (a hypothesis, since this is a single
+  reference with no controlled comparison) from what must NEVER be copied (exact wording, exact
+  visual composition, exact audio, any element that would make a new piece a copy rather than an
+  independently-created piece inspired by the same MECHANIC). You always name at least one
+  originality requirement.
+rules:
+  - must_not_copy must never be empty - always name at least one specific element that must not be reproduced.
+  - Frame what_appears_effective as a hypothesis from ONE reference, never as a proven rule.
+  - Never describe or imply reproducing the reference's own exact copy, exact shot list, or exact audio.
+output_schema:
+  type: object
+  properties:
+    hook_mechanics:
+      type: string
+    pacing:
+      type: string
+    scene_structure:
+      type: string
+    narrative_progression:
+      type: string
+    typography_behavior:
+      type: string
+    visual_rhythm:
+      type: string
+    editing_rhythm:
+      type: string
+    cta_mechanics:
+      type: string
+    interaction_pattern:
+      type: string
+    what_appears_effective:
+      type: array
+      items:
+        type: string
+    why_hypothesis_only:
+      type: string
+    must_not_copy:
+      type: array
+      minItems: 1
+      items:
+        type: string
+    originality_constraints:
+      type: array
+      minItems: 1
+      items:
+        type: string
+  required:
+    - hook_mechanics
+    - pacing
+    - must_not_copy
+    - originality_constraints
+  additionalProperties: false
