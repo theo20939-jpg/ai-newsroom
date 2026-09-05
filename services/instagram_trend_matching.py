@@ -60,6 +60,12 @@ class TrendNewsMatch:
     evidence: list[str] = field(default_factory=list)
     risks: list[str] = field(default_factory=list)
     confidence: float = 0.0
+    # INSTAGRAM-GROWTH-3 item 1: semantic SUPPLEMENT fields, additive - always default to "not
+    # evaluated" so every existing caller/test that never passes a gateway is completely unaffected.
+    # Populated only by services/instagram_semantic_trend_matching.py, never by this module.
+    semantic_available: bool = False
+    semantic_relatedness: float | None = None
+    semantic_rationale: str | None = None
 
 
 @dataclass(frozen=True)
@@ -70,6 +76,9 @@ class TrendCampaignMatch:
     campaign_fit: float
     brand_fit_ok: bool
     product_mention_allowed: bool
+    semantic_available: bool = False
+    semantic_relatedness: float | None = None
+    semantic_rationale: str | None = None
     evidence: list[str] = field(default_factory=list)
     risks: list[str] = field(default_factory=list)
     confidence: float = 0.0
