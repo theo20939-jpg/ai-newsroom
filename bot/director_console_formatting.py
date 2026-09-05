@@ -224,6 +224,8 @@ def render_performance(view: PerformanceView, *, role: BusinessContextRole, plat
             lines.append(view.telegram_status)
         for evidence in view.telegram_evidence:
             lines.append(f"- {evidence.description} (n={evidence.sample_size}, эффект={evidence.effect_size:+.0%}, стадия={evidence.stage})")
+        if view.telegram_last_run_summary:
+            lines.append(f"Growth Director: {view.telegram_last_run_summary}")
         lines.append("")
 
     if platform in (None, "instagram"):

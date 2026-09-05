@@ -27,7 +27,7 @@ from database.models.director_run import (
     DirectorRunStatus,
     DirectorType,
 )
-from services.business_context_snapshot_service import BusinessContextSnapshot
+from services.business_context_snapshot_service import BusinessContextSnapshot, get_business_context_snapshot
 from services.campaign_planner import build_campaign_plan
 from services.campaign_service import get_campaign
 
@@ -121,6 +121,25 @@ async def is_run_context_stale(
     ):
         return True
     return False
+
+
+async def describe_latest_run(session: AsyncSession, director_type: DirectorType, *, now: datetime) -> str | None:
+    """SOCIAL-INTELLIGENCE-OPS-1A, spec §5: a plain, read-only, Russian-text summary of the
+    latest persisted run for console display - shared by `/directors`
+    (services/director_status_service.py) and `/performance`
+    (services/director_console_service.py) so the "last real run" summary never drifts between the
+    two surfaces. Never computes or persists anything itself; returns None (never a fabricated
+    message) when no run has ever been persisted for this director type."""
+    run = await get_latest_run(session, director_type)
+    if run is None:
+        return None
+    snapshot = await get_business_context_snapshot(session, now=now)
+    current_fingerprint = compute_business_context_fingerprint(snapshot)
+    stale = await is_run_context_stale(session, run, now=now, current_business_context_fingerprint=current_fingerprint)
+    decision = run.decision or "решение не зафиксировано"
+    confidence_text = f", уверенность {run.confidence:.2f}" if run.confidence is not None else ""
+    stale_text = " [STALE_CONTEXT]" if stale else ""
+    return f"последний запуск {run.generated_at.strftime('%Y-%m-%d %H:%M UTC')}: {decision}{confidence_text}{stale_text}"
 
 
 async def mark_stale(session: AsyncSession, run_id: UUID, *, reason: str) -> DirectorRun:

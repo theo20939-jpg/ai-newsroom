@@ -1,16 +1,25 @@
-"""SOCIAL-INTELLIGENCE-INTEGRATION-1, spec §7-13/§17/§25-27: DirectorConsoleService - assembles
-`/plan`, `/opportunities`, `/calendar`, `/performance` from already-implemented, real services.
-Business logic lives HERE, never inside a Telegram handler (spec §13).
+"""SOCIAL-INTELLIGENCE-OPS-1A, spec §1/§3: DirectorConsoleService - assembles `/plan`,
+`/opportunities`, `/calendar`, `/performance` from already-implemented, real services.
+Business logic lives HERE, never inside a Telegram handler (spec §13, carried over from
+SOCIAL-INTELLIGENCE-INTEGRATION-1).
 
-CRITICAL cost safety (spec §18): nothing in this module calls the AI Gateway. Instagram Growth
-Strategy/Format Director/objective selection are all deterministic, free functions; Creative
-Director generation is never invoked here.
+CRITICAL console read-purity invariant (spec §1/§3): every function in this module is a pure
+read. NONE of them may ever call `services/director_run_service.py::create_director_run()`,
+`services/telegram_calendar_service.py`'s or `services/instagram_calendar_service.py`'s write
+functions, or anything that mutates Business Context/campaign/calendar/DirectorRun state. Director
+advisory COMPUTATION AND PERSISTENCE now belongs exclusively to
+`services/director_execution_service.py` - this module only ever reads the latest already-
+persisted `DirectorRun` (`services/director_run_service.py::get_latest_run()`/
+`describe_latest_run()`) for `/plan`/`/performance`, exactly as `/directors`
+(services/director_status_service.py) already did. If no run has ever been persisted for a given
+director, the honest state is NO_CURRENT_ADVISORY - never silently computed and shown as if it
+were a real run.
 
-CRITICAL (spec §9): a Telegram post is never fabricated in the calendar view - Telegram has no
-persisted content-calendar model in this codebase, and that is stated explicitly rather than
-silently omitted.
+CRITICAL cost safety (spec §18, carried over): nothing in this module calls the AI Gateway.
 
-Every view carries `as_of`/`generated_at` (spec §25) so a caller can render data freshness."""
+CRITICAL (spec §9, carried over): a Telegram post is never fabricated in the calendar view.
+
+Every view carries `as_of`/`generated_at` so a caller can render data freshness."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
@@ -19,8 +28,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.config import settings
-from database.models.director_run import DirectorRunEvidenceStage, DirectorRunStatus, DirectorType
+from database.models.director_run import DirectorType
 from database.models.instagram_calendar_item import CalendarItemStatus, InstagramContentCalendarItem
 from database.models.strategic_directive import StrategicDirective
 from database.models.story import Story
@@ -31,11 +39,7 @@ from database.models.telegram_content_calendar_item import (
 from services.business_context_snapshot_service import BusinessContextSnapshot, get_business_context_snapshot
 from services.campaign_planner import CampaignPhase, CampaignPlan, build_campaign_plan
 from services.campaign_service import get_campaign
-from services.director_run_service import (
-    compute_business_context_fingerprint,
-    compute_input_fingerprint,
-    create_director_run,
-)
+from services.director_run_service import describe_latest_run, get_latest_run
 from services.instagram_calendar_service import list_calendar_items
 from services.instagram_content_opportunity import (
     ContentOpportunity,
@@ -44,50 +48,13 @@ from services.instagram_content_opportunity import (
 )
 from services.instagram_format_director import ContentFormat
 from services.instagram_format_director_v2 import AssetConstraints, evaluate_format_v2
-from services.instagram_growth_strategist import (
-    InstagramGrowthStrategy,
-    OpportunityContext,
-    generate_growth_strategy,
-)
+from services.instagram_growth_strategist import InstagramGrowthStrategy
 from services.instagram_objective_selection import ObjectiveRecommendation, recommend_objective
 from services.instagram_objectives import ContentObjective
 from services.story_campaign_matcher import StoryCampaignMatchType, StoryInput, match_story_to_campaign
 from services.telegram_calendar_service import list_calendar_items as list_telegram_calendar_items
-from services.telegram_feed_state import compute_feed_state
-from services.telegram_growth_director import derive_growth_director_advisory
 from services.telegram_performance_aggregator import compute_telegram_performance_aggregate
-from services.telegram_performance_memory import EvidenceStage, PerformancePattern
-from services.telegram_strategy_director import StrategyDirectorAdvisory, derive_strategy_advisory
-
-_AGGREGATE_STATUS_TO_RUN_STATUS: dict[str, DirectorRunStatus] = {
-    "OK": DirectorRunStatus.OK,
-    "WAITING_FOR_DATA": DirectorRunStatus.WAITING_FOR_DATA,
-    "INSUFFICIENT_EVIDENCE": DirectorRunStatus.INSUFFICIENT_EVIDENCE,
-    "PUBLIC_CHANNEL_NOT_CONFIGURED": DirectorRunStatus.BLOCKED,
-}
-_EVIDENCE_STAGE_ORDER = [
-    EvidenceStage.ANOMALY, EvidenceStage.POSSIBLE_SIGNAL, EvidenceStage.REPEATED_PATTERN,
-    EvidenceStage.STABLE_WORKING_RULE,
-]
-_EVIDENCE_STAGE_TO_RUN_STAGE: dict[EvidenceStage, DirectorRunEvidenceStage] = {
-    EvidenceStage.ANOMALY: DirectorRunEvidenceStage.OBSERVATION,
-    EvidenceStage.POSSIBLE_SIGNAL: DirectorRunEvidenceStage.POSSIBLE_SIGNAL,
-    EvidenceStage.REPEATED_PATTERN: DirectorRunEvidenceStage.REPEATED_PATTERN,
-    EvidenceStage.STABLE_WORKING_RULE: DirectorRunEvidenceStage.STABLE_WORKING_RULE,
-}
-
-
-def _best_evidence_stage(patterns: list[PerformancePattern]) -> DirectorRunEvidenceStage | None:
-    """The most evidentially mature stage among the patterns a run actually consumed - a run
-    fed zero patterns records no evidence stage at all, never a fabricated OBSERVATION."""
-    if not patterns:
-        return None
-    best = max(patterns, key=lambda p: _EVIDENCE_STAGE_ORDER.index(p.stage))
-    return _EVIDENCE_STAGE_TO_RUN_STAGE[best.stage]
-
-
-def _first_or_none(values: list[str]) -> str | None:
-    return values[0][:100] if values else None
+from services.telegram_strategy_director import StrategyDirectorAdvisory
 
 _PRODUCT_MENTION_ALLOWED_PHASES = frozenset({
     CampaignPhase.PRODUCT_TEASING, CampaignPhase.FEATURE_REVEAL, CampaignPhase.COUNTDOWN,
@@ -133,81 +100,35 @@ def _restricted_claim_texts_for_product(snapshot: BusinessContextSnapshot, produ
     return [c.claim_text for c in snapshot.restricted_claims if str(c.product_id) == product_id]
 
 
-def _product_opportunities_from_campaigns(snapshot: BusinessContextSnapshot) -> list[OpportunityContext]:
-    contexts: list[OpportunityContext] = []
-    product_by_id = {str(s.product.id): s.product for s in snapshot.products}
-    for plan in snapshot.active_campaigns:
-        product = product_by_id.get(plan.product_id)
-        opportunity = build_content_opportunity(
-            id=f"campaign:{plan.campaign_id}", source_type=OpportunitySourceType.PRODUCT,
-            product_id=plan.product_id, campaign_id=plan.campaign_id, campaign_plan=plan,
-            recommended_objectives=[], evidence=[f"active campaign phase={plan.phase}"], confidence=0.4,
-        )
-        real_restricted = _restricted_claim_texts_for_product(snapshot, plan.product_id)
-        if real_restricted:
-            opportunity = replace(opportunity, restricted_claims=sorted(set(opportunity.restricted_claims) | set(real_restricted)))
-        contexts.append(OpportunityContext(opportunity=opportunity, product_slug=product.slug if product else None))
-    return contexts
-
-
 async def build_plan_view(
     session: AsyncSession, *, now: datetime | None = None, platform: str | None = None,
 ) -> PlanView:
+    """SOCIAL-INTELLIGENCE-OPS-1A, spec §4: a pure read. Never computes a Telegram/Instagram
+    advisory itself - that computation (and its optional persistence) belongs exclusively to
+    `services/director_execution_service.py`. Shows the latest PERSISTED advisory for each
+    platform, or an honest NO_CURRENT_ADVISORY note when none has ever been persisted - never
+    silently generates one just to avoid an empty screen."""
     now = now or datetime.now(timezone.utc)
     snapshot = await get_business_context_snapshot(session, now=now)
     version = _business_context_version(snapshot)
 
-    business_context_fingerprint = compute_business_context_fingerprint(snapshot)
-
     telegram_advisory: StrategyDirectorAdvisory | None = None
     telegram_note = ""
     if platform in (None, "telegram"):
-        feed_state = await compute_feed_state(session, now=now)
-        if feed_state.posts_24h == 0 and not feed_state.topic_distribution:
-            telegram_note = "недостаточно данных: нет истории постов канала"
-        aggregate = await compute_telegram_performance_aggregate(session, now=now)
-        telegram_advisory = derive_strategy_advisory(feed_state, patterns=aggregate.patterns)
-        if settings.director_run_persistence_enabled:
-            await create_director_run(
-                session, director_type=DirectorType.TELEGRAM_STRATEGY, platform="telegram", generated_at=now,
-                input_fingerprint=compute_input_fingerprint(
-                    feed_state.posts_24h, feed_state.topic_streak, aggregate.total_posts_considered,
-                ),
-                result_payload={
-                    "priority_themes": telegram_advisory.priority_themes,
-                    "content_gaps": telegram_advisory.content_gaps,
-                    "experiment_suggestions": telegram_advisory.experiment_suggestions,
-                    "series_opportunities": telegram_advisory.series_opportunities,
-                },
-                status=_AGGREGATE_STATUS_TO_RUN_STATUS.get(aggregate.status, DirectorRunStatus.WAITING_FOR_DATA),
-                decision=_first_or_none(telegram_advisory.priority_themes) or "no priority theme identified",
-                evidence_stage=_best_evidence_stage(aggregate.patterns),
-                business_context_fingerprint=business_context_fingerprint,
-            )
+        run = await get_latest_run(session, DirectorType.TELEGRAM_STRATEGY)
+        if run is None:
+            telegram_note = "NO_CURRENT_ADVISORY: Telegram Strategy Director ещё не запускался"
+        else:
+            telegram_advisory = StrategyDirectorAdvisory(**run.result_payload)
 
     instagram_strategy: InstagramGrowthStrategy | None = None
     instagram_note = ""
     if platform in (None, "instagram"):
-        contexts = _product_opportunities_from_campaigns(snapshot)
-        if not contexts:
-            instagram_note = "недостаточно данных: нет активных кампаний для стратегии"
-        instagram_strategy = generate_growth_strategy(
-            opportunity_contexts=contexts, directives=list(snapshot.active_directives),
-        )
-        if settings.director_run_persistence_enabled:
-            await create_director_run(
-                session, director_type=DirectorType.INSTAGRAM_GROWTH, platform="instagram", generated_at=now,
-                input_fingerprint=compute_input_fingerprint(len(contexts), sorted(c.opportunity.id for c in contexts)),
-                result_payload={
-                    "objective_mix": instagram_strategy.objective_mix,
-                    "campaign_support": instagram_strategy.campaign_support,
-                    "content_gaps": instagram_strategy.content_gaps,
-                    "trend_opportunities": instagram_strategy.trend_opportunities,
-                },
-                status=DirectorRunStatus.OK if contexts else DirectorRunStatus.WAITING_FOR_DATA,
-                confidence=instagram_strategy.confidence,
-                business_context_fingerprint=business_context_fingerprint,
-            )
+        run = await get_latest_run(session, DirectorType.INSTAGRAM_GROWTH)
+        if run is None:
+            instagram_note = "NO_CURRENT_ADVISORY: Instagram Growth Strategist ещё не запускался"
+        else:
+            instagram_strategy = InstagramGrowthStrategy(**run.result_payload)
 
     return PlanView(
         as_of=now, business_context_version=version, active_campaigns=list(snapshot.active_campaigns),
@@ -492,15 +413,27 @@ class PerformanceView:
     as_of: datetime
     telegram_status: str
     telegram_evidence: list[PerformanceEvidenceRow] = field(default_factory=list)
+    telegram_last_run_summary: str | None = None
     instagram_status: str = "NO_FIRST_PARTY_DATA"
 
 
 async def build_performance_view(
     session: AsyncSession, *, now: datetime | None = None, platform: str | None = None,
 ) -> PerformanceView:
+    """SOCIAL-INTELLIGENCE-OPS-1A, spec §5/§6: a pure read. `compute_telegram_performance_
+    aggregate()` is itself side-effect-free (it only ever SELECTs TelegramChannelMemory/
+    TelegramPostPerformanceSnapshot rows and returns an in-memory dataclass - there is no
+    PerformancePattern table to persist into), so it may still be computed live here for the
+    evidence rows (spec §5's own "if live aggregation is cheap and PURE it may compute an
+    ephemeral view" allowance). What this function must NEVER do, and no longer does, is persist a
+    DirectorRun - that belongs exclusively to
+    services/director_execution_service.py::run_telegram_growth_director(). The latest PERSISTED
+    Growth Director run is additionally surfaced read-only via `describe_latest_run()` for
+    continuity with `/directors`."""
     now = now or datetime.now(timezone.utc)
     telegram_status = "NOT_APPLICABLE"
     telegram_evidence: list[PerformanceEvidenceRow] = []
+    telegram_last_run_summary: str | None = None
 
     if platform in (None, "telegram"):
         aggregate = await compute_telegram_performance_aggregate(session, now=now)
@@ -512,24 +445,11 @@ async def build_performance_view(
             )
             for pattern in aggregate.patterns
         ]
-        if aggregate.status == "OK" and settings.director_run_persistence_enabled:
-            growth_advisory = derive_growth_director_advisory(aggregate.patterns)
-            await create_director_run(
-                session, director_type=DirectorType.TELEGRAM_GROWTH, platform="telegram", generated_at=now,
-                input_fingerprint=compute_input_fingerprint(aggregate.total_posts_considered, aggregate.window),
-                result_payload={
-                    "signals": growth_advisory.signals, "fatigue": growth_advisory.fatigue,
-                    "amplification_candidates": growth_advisory.amplification_candidates,
-                    "experiment_recommendations": growth_advisory.experiment_recommendations,
-                    "warnings": growth_advisory.warnings,
-                },
-                status=DirectorRunStatus.OK, decision=_first_or_none(growth_advisory.signals) or "no actionable signal yet",
-                confidence=growth_advisory.confidence, evidence_stage=_best_evidence_stage(aggregate.patterns),
-            )
+        telegram_last_run_summary = await describe_latest_run(session, DirectorType.TELEGRAM_GROWTH, now=now)
 
     instagram_status = "NO_FIRST_PARTY_DATA" if platform in (None, "instagram") else "NOT_APPLICABLE"
 
     return PerformanceView(
         as_of=now, telegram_status=telegram_status, telegram_evidence=telegram_evidence,
-        instagram_status=instagram_status,
+        telegram_last_run_summary=telegram_last_run_summary, instagram_status=instagram_status,
     )
