@@ -10,6 +10,8 @@ from __future__ import annotations
 import enum
 from dataclasses import dataclass
 
+from database.models.instagram_shared import IntelligenceEvidenceStage
+
 
 class EvidenceStage(str, enum.Enum):
     ANOMALY = "anomaly"
@@ -124,3 +126,24 @@ class ExperimentRecord:
     sample_size: int = 0
     result: str | None = None
     confidence: float = 0.0
+
+
+_MIN_OBSERVATIONS_FOR_POSSIBLE_SIGNAL = 2
+_MIN_OBSERVATIONS_FOR_REPEATED_PATTERN = 4
+_MIN_OBSERVATIONS_FOR_STABLE_WORKING_RULE = 10
+
+
+def advance_intelligence_evidence_stage(*, observation_count: int, is_hypothesis_only: bool = False) -> IntelligenceEvidenceStage:
+    """Spec item 3's own required discipline: never persist a speculative fact as an established
+    truth. `is_hypothesis_only=True` (no real observation backing it at all yet, e.g. an
+    AudienceInsight sourced as HYPOTHESIS) always returns HYPOTHESIS regardless of count - a
+    hypothesis does not "become" an observation just because it was written down more than once."""
+    if is_hypothesis_only:
+        return IntelligenceEvidenceStage.HYPOTHESIS
+    if observation_count < _MIN_OBSERVATIONS_FOR_POSSIBLE_SIGNAL:
+        return IntelligenceEvidenceStage.OBSERVATION
+    if observation_count < _MIN_OBSERVATIONS_FOR_REPEATED_PATTERN:
+        return IntelligenceEvidenceStage.POSSIBLE_SIGNAL
+    if observation_count < _MIN_OBSERVATIONS_FOR_STABLE_WORKING_RULE:
+        return IntelligenceEvidenceStage.REPEATED_PATTERN
+    return IntelligenceEvidenceStage.STABLE_WORKING_RULE

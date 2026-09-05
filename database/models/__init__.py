@@ -8,7 +8,15 @@ from database.models.competitor import CompetitorAccount, CompetitorContentObser
 from database.models.content_draft import ContentDraft
 from database.models.editorial_task import EditorialTask
 from database.models.image_candidate_record import ImageCandidateRecord
+from database.models.instagram_ai_call_record import InstagramAICallRecord
+from database.models.instagram_audience_memory import InstagramAudienceInsight
 from database.models.instagram_calendar_item import InstagramContentCalendarItem
+from database.models.instagram_creative_plan import InstagramCreativeDraft, InstagramCreativePlan
+from database.models.instagram_creator_memory import InstagramCreatorObservation
+from database.models.instagram_hook_memory import InstagramFatigueObservation, InstagramHookEvidenceRecord
+from database.models.instagram_original_format_memory import InstagramOriginalFormatExperiment
+from database.models.instagram_reference_deconstruction_memory import InstagramReferenceDeconstruction
+from database.models.instagram_series_memory import InstagramSeries
 from database.models.meme_candidate import MemeCandidate
 from database.models.news_event import NewsEvent
 from database.models.news_source import NewsSource
@@ -40,4 +48,14 @@ __all__ = [
     "CompetitorAccount",
     "CompetitorContentObservation",
     "InstagramContentCalendarItem",
+    "InstagramAudienceInsight",
+    "InstagramHookEvidenceRecord",
+    "InstagramFatigueObservation",
+    "InstagramSeries",
+    "InstagramOriginalFormatExperiment",
+    "InstagramReferenceDeconstruction",
+    "InstagramCreatorObservation",
+    "InstagramCreativePlan",
+    "InstagramCreativeDraft",
+    "InstagramAICallRecord",
 ]
