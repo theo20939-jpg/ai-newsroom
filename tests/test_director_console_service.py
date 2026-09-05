@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models.instagram_calendar_item import CalendarItemStatus
@@ -42,18 +43,42 @@ async def _make_confirmed_campaign(db_session: AsyncSession, *, slug: str, days_
 
 
 @pytest.mark.asyncio
-async def test_plan_view_produces_separate_telegram_and_instagram_plans(db_session: AsyncSession) -> None:
+async def test_plan_view_shows_no_current_advisory_when_nothing_has_executed(db_session: AsyncSession) -> None:
+    """SOCIAL-INTELLIGENCE-OPS-1A spec §4: /plan is a pure read - it must never compute an
+    advisory itself. With no DirectorRun ever persisted, it must show an honest NO_CURRENT_ADVISORY
+    note, never silently generate one."""
     _, campaign = await _make_confirmed_campaign(db_session, slug="plana")
     now = datetime.now(timezone.utc)
     plan = await build_plan_view(db_session, now=now)
 
-    assert plan.telegram_advisory is not None
-    assert plan.instagram_strategy is not None
-    # The two are genuinely independent objects derived from different logic paths - never the
-    # same object or a copy of one into the other's shape.
-    assert plan.telegram_advisory is not plan.instagram_strategy
+    assert plan.telegram_advisory is None
+    assert "NO_CURRENT_ADVISORY" in plan.telegram_note
+    assert plan.instagram_strategy is None
+    assert "NO_CURRENT_ADVISORY" in plan.instagram_note
     assert len(plan.active_campaigns) == 1
     assert plan.active_campaigns[0].campaign_id == str(campaign.id)
+
+
+@pytest.mark.asyncio
+async def test_plan_view_shows_separate_persisted_telegram_and_instagram_advisories(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Once a real execution has persisted a run for each platform (director_execution_service.py,
+    tested separately), /plan must display them - as genuinely separate objects derived from
+    different logic paths, never the same object or a copy of one into the other's shape."""
+    from core.config import settings
+    from services.director_execution_service import run_instagram_growth_strategist, run_telegram_strategy_director
+
+    monkeypatch.setattr(settings, "director_run_persistence_enabled", True)
+    await _make_confirmed_campaign(db_session, slug="planasep")
+    now = datetime.now(timezone.utc)
+    await run_telegram_strategy_director(db_session, now=now)
+    await run_instagram_growth_strategist(db_session, now=now)
+
+    plan = await build_plan_view(db_session, now=now)
+    assert plan.telegram_advisory is not None
+    assert plan.instagram_strategy is not None
+    assert plan.telegram_advisory is not plan.instagram_strategy
 
 
 @pytest.mark.asyncio
@@ -356,16 +381,17 @@ async def test_performance_instagram_is_honest_no_data(db_session: AsyncSession)
 
 
 @pytest.mark.asyncio
-async def test_performance_shows_real_evidence_rows_and_persists_growth_run(
+async def test_performance_shows_real_evidence_rows_without_ever_persisting_a_run(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Spec §35-44: /performance renders real aggregated evidence (not a hardcoded
-    NO_EVIDENCE_YET), and the Growth Director's real, free advisory computation is persisted as a
-    DirectorRun as a byproduct (spec §29-34) - never a second, LLM-costing call."""
+    """SOCIAL-INTELLIGENCE-OPS-1A spec §5: /performance renders real aggregated evidence (not a
+    hardcoded placeholder) via the pure, side-effect-free aggregator - but must NEVER persist a
+    DirectorRun itself, even with the persistence flag on (that belongs exclusively to
+    services/director_execution_service.py::run_telegram_growth_director())."""
     from uuid import uuid4
 
     from core.config import settings
-    from database.models.director_run import DirectorType
+    from database.models.director_run import DirectorRun, DirectorType
     from database.models.telegram_channel_memory import TelegramChannelMemory
     from database.models.telegram_post_performance import SnapshotWindow, TelegramPostPerformanceSnapshot
     from services.director_run_service import get_latest_run
@@ -388,47 +414,134 @@ async def test_performance_shows_real_evidence_rows_and_persists_growth_run(
         ))
     await db_session.commit()
 
+    run_count_before = (await db_session.execute(select(func.count()).select_from(DirectorRun))).scalar_one()
     view = await build_performance_view(db_session, now=now)
+    run_count_after = (await db_session.execute(select(func.count()).select_from(DirectorRun))).scalar_one()
+
     assert view.telegram_status == "OK"
     assert view.telegram_evidence  # real pattern rows, not an empty placeholder
-
-    run = await get_latest_run(db_session, DirectorType.TELEGRAM_GROWTH)
-    assert run is not None
-    assert run.status.value == "ok"
+    assert run_count_after == run_count_before  # zero DirectorRun rows written by a read
+    assert await get_latest_run(db_session, DirectorType.TELEGRAM_GROWTH) is None
 
 
 @pytest.mark.asyncio
-async def test_plan_persists_telegram_strategy_and_instagram_growth_runs(
+async def test_plan_never_persists_a_director_run(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """/plan's advisory computation is already free/deterministic - persisting it as a DirectorRun
-    is an audit-log byproduct, never a newly-triggered paid run."""
+    """SOCIAL-INTELLIGENCE-OPS-1A spec §1/§4: /plan must never persist a DirectorRun, even with
+    the persistence flag on - it is a pure read of already-persisted state."""
     from core.config import settings
-    from database.models.director_run import DirectorType
+    from database.models.director_run import DirectorRun, DirectorType
     from services.director_run_service import get_latest_run
 
     monkeypatch.setattr(settings, "director_run_persistence_enabled", True)
-    _, campaign = await _make_confirmed_campaign(db_session, slug="planrun")
+    await _make_confirmed_campaign(db_session, slug="planrun")
     now = datetime.now(timezone.utc)
+
+    run_count_before = (await db_session.execute(select(func.count()).select_from(DirectorRun))).scalar_one()
     await build_plan_view(db_session, now=now)
+    run_count_after = (await db_session.execute(select(func.count()).select_from(DirectorRun))).scalar_one()
 
-    telegram_run = await get_latest_run(db_session, DirectorType.TELEGRAM_STRATEGY)
-    assert telegram_run is not None
-    assert telegram_run.business_context_fingerprint is not None
+    assert run_count_after == run_count_before
+    assert await get_latest_run(db_session, DirectorType.TELEGRAM_STRATEGY) is None
+    assert await get_latest_run(db_session, DirectorType.INSTAGRAM_GROWTH) is None
 
-    instagram_run = await get_latest_run(db_session, DirectorType.INSTAGRAM_GROWTH)
-    assert instagram_run is not None
-    assert instagram_run.status.value == "ok"  # a real active campaign exists
+
+# ---------------------------------------------------------------------------
+# SOCIAL-INTELLIGENCE-OPS-1A spec §15: read-purity contract for every console read command -
+# DB row counts across every table a read command could plausibly write to must be identical
+# before and after the call.
+# ---------------------------------------------------------------------------
+
+
+async def _domain_row_counts(db_session: AsyncSession) -> dict[str, int]:
+    from database.models.campaign import LaunchCampaign
+    from database.models.director_run import DirectorRun
+    from database.models.instagram_calendar_item import InstagramContentCalendarItem
+    from database.models.strategic_directive import StrategicDirective
+    from database.models.telegram_content_calendar_item import TelegramContentCalendarItem
+
+    tables = {
+        "director_run": DirectorRun, "instagram_calendar_item": InstagramContentCalendarItem,
+        "telegram_calendar_item": TelegramContentCalendarItem, "launch_campaign": LaunchCampaign,
+        "strategic_directive": StrategicDirective,
+    }
+    return {
+        name: (await db_session.execute(select(func.count()).select_from(model))).scalar_one()
+        for name, model in tables.items()
+    }
 
 
 @pytest.mark.asyncio
-async def test_plan_persists_nothing_when_run_persistence_flag_is_off(db_session: AsyncSession) -> None:
-    """director_run_persistence_enabled defaults False - /plan must not write any DirectorRun row
-    unless a founder has explicitly opted in."""
-    from database.models.director_run import DirectorType
-    from services.director_run_service import get_latest_run
+async def test_plan_view_is_fully_read_pure(db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    from core.config import settings
 
-    await _make_confirmed_campaign(db_session, slug="planrunoff")
+    monkeypatch.setattr(settings, "director_run_persistence_enabled", True)
+    await _make_confirmed_campaign(db_session, slug="purityplan")
+    before = await _domain_row_counts(db_session)
     await build_plan_view(db_session, now=datetime.now(timezone.utc))
-    assert await get_latest_run(db_session, DirectorType.TELEGRAM_STRATEGY) is None
-    assert await get_latest_run(db_session, DirectorType.INSTAGRAM_GROWTH) is None
+    assert await _domain_row_counts(db_session) == before
+
+
+@pytest.mark.asyncio
+async def test_opportunities_view_is_fully_read_pure(db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "director_run_persistence_enabled", True)
+    await _make_confirmed_campaign(db_session, slug="purityopp")
+    before = await _domain_row_counts(db_session)
+    await build_opportunities_view(db_session, now=datetime.now(timezone.utc))
+    assert await _domain_row_counts(db_session) == before
+
+
+@pytest.mark.asyncio
+async def test_calendar_view_is_fully_read_pure(db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "director_run_persistence_enabled", True)
+    await create_calendar_item(db_session, planned_at=datetime.now(timezone.utc), objective="reach", format="reel")
+    before = await _domain_row_counts(db_session)
+    await build_calendar_view(db_session, now=datetime.now(timezone.utc))
+    assert await _domain_row_counts(db_session) == before
+
+
+@pytest.mark.asyncio
+async def test_performance_view_is_fully_read_pure(db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "director_run_persistence_enabled", True)
+    monkeypatch.setattr(settings, "telegram_owned_channel_id", -1007778889990)
+    await create_surface(
+        db_session, chat_id=-1007778889990, role=TelegramSurfaceRole.PUBLIC_NEWS_CHANNEL,
+        name="Purity Channel", analytics_enabled=True, active=True,
+    )
+    before = await _domain_row_counts(db_session)
+    await build_performance_view(db_session, now=datetime.now(timezone.utc))
+    assert await _domain_row_counts(db_session) == before
+
+
+@pytest.mark.asyncio
+async def test_performance_view_surfaces_stale_context_on_persisted_growth_run(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SOCIAL-INTELLIGENCE-OPS-1A spec §9: staleness must be preserved, never hidden by a read
+    command - /performance's `telegram_last_run_summary` must carry the same STALE_CONTEXT marker
+    /directors already shows, sourced from the same shared describe_latest_run()."""
+    from core.config import settings
+    from database.models.director_run import DirectorType
+    from services.director_run_service import create_director_run
+
+    now = datetime.now(timezone.utc)
+    await create_director_run(
+        db_session, director_type=DirectorType.TELEGRAM_GROWTH, platform="telegram", generated_at=now,
+        input_fingerprint="f", result_payload={}, decision="stale decision",
+        business_context_fingerprint="some-old-fingerprint",
+    )
+    monkeypatch.setattr(settings, "telegram_owned_channel_id", -1006665554443)
+    await create_surface(
+        db_session, chat_id=-1006665554443, role=TelegramSurfaceRole.PUBLIC_NEWS_CHANNEL,
+        name="Stale Channel", analytics_enabled=True, active=True,
+    )
+    view = await build_performance_view(db_session, now=now)
+    assert view.telegram_last_run_summary is not None
+    assert "STALE_CONTEXT" in view.telegram_last_run_summary
