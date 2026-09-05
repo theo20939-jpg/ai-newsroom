@@ -26,6 +26,7 @@ from database.models.product_event import ProductEvent
 from database.models.strategic_directive import StrategicDirective
 from database.models.telegram_channel import TelegramChannel
 from database.models.telegram_channel_memory import TelegramChannelMemory
+from database.models.telegram_content_calendar_item import TelegramContentCalendarItem
 from database.models.telegram_experiment import TelegramExperiment
 from database.models.telegram_post_performance import TelegramPostPerformanceSnapshot
 from database.models.telegram_surface import TelegramSurface
@@ -65,6 +66,7 @@ __all__ = [
     "InstagramCreativeDraft",
     "InstagramAICallRecord",
     "TelegramChannelMemory",
+    "TelegramContentCalendarItem",
     "TelegramPostPerformanceSnapshot",
     "TelegramVisualFailure",
     "TelegramExperiment",
