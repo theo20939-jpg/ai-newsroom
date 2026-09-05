@@ -50,3 +50,16 @@ def test_platform_filter_rejects_unknown_value_with_error_not_a_crash() -> None:
     platform, error = _parse_platform_filter(_command("tiktok"))
     assert platform is None
     assert error is not None
+
+
+def test_handler_module_has_no_publish_or_gateway_symbol() -> None:
+    """Spec §29: /directors /plan /opportunities /calendar /performance must never send a public
+    post, call the AI Gateway, or touch a platform API - swept at the source level, mirroring the
+    Instagram phase's own equivalent safety sweep."""
+    import inspect
+
+    import bot.handlers.director_console as module
+
+    source = inspect.getsource(module).lower()
+    for forbidden in ("call_generate", "llmgateway", "graph.facebook", "send_media_group", "publish"):
+        assert forbidden not in source, f"unexpected symbol in director_console handler: {forbidden!r}"

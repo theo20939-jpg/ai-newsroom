@@ -230,6 +230,7 @@ async def build_opportunities_view(
     if not stories:
         notes.append("нет свежих Story - NEWS-возможности недоступны")
     notes.append("TREND-возможности недоступны: живой сбор трендов не реализован")
+    notes.append("HYBRID-возможности недоступны: нет функции сопоставления Story×Campaign")
 
     if platform is not None:
         # Platform filter only trims which recommendation columns are meaningful to show; the

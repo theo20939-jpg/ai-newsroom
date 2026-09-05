@@ -141,6 +141,7 @@ async def test_no_campaign_no_story_notes_are_honest(db_session: AsyncSession) -
     assert any("PRODUCT" in n for n in view.notes)
     assert any("NEWS" in n for n in view.notes)
     assert any("TREND" in n for n in view.notes)
+    assert any("HYBRID" in n for n in view.notes)
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +191,37 @@ async def test_calendar_shows_delay_invalidation_after_service_runs(db_session: 
     row = next(r for r in view.rows if r.campaign_id == str(campaign.id))
     assert row.status == CalendarItemStatus.INVALIDATED
     assert row.context_stale is False  # already invalidated - not double-flagged
+
+
+@pytest.mark.asyncio
+async def test_calendar_shows_cancel_invalidation(db_session: AsyncSession) -> None:
+    from services.instagram_calendar_service import invalidate_items_for_campaign_change
+    from database.models.campaign import CampaignStatus
+
+    _, campaign = await _make_confirmed_campaign(db_session, slug="calc")
+    await create_calendar_item(
+        db_session, planned_at=datetime.now(timezone.utc), objective="product_click", format="single", campaign_id=campaign.id,
+        depends_on_campaign_phase="LAUNCH", planned_against_campaign_status="confirmed", planned_against_campaign_phase="LAUNCH",
+    )
+    await update_campaign(db_session, campaign.id, structured_context={"status": "cancelled"})
+    await invalidate_items_for_campaign_change(
+        db_session, campaign_id=campaign.id, new_status=CampaignStatus.CANCELLED, new_phase=None, reason="campaign cancelled",
+    )
+    view = await build_calendar_view(db_session, now=datetime.now(timezone.utc))
+    row = next(r for r in view.rows if r.campaign_id == str(campaign.id))
+    assert row.status == CalendarItemStatus.INVALIDATED
+
+
+@pytest.mark.asyncio
+async def test_calendar_shows_rescheduled_item(db_session: AsyncSession) -> None:
+    from services.instagram_calendar_service import reschedule_calendar_item
+
+    item = await create_calendar_item(db_session, planned_at=datetime.now(timezone.utc), objective="reach", format="reel")
+    new_time = datetime.now(timezone.utc) + timedelta(days=5)
+    await reschedule_calendar_item(db_session, item.id, new_planned_at=new_time, reason="moved to confirmed date")
+    view = await build_calendar_view(db_session, now=datetime.now(timezone.utc))
+    row = next(r for r in view.rows if r.planned_at == new_time)
+    assert row.status == CalendarItemStatus.RESCHEDULED
 
 
 @pytest.mark.asyncio
