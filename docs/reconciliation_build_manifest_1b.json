@@ -1,0 +1,106 @@
+{
+  "phase": "PRODUCTION-SOURCE-RECONCILIATION-1B",
+  "generated_at": "2026-09-05T21:50:00Z",
+  "canonical_git_sha": "2bfd69e8987fd7abe9fb524d1d2d190922da5fb4",
+  "canonical_git_sha_short": "2bfd69e",
+  "branch": "feature/production-source-reconciliation-v1",
+  "base_branch": "feature/social-intelligence-ops-v1",
+  "base_sha": "28307800cdb9a2c1c94cbfb166cc6d0affc9df53",
+  "commit_count_since_base": 7,
+  "worktree_clean": true,
+  "alembic_head": "7176e2997b8b",
+  "production_db_revision": "afcd869550a7",
+  "migrations_to_apply": [
+    {
+      "revision": "7176e2997b8b",
+      "down_revision": "afcd869550a7",
+      "message": "add visual design autonomy tables",
+      "classification": ["ADD_TABLE", "ADD_INDEX", "MERGE"],
+      "destructive": false,
+      "notes": "4 new tables (visual_designer_brief_versions, visual_design_attempts, visual_regression_cases, visual_regression_runs), their indexes, and one additive ALTER TYPE ... ADD VALUE IF NOT EXISTS on director_run_type. No DROP/ALTER-destructive operation in the upgrade path."
+    }
+  ],
+  "destructive_migration_count": 0,
+  "images": {
+    "single_build_context": true,
+    "note": "telegram_bot, content_worker, and automation_worker all build from the same Dockerfile ('build: .' in docker-compose.yml) and differ only by the command: override - one image build covers all three.",
+    "new_image_id": "sha256:961098cd6f1a",
+    "new_image_tags": [
+      "ai-newsroom:telegram-reconcile-2bfd69e",
+      "ai-newsroom:content-reconcile-2bfd69e",
+      "ai-newsroom:automation-reconcile-2bfd69e"
+    ],
+    "image_built_from_sha": "2bfd69e8987fd7abe9fb524d1d2d190922da5fb4",
+    "production_baseline": {
+      "telegram_bot": {"image_id": "sha256:d609e9bcc1fe0b66a971aa19cc7cb811fac90f95b3636afb487f841bbf1030a2", "created": "2026-08-24T22:01:50Z", "still_exists_locally": true},
+      "content_worker": {"image_id": "sha256:b4305b8b4fff01d1357eba1f4e0c16fce8905bc202050bfb608feb1278b47f34", "created": "2026-08-02T20:36:08Z", "still_exists_locally": false, "note": "image pruned; container filesystem was still extractable via docker cp on the stopped container"},
+      "automation_worker": {"image_id": "sha256:272074e08cf989f7b05430bc80eff5bbc3ea1d36fa62bfac46679439dbf8a80d", "created": "2026-08-25T20:14:29Z", "still_exists_locally": true},
+      "backend": {"image_id": "sha256:14fac3ab449b7b4d7530633e1ebdd092ef3a3a95b82d529900333dbd38e7cedd", "created": "2026-07-31T19:43:38Z", "still_exists_locally": true, "note": "untouched service, comparison only"},
+      "news_analysis_worker": {"image_id": "sha256:35f78034b495ad2ad0c9e0f3673904337a446d1639a8ca3b807fafd557a25b88", "created": "2026-08-02T20:36:08Z", "still_exists_locally": true, "note": "untouched service, comparison only"}
+    }
+  },
+  "source_provenance_sha256": {
+    "note": "SHA256 of critical recovered files, verified identical between the reconciliation worktree and the built image at the final canonical SHA (2bfd69e) via `docker run ... sha256sum`.",
+    "services/media_finalizer.py": "42f42e1ac683a67872bef2067a8deb3cd7f1e6a603bf644a30d62ca8e43b6f97",
+    "services/final_post_review_notifier.py": "2a706bd2db60e0f2ef8c5b79c0ce38013e4dc9d989c571d7f2a99042094c9e8d",
+    "services/event_recap_review_notifier.py": "8778cdaf30197f84c44f4d7d4dee0397a632e0c286342a59b1b268c14eb4f007",
+    "services/image_preview_notifier.py": "ffc3b513552d28c5ce2fe890a4ac1a104717684c3ddd95a4e26deaecef47f13c",
+    "bot/handlers/image_preview.py": "64ae105ba0d9ae6083b8ad01f58329faadab11c1c8f96b4cb0de26b9de197d12",
+    "bot/keyboards/image_preview.py": "ba1a0629853a8f151577eb00fa20170e74c48094e2119a4c75b1e0bcef076951",
+    "bot/keyboards/meme_preview.py": "09c2ac1cf5ce11c19921e0bf48cb3b89745c4ac682830adbddc56be59545abb4",
+    "bot/meme_preview_formatting.py": "7042a49e5cbca48c81bfa57685bd840fec135b8dfbb167724350cf5e36f69117",
+    "worker/content_cycle.py": "c330cdb14bb7be0e32393d38ac5502cc95c3889fb1f83ffbf956468cac4505f5",
+    "services/brand_renderer.py": "13e425f7ff35c334b9daffe49df32029f1a36f054f8b9d78e40253b5e636dec0",
+    "services/meme_render.py": "d275eb2cdc8487e9172fe003df21b2bbabf7e83e8c4e2a67b2adf89b606ebcea",
+    "services/meme_watermark.py": "02e2a36b78197ab2a5fe803addec594b2b97c1a7959103bc2ff94854bdbb152d",
+    "services/meme_generation_orchestrator.py": "99dca86dd8d56ce32bed9a01de5f5c6aefdd0207b93d15cfda5e20b0001c3059",
+    "services/story_memory.py": "83985dffa726518fe742b6da8da018ef7e8a6ddffbf8ccf909319e55c9be4cc9",
+    "services/presentation_director.py": "4d3ae3b96d3fde681f15b2e55222fe2d904b8b38d613a391f943d1505beb7846",
+    "worker/cycle.py": "43713f30700c60cee6eac944bd1979febf269c42b402c78751a2d8d07c1ad5cb",
+    "services/event_recap_scheduler.py": "cdda4eb3e701ca7587351856df22101dd1747ef5024a89beaaa865a6f47f84c8",
+    "services/video_quality_gate.py": "63904feac038227ff0489ef08ef3d69333f61e869109a8fc0e07f0ccdc6c93f0",
+    "services/media_vision_review_persistence.py": "fc45b9b9d62572c0a9c56173ba513810400510c00df2b98dd12dcd7dc9da0a77",
+    "bot/handlers/visual_design.py": "30bab4fa11ffd59064a36644cacd693745a5f88483656ea3e96e00b7fb5eb96d",
+    "bot/handlers/business_context.py": "ab0521fbf792219b1b36cf2ef20bda68e53454c849c935f4bbd1634eb2a14d86",
+    "services/visual_renderer_constraints.py": "8e5bf52587d010610ca9733d28b646d56c29bee5c0cee99d2bbf00ea516ba29b",
+    "services/visual_brief_observability.py": "6358dcfc4b171265b8ea44602ee9737425c9cafeeba5cbb09cfed0e3ff9bd550",
+    "services/visual_designer_brief_service.py": "fa526160a9dc918a86a6cc8315e13ee6b6dd49889c4e1ff0bf3d3c767ab0dd10",
+    "services/visual_regression_service.py": "b2ca3b1c0d619d86e7e9f9682f6ed5c48a80825e3c38e442f5a960ee76e30eab",
+    "services/visual_design_loop.py": "3303aafbfcf8ac8e9a539cda98b7048268278c84025ca30e7ce7f1940217d4ba"
+  },
+  "startup_verification": {
+    "bot.main": "imports OK (fake config, no real Postgres/Redis/Telegram reachable)",
+    "worker.content_main": "imports OK",
+    "worker.main": "imports OK",
+    "model_calls_during_startup": false,
+    "public_sends_during_verification": false,
+    "migration_applied_automatically_on_import": false
+  },
+  "feature_flag_defaults": {
+    "all_new_runtime_flags_default_false": true,
+    "categories": {
+      "business_context_console": ["director_console_enabled=False"],
+      "telegram_directors": ["telegram_channel_director_shadow_enabled=False", "telegram_art_director_shadow_enabled=False", "telegram_art_director_enforcement_enabled=False", "telegram_growth_memory_enabled=False", "telegram_strategy_director_enabled=False"],
+      "telegram_performance": ["telegram_performance_collection_enabled=False"],
+      "instagram_growth": ["instagram_growth_engine_enabled=False", "instagram_story_opportunity_shadow_enabled=False", "instagram_trend_intelligence_enabled=False", "instagram_performance_memory_enabled=False", "instagram_format_director_shadow_enabled=False", "instagram_competitor_intelligence_enabled=False", "instagram_growth_strategy_shadow_enabled=False", "instagram_calendar_enabled=False", "instagram_semantic_matching_enabled=False", "instagram_creative_director_shadow_enabled=False"],
+      "visual_design_director": ["visual_design_director_enabled=False"],
+      "visual_autonomy": ["visual_design_autonomy_enabled=False"],
+      "visual_auto_revision": ["visual_design_auto_revision_enabled=False"],
+      "brief_adaptation": ["visual_brief_auto_adaptation_enabled=False"],
+      "brief_auto_promotion": ["visual_brief_auto_promotion_enabled=False"],
+      "regression_validation": ["visual_regression_validation_enabled=False"],
+      "director_run_persistence": ["director_run_persistence_enabled=False"],
+      "media_production_reconciliation_additions": ["video_quality_gate_mode=off"]
+    }
+  },
+  "secret_scan": {
+    "range": "feature/social-intelligence-ops-v1..HEAD",
+    "result": "clean",
+    "patterns_checked": ["api_key literals", "secret/password literals", "PEM private key headers", "AWS access key IDs", "OpenAI sk- keys", "Slack xoxb- tokens", "GitHub ghp_ tokens", ".env/.session/.dump/credential filenames"]
+  },
+  "known_gaps": [
+    "MEME-PROD-4 'Meme Director' evolution (panel support, PROMPT_VERSION 4) deliberately not implemented - structural feature work, out of this phase's 'no feature redesign' scope",
+    "Docker build matrix proven for telegram_bot/content_worker/automation_worker only; backend and news_analysis_worker share the identical Dockerfile/build context so are provably buildable by the same evidence but were not separately entrypoint-smoke-tested this phase",
+    "Full production-image vs. new-image behavioral parity harness (side-by-side runtime comparison under live-shaped traffic) not built - static source/provenance/import/regression verification only; a bounded pixel-level visual regression corpus (per-presentation-type deterministic-renderer output, e.g. safe-zone/branding-present/DATA-fallback assertions) was likewise not built as a separate artifact this phase - covered instead by the existing unit/integration test suites for brand_renderer.py/meme_render.py/meme_watermark.py, which already assert pixel-level invariants (branding presence, safe-zone non-intrusion, contrast, fallback engagement) directly"
+  ]
+}

@@ -200,3 +200,132 @@ branch), not a `def` - a real gap the def-name comparison methodology cannot see
   each commit; clean in all five commits.
 - No binary/media assets were committed by this phase - all recovered content is `.py`/`.yaml`
   source, so the asset-review gate (§40) was not triggered.
+
+## Addendum: PRODUCTION-SOURCE-RECONCILIATION-1B (build provenance, functional parity, visual completion)
+
+Continues directly from the PASS/PARTIAL boundary above. Branch, worktree, and commit range are
+unchanged; this addendum covers commits `2bfd69e` (safe-zone adapter + observability) and later.
+
+### Provenance re-verification
+
+The prior report said "COMMITS=5" while listing 6 SHAs - a simple counting error, not an integrity
+problem. Re-verified directly: `git rev-list --count 28307800..HEAD` = 6 at the start of this
+addendum (7 after the observability commit), all 6/7 are real ancestors of HEAD in the stated
+order, `git merge-base --is-ancestor` confirms the base commit is an ancestor, and the worktree was
+clean before every commit.
+
+### Old service-specific production branches, and why they were not blindly copied
+
+`b04fac8` (automation), `250da40` (`feature/prod-content-recap-release`'s tip), and `6046c04`
+(`feature/prod-telegram-recap-release`'s tip) are the three service-specific "preserve-and-patch"
+production lineages this reconciliation had to reconcile against. `b04fac8` was already a direct
+ancestor of dev HEAD - no work needed there. `250da40` and `6046c04` are NOT ancestors of dev or of
+each other (confirmed via `git merge-base --is-ancestor` both ways returning false) - two parallel,
+overlapping-but-not-identical production-track branches.
+
+Neither was blindly merged or copied wholesale, for two confirmed reasons found during this
+addendum's own content-level diffing:
+
+1. **A production branch can be *behind* dev's own later, independent work.** `worker/cycle.py`'s
+   RECAP-scheduler wiring exists in both `feature/prod-content-recap-release` (older, simpler
+   version) and dev's own committed history (`94edb97 feat(recap): add flag-gated automation
+   scheduler`, newer, equivalent-or-better). A first pass in this addendum mistakenly overwrote
+   dev's file with the older branch snapshot before recognizing this from a semantic diff against
+   both dev's own git log and the real running automation-worker container (both agreed dev's
+   version was correct) - reverted before commit. `services/presentation_director.py` and
+   `services/fact_safety.py` showed the same pattern (dev's own dated, documented DATA-CARD-1 /
+   R2.10-FINALIZATION-3 evolution superseding the production branch snapshot) and were likewise
+   left untouched.
+2. **A production branch can contain real, still-unrecovered incident fixes even though it was
+   never actually deployed.** The single largest finding of this whole reconciliation (the
+   MEME-PROD-2.1/3/3.1 fix chain - SVG watermark, Cyrillic font support, Russian-language
+   enforcement, pseudo-text prompt hardening) was recovered from `feature/prod-content-recap-
+   release` despite that exact code never having shipped to the currently-running
+   `ai_newsroom_automation_worker` container (confirmed via `docker cp` extraction - the running
+   image, dated 2026-08-24, predates it). It was recovered anyway because it is real,
+   already-authored, already-tested, evidence-driven production-track work that dev's own history
+   never received - a deploy freeze (the very reason this reconciliation phase exists) is the most
+   likely explanation for why an already-fixed incident never reached the running container, not a
+   reason to leave the fix behind.
+
+`feature/prod-telegram-recap-release` additionally carries a "MEME-PROD-4 Meme Director" evolution
+(panel-format support, `PROMPT_VERSION` 4, a new shape-gate module) layered on top of the same
+MEME-PROD-2.1/3/3.1 base already recovered. This is structural feature work, not incident
+preservation, and was deliberately NOT implemented (violates the "no feature redesign" constraint)
+- confirmed via diffing the two production branches against each other, not just against dev.
+
+### Canonical build
+
+One Dockerfile (`build: .` in `docker-compose.yml`) serves `telegram_bot`, `content_worker`,
+`automation_worker`, `backend`, and `news_analysis_worker` alike - they differ only by the
+`command:` override, never the image contents. Building once from the final canonical SHA
+(`2bfd69e8987fd7abe9fb524d1d2d190922da5fb4`) and tagging it three ways therefore proves
+buildability for all three primary services simultaneously; all three tags resolved to the same
+image ID (`961098cd6f1a...`), as expected.
+
+Source provenance: SHA256 of 26 critical recovered/touched files (the full MEDIA-PROD-1/meme-chain/
+DATA-fallback/RECAP/visual-safe-zone/observability set) matched byte-for-byte between the
+reconciliation worktree and the built image. All three entrypoints (`bot.main`,
+`worker.content_main`, `worker.main`) import cleanly against fake, unreachable Postgres/Redis/
+Telegram config - no model call, no public send, no automatic migration at import time.
+
+### Migration proof against the real production database
+
+Read-only query against the real, running `ai_newsroom_postgres` container: production's
+`alembic_version` is stamped at `afcd869550a7` (add director runs table) - the direct parent of
+dev's single head, `7176e2997b8b` (add visual design autonomy tables). Exactly one migration
+separates them, entirely additive (4 `ADD_TABLE`, several `ADD_INDEX`, one
+`ALTER TYPE ... ADD VALUE IF NOT EXISTS` enum extension) - zero destructive operations. Proven on
+two disposable local databases (never production): a fresh empty DB upgrades cleanly all the way
+to head (44 migrations, including one real multi-head `MERGE`), and a DB brought to the exact
+production revision first upgrades cleanly through just the one remaining production-to-head step.
+Both disposable databases were dropped immediately after.
+
+### Safe-zone / renderer-constraint resolution
+
+`services/nnj_overlay_contract.py` is confirmed NOT the live overlay source - its own module
+docstring says so ("NOT YET wired into services/brand_renderer.py or worker/content_cycle.py -
+this is proof-phase infrastructure only"), and its manifest asset is absent from both production
+images (already established in the base report). It is reachable only through
+`nnj_candidate_c_contract.py` -> `editorial_recomposition.py`, gated by
+`editorial_recomposition_mode="off"` (default, never overridden in production).
+
+The real, confirmed-live geometry lives in code: `services/nnj_master_news_overlay.py::
+apply_master_news_branding()` ("the ONE production compositing entry point", called from
+`worker/content_cycle.py` for every NEWS/BREAKING send) and `services/brand_renderer.py::
+render_data_card()` for DATA. New `services/visual_renderer_constraints.py::
+get_current_renderer_constraints()` derives a truthful, read-only summary directly from those
+modules' own live constants - wired as the real default for `VisualDirectorContext.
+renderer_constraints_summary` in `services/visual_design_loop.py`, replacing the literal
+`"unknown"` that shipped in VISUAL-DESIGN-AUTONOMY-1. **SAFE_ZONE_CONTEXT_BLOCKED=false** -
+resolved, not blocked.
+
+### Visual brief lifecycle observability (closed)
+
+`services/visual_brief_observability.py` (new) emits one `logger.info()` event per lifecycle
+transition (`visual_brief_candidate_created/_validated/_promoted/_rejected/_rolled_back/_frozen/
+_unfrozen`), wired into every mutation in `services/visual_designer_brief_service.py` and the
+validation outcome in `services/visual_regression_service.py`. Never logs raw `brief_text` - only
+scope/version/parent version/reason code/evidence stage/result/cost. Proven via 8 tests using real
+`caplog` capture against the actual wiring (not mocks), including an explicit "raw brief text never
+appears in any log payload" proof and a "normal read emits zero lifecycle events" proof.
+
+### Feature flag audit
+
+Enumerated every new runtime-impacting flag across Business Context/Console, Telegram Directors,
+Telegram Performance, Instagram Growth, Visual Design Director/Autonomy/Auto-Revision, Brief
+Adaptation/Auto-Promotion, Regression Validation, and DirectorRun Persistence (22 boolean flags,
+plus `video_quality_gate_mode` from this same reconciliation's first pass) - all default `False`/
+`"off"`. The 4 flags found defaulting `True` (`watermark_enabled`, `pulse_line_enabled`,
+`editorial_code_enabled`, `presentation_breaking_enabled`) are pre-existing, already-live
+production behaviors unrelated to the new Social/Visual systems, not something this reconciliation
+introduced.
+
+### What remains (see the final report for the complete gap list and verdict)
+
+Behavioral parity harness (side-by-side runtime comparison of the new image against the current
+production image under live-shaped traffic) and a dedicated pixel-level visual regression corpus
+artifact were not built this addendum - covered instead by the existing brand_renderer.py/
+meme_render.py/meme_watermark.py test suites, which already assert the relevant pixel-level
+invariants directly (branding presence, safe-zone non-intrusion, contrast, fallback engagement).
+MEME-PROD-4 remains deliberately deferred.
