@@ -5,8 +5,11 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from database.models.director_run import DirectorRun
+from services.business_context_snapshot_service import get_business_context_snapshot
 from services.campaign_service import create_campaign
 from services.director_status_service import DirectorStatus, get_director_console_status
 from services.product_context_service import create_product
@@ -94,3 +97,54 @@ async def test_status_check_never_mutates_the_database(db_session: AsyncSession)
     before = await get_director_console_status(db_session, now=datetime.now(timezone.utc))
     after = await get_director_console_status(db_session, now=datetime.now(timezone.utc))
     assert [e.status for e in before.telegram] == [e.status for e in after.telegram]
+
+
+@pytest.mark.asyncio
+async def test_directors_shows_latest_persisted_growth_run_without_triggering_one(db_session: AsyncSession) -> None:
+    """Spec §32: `/directors` must show the latest PERSISTED run, and must never itself compute or
+    persist a new one - get_director_console_status() never calls create_director_run()."""
+    from database.models.director_run import DirectorType
+    from services.director_run_service import compute_input_fingerprint, create_director_run
+
+    now = datetime.now(timezone.utc)
+    await create_director_run(
+        db_session, director_type=DirectorType.TELEGRAM_GROWTH, platform="telegram", generated_at=now,
+        input_fingerprint=compute_input_fingerprint("x"), result_payload={"signals": ["topic X is trending"]},
+        decision="topic X is trending", confidence=0.6,
+    )
+    run_count_before = (await db_session.execute(select(func.count()).select_from(DirectorRun))).scalar_one()
+
+    status = await get_director_console_status(db_session, now=now)
+    growth_director = next(e for e in status.telegram if e.name == "Growth Director")
+    assert growth_director.status == DirectorStatus.SHADOW
+    assert "topic X is trending" in growth_director.detail
+    assert "0.60" in growth_director.detail
+
+    run_count_after = (await db_session.execute(select(func.count()).select_from(DirectorRun))).scalar_one()
+    assert run_count_after == run_count_before  # reading /directors never persisted a new run
+
+
+@pytest.mark.asyncio
+async def test_directors_marks_stale_context_on_growth_run(db_session: AsyncSession) -> None:
+    from database.models.director_run import DirectorType
+    from services.director_run_service import (
+        compute_business_context_fingerprint,
+        compute_input_fingerprint,
+        create_director_run,
+    )
+
+    now = datetime.now(timezone.utc)
+    snapshot_before = await get_business_context_snapshot(db_session, now=now)
+    fingerprint_before = compute_business_context_fingerprint(snapshot_before)
+    await create_director_run(
+        db_session, director_type=DirectorType.TELEGRAM_GROWTH, platform="telegram", generated_at=now,
+        input_fingerprint=compute_input_fingerprint("x"), result_payload={}, decision="stable decision",
+        business_context_fingerprint=fingerprint_before,
+    )
+
+    product = await create_product(db_session, slug="dsstale", name="DS Stale Product")
+    await create_campaign(db_session, product_id=product.id, name="New Launch")
+
+    status = await get_director_console_status(db_session, now=now)
+    growth_director = next(e for e in status.telegram if e.name == "Growth Director")
+    assert "STALE_CONTEXT" in growth_director.detail

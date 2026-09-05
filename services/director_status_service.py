@@ -29,9 +29,15 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
+from database.models.director_run import DirectorRun, DirectorType
 from database.models.telegram_channel_memory import TelegramChannelMemory
 from database.models.telegram_visual_failure import TelegramVisualFailure
 from services.business_context_snapshot_service import get_business_context_snapshot
+from services.director_run_service import (
+    compute_business_context_fingerprint,
+    get_latest_run,
+    is_run_context_stale,
+)
 from services.instagram_platform_capabilities import CapabilityStatus, INSTAGRAM_PLATFORM_CAPABILITIES
 
 
@@ -115,6 +121,22 @@ async def _art_director_summary(session: AsyncSession) -> str | None:
     return summary
 
 
+async def _latest_run_detail(session: AsyncSession, director_type: DirectorType, *, now: datetime) -> str | None:
+    """Spec §32: `/directors` reads the LATEST PERSISTED run only - never computes or triggers a
+    new one. Returns None (never a fabricated message) when no run has ever been persisted for
+    this director type - a legitimate, honest state (nothing has computed/persisted one yet)."""
+    run: DirectorRun | None = await get_latest_run(session, director_type)
+    if run is None:
+        return None
+    snapshot = await get_business_context_snapshot(session, now=now)
+    current_fingerprint = compute_business_context_fingerprint(snapshot)
+    stale = await is_run_context_stale(session, run, now=now, current_business_context_fingerprint=current_fingerprint)
+    decision = run.decision or "решение не зафиксировано"
+    confidence_text = f", уверенность {run.confidence:.2f}" if run.confidence is not None else ""
+    stale_text = " [STALE_CONTEXT]" if stale else ""
+    return f"последний запуск {run.generated_at.strftime('%Y-%m-%d %H:%M UTC')}: {decision}{confidence_text}{stale_text}"
+
+
 async def _telegram_status(session: AsyncSession, *, now: datetime) -> list[DirectorStatusEntry]:
     entries: list[DirectorStatusEntry] = []
 
@@ -131,16 +153,22 @@ async def _telegram_status(session: AsyncSession, *, now: datetime) -> list[Dire
         detail=art_director_detail or "нет накопленных оценок рендера",
     ))
 
+    growth_run_detail = await _latest_run_detail(session, DirectorType.TELEGRAM_GROWTH, now=now)
     entries.append(DirectorStatusEntry(
-        name="Growth Director", status=DirectorStatus.WAITING_FOR_DATA,
-        detail="нет накопленных performance-паттернов (сбор метрик не настроен)",
+        name="Growth Director",
+        status=DirectorStatus.SHADOW if growth_run_detail is not None else DirectorStatus.WAITING_FOR_DATA,
+        detail=growth_run_detail or "нет накопленных performance-паттернов (сбор метрик не настроен)",
     ))
 
     channel_memory_count = (await session.execute(select(func.count()).select_from(TelegramChannelMemory))).scalar_one()
+    strategy_run_detail = await _latest_run_detail(session, DirectorType.TELEGRAM_STRATEGY, now=now)
+    strategy_detail = strategy_run_detail or (
+        f"{channel_memory_count} постов в памяти ленты" if channel_memory_count > 0 else "нет истории постов канала"
+    )
     entries.append(DirectorStatusEntry(
         name="Strategy Director",
-        status=DirectorStatus.SHADOW if channel_memory_count > 0 else DirectorStatus.WAITING_FOR_DATA,
-        detail=f"{channel_memory_count} постов в памяти ленты" if channel_memory_count > 0 else "нет истории постов канала",
+        status=DirectorStatus.SHADOW if (strategy_run_detail is not None or channel_memory_count > 0) else DirectorStatus.WAITING_FOR_DATA,
+        detail=strategy_detail,
     ))
     return entries
 
