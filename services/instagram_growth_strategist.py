@@ -14,18 +14,30 @@ re-parses the free-text `instruction` itself - that would be exactly the "ad-hoc
 warns against for trend matching, and is even less appropriate for a safety-critical override.
 
 CRITICAL (spec §95/§98): still never imports anything from services/telegram_*.py - shared truth,
-independent execution."""
+independent execution.
+
+SOCIAL-INTELLIGENCE-OPS-1 §19 update: `directive_blocks_product()` itself now lives in
+services/founder_directive_policy.py (genuinely platform-agnostic - it only reads
+StrategicDirective's own structured scope) and is re-exported here for backward compatibility -
+services/story_campaign_matcher.py uses the exact same function, never a second copy."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
-from database.models.strategic_directive import DirectiveStatus, StrategicDirective
+from database.models.strategic_directive import StrategicDirective
 from services.campaign_planner import CampaignPlan
+from services.founder_directive_policy import directive_blocks_product
 from services.instagram_competitor_intelligence import CompetitorGap
 from services.instagram_content_opportunity import ContentOpportunity
 from services.instagram_format_director import ContentFormat
 from services.instagram_objective_selection import recommend_objective
 from services.instagram_series import ContentSeries, is_recommendable_as_active
+
+__all__ = [
+    "ContentIdea", "propose_ideas_from_campaign_plan", "GrowthAutopsy", "OpportunityContext",
+    "directive_blocks_product", "apply_founder_directive_precedence", "InstagramGrowthStrategy",
+    "generate_growth_strategy", "suggest_amplification",
+]
 
 
 @dataclass(frozen=True)
@@ -83,25 +95,6 @@ class OpportunityContext:
 
     opportunity: ContentOpportunity
     product_slug: str | None = None
-
-
-def directive_blocks_product(
-    directives: list[StrategicDirective], *, product_slug: str, platform: str = "instagram",
-) -> list[StrategicDirective]:
-    """A directive with an empty `products`/`platforms` scope is read as "applies to everything" -
-    exactly as broad as a founder saying "all products, all platforms" (module docstring, spec
-    §12/§14's own "as narrow or as broad as the founder actually said" instruction)."""
-    matches = []
-    for directive in directives:
-        if directive.status != DirectiveStatus.ACTIVE:
-            continue
-        scoped_products = directive.products or []
-        scoped_platforms = directive.platforms or []
-        product_matches = not scoped_products or product_slug in scoped_products
-        platform_matches = not scoped_platforms or platform in scoped_platforms
-        if product_matches and platform_matches:
-            matches.append(directive)
-    return matches
 
 
 def apply_founder_directive_precedence(

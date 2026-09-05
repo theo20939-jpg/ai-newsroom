@@ -135,6 +135,40 @@ async def test_opportunity_platform_recommendations_are_independent(db_session: 
 
 
 @pytest.mark.asyncio
+async def test_opportunities_view_produces_real_hybrid_row(db_session: AsyncSession, real_news_event) -> None:
+    """SOCIAL-INTELLIGENCE-OPS-1 spec §20: a Story genuinely relevant to an active campaign
+    produces ONE real HYBRID row (not fabricated, not a fake magic score) - and that Story is never
+    ALSO shown a second time as a plain NEWS row."""
+    from uuid import uuid4
+
+    from database.models.story import Story
+
+    product = await create_product(db_session, slug="hybridtest", name="NINJA AI")
+    campaign = await create_campaign(
+        db_session, product_id=product.id, name="AI launch",
+        structured_context={
+            "status": "confirmed", "date_confidence": "exact",
+            "key_messages": ["ai coding assistant", "developer productivity"],
+        },
+    )
+    story = Story(
+        id=uuid4(), title="New AI coding assistant boosts developer productivity", category=real_news_event.category,
+        entities=[], keywords=[], topic_bucket="product", first_event_id=real_news_event.id, event_count=1,
+    )
+    db_session.add(story)
+    await db_session.flush()
+
+    view = await build_opportunities_view(db_session, now=datetime.now(timezone.utc))
+    hybrid_rows = [r for r in view.rows if r.source_type == "hybrid"]
+    assert len(hybrid_rows) == 1
+    assert hybrid_rows[0].campaign_relevance is not None
+    assert hybrid_rows[0].news_value is not None
+    # never shown a second time as a plain NEWS row
+    assert not any(r.source_type == "news" and r.topic == story.title for r in view.rows)
+    assert not any(r.source_type == "product" and r.topic == f"campaign:{campaign.id}" for r in view.rows)
+
+
+@pytest.mark.asyncio
 async def test_no_campaign_no_story_notes_are_honest(db_session: AsyncSession) -> None:
     view = await build_opportunities_view(db_session, now=datetime.now(timezone.utc))
     assert view.rows == []

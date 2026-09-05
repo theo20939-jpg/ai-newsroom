@@ -40,6 +40,7 @@ from services.instagram_growth_strategist import (
 )
 from services.instagram_objective_selection import ObjectiveRecommendation, recommend_objective
 from services.instagram_objectives import ContentObjective
+from services.story_campaign_matcher import StoryCampaignMatchType, StoryInput, match_story_to_campaign
 from services.telegram_feed_state import compute_feed_state
 from services.telegram_own_channel import owned_chat_id
 from services.telegram_strategy_director import StrategyDirectorAdvisory, derive_strategy_advisory
@@ -197,6 +198,10 @@ def _row_from_opportunity(opportunity: ContentOpportunity, *, topic: str, telegr
     )
 
 
+def _product_slug_for(snapshot: BusinessContextSnapshot, product_id: str) -> str | None:
+    return next((s.product.slug for s in snapshot.products if str(s.product.id) == product_id), None)
+
+
 async def build_opportunities_view(
     session: AsyncSession, *, now: datetime | None = None, platform: str | None = None,
 ) -> OpportunitiesView:
@@ -205,21 +210,61 @@ async def build_opportunities_view(
     rows: list[OpportunityRow] = []
     notes: list[str] = []
 
-    for plan in snapshot.active_campaigns:
-        opportunity = build_content_opportunity(
-            id=f"campaign:{plan.campaign_id}", source_type=OpportunitySourceType.PRODUCT,
-            product_id=plan.product_id, campaign_id=plan.campaign_id, campaign_plan=plan,
-            evidence=[f"active campaign phase={plan.phase}"], confidence=0.4,
-        )
-        real_restricted = _restricted_claim_texts_for_product(snapshot, plan.product_id)
-        if real_restricted:
-            opportunity = replace(opportunity, restricted_claims=sorted(set(opportunity.restricted_claims) | set(real_restricted)))
-        rows.append(_row_from_opportunity(opportunity, topic=f"campaign:{plan.campaign_id}", telegram_note=_telegram_mention_note(plan)))
-
     stories = list((await session.execute(
         select(Story).order_by(Story.updated_at.desc()).limit(_MAX_RECENT_STORIES)
     )).scalars().all())
+
+    # spec §19/§20: real HYBRID opportunities - one shared StoryCampaignMatcher call per
+    # (Story, active campaign) pair, deterministic only (no Gateway call from a read command,
+    # spec §68). matched_story_ids tracks which Stories already produced a HYBRID row so they are
+    # never ALSO shown a second time as a plain NEWS row.
+    matched_story_ids: set[str] = set()
+    for plan in snapshot.active_campaigns:
+        product_slug = _product_slug_for(snapshot, plan.product_id)
+        best_match = None
+        best_story = None
+        for story in stories:
+            story_input = StoryInput(story_id=str(story.id), title=story.title, entities=story.entities or [], keywords=story.keywords or [])
+            match = match_story_to_campaign(
+                story_input, plan, snapshot=snapshot, directives=list(snapshot.active_directives),
+                product_slug=product_slug,
+            )
+            if match.match_type == StoryCampaignMatchType.NONE:
+                continue
+            if best_match is None or match.campaign_value > best_match.campaign_value:
+                best_match, best_story = match, story
+
+        if best_match is not None and best_story is not None:
+            matched_story_ids.add(str(best_story.id))
+            opportunity = build_content_opportunity(
+                id=f"hybrid:{best_story.id}:{plan.campaign_id}", source_type=OpportunitySourceType.HYBRID,
+                story_id=str(best_story.id), campaign_id=plan.campaign_id, product_id=plan.product_id,
+                news_value=_story_freshness(best_story.updated_at, now=now), campaign_plan=plan,
+                evidence=best_match.evidence, confidence=best_match.confidence,
+            )
+            opportunity = replace(
+                opportunity, campaign_relevance=best_match.campaign_value,
+                restricted_claims=best_match.restricted_claims, embargo_constraints=best_match.embargo_constraints,
+                product_mention_allowed=best_match.product_mention_allowed,
+            )
+            rows.append(_row_from_opportunity(
+                opportunity, topic=best_story.title,
+                telegram_note=f"органический прогрев темы (совпадение: {best_match.match_type.value})",
+            ))
+        else:
+            opportunity = build_content_opportunity(
+                id=f"campaign:{plan.campaign_id}", source_type=OpportunitySourceType.PRODUCT,
+                product_id=plan.product_id, campaign_id=plan.campaign_id, campaign_plan=plan,
+                evidence=[f"active campaign phase={plan.phase}"], confidence=0.4,
+            )
+            real_restricted = _restricted_claim_texts_for_product(snapshot, plan.product_id)
+            if real_restricted:
+                opportunity = replace(opportunity, restricted_claims=sorted(set(opportunity.restricted_claims) | set(real_restricted)))
+            rows.append(_row_from_opportunity(opportunity, topic=f"campaign:{plan.campaign_id}", telegram_note=_telegram_mention_note(plan)))
+
     for story in stories:
+        if str(story.id) in matched_story_ids:
+            continue
         news_value = _story_freshness(story.updated_at, now=now)
         opportunity = build_content_opportunity(
             id=f"story:{story.id}", source_type=OpportunitySourceType.NEWS, story_id=str(story.id),
@@ -228,11 +273,10 @@ async def build_opportunities_view(
         rows.append(_row_from_opportunity(opportunity, topic=story.title, telegram_note="нет прямой оценки Channel Director вне рабочего цикла"))
 
     if not snapshot.active_campaigns:
-        notes.append("нет активных кампаний - PRODUCT-возможности недоступны")
+        notes.append("нет активных кампаний - PRODUCT/HYBRID-возможности недоступны")
     if not stories:
-        notes.append("нет свежих Story - NEWS-возможности недоступны")
+        notes.append("нет свежих Story - NEWS/HYBRID-возможности недоступны")
     notes.append("TREND-возможности недоступны: живой сбор трендов не реализован")
-    notes.append("HYBRID-возможности недоступны: нет функции сопоставления Story×Campaign")
 
     if platform is not None:
         # Platform filter only trims which recommendation columns are meaningful to show; the
