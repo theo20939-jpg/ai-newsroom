@@ -13,6 +13,7 @@ from bot.handlers.news import router as news_router
 from bot.handlers.settings import router as settings_router
 from bot.handlers.start import router as start_router
 from bot.handlers.status import router as status_router
+from bot.handlers.telegram_surface import router as telegram_surface_router
 from bot.handlers.telegraph_article_review import router as telegraph_article_review_router
 from bot.handlers.telegraph_shortlist import router as telegraph_shortlist_router
 from bot.handlers.whereami import router as whereami_router
@@ -69,5 +70,9 @@ router.include_router(business_context_router)
 # /calendar /performance) - same General-topic gate, additionally off by default via
 # settings.director_console_enabled (bot/handlers/director_console.py's own module docstring).
 router.include_router(director_console_router)
+# SOCIAL-INTELLIGENCE-OPS-1: /surface Telegram Surface configuration - same General-topic gate,
+# read available broadly, mutation FOUNDER-only (bot/handlers/telegram_surface.py's own module
+# docstring).
+router.include_router(telegram_surface_router)
 
 __all__ = ["router"]

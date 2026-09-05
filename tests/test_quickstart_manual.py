@@ -10,3 +10,8 @@ def test_quickstart_manual_lists_director_console_commands() -> None:
     for command in ("/directors", "/plan", "/opportunities", "/calendar", "/performance"):
         assert command in text
     assert "Директора:" in text
+
+
+def test_quickstart_manual_lists_surface_command() -> None:
+    text = render_quickstart_manual()
+    assert "/surface" in text

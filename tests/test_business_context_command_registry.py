@@ -11,6 +11,8 @@ _ALL_COMMAND_NAMES = frozenset({
     "product", "campaign", "milestone", "directive", "claim", "context", "status", "help",
     # SOCIAL-INTELLIGENCE-INTEGRATION-1 §6-12: Director Console, added through this SAME registry.
     "directors", "plan", "opportunities", "calendar", "performance",
+    # SOCIAL-INTELLIGENCE-OPS-1 §3: /surface, added through this SAME registry.
+    "surface",
 })
 
 

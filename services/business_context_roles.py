@@ -33,19 +33,28 @@ class BusinessContextRole(str, enum.Enum):
 # lists "directors/opportunities/performance where appropriate" for that role, not the full set.
 _DIRECTOR_CONSOLE_COMMANDS = frozenset({"directors", "plan", "opportunities", "calendar", "performance"})
 
+# SOCIAL-INTELLIGENCE-OPS-1 §5: every role may READ /surface status; only FOUNDER may submit a
+# configuration change (enforced separately, inside bot/handlers/telegram_surface.py, via the same
+# "directive"-allowed FOUNDER-tier proxy the Business Context callback handler already uses - the
+# registry/role system only gates "may use /surface at all", never the read/write distinction).
+_SURFACE_COMMAND = frozenset({"surface"})
+
 DEFAULT_ROLE_COMMANDS: dict[BusinessContextRole, frozenset[str]] = {
     BusinessContextRole.FOUNDER: frozenset(
         {"product", "campaign", "milestone", "directive", "claim", "context", "status", "help"}
-        | _DIRECTOR_CONSOLE_COMMANDS
+        | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND
     ),
     BusinessContextRole.PRODUCT_OWNER: frozenset(
-        {"product", "campaign", "milestone", "claim", "context", "status", "help"} | _DIRECTOR_CONSOLE_COMMANDS
+        {"product", "campaign", "milestone", "claim", "context", "status", "help"}
+        | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND
     ),
     BusinessContextRole.MARKETING: frozenset(
-        {"campaign", "milestone", "context", "status", "help"} | _DIRECTOR_CONSOLE_COMMANDS
+        {"campaign", "milestone", "context", "status", "help"} | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND
     ),
-    BusinessContextRole.EDITOR: frozenset({"status", "help", "directors", "opportunities", "performance"}),
-    BusinessContextRole.VIEWER: frozenset({"status", "help"} | _DIRECTOR_CONSOLE_COMMANDS),
+    BusinessContextRole.EDITOR: frozenset(
+        {"status", "help", "directors", "opportunities", "performance"} | _SURFACE_COMMAND
+    ),
+    BusinessContextRole.VIEWER: frozenset({"status", "help"} | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND),
 }
 
 

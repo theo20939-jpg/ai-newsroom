@@ -107,7 +107,8 @@ def render_proposal_preview(proposal: BusinessContextProposal) -> str:
 
 def render_quickstart_manual() -> str:
     """Spec §36 (Business Context) / SOCIAL-INTELLIGENCE-INTEGRATION-1 §22 (Director Console
-    section) - Russian, user-facing, renderer-only (never auto-pinned by this phase)."""
+    section) / SOCIAL-INTELLIGENCE-OPS-1 §8 (/surface section) - Russian, user-facing,
+    renderer-only (never auto-pinned by this phase)."""
     return (
         "NINJA Command Center\n\n"
         "General — точка управления бизнес-контекстом NINJA.\n\n"
@@ -125,5 +126,7 @@ def render_quickstart_manual() -> str:
         "/plan — текущий Telegram + Instagram контент-план\n"
         "/opportunities — актуальные новости/тренды/кампании для контента\n"
         "/calendar — будущий контент и его статус\n"
-        "/performance — реальные сигналы эффективности"
+        "/performance — реальные сигналы эффективности\n\n"
+        "Поверхности Telegram:\n\n"
+        "/surface — статус публичных/внутренних каналов (настройка — только FOUNDER)"
     )

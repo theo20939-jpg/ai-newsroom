@@ -150,6 +150,26 @@ COMMAND_REGISTRY: dict[str, CommandDefinition] = {
             "показывает 0 вместо \"данные недоступны\"."
         ),
     ),
+    # SOCIAL-INTELLIGENCE-OPS-1 §3/§4/§7: /surface - reading status is broadly available (see
+    # services/business_context_roles.py); SUBMITTING a configuration change additionally requires
+    # FOUNDER tier, enforced inside bot/handlers/telegram_surface.py itself (spec §5) - the
+    # registry/role system only gates "may use /surface at all".
+    "surface": CommandDefinition(
+        name="surface", description="Настройка и статус поверхностей Telegram (публичные/внутренние).",
+        examples=(
+            "/surface",
+            "/surface\n\nNINJA PULSE — публичный новостной канал.\nUsername: @ninjapulse.\n"
+            "Использовать его как PUBLIC_NEWS_CHANNEL.\nАналитику включить.",
+        ),
+        detailed_help=(
+            "Без текста - показывает текущий статус всех настроенных поверхностей (публичные "
+            "каналы vs внутренний редакторский чат). С текстом - предлагает настройку новой "
+            "поверхности (доступно только FOUNDER): AI разберёт сообщение, покажет предложенную "
+            "структуру, и применит её только после подтверждения. Внутренний редакторский чат "
+            "никогда не становится источником данных об аудитории без явного подтверждения роли "
+            "PUBLIC_* с включённой аналитикой."
+        ),
+    ),
 }
 
 

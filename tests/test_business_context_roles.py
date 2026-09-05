@@ -53,7 +53,8 @@ def test_commands_for_role_matches_role_matrix() -> None:
     assert "directive" in commands_for_role(BusinessContextRole.FOUNDER)
     assert "directive" not in commands_for_role(BusinessContextRole.MARKETING)
     # SOCIAL-INTELLIGENCE-INTEGRATION-1 §5: Director Console commands are all read-only, so VIEWER
-    # gets them alongside the pre-existing /status /help.
+    # gets them alongside the pre-existing /status /help. SOCIAL-INTELLIGENCE-OPS-1 §5: /surface
+    # READ is broadly available too - mutation is gated separately inside the handler.
     assert commands_for_role(BusinessContextRole.VIEWER) == frozenset({
-        "status", "help", "directors", "plan", "opportunities", "calendar", "performance",
+        "status", "help", "directors", "plan", "opportunities", "calendar", "performance", "surface",
     })
