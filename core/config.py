@@ -1013,6 +1013,13 @@ class Settings(BaseSettings):
     instagram_trend_intelligence_enabled: bool = False
     instagram_performance_memory_enabled: bool = False
     instagram_format_director_shadow_enabled: bool = False
+    # INSTAGRAM GROWTH ENGINE v2 (spec §61) - same discipline as the five flags above: real
+    # persistence/service code exists behind each of these (competitor intelligence tables, the
+    # growth strategy advisory layer, the dynamic calendar), but every flag still defaults False
+    # and nothing in this phase reads any of them to gate a live/production code path yet.
+    instagram_competitor_intelligence_enabled: bool = False
+    instagram_growth_strategy_shadow_enabled: bool = False
+    instagram_calendar_enabled: bool = False
 
     # services/weekly_recap_selection.py::select_weekly_recap_stories() - target Story count
     # (spec's own "Target 5-8 Stories max"), lookback window, and the per-company diversity cap
