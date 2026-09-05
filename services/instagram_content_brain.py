@@ -70,6 +70,36 @@ def evaluate_creative_fatigue(*, dimension: str, value: str, repetition_count: i
     )
 
 
+class FatigueState(str, enum.Enum):
+    """Spec §47 Creative Fatigue V2: a graded scale, richer than `CreativeFatigueSignal.is_fatigued`
+    alone - tracked identically across EVERY dimension (hook family, visual family, series, format,
+    topic, CTA, trend mechanic, campaign angle), never a dimension-specific threshold, so a
+    "successful format" and a "successful hook" are held to the same fatigue discipline (spec's own
+    "a successful format can become stale" instruction, generalized beyond just format)."""
+
+    FRESH = "fresh"
+    NORMAL = "normal"
+    REPEATED = "repeated"
+    FATIGUED = "fatigued"
+    OVERUSED = "overused"
+
+
+_FATIGUE_STATE_THRESHOLDS: tuple[tuple[int, FatigueState], ...] = (
+    (1, FatigueState.FRESH), (3, FatigueState.NORMAL), (5, FatigueState.REPEATED), (8, FatigueState.FATIGUED),
+)
+
+
+def evaluate_fatigue_state(*, dimension: str, repetition_count: int, window_days: int) -> FatigueState:
+    """Generic, dimension-agnostic graded fatigue (spec §47) - `dimension` is documentation/logging
+    only (mirrors `CreativeFatigueSignal.dimension`'s own convention), the ordinal progression
+    itself never varies by dimension without real calibrating evidence to justify doing so."""
+    del dimension  # not used in the calculation itself - see docstring
+    for ceiling, state in _FATIGUE_STATE_THRESHOLDS:
+        if repetition_count <= ceiling:
+            return state
+    return FatigueState.OVERUSED
+
+
 @dataclass(frozen=True)
 class CreativeScore:
     """Spec §85: dimensions kept explicitly separate - never collapsed into one unexplained 0-100

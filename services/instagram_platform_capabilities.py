@@ -37,11 +37,17 @@ INSTAGRAM_PLATFORM_CAPABILITIES: dict[str, PlatformCapability] = {
     "publish_single": PlatformCapability("publish_single", CapabilityStatus.UNAVAILABLE, _NO_META_INTEGRATION_EVIDENCE),
     "publish_carousel": PlatformCapability("publish_carousel", CapabilityStatus.UNAVAILABLE, _NO_META_INTEGRATION_EVIDENCE),
     "publish_reel": PlatformCapability("publish_reel", CapabilityStatus.UNAVAILABLE, _NO_META_INTEGRATION_EVIDENCE),
+    "publish_story": PlatformCapability("publish_story", CapabilityStatus.UNAVAILABLE, _NO_META_INTEGRATION_EVIDENCE),
     "read_insights": PlatformCapability("read_insights", CapabilityStatus.UNAVAILABLE, _NO_META_INTEGRATION_EVIDENCE),
+    "read_post_insights": PlatformCapability("read_post_insights", CapabilityStatus.UNAVAILABLE, _NO_META_INTEGRATION_EVIDENCE),
+    "read_reel_insights": PlatformCapability("read_reel_insights", CapabilityStatus.UNAVAILABLE, _NO_META_INTEGRATION_EVIDENCE),
     "read_comments": PlatformCapability("read_comments", CapabilityStatus.UNAVAILABLE, _NO_META_INTEGRATION_EVIDENCE),
     "read_follower_stats": PlatformCapability("read_follower_stats", CapabilityStatus.UNAVAILABLE, _NO_META_INTEGRATION_EVIDENCE),
+    "read_profile_metrics": PlatformCapability("read_profile_metrics", CapabilityStatus.UNAVAILABLE, _NO_META_INTEGRATION_EVIDENCE),
+    "read_follower_count": PlatformCapability("read_follower_count", CapabilityStatus.UNAVAILABLE, _NO_META_INTEGRATION_EVIDENCE),
     "audio_trend_data": PlatformCapability("audio_trend_data", CapabilityStatus.UNKNOWN, "No first-party or third-party audio-trend data source is wired anywhere - never verified either way."),
     "collab_posting": PlatformCapability("collab_posting", CapabilityStatus.UNAVAILABLE, _NO_META_INTEGRATION_EVIDENCE),
+    "creator_discovery": PlatformCapability("creator_discovery", CapabilityStatus.UNKNOWN, "No creator-discovery data source is wired anywhere - never verified either way."),
     "stories_publishing": PlatformCapability("stories_publishing", CapabilityStatus.UNAVAILABLE, _NO_META_INTEGRATION_EVIDENCE),
 }
 

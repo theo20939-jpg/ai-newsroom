@@ -17,10 +17,12 @@ from dataclasses import dataclass, field
 from services.instagram_content_brain import (
     CreativeFatigueSignal,
     EvidenceStage,
+    FatigueState,
     PerformancePattern,
     advance_evidence_stage,
     evaluate_creative_fatigue,
 )
+from services.instagram_content_brain import evaluate_fatigue_state as _evaluate_fatigue_state
 from services.instagram_format_director import ContentFormat
 from services.instagram_objectives import ContentObjective
 
@@ -45,30 +47,11 @@ class HookFamily(str, enum.Enum):
     MYTH_BUSTING = "myth_busting"
 
 
-class FatigueState(str, enum.Enum):
-    """Spec §23: richer than the foundation's own bare `is_fatigued: bool` - a graded scale."""
-
-    FRESH = "fresh"
-    NORMAL = "normal"
-    REPEATED = "repeated"
-    FATIGUED = "fatigued"
-    OVERUSED = "overused"
-
-
-_FATIGUE_STATE_THRESHOLDS: tuple[tuple[int, FatigueState], ...] = (
-    (1, FatigueState.FRESH), (3, FatigueState.NORMAL), (5, FatigueState.REPEATED), (8, FatigueState.FATIGUED),
-)
-
-
 def evaluate_hook_fatigue_state(*, repetition_count: int, window_days: int) -> FatigueState:
-    """Spec §23/§47: time-aware graded fatigue - no arbitrary universal threshold beyond the
-    ordinal progression itself (a caller supplying a real evidence-calibrated threshold set later
-    can replace `_FATIGUE_STATE_THRESHOLDS`; this is the deterministic default, not a claimed
-    learned one)."""
-    for ceiling, state in _FATIGUE_STATE_THRESHOLDS:
-        if repetition_count <= ceiling:
-            return state
-    return FatigueState.OVERUSED
+    """Spec §23/§47: time-aware graded fatigue, pinned to the "hook_family" dimension of the SAME
+    generic scale every other dimension uses (services/instagram_content_brain.py::
+    evaluate_fatigue_state) - hook fatigue is never held to a hook-specific, laxer threshold."""
+    return _evaluate_fatigue_state(dimension="hook_family", repetition_count=repetition_count, window_days=window_days)
 
 
 @dataclass(frozen=True)
