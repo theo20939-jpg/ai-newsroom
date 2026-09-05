@@ -18,6 +18,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models.visual_designer_brief import VisualDesignerBriefStatus, VisualDesignerBriefVersion
+from services.visual_brief_observability import (
+    log_candidate_created,
+    log_candidate_rejected,
+    log_frozen,
+    log_promoted,
+    log_rolled_back,
+    log_unfrozen,
+)
 
 GLOBAL_SCOPE = "global"
 
@@ -99,6 +107,10 @@ async def create_candidate_brief(
     session.add(candidate)
     await session.commit()
     await session.refresh(candidate)
+    log_candidate_created(
+        scope=scope, version=candidate.version, brief_version_id=candidate.id,
+        parent_version_id=candidate.parent_version_id, reason=reason, evidence=evidence,
+    )
     return candidate
 
 
@@ -120,6 +132,7 @@ async def promote_candidate(session: AsyncSession, candidate_id: UUID) -> Visual
     candidate.activated_at = datetime.now(timezone.utc)
     await session.commit()
     await session.refresh(candidate)
+    log_promoted(scope=candidate.scope, version=candidate.version, brief_version_id=candidate.id)
     return candidate
 
 
@@ -133,6 +146,7 @@ async def reject_candidate(session: AsyncSession, candidate_id: UUID, *, reason:
     candidate.reason = reason
     await session.commit()
     await session.refresh(candidate)
+    log_candidate_rejected(scope=candidate.scope, version=candidate.version, brief_version_id=candidate.id, reason=reason)
     return candidate
 
 
@@ -146,6 +160,7 @@ async def freeze_brief(session: AsyncSession, scope: str, *, reason: str) -> Vis
     active.reason = reason
     await session.commit()
     await session.refresh(active)
+    log_frozen(scope=active.scope, version=active.version, brief_version_id=active.id, reason=reason)
     return active
 
 
@@ -157,6 +172,7 @@ async def unfreeze_brief(session: AsyncSession, scope: str, *, reason: str) -> V
     frozen.reason = reason
     await session.commit()
     await session.refresh(frozen)
+    log_unfrozen(scope=frozen.scope, version=frozen.version, brief_version_id=frozen.id, reason=reason)
     return frozen
 
 
@@ -197,4 +213,8 @@ async def rollback_to(session: AsyncSession, scope: str, *, target_version_id: U
     target.activated_at = datetime.now(timezone.utc)
     await session.commit()
     await session.refresh(target)
+    from_version_id = current_active.id if current_active is not None else (current_frozen.id if current_frozen is not None else None)
+    log_rolled_back(
+        scope=scope, from_version_id=from_version_id, to_version_id=target.id, to_version=target.version, reason=reason,
+    )
     return target

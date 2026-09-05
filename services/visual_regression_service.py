@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models.visual_regression import VisualRegressionCase, VisualRegressionOutcome, VisualRegressionRun
+from services.visual_brief_observability import log_candidate_validated
 
 RegressionArtDirectorFn = Callable[[VisualRegressionCase, UUID], Awaitable[tuple[VisualRegressionOutcome, list[str], float | None]]]
 
@@ -90,10 +91,22 @@ async def run_regression_validation(
     for run in runs:
         await session.refresh(run)
 
-    return RegressionValidationResult(
+    validation_result = RegressionValidationResult(
         candidate_brief_version_id=candidate_brief_version_id, baseline_brief_version_id=baseline_brief_version_id,
         runs=runs, total_cost_known=cost_known, total_cost=(total_cost if cost_known else None),
     )
+    # PRODUCTION-SOURCE-RECONCILIATION-1B §17: evaluate_promotion_policy() is called here ONLY to
+    # derive the "did this validation pass" label for the observability event below - it does not
+    # change this function's own return contract, and no promotion decision is made or acted on
+    # here (services/visual_brief_promotion_service.py, not yet built, remains the real caller of
+    # evaluate_promotion_policy() for an actual promotion decision).
+    policy = evaluate_promotion_policy(validation_result)
+    log_candidate_validated(
+        scope=cases[0].scope if cases else "unknown", candidate_version_id=candidate_brief_version_id,
+        baseline_version_id=baseline_brief_version_id, result="pass" if policy.may_promote else "fail",
+        reasons=policy.reasons, total_cost=validation_result.total_cost,
+    )
+    return validation_result
 
 
 @dataclass(frozen=True)

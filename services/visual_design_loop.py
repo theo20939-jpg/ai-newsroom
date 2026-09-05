@@ -45,6 +45,7 @@ from services.visual_design_director import (
 )
 from services.visual_designer_brief_service import GLOBAL_SCOPE, get_active_or_frozen_brief
 from services.visual_feed_context import compute_visual_feed_context
+from services.visual_renderer_constraints import get_current_renderer_constraints
 from services.visual_root_cause import classify_root_cause
 
 logger = logging.getLogger(__name__)
@@ -90,11 +91,17 @@ async def run_visual_design_loop(
     session: AsyncSession, gateway: LLMGateway, prompt_repository: PromptRepository, *,
     story: StoryFactsInput, platform: str, presentation_type: str | None, scope: str = GLOBAL_SCOPE,
     render_fn: RenderFn, art_director_fn: ArtDirectorFn,
-    available_media_summary: str = "unknown", renderer_constraints_summary: str = "unknown",
+    available_media_summary: str = "unknown", renderer_constraints_summary: str | None = None,
     restricted_claims: list[str] | None = None, now: datetime | None = None,
 ) -> VisualDesignLoopResult:
     now = now or datetime.now(timezone.utc)
     story_uuid = _safe_uuid(story.story_id)
+    # PRODUCTION-SOURCE-RECONCILIATION-1B §15: real, code-derived renderer geometry by default -
+    # never the literal "unknown" - unless a caller (e.g. a test) explicitly overrides it. See
+    # services/visual_renderer_constraints.py's own docstring for why nnj_overlay_contract.py is
+    # deliberately NOT this summary's source.
+    if renderer_constraints_summary is None:
+        renderer_constraints_summary = get_current_renderer_constraints()
 
     brief = await get_active_or_frozen_brief(session, scope)
     brief_text = brief.brief_text if brief is not None else "(no persistent Designer Brief configured yet for this scope)"
