@@ -20,6 +20,23 @@ class ContentFormat(str, enum.Enum):
     REEL = "reel"
 
 
+class SlideRole:
+    """Spec §34's own suggested carousel slide role vocabulary - a plain str-constants namespace
+    (mirrors services/campaign_planner.py::CampaignPhase's own style), NOT an enforced enum on
+    `CarouselSlide.role`: not every carousel needs every role (spec's own explicit instruction),
+    and existing packages already use free-text roles like "body" - this namespace documents the
+    common vocabulary without narrowing what `CarouselSlide.role` accepts."""
+
+    HOOK = "hook"
+    CONTEXT = "context"
+    PROBLEM = "problem"
+    EXPLANATION = "explanation"
+    DATA = "data"
+    COMPARISON = "comparison"
+    TAKEAWAY = "takeaway"
+    CTA = "cta"
+
+
 class ClaimViolationError(ValueError):
     """Raised when a production package's own body text asserts a claim listed in
     `restricted_claims` - never silently dropped or auto-corrected (mirrors services/claim_policy_
@@ -86,6 +103,8 @@ class ReelPackage:
     on_screen_text: list[str] = field(default_factory=list)
     voiceover_script: str | None = None
     b_roll_needs: list[str] = field(default_factory=list)
+    shot_list: list[str] = field(default_factory=list)
+    visual_transitions: list[str] = field(default_factory=list)
     audio_strategy: str | None = None
     cta: str | None = None
     loop_ending_concept: str | None = None
