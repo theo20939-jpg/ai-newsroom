@@ -183,10 +183,20 @@ branch), not a `def` - a real gap the def-name comparison methodology cannot see
 - `ruff check` and `mypy`: full-repo sweep on the reconciliation worktree. Zero new errors versus
   the accepted dev branch baseline (23 pre-existing ruff findings, 9 pre-existing mypy environment/
   config findings - both confirmed identical on `feature/social-intelligence-ops-v1`).
-- Full `pytest` suite: see the accompanying final report for the exact pass/fail/skip counts,
-  compared against the prior phase's own documented baseline (5751 passed, 41 pre-existing
-  failures, 28 skipped).
+- Full `pytest` suite (5857 collected, excluding 4 files that fail to collect identically on the
+  accepted dev branch - see below): **5788 passed, 41 failed, 28 skipped** - matching the prior
+  phase's own documented baseline (5751 passed, 41 pre-existing failures, 28 skipped) exactly on
+  failed/skipped counts; the higher pass count is this phase's own added tests (media_finalizer,
+  video_quality_gate, media_vision_review calibration, two brand_renderer fallback tests).
+  Cross-checked the exact 41 failing node IDs by re-running them as a fixed subset on both branches:
+  identical result on both (38 failed, 3 passed - the 3 are order-dependent/shared-Postgres-state
+  flakiness that also disappears when the same 3 are run in isolation on *either* branch, not a
+  reconciliation-branch regression). No new failures were introduced by this phase.
+- The 4 pre-existing collection errors (`test_phase20_m1_harness_fixes.py`,
+  `test_v2_3a_editorial_recomposition_canary.py`, `test_v2_4d_overlay_contract.py`,
+  `test_v2_4f_compact_overlay.py` - missing local-only `scripts/` files and the confirmed-non-live
+  overlay manifest) confirmed identical on `feature/social-intelligence-ops-v1`.
 - Secret scan (grep for API-key/token/password/private-key patterns) run against every diff before
-  each commit; clean in all four cases.
+  each commit; clean in all five commits.
 - No binary/media assets were committed by this phase - all recovered content is `.py`/`.yaml`
   source, so the asset-review gate (§40) was not triggered.
