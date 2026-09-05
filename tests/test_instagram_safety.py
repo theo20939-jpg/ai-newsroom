@@ -21,9 +21,18 @@ import services.instagram_content_opportunity as content_opportunity_module
 import services.instagram_competitor_intelligence as competitor_module
 import services.instagram_growth_strategist as growth_strategist_module
 import services.instagram_calendar_service as calendar_module
+import services.instagram_semantic_matching as semantic_matching_module
+import services.instagram_semantic_trend_matching as semantic_trend_matching_module
+import services.instagram_creative_director as creative_director_module
+import services.instagram_reference_analysis as reference_analysis_module
+import services.instagram_shadow_pipeline as shadow_pipeline_module
 
 
-_NEW_MODULES = [content_opportunity_module, competitor_module, growth_strategist_module, calendar_module]
+_NEW_MODULES = [
+    content_opportunity_module, competitor_module, growth_strategist_module, calendar_module,
+    semantic_matching_module, semantic_trend_matching_module, creative_director_module,
+    reference_analysis_module, shadow_pipeline_module,
+]
 
 
 def test_no_publication_or_meta_write_symbol_anywhere_in_new_modules() -> None:
@@ -39,6 +48,8 @@ def test_all_new_feature_flags_default_false() -> None:
     assert settings.instagram_competitor_intelligence_enabled is False
     assert settings.instagram_growth_strategy_shadow_enabled is False
     assert settings.instagram_calendar_enabled is False
+    assert settings.instagram_semantic_matching_enabled is False
+    assert settings.instagram_creative_director_shadow_enabled is False
     assert not hasattr(settings, "instagram_publication_enabled")
     assert not hasattr(settings, "instagram_ad_spend_enabled")
 

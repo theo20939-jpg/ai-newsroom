@@ -37,6 +37,12 @@ class InstagramContentCalendarItem(Base):
 
     opportunity_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     creative_concept_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # INSTAGRAM-GROWTH-3 item 8: a REAL reference to the generated proposal
+    # (database/models/instagram_creative_plan.py::InstagramCreativePlan), additive alongside the
+    # older free-text `creative_concept_id` above (kept for backward compatibility, never removed).
+    creative_plan_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("instagram_creative_plans.id"), nullable=True, index=True
+    )
     campaign_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("launch_campaigns.id"), nullable=True, index=True
     )

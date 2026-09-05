@@ -37,8 +37,9 @@ class UnsafeCalendarAssumptionError(ValueError):
 async def create_calendar_item(
     session: AsyncSession, *, planned_at: datetime, objective: str, format: str,
     campaign_id: UUID | None = None, product_id: UUID | None = None, opportunity_id: str | None = None,
-    creative_concept_id: str | None = None, depends_on_campaign_phase: str | None = None,
-    planned_against_campaign_status: str | None = None, planned_against_campaign_phase: str | None = None,
+    creative_concept_id: str | None = None, creative_plan_id: UUID | None = None,
+    depends_on_campaign_phase: str | None = None, planned_against_campaign_status: str | None = None,
+    planned_against_campaign_phase: str | None = None,
 ) -> InstagramContentCalendarItem:
     if (
         depends_on_campaign_phase in _EXACT_DATE_DEPENDENT_PHASES
@@ -51,12 +52,30 @@ async def create_calendar_item(
         )
     item = InstagramContentCalendarItem(
         planned_at=planned_at, objective=objective, format=format, campaign_id=campaign_id, product_id=product_id,
-        opportunity_id=opportunity_id, creative_concept_id=creative_concept_id,
+        opportunity_id=opportunity_id, creative_concept_id=creative_concept_id, creative_plan_id=creative_plan_id,
         depends_on_campaign_phase=depends_on_campaign_phase,
         planned_against_campaign_status=planned_against_campaign_status,
         planned_against_campaign_phase=planned_against_campaign_phase,
     )
     session.add(item)
+    await session.commit()
+    await session.refresh(item)
+    return item
+
+
+async def reschedule_calendar_item(
+    session: AsyncSession, item_id: UUID, *, new_planned_at: datetime, reason: str,
+) -> InstagramContentCalendarItem:
+    """Spec item 8's own third required outcome (alongside STALE/INVALIDATED): a calendar item
+    whose underlying idea is still good but whose timing no longer fits (e.g. a launch delay with
+    a NEW confirmed date, rather than an open-ended delay) moves to RESCHEDULED with a new
+    `planned_at`, distinct from an INVALIDATED item that has no good timing to move to."""
+    item = await session.get(InstagramContentCalendarItem, item_id)
+    if item is None:
+        raise ValueError(f"no InstagramContentCalendarItem with id={item_id}")
+    item.status = CalendarItemStatus.RESCHEDULED
+    item.planned_at = new_planned_at
+    item.invalidation_reason = reason
     await session.commit()
     await session.refresh(item)
     return item

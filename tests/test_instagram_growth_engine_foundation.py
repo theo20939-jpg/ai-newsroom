@@ -150,6 +150,8 @@ def test_instagram_feature_flags_default_false() -> None:
     assert settings.instagram_competitor_intelligence_enabled is False
     assert settings.instagram_growth_strategy_shadow_enabled is False
     assert settings.instagram_calendar_enabled is False
+    assert settings.instagram_semantic_matching_enabled is False
+    assert settings.instagram_creative_director_shadow_enabled is False
 
 
 def test_no_publication_flag_exists_at_all() -> None:

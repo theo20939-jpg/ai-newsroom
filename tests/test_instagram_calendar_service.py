@@ -16,7 +16,9 @@ from services.instagram_calendar_service import (
     invalidate_items_for_campaign_change,
     invalidate_items_for_claim_change,
     list_calendar_items,
+    reschedule_calendar_item,
 )
+from services.instagram_creative_plan_service import create_creative_plan
 from services.product_context_service import create_product
 
 
@@ -135,3 +137,23 @@ async def test_business_context_version_is_stored_on_calendar_item(db_session: A
     )
     assert item.planned_against_campaign_status == "confirmed"
     assert item.planned_against_campaign_phase == "LAUNCH"
+
+
+@pytest.mark.asyncio
+async def test_calendar_item_references_a_real_creative_plan(db_session: AsyncSession) -> None:
+    plan = await create_creative_plan(db_session, content_opportunity_id="opp-1", objective="reach", format="reel")
+    item = await create_calendar_item(
+        db_session, planned_at=datetime.now(timezone.utc), objective="reach", format="reel", creative_plan_id=plan.id,
+    )
+    assert item.creative_plan_id == plan.id
+
+
+@pytest.mark.asyncio
+async def test_reschedule_moves_item_to_rescheduled_status(db_session: AsyncSession) -> None:
+    item = await create_calendar_item(
+        db_session, planned_at=datetime.now(timezone.utc), objective="reach", format="reel",
+    )
+    new_time = datetime.now(timezone.utc) + timedelta(days=10)
+    rescheduled = await reschedule_calendar_item(db_session, item.id, new_planned_at=new_time, reason="launch date confirmed later")
+    assert rescheduled.status == CalendarItemStatus.RESCHEDULED
+    assert rescheduled.planned_at == new_time

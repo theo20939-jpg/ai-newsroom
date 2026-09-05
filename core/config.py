@@ -1020,6 +1020,13 @@ class Settings(BaseSettings):
     instagram_competitor_intelligence_enabled: bool = False
     instagram_growth_strategy_shadow_enabled: bool = False
     instagram_calendar_enabled: bool = False
+    # INSTAGRAM-GROWTH-3 - same discipline again: real semantic-matching/Creative-Director code
+    # exists (services/instagram_semantic_matching.py, services/instagram_creative_director.py),
+    # both defaulting False and unread by any live/production code path. Still no publication flag
+    # anywhere - there is nothing here that could ever be flipped to make this codebase publish to
+    # Instagram.
+    instagram_semantic_matching_enabled: bool = False
+    instagram_creative_director_shadow_enabled: bool = False
 
     # services/weekly_recap_selection.py::select_weekly_recap_stories() - target Story count
     # (spec's own "Target 5-8 Stories max"), lookback window, and the per-company diversity cap
