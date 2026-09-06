@@ -113,3 +113,8 @@ class VisualDirectorContext:
 
     restricted_claims: list[str] = field(default_factory=list)
     previous_attempt: PreviousAttemptFeedback | None = None
+    # SOCIAL-INTELLIGENCE-PRELAUNCH-1A §16: INFORMATION ONLY, mirroring feed_context_summary's own
+    # "already a short string a caller assembled deliberately" discipline - "" (the default) for
+    # every caller that never wires launch context, so this field existing changes nothing about
+    # attempts/budget/renderer behavior for any existing caller.
+    launch_context_summary: str = ""

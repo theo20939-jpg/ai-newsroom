@@ -79,7 +79,7 @@ def build_visual_director_context(
     available_media_summary: str, renderer_constraints_summary: str,
     attempts_used: int, max_attempts: int, budget_state_summary: str,
     restricted_claims: list[str] | None = None, previous_attempt: PreviousAttemptFeedback | None = None,
-    now: datetime | None = None,
+    launch_context_summary: str = "", now: datetime | None = None,
 ) -> VisualDirectorContext:
     return VisualDirectorContext(
         as_of=now or datetime.now(timezone.utc), story_id=story.story_id, platform=platform,
@@ -90,6 +90,7 @@ def build_visual_director_context(
         available_media_summary=available_media_summary, renderer_constraints_summary=renderer_constraints_summary,
         attempts_used=attempts_used, max_attempts=max_attempts, budget_state_summary=budget_state_summary,
         restricted_claims=restricted_claims or [], previous_attempt=previous_attempt,
+        launch_context_summary=launch_context_summary,
     )
 
 
@@ -106,6 +107,7 @@ def _build_user_text(context: VisualDirectorContext) -> str:
         f"ATTEMPTS: {context.attempts_used}/{context.max_attempts} used",
         f"BUDGET STATE: {context.budget_state_summary}",
         f"RESTRICTED CLAIMS (never depict): {context.restricted_claims}",
+        f"LAUNCH CONTEXT (advisory only, not a rule): {context.launch_context_summary or '(established account - no launch context)'}",
     ]
     if context.previous_attempt is not None:
         prev = context.previous_attempt

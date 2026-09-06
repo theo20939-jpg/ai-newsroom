@@ -28,11 +28,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from database.models.director_run import DirectorRunStatus, DirectorType
+from database.models.social_launch_context import SocialLaunchPlatform
 from database.models.visual_design_attempt import VisualDesignAttempt, VisualDesignAttemptStatus, VisualFailureRootCause
 from database.models.visual_designer_brief import VisualDesignerBriefVersion
 from integrations.llm_gateway.protocol import LLMGateway
 from integrations.prompts.protocol import PromptRepository
 from services.director_run_service import compute_input_fingerprint, create_director_run
+from services.social_launch_context_service import describe_launch_context_for_creative, get_current_context
 from services.telegram_art_director import ArtDirectorDecision, ArtDirectorResult
 from services.visual_budget_service import BudgetCheckResult, BudgetDecision, check_budget
 from services.visual_creative_direction import PreviousAttemptFeedback, VisualCreativeDirection
@@ -79,6 +81,21 @@ class VisualDesignLoopResult:
     director_run_id: UUID | None = None
 
 
+async def _launch_context_summary_for(session: AsyncSession, *, platform: str) -> str:
+    """SOCIAL-INTELLIGENCE-PRELAUNCH-1A §16: INFORMATION ONLY - a plain summary string folded into
+    VisualDirectorContext exactly like feed_context_summary/recent_failure_summary already are.
+    Never changes budget/attempt/routing/renderer behavior in this loop - a caller ignoring this
+    field entirely would observe no difference. `platform` values outside the two real
+    SocialLaunchPlatform members (e.g. a future third platform) safely produce "" rather than
+    raising - this loop's own platform string is not currently constrained to match that enum."""
+    try:
+        launch_platform = SocialLaunchPlatform(platform)
+    except ValueError:
+        return ""
+    context = await get_current_context(session, launch_platform)
+    return describe_launch_context_for_creative(context)
+
+
 def _art_decision_to_attempt_status(decision: ArtDirectorDecision) -> VisualDesignAttemptStatus:
     if decision == ArtDirectorDecision.PASS:
         return VisualDesignAttemptStatus.PASSED
@@ -108,6 +125,7 @@ async def run_visual_design_loop(
     brief_version_number = brief.version if brief is not None else 0
 
     feed_context = await compute_visual_feed_context(session, now=now)
+    launch_context_summary = await _launch_context_summary_for(session, platform=platform)
 
     attempts: list[VisualDesignAttempt] = []
     previous_feedback: PreviousAttemptFeedback | None = None
@@ -130,7 +148,7 @@ async def run_visual_design_loop(
             available_media_summary=available_media_summary, renderer_constraints_summary=renderer_constraints_summary,
             attempts_used=budget.attempts_used, max_attempts=budget.max_attempts,
             budget_state_summary=_budget_summary(budget), restricted_claims=restricted_claims,
-            previous_attempt=previous_feedback, now=now,
+            previous_attempt=previous_feedback, launch_context_summary=launch_context_summary, now=now,
         )
 
         attempt_number = budget.attempts_used + 1

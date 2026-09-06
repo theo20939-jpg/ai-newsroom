@@ -8,7 +8,15 @@ CRITICAL (spec §46): must never classify a deliberate safe no-overlay decision 
 because a logo/mark is absent - `renderer_decision_metadata` carries the real safety-scoring
 outcome (services/brand_renderer.py's own `MasterNewsBrandingDecision`/`DataSignaturePlan` shape,
 passed through as a plain dict here to avoid a new cross-module coupling) and this function checks
-it BEFORE ever raising a missing-mark issue."""
+it BEFORE ever raising a missing-mark issue.
+
+SOCIAL-INTELLIGENCE-PRELAUNCH-1A §17: explicitly evaluated and NOT wired with SocialLaunchContext.
+This module is a pixel-level QC gate against the ACTUAL rendered bytes (overflow/clipping/contrast/
+overlap) - whether the account is cold-start/pre-launch/live has no bearing on any of those checks;
+a headline that overflows overflows the same way on post #1 as on post #10,000. The launch-stage
+reasoning this phase adds lives entirely upstream, in services/visual_design_director.py's own
+VisualDirectorContext.launch_context_summary (spec §16) - the Art Director evaluates what was
+actually produced, never why it was requested."""
 from __future__ import annotations
 
 import enum

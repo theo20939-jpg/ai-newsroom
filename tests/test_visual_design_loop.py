@@ -9,10 +9,18 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models.director_run import DirectorRun, DirectorType
+from database.models.social_launch_context import (
+    HistoricalContentPolicy,
+    LaunchDateStatus,
+    LaunchState,
+    LearningBaselinePolicy,
+    SocialLaunchPlatform,
+)
 from database.models.visual_design_attempt import VisualDesignAttempt, VisualDesignAttemptStatus, VisualFailureRootCause
 from integrations.llm_gateway.protocol import GenerateResponse
 from integrations.prompts.protocol import RenderedPrompt
 from schemas.capability import CapabilityUsage
+from services.social_launch_context_service import create_next_version
 from services.telegram_art_director import ArtDirectorDecision, ArtDirectorIssueCode, ArtDirectorResult
 from services.visual_design_director import PROMPT_NAME, StoryFactsInput
 from services.visual_design_loop import RenderOutcome, run_visual_design_loop
@@ -70,6 +78,30 @@ async def test_pass_stops_the_loop_after_one_attempt(db_session: AsyncSession) -
     )
     assert result.final_status == VisualDesignAttemptStatus.PASSED
     assert len(result.attempts) == 1
+
+
+@pytest.mark.asyncio
+async def test_launch_context_is_information_only_never_changes_routing(db_session: AsyncSession) -> None:
+    """SOCIAL-INTELLIGENCE-PRELAUNCH-1A §16: a PRE_LAUNCH Telegram launch context gets folded into
+    the prompt text (information only) but changes NOTHING about the loop's own routing - PASS
+    still stops the loop after one attempt, exactly like the no-launch-context case above."""
+    await create_next_version(
+        db_session, platform=SocialLaunchPlatform.TELEGRAM, target_identity="NINJA PULSE",
+        current_identity="NINJA VPN news", launch_state=LaunchState.PRE_LAUNCH, planned_launch_at=None,
+        launch_date_status=LaunchDateStatus.UNSCHEDULED, baseline_policy=LearningBaselinePolicy.FROM_FIRST_PUBLICATION,
+        historical_content_policy=HistoricalContentPolicy.IGNORE, raw_instruction="test setup",
+        confirmed_structure={}, created_by=5507703201,
+    )
+    gateway = FakeLLMGateway(generate_response=_gateway_response(_direction_output()))
+    result = await run_visual_design_loop(
+        db_session, gateway, _prompt_repository(), story=_story(), platform="telegram", presentation_type="NEWS",
+        render_fn=_render_fn, art_director_fn=_art_director_fn_returning(ArtDirectorDecision.PASS),
+    )
+    assert result.final_status == VisualDesignAttemptStatus.PASSED
+    assert len(result.attempts) == 1
+    prompt_text = str(gateway.received_requests[-1].messages[-1].content[0].text)
+    assert "LAUNCH CONTEXT" in prompt_text
+    assert "NINJA PULSE" in prompt_text
 
 
 @pytest.mark.asyncio
