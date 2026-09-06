@@ -7,6 +7,7 @@ from bot.handlers.director_console import router as director_console_router
 from bot.handlers.event_recap_review import router as event_recap_review_router
 from bot.handlers.final_post_review import router as final_post_review_router
 from bot.handlers.image_preview import router as image_preview_router
+from bot.handlers.launch import router as launch_router
 from bot.handlers.meme_generate import router as meme_generate_router
 from bot.handlers.meme_preview import router as meme_preview_router
 from bot.handlers.news import router as news_router
@@ -79,5 +80,10 @@ router.include_router(telegram_surface_router)
 # General-topic gate, read available broadly, mutation FOUNDER-only via confirm/cancel keyboard
 # (bot/handlers/visual_design.py's own module docstring).
 router.include_router(visual_design_router)
+# SOCIAL-INTELLIGENCE-PRELAUNCH-1: /launch cold-start social launch strategy (Telegram VPN->PULSE
+# transition, Instagram empty-account cold start) - same General-topic gate, read available
+# broadly, mutation FOUNDER-only, additionally off by default via
+# settings.social_launch_context_enabled (bot/handlers/launch.py's own module docstring).
+router.include_router(launch_router)
 
 __all__ = ["router"]

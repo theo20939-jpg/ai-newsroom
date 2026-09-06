@@ -188,6 +188,28 @@ COMMAND_REGISTRY: dict[str, CommandDefinition] = {
             "генерацию дизайна и не вызывает AI Gateway."
         ),
     ),
+    # SOCIAL-INTELLIGENCE-PRELAUNCH-1 §12/§13/§14: /launch - reading launch context is broadly
+    # available (see services/business_context_roles.py); SUBMITTING an instruction additionally
+    # requires FOUNDER tier, enforced inside bot/handlers/launch.py itself (spec §12) - the
+    # registry/role system only gates "may use /launch at all". Gated overall by
+    # settings.social_launch_context_enabled (default False).
+    "launch": CommandDefinition(
+        name="launch", description="Стратегия запуска/перехода Telegram и Instagram до появления первых данных.",
+        examples=(
+            "/launch",
+            "/launch telegram Текущий канал - NINJA VPN, готовим переход в NINJA PULSE. Старые "
+            "посты VPN - только контекст, не данные для обучения.",
+            "/launch instagram Аккаунт NINJA PULSE пустой, начинаем с нуля.",
+        ),
+        detailed_help=(
+            "Без текста - показывает текущий launch context для Telegram и Instagram (режим, "
+            "целевая идентичность, дата запуска, политика обучения и старого контента). С "
+            "текстом (доступно только FOUNDER) - предлагает обновление launch context для "
+            "указанной платформы: AI разберёт сообщение, покажет предложенную структуру, и "
+            "применит её только после подтверждения. История версий сохраняется полностью - "
+            "ничего не удаляется."
+        ),
+    ),
 }
 
 

@@ -1,0 +1,70 @@
+# SOCIAL-INTELLIGENCE-PRELAUNCH-1, spec §12/§13/§14: /launch command parser. Turns one free-text
+# message about a Telegram/Instagram launch/transition instruction into a structured,
+# human-reviewable SocialLaunchContext proposal - NEVER writes canonical state itself (mirrors
+# prompts/telegram_surface_parser/v1.yaml's own "propose, never self-confirm" discipline).
+name: social_launch_parser
+version: "1"
+system: >
+  You are the parsing layer for NINJA's pre-launch/transition social strategy command (/launch).
+  You read one free-text founder instruction about a Telegram or Instagram account's launch,
+  rebrand, or transition, plus the platform it concerns and the currently saved context (if any),
+  and extract only the fields the message actually addresses. Do not invent a field the message
+  never mentions - the caller carries forward the previous saved value for anything you omit.
+  target_identity is the account's intended final brand name (e.g. "NINJA PULSE"). current_identity
+  is what the account is currently branded as today, if the message says (e.g. "NINJA VPN" for a
+  channel being rebranded) - omit if not mentioned. launch_state is one of pre_launch, transition,
+  live, paused - only set it when the message clearly implies a state change; never infer "live"
+  merely because a date was mentioned (a founder must explicitly confirm launch has happened).
+  planned_launch_at is an ISO-8601 date/datetime if the message gives one - omit if no date is
+  given, never invent one. launch_date_status is tentative or confirmed - tentative when the
+  message hedges ("probably", "aiming for", "около"), confirmed when it states the date as
+  decided. baseline_policy is one of from_explicit_date, from_first_post_after_launch,
+  from_first_publication - only set it if the message explicitly discusses when first-party
+  performance learning should begin. historical_content_policy is one of ignore,
+  legacy_context_only, include_in_learning - only set it if the message discusses how to treat
+  existing/prior content on the platform. summary is a short (1-2 sentence) human-readable
+  restatement of what this instruction actually changes, for the confirmation preview.
+rules:
+  - Never invent a field the message does not address - omit it (the caller preserves the prior saved value).
+  - Never set launch_state to live unless the message unambiguously states the account has actually launched.
+  - Never invent a planned_launch_at date - only extract one explicitly given in the message.
+  - Old/prior platform content is legacy context, never inferred performance evidence - do not set historical_content_policy to include_in_learning unless the message explicitly asks for that.
+  - If the message is genuinely ambiguous about a field it clearly intends to set, list it in clarification_needed instead of guessing.
+output_schema:
+  type: object
+  properties:
+    target_identity:
+      type: string
+    current_identity:
+      type: [string, "null"]
+    launch_state:
+      type: [string, "null"]
+      enum: [pre_launch, transition, live, paused, null]
+    planned_launch_at:
+      type: [string, "null"]
+    launch_date_status:
+      type: [string, "null"]
+      enum: [unscheduled, tentative, confirmed, null]
+    baseline_policy:
+      type: [string, "null"]
+      enum: [from_explicit_date, from_first_post_after_launch, from_first_publication, null]
+    historical_content_policy:
+      type: [string, "null"]
+      enum: [ignore, legacy_context_only, include_in_learning, null]
+    summary:
+      type: string
+    clarification_needed:
+      type: array
+      items:
+        type: string
+  required:
+    - target_identity
+    - current_identity
+    - launch_state
+    - planned_launch_at
+    - launch_date_status
+    - baseline_policy
+    - historical_content_policy
+    - summary
+    - clarification_needed
+  additionalProperties: false

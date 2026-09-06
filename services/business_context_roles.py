@@ -47,22 +47,32 @@ _SURFACE_COMMAND = frozenset({"surface"})
 # permission system.
 _DESIGN_COMMAND = frozenset({"design"})
 
+# SOCIAL-INTELLIGENCE-PRELAUNCH-1 §12: /launch read is available to every role that already has
+# director console read access (same reasoning as _DESIGN_COMMAND exactly - launch context status
+# is read-only strategic state, same category as /directors/performance); SUBMITTING an
+# instruction is additionally FOUNDER-only, enforced the same "directive"-allowed proxy check
+# bot/handlers/telegram_surface.py already established, never a second permission system.
+_LAUNCH_COMMAND = frozenset({"launch"})
+
 DEFAULT_ROLE_COMMANDS: dict[BusinessContextRole, frozenset[str]] = {
     BusinessContextRole.FOUNDER: frozenset(
         {"product", "campaign", "milestone", "directive", "claim", "context", "status", "help"}
-        | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND | _DESIGN_COMMAND
+        | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND | _DESIGN_COMMAND | _LAUNCH_COMMAND
     ),
     BusinessContextRole.PRODUCT_OWNER: frozenset(
         {"product", "campaign", "milestone", "claim", "context", "status", "help"}
-        | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND | _DESIGN_COMMAND
+        | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND | _DESIGN_COMMAND | _LAUNCH_COMMAND
     ),
     BusinessContextRole.MARKETING: frozenset(
-        {"campaign", "milestone", "context", "status", "help"} | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND | _DESIGN_COMMAND
+        {"campaign", "milestone", "context", "status", "help"}
+        | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND | _DESIGN_COMMAND | _LAUNCH_COMMAND
     ),
     BusinessContextRole.EDITOR: frozenset(
-        {"status", "help", "directors", "opportunities", "performance"} | _SURFACE_COMMAND | _DESIGN_COMMAND
+        {"status", "help", "directors", "opportunities", "performance"} | _SURFACE_COMMAND | _DESIGN_COMMAND | _LAUNCH_COMMAND
     ),
-    BusinessContextRole.VIEWER: frozenset({"status", "help"} | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND | _DESIGN_COMMAND),
+    BusinessContextRole.VIEWER: frozenset(
+        {"status", "help"} | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND | _DESIGN_COMMAND | _LAUNCH_COMMAND
+    ),
 }
 
 
