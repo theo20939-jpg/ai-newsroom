@@ -49,15 +49,21 @@ _DESIGN_COMMAND = frozenset({"design"})
 
 # SOCIAL-INTELLIGENCE-PRELAUNCH-1 §12: /launch read is available to every role that already has
 # director console read access (same reasoning as _DESIGN_COMMAND exactly - launch context status
-# is read-only strategic state, same category as /directors/performance); SUBMITTING an
-# instruction is additionally FOUNDER-only, enforced the same "directive"-allowed proxy check
-# bot/handlers/telegram_surface.py already established, never a second permission system.
+# is read-only strategic state, same category as /directors/performance).
 _LAUNCH_COMMAND = frozenset({"launch"})
+
+# SOCIAL-INTELLIGENCE-PRELAUNCH-1A §3: /launch's OWN canonical mutation permission - deliberately
+# NOT the "directive" proxy every other mutation command (/surface, /design) still uses. A
+# distinct command name means changing FOUNDER's "directive" entry (e.g. a future phase narrowing
+# who may issue strategic directives) can never accidentally change who may mutate launch context,
+# and vice versa - two independent frozensets, same underlying CommandRegistry/role-map mechanism,
+# never a second permission system. FOUNDER-only: no other role's entry below includes this name.
+_LAUNCH_MUTATE_COMMAND = frozenset({"launch_mutate"})
 
 DEFAULT_ROLE_COMMANDS: dict[BusinessContextRole, frozenset[str]] = {
     BusinessContextRole.FOUNDER: frozenset(
         {"product", "campaign", "milestone", "directive", "claim", "context", "status", "help"}
-        | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND | _DESIGN_COMMAND | _LAUNCH_COMMAND
+        | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND | _DESIGN_COMMAND | _LAUNCH_COMMAND | _LAUNCH_MUTATE_COMMAND
     ),
     BusinessContextRole.PRODUCT_OWNER: frozenset(
         {"product", "campaign", "milestone", "claim", "context", "status", "help"}

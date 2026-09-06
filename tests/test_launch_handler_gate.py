@@ -1,5 +1,6 @@
-"""SOCIAL-INTELLIGENCE-PRELAUNCH-1 §43: /launch gate tests - CommandRegistry usage, mutation
-requires FOUNDER tier, wrong chat/topic rejected, read pure, non-Founder rejected."""
+"""SOCIAL-INTELLIGENCE-PRELAUNCH-1/1A §3/§26/§43: /launch gate tests - CommandRegistry usage,
+mutation requires FOUNDER tier via /launch's OWN canonical permission (never the "directive"
+proxy), wrong chat/topic rejected, read pure, non-Founder rejected."""
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -36,10 +37,27 @@ def test_launch_command_uses_command_registry() -> None:
 
 def test_only_founder_tier_can_mutate(monkeypatch) -> None:
     monkeypatch.setattr(settings, "business_context_role_map", {1: "founder", 2: "product_owner", 3: "marketing", 4: "editor", 5: "viewer"})
-    # The exact proxy check bot/handlers/launch.py::handle_launch uses for "may submit an instruction".
-    assert is_command_allowed(1, "directive") is True
+    # The exact check bot/handlers/launch.py::handle_launch uses for "may submit an instruction" -
+    # /launch's own canonical permission, never the "directive" proxy (spec §3, PRELAUNCH-1A).
+    assert is_command_allowed(1, "launch_mutate") is True
     for non_founder in (2, 3, 4, 5):
-        assert is_command_allowed(non_founder, "directive") is False
+        assert is_command_allowed(non_founder, "launch_mutate") is False
+
+
+def test_launch_mutation_permission_is_independent_of_directive(monkeypatch) -> None:
+    """spec §3/§26: changing /directive permissions must never change /launch permissions - two
+    independent frozensets, not a shared proxy."""
+    monkeypatch.setattr(settings, "business_context_role_map", {1: "founder"})
+    from services.business_context_roles import DEFAULT_ROLE_COMMANDS, BusinessContextRole
+
+    founder_commands = DEFAULT_ROLE_COMMANDS[BusinessContextRole.FOUNDER]
+    assert "launch_mutate" in founder_commands
+    assert "directive" in founder_commands
+    # Removing "directive" from a hypothetical narrower role matrix must not remove
+    # "launch_mutate" - proven by checking they are two distinct, independently-membered entries
+    # in the same frozenset, not one gating the other.
+    narrowed = founder_commands - {"directive"}
+    assert "launch_mutate" in narrowed
 
 
 def test_every_role_can_read_launch_status(monkeypatch) -> None:

@@ -21,7 +21,20 @@ _ALL_COMMAND_NAMES = frozenset({
 
 
 def test_registry_covers_every_spec_command() -> None:
-    assert set(COMMAND_REGISTRY.keys()) == _ALL_COMMAND_NAMES
+    """Compares against real, user-facing commands only (enabled=True) - a permission-only
+    registry entry like "launch_mutate" (PRELAUNCH-1A §3, never a real slash command) is
+    deliberately excluded here, checked separately below instead."""
+    real_commands = {name for name, c in COMMAND_REGISTRY.items() if c.enabled}
+    assert real_commands == _ALL_COMMAND_NAMES
+
+
+def test_registry_may_contain_disabled_permission_only_entries() -> None:
+    """PRELAUNCH-1A §3/§26: launch_mutate exists solely so the role matrix's own
+    "every entry is a registered command" invariant holds for /launch's canonical mutation
+    permission - it must never appear as a real, user-facing command."""
+    entry = get_command("launch_mutate")
+    assert entry is not None
+    assert entry.enabled is False
 
 
 def test_role_matrix_never_references_an_unregistered_command() -> None:

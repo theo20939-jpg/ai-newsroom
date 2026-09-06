@@ -210,6 +210,17 @@ COMMAND_REGISTRY: dict[str, CommandDefinition] = {
             "ничего не удаляется."
         ),
     ),
+    # SOCIAL-INTELLIGENCE-PRELAUNCH-1A §3/§26: NOT a real slash command - a permission-only entry
+    # so /launch's own canonical mutation check (is_command_allowed(user_id, "launch_mutate"),
+    # services/business_context_roles.py) satisfies this registry's own "every role-matrix entry
+    # must reference a registered command" invariant (test_business_context_command_registry.py::
+    # test_role_matrix_never_references_an_unregistered_command) without polluting /help's
+    # rendered command list - enabled=False excludes it from commands_for_role() below, the same
+    # function render_help() uses to build that list.
+    "launch_mutate": CommandDefinition(
+        name="launch_mutate", description="(internal) FOUNDER permission for /launch mutation - not a real command.",
+        enabled=False,
+    ),
 }
 
 

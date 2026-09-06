@@ -3,10 +3,12 @@ through the SAME General-topic Command Center. Router registration mirrors bot/h
 telegram_surface.py's own shape exactly - same two-factor gate, same lazily-constructed AI layer,
 same propose->confirm/cancel lifecycle.
 
-CRITICAL (spec §12): reading launch context is available to every role the CommandRegistry grants
-"launch" to; SUBMITTING an instruction additionally requires FOUNDER tier - checked via the exact
-same `is_command_allowed(user_id, "directive")` proxy every other mutation command in this
-codebase already uses.
+CRITICAL (spec §3, PRELAUNCH-1A): reading launch context is available to every role the
+CommandRegistry grants "launch" to; SUBMITTING an instruction additionally requires FOUNDER tier -
+checked via `is_command_allowed(user_id, "launch_mutate")`, /launch's OWN canonical mutation
+permission (services/business_context_roles.py), never the "directive" proxy /surface and /design
+still use. This deliberately decouples /launch's authorization from any other command's - changing
+who may issue a strategic directive can never accidentally change who may mutate launch context.
 
 CRITICAL (spec §5): `settings.social_launch_context_enabled` (default False) gates the WHOLE
 command, mirroring bot/handlers/director_console.py's own `director_console_enabled` precedent -
@@ -120,8 +122,9 @@ async def handle_launch(message: Message, command: CommandObject) -> None:
         await message.answer(text)
         return
 
-    # Anything past this point is an attempted MUTATION - FOUNDER tier only (spec §12).
-    if not is_command_allowed(user_id, "directive"):
+    # Anything past this point is an attempted MUTATION - FOUNDER tier only, via /launch's own
+    # canonical permission (spec §3, PRELAUNCH-1A) - never the "directive" proxy.
+    if not is_command_allowed(user_id, "launch_mutate"):
         await _fail_not_founder(message)
         return
 
@@ -191,7 +194,7 @@ async def handle_launch_callback(callback: CallbackQuery) -> None:
         return
 
     user_id = callback.from_user.id
-    if not is_command_allowed(user_id, "directive"):
+    if not is_command_allowed(user_id, "launch_mutate"):
         await callback.answer("Только FOUNDER может подтвердить launch context.", show_alert=True)
         return
 
