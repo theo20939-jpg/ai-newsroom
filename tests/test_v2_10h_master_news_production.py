@@ -143,11 +143,16 @@ def test_left_ordering_is_nnj_pulse_line() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_upper_and_lower_are_selected_independently_on_a_clean_photo() -> None:
+def test_upper_mark_never_joins_an_already_placed_lower_signature() -> None:
+    """VISUAL-SINGLE-BRAND-MARK-1 §6: both components draw the SAME canonical NNJ mark, so a clean
+    photo where the lower signature can be placed must never ALSO place the upper mark - that
+    would put two independently-readable NNJ marks on one image. Supersedes this suite's own prior
+    "upper_and_lower" expectation, which was the real, live duplicate-brand-mark root cause this
+    phase closes."""
     branded, decision = apply_master_news_branding(_flat_photo())
-    assert decision.upper_mark.placement is not ComponentPlacement.OMITTED
     assert decision.lower_signature.placement is not ComponentPlacement.OMITTED
-    assert decision.degradation_mode == "upper_and_lower"
+    assert decision.upper_mark.placement is ComponentPlacement.OMITTED
+    assert decision.degradation_mode == "lower_signature_only"
 
 
 def test_lower_right_preferred_when_safe() -> None:
@@ -175,7 +180,9 @@ def test_upper_mark_only_degradation_reachable() -> None:
     evaluated, smaller-footprint) upper mark can still succeed."""
     photo_bytes = _photo_with_busy_patch((0, 600, 1280, 720))
     branded, decision = apply_master_news_branding(photo_bytes)
-    assert decision.degradation_mode in ("upper_mark_only", "upper_and_lower", "lower_signature_only")
+    # "upper_and_lower" is structurally unreachable since VISUAL-SINGLE-BRAND-MARK-1 §6 (both
+    # components draw the same canonical mark - never composited together).
+    assert decision.degradation_mode in ("upper_mark_only", "lower_signature_only")
 
 
 def test_lower_signature_only_degradation_reachable() -> None:

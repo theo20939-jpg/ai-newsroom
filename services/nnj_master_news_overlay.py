@@ -221,13 +221,30 @@ class MasterNewsBrandingDecision:
     upper_mark: ComponentDecision
     lower_signature: ComponentDecision
     canvas_size: tuple[int, int]
+    # VISUAL-SINGLE-BRAND-MARK-1 §6: True when `apply_master_news_branding()` detected the input
+    # bytes already carry this module's own finalization marker (see `_FINALIZED_MARKER_PREFIX`
+    # below) and returned them completely unchanged - no new compositing occurred, `upper_mark`/
+    # `lower_signature` above are both placeholder OMITTED decisions with no real evaluation.
+    # `already_finalized_had_overlay` preserves whether that PRIOR run actually placed a mark
+    # (read back from the marker itself, never re-derived from pixels) so a caller's
+    # BRANDED-vs-NO_OVERLAY_SAFETY accounting stays correct across repeated finalization instead
+    # of blindly assuming a mark is present.
+    already_finalized: bool = False
+    already_finalized_had_overlay: bool = False
 
     @property
     def degradation_mode(self) -> str:
+        if self.already_finalized:
+            return "already_finalized" if self.already_finalized_had_overlay else "no_overlay"
         has_upper = self.upper_mark.placement is not ComponentPlacement.OMITTED
         has_lower = self.lower_signature.placement is not ComponentPlacement.OMITTED
+        # VISUAL-SINGLE-BRAND-MARK-1 §6: upper_mark and lower_signature are now mutually
+        # exclusive by construction (select_master_news_branding() never evaluates the upper mark
+        # once the lower signature has already been placed) - "upper_and_lower" is therefore
+        # structurally unreachable, kept only so a legacy log/telemetry reader never crashes on an
+        # unrecognized value it may still hold in historical records.
         if has_upper and has_lower:
-            return "upper_and_lower"
+            return "upper_and_lower"  # pragma: no cover - structurally unreachable, see above
         if has_lower:
             return "lower_signature_only"
         if has_upper:
@@ -240,7 +257,9 @@ class MasterNewsBrandingDecision:
         successful `apply_master_news_branding()` call (i.e. one that did not raise) - the caller
         is responsible for the two exception/no-bytes states this decision object cannot itself
         represent (`NEWS_BRANDING_ORIGINAL_SOURCE_FAILURE` / `NEWS_BRANDING_NO_SOURCE_BYTES`),
-        since this object is only ever constructed when branding actually ran to completion."""
+        since this object is only ever constructed when branding actually ran to completion.
+        Correctly reflects `already_finalized_had_overlay` on a repeated finalization too -
+        `degradation_mode` above already folds that flag in, never blindly reporting BRANDED."""
         return NEWS_BRANDING_NO_OVERLAY_SAFETY if self.degradation_mode == "no_overlay" else NEWS_BRANDING_BRANDED
 
 
@@ -414,16 +433,24 @@ def _fit_photo_to_canvas(photo: Image.Image, size: tuple[int, int]) -> Image.Ima
 def select_master_news_branding(
     photo: Image.Image, *, subject_bbox: BoundingBox | None = None, disable_lower_signature: bool = False,
 ) -> MasterNewsBrandingDecision:
-    """The one deterministic selection function (Phase V2.10H §3/§4/§6, extended Phase V2.10I
-    §7): evaluates the LOWER SIGNATURE (LOWER_RIGHT -> LOWER_LEFT -> UPPER_RIGHT -> UPPER_LEFT,
-    bottom-edge strongly preferred per §4) and the UPPER MARK (UPPER_RIGHT -> UPPER_LEFT)
-    completely independently against the real `photo` pixels - neither is forced into the other's
-    corner, and either may end up OMITTED while the other still renders. No semantic subject
-    detector is invoked; a genuinely supplied `subject_bbox` is honored as an additional
-    exclusion. `disable_lower_signature=True` (Phase V2.10I §7 - see module docstring's own
-    "EXISTING METADATA REUSE" section) skips lower-signature region evaluation entirely - a
-    whole-image, non-spatial risk signal cannot certify any particular corner as safe, so no
-    region is scored at all; the upper mark's own independent, spatial evaluation is unaffected."""
+    """The one deterministic selection function (Phase V2.10H §3/§4/§6, extended Phase V2.10I §7,
+    VISUAL-SINGLE-BRAND-MARK-1 §6): evaluates the LOWER SIGNATURE first (LOWER_RIGHT ->
+    LOWER_LEFT -> UPPER_RIGHT -> UPPER_LEFT, bottom-edge strongly preferred per §4) since it is
+    this contract's own preferred, primary branding unit. The UPPER MARK (UPPER_RIGHT ->
+    UPPER_LEFT) is evaluated ONLY as a fallback for when the lower signature could not be safely
+    placed anywhere - both components draw the SAME canonical NNJ mark
+    (`rasterize_nnj_mark()`), so compositing both at once would put two independently-readable
+    NNJ marks on one image (VISUAL-SINGLE-BRAND-MARK-1's own "exactly one canonical brand mark"
+    invariant - this is the real, live root cause that invariant is closing: prior to this phase
+    the two components were placed completely independently and could both succeed on the same
+    quiet photo). Never both, never neither's own placement chain shortened - the fallback still
+    tries every one of its own candidate corners, exactly as before. No semantic subject detector
+    is invoked; a genuinely supplied `subject_bbox` is honored as an additional exclusion.
+    `disable_lower_signature=True` (Phase V2.10I §7 - see module docstring's own "EXISTING
+    METADATA REUSE" section) skips lower-signature region evaluation entirely and lets the upper
+    mark's own independent, spatial evaluation run as the sole candidate - a whole-image,
+    non-spatial risk signal cannot certify any particular corner as safe, so no lower-signature
+    region is scored at all."""
     canvas_size = (photo.width, photo.height)
     inset = max(1, round(_SAFE_INSET_FRAC * canvas_size[0]))
 
@@ -448,17 +475,32 @@ def select_master_news_branding(
         lower_image = _build_lower_signature_image(canvas_size, lower_placement, inset) if lower_placement is not ComponentPlacement.OMITTED else None
         lower_disabled_reason = None
 
-    upper_mark_w = max(1, round(_UPPER_MARK_W_FRAC * canvas_size[0]))
-    upper_mark_h = rasterize_nnj_mark(target_width=upper_mark_w).height
-    upper_placement, _ubox, upper_attempts = _evaluate_placements(
-        photo, component_size=(upper_mark_w, upper_mark_h),
-        candidates=(ComponentPlacement.UPPER_RIGHT, ComponentPlacement.UPPER_LEFT),
-        inset=inset, subject_bbox=subject_bbox,
-    )
-    upper_image = _build_upper_mark_image(canvas_size, upper_placement, inset) if upper_placement is not ComponentPlacement.OMITTED else None
+    # VISUAL-SINGLE-BRAND-MARK-1 §6: mutual exclusion with the lower signature - the upper mark is
+    # only ever evaluated when the lower signature ended up OMITTED (unsafe everywhere it tried,
+    # or force-disabled above). A lower signature that WAS placed already supplies this image's
+    # one canonical mark; scoring the upper mark's own corners in that case would only ever risk
+    # adding a second one.
+    upper_disabled_reason: str | None = None
+    if lower_placement is not ComponentPlacement.OMITTED:
+        upper_placement = ComponentPlacement.OMITTED
+        upper_attempts: tuple[RegionScore, ...] = ()
+        upper_image = None
+        upper_disabled_reason = "single_brand_mark_contract_lower_signature_already_placed"
+    else:
+        upper_mark_w = max(1, round(_UPPER_MARK_W_FRAC * canvas_size[0]))
+        upper_mark_h = rasterize_nnj_mark(target_width=upper_mark_w).height
+        upper_placement, _ubox, upper_attempts = _evaluate_placements(
+            photo, component_size=(upper_mark_w, upper_mark_h),
+            candidates=(ComponentPlacement.UPPER_RIGHT, ComponentPlacement.UPPER_LEFT),
+            inset=inset, subject_bbox=subject_bbox,
+        )
+        upper_image = _build_upper_mark_image(canvas_size, upper_placement, inset) if upper_placement is not ComponentPlacement.OMITTED else None
 
     return MasterNewsBrandingDecision(
-        upper_mark=ComponentDecision(placement=upper_placement, image=upper_image, attempts=upper_attempts),
+        upper_mark=ComponentDecision(
+            placement=upper_placement, image=upper_image, attempts=upper_attempts,
+            disabled_reason=upper_disabled_reason,
+        ),
         lower_signature=ComponentDecision(
             placement=lower_placement, image=lower_image, attempts=lower_attempts,
             disabled_reason=lower_disabled_reason,
@@ -467,18 +509,56 @@ def select_master_news_branding(
     )
 
 
+_FINALIZED_MARKER_PREFIX = b"NNJ-FINALIZED-V1:"
+_FINALIZED_MARKER_BRANDED = _FINALIZED_MARKER_PREFIX + b"BRANDED"
+_FINALIZED_MARKER_NO_OVERLAY = _FINALIZED_MARKER_PREFIX + b"NO_OVERLAY"
+
+
+def _read_finalized_marker(photo: Image.Image) -> bool | None:
+    """Reads back the JPEG COM segment `apply_master_news_branding()` embeds in every output it
+    produces (see below) - structural pipeline knowledge, never visual/OCR logo detection (spec's
+    own explicit "do not rely on fragile visual OCR/logo detection as the primary idempotency
+    mechanism" instruction). Returns `True` if the prior run placed a mark, `False` if it
+    completed as NO_OVERLAY_SAFETY, `None` if the input carries no marker at all (never
+    previously finalized by this function)."""
+    comment = photo.info.get("comment")
+    if comment == _FINALIZED_MARKER_BRANDED:
+        return True
+    if comment == _FINALIZED_MARKER_NO_OVERLAY:
+        return False
+    return None
+
+
 def apply_master_news_branding(
     source_image_bytes: bytes, *, subject_bbox: BoundingBox | None = None, disable_lower_signature: bool = False,
 ) -> tuple[bytes, MasterNewsBrandingDecision]:
     """Phase V2.10H - the ONE production compositing entry point for the locked MASTER NEWS
     contract. Fits `source_image_bytes` to the 1280x720 canvas, evaluates and composites the
-    upper mark and lower signature independently (either or both may be omitted - NO_OVERLAY is a
-    valid result, never forced through unsafe content), and returns `(jpeg_bytes, decision)`.
-    Works identically for an ORIGINAL_SOURCE image or a successfully-recomposed one - the caller
-    decides which bytes to pass in; this function has no opinion about where they came from.
-    `disable_lower_signature` - see select_master_news_branding()'s own docstring (Phase V2.10I
-    §7)."""
-    photo = Image.open(io.BytesIO(source_image_bytes)).convert("RGBA")
+    upper mark and lower signature - now mutually exclusive (VISUAL-SINGLE-BRAND-MARK-1 §6), never
+    both at once - and returns `(jpeg_bytes, decision)`. Works identically for an ORIGINAL_SOURCE
+    image or a successfully-recomposed one - the caller decides which bytes to pass in; this
+    function has no opinion about where they came from. `disable_lower_signature` - see
+    select_master_news_branding()'s own docstring (Phase V2.10I §7).
+
+    IDEMPOTENT (VISUAL-SINGLE-BRAND-MARK-1 §6/§7): every output this function produces carries a
+    JPEG comment marker recording whether a mark was actually placed. A repeat call on bytes this
+    SAME function already produced detects that marker immediately and returns the input
+    completely unchanged - no re-evaluation, no re-compositing, no second mark, regardless of how
+    many times it is called or what `disable_lower_signature`/`subject_bbox` the repeat call
+    passes. This is the one real choke point every caller (services/media_finalizer.py,
+    worker/content_cycle.py, services/final_post_review_notifier.py) already goes through, so the
+    guarantee is automatic for all of them without any call-site change."""
+    opened = Image.open(io.BytesIO(source_image_bytes))
+    prior_had_overlay = _read_finalized_marker(opened)
+    if prior_had_overlay is not None:
+        skip = ComponentDecision(placement=ComponentPlacement.OMITTED, image=None, attempts=())
+        decision = MasterNewsBrandingDecision(
+            upper_mark=skip, lower_signature=skip, canvas_size=opened.size,
+            already_finalized=True, already_finalized_had_overlay=prior_had_overlay,
+        )
+        return source_image_bytes, decision
+
+    photo = opened.convert("RGBA")
     photo_fit = _fit_photo_to_canvas(photo, (_CANVAS_W, _CANVAS_H))
 
     decision = select_master_news_branding(photo_fit, subject_bbox=subject_bbox, disable_lower_signature=disable_lower_signature)
@@ -489,5 +569,7 @@ def apply_master_news_branding(
     if decision.upper_mark.image is not None:
         branded.alpha_composite(decision.upper_mark.image)
     buf = io.BytesIO()
-    branded.convert("RGB").save(buf, "JPEG", quality=95)
+    has_mark = decision.degradation_mode != "no_overlay"
+    marker = _FINALIZED_MARKER_BRANDED if has_mark else _FINALIZED_MARKER_NO_OVERLAY
+    branded.convert("RGB").save(buf, "JPEG", quality=95, comment=marker)
     return buf.getvalue(), decision
