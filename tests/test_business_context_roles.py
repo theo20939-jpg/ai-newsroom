@@ -57,6 +57,8 @@ def test_commands_for_role_matches_role_matrix() -> None:
     # READ is broadly available too - mutation is gated separately inside the handler.
     # VISUAL-DESIGN-AUTONOMY-1 §54: /design read is broadly available too - mutation
     # (freeze/unfreeze/rollback) is gated separately inside the handler, same pattern as /surface.
+    # SOCIAL-INTELLIGENCE-PRELAUNCH-1 §12: /launch read is broadly available too - mutation is
+    # gated separately inside the handler, same pattern as /surface and /design.
     assert commands_for_role(BusinessContextRole.VIEWER) == frozenset({
-        "status", "help", "directors", "plan", "opportunities", "calendar", "performance", "surface", "design",
+        "status", "help", "directors", "plan", "opportunities", "calendar", "performance", "surface", "design", "launch",
     })
