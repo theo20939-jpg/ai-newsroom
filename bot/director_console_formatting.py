@@ -97,20 +97,28 @@ def render_plan(view: PlanView, *, role: BusinessContextRole, platform: str | No
         lines.append("TELEGRAM PLAN")
         if view.telegram_note:
             lines.append(view.telegram_note)
-        elif view.telegram_advisory is not None:
+        if view.telegram_advisory is not None:
             if view.telegram_advisory.priority_themes:
                 lines.append("Приоритетные темы: " + ", ".join(view.telegram_advisory.priority_themes))
             for note in view.telegram_advisory.content_balance_notes:
                 lines.append(f"- {note}")
             for note in view.telegram_advisory.campaign_support_notes:
                 lines.append(f"- {note}")
+        if view.telegram_prelaunch is not None:
+            lines.append(f"Pre-launch advisory: {view.telegram_prelaunch.current_state} → {view.telegram_prelaunch.target_state}")
+            if view.telegram_prelaunch.launch_objectives:
+                lines.append("Цели запуска: " + "; ".join(view.telegram_prelaunch.launch_objectives))
         lines.append("")
 
     if platform in (None, "instagram"):
         lines.append("INSTAGRAM PLAN")
         if view.instagram_note:
             lines.append(view.instagram_note)
-        elif view.instagram_strategy is not None:
+        if view.instagram_prelaunch is not None:
+            lines.append(f"Pre-launch advisory: {view.instagram_prelaunch.current_state} → {view.instagram_prelaunch.target_state}")
+            if view.instagram_prelaunch.launch_objectives:
+                lines.append("Цели запуска: " + "; ".join(view.instagram_prelaunch.launch_objectives))
+        if view.instagram_strategy is not None:
             if view.instagram_strategy.objective_mix:
                 mix = ", ".join(f"{k}: {v}" for k, v in view.instagram_strategy.objective_mix.items())
                 lines.append(f"Распределение целей: {mix}")

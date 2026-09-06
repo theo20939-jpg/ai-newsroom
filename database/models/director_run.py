@@ -28,7 +28,17 @@ class DirectorType(str, enum.Enum):
     TELEGRAM_GROWTH = "telegram_growth"
     TELEGRAM_STRATEGY = "telegram_strategy"
     TELEGRAM_VISUAL_DESIGN = "telegram_visual_design"
+    # SOCIAL-INTELLIGENCE-PRELAUNCH-1 §22/§27: deliberately DISTINCT from TELEGRAM_STRATEGY/
+    # INSTAGRAM_GROWTH above - services/social_prelaunch_advisory.py::PrelaunchAdvisory has a
+    # completely different result_payload shape (current_state/target_state/launch_objectives/...
+    # vs. StrategyDirectorAdvisory's priority_themes/... or InstagramGrowthStrategy's
+    # objective_mix/...). DirectorRun's own docstring is explicit that different director types
+    # intentionally keep different payload shapes - reusing an existing type here would make
+    # services/director_console_service.py::build_plan_view()'s own `StrategyDirectorAdvisory(
+    # **run.result_payload)` reconstruction raise on a real pre-launch run.
+    TELEGRAM_PRELAUNCH = "telegram_prelaunch"
     INSTAGRAM_GROWTH = "instagram_growth"
+    INSTAGRAM_PRELAUNCH = "instagram_prelaunch"
     INSTAGRAM_FORMAT = "instagram_format"
     INSTAGRAM_CREATIVE = "instagram_creative"
     CAMPAIGN_DIRECTOR = "campaign_director"
@@ -81,6 +91,13 @@ class DirectorRun(Base):
     # calendar item.
     campaign_status_at_run: Mapped[str | None] = mapped_column(String(30), nullable=True)
     campaign_phase_at_run: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    # SOCIAL-INTELLIGENCE-PRELAUNCH-1 §16/§27: a fingerprint of the SocialLaunchContext this run
+    # was computed against (services/social_launch_context_service.py::
+    # compute_launch_context_fingerprint()) - the same targeted-staleness idiom
+    # business_context_fingerprint below already established, applied to launch state/date/policy
+    # instead. A run with no launch context involved leaves this None, never a fabricated value.
+    launch_context_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     # A coarse fingerprint of the whole BusinessContextSnapshot at run time (directives/claims/
     # campaign statuses) - a catch-all staleness signal beyond just this run's own campaign_id,

@@ -11,15 +11,23 @@ the existing role/command gate - console commands are additionally off by defaul
 otherwise-permitted role. Every handler below is READ-ONLY: it authorizes, parses the optional
 platform filter, calls a DirectorConsoleService/DirectorStatusService function, renders the pure
 result, and sends it - NO service call here ever writes to a table, calls the AI Gateway, or
-touches a platform API (spec §13/§18/§29)."""
+touches a platform API (spec §13/§18/§29).
+
+SOCIAL-INTELLIGENCE-PRELAUNCH-1 §24/§25/§26: `/directors refresh <target>` is the ONE explicit
+exception - a genuinely separate, NOT-read subcommand of `/directors` (never a bare `/directors`
+or `/directors <platform>` filter, which remain exactly as pure as before). FOUNDER-only, gated by
+`settings.social_advisory_execution_enabled` (default False) ON TOP OF the existing
+`director_console_enabled` gate, and always requires an explicit confirm/cancel keyboard press
+before it ever calls the Gateway - opening `/directors refresh ...` itself never spends anything."""
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, InaccessibleMessage, Message
 
 from bot.director_console_formatting import (
     render_calendar,
@@ -28,8 +36,13 @@ from bot.director_console_formatting import (
     render_performance,
     render_plan,
 )
+from bot.keyboards.launch import build_refresh_confirmation_keyboard, parse_refresh_callback_data
+from bot.launch_formatting import render_budget_blocked, render_prelaunch_advisory, render_refresh_confirmation
 from core.config import settings
+from database.models.social_launch_context import SocialLaunchPlatform
 from database.session import async_session_factory
+from integrations.llm_gateway.boot import assemble_ai_integration_layer
+from integrations.prompts.file_repository import FilePromptRepository
 from services.business_context_roles import BusinessContextRole, get_role_for_user, is_command_allowed
 from services.director_console_service import (
     build_calendar_view,
@@ -38,10 +51,17 @@ from services.director_console_service import (
     build_plan_view,
 )
 from services.director_status_service import get_director_console_status
+from services.social_advisory_budget_service import check_social_advisory_budget, daily_advisory_summary
+from services.social_advisory_execution_service import run_prelaunch_advisory
 
 logger = logging.getLogger(__name__)
 
 router = Router(name="director_console")
+
+_PROMPTS_ROOT = Path(__file__).resolve().parent.parent.parent / "prompts"
+_REFRESH_TARGETS = {"telegram": [SocialLaunchPlatform.TELEGRAM], "instagram": [SocialLaunchPlatform.INSTAGRAM],
+                     "all": [SocialLaunchPlatform.TELEGRAM, SocialLaunchPlatform.INSTAGRAM]}
+_PLATFORM_LABEL = {SocialLaunchPlatform.TELEGRAM: "Telegram", SocialLaunchPlatform.INSTAGRAM: "Instagram"}
 
 _VALID_PLATFORM_FILTERS = {"telegram", "instagram"}
 _TELEGRAM_MESSAGE_LIMIT = 4000
@@ -113,14 +133,116 @@ async def _authorize(message: Message, command_name: str) -> BusinessContextRole
     return role
 
 
+def _parse_refresh_target(args: str) -> str | None:
+    parts = args.strip().lower().split()
+    if len(parts) != 2 or parts[0] != "refresh":
+        return None
+    return parts[1] if parts[1] in _REFRESH_TARGETS else None
+
+
 @router.message(Command("directors"))
 async def handle_directors(message: Message, command: CommandObject) -> None:
+    """spec §24: a bare `/directors` (or a future non-"refresh" argument) stays exactly as pure a
+    read as before - `_authorize()` alone gates it, no budget/Gateway code path is even reached.
+    `/directors refresh <target>` is parsed BEFORE that pure read path and branches away entirely
+    - it is never treated as an unrecognized platform filter."""
+    if command.args and command.args.strip().lower().startswith("refresh"):
+        await _handle_refresh_request(message, command.args)
+        return
+
     role = await _authorize(message, "directors")
     if role is None:
         return
     async with async_session_factory() as session:
         status = await get_director_console_status(session, now=datetime.now(timezone.utc))
     await _send_possibly_long(message, render_directors_status(status, role=role))
+
+
+async def _handle_refresh_request(message: Message, args: str) -> None:
+    """spec §25/§26: FOUNDER-only, additionally gated by social_advisory_execution_enabled ON TOP
+    of director_console_enabled, and NEVER calls the Gateway from this function itself - only
+    shows the confirmation keyboard. The actual call happens in handle_refresh_callback() below,
+    only after that keyboard's own Confirm button is pressed."""
+    if not _is_authorized_chat_and_topic(message):
+        await _fail_wrong_location(message)
+        return
+    if not settings.director_console_enabled:
+        await _fail_console_disabled(message)
+        return
+    user_id = message.from_user.id if message.from_user else None
+    if user_id is None or not is_command_allowed(user_id, "directive"):
+        await message.answer("🥷 Запускать advisory-директоров может только FOUNDER.")
+        return
+    if not settings.social_advisory_execution_enabled:
+        await message.answer("🥷 Явный запуск advisory-директоров пока отключён.")
+        return
+
+    target = _parse_refresh_target(args)
+    if target is None:
+        await message.answer("🥷 Используйте: /directors refresh telegram, /directors refresh instagram, или /directors refresh all.")
+        return
+
+    async with async_session_factory() as session:
+        budget = await check_social_advisory_budget(session, now=datetime.now(timezone.utc))
+    if not budget.allowed:
+        await message.answer(render_budget_blocked(budget.decision.value))
+        return
+
+    async with async_session_factory() as session:
+        runs_today, cost_known, cost_today = await daily_advisory_summary(session, now=datetime.now(timezone.utc))
+    await message.answer(
+        render_refresh_confirmation(
+            target, runs_today=runs_today, max_runs_per_day=settings.social_advisory_max_runs_per_day,
+            cost_known=cost_known, cost_today=cost_today if cost_known else None,
+        ),
+        reply_markup=build_refresh_confirmation_keyboard(target),
+    )
+
+
+@router.callback_query(F.data.startswith("directorsrefresh:"))
+async def handle_refresh_callback(callback: CallbackQuery) -> None:
+    parsed = parse_refresh_callback_data(callback.data or "")
+    if parsed is None:
+        await callback.answer("Некорректные данные кнопки.", show_alert=True)
+        return
+    action, target = parsed
+
+    message = callback.message
+    if message is None or isinstance(message, InaccessibleMessage):
+        await callback.answer("Сообщение недоступно.", show_alert=True)
+        return
+    if not _is_authorized_chat_and_topic(message):
+        await callback.answer("Недоступно вне General.", show_alert=True)
+        return
+
+    user_id = callback.from_user.id
+    if not is_command_allowed(user_id, "directive"):
+        await callback.answer("Только FOUNDER может запустить advisory-директоров.", show_alert=True)
+        return
+    if action == "cancel":
+        await callback.answer("Отменено")
+        return
+    if not settings.social_advisory_execution_enabled:
+        await callback.answer("Явный запуск advisory-директоров пока отключён.", show_alert=True)
+        return
+
+    prompt_repository = FilePromptRepository(_PROMPTS_ROOT)
+    ai_layer = assemble_ai_integration_layer(settings, prompt_repository)
+    now = datetime.now(timezone.utc)
+
+    for platform in _REFRESH_TARGETS[target]:
+        async with async_session_factory() as session:
+            budget = await check_social_advisory_budget(session, now=now)
+            if not budget.allowed:
+                await message.answer(f"{_PLATFORM_LABEL[platform]}: {render_budget_blocked(budget.decision.value)}")
+                continue
+            result = await run_prelaunch_advisory(session, ai_layer.gateway, prompt_repository, platform=platform, now=now)
+        if result.error is not None:
+            await message.answer(f"{_PLATFORM_LABEL[platform]}: не удалось получить advisory ({result.error}).")
+        elif result.advisory is not None:
+            await message.answer(render_prelaunch_advisory(_PLATFORM_LABEL[platform], result.advisory))
+
+    await callback.answer("Готово")
 
 
 @router.message(Command("plan"))

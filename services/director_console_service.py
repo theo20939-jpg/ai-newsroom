@@ -51,6 +51,7 @@ from services.instagram_format_director_v2 import AssetConstraints, evaluate_for
 from services.instagram_growth_strategist import InstagramGrowthStrategy
 from services.instagram_objective_selection import ObjectiveRecommendation, recommend_objective
 from services.instagram_objectives import ContentObjective
+from services.social_prelaunch_advisory import PrelaunchAdvisory
 from services.story_campaign_matcher import StoryCampaignMatchType, StoryInput, match_story_to_campaign
 from services.telegram_calendar_service import list_calendar_items as list_telegram_calendar_items
 from services.telegram_performance_aggregator import compute_telegram_performance_aggregate
@@ -79,6 +80,14 @@ class PlanView:
     telegram_note: str = ""
     instagram_strategy: InstagramGrowthStrategy | None = None
     instagram_note: str = ""
+    # SOCIAL-INTELLIGENCE-PRELAUNCH-1 §31: the latest persisted pre-launch advisory (distinct
+    # DirectorType from telegram_advisory/instagram_strategy above - see database/models/
+    # director_run.py's own docstring for why they can never share a payload shape). Shown
+    # ALONGSIDE the deterministic advisory above, never instead of it - a platform can be in
+    # PRE_LAUNCH with a pre-launch advisory AND, once real posts exist, also accumulate real
+    # first-party StrategyDirectorAdvisory/InstagramGrowthStrategy evidence independently.
+    telegram_prelaunch: PrelaunchAdvisory | None = None
+    instagram_prelaunch: PrelaunchAdvisory | None = None
 
 
 def _business_context_version(snapshot: BusinessContextSnapshot) -> str:
@@ -113,27 +122,36 @@ async def build_plan_view(
     version = _business_context_version(snapshot)
 
     telegram_advisory: StrategyDirectorAdvisory | None = None
+    telegram_prelaunch: PrelaunchAdvisory | None = None
     telegram_note = ""
     if platform in (None, "telegram"):
         run = await get_latest_run(session, DirectorType.TELEGRAM_STRATEGY)
-        if run is None:
-            telegram_note = "NO_CURRENT_ADVISORY: Telegram Strategy Director ещё не запускался"
-        else:
+        if run is not None:
             telegram_advisory = StrategyDirectorAdvisory(**run.result_payload)
+        prelaunch_run = await get_latest_run(session, DirectorType.TELEGRAM_PRELAUNCH)
+        if prelaunch_run is not None:
+            telegram_prelaunch = PrelaunchAdvisory(**prelaunch_run.result_payload)
+        if run is None and prelaunch_run is None:
+            telegram_note = "NO_CURRENT_ADVISORY: Telegram Strategy Director ещё не запускался - используйте /directors refresh telegram"
 
     instagram_strategy: InstagramGrowthStrategy | None = None
+    instagram_prelaunch: PrelaunchAdvisory | None = None
     instagram_note = ""
     if platform in (None, "instagram"):
         run = await get_latest_run(session, DirectorType.INSTAGRAM_GROWTH)
-        if run is None:
-            instagram_note = "NO_CURRENT_ADVISORY: Instagram Growth Strategist ещё не запускался"
-        else:
+        if run is not None:
             instagram_strategy = InstagramGrowthStrategy(**run.result_payload)
+        prelaunch_run = await get_latest_run(session, DirectorType.INSTAGRAM_PRELAUNCH)
+        if prelaunch_run is not None:
+            instagram_prelaunch = PrelaunchAdvisory(**prelaunch_run.result_payload)
+        if run is None and prelaunch_run is None:
+            instagram_note = "NO_CURRENT_ADVISORY: Instagram Growth Strategist ещё не запускался - используйте /directors refresh instagram"
 
     return PlanView(
         as_of=now, business_context_version=version, active_campaigns=list(snapshot.active_campaigns),
         active_directives=list(snapshot.active_directives), telegram_advisory=telegram_advisory,
         telegram_note=telegram_note, instagram_strategy=instagram_strategy, instagram_note=instagram_note,
+        telegram_prelaunch=telegram_prelaunch, instagram_prelaunch=instagram_prelaunch,
     )
 
 

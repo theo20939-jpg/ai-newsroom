@@ -64,14 +64,15 @@ async def create_director_run(
     input_fingerprint: str, result_payload: dict, status: DirectorRunStatus = DirectorRunStatus.OK,
     subject_type: str | None = None, subject_id: UUID | None = None, campaign_id: UUID | None = None,
     campaign_status_at_run: str | None = None, campaign_phase_at_run: str | None = None,
-    business_context_fingerprint: str | None = None, decision: str | None = None,
-    confidence: float | None = None, evidence_stage: DirectorRunEvidenceStage | None = None,
+    business_context_fingerprint: str | None = None, launch_context_fingerprint: str | None = None,
+    decision: str | None = None, confidence: float | None = None, evidence_stage: DirectorRunEvidenceStage | None = None,
     model_provider: str | None = None, model_name: str | None = None, cost_usd: float | None = None,
 ) -> DirectorRun:
     run = DirectorRun(
         director_type=director_type, platform=platform, subject_type=subject_type, subject_id=subject_id,
         campaign_id=campaign_id, campaign_status_at_run=campaign_status_at_run,
         campaign_phase_at_run=campaign_phase_at_run, business_context_fingerprint=business_context_fingerprint,
+        launch_context_fingerprint=launch_context_fingerprint,
         input_fingerprint=input_fingerprint, generated_at=generated_at, status=status, decision=decision,
         confidence=confidence, evidence_stage=evidence_stage, result_payload=result_payload,
         model_provider=model_provider, model_name=model_name, cost_usd=cost_usd,
@@ -102,9 +103,16 @@ async def get_latest_run(
 
 async def is_run_context_stale(
     session: AsyncSession, run: DirectorRun, *, now: datetime, current_business_context_fingerprint: str | None = None,
+    current_launch_context_fingerprint: str | None = None,
 ) -> bool:
     """Display-time freshness check, independent of `run.stale_at` itself - mirrors
-    services/director_console_service.py::_is_context_stale()'s own targeted comparison."""
+    services/director_console_service.py::_is_context_stale()'s own targeted comparison.
+
+    SOCIAL-INTELLIGENCE-PRELAUNCH-1 §16: `current_launch_context_fingerprint` follows the exact
+    same targeted-comparison shape as `current_business_context_fingerprint` - a run captured a
+    launch context fingerprint iff it actually consumed one (services/
+    social_advisory_execution_service.py); a run with none set (e.g. a live-channel Growth run
+    with no launch-context relevance) can never be marked stale by this comparison."""
     if run.campaign_id is not None:
         campaign = await get_campaign(session, run.campaign_id)
         if campaign is None:
@@ -118,6 +126,12 @@ async def is_run_context_stale(
         current_business_context_fingerprint is not None
         and run.business_context_fingerprint is not None
         and run.business_context_fingerprint != current_business_context_fingerprint
+    ):
+        return True
+    if (
+        current_launch_context_fingerprint is not None
+        and run.launch_context_fingerprint is not None
+        and run.launch_context_fingerprint != current_launch_context_fingerprint
     ):
         return True
     return False
