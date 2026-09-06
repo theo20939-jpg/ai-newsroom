@@ -35,6 +35,7 @@ from services.telegram_art_director import (
     ArtDirectorResult,
     PixelInputContract,
     evaluate_art_direction_shadow,
+    renderer_reports_duplicate_branding,
     renderer_reports_safe_degradation,
 )
 
@@ -61,12 +62,14 @@ def _build_task_text(
     pixel_input: PixelInputContract, *, expected_facts: dict[str, Any] | None,
 ) -> str:
     safe_degradation = renderer_reports_safe_degradation(pixel_input.renderer_decision_metadata)
+    duplicate_marks = renderer_reports_duplicate_branding(pixel_input.renderer_decision_metadata)
     lines = [
         f"presentation_type: {pixel_input.presentation_type}",
         f"renderer_version: {pixel_input.renderer_version or 'unknown'}",
         f"caption: {pixel_input.caption}",
         f"renderer_decision_metadata: {pixel_input.renderer_decision_metadata}",
         f"safe_no_overlay_degradation: {safe_degradation}",
+        f"renderer_placed_duplicate_marks: {duplicate_marks}",
         f"media_source_metadata: {pixel_input.media_source_metadata}",
         f"expected_facts: {expected_facts or {}}",
     ]
@@ -102,11 +105,16 @@ async def evaluate_art_direction_vision(
     gateway: LLMGateway, prompt_repository: PromptRepository, *, pixel_input: PixelInputContract,
     expected_facts: dict[str, Any] | None = None, image_format: str = "JPEG",
 ) -> ArtDirectorResult:
-    """Real vision inspection. Falls back to the deterministic structural check (empty-bytes
-    BLOCK) before ever spending a paid vision call; never fabricates a quality judgment when there
-    is nothing to look at."""
+    """Real vision inspection. Falls back to the deterministic structural checks (empty bytes,
+    renderer-side duplicate branding) before ever spending a paid vision call - VISUAL-SINGLE-
+    BRAND-MARK-1 §23's own "prevent structurally before image mutation, never burn image-
+    generation budget for a renderer bug" instruction. Never fabricates a quality judgment when
+    there is nothing to look at, and never asks a vision model to confirm what pipeline metadata
+    already proves."""
     structural = evaluate_art_direction_shadow(pixel_input)
     if not pixel_input.rendered_bytes:
+        return structural
+    if renderer_reports_duplicate_branding(pixel_input.renderer_decision_metadata):
         return structural
 
     from capabilities.gateway_call import call_generate  # local import: avoids a capabilities<->services import cycle at module load time

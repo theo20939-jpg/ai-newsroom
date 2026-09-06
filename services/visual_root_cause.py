@@ -28,6 +28,12 @@ _RENDERER_CODES = frozenset({
 _OVERLAY_CODES = frozenset({
     ArtDirectorIssueCode.LOW_LOGO_CONTRAST, ArtDirectorIssueCode.LOGO_DEFORMED, ArtDirectorIssueCode.LOGO_TOO_LARGE,
     ArtDirectorIssueCode.LOGO_TOO_SMALL, ArtDirectorIssueCode.SAFE_AREA_VIOLATION,
+    # VISUAL-SINGLE-BRAND-MARK-1 §11/§12: DUPLICATE_NNJ_BRAND_MARK defaults to OVERLAY here
+    # (a branding/overlay-design symptom) - the fixed `_PRIORITY` order below means a co-emitted
+    # GENERATION_ARTIFACT (the generation-caused variant of this same symptom - see services/
+    # telegram_art_director_vision.py's own prompt instructions) still wins and correctly routes
+    # to GENERATION_MODEL instead, since that check runs first.
+    ArtDirectorIssueCode.DUPLICATE_NNJ_BRAND_MARK,
 })
 _FACTUAL_CODES = frozenset({ArtDirectorIssueCode.NUMBER_MISMATCH})
 _DESIGN_DIRECTION_CODES = frozenset({

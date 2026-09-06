@@ -14,6 +14,15 @@ _MEDIA_ISSUE_CODES = frozenset({
     ArtDirectorIssueCode.SUBJECT_CROP_BAD,
 })
 _PRESENTATION_ISSUE_CODES = frozenset({ArtDirectorIssueCode.PRESENTATION_MISMATCH})
+# VISUAL-SINGLE-BRAND-MARK-1 §12: a REWORK-decision DUPLICATE_NNJ_BRAND_MARK only ever reaches
+# here for the generation-caused variant - the renderer-caused variant is always a BLOCK decision
+# (services/telegram_art_director.py::evaluate_art_direction_shadow()'s own structural check),
+# which the BLOCK branch below already routes to HUMAN_REVIEW before this set is even consulted.
+# REDRAW (never RERENDER) because re-running the SAME deterministic overlay on the SAME source
+# bytes cannot remove a fake mark the generation model drew into the scene itself.
+_GENERATED_REDRAW_ISSUE_CODES = frozenset({
+    ArtDirectorIssueCode.GENERATION_ARTIFACT, ArtDirectorIssueCode.DUPLICATE_NNJ_BRAND_MARK,
+})
 
 
 class RevisionAction(str, enum.Enum):
@@ -40,7 +49,7 @@ def route_revision(result: ArtDirectorResult, *, attempt_count: int) -> Revision
         return RevisionAction.REQUEST_PRESENTATION_REVIEW
     if issue_set & _MEDIA_ISSUE_CODES:
         return RevisionAction.RESELECT_MEDIA
-    if ArtDirectorIssueCode.GENERATION_ARTIFACT in issue_set:
+    if issue_set & _GENERATED_REDRAW_ISSUE_CODES:
         return RevisionAction.REDRAW
     if issue_set:
         return RevisionAction.RERENDER

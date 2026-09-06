@@ -45,6 +45,13 @@ class ArtDirectorIssueCode(str, enum.Enum):
     VISUAL_TOO_BUSY = "visual_too_busy"
     VISUAL_EMPTY = "visual_empty"
     UNKNOWN_VISUAL_FAILURE = "unknown_visual_failure"
+    # VISUAL-SINGLE-BRAND-MARK-1 §11: the ONE canonical name for "this final image contains more
+    # than one NNJ/NINJA brand mark" - never a second, differently-named code for the same
+    # symptom. May originate from the deterministic renderer (structurally detected, see
+    # `renderer_reports_duplicate_branding()` below) or from the generation model drawing a fake
+    # extra mark into the scene itself (vision-detected) - see that function's own docstring and
+    # services/visual_root_cause.py::classify_root_cause() for how the two are told apart.
+    DUPLICATE_NNJ_BRAND_MARK = "duplicate_nnj_brand_mark"
 
 
 class ArtDirectorDecision(str, enum.Enum):
@@ -97,6 +104,29 @@ def renderer_reports_safe_degradation(renderer_decision_metadata: dict[str, Any]
     return False
 
 
+def renderer_reports_duplicate_branding(renderer_decision_metadata: dict[str, Any]) -> bool:
+    """VISUAL-SINGLE-BRAND-MARK-1 §6/§11: structural (never visual/OCR) detection of a genuine
+    RENDERER-side double-application - `services/nnj_master_news_overlay.py::
+    select_master_news_branding()` now enforces mutual exclusion between its `upper_mark` and
+    `lower_signature` components (they draw the SAME canonical mark), so this should be
+    structurally unreachable in live production; this check exists purely as defense-in-depth so
+    a future regression is caught deterministically rather than only probabilistically by vision.
+    Recognizes both a direct `degradation_mode == "upper_and_lower"` key and the equivalent
+    `upper_mark`/`lower_signature` sub-dict shape (mirrors `renderer_reports_safe_degradation()`'s
+    own accepted plain-dict convention, same reason: no new services/nnj_master_news_overlay.py
+    import coupling from this module)."""
+    if renderer_decision_metadata.get("degradation_mode") == "upper_and_lower":
+        return True
+    upper = renderer_decision_metadata.get("upper_mark")
+    lower = renderer_decision_metadata.get("lower_signature")
+    if isinstance(upper, dict) and isinstance(lower, dict):
+        upper_placed = upper.get("placement") not in ("omitted", "OMITTED", None)
+        lower_placed = lower.get("placement") not in ("omitted", "OMITTED", None)
+        if upper_placed and lower_placed:
+            return True
+    return False
+
+
 def evaluate_art_direction_shadow(pixel_input: PixelInputContract) -> ArtDirectorResult:
     """Deterministic, structural checks only in this phase (no real vision/pixel-analysis model
     wired yet - a future phase's own explicit job, per spec §44's "either actual rendered bytes...
@@ -108,6 +138,23 @@ def evaluate_art_direction_shadow(pixel_input: PixelInputContract) -> ArtDirecto
             decision=ArtDirectorDecision.BLOCK, severity="high",
             issue_codes=[ArtDirectorIssueCode.VISUAL_EMPTY], action="RERENDER",
             instructions="No rendered bytes provided - cannot evaluate an empty render.", confidence=1.0,
+        )
+
+    if renderer_reports_duplicate_branding(pixel_input.renderer_decision_metadata):
+        # §12: a structurally-proven renderer double-application is a renderer/finalization bug,
+        # never a generation-model problem - BLOCK (never REWORK/RERENDER) so no image-generation
+        # budget is ever spent trying to fix it, and route_revision()'s own BLOCK handling sends
+        # it straight to HUMAN_REVIEW rather than looping.
+        return ArtDirectorResult(
+            decision=ArtDirectorDecision.BLOCK, severity="high",
+            issue_codes=[ArtDirectorIssueCode.DUPLICATE_NNJ_BRAND_MARK], action="HUMAN_REVIEW",
+            instructions=(
+                "Renderer decision metadata shows both the upper mark and the lower signature "
+                "were placed on the same image - two canonical NNJ brand marks on one final "
+                "visual. This is a deterministic renderer/finalization defect, not a generation-"
+                "model problem; do not regenerate the image, route to human review."
+            ),
+            confidence=1.0,
         )
 
     if renderer_reports_safe_degradation(pixel_input.renderer_decision_metadata):

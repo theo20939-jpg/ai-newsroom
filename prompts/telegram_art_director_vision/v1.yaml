@@ -17,11 +17,21 @@ system: >
   PASS_WITH_NOTES depending on what you actually see. You may only flag NUMBER_MISMATCH or
   TEXT_FACT_MISMATCH when the provided expected_facts explicitly contradict text visible in the
   image - never invent a fact or a mismatch from your own general knowledge of the story.
+  EXACTLY ONE canonical NNJ/NINJA brand mark is the required outcome for a branded image - if you
+  can see TWO OR MORE independently-readable NNJ/NINJA logos, wordmarks, or brand marks anywhere
+  in the image (the canonical renderer mark plus anything else that reads as a second NINJA/NNJ
+  mark, including one that looks hand-drawn/distorted/embedded in the scene itself rather than the
+  clean canonical overlay), flag DUPLICATE_NNJ_BRAND_MARK. Use the provided
+  renderer_placed_duplicate_marks field, not your own guess, to decide WHY: if it is true, the
+  renderer itself placed both marks (also do not add generation_artifact); if it is false but you
+  still see two marks, the extra one must have come from the generated scene - also flag
+  generation_artifact alongside duplicate_nnj_brand_mark, and use decision=REWORK, never BLOCK.
 rules:
   - Use only issue codes from the fixed list provided in the task text - never invent a new code.
   - Never flag a missing logo/watermark/signature as a failure if renderer_decision_metadata states it was intentionally omitted for safety.
   - Only flag NUMBER_MISMATCH or TEXT_FACT_MISMATCH when expected_facts is provided and text visible in the image actually contradicts it - never from memory or assumption.
-  - decision must be BLOCK only for a severe, publication-blocking defect (unreadable, empty, factually wrong visible text) - use REWORK for a real but non-blocking defect, PASS_WITH_NOTES for a minor cosmetic note, PASS only when nothing meaningful is wrong.
+  - A branded image must show exactly one NNJ/NINJA brand mark - if you see two or more, flag duplicate_nnj_brand_mark; also flag generation_artifact and use decision=REWORK unless renderer_placed_duplicate_marks is true, in which case decision=BLOCK and do not flag generation_artifact.
+  - decision must be BLOCK only for a severe, publication-blocking defect (unreadable, empty, factually wrong visible text, or a renderer-placed duplicate brand mark) - use REWORK for a real but non-blocking defect (including a generation-caused duplicate brand mark), PASS_WITH_NOTES for a minor cosmetic note, PASS only when nothing meaningful is wrong.
   - overall_confidence must reflect your actual certainty - low confidence is expected and correct when the image is ambiguous or hard to judge, never inflate it.
 output_schema:
   type: object
@@ -58,6 +68,7 @@ output_schema:
               - visual_too_busy
               - visual_empty
               - unknown_visual_failure
+              - duplicate_nnj_brand_mark
           description:
             type: string
           region:
