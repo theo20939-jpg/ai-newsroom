@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models.director_run import DirectorType
 from database.models.instagram_calendar_item import CalendarItemStatus, InstagramContentCalendarItem
+from database.models.social_launch_context import SocialLaunchPlatform
 from database.models.strategic_directive import StrategicDirective
 from database.models.story import Story
 from database.models.telegram_content_calendar_item import (
@@ -51,6 +52,8 @@ from services.instagram_format_director_v2 import AssetConstraints, evaluate_for
 from services.instagram_growth_strategist import InstagramGrowthStrategy
 from services.instagram_objective_selection import ObjectiveRecommendation, recommend_objective
 from services.instagram_objectives import ContentObjective
+from services.social_launch_context_service import get_current_context, is_prelaunch_or_transition
+from services.social_launch_fit import LaunchFitAssessment, assess_launch_fit
 from services.social_prelaunch_advisory import PrelaunchAdvisory
 from services.story_campaign_matcher import StoryCampaignMatchType, StoryInput, match_story_to_campaign
 from services.telegram_calendar_service import list_calendar_items as list_telegram_calendar_items
@@ -175,6 +178,13 @@ class OpportunityRow:
     confidence: float
     evidence: list[str] = field(default_factory=list)
     embargo_constraints: list[str] = field(default_factory=list)
+    # SOCIAL-INTELLIGENCE-PRELAUNCH-1A §11/§12/§13: None for a LIVE platform (the exact prior view
+    # shape) - only populated when that specific platform is currently PRE_LAUNCH/TRANSITION.
+    # Kept as two separate fields (never one shared "launch_fit") because Telegram and Instagram
+    # can be at different launch stages at the same time - spec §13's own "recognize cross-platform
+    # differences explicitly" requirement.
+    launch_fit_telegram: LaunchFitAssessment | None = None
+    launch_fit_instagram: LaunchFitAssessment | None = None
 
 
 @dataclass(frozen=True)
@@ -200,9 +210,27 @@ def _telegram_mention_note(plan: CampaignPlan | None) -> str:
     return f"явное упоминание продукта НЕ допускается на фазе {plan.phase or 'неизвестна'}"
 
 
-def _row_from_opportunity(opportunity: ContentOpportunity, *, topic: str, telegram_note: str) -> OpportunityRow:
+def _row_from_opportunity(
+    opportunity: ContentOpportunity, *, topic: str, telegram_note: str,
+    telegram_cold_start: bool = False, instagram_cold_start: bool = False,
+) -> OpportunityRow:
     recommendation: ObjectiveRecommendation = recommend_objective(opportunity=opportunity)
     format_decision = evaluate_format_v2(objective=recommendation.primary_objective, assets=AssetConstraints(), opportunity=opportunity)
+
+    # SOCIAL-INTELLIGENCE-PRELAUNCH-1A §11/§12: same canonical, deterministic assess_launch_fit()
+    # services/telegram_channel_director.py already uses - no magic numeric launch score, real
+    # reasons/dimensions retained. `is_transition_related` stays False here (no explicit
+    # transition-flagging signal exists at Story/opportunity level yet in this console read path -
+    # a documented scope boundary, never guessed from title/topic text).
+    launch_fit_telegram = assess_launch_fit(
+        news_importance=opportunity.news_value or 0.0, timeliness=opportunity.news_value or 0.0,
+        is_transition_related=False, campaign_relevance=opportunity.campaign_relevance or 0.0,
+    ) if telegram_cold_start else None
+    launch_fit_instagram = assess_launch_fit(
+        news_importance=opportunity.news_value or 0.0, timeliness=opportunity.news_value or 0.0,
+        is_transition_related=False, campaign_relevance=opportunity.campaign_relevance or 0.0,
+    ) if instagram_cold_start else None
+
     return OpportunityRow(
         source_type=opportunity.source_type.value, topic=topic,
         news_value=opportunity.news_value or None, campaign_relevance=opportunity.campaign_relevance or None,
@@ -211,6 +239,7 @@ def _row_from_opportunity(opportunity: ContentOpportunity, *, topic: str, telegr
         instagram_format=format_decision.recommended_format, telegram_note=telegram_note,
         confidence=opportunity.confidence, evidence=list(opportunity.evidence),
         embargo_constraints=list(opportunity.embargo_constraints),
+        launch_fit_telegram=launch_fit_telegram, launch_fit_instagram=launch_fit_instagram,
     )
 
 
@@ -225,6 +254,15 @@ async def build_opportunities_view(
     snapshot = await get_business_context_snapshot(session, now=now)
     rows: list[OpportunityRow] = []
     notes: list[str] = []
+
+    # SOCIAL-INTELLIGENCE-PRELAUNCH-1A §11/§12/§13: read-only, no Gateway call - the exact same
+    # get_current_context() every director/console read already uses. A platform stays cold-start
+    # here even if the other platform is already LIVE, per §13's own cross-platform-differences
+    # requirement.
+    telegram_launch_context = await get_current_context(session, SocialLaunchPlatform.TELEGRAM)
+    instagram_launch_context = await get_current_context(session, SocialLaunchPlatform.INSTAGRAM)
+    telegram_cold_start = telegram_launch_context is not None and is_prelaunch_or_transition(telegram_launch_context)
+    instagram_cold_start = instagram_launch_context is not None and is_prelaunch_or_transition(instagram_launch_context)
 
     stories = list((await session.execute(
         select(Story).order_by(Story.updated_at.desc()).limit(_MAX_RECENT_STORIES)
@@ -266,6 +304,7 @@ async def build_opportunities_view(
             rows.append(_row_from_opportunity(
                 opportunity, topic=best_story.title,
                 telegram_note=f"органический прогрев темы (совпадение: {best_match.match_type.value})",
+                telegram_cold_start=telegram_cold_start, instagram_cold_start=instagram_cold_start,
             ))
         else:
             opportunity = build_content_opportunity(
@@ -276,7 +315,10 @@ async def build_opportunities_view(
             real_restricted = _restricted_claim_texts_for_product(snapshot, plan.product_id)
             if real_restricted:
                 opportunity = replace(opportunity, restricted_claims=sorted(set(opportunity.restricted_claims) | set(real_restricted)))
-            rows.append(_row_from_opportunity(opportunity, topic=f"campaign:{plan.campaign_id}", telegram_note=_telegram_mention_note(plan)))
+            rows.append(_row_from_opportunity(
+                opportunity, topic=f"campaign:{plan.campaign_id}", telegram_note=_telegram_mention_note(plan),
+                telegram_cold_start=telegram_cold_start, instagram_cold_start=instagram_cold_start,
+            ))
 
     for story in stories:
         if str(story.id) in matched_story_ids:
@@ -286,13 +328,23 @@ async def build_opportunities_view(
             id=f"story:{story.id}", source_type=OpportunitySourceType.NEWS, story_id=str(story.id),
             news_value=news_value, evidence=[f"story updated_at={story.updated_at.isoformat()}"], confidence=0.3,
         )
-        rows.append(_row_from_opportunity(opportunity, topic=story.title, telegram_note="нет прямой оценки Channel Director вне рабочего цикла"))
+        rows.append(_row_from_opportunity(
+            opportunity, topic=story.title, telegram_note="нет прямой оценки Channel Director вне рабочего цикла",
+            telegram_cold_start=telegram_cold_start, instagram_cold_start=instagram_cold_start,
+        ))
 
     if not snapshot.active_campaigns:
         notes.append("нет активных кампаний - PRODUCT/HYBRID-возможности недоступны")
     if not stories:
         notes.append("нет свежих Story - NEWS/HYBRID-возможности недоступны")
     notes.append("TREND-возможности недоступны: живой сбор трендов не реализован")
+
+    # SOCIAL-INTELLIGENCE-PRELAUNCH-1A §20: repository vocabulary (COLD_START/PRE_LAUNCH/
+    # TRANSITION - the same LaunchState values the model itself uses), never an ad hoc phrase.
+    if telegram_cold_start and telegram_launch_context is not None:
+        notes.append(f"Telegram: {telegram_launch_context.launch_state.value.upper()} - launch_fit_telegram проставлен для каждой строки")
+    if instagram_cold_start and instagram_launch_context is not None:
+        notes.append(f"Instagram: {instagram_launch_context.launch_state.value.upper()} - launch_fit_instagram проставлен для каждой строки")
 
     if platform is not None:
         # Platform filter only trims which recommendation columns are meaningful to show; the

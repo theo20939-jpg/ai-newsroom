@@ -9,10 +9,18 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models.director_run import DirectorRun
+from database.models.social_launch_context import (
+    HistoricalContentPolicy,
+    LaunchDateStatus,
+    LaunchState,
+    LearningBaselinePolicy,
+    SocialLaunchPlatform,
+)
 from services.business_context_snapshot_service import get_business_context_snapshot
 from services.campaign_service import create_campaign
 from services.director_status_service import DirectorStatus, get_director_console_status
 from services.product_context_service import create_product
+from services.social_launch_context_service import create_next_version
 
 
 @pytest.mark.asyncio
@@ -122,6 +130,29 @@ async def test_directors_shows_latest_persisted_growth_run_without_triggering_on
 
     run_count_after = (await db_session.execute(select(func.count()).select_from(DirectorRun))).scalar_one()
     assert run_count_after == run_count_before  # reading /directors never persisted a new run
+
+
+@pytest.mark.asyncio
+async def test_directors_uses_repository_vocabulary_for_cold_start_telegram(db_session: AsyncSession) -> None:
+    """SOCIAL-INTELLIGENCE-PRELAUNCH-1A §20: a PRE_LAUNCH Telegram context shows up in /directors
+    using the SAME LaunchState value the model itself uses (never an invented phrase) - and never
+    leaks onto Instagram's own entries, which have no context configured here."""
+    await create_next_version(
+        db_session, platform=SocialLaunchPlatform.TELEGRAM, target_identity="NINJA PULSE",
+        current_identity="NINJA VPN news", launch_state=LaunchState.PRE_LAUNCH, planned_launch_at=None,
+        launch_date_status=LaunchDateStatus.UNSCHEDULED, baseline_policy=LearningBaselinePolicy.FROM_FIRST_PUBLICATION,
+        historical_content_policy=HistoricalContentPolicy.IGNORE, raw_instruction="test setup",
+        confirmed_structure={}, created_by=5507703201,
+    )
+    status = await get_director_console_status(db_session, now=datetime.now(timezone.utc))
+
+    growth_director = next(e for e in status.telegram if e.name == "Growth Director")
+    assert "[PRE_LAUNCH]" in growth_director.detail
+    strategy_director = next(e for e in status.telegram if e.name == "Strategy Director")
+    assert "[PRE_LAUNCH]" in strategy_director.detail
+
+    performance_memory = next(e for e in status.instagram if e.name == "Performance Memory")
+    assert "[PRE_LAUNCH]" not in performance_memory.detail  # Instagram has no context configured
 
 
 @pytest.mark.asyncio

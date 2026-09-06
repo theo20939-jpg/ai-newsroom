@@ -30,11 +30,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from database.models.director_run import DirectorType
+from database.models.social_launch_context import SocialLaunchContext, SocialLaunchPlatform
 from database.models.telegram_channel_memory import TelegramChannelMemory
 from database.models.telegram_visual_failure import TelegramVisualFailure
 from services.business_context_snapshot_service import get_business_context_snapshot
 from services.director_run_service import describe_latest_run
 from services.instagram_platform_capabilities import CapabilityStatus, INSTAGRAM_PLATFORM_CAPABILITIES
+from services.social_launch_context_service import get_current_context, is_prelaunch_or_transition
 
 
 class DirectorStatus(str, enum.Enum):
@@ -117,8 +119,21 @@ async def _art_director_summary(session: AsyncSession) -> str | None:
     return summary
 
 
-async def _telegram_status(session: AsyncSession, *, now: datetime) -> list[DirectorStatusEntry]:
+def _cold_start_suffix(context: SocialLaunchContext | None) -> str:
+    """SOCIAL-INTELLIGENCE-PRELAUNCH-1A §20: repository vocabulary only - the SAME LaunchState
+    enum values the model itself uses (PRE_LAUNCH/TRANSITION/...), never an invented phrase like
+    "not started yet". "" when no context is configured or the platform is already LIVE - an
+    established account's WAITING_FOR_DATA detail stays exactly as it read before this phase."""
+    if context is None or not is_prelaunch_or_transition(context):
+        return ""
+    return f" [{context.launch_state.value.upper()}]"
+
+
+async def _telegram_status(
+    session: AsyncSession, *, now: datetime, launch_context: SocialLaunchContext | None = None,
+) -> list[DirectorStatusEntry]:
     entries: list[DirectorStatusEntry] = []
+    cold_start_suffix = _cold_start_suffix(launch_context)
 
     entries.append(DirectorStatusEntry(
         name="Channel Director",
@@ -137,7 +152,7 @@ async def _telegram_status(session: AsyncSession, *, now: datetime) -> list[Dire
     entries.append(DirectorStatusEntry(
         name="Growth Director",
         status=DirectorStatus.SHADOW if growth_run_detail is not None else DirectorStatus.WAITING_FOR_DATA,
-        detail=growth_run_detail or "нет накопленных performance-паттернов (сбор метрик не настроен)",
+        detail=(growth_run_detail or "нет накопленных performance-паттернов (сбор метрик не настроен)") + cold_start_suffix,
     ))
 
     channel_memory_count = (await session.execute(select(func.count()).select_from(TelegramChannelMemory))).scalar_one()
@@ -148,17 +163,18 @@ async def _telegram_status(session: AsyncSession, *, now: datetime) -> list[Dire
     entries.append(DirectorStatusEntry(
         name="Strategy Director",
         status=DirectorStatus.SHADOW if (strategy_run_detail is not None or channel_memory_count > 0) else DirectorStatus.WAITING_FOR_DATA,
-        detail=strategy_detail,
+        detail=strategy_detail + cold_start_suffix,
     ))
     return entries
 
 
-def _instagram_status(*, has_real_business_data: bool) -> list[DirectorStatusEntry]:
+def _instagram_status(*, has_real_business_data: bool, launch_context: SocialLaunchContext | None = None) -> list[DirectorStatusEntry]:
+    cold_start_suffix = _cold_start_suffix(launch_context)
     entries = [
         DirectorStatusEntry(
             name="Growth Strategist",
             status=DirectorStatus.SHADOW if has_real_business_data else DirectorStatus.WAITING_FOR_DATA,
-            detail="есть реальные продукт/кампания для стратегии" if has_real_business_data else "нет продуктов/кампаний для построения стратегии",
+            detail=("есть реальные продукт/кампания для стратегии" if has_real_business_data else "нет продуктов/кампаний для построения стратегии") + cold_start_suffix,
         ),
         DirectorStatusEntry(
             name="Format Director", status=DirectorStatus.SHADOW,
@@ -177,7 +193,7 @@ def _instagram_status(*, has_real_business_data: bool) -> list[DirectorStatusEnt
     )
     entries.append(DirectorStatusEntry(
         name="Performance Memory", status=performance_status,
-        detail="аккаунт Instagram не подключён - нет первичных метрик" if performance_status == DirectorStatus.WAITING_FOR_DATA else "",
+        detail=("аккаунт Instagram не подключён - нет первичных метрик" + cold_start_suffix) if performance_status == DirectorStatus.WAITING_FOR_DATA else "",
     ))
     return entries
 
@@ -185,7 +201,12 @@ def _instagram_status(*, has_real_business_data: bool) -> list[DirectorStatusEnt
 async def get_director_console_status(session: AsyncSession, *, now: datetime | None = None) -> DirectorConsoleStatus:
     now = now or datetime.now(timezone.utc)
     business = await _business_status(session, now=now)
-    telegram = await _telegram_status(session, now=now)
+    telegram_launch_context = await get_current_context(session, SocialLaunchPlatform.TELEGRAM)
+    instagram_launch_context = await get_current_context(session, SocialLaunchPlatform.INSTAGRAM)
+    telegram = await _telegram_status(session, now=now, launch_context=telegram_launch_context)
     snapshot = await get_business_context_snapshot(session, now=now)
-    instagram = _instagram_status(has_real_business_data=bool(snapshot.products or snapshot.active_campaigns))
+    instagram = _instagram_status(
+        has_real_business_data=bool(snapshot.products or snapshot.active_campaigns),
+        launch_context=instagram_launch_context,
+    )
     return DirectorConsoleStatus(as_of=now, business=business, telegram=telegram, instagram=instagram)

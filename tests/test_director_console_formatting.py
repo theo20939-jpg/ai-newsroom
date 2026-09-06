@@ -19,6 +19,7 @@ from services.director_status_service import DirectorConsoleStatus, DirectorStat
 from services.instagram_format_director import ContentFormat
 from services.instagram_growth_strategist import InstagramGrowthStrategy
 from services.instagram_objectives import ContentObjective
+from services.social_prelaunch_advisory import PrelaunchAdvisory
 from services.telegram_strategy_director import StrategyDirectorAdvisory
 
 _NOW = datetime(2026, 9, 5, 12, 0, tzinfo=timezone.utc)
@@ -37,6 +38,30 @@ def test_render_directors_status_never_shows_fake_active() -> None:
     assert "DISABLED" in text
     assert "READY" in text
     assert "ACTIVE" not in text.replace("🟢 ACTIVE", "")  # no fabricated ACTIVE label anywhere
+
+
+def test_render_plan_shows_real_prelaunch_advisory_content_not_just_status() -> None:
+    """SOCIAL-INTELLIGENCE-PRELAUNCH-1A §19: /plan must show REAL strategic content from a
+    persisted PrelaunchAdvisory (content pillars, initial sequence, cadence/format hypotheses,
+    risks) - not merely a current_state -> target_state status line."""
+    advisory = PrelaunchAdvisory(
+        current_state="NINJA VPN news channel", target_state="NINJA PULSE",
+        launch_objectives=["establish PULSE as the primary identity"],
+        transition_tasks=["update channel avatar and pinned message"],
+        content_pillars=["breaking news", "explainers"],
+        initial_content_sequence=["intro post", "first breaking story"],
+        cadence_hypothesis="one post per major story, no fixed daily minimum",
+        format_hypotheses=["DATA/QUOTE presentation over plain NEWS"],
+        risks=["audience confusion during rebrand"],
+    )
+    view = PlanView(as_of=_NOW, business_context_version="v1", telegram_prelaunch=advisory)
+    text = render_plan(view, role=_FOUNDER, platform="telegram")
+    assert "NINJA VPN news channel" in text and "NINJA PULSE" in text
+    assert "Контентные столпы" in text and "explainers" in text
+    assert "Первая последовательность контента" in text and "first breaking story" in text
+    assert "Гипотеза каденции" in text
+    assert "Гипотезы форматов" in text
+    assert "Риски" in text and "audience confusion during rebrand" in text
 
 
 def test_render_performance_shows_public_channel_not_configured_not_internal_metrics() -> None:

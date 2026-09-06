@@ -9,6 +9,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models.instagram_calendar_item import CalendarItemStatus
+from database.models.social_launch_context import (
+    HistoricalContentPolicy,
+    LaunchDateStatus,
+    LaunchState,
+    LearningBaselinePolicy,
+    SocialLaunchPlatform,
+)
 from database.models.telegram_surface import TelegramSurfaceRole
 from services.campaign_service import create_campaign, update_campaign
 from services.claim_policy_service import create_claim_policy
@@ -20,8 +27,19 @@ from services.director_console_service import (
 )
 from services.instagram_calendar_service import create_calendar_item
 from services.product_context_service import create_product
+from services.social_launch_context_service import create_next_version
 from services.strategic_directive_service import create_directive
 from services.telegram_surface_registry import create_surface
+
+
+async def _make_launch_context(db_session: AsyncSession, *, platform: SocialLaunchPlatform, launch_state: LaunchState):
+    return await create_next_version(
+        db_session, platform=platform, target_identity="NINJA PULSE", current_identity="NINJA VPN news",
+        launch_state=launch_state, planned_launch_at=None, launch_date_status=LaunchDateStatus.UNSCHEDULED,
+        baseline_policy=LearningBaselinePolicy.FROM_FIRST_PUBLICATION,
+        historical_content_policy=HistoricalContentPolicy.IGNORE,
+        raw_instruction="test setup", confirmed_structure={}, created_by=5507703201,
+    )
 
 
 async def _make_confirmed_campaign(db_session: AsyncSession, *, slug: str, days_out: int = 2):
@@ -157,6 +175,24 @@ async def test_opportunity_platform_recommendations_are_independent(db_session: 
     assert row.instagram_objective is not None
     assert row.instagram_format is not None
     assert isinstance(row.telegram_note, str) and row.telegram_note
+
+
+@pytest.mark.asyncio
+async def test_opportunity_launch_fit_is_per_platform_and_none_when_live(db_session: AsyncSession) -> None:
+    """SOCIAL-INTELLIGENCE-PRELAUNCH-1A §11/§12/§13: launch_fit is populated ONLY for a platform
+    that is actually PRE_LAUNCH/TRANSITION - Telegram being cold-start must never leak a launch_fit
+    onto Instagram (or vice versa) when Instagram has no context at all (defaults to the honest
+    "no context configured" cold-start-by-absence state is a separate concern from an explicitly
+    LIVE platform, which must show launch_fit_instagram=None)."""
+    await _make_confirmed_campaign(db_session, slug="opplf")
+    await _make_launch_context(db_session, platform=SocialLaunchPlatform.TELEGRAM, launch_state=LaunchState.PRE_LAUNCH)
+    await _make_launch_context(db_session, platform=SocialLaunchPlatform.INSTAGRAM, launch_state=LaunchState.LIVE)
+
+    view = await build_opportunities_view(db_session, now=datetime.now(timezone.utc))
+    row = next(r for r in view.rows if r.source_type == "product")
+    assert row.launch_fit_telegram is not None
+    assert row.launch_fit_telegram.classification is not None
+    assert row.launch_fit_instagram is None
 
 
 @pytest.mark.asyncio

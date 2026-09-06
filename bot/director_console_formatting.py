@@ -13,6 +13,7 @@ from services.business_context_roles import BusinessContextRole
 from services.director_console_access_policy import REDACTED_LABEL, DirectorConsoleAccessPolicy
 from services.director_console_service import CalendarView, OpportunitiesView, PerformanceView, PlanView
 from services.director_status_service import DirectorConsoleStatus, DirectorStatus
+from services.social_prelaunch_advisory import PrelaunchAdvisory
 
 _STATUS_LABEL = {
     DirectorStatus.DISABLED: "🔕 DISABLED", DirectorStatus.READY: "🟡 READY",
@@ -69,6 +70,29 @@ def render_directors_status(status: DirectorConsoleStatus, *, role: BusinessCont
     return "\n".join(lines).strip()
 
 
+def _render_prelaunch_advisory_lines(advisory: PrelaunchAdvisory) -> list[str]:
+    """SOCIAL-INTELLIGENCE-PRELAUNCH-1A §19: /plan must show REAL strategic content from a
+    persisted PrelaunchAdvisory, not just current_state/target_state - every list here is real
+    LLM-generated content this phase already produces and persists, never re-derived or invented
+    by this formatting function."""
+    lines = [f"Pre-launch advisory: {advisory.current_state} → {advisory.target_state}"]
+    if advisory.launch_objectives:
+        lines.append("Цели запуска: " + "; ".join(advisory.launch_objectives))
+    if advisory.transition_tasks:
+        lines.append("Задачи перехода: " + "; ".join(advisory.transition_tasks))
+    if advisory.content_pillars:
+        lines.append("Контентные столпы: " + "; ".join(advisory.content_pillars))
+    if advisory.initial_content_sequence:
+        lines.append("Первая последовательность контента: " + "; ".join(advisory.initial_content_sequence))
+    if advisory.cadence_hypothesis:
+        lines.append(f"Гипотеза каденции: {advisory.cadence_hypothesis}")
+    if advisory.format_hypotheses:
+        lines.append("Гипотезы форматов: " + "; ".join(advisory.format_hypotheses))
+    if advisory.risks:
+        lines.append("Риски: " + "; ".join(advisory.risks))
+    return lines
+
+
 def render_plan(view: PlanView, *, role: BusinessContextRole, platform: str | None = None) -> str:
     policy = DirectorConsoleAccessPolicy(role=role)
     lines = ["🥷 NINJA План", "", _as_of_line(view.as_of), ""]
@@ -105,9 +129,7 @@ def render_plan(view: PlanView, *, role: BusinessContextRole, platform: str | No
             for note in view.telegram_advisory.campaign_support_notes:
                 lines.append(f"- {note}")
         if view.telegram_prelaunch is not None:
-            lines.append(f"Pre-launch advisory: {view.telegram_prelaunch.current_state} → {view.telegram_prelaunch.target_state}")
-            if view.telegram_prelaunch.launch_objectives:
-                lines.append("Цели запуска: " + "; ".join(view.telegram_prelaunch.launch_objectives))
+            lines.extend(_render_prelaunch_advisory_lines(view.telegram_prelaunch))
         lines.append("")
 
     if platform in (None, "instagram"):
@@ -115,9 +137,7 @@ def render_plan(view: PlanView, *, role: BusinessContextRole, platform: str | No
         if view.instagram_note:
             lines.append(view.instagram_note)
         if view.instagram_prelaunch is not None:
-            lines.append(f"Pre-launch advisory: {view.instagram_prelaunch.current_state} → {view.instagram_prelaunch.target_state}")
-            if view.instagram_prelaunch.launch_objectives:
-                lines.append("Цели запуска: " + "; ".join(view.instagram_prelaunch.launch_objectives))
+            lines.extend(_render_prelaunch_advisory_lines(view.instagram_prelaunch))
         if view.instagram_strategy is not None:
             if view.instagram_strategy.objective_mix:
                 mix = ", ".join(f"{k}: {v}" for k, v in view.instagram_strategy.objective_mix.items())
@@ -157,8 +177,12 @@ def render_opportunities(view: OpportunitiesView, *, role: BusinessContextRole, 
             lines.append(", ".join(dims))
         if platform in (None, "instagram"):
             lines.append(f"Instagram: {row.instagram_objective.value if row.instagram_objective else '-'} / {row.instagram_format.value if row.instagram_format else '-'}")
+            if row.launch_fit_instagram is not None:
+                lines.append(f"Instagram launch-fit: {row.launch_fit_instagram.classification.value.upper()} ({'; '.join(row.launch_fit_instagram.reasons)})")
         if platform in (None, "telegram"):
             lines.append(f"Telegram: {row.telegram_note}")
+            if row.launch_fit_telegram is not None:
+                lines.append(f"Telegram launch-fit: {row.launch_fit_telegram.classification.value.upper()} ({'; '.join(row.launch_fit_telegram.reasons)})")
         lines.append(f"Упоминание продукта: {'РАЗРЕШЕНО' if row.product_mention_allowed else 'НЕ РАЗРЕШЕНО'}")
         if row.restricted_claims:
             lines.append("Запрещённые утверждения: " + (", ".join(row.restricted_claims) if policy.can_see_restricted_claims() else REDACTED_LABEL))
