@@ -27,11 +27,21 @@ from database.models.director_run import (
     DirectorRunStatus,
     DirectorType,
 )
+from database.models.social_launch_context import SocialLaunchPlatform
 from services.business_context_snapshot_service import BusinessContextSnapshot, get_business_context_snapshot
 from services.campaign_planner import build_campaign_plan
 from services.campaign_service import get_campaign
+from services.social_launch_context_service import compute_launch_context_fingerprint, get_current_context
 
 logger = logging.getLogger(__name__)
+
+_LAUNCH_PLATFORM_BY_DIRECTOR_TYPE: dict[DirectorType, SocialLaunchPlatform] = {
+    DirectorType.TELEGRAM_GROWTH: SocialLaunchPlatform.TELEGRAM,
+    DirectorType.TELEGRAM_STRATEGY: SocialLaunchPlatform.TELEGRAM,
+    DirectorType.TELEGRAM_PRELAUNCH: SocialLaunchPlatform.TELEGRAM,
+    DirectorType.INSTAGRAM_GROWTH: SocialLaunchPlatform.INSTAGRAM,
+    DirectorType.INSTAGRAM_PRELAUNCH: SocialLaunchPlatform.INSTAGRAM,
+}
 
 
 def compute_input_fingerprint(*parts: object) -> str:
@@ -149,7 +159,22 @@ async def describe_latest_run(session: AsyncSession, director_type: DirectorType
         return None
     snapshot = await get_business_context_snapshot(session, now=now)
     current_fingerprint = compute_business_context_fingerprint(snapshot)
-    stale = await is_run_context_stale(session, run, now=now, current_business_context_fingerprint=current_fingerprint)
+
+    # SOCIAL-INTELLIGENCE-PRELAUNCH-1A §25: a run belonging to a director that actually consumes
+    # launch context (see _LAUNCH_PLATFORM_BY_DIRECTOR_TYPE) is also checked against the CURRENT
+    # launch context fingerprint - e.g. a Growth Director run computed before the founder issued a
+    # new /launch instruction (changing learning_start_at) is correctly marked stale, since its
+    # patterns may now reflect the wrong eligibility boundary.
+    current_launch_fingerprint = None
+    launch_platform = _LAUNCH_PLATFORM_BY_DIRECTOR_TYPE.get(director_type)
+    if launch_platform is not None:
+        current_launch_context = await get_current_context(session, launch_platform)
+        current_launch_fingerprint = compute_launch_context_fingerprint(current_launch_context)
+
+    stale = await is_run_context_stale(
+        session, run, now=now, current_business_context_fingerprint=current_fingerprint,
+        current_launch_context_fingerprint=current_launch_fingerprint,
+    )
     decision = run.decision or "решение не зафиксировано"
     confidence_text = f", уверенность {run.confidence:.2f}" if run.confidence is not None else ""
     stale_text = " [STALE_CONTEXT]" if stale else ""

@@ -9,17 +9,26 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models.director_run import DirectorRunStatus, DirectorType
+from database.models.social_launch_context import (
+    HistoricalContentPolicy,
+    LaunchDateStatus,
+    LaunchState,
+    LearningBaselinePolicy,
+    SocialLaunchPlatform,
+)
 from services.business_context_snapshot_service import get_business_context_snapshot
 from services.campaign_service import create_campaign, update_campaign
 from services.director_run_service import (
     compute_business_context_fingerprint,
     compute_input_fingerprint,
     create_director_run,
+    describe_latest_run,
     get_latest_run,
     is_run_context_stale,
     mark_stale,
 )
 from services.product_context_service import create_product
+from services.social_launch_context_service import compute_launch_context_fingerprint, create_next_version
 
 
 @pytest.mark.asyncio
@@ -108,6 +117,62 @@ async def test_run_is_stale_when_business_context_fingerprint_drifts(db_session:
     )
     assert await is_run_context_stale(db_session, run, now=now, current_business_context_fingerprint=fingerprint) is False
     assert await is_run_context_stale(db_session, run, now=now, current_business_context_fingerprint="different") is True
+
+
+@pytest.mark.asyncio
+async def test_run_is_stale_when_launch_context_fingerprint_drifts(db_session: AsyncSession) -> None:
+    """SOCIAL-INTELLIGENCE-PRELAUNCH-1A §25: a real launch context change (e.g. a new /launch
+    instruction moving learning_start_at) marks a Growth Director run stale, using the SAME
+    targeted-fingerprint-comparison shape business_context_fingerprint already uses."""
+    now = datetime.now(timezone.utc)
+    context = await create_next_version(
+        db_session, platform=SocialLaunchPlatform.TELEGRAM, target_identity="NINJA PULSE",
+        current_identity="NINJA VPN news", launch_state=LaunchState.PRE_LAUNCH, planned_launch_at=None,
+        launch_date_status=LaunchDateStatus.UNSCHEDULED, baseline_policy=LearningBaselinePolicy.FROM_FIRST_PUBLICATION,
+        historical_content_policy=HistoricalContentPolicy.IGNORE, raw_instruction="test setup",
+        confirmed_structure={}, created_by=5507703201,
+    )
+    fingerprint = compute_launch_context_fingerprint(context)
+    run = await create_director_run(
+        db_session, director_type=DirectorType.TELEGRAM_GROWTH, platform="telegram", generated_at=now,
+        input_fingerprint="f", result_payload={}, launch_context_fingerprint=fingerprint,
+    )
+    assert await is_run_context_stale(db_session, run, now=now, current_launch_context_fingerprint=fingerprint) is False
+    assert await is_run_context_stale(db_session, run, now=now, current_launch_context_fingerprint="different") is True
+
+
+@pytest.mark.asyncio
+async def test_describe_latest_run_marks_stale_context_after_new_launch_instruction(db_session: AsyncSession) -> None:
+    """describe_latest_run() (the function /directors and /performance both call) must itself pick
+    up a launch-context change for a director type that actually consumes one - never left to each
+    caller to remember to pass current_launch_context_fingerprint."""
+    now = datetime.now(timezone.utc)
+    context = await create_next_version(
+        db_session, platform=SocialLaunchPlatform.TELEGRAM, target_identity="NINJA PULSE",
+        current_identity="NINJA VPN news", launch_state=LaunchState.PRE_LAUNCH, planned_launch_at=None,
+        launch_date_status=LaunchDateStatus.UNSCHEDULED, baseline_policy=LearningBaselinePolicy.FROM_FIRST_PUBLICATION,
+        historical_content_policy=HistoricalContentPolicy.IGNORE, raw_instruction="first instruction",
+        confirmed_structure={}, created_by=5507703201,
+    )
+    await create_director_run(
+        db_session, director_type=DirectorType.TELEGRAM_GROWTH, platform="telegram", generated_at=now,
+        input_fingerprint="f", result_payload={}, decision="stable decision",
+        launch_context_fingerprint=compute_launch_context_fingerprint(context),
+    )
+    description_before = await describe_latest_run(db_session, DirectorType.TELEGRAM_GROWTH, now=now)
+    assert description_before is not None
+    assert "STALE_CONTEXT" not in description_before
+
+    await create_next_version(
+        db_session, platform=SocialLaunchPlatform.TELEGRAM, target_identity="NINJA PULSE",
+        current_identity="NINJA VPN news", launch_state=LaunchState.TRANSITION, planned_launch_at=None,
+        launch_date_status=LaunchDateStatus.CONFIRMED, baseline_policy=LearningBaselinePolicy.FROM_FIRST_PUBLICATION,
+        historical_content_policy=HistoricalContentPolicy.IGNORE, raw_instruction="revised instruction",
+        confirmed_structure={}, created_by=5507703201,
+    )
+    description_after = await describe_latest_run(db_session, DirectorType.TELEGRAM_GROWTH, now=now)
+    assert description_after is not None
+    assert "STALE_CONTEXT" in description_after
 
 
 @pytest.mark.asyncio

@@ -12,6 +12,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
+from database.models.social_launch_context import (
+    HistoricalContentPolicy,
+    LaunchDateStatus,
+    LaunchState,
+    LearningBaselinePolicy,
+    SocialLaunchPlatform,
+)
 from database.models.telegram_channel_memory import StoryRole, TelegramChannelMemory
 from database.models.telegram_experiment import ExperimentStatus
 from database.models.telegram_post_performance import SnapshotWindow, TelegramPostPerformanceSnapshot
@@ -19,6 +26,7 @@ from database.models.telegram_visual_failure import ArtDirectorDecisionEnum, Tel
 from integrations.llm_gateway.protocol import GenerateResponse
 from integrations.prompts.protocol import RenderedPrompt
 from schemas.capability import CapabilityUsage
+from services.social_launch_context_service import create_next_version
 from services.telegram_art_director import (
     ArtDirectorDecision,
     ArtDirectorIssueCode,
@@ -26,6 +34,7 @@ from services.telegram_art_director import (
     PixelInputContract,
 )
 from services.telegram_art_director_vision import VISION_PROMPT_NAME, VISION_PROMPT_VERSION, evaluate_art_direction_vision
+from services.telegram_channel_director import ChannelDirectorDecision
 from services.telegram_channel_director_shadow import run_channel_director_shadow
 from services.telegram_experiment_service import create_experiment, record_experiment_result
 from services.telegram_feed_state import compute_feed_state
@@ -191,6 +200,89 @@ async def test_channel_director_shadow_real_input_contract_and_no_side_effect(
     assert result.business_campaign_relevance == 0.0  # no active campaigns in this bare test DB
     pending_after = len(db_session.new) + len(db_session.dirty) + len(db_session.deleted)
     assert pending_after == pending_before  # no runtime side effect - nothing written
+
+
+async def _make_pre_launch_context(db_session: AsyncSession) -> None:
+    await create_next_version(
+        db_session, platform=SocialLaunchPlatform.TELEGRAM, target_identity="NINJA PULSE",
+        current_identity="NINJA VPN news", launch_state=LaunchState.PRE_LAUNCH, planned_launch_at=None,
+        launch_date_status=LaunchDateStatus.UNSCHEDULED, baseline_policy=LearningBaselinePolicy.FROM_FIRST_PUBLICATION,
+        historical_content_policy=HistoricalContentPolicy.IGNORE, raw_instruction="test setup",
+        confirmed_structure={}, created_by=5507703201,
+    )
+
+
+@pytest.mark.asyncio
+async def test_channel_director_shadow_cold_start_produces_launch_fit_never_publication(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SOCIAL-INTELLIGENCE-PRELAUNCH-1A §4/§27: a real PRE_LAUNCH Telegram context with zero
+    first-party-eligible posts flows all the way through run_channel_director_shadow() into a real
+    launch_fit classification - still shadow-only, still no DB write, still no publication
+    authority. A highly newsworthy, timely story should be GOOD_FOR_LAUNCH."""
+    monkeypatch.setattr(settings, "telegram_channel_director_shadow_enabled", True)
+    await _make_pre_launch_context(db_session)
+    pending_before = len(db_session.new) + len(db_session.dirty) + len(db_session.deleted)
+
+    result = await run_channel_director_shadow(
+        db_session, news_importance=0.9, now=datetime.now(timezone.utc), timeliness=0.9,
+    )
+
+    assert result is not None
+    assert result.launch_fit is not None
+    assert result.launch_fit.classification.value == "good_for_launch"
+    assert result.feed_role.startswith("cold_start_feed_candidate:")
+    assert result.decision == ChannelDirectorDecision.PUBLISH_NOW
+    assert any("NINJA PULSE" in r for r in result.reasons)
+    pending_after = len(db_session.new) + len(db_session.dirty) + len(db_session.deleted)
+    assert pending_after == pending_before  # still read-only, even with real launch context wiring
+
+
+@pytest.mark.asyncio
+async def test_channel_director_shadow_transition_content_always_routes_human_review(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SOCIAL-INTELLIGENCE-PRELAUNCH-1A §4: a story about the transition itself (e.g. the NINJA
+    VPN -> PULSE rebrand announcement) is never auto-classified GOOD/SAVE/NOT_FIT like ordinary
+    editorial content - it always routes to HUMAN_REVIEW, regardless of news_importance."""
+    monkeypatch.setattr(settings, "telegram_channel_director_shadow_enabled", True)
+    await _make_pre_launch_context(db_session)
+
+    result = await run_channel_director_shadow(
+        db_session, news_importance=0.9, now=datetime.now(timezone.utc), is_transition_related_story=True,
+    )
+
+    assert result is not None
+    assert result.is_transition_content is True
+    assert result.launch_fit is not None
+    assert result.launch_fit.classification.value == "transition_only"
+    assert result.decision == ChannelDirectorDecision.HUMAN_REVIEW
+
+
+@pytest.mark.asyncio
+async def test_channel_director_shadow_live_context_unaffected_by_launch_fit(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A launch context that exists but is already LIVE (with real feed history) must behave
+    exactly like the no-context case - launch_fit stays None, feed_role stays "advisory_only"."""
+    monkeypatch.setattr(settings, "telegram_channel_director_shadow_enabled", True)
+    now = datetime.now(timezone.utc)
+    await create_next_version(
+        db_session, platform=SocialLaunchPlatform.TELEGRAM, target_identity="NINJA PULSE",
+        current_identity="NINJA VPN news", launch_state=LaunchState.LIVE, planned_launch_at=None,
+        launch_date_status=LaunchDateStatus.CONFIRMED, learning_start_at=now - timedelta(days=30),
+        baseline_policy=LearningBaselinePolicy.FROM_EXPLICIT_DATE,
+        historical_content_policy=HistoricalContentPolicy.LEGACY_CONTEXT_ONLY, raw_instruction="test setup",
+        confirmed_structure={}, created_by=5507703201,
+    )
+    db_session.add(TelegramChannelMemory(published_at=now - timedelta(hours=1), topics=["ai"]))
+    await db_session.commit()
+
+    result = await run_channel_director_shadow(db_session, news_importance=0.85, now=now)
+
+    assert result is not None
+    assert result.launch_fit is None
+    assert result.feed_role == "advisory_only"
 
 
 # --- §13-18: Art Director real vision inspection ------------------------------------------------

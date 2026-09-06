@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from database.models.director_run import DirectorRun, DirectorRunEvidenceStage, DirectorRunStatus, DirectorType
+from database.models.social_launch_context import SocialLaunchPlatform
 from services.business_context_snapshot_service import BusinessContextSnapshot, get_business_context_snapshot
 from services.director_run_service import (
     compute_business_context_fingerprint,
@@ -37,6 +38,7 @@ from services.director_run_service import (
 )
 from services.instagram_content_opportunity import OpportunitySourceType, build_content_opportunity
 from services.instagram_growth_strategist import InstagramGrowthStrategy, OpportunityContext, generate_growth_strategy
+from services.social_launch_context_service import compute_launch_context_fingerprint, get_current_context
 from services.telegram_feed_state import compute_feed_state
 from services.telegram_growth_director import GrowthDirectorAdvisory, derive_growth_director_advisory
 from services.telegram_performance_aggregator import compute_telegram_performance_aggregate
@@ -91,7 +93,8 @@ def _growth_advisory_payload(advisory: GrowthDirectorAdvisory) -> dict:
         "signals": advisory.signals, "fatigue": advisory.fatigue,
         "amplification_candidates": advisory.amplification_candidates,
         "experiment_recommendations": advisory.experiment_recommendations, "warnings": advisory.warnings,
-        "confidence": advisory.confidence,
+        "confidence": advisory.confidence, "first_party_baseline": advisory.first_party_baseline,
+        "growth_hypotheses": advisory.growth_hypotheses,
     }
 
 
@@ -154,7 +157,12 @@ async def run_telegram_strategy_director(
     `settings.director_run_persistence_enabled`."""
     now = now or datetime.now(timezone.utc)
     snapshot = await get_business_context_snapshot(session, now=now)
-    feed_state = await compute_feed_state(session, now=now)
+    # SOCIAL-INTELLIGENCE-PRELAUNCH-1A §21/§25: the SAME launch context compute_feed_state()'s own
+    # cold-start filtering already uses (services/telegram_feed_state.py) - a Strategy Director
+    # reading a live, already-launched channel's feed_state is completely unaffected by this fetch
+    # existing (launch_context=None -> unfiltered, exact prior behavior).
+    launch_context = await get_current_context(session, SocialLaunchPlatform.TELEGRAM)
+    feed_state = await compute_feed_state(session, now=now, launch_context=launch_context)
     aggregate = await compute_telegram_performance_aggregate(session, now=now)
     advisory = derive_strategy_advisory(feed_state, patterns=aggregate.patterns)
 
@@ -170,6 +178,7 @@ async def run_telegram_strategy_director(
             decision=_first_or_none(advisory.priority_themes) or "no priority theme identified",
             evidence_stage=_best_evidence_stage(aggregate.patterns),
             business_context_fingerprint=compute_business_context_fingerprint(snapshot),
+            launch_context_fingerprint=compute_launch_context_fingerprint(launch_context),
         )
     return TelegramStrategyExecutionResult(advisory=advisory, aggregate_status=aggregate.status, run=run)
 
@@ -178,22 +187,34 @@ async def run_telegram_growth_director(
     session: AsyncSession, *, now: datetime | None = None,
 ) -> TelegramGrowthExecutionResult:
     """Real execution over the same TelegramPerformanceAggregator evidence `/performance` reads.
-    `advisory` is None when the aggregate itself is not OK (nothing meaningful to advise on yet) -
-    never a fabricated advisory over absent evidence."""
+
+    SOCIAL-INTELLIGENCE-PRELAUNCH-1A §5: `aggregate.status != "OK"` (zero eligible first-party
+    posts, for any reason - no public channel, no posts yet, or too few) no longer returns
+    `advisory=None` - it returns a real GrowthDirectorAdvisory with
+    `first_party_baseline="NONE"` and clearly-labeled `growth_hypotheses` instead. This is NOT
+    "a fabricated advisory over absent evidence" (this function's own prior docstring wording) -
+    a hypothesis is explicitly never presented as an observed pattern, and
+    services/telegram_growth_director.py never promotes one into a PerformancePattern on its own."""
     now = now or datetime.now(timezone.utc)
     aggregate = await compute_telegram_performance_aggregate(session, now=now)
-    if aggregate.status != "OK":
-        return TelegramGrowthExecutionResult(advisory=None, aggregate_status=aggregate.status, run=None)
+    advisory = derive_growth_director_advisory(aggregate.patterns, is_cold_start=aggregate.status != "OK")
 
-    advisory = derive_growth_director_advisory(aggregate.patterns)
     run: DirectorRun | None = None
     if settings.director_run_persistence_enabled:
+        # SOCIAL-INTELLIGENCE-PRELAUNCH-1A §25: the aggregator's own patterns are already filtered
+        # through the current launch context (services/telegram_performance_aggregator.py) - this
+        # fingerprint lets a later staleness check (services/director_run_service.py::
+        # is_run_context_stale()) detect a launch context change even though this run never reads
+        # the context object directly itself.
+        launch_context = await get_current_context(session, SocialLaunchPlatform.TELEGRAM)
         run = await create_director_run(
             session, director_type=DirectorType.TELEGRAM_GROWTH, platform="telegram", generated_at=now,
             input_fingerprint=compute_input_fingerprint(aggregate.total_posts_considered, aggregate.window),
             result_payload=_growth_advisory_payload(advisory),
-            status=DirectorRunStatus.OK, decision=_first_or_none(advisory.signals) or "no actionable signal yet",
+            status=DirectorRunStatus.OK if aggregate.status == "OK" else DirectorRunStatus.WAITING_FOR_DATA,
+            decision=_first_or_none(advisory.signals) or _first_or_none(advisory.growth_hypotheses) or "no actionable signal yet",
             confidence=advisory.confidence, evidence_stage=_best_evidence_stage(aggregate.patterns),
+            launch_context_fingerprint=compute_launch_context_fingerprint(launch_context),
         )
     return TelegramGrowthExecutionResult(advisory=advisory, aggregate_status=aggregate.status, run=run)
 

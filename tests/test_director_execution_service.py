@@ -101,17 +101,24 @@ async def test_instagram_growth_execution_waiting_for_data_with_no_campaigns(
 
 
 @pytest.mark.asyncio
-async def test_telegram_growth_execution_returns_no_advisory_without_real_evidence(
+async def test_telegram_growth_execution_returns_labeled_hypotheses_without_real_evidence(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No public analytics surface, no channel memory - nothing to advise on. Never a fabricated
-    advisory over absent evidence, and never a persisted run either."""
+    """SOCIAL-INTELLIGENCE-PRELAUNCH-1A §5: no public analytics surface, no channel memory - zero
+    first-party evidence. No longer returns advisory=None (the pre-PRELAUNCH-1A behavior) - now
+    returns a real, truthfully-labeled advisory: first_party_baseline="NONE" and clearly-labeled
+    growth_hypotheses, never a fabricated signal/pattern. The run IS persisted (persistence is on
+    here) with status=WAITING_FOR_DATA - a hypothesis is not evidence, so it is never OK."""
     from core.config import settings
 
     monkeypatch.setattr(settings, "director_run_persistence_enabled", True)
     result = await run_telegram_growth_director(db_session, now=datetime.now(timezone.utc))
-    assert result.advisory is None
-    assert result.run is None
+    assert result.advisory is not None
+    assert result.advisory.first_party_baseline == "NONE"
+    assert result.advisory.growth_hypotheses  # non-empty, clearly labeled starting-point ideas
+    assert result.advisory.signals == []  # never a fabricated signal
+    assert result.run is not None
+    assert result.run.status.value == "waiting_for_data"
     assert result.aggregate_status == "PUBLIC_CHANNEL_NOT_CONFIGURED"
 
 

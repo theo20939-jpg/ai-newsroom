@@ -16,8 +16,10 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
+from database.models.social_launch_context import SocialLaunchPlatform
 from services.business_context_snapshot_service import get_business_context_snapshot
 from services.campaign_planner import CampaignPhase, CampaignPlan
+from services.social_launch_context_service import get_current_context
 from services.telegram_channel_director import ChannelDirectorResult, evaluate_channel_fit_shadow
 from services.telegram_editorial_need import derive_editorial_need
 from services.telegram_feed_state import compute_feed_state
@@ -48,14 +50,24 @@ def _select_campaign_plan(active_campaigns: list[CampaignPlan]) -> CampaignPlan 
 
 async def run_channel_director_shadow(
     session: AsyncSession, *, news_importance: float, now: datetime,
+    timeliness: float = 0.7, is_transition_related_story: bool = False,
 ) -> ChannelDirectorResult | None:
     """Returns None (no-op) when `telegram_channel_director_shadow_enabled` is False - the default.
     Never raises past this point in a way that could reach the real publish path; the caller in
-    worker/content_cycle.py additionally wraps this call in its own try/except as defense in depth."""
+    worker/content_cycle.py additionally wraps this call in its own try/except as defense in depth.
+
+    SOCIAL-INTELLIGENCE-PRELAUNCH-1A §4/§25: fetches the current Telegram SocialLaunchContext
+    (None if never configured) and passes it straight through to evaluate_channel_fit_shadow() -
+    cold-start reasoning is driven entirely by feed_state.is_cold_start there, so a live channel's
+    own behavior is unaffected by this fetch existing. `is_transition_related_story` stays the
+    caller's own responsibility to supply from real signal (this function never infers it) -
+    worker/content_cycle.py's own real call site does not yet pass a non-default value, which is a
+    documented, deliberate scope boundary for this phase (see this phase's own final report)."""
     if not settings.telegram_channel_director_shadow_enabled:
         return None
 
-    feed_state = await compute_feed_state(session, now=now)
+    launch_context = await get_current_context(session, SocialLaunchPlatform.TELEGRAM)
+    feed_state = await compute_feed_state(session, now=now, launch_context=launch_context)
     editorial_need = derive_editorial_need(feed_state)
     business_context = await get_business_context_snapshot(session, now=now)
     campaign_plan = _select_campaign_plan(business_context.active_campaigns)
@@ -64,6 +76,7 @@ async def run_channel_director_shadow(
     result = evaluate_channel_fit_shadow(
         news_importance=news_importance, feed_state=feed_state, editorial_need=editorial_need,
         campaign_plan=campaign_plan, campaign_mention_explicitly_allowed=mention_allowed,
+        launch_context=launch_context, timeliness=timeliness, is_transition_related_story=is_transition_related_story,
     )
     logger.info(
         "telegram_channel_director_shadow decision=%s priority=%d organic=%.2f campaign=%.2f "
