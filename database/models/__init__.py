@@ -24,6 +24,8 @@ from database.models.news_source import NewsSource
 from database.models.product import Product
 from database.models.product_context_version import ProductContextVersion
 from database.models.product_event import ProductEvent
+from database.models.social_launch_context import SocialLaunchContext
+from database.models.social_launch_proposal import SocialLaunchProposal
 from database.models.strategic_directive import StrategicDirective
 from database.models.telegram_channel import TelegramChannel
 from database.models.telegram_channel_memory import TelegramChannelMemory
@@ -55,6 +57,8 @@ __all__ = [
     "LaunchCampaign",
     "CampaignMilestone",
     "ClaimPolicy",
+    "SocialLaunchContext",
+    "SocialLaunchProposal",
     "StrategicDirective",
     "BusinessContextProposal",
     "CompetitorAccount",

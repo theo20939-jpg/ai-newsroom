@@ -1099,6 +1099,35 @@ class Settings(BaseSettings):
     visual_brief_auto_promotion_enabled: bool = False
     visual_regression_validation_enabled: bool = False
 
+    # SOCIAL-INTELLIGENCE-PRELAUNCH-1 §47: cold-start social launch strategy flags. All default
+    # False - the /launch command and SocialLaunchContext model are always importable/testable,
+    # but social_launch_context_enabled gates whether bot/handlers/launch.py's router is even
+    # registered (mirrors settings.director_console_enabled's own "no console handler runs until
+    # this is explicitly turned on" precedent). social_advisory_execution_enabled separately gates
+    # ONLY `/directors refresh` (spec §25's own explicit "NOT a read operation" mutation path) -
+    # console reads (/plan /directors /performance /calendar /opportunities) never check this flag
+    # at all, since they only ever display already-persisted DirectorRun state (spec §24's own
+    # "console reads remain PURE" invariant, unaffected by whether refresh is enabled).
+    # social_advisory_daily_enabled gates a future automatic daily scheduling hook that this phase
+    # explicitly does NOT wire into worker/cycle.py (spec §29's own "do not enable in this
+    # development phase" instruction) - the setting exists so a later phase can turn it on without
+    # a migration, not because anything reads it yet.
+    social_launch_context_enabled: bool = False
+    social_advisory_execution_enabled: bool = False
+    social_advisory_daily_enabled: bool = False
+
+    # SOCIAL-INTELLIGENCE-PRELAUNCH-1 §28: SocialAdvisoryBudgetService's hard limits - mirrors
+    # the Visual Design Autonomy budget settings immediately below in shape and intent.
+    social_advisory_max_runs_per_day: int = 3
+    social_advisory_max_cost_per_day: float = 5.0
+    # Structural, not a runtime counter: services/social_prelaunch_advisory.py::
+    # build_prelaunch_advisory() makes exactly one call_generate() call per invocation, no internal
+    # retry loop beyond capabilities/gateway_call.py's own already-established Gateway retry
+    # behavior (spec §28's own "reuse existing Gateway retry behavior only" instruction) - this
+    # setting documents that invariant as an explicit, checkable number rather than leaving "one
+    # bounded call" as an unverified claim in a docstring alone.
+    social_advisory_max_calls_per_refresh: int = 1
+
     # VISUAL-DESIGN-AUTONOMY-1 §27/§28: attempt/cost budgets - the hard limits the Visual Design
     # Director operates inside of. `visual_max_attempts_default` applies unless a presentation-type
     # override below is set; one initial render counts as attempt 1 (spec §27). All costs are USD.
