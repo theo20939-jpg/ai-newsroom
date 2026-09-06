@@ -9,9 +9,17 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from database.models.social_launch_context import (
+    HistoricalContentPolicy,
+    LaunchDateStatus,
+    LaunchState,
+    LearningBaselinePolicy,
+    SocialLaunchPlatform,
+)
 from database.models.telegram_channel_memory import TelegramChannelMemory
 from database.models.telegram_post_performance import SnapshotWindow, TelegramPostPerformanceSnapshot
 from database.models.telegram_surface import TelegramSurfaceRole
+from services.social_launch_context_service import create_next_version
 from services.telegram_performance_aggregator import compute_telegram_performance_aggregate
 from services.telegram_performance_memory import EvidenceStage
 from services.telegram_surface_registry import create_surface
@@ -155,3 +163,53 @@ async def test_single_post_pattern_never_reaches_stable_rule(db_session: AsyncSe
     unique_pattern = next(p for p in aggregate.patterns if p.dimension_value == "unique")
     assert unique_pattern.sample_size == 1
     assert unique_pattern.stage == EvidenceStage.ANOMALY
+
+
+@pytest.mark.asyncio
+async def test_no_launch_context_configured_applies_no_learning_boundary_filter(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SOCIAL-INTELLIGENCE-PRELAUNCH-1A §21: a channel that has never run /launch (the real,
+    current production state) sees ZERO behavior change - every post still counts, exactly as
+    before this phase."""
+    await _enable_public_analytics_surface(db_session, monkeypatch)
+    now = datetime.now(timezone.utc)
+    for i in range(3):
+        await _post_with_snapshot(db_session, published_at=now - timedelta(days=10, hours=i), views=500, category="news")
+    aggregate = await compute_telegram_performance_aggregate(db_session, now=now)
+    assert aggregate.status == "OK"
+    assert aggregate.total_posts_considered == 3
+
+
+@pytest.mark.asyncio
+async def test_legacy_posts_before_learning_boundary_never_count_even_when_live(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SOCIAL-INTELLIGENCE-PRELAUNCH-1A §21: once a real learning_start_at boundary exists, posts
+    published before it (the old NINJA VPN channel's own history) NEVER count toward NINJA PULSE
+    performance evidence - not even after the channel has since gone LIVE. The boundary is a
+    permanent historical fact, never re-opened by a later launch_state change."""
+    await _enable_public_analytics_surface(db_session, monkeypatch)
+    now = datetime.now(timezone.utc)
+    learning_start_at = now - timedelta(days=5)
+    await create_next_version(
+        db_session, platform=SocialLaunchPlatform.TELEGRAM, target_identity="NINJA PULSE",
+        current_identity="NINJA VPN news", launch_state=LaunchState.LIVE, planned_launch_at=None,
+        launch_date_status=LaunchDateStatus.CONFIRMED, learning_start_at=learning_start_at,
+        baseline_policy=LearningBaselinePolicy.FROM_EXPLICIT_DATE,
+        historical_content_policy=HistoricalContentPolicy.LEGACY_CONTEXT_ONLY,
+        raw_instruction="test setup", confirmed_structure={}, created_by=5507703201,
+    )
+    # 3 legacy (pre-boundary) posts - must never count.
+    for i in range(3):
+        await _post_with_snapshot(db_session, published_at=now - timedelta(days=10, hours=i), views=999999, category="legacy_vpn")
+    # 3 real post-boundary PULSE posts - these are the only ones that should count.
+    for i in range(3):
+        await _post_with_snapshot(db_session, published_at=now - timedelta(days=1, hours=i), views=500, category="news")
+
+    aggregate = await compute_telegram_performance_aggregate(db_session, now=now)
+    assert aggregate.status == "OK"
+    assert aggregate.total_posts_considered == 3
+    dims = {(p.dimension, p.dimension_value) for p in aggregate.patterns}
+    assert ("content_role", "legacy_vpn") not in dims
+    assert ("content_role", "news") in dims

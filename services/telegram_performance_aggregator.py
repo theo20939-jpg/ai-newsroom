@@ -26,7 +26,17 @@ Dimensions implemented: content_role (`category`), presentation_type, topic (eac
 `topics`), entity (each entry of `entities`), source, objective (`content_objective`),
 campaign_relation (linked to a campaign or not), publication_hour, publication_day, visual_family.
 "hook family" (spec's own dimension list) has no persisted field anywhere in this codebase today -
-deliberately omitted rather than fabricated; noted in this phase's final report."""
+deliberately omitted rather than fabricated; noted in this phase's final report.
+
+SOCIAL-INTELLIGENCE-PRELAUNCH-1A §21: `services/social_learning_boundary.py::
+is_eligible_for_first_party_learning()` (the ONE canonical filter) is applied here whenever a
+Telegram SocialLaunchContext has ever been configured - never conditioned on the context's CURRENT
+launch_state, since `learning_start_at` is a permanent historical boundary that stays true even
+after the channel goes LIVE (a post from before the NINJA VPN -> PULSE transition never becomes
+eligible just because the channel is live today). When no context has EVER been configured
+(`get_current_context()` returns None), this module applies NO filter at all - the concept simply
+does not exist yet for this platform, which is the exact prior (pre-PRELAUNCH-1A) behavior, so an
+already-operating production channel that has never run `/launch` sees zero change here."""
 from __future__ import annotations
 
 import logging
@@ -38,8 +48,11 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from database.models.social_launch_context import SocialLaunchPlatform
 from database.models.telegram_channel_memory import TelegramChannelMemory
 from database.models.telegram_post_performance import SnapshotWindow, TelegramPostPerformanceSnapshot
+from services.social_learning_boundary import is_eligible_for_first_party_learning
+from services.social_launch_context_service import get_current_context
 from services.telegram_performance_memory import EvidenceStage, PerformancePattern, advance_evidence_stage
 from services.telegram_performance_normalization import same_window_snapshots, views_velocity_per_hour
 from services.telegram_surface_registry import owned_surface_is_public_and_analytics_enabled
@@ -149,6 +162,24 @@ async def compute_telegram_performance_aggregate(
             notes=["нет ни одного зафиксированного поста в telegram_channel_memory"],
         )
 
+    launch_context = await get_current_context(session, SocialLaunchPlatform.TELEGRAM)
+    excluded_legacy_count = 0
+    if launch_context is not None:
+        eligible_memories = [
+            m for m in memories
+            if is_eligible_for_first_party_learning(published_at=m.published_at, launch_context=launch_context)
+        ]
+        excluded_legacy_count = len(memories) - len(eligible_memories)
+        memories = eligible_memories
+    if not memories:
+        return TelegramPerformanceAggregate(
+            as_of=now, status="WAITING_FOR_DATA", window=window.value,
+            notes=[
+                f"все {excluded_legacy_count} зафиксированных пост(ов) относятся к периоду до "
+                "границы обучения NINJA PULSE (learning_start_at) - ни один ещё не учитывается"
+            ],
+        )
+
     snapshots_by_memory = await _latest_comparable_snapshot_per_post(
         session, [m.id for m in memories], window=window,
     )
@@ -201,6 +232,8 @@ async def compute_telegram_performance_aggregate(
     patterns.sort(key=lambda p: p.effect_size, reverse=True)
 
     notes: list[str] = []
+    if excluded_legacy_count:
+        notes.append(f"{excluded_legacy_count} пост(ов) до границы обучения NINJA PULSE исключены из выборки")
     if len(patterns) > _MAX_PATTERNS:
         notes.append(f"показаны {_MAX_PATTERNS} из {len(patterns)} паттернов")
         patterns = patterns[:_MAX_PATTERNS]
