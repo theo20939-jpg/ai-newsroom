@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, InaccessibleMessage, Message
 
@@ -65,6 +66,13 @@ _PLATFORM_LABEL = {SocialLaunchPlatform.TELEGRAM: "Telegram", SocialLaunchPlatfo
 
 _VALID_PLATFORM_FILTERS = {"telegram", "instagram"}
 _TELEGRAM_MESSAGE_LIMIT = 4000
+
+# DIRECTOR-REFRESH-CALLBACK-1: per-process, in-memory dedup guard - a (chat_id, message_id) pair
+# stays in this set for the duration of one refresh execution. A confirmation card is a fresh
+# message every time /directors refresh ... is run, so two INTENTIONALLY separate refreshes (even
+# for the same target, at different times) always get distinct message_ids and are never blocked
+# by this - only a genuine duplicate tap/delivery on the SAME still-open confirmation card is.
+_IN_PROGRESS_REFRESH_KEYS: set[tuple[int, int]] = set()
 
 
 def _is_authorized_chat_and_topic(message: Message) -> bool:
@@ -221,28 +229,69 @@ async def handle_refresh_callback(callback: CallbackQuery) -> None:
         return
     if action == "cancel":
         await callback.answer("Отменено")
+        await _clear_keyboard(message)
         return
     if not settings.social_advisory_execution_enabled:
         await callback.answer("Явный запуск advisory-директоров пока отключён.", show_alert=True)
         return
 
-    prompt_repository = FilePromptRepository(_PROMPTS_ROOT)
-    ai_layer = assemble_ai_integration_layer(settings, prompt_repository)
-    now = datetime.now(timezone.utc)
+    # DIRECTOR-REFRESH-CALLBACK-1 §5: a genuine duplicate tap/delivery on the SAME still-open
+    # confirmation card must never re-execute - checked+added with no `await` in between, so this
+    # is atomic within the single-threaded asyncio event loop (no other coroutine can interleave).
+    dedup_key = (message.chat.id, message.message_id)
+    if dedup_key in _IN_PROGRESS_REFRESH_KEYS:
+        await callback.answer("Уже выполняется, подождите.", show_alert=True)
+        return
+    _IN_PROGRESS_REFRESH_KEYS.add(dedup_key)
 
-    for platform in _REFRESH_TARGETS[target]:
-        async with async_session_factory() as session:
-            budget = await check_social_advisory_budget(session, now=now)
-            if not budget.allowed:
-                await message.answer(f"{_PLATFORM_LABEL[platform]}: {render_budget_blocked(budget.decision.value)}")
-                continue
-            result = await run_prelaunch_advisory(session, ai_layer.gateway, prompt_repository, platform=platform, now=now)
-        if result.error is not None:
-            await message.answer(f"{_PLATFORM_LABEL[platform]}: не удалось получить advisory ({result.error}).")
-        elif result.advisory is not None:
-            await message.answer(render_prelaunch_advisory(_PLATFORM_LABEL[platform], result.advisory))
+    # DIRECTOR-REFRESH-CALLBACK-1 §4/§10: acknowledge IMMEDIATELY, before any execution - the
+    # Founder must never see a stuck button, even if the execution below is slow or fails.
+    # callback.answer() may only be called once per callback, so this is the ONLY call for the
+    # success path; the final visible result is a real message, not a second callback answer.
+    await callback.answer("Запущено")
+    await _clear_keyboard(message)
 
-    await callback.answer("Готово")
+    try:
+        prompt_repository = FilePromptRepository(_PROMPTS_ROOT)
+        ai_layer = assemble_ai_integration_layer(settings, prompt_repository)
+        now = datetime.now(timezone.utc)
+
+        for platform in _REFRESH_TARGETS[target]:
+            async with async_session_factory() as session:
+                budget = await check_social_advisory_budget(session, now=now)
+                if not budget.allowed:
+                    await message.answer(f"{_PLATFORM_LABEL[platform]}: {render_budget_blocked(budget.decision.value)}")
+                    continue
+                result = await run_prelaunch_advisory(session, ai_layer.gateway, prompt_repository, platform=platform, now=now)
+            if result.error is not None:
+                await message.answer(f"{_PLATFORM_LABEL[platform]}: не удалось получить advisory ({result.error}).")
+            elif result.advisory is not None:
+                # DIRECTOR-REFRESH-CALLBACK-1 §1/§2: the real production root cause - a real,
+                # detailed PrelaunchAdvisory routinely exceeds Telegram's 4096-char message limit,
+                # and a plain message.answer() raised TelegramBadRequest("message is too long"),
+                # aborting this function before it ever reached callback.answer() - the exact
+                # observed "nothing happens" symptom. _send_possibly_long() (already used by
+                # /plan and /directors above) paginates instead.
+                await _send_possibly_long(message, render_prelaunch_advisory(_PLATFORM_LABEL[platform], result.advisory))
+        await message.answer("Готово.")
+    except Exception:
+        # DIRECTOR-REFRESH-CALLBACK-1 §10: never swallow silently - full technical detail server
+        # side, a safe, no-stack-trace message to the Founder.
+        logger.exception("social_advisory_refresh_failed", extra={"target": target})
+        await message.answer("🥷 Не удалось обновить advisory-директоров: внутренняя ошибка. Подробности в логах.")
+    finally:
+        _IN_PROGRESS_REFRESH_KEYS.discard(dedup_key)
+
+
+async def _clear_keyboard(message: Message) -> None:
+    """Best-effort: removes the confirm/cancel buttons once a callback has been acted on, so a
+    human cannot tap the same still-visible card again through the Telegram UI. Never raises - a
+    message that was already edited/deleted (e.g. by a near-simultaneous duplicate delivery) is
+    exactly the harmless case this suppresses."""
+    try:
+        await message.edit_reply_markup(reply_markup=None)
+    except TelegramBadRequest:
+        pass
 
 
 @router.message(Command("plan"))
