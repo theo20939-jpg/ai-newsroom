@@ -9,11 +9,21 @@ from that module) - this module is the one place allowed to depend on both.
 
 Spec §31's own caution preserved: the objective->format hypotheses below are STARTING points, not
 permanent universal truth - a real Performance Memory pass would recalibrate them over time (not
-implemented in this phase, no live Instagram performance data exists yet, spec §42)."""
+implemented in this phase, no live Instagram performance data exists yet, spec §42).
+
+SOCIAL-INTELLIGENCE-PRELAUNCH-1A §6: `launch_context` (optional, None-default so every existing
+call site keeps its exact prior behavior) is INFORMATION ONLY - it never invents an `audience`/
+`hook`/`series` value that the caller did not already supply (those stay the real, honest signal
+of whether any first-party account history exists at all). For a genuinely empty account, callers
+already naturally pass `audience=None, hook=None, series=None` today, which already routes this
+function to its safe SINGLE/CAROUSEL default via Story/campaign/format-knowledge reasoning alone -
+this wiring only makes that reasoning explicit and traceable in `why`, so a cold-start
+recommendation is never mistaken for one backed by real first-party format performance."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from database.models.social_launch_context import SocialLaunchContext
 from services.campaign_planner import CampaignPlan
 from services.instagram_audience_intelligence import AudienceSegment, FunnelStage
 from services.instagram_content_opportunity import ContentOpportunity
@@ -22,6 +32,7 @@ from services.instagram_hook_intelligence import FatigueState, Hook
 from services.instagram_objectives import ContentObjective
 from services.instagram_series import ContentSeries, SeriesStatus
 from services.instagram_trend_radar import Trend, TrendLifecycleStage
+from services.social_launch_context_service import is_prelaunch_or_transition
 
 _EARLY_FUNNEL_STAGES = (FunnelStage.UNAWARE, FunnelStage.PROBLEM_AWARE)
 _LATE_FUNNEL_STAGES = (FunnelStage.PRODUCT_AWARE, FunnelStage.CONSIDERING)
@@ -38,10 +49,21 @@ def evaluate_format_v2(
     *, objective: ContentObjective, assets: AssetConstraints, opportunity: ContentOpportunity | None = None,
     audience: AudienceSegment | None = None, trend: Trend | None = None, campaign_plan: CampaignPlan | None = None,
     hook: Hook | None = None, series: ContentSeries | None = None,
+    launch_context: SocialLaunchContext | None = None,
 ) -> FormatDecision:
     evidence: list[str] = [f"objective={objective.value}"]
     risks: list[str] = []
     alternatives: list[ContentFormat] = []
+
+    if (
+        launch_context is not None and is_prelaunch_or_transition(launch_context)
+        and audience is None and hook is None and series is None
+    ):
+        evidence.append(
+            f"cold-start account (target identity={launch_context.target_identity!r}) - no "
+            "first-party format performance exists yet; this recommendation is derived from "
+            "objective/opportunity/campaign/format knowledge only, never an invented first-party preference"
+        )
 
     # Spec §30: audience funnel stage feeds the decision - an early-funnel audience (has not yet
     # framed the problem) is steered toward carousel/education over a discovery-only Reel, a

@@ -24,7 +24,15 @@ AFTER generation (never trusted to prompt discipline alone):
      against every generated text field and `restricted_claims`.
   3. When `product_mention_allowed=False`, `product_name` (if supplied) is folded into the
      restricted-claims check too - a Founder-Directive-blocked or not-yet-public product can never
-     be named, exactly as if it were itself a restricted claim."""
+     be named, exactly as if it were itself a restricted claim.
+
+SOCIAL-INTELLIGENCE-PRELAUNCH-1A §7: `CreativeDirectorInput.launch_context_note` (optional, empty
+by default so every existing call site keeps its exact prior prompt text) is the ONLY zero-to-one
+wiring this module needs - a plain text briefing line (e.g. "first Instagram post ever; account is
+transitioning from X to Y; introduce the new identity, assume zero follower familiarity") that the
+caller derives from the real SocialLaunchContext. This module still performs NO Meta publication
+and generates NO new video beyond the existing Reel/Carousel/Single contract - it only gets an
+honest extra sentence of context for the very first pieces of content."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -76,6 +84,7 @@ class CreativeDirectorInput:
     restricted_claims: list[str] = field(default_factory=list)
     product_mention_allowed: bool = False
     product_name: str | None = None
+    launch_context_note: str = ""
 
 
 @dataclass(frozen=True)
@@ -119,6 +128,7 @@ def _build_user_text(director_input: CreativeDirectorInput) -> str:
         f"APPROVED CLAIMS: {director_input.approved_claims}\n"
         f"RESTRICTED CLAIMS (never use): {director_input.restricted_claims}\n"
         f"PRODUCT_MENTION_ALLOWED: {director_input.product_mention_allowed}\n"
+        f"LAUNCH CONTEXT: {director_input.launch_context_note or '(established account - no launch context)'}\n"
         f"EVIDENCE BULLETS (use ONLY these for any factual claim):\n{evidence_block}"
     )
 

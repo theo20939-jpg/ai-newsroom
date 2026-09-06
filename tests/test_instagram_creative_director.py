@@ -99,6 +99,22 @@ async def test_single_creative_generation_succeeds() -> None:
 
 
 @pytest.mark.asyncio
+async def test_launch_context_note_reaches_the_prompt_but_is_optional() -> None:
+    """SOCIAL-INTELLIGENCE-PRELAUNCH-1A §7: `launch_context_note` (when a caller supplies one from
+    a real SocialLaunchContext) reaches the Gateway prompt text verbatim - and its absence (the
+    default "") never breaks generation, exactly as every existing call site above proves."""
+    gateway = FakeLLMGateway(generate_response=_response({
+        "creative_angle": "a", "visual_concept": "a", "on_image_copy": "a", "caption_direction": "a",
+        "cta": None, "asset_requirements": [], "evidence_used": ["OpenAI announced a new autonomous coding agent on 2026-09-04"],
+    }))
+    director_input = _base_input(launch_context_note="first Instagram post ever - assume zero follower familiarity")
+    await generate_single_creative(gateway, _prompt_repository(), director_input=director_input)
+    prompt_text = str(gateway.received_requests[-1].messages[-1].content[0].text)
+    assert "LAUNCH CONTEXT" in prompt_text
+    assert "first Instagram post ever" in prompt_text
+
+
+@pytest.mark.asyncio
 async def test_carousel_creative_generation_succeeds() -> None:
     gateway = FakeLLMGateway(generate_response=_response({
         "objective": "saves",

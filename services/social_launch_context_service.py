@@ -105,6 +105,27 @@ def is_prelaunch_or_transition(context: SocialLaunchContext | None) -> bool:
     return context.launch_state in (LaunchState.PRE_LAUNCH, LaunchState.TRANSITION)
 
 
+def describe_launch_context_for_creative(context: SocialLaunchContext | None) -> str:
+    """SOCIAL-INTELLIGENCE-PRELAUNCH-1A §7: the ONE place that turns a SocialLaunchContext into the
+    plain-text briefing line services/instagram_creative_director.py::CreativeDirectorInput.
+    launch_context_note (and any future zero-to-one caller) actually uses - so every caller
+    describes cold-start/transition identically instead of re-deriving this text ad hoc. Empty
+    string (the field's own default) when there is no context or the platform is already LIVE with
+    real history - an established account gets no injected launch framing at all."""
+    if context is None or not is_prelaunch_or_transition(context):
+        return ""
+    if context.launch_state == LaunchState.TRANSITION:
+        return (
+            f"this account is transitioning from {context.current_identity or 'its prior identity'} to "
+            f"{context.target_identity} - frame content as introducing/reinforcing the new identity, "
+            "never assume audience familiarity with the target identity yet"
+        )
+    return (
+        f"this is early content for a pre-launch account (target identity={context.target_identity}) - "
+        "assume zero follower familiarity and no first-party format/audience/hook history exists yet"
+    )
+
+
 def mark_learning_started(context: SocialLaunchContext, *, now: datetime | None = None) -> None:
     """spec §5/§6: called ONLY by whatever real event actually satisfies the context's own
     baseline_policy (e.g. a real first post being recorded after LIVE transition) - never called

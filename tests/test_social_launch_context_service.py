@@ -17,6 +17,7 @@ from database.models.social_launch_context import (
 from services.social_launch_context_service import (
     compute_launch_context_fingerprint,
     create_next_version,
+    describe_launch_context_for_creative,
     get_current_context,
     is_prelaunch_or_transition,
     list_history,
@@ -95,3 +96,30 @@ async def test_fingerprint_is_stable_for_identical_content() -> None:
 
 async def test_none_context_fingerprint_is_none() -> None:
     assert compute_launch_context_fingerprint(None) is None
+
+
+async def test_describe_launch_context_for_creative_is_empty_for_no_context_or_live(db_session: AsyncSession) -> None:
+    """SOCIAL-INTELLIGENCE-PRELAUNCH-1A §7: an established (LIVE) or unconfigured platform gets no
+    injected launch framing at all - the empty string is CreativeDirectorInput.launch_context_note's
+    own default, so every existing caller stays byte-for-byte unaffected."""
+    assert describe_launch_context_for_creative(None) == ""
+    live_context = await _create(db_session, platform=SocialLaunchPlatform.INSTAGRAM, launch_state=LaunchState.LIVE)
+    assert describe_launch_context_for_creative(live_context) == ""
+
+
+async def test_describe_launch_context_for_creative_distinguishes_pre_launch_from_transition(db_session: AsyncSession) -> None:
+    """PRE_LAUNCH and TRANSITION are real, distinct states (spec §7) - a rebrand-in-progress
+    account gets framing about the OLD identity too, a brand-new account does not (it has none)."""
+    pre_launch = await _create(db_session, platform=SocialLaunchPlatform.INSTAGRAM, launch_state=LaunchState.PRE_LAUNCH)
+    pre_launch_text = describe_launch_context_for_creative(pre_launch)
+    assert "NINJA PULSE" in pre_launch_text
+    assert "zero follower familiarity" in pre_launch_text
+
+    transition = await _create(
+        db_session, platform=SocialLaunchPlatform.TELEGRAM, launch_state=LaunchState.TRANSITION,
+        current_identity="NINJA VPN news",
+    )
+    transition_text = describe_launch_context_for_creative(transition)
+    assert "NINJA VPN news" in transition_text
+    assert "NINJA PULSE" in transition_text
+    assert "transitioning" in transition_text
