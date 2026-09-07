@@ -42,6 +42,7 @@ from services.image_relevance import PROVENANCE_TABLE
 from services.media_ranking import _NEAR_DUPLICATE_MAX_HAMMING_DISTANCE, rank_media_candidates
 from services.news_editorial_relevance import OUT_OF_SCOPE, classify_editorial_relevance
 from services.brand_renderer import RenderResult, render_branded_media
+from services.data_source_classification import classify_source_presentation, select_data_presentation_mode
 from services.nnj_master_news_overlay import (
     NEWS_BRANDING_NO_SOURCE_BYTES,
     NEWS_BRANDING_ORIGINAL_SOURCE_FAILURE,
@@ -89,6 +90,7 @@ from services.story_telegram_delivery import (
     persist_reply_routing_proposal,
     record_delivery,
 )
+from services.director_editorial_gate_shadow import run_editorial_gate_shadow
 from services.telegram_channel_director_shadow import run_channel_director_shadow
 from services.telegram_notifier import send_editorial_card, to_editorial_card
 from services.telegram_routing import (
@@ -1547,6 +1549,25 @@ async def run_content_cycle(
                         except Exception:
                             logger.warning("telegram_channel_director_shadow failed (shadow only, non-fatal)", exc_info=True)
 
+                    # DIRECTOR-CONTROL-PLANE-1 §8-13: Editorial Gate shadow evaluation - flag-gated
+                    # (default False, run_editorial_gate_shadow() itself no-ops when disabled) and
+                    # wrapped in its own try/except, same defense-in-depth pattern as Channel
+                    # Director shadow immediately above. See that module's own docstring for this
+                    # phase's honest scope limitation (shadow/logged only, does not yet withhold
+                    # anything from the real queue).
+                    try:
+                        async with session_factory() as editorial_gate_session:
+                            await run_editorial_gate_shadow(
+                                editorial_gate_session,
+                                story_id=str(outcome.content_draft.id), event_id=str(event.id),
+                                platform="telegram", category=event.category,
+                                has_sufficient_facts=bool(event.content),
+                                source_confidence=(presentation_score / 100.0) if presentation_score is not None else 0.5,
+                                now=datetime.now(timezone.utc),
+                            )
+                    except Exception:
+                        logger.warning("director_editorial_gate_shadow failed (shadow only, non-fatal)", exc_info=True)
+
                     if settings.presentation_director_mode == "enforce":
                         # PRESENTATION RECOVERY (2026-09-02): the prior Phase V2.10N behavior here
                         # unconditionally overwrote `keyboard` with the legacy subscribe/CTA
@@ -1776,6 +1797,17 @@ async def run_content_cycle(
                                             duration_ms=(time.monotonic() - started_adaptive_branding) * 1000,
                                         )
                                 else:
+                                    # DIRECTOR-CONTROL-PLANE-1 §23-26: classify the source before
+                                    # DATA renders - the real Kirin 9050 Pro regression fix. Never
+                                    # affects BREAKING/QUOTE/NEWS (data_presentation_mode is only
+                                    # ever read by render_data_card()'s own DATA branch); a source
+                                    # already classified EXISTING_INFOGRAPHIC gets the source-
+                                    # preserving treatment instead of a second competing stat card.
+                                    data_presentation_mode = select_data_presentation_mode(
+                                        classify_source_presentation(
+                                            resolved_photo_candidate.warnings if resolved_photo_candidate is not None else None
+                                        )
+                                    )
                                     render_result = render_branded_media(
                                         presentation_type=presentation_decision.presentation_type,
                                         source_image_bytes=source_bytes,
@@ -1784,6 +1816,7 @@ async def run_content_cycle(
                                         branding_strength=presentation_decision.branding_strength,
                                         data_candidate=presentation_decision.data_candidate,
                                         quote_candidate=presentation_decision.quote_candidate,
+                                        data_presentation_mode=data_presentation_mode,
                                     )
                                 logger.info(
                                     "brand_render_attempted",
