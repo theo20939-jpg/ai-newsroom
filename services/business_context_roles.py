@@ -52,6 +52,14 @@ _DESIGN_COMMAND = frozenset({"design"})
 # is read-only strategic state, same category as /directors/performance).
 _LAUNCH_COMMAND = frozenset({"launch"})
 
+# DIRECTOR-CONTROL-PLANE-1 §34: /accounts read is available to every role that already has
+# director console read access (same reasoning as _DESIGN_COMMAND/_LAUNCH_COMMAND exactly -
+# platform account/connection status is read-only state, same category as /directors/performance).
+# Read-only, no separate mutation command - account connection itself is a config/credential
+# action, never something this bot ever writes (spec §32's own "Directors may NOT... change
+# credentials, change account permissions" hard boundary).
+_ACCOUNTS_COMMAND = frozenset({"accounts"})
+
 # SOCIAL-INTELLIGENCE-PRELAUNCH-1A §3: /launch's OWN canonical mutation permission - deliberately
 # NOT the "directive" proxy every other mutation command (/surface, /design) still uses. A
 # distinct command name means changing FOUNDER's "directive" entry (e.g. a future phase narrowing
@@ -64,20 +72,23 @@ DEFAULT_ROLE_COMMANDS: dict[BusinessContextRole, frozenset[str]] = {
     BusinessContextRole.FOUNDER: frozenset(
         {"product", "campaign", "milestone", "directive", "claim", "context", "status", "help"}
         | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND | _DESIGN_COMMAND | _LAUNCH_COMMAND | _LAUNCH_MUTATE_COMMAND
+        | _ACCOUNTS_COMMAND
     ),
     BusinessContextRole.PRODUCT_OWNER: frozenset(
         {"product", "campaign", "milestone", "claim", "context", "status", "help"}
-        | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND | _DESIGN_COMMAND | _LAUNCH_COMMAND
+        | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND | _DESIGN_COMMAND | _LAUNCH_COMMAND | _ACCOUNTS_COMMAND
     ),
     BusinessContextRole.MARKETING: frozenset(
         {"campaign", "milestone", "context", "status", "help"}
-        | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND | _DESIGN_COMMAND | _LAUNCH_COMMAND
+        | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND | _DESIGN_COMMAND | _LAUNCH_COMMAND | _ACCOUNTS_COMMAND
     ),
     BusinessContextRole.EDITOR: frozenset(
-        {"status", "help", "directors", "opportunities", "performance"} | _SURFACE_COMMAND | _DESIGN_COMMAND | _LAUNCH_COMMAND
+        {"status", "help", "directors", "opportunities", "performance"}
+        | _SURFACE_COMMAND | _DESIGN_COMMAND | _LAUNCH_COMMAND | _ACCOUNTS_COMMAND
     ),
     BusinessContextRole.VIEWER: frozenset(
         {"status", "help"} | _DIRECTOR_CONSOLE_COMMANDS | _SURFACE_COMMAND | _DESIGN_COMMAND | _LAUNCH_COMMAND
+        | _ACCOUNTS_COMMAND
     ),
 }
 

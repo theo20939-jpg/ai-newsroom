@@ -30,6 +30,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, InaccessibleMessage, Message
 
+from bot.accounts_formatting import render_accounts_status
 from bot.director_console_formatting import (
     render_calendar,
     render_directors_status,
@@ -52,6 +53,7 @@ from services.director_console_service import (
     build_plan_view,
 )
 from services.director_status_service import get_director_console_status
+from services.platform_account_context import build_instagram_account_context, build_telegram_account_context
 from services.social_advisory_budget_service import check_social_advisory_budget, daily_advisory_summary
 from services.social_advisory_execution_service import run_prelaunch_advisory
 
@@ -348,3 +350,19 @@ async def handle_performance(message: Message, command: CommandObject) -> None:
     async with async_session_factory() as session:
         view = await build_performance_view(session, now=datetime.now(timezone.utc), platform=platform)
     await _send_possibly_long(message, render_performance(view, role=role, platform=platform))
+
+
+@router.message(Command("accounts"))
+async def handle_accounts(message: Message, command: CommandObject) -> None:
+    """DIRECTOR-CONTROL-PLANE-1 §33-34: read-only, 0 writes, 0 Gateway calls - resolves the real
+    Telegram/Instagram PlatformAccountContext (services/platform_account_context.py) and renders
+    it. No secrets/tokens ever appear in the output (bot/accounts_formatting.py's own module
+    docstring)."""
+    role = await _authorize(message, "accounts")
+    if role is None:
+        return
+    now = datetime.now(timezone.utc)
+    async with async_session_factory() as session:
+        telegram_context = await build_telegram_account_context(session, now=now)
+        instagram_context = await build_instagram_account_context(session, now=now)
+    await _send_possibly_long(message, render_accounts_status(telegram_context, instagram_context))

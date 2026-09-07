@@ -6,8 +6,13 @@ from database.models.campaign_milestone import CampaignMilestone
 from database.models.claim_policy import ClaimPolicy
 from database.models.competitor import CompetitorAccount, CompetitorContentObservation
 from database.models.content_draft import ContentDraft
+from database.models.design_reference_asset import DesignReferenceAsset
+from database.models.design_spec_version import DesignSpecVersion
+from database.models.director_editorial_decision import DirectorEditorialDecision
+from database.models.director_editorial_task import DirectorEditorialTask
 from database.models.director_run import DirectorRun
 from database.models.editorial_task import EditorialTask
+from database.models.instagram_account import InstagramAccount
 from database.models.image_candidate_record import ImageCandidateRecord
 from database.models.instagram_ai_call_record import InstagramAICallRecord
 from database.models.instagram_audience_memory import InstagramAudienceInsight
@@ -85,4 +90,9 @@ __all__ = [
     "VisualDesignerBriefVersion",
     "VisualRegressionCase",
     "VisualRegressionRun",
+    "InstagramAccount",
+    "DirectorEditorialDecision",
+    "DirectorEditorialTask",
+    "DesignSpecVersion",
+    "DesignReferenceAsset",
 ]

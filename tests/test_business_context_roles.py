@@ -59,6 +59,9 @@ def test_commands_for_role_matches_role_matrix() -> None:
     # (freeze/unfreeze/rollback) is gated separately inside the handler, same pattern as /surface.
     # SOCIAL-INTELLIGENCE-PRELAUNCH-1 §12: /launch read is broadly available too - mutation is
     # gated separately inside the handler, same pattern as /surface and /design.
+    # DIRECTOR-CONTROL-PLANE-1 §34: /accounts read is broadly available too, same read-only
+    # reasoning - there is no accounts mutation command at all (spec §32's own hard boundary).
     assert commands_for_role(BusinessContextRole.VIEWER) == frozenset({
         "status", "help", "directors", "plan", "opportunities", "calendar", "performance", "surface", "design", "launch",
+        "accounts",
     })

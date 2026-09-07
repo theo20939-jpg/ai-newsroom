@@ -17,6 +17,8 @@ _ALL_COMMAND_NAMES = frozenset({
     "design",
     # SOCIAL-INTELLIGENCE-PRELAUNCH-1 §12: /launch, added through this SAME registry.
     "launch",
+    # DIRECTOR-CONTROL-PLANE-1 §33-34: /accounts, added through this SAME registry.
+    "accounts",
 })
 
 

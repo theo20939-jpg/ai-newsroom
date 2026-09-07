@@ -221,6 +221,19 @@ COMMAND_REGISTRY: dict[str, CommandDefinition] = {
         name="launch_mutate", description="(internal) FOUNDER permission for /launch mutation - not a real command.",
         enabled=False,
     ),
+    # DIRECTOR-CONTROL-PLANE-1 §33-34: /accounts - read-only, broadly available (see services/
+    # business_context_roles.py's own _ACCOUNTS_COMMAND). No mutation variant exists at all (spec
+    # §32's own hard boundary: no credential/account-permission changes from this bot).
+    "accounts": CommandDefinition(
+        name="accounts", description="Статус подключения NINJA PULSE к Telegram и Instagram.",
+        examples=("/accounts",),
+        detailed_help=(
+            "Показывает текущее состояние подключения для Telegram и Instagram: статус "
+            "регистрации/подключения, launch state, доступные возможности чтения/аналитики, "
+            "и границу исторического обучения. Только чтение - без секретов/токенов."
+        ),
+        is_mutation=False,  # spec §32: no accounts mutation path exists at all, unlike /surface, /design, /launch
+    ),
 }
 
 

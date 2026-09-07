@@ -1162,6 +1162,23 @@ class Settings(BaseSettings):
     weekly_recap_adjacent_min_score: int = Field(default=70, ge=0, le=100)
     weekly_recap_adjacent_min_significance: float = Field(default=5.0, ge=0.0, le=10.0)
 
+    # DIRECTOR-CONTROL-PLANE-1 §6: Instagram Graph API adapter config - mirrors telegram_bot_token's
+    # own SecretStr pattern exactly. Both None by default (spec §6's own "do not invent credentials,
+    # do not hardcode tokens" instruction) - services/instagram_graph_adapter.py::is_configured()
+    # is False whenever either is unset, and every real caller reports CONNECTION_REQUIRED rather
+    # than fabricating a connected state.
+    instagram_access_token: SecretStr | None = None
+    instagram_business_account_id: str | None = None
+
+    # DIRECTOR-CONTROL-PLANE-1 §8/§12: the ONE new enforcement flag this phase introduces - gates
+    # only whether services/director_editorial_gate.py's decision actually withholds DROP/HOLD
+    # candidates from the real Founder NEWS queue. Default False: every gate evaluation still runs
+    # and persists a DirectorEditorialDecision (shadow), but worker/content_cycle.py's own routing
+    # is completely unaffected until this is explicitly turned on - deliberately separate from
+    # every PUBLICATION-facing flag (final_post_publication_enabled, telegram_channel_director_
+    # shadow_enabled, telegram_art_director_enforcement_enabled), none of which this flag touches.
+    telegram_editorial_gate_enabled: bool = False
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""
