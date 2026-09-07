@@ -156,9 +156,17 @@ async def evaluate_art_direction_vision(
 
     issues_raw = output.get("issues", [])
     issue_codes = [_parse_issue_code(issue.get("code", "")) for issue in issues_raw if isinstance(issue, dict)]
+    decision = _parse_decision(output.get("decision", ""))
+
+    # DIRECTOR-CONTROL-PLANE-1 §26: a deterministic backstop, never trusting the vision model's
+    # own decision field alone for this one specific case - a final visual that changes or
+    # ambiguously changes the key factual metric (NUMBER_MISMATCH) must BLOCK, never
+    # PASS_WITH_NOTES/REWORK, regardless of what decision string the model itself returned.
+    if ArtDirectorIssueCode.NUMBER_MISMATCH in issue_codes:
+        decision = ArtDirectorDecision.BLOCK
 
     return ArtDirectorResult(
-        decision=_parse_decision(output.get("decision", "")),
+        decision=decision,
         severity=output.get("severity", "none"),
         issue_codes=issue_codes,
         action=(issues_raw[0].get("recommended_action", "") if issues_raw and isinstance(issues_raw[0], dict) else ""),

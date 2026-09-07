@@ -52,6 +52,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageStat
 
 from core.config import settings
+from services.data_source_classification import DataPresentationMode
 from services.nnj_master_news_mark import rasterize_nnj_mark
 from services.nnj_master_news_overlay import (
     BoundingBox,
@@ -805,6 +806,7 @@ def _build_data_lower_signature_image(
 
 def render_data_card(
     data_candidate: DataCandidate, *, category: str, editorial_code: str, source_image_bytes: bytes,
+    presentation_mode: DataPresentationMode = DataPresentationMode.FULL_DATA_CARD,
 ) -> bytes:
     """Phase V2.20A - see the module comment above this function's constants for the full
     approved-template rationale. The source/editorial image is composited directly (via the
@@ -815,7 +817,14 @@ def render_data_card(
     non-colliding corner `_select_data_block_placement()` finds - or none at all, if no corner
     qualifies, in which case the source+signature-only image is returned as-is (never a forced or
     clipped overlay). `category`/`editorial_code` are accepted for dispatch-symmetry with the
-    other render_* functions but are not drawn anywhere here."""
+    other render_* functions but are not drawn anywhere here.
+
+    DIRECTOR-CONTROL-PLANE-1 §23-26: `presentation_mode=MINIMAL_SOURCE_PRESERVING` (the real
+    Kirin 9050 Pro regression fix - services/data_source_classification.py's own module docstring)
+    skips the stat-block step ENTIRELY and returns right after the NNJ signature is composited -
+    the source image's own already-printed metric is never redrawn, overpainted, or risked
+    colliding with a second competing number. Default FULL_DATA_CARD is completely unchanged -
+    every existing caller that never passes this parameter gets byte-identical behavior."""
     photo = Image.open(io.BytesIO(source_image_bytes)).convert("RGBA")
     canvas = _fit_photo_to_canvas(photo, (_CANVAS_W, _CANVAS_H))
     canvas_w, canvas_h = canvas.size
@@ -846,6 +855,14 @@ def render_data_card(
         # own docstring for why this is a deliberately different, scoring-free guarantee).
         fallback_image, signature_box = _build_data_signature_fallback(canvas.size, inset=inset)
         canvas.alpha_composite(fallback_image)
+
+    if presentation_mode == DataPresentationMode.MINIMAL_SOURCE_PRESERVING:
+        # DIRECTOR-CONTROL-PLANE-1 §25: source information already IS the presentation - the ONLY
+        # addition is the NNJ signature already composited above. Never measures/places/draws a
+        # second stat block that could visually collide with or duplicate the source's own number.
+        out = io.BytesIO()
+        canvas.convert("RGB").save(out, format="JPEG", quality=95)
+        return out.getvalue()
 
     block_w = max(160, round(_DATA_BLOCK_WIDTH_FRAC * canvas_w))
     inner_max_width = max(1, block_w - _DATA_BLOCK_MARGIN * 2)
@@ -966,11 +983,17 @@ def render_branded_media(
     branding_strength: str = "EDITORIAL",
     data_candidate: DataCandidate | None = None,
     quote_candidate: QuoteCandidate | None = None,
+    data_presentation_mode: DataPresentationMode = DataPresentationMode.FULL_DATA_CARD,
 ) -> RenderResult:
     """The one dispatch entry point. Never raises - any failure (missing asset, decode error,
     unexpected exception) is caught here and reported as `success=False`; the caller
     (worker/content_cycle.py) must then use the original, unbranded media (or plain NEWS text)
-    unchanged, per spec §29's non-negotiable fail-safe rule."""
+    unchanged, per spec §29's non-negotiable fail-safe rule.
+
+    DIRECTOR-CONTROL-PLANE-1 §23-26: `data_presentation_mode` is forwarded to render_data_card()
+    unchanged for DATA only - every other presentation_type ignores it. Defaults to the existing
+    FULL_DATA_CARD behavior, so every pre-existing caller that never passes this parameter is
+    completely unaffected."""
     started = time.monotonic()
     template_version = _TEMPLATE_BY_PRESENTATION_TYPE.get(presentation_type, TEMPLATE_NEWS)
     try:
@@ -997,7 +1020,7 @@ def render_branded_media(
                 raise ValueError("DATA presentation requested with no source_image_bytes")
             image_bytes = render_data_card(
                 data_candidate, category=category, editorial_code=editorial_code,
-                source_image_bytes=source_image_bytes,
+                source_image_bytes=source_image_bytes, presentation_mode=data_presentation_mode,
             )
         elif presentation_type == QUOTE:
             if quote_candidate is None:
