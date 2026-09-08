@@ -30,7 +30,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, InaccessibleMessage, Message
 
-from bot.accounts_formatting import render_accounts_status
+from bot.accounts_formatting import render_accounts_status, render_instagram_connection_report
 from bot.director_console_formatting import (
     render_calendar,
     render_directors_status,
@@ -354,10 +354,18 @@ async def handle_performance(message: Message, command: CommandObject) -> None:
 
 @router.message(Command("accounts"))
 async def handle_accounts(message: Message, command: CommandObject) -> None:
-    """DIRECTOR-CONTROL-PLANE-1 §33-34: read-only, 0 writes, 0 Gateway calls - resolves the real
-    Telegram/Instagram PlatformAccountContext (services/platform_account_context.py) and renders
-    it. No secrets/tokens ever appear in the output (bot/accounts_formatting.py's own module
-    docstring)."""
+    """DIRECTOR-CONTROL-PLANE-1 §33-34 / 1C §19-20: bare `/accounts` is read-only - 0 writes, 0
+    Gateway calls, 0 network calls - it resolves the persisted Telegram/Instagram
+    PlatformAccountContext and renders it. No secrets/tokens ever appear.
+
+    `/accounts test instagram` (1C §20) is the ONE explicit exception - a genuinely separate,
+    NOT-read subcommand: FOUNDER-only, it runs the bounded official connection check
+    (services/instagram_connection_service.py::run_instagram_connection_check - profile fetch, identity
+    verification, capability detection) and persists ONLY non-secret connection metadata. It is
+    never a side effect of viewing `/accounts`."""
+    if (command.args or "").strip().lower().startswith("test"):
+        await _handle_accounts_test(message, command.args or "")
+        return
     role = await _authorize(message, "accounts")
     if role is None:
         return
@@ -366,3 +374,29 @@ async def handle_accounts(message: Message, command: CommandObject) -> None:
         telegram_context = await build_telegram_account_context(session, now=now)
         instagram_context = await build_instagram_account_context(session, now=now)
     await _send_possibly_long(message, render_accounts_status(telegram_context, instagram_context))
+
+
+async def _handle_accounts_test(message: Message, args: str) -> None:
+    """1C §20: FOUNDER-only explicit connection diagnostic. Runs one bounded official read and
+    commits only the non-secret connection-state metadata."""
+    if not _is_authorized_chat_and_topic(message):
+        await _fail_wrong_location(message)
+        return
+    if not settings.director_console_enabled:
+        await _fail_console_disabled(message)
+        return
+    user_id = message.from_user.id if message.from_user else None
+    if user_id is None or not is_command_allowed(user_id, "directive"):
+        await message.answer("🥷 Явную проверку подключения аккаунта может запускать только FOUNDER.")
+        return
+    parts = args.strip().lower().split()
+    if len(parts) != 2 or parts[1] != "instagram":
+        await message.answer("🥷 Используйте: /accounts test instagram")
+        return
+
+    from services.instagram_connection_service import run_instagram_connection_check
+
+    async with async_session_factory() as session:
+        report = await run_instagram_connection_check(session, now=datetime.now(timezone.utc))
+        await session.commit()
+    await _send_possibly_long(message, render_instagram_connection_report(report))
