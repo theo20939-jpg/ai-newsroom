@@ -1,12 +1,22 @@
 # Editorial Gate Cost Model
 
-DIRECTOR-CONTROL-PLANE-1A §28 - a realistic, staged cost estimate for the two-stage Editorial Gate
-(`services/director_editorial_gate.py` Stage 1, `services/director_editorial_gate_llm.py` Stage 2).
-The hard ceiling below is enforced by real code
+DIRECTOR-CONTROL-PLANE-1A §28 / DIRECTOR-CONTROL-PLANE-1B §22 - a realistic, staged cost estimate
+for the two-stage Editorial Gate (`services/director_editorial_gate.py` Stage 1,
+`services/director_editorial_gate_llm.py` Stage 2). The hard ceiling below is enforced by real code
 (`services/director_editorial_gate_budget.py::check_gate_llm_budget()`), not just this document -
 every other figure is a reasoned estimate, explicitly labeled as such, never presented as measured
 production data (this environment has no live gate traffic yet - `telegram_editorial_gate_enabled`
 stays `false`).
+
+**1B update:** Stage 2 is now actually invoked from the live pre-generation path
+(`worker/content_cycle.py::run_content_cycle()` -> `run_pre_generation_gate(gateway=..., prompt_repository=...)`
+-> `run_editorial_gate_fail_soft(llm_escalate=llm_escalate_gate)`), threaded from
+`worker/content_main.py` using the AI layer's own gateway + `FilePromptRepository`. A Stage 2 call
+is still made ONLY when (a) `is_escalation_worthy()` is True, (b) a real gateway was threaded in,
+and (c) `check_gate_llm_budget()` reports budget remaining. Budget exhausted -> Stage 1 outcome,
+no paid call attempted. Any provider failure -> fail-soft to the Stage 1 outcome. The persisted
+`DirectorEditorialDecision.director_version` is stamped `v1-llm` whenever a Stage 2 call was
+*attempted* (success or fail-soft), so the daily bound counts paid calls, not just successful ones.
 
 ## Volume assumptions (reasoned estimates, not measured)
 
@@ -61,6 +71,18 @@ Once `telegram_editorial_gate_enabled=true` runs in production for a real week, 
 RAW_ITEMS_PER_DAY / CLUSTERED_STORIES_PER_DAY / DETERMINISTIC_PREFILTER_SURVIVORS /
 EXPECTED_DIRECTOR_LLM_REVIEWS estimates above with the real shadow-metrics counters already
 persisted by `worker/content_cycle.py`'s `ContentCycleResult` (`gate_total_stories`,
-`gate_cheap_prefilter_passed`, `gate_director_reviewed`, ...) - this document's own estimates exist
+`gate_cheap_prefilter_passed`, `gate_director_reviewed`, `gate_stage2_llm_used`,
+`gate_stage2_fell_back`, `gate_stage2_budget_exhausted`, ...) - this document's own estimates exist
 only to size `director_editorial_gate_max_llm_reviews_per_day` sanely before any real traffic
 exists, never as a claim about actual production behavior.
+
+## 1B reported figures (§22)
+
+| Field | Value |
+|---|---|
+| RAW_ITEMS_PER_DAY_ASSUMPTION | ~800-1500 (reasoned estimate, unchanged) |
+| CLUSTERED_STORIES_PER_DAY_ASSUMPTION | ~150-300 (reasoned estimate, unchanged) |
+| STAGE1_SURVIVORS | ~60-150/day (reasoned estimate) |
+| STAGE2_ELIGIBLE | ~15-40/day (reasoned estimate - `is_escalation_worthy()` minority) |
+| MAX_STAGE2_CALLS_PER_DAY | **100** (`director_editorial_gate_max_llm_reviews_per_day`, code-enforced) |
+| ESTIMATED_DAILY_COST | **~$0.28/day** hard worst case (100 x $0.0028, GPT-5.6 Luna, PricingCatalog-resolved) |
