@@ -1178,11 +1178,13 @@ class Settings(BaseSettings):
     # every PUBLICATION-facing flag (final_post_publication_enabled, telegram_channel_director_
     # shadow_enabled, telegram_art_director_enforcement_enabled), none of which this flag touches.
     telegram_editorial_gate_enabled: bool = False
-    # DIRECTOR-CONTROL-PLANE-1A §29: the daily bound on Stage 2 (real Director LLM) editorial-gate
-    # reviews - services/director_editorial_gate_budget.py's own real, tested guard. Enforcement-
-    # disabled by construction today (Stage 2 has no live caller yet - services/director_editorial_
-    # gate_shadow.py's own module docstring), but the bound exists now so a future phase that wires
-    # Stage 2 in cannot accidentally ship without one. See §28's own cost model for the derivation.
+    # DIRECTOR-CONTROL-PLANE-1A §29 / 1B §3: the daily bound on Stage 2 (real Director LLM)
+    # editorial-gate reviews - services/director_editorial_gate_budget.py's own real, tested guard.
+    # As of 1B, Stage 2 IS wired into the live pre-generation path (worker/content_main.py ->
+    # run_content_cycle -> run_pre_generation_gate), so this bound is load-bearing: an
+    # escalation-worthy candidate gets a real Gateway call only while check_gate_llm_budget()
+    # reports budget remaining; once the day's count of v1-llm DirectorEditorialDecision rows hits
+    # this value the gate falls back to the Stage 1 deterministic outcome. See §28's cost model.
     director_editorial_gate_max_llm_reviews_per_day: int = Field(default=100, ge=0)
 
     @property
