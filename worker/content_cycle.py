@@ -24,6 +24,7 @@ from bot.keyboards.image_preview import build_editorial_send_keyboard
 from capabilities.registry import CapabilityRegistry
 from core.config import settings
 from database.models.content_draft_story_link import ContentDraftStoryLink
+from database.models.director_editorial_decision import EditorialGateDecision
 from database.models.editorial_task import EditorialTask, TaskStatus
 from database.models.news_event import NewsEvent
 from database.models.news_event_article_acquisition import NewsEventArticleAcquisition
@@ -90,7 +91,7 @@ from services.story_telegram_delivery import (
     persist_reply_routing_proposal,
     record_delivery,
 )
-from services.director_editorial_gate_shadow import run_editorial_gate_shadow
+from services.director_editorial_gate_shadow import reaches_editor_queue, run_pre_generation_gate
 from services.telegram_channel_director_shadow import run_channel_director_shadow
 from services.telegram_notifier import send_editorial_card, to_editorial_card
 from services.telegram_routing import (
@@ -639,6 +640,29 @@ class ContentCycleResult:
     # presentation_director_mode == "off" (the default).
     presentation_breaking_sent: int = 0
 
+    # DIRECTOR-CONTROL-PLANE-1A §8: Editorial Gate shadow comparison counters. All always 0 unless
+    # gate_input assembly actually succeeds (services/director_editorial_gate_context.py returns
+    # None only if the event row itself is already gone). `gate_would_have_reached_editor_before`
+    # counts every event that reached this point in the loop at all (i.e. what the queue already
+    # looked like with no gate); `gate_would_reach_editor_with_gate` counts only SEND_TO_EDITOR/
+    # PRIORITY/BREAKING decisions - the real "what would change if this were ON" comparison spec
+    # §8 asks for, computed and persisted regardless of whether telegram_editorial_gate_enabled is
+    # True (shadow) - only the SUPPRESSION below (skipping generation) is flag-gated.
+    gate_total_stories: int = 0
+    gate_cheap_prefilter_passed: int = 0
+    gate_director_reviewed: int = 0
+    gate_drop: int = 0
+    gate_hold: int = 0
+    gate_send_to_editor: int = 0
+    gate_priority: int = 0
+    gate_breaking: int = 0
+    gate_would_have_reached_editor_before: int = 0
+    gate_would_reach_editor_with_gate: int = 0
+    # Strict subset of the above - counts an event whose generation was actually SKIPPED because
+    # telegram_editorial_gate_enabled was True and the gate decided DROP/HOLD. Always 0 while the
+    # flag is False (spec §7's own "OFF -> normal Founder NEWS queue remains unchanged" contract).
+    gate_generation_suppressed: int = 0
+
 
 def _fact_safety_delivery_decision(
     base_dry_run: bool, fact_safety_mode: str, fact_safety_status: str | None
@@ -982,6 +1006,49 @@ async def run_content_cycle(
                 },
             )
             continue
+
+        # DIRECTOR-CONTROL-PLANE-1A §2-8: the Director Editorial Gate - BEFORE the paid
+        # run_content_generation_for_event() call below, for every delivery mode (unlike the
+        # router-only treatment/duplicate gates above). Always computes and persists a real
+        # decision (shadow metrics, spec §7/§8); only actually skips generation
+        # (`gate_evaluation.suppress_generation`) when telegram_editorial_gate_enabled is True AND
+        # the decision is DROP/HOLD. Wrapped in its own try/except - a bug here can never block a
+        # real Story from reaching the editor (fails open to "let generation proceed unsuppressed"
+        # exactly like Channel Director/Editorial Gate shadow's own established precedent).
+        gate_evaluation = None
+        try:
+            async with session_factory() as gate_session:
+                gate_evaluation = await run_pre_generation_gate(gate_session, event_id, now=datetime.now(timezone.utc))
+                await gate_session.commit()
+        except Exception:
+            logger.warning("director_editorial_gate failed (fail-open, generation proceeds)", exc_info=True)
+
+        if gate_evaluation is not None:
+            result.gate_total_stories += 1
+            result.gate_cheap_prefilter_passed += 1
+            if gate_evaluation.escalation_worthy:
+                result.gate_director_reviewed += 1
+            decision = gate_evaluation.outcome.decision
+            if decision == EditorialGateDecision.DROP:
+                result.gate_drop += 1
+            elif decision == EditorialGateDecision.HOLD:
+                result.gate_hold += 1
+            elif decision == EditorialGateDecision.SEND_TO_EDITOR:
+                result.gate_send_to_editor += 1
+            elif decision == EditorialGateDecision.PRIORITY:
+                result.gate_priority += 1
+            elif decision == EditorialGateDecision.BREAKING:
+                result.gate_breaking += 1
+            result.gate_would_have_reached_editor_before += 1  # this point in the loop was always reached pre-gate
+            if reaches_editor_queue(decision):
+                result.gate_would_reach_editor_with_gate += 1
+            if gate_evaluation.suppress_generation:
+                result.gate_generation_suppressed += 1
+                logger.info(
+                    "director_editorial_gate_suppressed_generation",
+                    extra={"event_id": str(event_id), "decision": decision.value},
+                )
+                continue
 
         # Phase V2.6 §5: `precomputed_outcomes` lets a caller supply an already-produced
         # ContentGenerationOutcome for this event_id (from a real, already-run
@@ -1548,25 +1615,6 @@ async def run_content_cycle(
                                 )
                         except Exception:
                             logger.warning("telegram_channel_director_shadow failed (shadow only, non-fatal)", exc_info=True)
-
-                    # DIRECTOR-CONTROL-PLANE-1 §8-13: Editorial Gate shadow evaluation - flag-gated
-                    # (default False, run_editorial_gate_shadow() itself no-ops when disabled) and
-                    # wrapped in its own try/except, same defense-in-depth pattern as Channel
-                    # Director shadow immediately above. See that module's own docstring for this
-                    # phase's honest scope limitation (shadow/logged only, does not yet withhold
-                    # anything from the real queue).
-                    try:
-                        async with session_factory() as editorial_gate_session:
-                            await run_editorial_gate_shadow(
-                                editorial_gate_session,
-                                story_id=str(outcome.content_draft.id), event_id=str(event.id),
-                                platform="telegram", category=event.category,
-                                has_sufficient_facts=bool(event.content),
-                                source_confidence=(presentation_score / 100.0) if presentation_score is not None else 0.5,
-                                now=datetime.now(timezone.utc),
-                            )
-                    except Exception:
-                        logger.warning("director_editorial_gate_shadow failed (shadow only, non-fatal)", exc_info=True)
 
                     if settings.presentation_director_mode == "enforce":
                         # PRESENTATION RECOVERY (2026-09-02): the prior Phase V2.10N behavior here
