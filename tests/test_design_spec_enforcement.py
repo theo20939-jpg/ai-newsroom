@@ -165,28 +165,36 @@ def test_news_accepted_render_spec_match_is_partial_evidence_never_whole_na() ->
     assert branded  # the real render succeeded
 
 
-def test_breaking_dark_band_is_a_real_scrim_spec_conflict_not_hidden() -> None:
-    """addendum §1: render_breaking_frame() still draws an unconditional ~22% dark-gradient band
-    (peak opacity ~82%) + baked 'BREAKING' banner. That contradicts ACTIVE telegram_breaking v1
-    (scrim_treatment=none) and the accepted visual-system doc. The evidence reports it truthfully
-    as scrim_treatment='strong' -> SPEC_MATCH FAIL / SPEC_SCRIM_MISMATCH (soft REWORK), which makes
-    the phase PARTIAL. It is NOT reported as NOT_MEASURED to dodge the mismatch."""
+def test_breaking_corrected_render_has_no_band_no_scrim_mismatch_and_matches_news_family() -> None:
+    """VISUAL-RENDERER-RECONCILIATION-1 §5-9: the retired dark band + baked 'BREAKING' wordmark are
+    gone; BREAKING now uses the exact MASTER NEWS fused lower signature on the NATIVE-size source.
+    scrim_treatment is genuinely `none` -> no SPEC_SCRIM_MISMATCH. The only remaining discrepancy
+    is `placement_zone` (the same wrongly-derived field as NEWS: telegram_breaking v1 declares
+    lower_left, the fused signature exposes no independent accent placement) -> SPEC_MATCH is
+    PARTIAL_EVIDENCE with that ONE field named, pending the telegram_breaking v2 founder review."""
     rendered = render_breaking_frame(_photo_16x9((120, 40, 40)), category="technology", editorial_code="NP-B1")
     evidence = derive_breaking_render_evidence(_photo_16x9((120, 40, 40)))
-    assert evidence.scrim_applied is True
-    assert evidence.scrim_treatment == "strong"
+    assert evidence.scrim_applied is False
+    assert evidence.scrim_treatment == "none"
+    assert evidence.source_image_treatment == "preserve"
 
     dim = _evaluate_spec_match(_local_spec(_BREAKING_PARAMS, scope="telegram_breaking"), None, evidence)
-    assert dim.status is DimensionStatus.FAIL, dim.rationale
-    assert dim.reason_codes == ["SPEC_SCRIM_MISMATCH"]
-    assert dim.hard_failure is False  # soft -> REWORK, per §7 "scrim mismatch"
-    assert "scrim_treatment" in dim.checked_fields
+    assert dim.status is DimensionStatus.PARTIAL_EVIDENCE, dim.rationale
+    assert dim.reason_codes == []
+    assert dim.hard_failure is False
+    assert set(dim.checked_fields) >= {"safe_margin_frac", "logo_zone", "scrim_treatment", "source_image_treatment"}
+    assert dim.not_measured_fields == ["placement_zone"]
+
+    # A `telegram_breaking v2` with placement_zone dropped -> SPEC_MATCH = PASS (no evaluator change).
+    v2_params = {k: v for k, v in _BREAKING_PARAMS.items() if k != "placement_zone"}
+    v2_dim = _evaluate_spec_match(_local_spec(v2_params, scope="telegram_breaking"), None, evidence)
+    assert v2_dim.status is DimensionStatus.PASS
 
     merged, spec_result = finalize_art_direction(SpecEvaluationInput(
         base_result=_passing_base(), active_spec=_local_spec(_BREAKING_PARAMS, scope="telegram_breaking"),
         render_evidence=evidence,
     ))
-    assert merged.decision is ArtDirectorDecision.REWORK
+    assert merged.decision is not ArtDirectorDecision.BLOCK
     assert spec_result.hard_failure_reason_codes == []
     assert rendered
 
@@ -528,9 +536,12 @@ async def test_all_four_active_specs_evaluate_their_accepted_render_field_aware(
     )
     quote_ev = derive_quote_render_evidence(_portrait())
 
+    # After VISUAL-RENDERER-RECONCILIATION-1: NEWS and BREAKING both land on PARTIAL_EVIDENCE for
+    # the SAME reason - the fused NEWS-family lower signature exposes no independent `placement_zone`
+    # while telegram_news/breaking v1 still declare the wrongly-derived placement_zone=lower_left.
     expected = {
         "telegram_news": DimensionStatus.PARTIAL_EVIDENCE,
-        "telegram_breaking": DimensionStatus.FAIL,
+        "telegram_breaking": DimensionStatus.PARTIAL_EVIDENCE,
         "telegram_data": DimensionStatus.PASS,
         "telegram_quote": DimensionStatus.PASS,
     }
@@ -547,14 +558,18 @@ async def test_all_four_active_specs_evaluate_their_accepted_render_field_aware(
         spec_dim = next(d for d in spec_result.dimensions if d.dimension is ArtDirectorDimension.SPEC_MATCH)
         assert spec_dim.status is expected[scope], (scope, spec_dim.status, merged.instructions)
         assert spec_result.hard_failure_reason_codes == [], scope
+        assert spec_dim.reason_codes == [], (scope, spec_dim.reason_codes)  # no mismatch anywhere
         # every case verifies at least the margin + logo zone + source treatment
         assert {"safe_margin_frac", "logo_zone", "source_image_treatment"} <= set(spec_dim.checked_fields), scope
-    # BREAKING's mismatch is the scrim, and it routes to REWORK (soft), never BLOCK.
-    brk_base = evaluate_art_direction_shadow(_pixel_input(photo, "BREAKING"))
+    # NEWS + BREAKING: the only not-measured field is placement_zone; nothing routes to BLOCK/REWORK.
+    for scope in ("telegram_news", "telegram_breaking"):
+        assert expected[scope] is DimensionStatus.PARTIAL_EVIDENCE
     brk_merged, _ = finalize_art_direction(SpecEvaluationInput(
-        base_result=brk_base, active_spec=specs["telegram_breaking"], render_evidence=breaking_ev,
+        base_result=evaluate_art_direction_shadow(_pixel_input(photo, "BREAKING")),
+        active_spec=specs["telegram_breaking"], render_evidence=breaking_ev,
     ))
-    assert brk_merged.decision is ArtDirectorDecision.REWORK
+    assert brk_merged.decision is not ArtDirectorDecision.BLOCK
+    assert brk_merged.decision is not ArtDirectorDecision.REWORK  # PARTIAL_EVIDENCE never downgrades
 
 
 # ==============================================================================================
@@ -613,15 +628,18 @@ def test_derive_quote_evidence_margin_above_floor_and_scrim_na_with_forensic_evi
     assert ev.source_image_treatment == "preserve"
 
 
-def test_derive_breaking_evidence_reports_the_dark_band_as_a_strong_scrim() -> None:
+def test_derive_breaking_evidence_reports_the_corrected_no_scrim_news_family_signature() -> None:
     ev = derive_breaking_render_evidence(_photo_16x9())
     assert ev.source_image_treatment == "preserve"
     assert ev.source_preserved is True
-    # addendum §1: the band IS measured and classified - not hidden behind NOT_MEASURED.
-    assert ev.scrim_applied is True
-    assert ev.scrim_treatment == "strong"
-    assert "scrim_treatment" not in ev.not_applicable_fields
-    assert "22%" in ev.notes["scrim_treatment"] and "SPEC_SCRIM_MISMATCH" in ev.notes["scrim_treatment"]
+    # VRR-1: the band is gone - the corrected renderer composites no scrim of any kind.
+    assert ev.scrim_applied is False
+    assert ev.scrim_treatment == "none"
+    assert ev.logo_count == 1
+    assert ev.renderer_version == "pulse-breaking-v2"
+    # placement_zone stays an APPLICABLE measurement gap (like NEWS), not not_applicable.
+    assert "placement_zone" not in ev.not_applicable_fields
+    assert "MEASUREMENT GAP" in ev.notes["placement_zone"] and "telegram_breaking v2" in ev.notes["placement_zone"]
 
 
 # --------------------------------------------------------------------------------------------------

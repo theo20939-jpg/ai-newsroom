@@ -145,20 +145,30 @@ def test_news_busy_photo_never_exceeds_one_mark_and_may_safely_suppress() -> Non
 
 
 def test_breaking_places_exactly_one_brand_mark(monkeypatch: pytest.MonkeyPatch) -> None:
-    import services.brand_renderer as brand_renderer_module
-    calls: list[int] = []
-    original = brand_renderer_module._paste_svg_mark
+    """VISUAL-RENDERER-RECONCILIATION-1 §7: BREAKING now composites the source with the SAME
+    MASTER NEWS lower signature as NEWS (`select_master_news_branding()` +
+    `composite_master_news_decision()`), so the single-brand-mark invariant is enforced structurally
+    in exactly one place. Spy on `select_master_news_branding` to prove BREAKING routes through it
+    once and the returned decision carries <= 1 canonical mark."""
+    from services import brand_renderer as brand_renderer_module
+    from services import nnj_master_news_overlay as overlay_module
 
-    def _spy(canvas, *, target_width, margin):
-        calls.append(1)
-        return original(canvas, target_width=target_width, margin=margin)
+    decisions: list[MasterNewsBrandingDecision] = []
+    original = overlay_module.select_master_news_branding
 
-    monkeypatch.setattr(brand_renderer_module, "_paste_svg_mark", _spy)
+    def _spy(photo, **kwargs):
+        d = original(photo, **kwargs)
+        decisions.append(d)
+        return d
+
+    monkeypatch.setattr(overlay_module, "select_master_news_branding", _spy)
+    monkeypatch.setattr(brand_renderer_module, "select_master_news_branding", _spy)
     result = render_branded_media(
         presentation_type=BREAKING, source_image_bytes=_flat_photo(), category="technology", editorial_code="NP-0001",
     )
     assert result.success
-    assert len(calls) == 1
+    assert len(decisions) == 1
+    assert _brand_mark_count(decisions[0]) <= 1  # mutual exclusion - never two marks
 
 
 def test_quote_places_exactly_one_brand_mark(monkeypatch: pytest.MonkeyPatch) -> None:

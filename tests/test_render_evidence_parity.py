@@ -19,8 +19,6 @@ import pytest
 from PIL import Image, ImageDraw, ImageStat
 
 from services.brand_renderer import (
-    _BREAKING_BAND_HEIGHT_FRAC,
-    _BREAKING_BAND_MAX_ALPHA,
     _CARD_WIDTH,
     _DATA_BLOCK_MARGIN,
     _DATA_BLOCK_WIDTH_FRAC,
@@ -123,51 +121,105 @@ def test_news_evidence_matches_master_branding_decision(src_w: int, src_h: int, 
     assert abs(top - bot) < 35, "MASTER NEWS must not darken the bottom of the frame (scrim=none)"
 
 
-# ==============================================================================================
-# BREAKING  (render_breaking_frame)
-# ==============================================================================================
+def test_news_geometry_is_the_fused_lower_right_signature_authoritative_evidence() -> None:
+    """VISUAL-RENDERER-RECONCILIATION-1 §1 conclusion: NEWS_MASTER_EXPECTED_LAYOUT = B
+    (FUSED_LOWER_RIGHT_SIGNATURE). The approved MASTER contract (V2.10H user-approved selection +
+    the single-brand-mark contract) and the master prototype
+    (assets/brand/newsroom_visuals/v1/references/nnj_editorial_visual_system_master_prototype.png -
+    the pulse line runs left->right and TERMINATES at the one nnj mark on the RIGHT) both describe
+    ONE fused bottom signature, not a separate lower-left pulse. This test pins that the current,
+    UNCHANGED renderer produces exactly that."""
+    branded, decision = apply_master_news_branding(_photo(1280, 720))
 
+    # exactly one canonical mark (mutual exclusion), and it is a bottom corner (LOWER_RIGHT
+    # preferred) - never a separate lower-left accent + lower-right logo pair.
+    placed = [decision.lower_signature.placement, decision.upper_mark.placement]
+    non_omitted = [p for p in placed if p is not ComponentPlacement.OMITTED]
+    assert len(non_omitted) <= 1
+    if non_omitted:
+        assert non_omitted[0] in (ComponentPlacement.LOWER_RIGHT, ComponentPlacement.LOWER_LEFT,
+                                  ComponentPlacement.UPPER_RIGHT, ComponentPlacement.UPPER_LEFT)
+        # on a clean single-subject photo the scorer prefers LOWER_RIGHT (the prototype corner).
+        assert decision.lower_signature.placement is ComponentPlacement.LOWER_RIGHT
 
-def test_breaking_evidence_matches_the_real_rendered_band() -> None:
-    raw = _photo(1280, 720, (120, 120, 120))  # neutral gray -> the band's darkening is unambiguous
-    ev = derive_breaking_render_evidence(raw)
-    rendered = render_breaking_frame(raw, category="technology", editorial_code="NP-B1")
-    im = Image.open(io.BytesIO(rendered)).convert("L")
+    # pixel evidence: the signature (line + pulse + mark) lives in the BOTTOM band, concentrated
+    # toward the RIGHT terminus - there is no independent red accent element in the lower-LEFT.
+    im = Image.open(io.BytesIO(branded)).convert("RGB")
     W, H = im.size
+    px = im.load()
 
-    # 1. The deriver's band model tracks the renderer's own named constants (single source of truth).
-    assert ev.scrim_applied is True
-    assert ev.scrim_treatment == "strong"
-    assert _BREAKING_BAND_HEIGHT_FRAC == 0.22 and _BREAKING_BAND_MAX_ALPHA == 210
+    def red_count(x0: int, x1: int) -> int:
+        return sum(1 for y in range(int(H * 0.86), H) for x in range(x0, x1, 2)
+                   if px[x, y][0] > 140 and px[x, y][1] < 90 and px[x, y][2] < 90)
 
-    # 2. Pixel parity: a dark gradient band really occupies ~the bottom _BREAKING_BAND_HEIGHT_FRAC.
-    col = [ImageStat.Stat(im.crop((W // 2 - 20, y, W // 2 + 20, y + 1))).mean[0] for y in range(H)]
-    band_top = next(y for y in range(H) if col[y] < 118)  # gray source is 128; band darkens it
-    measured_frac = (H - band_top) / H
-    assert abs(measured_frac - _BREAKING_BAND_HEIGHT_FRAC) < 0.03, (measured_frac, _BREAKING_BAND_HEIGHT_FRAC)
-    # bottom row is near-black (peak alpha ~0.82 over black) - a "strong" scrim by any reading.
-    assert col[-1] < 45
-
-    # 3. Structural fields the deriver still exposes truthfully.
-    assert ev.source_image_treatment == "preserve"  # native size, no crop
-    assert ev.logo_zone == "lower_right"
-    margin_px = max(16, round(W * 0.02))
-    assert ev.safe_margin_frac == round(margin_px / W, 5)
-    assert "placement_zone" in ev.not_applicable_fields  # no pulse line in this template
+    right_reds = red_count(int(W * 0.55), W)
+    left_reds = red_count(0, int(W * 0.30))
+    assert right_reds > 0, "the fused signature + nnj mark sit toward the lower-right"
+    assert right_reds > left_reds, "no independent lower-left pulse accent (case A) - it is fused right (case B)"
 
 
-def test_breaking_band_pixels_confirm_it_is_not_a_thin_pulse_treatment() -> None:
-    """Forensic distinction (addendum §1): the band is option A (historical readability band),
-    NOT option B (a thin pulse-related mark). A pulse line would darken << 5% of the frame height."""
-    raw = _photo(1280, 720, (128, 128, 128))
+# ==============================================================================================
+# BREAKING  (render_breaking_frame - corrected in VISUAL-RENDERER-RECONCILIATION-1)
+# ==============================================================================================
+
+
+def test_breaking_evidence_matches_the_corrected_news_family_signature() -> None:
+    """VRR-1 §8/§11: the corrected renderer composites the source at NATIVE size with the exact
+    MASTER NEWS lower signature. The deriver replays select_master_news_branding() and must agree."""
+    raw = _photo(1280, 720)
+    ev = derive_breaking_render_evidence(raw)
+    with Image.open(io.BytesIO(raw)) as im:
+        decision = select_master_news_branding(im.convert("RGBA"))
+    placed = [p for p in (decision.lower_signature.placement, decision.upper_mark.placement) if p is not ComponentPlacement.OMITTED]
+
+    assert ev.logo_count == len(placed)
+    assert ev.logo_zone == (placed[0].value if placed else NOT_MEASURED)
+    assert ev.source_image_treatment == "preserve"       # native size, no fit/crop
+    assert ev.source_preserved is True
+    assert ev.scrim_applied is False
+    assert ev.scrim_treatment == "none"                   # the band is GONE
+    assert ev.safe_margin_frac == round(float(_SAFE_INSET_FRAC), 5)
+    for f in ("primary_font_size", "secondary_font_size", "actual_line_count"):
+        assert f in ev.not_applicable_fields
+    # placement_zone stays an APPLICABLE measurement gap (same as NEWS) - NOT not_applicable.
+    assert "placement_zone" not in ev.not_applicable_fields
+    assert ev.placement_zone is NOT_MEASURED
+
+
+def test_breaking_corrected_pixels_have_no_dark_band_and_no_baked_wordmark() -> None:
+    """§11: prove from pixels - darkened lower-third no longer ~22%, no full-width dark banner,
+    source remains visible through the lower region, one NNJ mark, no baked white 'BREAKING' text."""
+    raw = _photo(1280, 720, (128, 128, 128))  # neutral gray -> any band would be obvious
     rendered = render_breaking_frame(raw, category="tech", editorial_code="NP-B1")
     im = Image.open(io.BytesIO(rendered)).convert("L")
     W, H = im.size
-    darkened_rows = sum(
-        1 for y in range(H)
-        if ImageStat.Stat(im.crop((0, y, W, y + 1))).mean[0] < 110
-    )
-    assert darkened_rows / H > 0.15, "the BREAKING darkening spans a band, not a thin pulse line"
+
+    # 1. Row-mean luminance across the bottom third stays ~= the gray source (no band darkening).
+    bottom_rows = [ImageStat.Stat(im.crop((0, y, W, y + 1))).mean[0] for y in range(int(H * 0.75), H)]
+    darkened = sum(1 for m in bottom_rows if m < 108)
+    assert darkened / len(bottom_rows) < 0.10, "no full-width dark band in the lower third"
+    assert min(bottom_rows) > 70, "source stays visible through the lower region (no near-black banner)"
+
+    # 2. No wide baked white wordmark: near-white pixels in the bottom 25% are just mark AA, not glyphs.
+    px = im.load()
+    white = sum(1 for y in range(int(H * 0.75), H) for x in range(0, W, 2) if px[x, y] > 205)
+    assert white < 400, "no baked 'BREAKING' white wordmark"
+
+    # 3. Structural render metadata (not OCR) already proves the text removal:
+    import inspect
+    src = inspect.getsource(render_breaking_frame)
+    assert '"BREAKING"' not in src.split('"""')[2]  # only the docstring mentions it
+    assert "band_height" not in src
+
+
+def test_breaking_no_source_still_carries_exactly_one_mark_and_no_band() -> None:
+    rendered = render_breaking_frame(None, category="tech", editorial_code="NP-B1")
+    im = Image.open(io.BytesIO(rendered)).convert("RGB")
+    assert im.size[0] > 0 and im.size[1] > 0
+    # solid NNJ-black card: the only non-black content is the single red mark bottom-right.
+    br = ImageStat.Stat(im.crop((im.width - 160, im.height - 120, im.width, im.height)))
+    rest = ImageStat.Stat(im.crop((0, 0, im.width // 2, im.height // 2)))
+    assert max(br.mean) > max(rest.mean) + 8
 
 
 # ==============================================================================================

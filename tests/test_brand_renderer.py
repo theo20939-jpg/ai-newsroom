@@ -126,11 +126,31 @@ def test_news_minimal_branding_omits_pulse_line_and_code_label():
     assert minimal != editorial
 
 
-def test_breaking_frame_never_exceeds_conservative_band_height():
-    source = _solid_jpeg(1600, 900)
+def test_breaking_frame_preserves_source_dimensions_and_draws_no_dark_band():
+    """VISUAL-RENDERER-RECONCILIATION-1 §5-6/§11: BREAKING composites the source at NATIVE size
+    (no fit/crop) with the MASTER NEWS lower signature - the retired ~22% dark-gradient lower-third
+    band is GONE. On a mid-gray source the bottom third must stay ~= the source luminance."""
+    from PIL import ImageStat
+
+    source = _solid_jpeg(1600, 900, color=(128, 128, 128))
     out = render_breaking_frame(source, category="AI", editorial_code="NP-0002")
     with Image.open(io.BytesIO(out)) as img:
-        assert img.size == (1600, 900)
+        assert img.size == (1600, 900)  # native, never fit/cropped
+        g = img.convert("L")
+        w, h = g.size
+        band_rows = [ImageStat.Stat(g.crop((0, y, w, y + 1))).mean[0] for y in range(int(h * 0.78), h)]
+        assert sum(1 for m in band_rows if m < 108) / len(band_rows) < 0.10  # no full-width dark band
+        assert min(band_rows) > 70  # source stays visible through the lower region
+
+
+def test_breaking_frame_bakes_no_wordmark_and_no_band_in_source():
+    """§11: structural render metadata (not OCR) proves the baked-text + band removal."""
+    src = inspect.getsource(render_breaking_frame)
+    body = src.split('"""')[2]  # everything after the docstring
+    assert '"BREAKING"' not in body
+    assert "band_height" not in body and "accent_height" not in body
+    assert "_draw_code_label(" not in body
+    assert "select_master_news_branding(" in body  # reuses the canonical NEWS primitive (§7)
 
 
 def test_breaking_frame_works_with_no_source_image():
