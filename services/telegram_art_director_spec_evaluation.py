@@ -330,3 +330,83 @@ def evaluate_against_spec_and_references(evaluation_input: SpecEvaluationInput) 
     # No dimension failed - never upgrade a base decision the pixel evaluator already reached
     # (e.g. BLOCK from a structural check this module does not re-derive); otherwise preserve it.
     return SpecEvaluationResult(overall_decision=evaluation_input.base_result.decision, dimensions=dimensions)
+
+
+# DIRECTOR-CONTROL-PLANE-1B §9-10: the composed Art Director verdict. Callers that consume a plain
+# ArtDirectorResult (services/visual_design_loop.py's own art-director step) get the base pixel
+# result AND the Design Spec / reference / source-classification evaluation merged into ONE result.
+_DECISION_STRICTNESS = {
+    ArtDirectorDecision.PASS: 0, ArtDirectorDecision.PASS_WITH_NOTES: 1,
+    ArtDirectorDecision.REWORK: 2, ArtDirectorDecision.BLOCK: 3,
+}
+
+
+def _merge_issue_codes(
+    base_result: ArtDirectorResult, spec_result: SpecEvaluationResult,
+) -> list[ArtDirectorIssueCode]:
+    """Base pixel issue codes, plus any spec-dimension reason code that is itself a real
+    ArtDirectorIssueCode (e.g. FACT_SAFETY -> NUMBER_MISMATCH). Spec-only codes that have no
+    ArtDirectorIssueCode member (SPEC_PRESENTATION_MODE_MISMATCH, MATCHES_REJECTED_REFERENCE,
+    INFOGRAPHIC_DESTROYED) are carried in the merged result's `instructions` instead, never
+    silently dropped."""
+    codes = list(base_result.issue_codes)
+    for dim_eval in spec_result.dimensions:
+        if dim_eval.status is not DimensionStatus.FAIL:
+            continue
+        for raw in dim_eval.reason_codes:
+            try:
+                mapped = ArtDirectorIssueCode(raw)
+            except ValueError:
+                continue
+            if mapped not in codes:
+                codes.append(mapped)
+    return codes
+
+
+def merge_spec_evaluation_into_result(
+    base_result: ArtDirectorResult, spec_result: SpecEvaluationResult,
+) -> ArtDirectorResult:
+    """§10 hard-failure precedence: a §19 hard failure (wrong/ambiguous key metric, infographic
+    destroyed, duplicate/fake NNJ mark, meaning-changing clipping, hard ACTIVE-spec invariant
+    violation) ALWAYS yields BLOCK - it can never be downgraded by an optimistic vision decision.
+    Otherwise the STRICTER of the base decision and the spec `overall_decision` wins (a spec/
+    reference soft mismatch can push PASS -> REWORK, but a base BLOCK is never softened)."""
+    merged_codes = _merge_issue_codes(base_result, spec_result)
+
+    if spec_result.hard_failure_reason_codes:
+        hard = "; ".join(spec_result.hard_failure_reason_codes)
+        instructions = f"Hard art-direction failure ({hard})."
+        if base_result.instructions:
+            instructions = f"{instructions} {base_result.instructions}"
+        return ArtDirectorResult(
+            decision=ArtDirectorDecision.BLOCK, severity="high", issue_codes=merged_codes,
+            action="HUMAN_REVIEW", instructions=instructions, confidence=max(base_result.confidence, 0.9),
+        )
+
+    if _DECISION_STRICTNESS[base_result.decision] >= _DECISION_STRICTNESS[spec_result.overall_decision]:
+        final_decision = base_result.decision
+    else:
+        final_decision = spec_result.overall_decision
+
+    soft_notes = [
+        code
+        for dim_eval in spec_result.dimensions if dim_eval.status is DimensionStatus.FAIL
+        for code in dim_eval.reason_codes
+    ]
+    instructions = base_result.instructions
+    if soft_notes:
+        joined = "; ".join(sorted(set(soft_notes)))
+        instructions = f"{instructions} spec/reference notes: {joined}".strip()
+    return ArtDirectorResult(
+        decision=final_decision, severity=base_result.severity, issue_codes=merged_codes,
+        action=base_result.action, instructions=instructions, confidence=base_result.confidence,
+    )
+
+
+def finalize_art_direction(evaluation_input: SpecEvaluationInput) -> tuple[ArtDirectorResult, SpecEvaluationResult]:
+    """Convenience: run `evaluate_against_spec_and_references()` and fold it back into a single
+    ArtDirectorResult in one call. Returns both so a caller that wants the per-dimension detail
+    (a console, a test) still has it. The pixel evaluation itself must already have happened -
+    `evaluation_input.base_result` is its output."""
+    spec_result = evaluate_against_spec_and_references(evaluation_input)
+    return merge_spec_evaluation_into_result(evaluation_input.base_result, spec_result), spec_result

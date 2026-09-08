@@ -214,3 +214,40 @@ async def test_attempts_are_persisted_with_real_cost(db_session: AsyncSession) -
     assert rows[0].generation_cost == 0.02
     assert rows[0].total_cost == 0.02
     assert rows[0].generation_model == "fake-image-model"
+
+
+@pytest.mark.asyncio
+async def test_source_type_and_mode_force_a_hard_block_even_when_art_director_fn_returns_pass(
+    db_session: AsyncSession,
+) -> None:
+    """DIRECTOR-CONTROL-PLANE-1B §9-10: the loop folds the spec/reference/source-classification
+    evaluation into the injected art_director_fn's result. An EXISTING_INFOGRAPHIC source rendered
+    FULL_DATA_CARD is a §19 hard failure - the loop must route to HUMAN_REVIEW and never retry,
+    even though art_director_fn itself said PASS."""
+    from services.data_source_classification import DataPresentationMode, SourceType
+
+    gateway = FakeLLMGateway(generate_response=_gateway_response(_direction_output()))
+    result = await run_visual_design_loop(
+        db_session, gateway, _prompt_repository(), story=_story(), platform="telegram", presentation_type="DATA",
+        render_fn=_render_fn, art_director_fn=_art_director_fn_returning(ArtDirectorDecision.PASS),
+        source_type=SourceType.EXISTING_INFOGRAPHIC, presentation_mode=DataPresentationMode.FULL_DATA_CARD,
+    )
+    assert result.final_status == VisualDesignAttemptStatus.HUMAN_REVIEW
+    assert len(result.attempts) == 1  # BLOCK never retries
+    assert result.attempts[0].art_decision == ArtDirectorDecision.BLOCK.value
+
+
+@pytest.mark.asyncio
+async def test_source_preserving_mode_leaves_a_pass_untouched(db_session: AsyncSession) -> None:
+    """The complementary case: a MINIMAL_SOURCE_PRESERVING render over the same source type has no
+    hard failure, so a PASS from art_director_fn stays a PASS through the merge."""
+    from services.data_source_classification import DataPresentationMode, SourceType
+
+    gateway = FakeLLMGateway(generate_response=_gateway_response(_direction_output()))
+    result = await run_visual_design_loop(
+        db_session, gateway, _prompt_repository(), story=_story(), platform="telegram", presentation_type="DATA",
+        render_fn=_render_fn, art_director_fn=_art_director_fn_returning(ArtDirectorDecision.PASS),
+        source_type=SourceType.EXISTING_INFOGRAPHIC, presentation_mode=DataPresentationMode.MINIMAL_SOURCE_PRESERVING,
+    )
+    assert result.final_status == VisualDesignAttemptStatus.PASSED
+    assert len(result.attempts) == 1

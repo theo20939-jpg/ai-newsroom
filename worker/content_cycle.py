@@ -1043,7 +1043,13 @@ async def run_content_cycle(
             async with session_factory() as gate_session:
                 gate_evaluation = await run_pre_generation_gate(
                     gate_session, event_id, now=datetime.now(timezone.utc),
-                    gateway=gate_gateway, prompt_repository=gate_prompt_repository,
+                    # `gate_gateway`/`gate_prompt_repository` are typed `object | None` on this
+                    # function so worker/content_cycle.py imports nothing from
+                    # integrations.llm_gateway.* (test_i_content_cycle_module_imports_no_llm_
+                    # gateway_or_capability_execution). run_pre_generation_gate() itself does the
+                    # real typed handoff; a None is a no-op (Stage-1-only gate).
+                    gateway=gate_gateway,  # type: ignore[arg-type]
+                    prompt_repository=gate_prompt_repository,  # type: ignore[arg-type]
                 )
                 await gate_session.commit()
         except Exception:

@@ -36,8 +36,10 @@ from integrations.llm_gateway.protocol import LLMGateway
 from integrations.prompts.protocol import PromptRepository
 from services.account_presentation_spec_reader import read_account_presentation_spec
 from services.account_presentation_spec_reader import summarize_for_creative as summarize_presentation_spec
+from services.data_source_classification import DataPresentationMode, SourceType
 from services.design_reference_registry import select_bounded_references
 from services.design_spec_registry import describe_spec_for_creative, get_active_or_frozen_spec
+from services.telegram_art_director_spec_evaluation import SpecEvaluationInput, finalize_art_direction
 from services.director_run_service import compute_input_fingerprint, create_director_run
 from services.social_launch_context_service import describe_launch_context_for_creative, get_current_context
 from services.telegram_art_director import ArtDirectorDecision, ArtDirectorResult
@@ -125,6 +127,12 @@ async def run_visual_design_loop(
     # is threaded straight through, exactly like `restricted_claims`. "" (the default) for every
     # existing caller/test - byte-identical behavior.
     source_classification_summary: str = "",
+    # DIRECTOR-CONTROL-PLANE-1B §9/§13: the STRUCTURED source classification for the Art Director's
+    # spec/reference evaluation (SOURCE_PRESERVATION + SPEC_MATCH dimensions). Caller-supplied,
+    # None-default -> those dimensions report NOT_APPLICABLE and the merge is a no-op, so every
+    # existing caller/test is byte-identical.
+    source_type: SourceType | None = None,
+    presentation_mode: DataPresentationMode | None = None,
 ) -> VisualDesignLoopResult:
     now = now or datetime.now(timezone.utc)
     story_uuid = _safe_uuid(story.story_id)
@@ -200,7 +208,19 @@ async def run_visual_design_loop(
             break
 
         render_outcome = await render_fn(direction)
-        art_result = await art_director_fn(render_outcome)
+        base_art_result = await art_director_fn(render_outcome)
+        # DIRECTOR-CONTROL-PLANE-1B §9-11: fold the ACTIVE/FROZEN Design Spec + the bounded
+        # approved/rejected references + the source classification into the Art Director verdict.
+        # `get_active_or_frozen_spec()` already excludes CANDIDATE/SUPERSEDED/REJECTED (§11), and
+        # the evaluator only treats an ACTIVE/FROZEN spec's presentation_mode as a HARD invariant.
+        # §10 hard-failure precedence: NUMBER_MISMATCH / infographic destroyed / duplicate NNJ mark
+        # / meaning-changing clip / hard ACTIVE-spec violation force BLOCK, never downgraded by an
+        # optimistic base decision.
+        art_result, _spec_evaluation = finalize_art_direction(SpecEvaluationInput(
+            base_result=base_art_result, active_spec=active_spec,
+            approved_references=approved_references, rejected_references=rejected_references,
+            source_type=source_type, presentation_mode=presentation_mode,
+        ))
         root_cause = classify_root_cause(list(art_result.issue_codes)) if art_result.issue_codes else None
         total_cost = _sum_known_costs(render_outcome.generation_cost)
 
