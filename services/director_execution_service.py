@@ -36,11 +36,9 @@ from services.director_run_service import (
     compute_input_fingerprint,
     create_director_run,
 )
-from services.instagram_connection_readiness import resolve_instagram_readiness_state
+from services.instagram_connection_service import sync_instagram_feed_context
 from services.instagram_content_opportunity import OpportunitySourceType, build_content_opportunity
-from services.instagram_feed_context import build_instagram_feed_context
 from services.instagram_growth_strategist import InstagramGrowthStrategy, OpportunityContext, generate_growth_strategy
-from services.platform_account_context import build_instagram_account_context
 from services.social_launch_context_service import compute_launch_context_fingerprint, get_current_context
 from services.telegram_feed_state import compute_feed_state
 from services.telegram_feed_window import assemble_live_telegram_feed_window
@@ -244,18 +242,15 @@ async def run_instagram_growth_strategist(
     now = now or datetime.now(timezone.utc)
     snapshot = await get_business_context_snapshot(session, now=now)
     contexts = _product_opportunities_from_campaigns(snapshot)
-    # DIRECTOR-CONTROL-PLANE-1B §7: the real Instagram feed context. No Graph API credentials
-    # exist in this environment, so build_instagram_account_context() reports connection_state
-    # "connection_required" -> readiness NOT_CONFIGURED and build_instagram_feed_context(None, ...)
-    # returns an honestly empty, prelaunch-labelled context (never fabricated posts/metrics). This
-    # call site is connection-ready: the moment real credentials + a fetch_recent_media()
-    # implementation exist, only `raw_media` changes here - the Director wiring is already done.
-    ig_account = await build_instagram_account_context(session, now=now)
-    ig_readiness = resolve_instagram_readiness_state(ig_account)
-    ig_launch_context = await get_current_context(session, SocialLaunchPlatform.INSTAGRAM)
-    feed_context = build_instagram_feed_context(None, readiness_state=ig_readiness, launch_context=ig_launch_context)
+    # DIRECTOR-CONTROL-PLANE-1C §10/§11: the ONE bounded official read path. When Instagram is
+    # configured, `sync_instagram_feed_context()` calls the real read-only reader
+    # (services/instagram_account_reader.py) and normalizes the result through
+    # build_instagram_feed_context(); when it is NOT configured (this environment - no credentials),
+    # it returns raw_media=None -> an honestly empty prelaunch context, exactly as before. Any
+    # fetch failure degrades to the same empty context (§15) - Director planning never crashes.
+    sync = await sync_instagram_feed_context(session, now=now)
     strategy = generate_growth_strategy(
-        opportunity_contexts=contexts, directives=list(snapshot.active_directives), feed_context=feed_context,
+        opportunity_contexts=contexts, directives=list(snapshot.active_directives), feed_context=sync.feed_context,
     )
 
     run: DirectorRun | None = None
