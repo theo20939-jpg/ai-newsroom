@@ -40,6 +40,47 @@ MINOR_DELTA = "minor_delta"
 MATERIAL_UPDATE = "material_update"
 UNCERTAIN_DELTA = "uncertain_delta"
 
+# STORY-CONTINUITY-P0: the coarse 3-class contract the continuity classifier consumes and the
+# StoryLink row persists (docs continuity contract §11). Deterministically derived from the
+# five fine classifications above by coarse_delta_class().
+DELTA_NONE = "NO_DELTA"
+DELTA_MINOR = "MINOR_DELTA"
+DELTA_MATERIAL = "MATERIAL_DELTA"
+
+# STORY-CONTINUITY-P0 (real production evidence, META-AI-DUPLICATE forensics): classify_delta()
+# was title/number-only, so a genuine reader-worthy development carried by a NEW capability /
+# availability / spec keyword ("multilingual", "diarization", "open weights", "API", "iOS app",
+# "100M tokens", "limited preview") registered at most as MINOR_DELTA and never drove UPDATE.
+# When one of these keywords is genuinely new to the Story (absent from every prior title) it
+# escalates the classification to MATERIAL_UPDATE. Closed, journalistically-principled set - NOT
+# a calibration list of the Meta incident's own words; every member is a general product-news
+# development signal. Matched against the same length-filtered, normalized keyword tokens
+# classify_delta() already extracts, so a bare mention inside a longer word never false-fires.
+_MATERIAL_CAPABILITY_KEYWORDS: frozenset[str] = frozenset({
+    # availability / rollout
+    "available", "availability", "rollout", "rolls", "launches", "launched", "released",
+    "releases", "ga", "preview", "beta", "waitlist", "rollout", "expands", "expanded",
+    "region", "regions", "country", "countries", "markets", "worldwide", "global",
+    # platform / device / distribution
+    "ios", "android", "iphone", "ipad", "mac", "macos", "windows", "linux", "web", "app",
+    "mobile", "desktop", "extension", "plugin", "sdk", "cli", "browser", "on-device",
+    "offline", "cloud", "self-hosted", "download", "downloadable",
+    # commercial
+    "pricing", "price", "priced", "free", "paid", "subscription", "tier", "tiers", "plan",
+    "enterprise", "cost", "costs", "dollar", "dollars", "month", "monthly", "annual",
+    "revenue", "acquisition", "funding", "partnership",
+    # model / capability specifics
+    "benchmark", "benchmarks", "score", "scored", "accuracy", "latency", "parameters",
+    "params", "context", "window", "tokens", "multimodal", "multilingual", "multilanguage",
+    "languages", "language", "diarization", "speaker", "speakers", "streaming", "real-time",
+    "realtime", "reasoning", "agentic", "coding", "vision", "audio", "voice", "weights",
+    "open-source", "open-weight", "opensource", "quantized", "fine-tuning", "distilled",
+    "throughput", "speed", "faster", "cheaper", "bigger", "smaller",
+    # timing
+    "date", "timeline", "schedule", "delayed", "postponed", "sunset", "deprecated",
+    "discontinued", "shutdown", "shutting",
+})
+
 # Claim types treated as "reader-worthy new fact" signals when genuinely new (never present in
 # any prior title for this story) - a release date, a price, a benchmark percentage, a named
 # quantity. "entity"/"quote" are deliberately excluded here: a new entity alone is often just a
@@ -187,6 +228,23 @@ def _classify_from_signals(
             CONFIRMATION_ONLY, max_title_overlap_vs_prior=max_title_overlap, reason=reason,
         )
 
+    # STORY-CONTINUITY-P0: a genuinely new capability / availability / spec keyword is a
+    # reader-worthy development even when no date/money/percentage/quantity claim is present in
+    # the title (real case: "Meta reveals its AI agent that can shop, send emails and plan
+    # trips" adds real capability substance with zero numeric claim). Escalate to MATERIAL_UPDATE.
+    material_capability_keywords = sorted(
+        set(new_keywords) & _MATERIAL_CAPABILITY_KEYWORDS
+    )
+    if material_capability_keywords:
+        reason = (
+            f"genuinely new material capability/availability/spec keyword(s) not present in any "
+            f"prior title: {material_capability_keywords}"
+        )
+        return DeltaResult(
+            MATERIAL_UPDATE, new_keywords=new_keywords, new_material_claims=material_capability_keywords,
+            max_title_overlap_vs_prior=max_title_overlap, reason=reason,
+        )
+
     if new_keywords and len(new_keywords) <= _MINOR_DELTA_MAX_NEW_KEYWORDS:
         reason = f"a small number of new distinctive keywords, no material claim ({new_keywords})"
         return DeltaResult(
@@ -230,6 +288,26 @@ def gate_delta_by_identity(delta: DeltaResult, *, has_distinctive_shared_entity:
             ),
         )
     return delta
+
+
+_COARSE_DELTA_MAP: dict[str, str] = {
+    NO_NEW_FACTS: DELTA_NONE,
+    CONFIRMATION_ONLY: DELTA_NONE,
+    MINOR_DELTA: DELTA_MINOR,
+    MATERIAL_UPDATE: DELTA_MATERIAL,
+    # UNCERTAIN_DELTA -> MINOR (conservative: never NO_DELTA, so an ambiguous delta is never
+    # treated as "nothing new" and can never make an event suppression-eligible).
+    UNCERTAIN_DELTA: DELTA_MINOR,
+}
+
+
+def coarse_delta_class(delta: DeltaResult | None) -> str:
+    """Pure. Maps a fine-grained DeltaResult to the {NO_DELTA, MINOR_DELTA, MATERIAL_DELTA}
+    contract the continuity classifier and the StoryLink row use. `None` (delta not computed -
+    e.g. a brand-new Story with no prior titles) -> DELTA_MINOR, never DELTA_NONE."""
+    if delta is None:
+        return DELTA_MINOR
+    return _COARSE_DELTA_MAP.get(delta.classification, DELTA_MINOR)
 
 
 async def compute_story_delta(
