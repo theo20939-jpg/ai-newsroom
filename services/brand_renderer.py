@@ -57,6 +57,8 @@ from services.nnj_master_news_mark import rasterize_nnj_mark
 from services.nnj_master_news_overlay import (
     BoundingBox,
     ComponentPlacement,
+    composite_master_news_decision,
+    select_master_news_branding,
     _CANVAS_H,
     _CANVAS_W,
     _EDGE_DENSITY_SAFE_THRESHOLD,
@@ -104,14 +106,6 @@ _OFFICIAL_NNJ_BLACK = (0x00, 0x00, 0x00)
 _CARD_WIDTH = 1200
 _CARD_HEIGHT = 675  # 16:9 - a conventional Telegram link-preview/photo aspect ratio, not the
 # source photo's own aspect ratio (DATA/QUOTE have no source photo to preserve).
-
-# render_breaking_frame()'s bottom dark-gradient band. Named here (rather than inline literals) so
-# services/render_evidence.py::derive_breaking_render_evidence() classifies the exact same band
-# geometry/opacity the renderer draws - a single source of truth, no drift (DESIGN-SPEC-
-# ENFORCEMENT-1 addendum §2). The band linearly ramps alpha 0 -> _BREAKING_BAND_MAX_ALPHA from its
-# top edge to the frame bottom, over _BREAKING_BAND_HEIGHT_FRAC of the canvas height.
-_BREAKING_BAND_HEIGHT_FRAC = 0.22
-_BREAKING_BAND_MAX_ALPHA = 210
 
 # Real forensic finding: Pillow's own bundled default font (`ImageFont.load_default()`) has NO
 # Cyrillic glyphs and no em-dash (confirmed empirically - tofu boxes) - a hard problem for RU
@@ -252,46 +246,32 @@ def render_news_hero(source_image_bytes: bytes, *, category: str, editorial_code
 
 
 def render_breaking_frame(source_image_bytes: bytes | None, *, category: str, editorial_code: str) -> bytes:
-    """Stronger BREAKING treatment (spec §21): official red mark, a bottom dark gradient band
-    (never covering more than ~22% of the frame) carrying "BREAKING" + category/code, and the
-    pulse line - never a full-frame overlay, never obscuring the source subject. Falls back to a
-    simplified solid dark card when no source photo is available (never blocks BREAKING delivery
-    on a missing image)."""
+    """VISUAL-RENDERER-RECONCILIATION-1 §5-7: BREAKING belongs to the SAME restrained NEWS family
+    as `apply_master_news_branding()`. The retired treatment - a ~22%-tall dark-gradient lower-
+    third band, a baked "BREAKING" wordmark, a red accent rule - is GONE: it was never approved
+    against the master prototype (`assets/brand/newsroom_visuals/v1/references/
+    nnj_editorial_visual_system_master_prototype.png` shows BREAKING with the identical thin
+    bottom line + pulse + one "nnj" mark NEWS/DATA use, no band, no baked text), and
+    `breaking_minimal_01` is `production_approved: false` in the overlay manifest.
+
+    BREAKING now composites the source at its NATIVE size (source_image_treatment=preserve) with
+    the exact MASTER NEWS single lower signature (`select_master_news_branding()` -> one thin edge
+    line + pulse + exactly one canonical NNJ mark, adaptive safe-corner placement, the single-
+    brand-mark invariant already enforced there). No band, no baked text, no badge, no ribbon.
+    `category`/`editorial_code` are accepted for dispatch symmetry with the other render_* funcs
+    (like DATA) but are never drawn. No source photo -> a minimal solid NNJ-black card carrying
+    only the one canonical mark (never blocks BREAKING delivery on a missing image)."""
     if source_image_bytes is not None:
         with Image.open(io.BytesIO(source_image_bytes)) as src:
-            canvas = src.convert("RGBA").copy()
+            photo = src.convert("RGBA").copy()
+        decision = select_master_news_branding(photo)
+        branded = composite_master_news_decision(photo, decision)
     else:
-        canvas = Image.new("RGBA", (_CARD_WIDTH, _CARD_HEIGHT), (*_OFFICIAL_NNJ_BLACK, 255))
-
-    band_height = round(canvas.height * _BREAKING_BAND_HEIGHT_FRAC)
-    band = Image.new("RGBA", (canvas.width, band_height), (0, 0, 0, 0))
-    band_draw = ImageDraw.Draw(band)
-    for row in range(band_height):
-        alpha = round(_BREAKING_BAND_MAX_ALPHA * (row / band_height))
-        band_draw.line([(0, row), (canvas.width, row)], fill=(0, 0, 0, alpha))
-    canvas.alpha_composite(band, (0, canvas.height - band_height))
-
-    draw = ImageDraw.Draw(canvas)
-    margin = max(16, round(canvas.width * 0.02))
-    accent_height = max(4, round(canvas.height * 0.006))
-    draw.rectangle(
-        [(0, canvas.height - band_height), (canvas.width, canvas.height - band_height + accent_height)],
-        fill=_OFFICIAL_NNJ_RED,
-    )
-    draw.text(
-        (margin, canvas.height - band_height + accent_height + margin // 2),
-        "BREAKING", font=_font(max(22, round(canvas.width * 0.032))), fill=_OFFICIAL_NNJ_WHITE,
-    )
-    _draw_code_label(
-        draw, x=margin, y=canvas.height - margin - max(14, round(canvas.width * 0.02)),
-        text=f"{category} · {editorial_code}", color=_OFFICIAL_NNJ_WHITE,
-        size=max(14, round(canvas.width * 0.02)),
-    )
-    logo_width = max(48, round(canvas.width * 0.08))
-    _paste_svg_mark(canvas, target_width=logo_width, margin=margin)
+        branded = Image.new("RGBA", (_CARD_WIDTH, _CARD_HEIGHT), (*_OFFICIAL_NNJ_BLACK, 255))
+        _paste_svg_mark(branded, target_width=max(48, round(_CARD_WIDTH * 0.08)), margin=64)
 
     out = io.BytesIO()
-    canvas.convert("RGB").save(out, format="JPEG", quality=92)
+    branded.convert("RGB").save(out, format="JPEG", quality=92)
     return out.getvalue()
 
 

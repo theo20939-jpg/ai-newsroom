@@ -509,6 +509,24 @@ def select_master_news_branding(
     )
 
 
+def composite_master_news_decision(
+    photo_rgba: Image.Image, decision: MasterNewsBrandingDecision,
+) -> Image.Image:
+    """Composite a `select_master_news_branding()` decision's own canvas-sized layers onto
+    `photo_rgba` (which MUST already be the exact size `decision` was computed for). The single
+    shared compositing step: `apply_master_news_branding()` calls it after its 1280x720 fit, and
+    `brand_renderer.render_breaking_frame()` calls it on a NATIVE-size photo (BREAKING is the same
+    restrained NEWS family, not a full-frame band) - one code path, no drift
+    (VISUAL-RENDERER-RECONCILIATION-1 §7). Mutual exclusion of the two components (the single-
+    brand-mark invariant) is already enforced inside `select_master_news_branding()`."""
+    branded = photo_rgba.copy()
+    if decision.lower_signature.image is not None:
+        branded.alpha_composite(decision.lower_signature.image)
+    if decision.upper_mark.image is not None:
+        branded.alpha_composite(decision.upper_mark.image)
+    return branded
+
+
 _FINALIZED_MARKER_PREFIX = b"NNJ-FINALIZED-V1:"
 _FINALIZED_MARKER_BRANDED = _FINALIZED_MARKER_PREFIX + b"BRANDED"
 _FINALIZED_MARKER_NO_OVERLAY = _FINALIZED_MARKER_PREFIX + b"NO_OVERLAY"
@@ -563,11 +581,7 @@ def apply_master_news_branding(
 
     decision = select_master_news_branding(photo_fit, subject_bbox=subject_bbox, disable_lower_signature=disable_lower_signature)
 
-    branded = photo_fit.copy()
-    if decision.lower_signature.image is not None:
-        branded.alpha_composite(decision.lower_signature.image)
-    if decision.upper_mark.image is not None:
-        branded.alpha_composite(decision.upper_mark.image)
+    branded = composite_master_news_decision(photo_fit, decision)
     buf = io.BytesIO()
     has_mark = decision.degradation_mode != "no_overlay"
     marker = _FINALIZED_MARKER_BRANDED if has_mark else _FINALIZED_MARKER_NO_OVERLAY
