@@ -39,6 +39,7 @@ from services.account_presentation_spec_reader import summarize_for_creative as 
 from services.data_source_classification import DataPresentationMode, SourceType
 from services.design_reference_registry import select_bounded_references
 from services.design_spec_registry import describe_spec_for_creative, get_active_or_frozen_spec
+from services.render_evidence import RenderEvidence
 from services.telegram_art_director_spec_evaluation import SpecEvaluationInput, finalize_art_direction
 from services.director_run_service import compute_input_fingerprint, create_director_run
 from services.social_launch_context_service import describe_launch_context_for_creative, get_current_context
@@ -77,6 +78,12 @@ class RenderOutcome:
     render_reference: str | None
     generation_model: str | None
     generation_cost: float | None
+    # DESIGN-SPEC-ENFORCEMENT-1 §3: structured, renderer-truthful evidence about this render
+    # (services/render_evidence.py `derive_*` helpers, replayed from the renderer's own
+    # deterministic decisions - never LLM-estimated). The production `render_fn` populates it; a
+    # `render_fn` that does not (older callers, minimal fakes) leaves it None and SPEC_MATCH keeps
+    # its presentation_mode-only behavior.
+    render_evidence: RenderEvidence | None = None
 
 
 @dataclass(frozen=True)
@@ -220,6 +227,7 @@ async def run_visual_design_loop(
             base_result=base_art_result, active_spec=active_spec,
             approved_references=approved_references, rejected_references=rejected_references,
             source_type=source_type, presentation_mode=presentation_mode,
+            render_evidence=render_outcome.render_evidence,
         ))
         root_cause = classify_root_cause(list(art_result.issue_codes)) if art_result.issue_codes else None
         total_cost = _sum_known_costs(render_outcome.generation_cost)
