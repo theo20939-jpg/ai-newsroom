@@ -63,6 +63,20 @@ async def list_history(session: AsyncSession, scope: str) -> list[DesignSpecVers
     return list((await session.execute(stmt)).scalars().all())
 
 
+def describe_spec_for_creative(spec: DesignSpecVersion | None) -> str:
+    """DIRECTOR-CONTROL-PLANE-1A §14: a plain, compact summary string for VisualDirectorContext -
+    mirrors services/social_launch_context_service.py::describe_launch_context_for_creative()'s own
+    "None -> honest empty string, never a fabricated spec description" contract."""
+    if spec is None:
+        return ""
+    parts = [f"scope={spec.scope}", f"type={spec.spec_type.value}", f"status={spec.status.value}", f"version={spec.version}"]
+    if spec.parameters:
+        parts.append(f"parameters={spec.parameters}")
+    if spec.notes:
+        parts.append(f"notes={spec.notes}")
+    return "; ".join(parts)
+
+
 async def _next_version_number(session: AsyncSession, scope: str) -> int:
     history = await list_history(session, scope)
     return (max((v.version for v in history), default=0)) + 1

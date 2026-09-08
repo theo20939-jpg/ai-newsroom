@@ -48,6 +48,17 @@ def render_design_status(view: VisualDesignView, *, role: BusinessContextRole) -
     else:
         lines.append("неизвестно (есть попытки без учтённой стоимости)")
 
+    if view.design_spec_registry is not None:
+        registry = view.design_spec_registry
+        lines.append("")
+        lines.append("Design Spec Registry:")
+        lines.append(f"Editorial gate: {'ENFORCED' if registry.editorial_gate_enabled else 'SHADOW (не применяется)'}")
+        lines.append(f"Активный spec: {registry.active_spec_summary}")
+        lines.append(
+            f"Референсы: {registry.approved_reference_count} approved / "
+            f"{registry.rejected_reference_count} rejected / {registry.needs_review_reference_count} needs review"
+        )
+
     return "\n".join(lines).strip()
 
 

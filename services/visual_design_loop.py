@@ -27,12 +27,17 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
+from database.models.design_reference_asset import DesignReferenceAsset, DesignReferenceRole
 from database.models.director_run import DirectorRunStatus, DirectorType
 from database.models.social_launch_context import SocialLaunchPlatform
 from database.models.visual_design_attempt import VisualDesignAttempt, VisualDesignAttemptStatus, VisualFailureRootCause
 from database.models.visual_designer_brief import VisualDesignerBriefVersion
 from integrations.llm_gateway.protocol import LLMGateway
 from integrations.prompts.protocol import PromptRepository
+from services.account_presentation_spec_reader import read_account_presentation_spec
+from services.account_presentation_spec_reader import summarize_for_creative as summarize_presentation_spec
+from services.design_reference_registry import select_bounded_references
+from services.design_spec_registry import describe_spec_for_creative, get_active_or_frozen_spec
 from services.director_run_service import compute_input_fingerprint, create_director_run
 from services.social_launch_context_service import describe_launch_context_for_creative, get_current_context
 from services.telegram_art_director import ArtDirectorDecision, ArtDirectorResult
@@ -96,6 +101,10 @@ async def _launch_context_summary_for(session: AsyncSession, *, platform: str) -
     return describe_launch_context_for_creative(context)
 
 
+def _reference_summary(asset: DesignReferenceAsset) -> str:
+    return f"{asset.asset_path} ({asset.notes or 'no notes'})"
+
+
 def _art_decision_to_attempt_status(decision: ArtDirectorDecision) -> VisualDesignAttemptStatus:
     if decision == ArtDirectorDecision.PASS:
         return VisualDesignAttemptStatus.PASSED
@@ -110,6 +119,12 @@ async def run_visual_design_loop(
     render_fn: RenderFn, art_director_fn: ArtDirectorFn,
     available_media_summary: str = "unknown", renderer_constraints_summary: str | None = None,
     restricted_claims: list[str] | None = None, now: datetime | None = None,
+    # DIRECTOR-CONTROL-PLANE-1A §14: caller-supplied only - this loop has no Story/source row of
+    # its own to classify (services/data_source_classification.py operates on a real
+    # NewsEventArticleAcquisition/media row this loop never sees), so a real classification string
+    # is threaded straight through, exactly like `restricted_claims`. "" (the default) for every
+    # existing caller/test - byte-identical behavior.
+    source_classification_summary: str = "",
 ) -> VisualDesignLoopResult:
     now = now or datetime.now(timezone.utc)
     story_uuid = _safe_uuid(story.story_id)
@@ -126,6 +141,22 @@ async def run_visual_design_loop(
 
     feed_context = await compute_visual_feed_context(session, now=now)
     launch_context_summary = await _launch_context_summary_for(session, platform=platform)
+
+    # DIRECTOR-CONTROL-PLANE-1A §14: real, bounded, declarative-only context - computed once per
+    # loop invocation (not once per attempt, since the active spec/references are not expected to
+    # change mid-loop), never mutated or auto-promoted from here (services/design_spec_registry.py's
+    # own module docstring: promote_candidate() is never called automatically by any Director).
+    active_spec = await get_active_or_frozen_spec(session, scope)
+    active_design_spec_summary = describe_spec_for_creative(active_spec)
+    account_presentation_spec_summary = summarize_presentation_spec(read_account_presentation_spec(platform))
+    approved_references = await select_bounded_references(
+        session, reference_role=DesignReferenceRole.APPROVED_REFERENCE, platform=platform, presentation_type=presentation_type,
+    )
+    rejected_references = await select_bounded_references(
+        session, reference_role=DesignReferenceRole.REJECTED_REFERENCE, platform=platform, presentation_type=presentation_type,
+    )
+    approved_reference_summary = [_reference_summary(a) for a in approved_references]
+    rejected_reference_summary = [_reference_summary(a) for a in rejected_references]
 
     attempts: list[VisualDesignAttempt] = []
     previous_feedback: PreviousAttemptFeedback | None = None
@@ -149,6 +180,11 @@ async def run_visual_design_loop(
             attempts_used=budget.attempts_used, max_attempts=budget.max_attempts,
             budget_state_summary=_budget_summary(budget), restricted_claims=restricted_claims,
             previous_attempt=previous_feedback, launch_context_summary=launch_context_summary, now=now,
+            active_design_spec_summary=active_design_spec_summary,
+            account_presentation_spec_summary=account_presentation_spec_summary,
+            approved_reference_summary=approved_reference_summary,
+            rejected_reference_summary=rejected_reference_summary,
+            source_classification_summary=source_classification_summary,
         )
 
         attempt_number = budget.attempts_used + 1

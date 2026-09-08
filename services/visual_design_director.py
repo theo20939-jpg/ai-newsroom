@@ -80,6 +80,9 @@ def build_visual_director_context(
     attempts_used: int, max_attempts: int, budget_state_summary: str,
     restricted_claims: list[str] | None = None, previous_attempt: PreviousAttemptFeedback | None = None,
     launch_context_summary: str = "", now: datetime | None = None,
+    active_design_spec_summary: str = "", account_presentation_spec_summary: str = "",
+    approved_reference_summary: list[str] | None = None, rejected_reference_summary: list[str] | None = None,
+    source_classification_summary: str = "",
 ) -> VisualDirectorContext:
     return VisualDirectorContext(
         as_of=now or datetime.now(timezone.utc), story_id=story.story_id, platform=platform,
@@ -91,6 +94,11 @@ def build_visual_director_context(
         attempts_used=attempts_used, max_attempts=max_attempts, budget_state_summary=budget_state_summary,
         restricted_claims=restricted_claims or [], previous_attempt=previous_attempt,
         launch_context_summary=launch_context_summary,
+        active_design_spec_summary=active_design_spec_summary,
+        account_presentation_spec_summary=account_presentation_spec_summary,
+        approved_reference_summary=approved_reference_summary or [],
+        rejected_reference_summary=rejected_reference_summary or [],
+        source_classification_summary=source_classification_summary,
     )
 
 
@@ -108,6 +116,13 @@ def _build_user_text(context: VisualDirectorContext) -> str:
         f"BUDGET STATE: {context.budget_state_summary}",
         f"RESTRICTED CLAIMS (never depict): {context.restricted_claims}",
         f"LAUNCH CONTEXT (advisory only, not a rule): {context.launch_context_summary or '(established account - no launch context)'}",
+        f"ACTIVE DESIGN SPEC (declarative, not a rule to rewrite): {context.active_design_spec_summary or '(no active Design Spec for this scope)'}",
+        f"ACCOUNT PRESENTATION SPEC (declarative, not a rule to rewrite): {context.account_presentation_spec_summary or '(no account presentation spec configured)'}",
+        "APPROVED REFERENCES (declarative, bounded - inform direction, do not copy pixel-for-pixel):\n"
+        + "\n".join(f"- {line}" for line in context.approved_reference_summary),
+        "REJECTED REFERENCES (declarative, bounded - avoid repeating these mistakes):\n"
+        + "\n".join(f"- {line}" for line in context.rejected_reference_summary),
+        f"SOURCE CLASSIFICATION: {context.source_classification_summary or '(no source classification available)'}",
     ]
     if context.previous_attempt is not None:
         prev = context.previous_attempt

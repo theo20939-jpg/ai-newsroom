@@ -14,10 +14,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
+from database.models.design_reference_asset import DesignReferenceRole
 from database.models.visual_design_attempt import VisualDesignAttempt, VisualDesignAttemptStatus
 from database.models.visual_designer_brief import VisualDesignerBriefStatus, VisualDesignerBriefVersion
+from services.design_reference_registry import list_assets
+from services.design_spec_registry import describe_spec_for_creative, get_active_or_frozen_spec
 from services.visual_budget_service import daily_cost_summary
-from services.visual_designer_brief_service import list_history
+from services.visual_designer_brief_service import GLOBAL_SCOPE, list_history
 
 _RECENT_ATTEMPT_LOOKBACK = 30
 
@@ -49,12 +52,27 @@ class VisualScopeSummary:
 
 
 @dataclass(frozen=True)
+class DesignSpecRegistrySummary:
+    """DIRECTOR-CONTROL-PLANE-1A §25: the exact required `/design` visibility list - editorial gate
+    shadow/enforced state, active Design Spec, and approved/rejected/needs-review reference counts.
+    Pure reads only (module docstring's own "never trigger design generation" invariant is
+    unaffected - this reads DesignSpecVersion/DesignReferenceAsset rows, never calls the Gateway)."""
+
+    editorial_gate_enabled: bool
+    active_spec_summary: str
+    approved_reference_count: int
+    rejected_reference_count: int
+    needs_review_reference_count: int
+
+
+@dataclass(frozen=True)
 class VisualDesignView:
     as_of: datetime
     scopes: list[VisualScopeSummary] = field(default_factory=list)
     daily_cost_known: bool = True
     daily_cost_so_far: float | None = None
     daily_cost_limit: float = 0.0
+    design_spec_registry: DesignSpecRegistrySummary | None = None
 
 
 @dataclass(frozen=True)
@@ -135,9 +153,22 @@ async def build_design_view(session: AsyncSession, *, now: datetime | None = Non
         ))
 
     cost_known, cost_so_far = await daily_cost_summary(session, now=now)
+
+    active_spec = await get_active_or_frozen_spec(session, GLOBAL_SCOPE)
+    approved = await list_assets(session, reference_role=DesignReferenceRole.APPROVED_REFERENCE)
+    rejected = await list_assets(session, reference_role=DesignReferenceRole.REJECTED_REFERENCE)
+    needs_review = await list_assets(session, reference_role=DesignReferenceRole.NEEDS_FOUNDER_REVIEW)
+    design_spec_registry = DesignSpecRegistrySummary(
+        editorial_gate_enabled=settings.telegram_editorial_gate_enabled,
+        active_spec_summary=describe_spec_for_creative(active_spec) or "нет активного Design Spec",
+        approved_reference_count=len(approved), rejected_reference_count=len(rejected),
+        needs_review_reference_count=len(needs_review),
+    )
+
     return VisualDesignView(
         as_of=now, scopes=scopes, daily_cost_known=cost_known,
         daily_cost_so_far=cost_so_far if cost_known else None, daily_cost_limit=settings.visual_max_cost_per_day,
+        design_spec_registry=design_spec_registry,
     )
 
 

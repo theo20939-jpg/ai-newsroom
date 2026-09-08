@@ -118,3 +118,14 @@ class VisualDirectorContext:
     # every caller that never wires launch context, so this field existing changes nothing about
     # attempts/budget/renderer behavior for any existing caller.
     launch_context_summary: str = ""
+    # DIRECTOR-CONTROL-PLANE-1A §14: DECLARATIVE ONLY - lets the Visual Director see the active
+    # Design Spec, the account's own presentation spec, bounded approved/rejected reference
+    # summaries, and a source-type classification note. None of these ever mutates a spec, promotes
+    # a candidate, or auto-approves a reference - this context object has no write path at all
+    # (mirrors `brand_core_rules`/`feed_context_summary`'s own read-only discipline). Every field
+    # defaults to ""/[] so every pre-existing caller is byte-identical.
+    active_design_spec_summary: str = ""
+    account_presentation_spec_summary: str = ""
+    approved_reference_summary: list[str] = field(default_factory=list)
+    rejected_reference_summary: list[str] = field(default_factory=list)
+    source_classification_summary: str = ""

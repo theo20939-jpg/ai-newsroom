@@ -67,6 +67,40 @@ async def list_assets(
     return list((await session.execute(stmt)).scalars().all())
 
 
+# DIRECTOR-CONTROL-PLANE-1A §17: "MAX_REFERENCES_PER_ART_REVIEW" - the one bounded-selection limit
+# shared by every real consumer of DesignReferenceAsset rows (the Art Director's own spec/reference
+# evaluation in services/telegram_art_director_vision.py, AND the Visual Director's own advisory
+# context in services/visual_design_director.py) - a single shared constant/function so there is
+# never a second, competing selection policy.
+MAX_REFERENCES_PER_ART_REVIEW = 6
+
+
+async def select_bounded_references(
+    session: AsyncSession, *, reference_role: DesignReferenceRole, platform: str | None = None,
+    presentation_type: str | None = None, limit: int = MAX_REFERENCES_PER_ART_REVIEW,
+) -> list[DesignReferenceAsset]:
+    """Spec §17's own required bounded reference selection: scoped by role (approved vs rejected -
+    never mixed in one call, so a caller cannot accidentally treat a rejected reference as
+    approved), and by platform/presentation_type WHEN an asset has that field set - an asset with
+    `platform=None`/`presentation_type=None` (e.g. the master prototype, spec §17's own "design-
+    authority hierarchy" top entry) applies everywhere and is never excluded by a platform/
+    presentation filter. Most-recently-added first (spec §17: no ordering guidance beyond
+    "bounded", so a deterministic, explicit tie-break is used rather than DB-default row order).
+    Never returns an ambiguous NEEDS_FOUNDER_REVIEW asset - callers must pass an explicit
+    APPROVED_REFERENCE or REJECTED_REFERENCE role (spec §21's own "ambiguous reference never auto-
+    selected" requirement)."""
+    stmt = select(DesignReferenceAsset).where(DesignReferenceAsset.reference_role == reference_role)
+    if platform is not None:
+        stmt = stmt.where((DesignReferenceAsset.platform == platform) | (DesignReferenceAsset.platform.is_(None)))
+    if presentation_type is not None:
+        stmt = stmt.where(
+            (DesignReferenceAsset.presentation_type == presentation_type)
+            | (DesignReferenceAsset.presentation_type.is_(None))
+        )
+    stmt = stmt.order_by(DesignReferenceAsset.created_at.desc()).limit(limit)
+    return list((await session.execute(stmt)).scalars().all())
+
+
 def _relpath(path: Path) -> str:
     return path.relative_to(_REPO_ROOT).as_posix()
 

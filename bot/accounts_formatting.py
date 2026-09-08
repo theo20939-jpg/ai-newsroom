@@ -26,6 +26,9 @@ def _render_capabilities(title: str, capabilities: dict[str, str]) -> str:
     return f"{title}: {parts}"
 
 
+_FEED_CONTEXT_AVAILABLE_STATES = frozenset({"registered", "connected"})
+
+
 def render_account_context(context: PlatformAccountContext) -> str:
     lines = [
         f"🥷 {context.platform.upper()}",
@@ -41,6 +44,11 @@ def render_account_context(context: PlatformAccountContext) -> str:
     lines.append(_render_capabilities("Read capabilities", context.read_capabilities))
     lines.append(_render_capabilities("Analytics capabilities", context.analytics_capabilities))
     lines.append(f"Historical learning boundary: {context.historical_learning_boundary}")
+    # DIRECTOR-CONTROL-PLANE-1A §25: real feed context (services/telegram_feed_window.py /
+    # services/instagram_feed_context.py) is only ever available once the account is actually
+    # registered/connected - never claims availability from a bare "connection_required" state.
+    feed_available = context.connection_state in _FEED_CONTEXT_AVAILABLE_STATES
+    lines.append(f"Feed context для директоров: {'доступен' if feed_available else 'недоступен (аккаунт не зарегистрирован/не подключён)'}")
     return "\n".join(lines)
 
 

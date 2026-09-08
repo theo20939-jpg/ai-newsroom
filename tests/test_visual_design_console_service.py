@@ -8,15 +8,19 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from database.models.design_reference_asset import DesignReferenceRole
+from database.models.design_spec_version import DesignSpecType
 from database.models.director_run import DirectorRun
 from database.models.visual_design_attempt import VisualDesignAttempt, VisualDesignAttemptStatus
 from database.models.visual_designer_brief import VisualDesignerBriefVersion
+from services.design_reference_registry import upsert_asset
+from services.design_spec_registry import create_candidate_spec, promote_candidate
 from services.visual_design_console_service import (
     VisualHealthStatus,
     build_design_scope_detail_view,
     build_design_view,
 )
-from services.visual_designer_brief_service import create_initial_brief, freeze_brief
+from services.visual_designer_brief_service import GLOBAL_SCOPE, create_initial_brief, freeze_brief
 
 
 async def _attempt(db_session: AsyncSession, brief: VisualDesignerBriefVersion, *, status: VisualDesignAttemptStatus, art_decision: str | None = None, issue_codes: list[str] | None = None) -> None:
@@ -31,6 +35,37 @@ async def _attempt(db_session: AsyncSession, brief: VisualDesignerBriefVersion, 
 async def test_view_is_empty_with_no_briefs_at_all(db_session: AsyncSession) -> None:
     view = await build_design_view(db_session, now=datetime.now(timezone.utc))
     assert view.scopes == []
+
+
+@pytest.mark.asyncio
+async def test_view_reports_design_spec_registry_state(db_session: AsyncSession) -> None:
+    """DIRECTOR-CONTROL-PLANE-1A §25: /design must show editorial gate state, the active Design
+    Spec, and real approved/rejected/needs-review reference counts."""
+    view_before = await build_design_view(db_session, now=datetime.now(timezone.utc))
+    assert view_before.design_spec_registry is not None
+    assert view_before.design_spec_registry.editorial_gate_enabled is False
+    assert view_before.design_spec_registry.approved_reference_count == 0
+
+    candidate = await create_candidate_spec(
+        db_session, scope=GLOBAL_SCOPE, spec_type=DesignSpecType.DECLARATIVE_VISUAL_PARAMS,
+        parameters={"alignment": "left"},
+    )
+    await promote_candidate(db_session, candidate.id)
+    await upsert_asset(
+        db_session, asset_path="assets/brand/newsroom_visuals/v1/references/test_console_approved.png",
+        reference_role=DesignReferenceRole.APPROVED_REFERENCE,
+    )
+    await upsert_asset(
+        db_session, asset_path="assets/brand/newsroom_visuals/v1/references/test_console_rejected.png",
+        reference_role=DesignReferenceRole.REJECTED_REFERENCE,
+    )
+
+    view_after = await build_design_view(db_session, now=datetime.now(timezone.utc))
+    registry = view_after.design_spec_registry
+    assert registry is not None
+    assert GLOBAL_SCOPE in registry.active_spec_summary
+    assert registry.approved_reference_count == 1
+    assert registry.rejected_reference_count == 1
 
 
 @pytest.mark.asyncio
