@@ -105,6 +105,14 @@ _CARD_WIDTH = 1200
 _CARD_HEIGHT = 675  # 16:9 - a conventional Telegram link-preview/photo aspect ratio, not the
 # source photo's own aspect ratio (DATA/QUOTE have no source photo to preserve).
 
+# render_breaking_frame()'s bottom dark-gradient band. Named here (rather than inline literals) so
+# services/render_evidence.py::derive_breaking_render_evidence() classifies the exact same band
+# geometry/opacity the renderer draws - a single source of truth, no drift (DESIGN-SPEC-
+# ENFORCEMENT-1 addendum §2). The band linearly ramps alpha 0 -> _BREAKING_BAND_MAX_ALPHA from its
+# top edge to the frame bottom, over _BREAKING_BAND_HEIGHT_FRAC of the canvas height.
+_BREAKING_BAND_HEIGHT_FRAC = 0.22
+_BREAKING_BAND_MAX_ALPHA = 210
+
 # Real forensic finding: Pillow's own bundled default font (`ImageFont.load_default()`) has NO
 # Cyrillic glyphs and no em-dash (confirmed empirically - tofu boxes) - a hard problem for RU
 # headlines/quotes, and no font file ships with any installed dependency (no matplotlib, no
@@ -255,11 +263,11 @@ def render_breaking_frame(source_image_bytes: bytes | None, *, category: str, ed
     else:
         canvas = Image.new("RGBA", (_CARD_WIDTH, _CARD_HEIGHT), (*_OFFICIAL_NNJ_BLACK, 255))
 
-    band_height = round(canvas.height * 0.22)
+    band_height = round(canvas.height * _BREAKING_BAND_HEIGHT_FRAC)
     band = Image.new("RGBA", (canvas.width, band_height), (0, 0, 0, 0))
     band_draw = ImageDraw.Draw(band)
     for row in range(band_height):
-        alpha = round(210 * (row / band_height))
+        alpha = round(_BREAKING_BAND_MAX_ALPHA * (row / band_height))
         band_draw.line([(0, row), (canvas.width, row)], fill=(0, 0, 0, alpha))
     canvas.alpha_composite(band, (0, canvas.height - band_height))
 
