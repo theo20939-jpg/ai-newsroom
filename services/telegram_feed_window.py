@@ -9,14 +9,25 @@ are deliberately separate booleans on every post - a legacy NINJA VPN post is AL
 read_context_eligible (understand what the current audience already saw, understand the pre-
 rebrand feed) but performance_learning_eligible only when it is at/after the real
 `learning_start_at` boundary AND the historical_content_policy allows it. No caller may ever use
-`performance_learning_eligible=False` posts as PULSE audience-preference evidence."""
+`performance_learning_eligible=False` posts as PULSE audience-preference evidence.
+
+DIRECTOR-CONTROL-PLANE-1B §5: `build_telegram_feed_window()` stays PURE (no I/O). The one I/O
+entry point Directors' live orchestration calls is `assemble_live_telegram_feed_window()` below -
+it resolves the registered owned surface, does the one bounded Telethon read, and delegates to the
+pure builder. No surface registered, or the read fails/is unauthorized -> an honestly empty
+window (`surface_registered=False`), never a fabricated one."""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from database.models.social_launch_context import SocialLaunchContext
 from services.social_learning_boundary import is_eligible_for_first_party_learning
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -95,3 +106,29 @@ def _parse_timestamp(raw: str | None) -> datetime | None:
         return datetime.fromisoformat(raw)
     except ValueError:
         return None
+
+
+async def assemble_live_telegram_feed_window(
+    session: AsyncSession, *, launch_context: SocialLaunchContext | None,
+) -> TelegramFeedWindow:
+    """DIRECTOR-CONTROL-PLANE-1B §5: the I/O entry point the live Director orchestration calls.
+    Resolves the registered owned surface (services/telegram_surface_registry.py::
+    resolve_owned_surface()); if there is none, returns an honestly empty
+    `TelegramFeedWindow(surface_registered=False)` - never a fabricated feed. Otherwise does the
+    ONE bounded Telethon read (services/telegram_channel_context.py::fetch_owned_channel_context(),
+    already capped at _RECENT_POST_LIMIT) and delegates to the pure `build_telegram_feed_window()`.
+    Any failure of that read (no session string, unauthorized, network, entity not resolvable) is
+    logged and also degrades to the empty window - a Director must keep working when the channel
+    read is unavailable, exactly like `raw_context=None`."""
+    from services.telegram_channel_context import fetch_owned_channel_context
+    from services.telegram_surface_registry import resolve_owned_surface
+
+    surface = await resolve_owned_surface(session)
+    if surface is None:
+        return TelegramFeedWindow(surface_registered=False)
+    try:
+        raw_context = await fetch_owned_channel_context(surface)
+    except Exception:  # noqa: BLE001 - the channel read is best-effort context, never load-bearing
+        logger.warning("assemble_live_telegram_feed_window: owned-channel read failed, using empty window", exc_info=True)
+        return TelegramFeedWindow(surface_registered=False)
+    return build_telegram_feed_window(raw_context, launch_context=launch_context)

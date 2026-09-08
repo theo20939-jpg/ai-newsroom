@@ -23,6 +23,7 @@ from services.social_launch_context_service import get_current_context
 from services.telegram_channel_director import ChannelDirectorResult, evaluate_channel_fit_shadow
 from services.telegram_editorial_need import derive_editorial_need
 from services.telegram_feed_state import compute_feed_state
+from services.telegram_feed_window import assemble_live_telegram_feed_window
 
 logger = logging.getLogger(__name__)
 
@@ -72,11 +73,18 @@ async def run_channel_director_shadow(
     business_context = await get_business_context_snapshot(session, now=now)
     campaign_plan = _select_campaign_plan(business_context.active_campaigns)
     mention_allowed = campaign_plan is not None and campaign_plan.phase in _PRODUCT_MENTION_ALLOWED_PHASES
+    # DIRECTOR-CONTROL-PLANE-1B §5: the real recent-feed window (one bounded Telethon read of the
+    # registered owned surface, or an honestly empty window when none is registered / the read
+    # fails). Advisory only - evaluate_channel_fit_shadow() never lets it change decision/priority,
+    # only enrich reasons/warnings. Legacy NINJA VPN posts arrive read-context-eligible but
+    # performance-learning-ineligible (spec §6), tagged by assemble_live_telegram_feed_window().
+    feed_window = await assemble_live_telegram_feed_window(session, launch_context=launch_context)
 
     result = evaluate_channel_fit_shadow(
         news_importance=news_importance, feed_state=feed_state, editorial_need=editorial_need,
         campaign_plan=campaign_plan, campaign_mention_explicitly_allowed=mention_allowed,
         launch_context=launch_context, timeliness=timeliness, is_transition_related_story=is_transition_related_story,
+        feed_window=feed_window,
     )
     logger.info(
         "telegram_channel_director_shadow decision=%s priority=%d organic=%.2f campaign=%.2f "

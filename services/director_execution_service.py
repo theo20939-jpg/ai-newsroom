@@ -36,10 +36,14 @@ from services.director_run_service import (
     compute_input_fingerprint,
     create_director_run,
 )
+from services.instagram_connection_readiness import resolve_instagram_readiness_state
 from services.instagram_content_opportunity import OpportunitySourceType, build_content_opportunity
+from services.instagram_feed_context import build_instagram_feed_context
 from services.instagram_growth_strategist import InstagramGrowthStrategy, OpportunityContext, generate_growth_strategy
+from services.platform_account_context import build_instagram_account_context
 from services.social_launch_context_service import compute_launch_context_fingerprint, get_current_context
 from services.telegram_feed_state import compute_feed_state
+from services.telegram_feed_window import assemble_live_telegram_feed_window
 from services.telegram_growth_director import GrowthDirectorAdvisory, derive_growth_director_advisory
 from services.telegram_performance_aggregator import compute_telegram_performance_aggregate
 from services.telegram_performance_memory import EvidenceStage, PerformancePattern
@@ -164,7 +168,12 @@ async def run_telegram_strategy_director(
     launch_context = await get_current_context(session, SocialLaunchPlatform.TELEGRAM)
     feed_state = await compute_feed_state(session, now=now, launch_context=launch_context)
     aggregate = await compute_telegram_performance_aggregate(session, now=now)
-    advisory = derive_strategy_advisory(feed_state, patterns=aggregate.patterns)
+    # DIRECTOR-CONTROL-PLANE-1B §5: real recent-feed window (bounded Telethon read of the
+    # registered owned surface, else an honestly empty window). derive_strategy_advisory() uses it
+    # only for a legacy-vs-eligible composition note - never to change the FeedState-derived
+    # reasoning (spec §6: legacy VPN posts are transition context, never PULSE performance evidence).
+    feed_window = await assemble_live_telegram_feed_window(session, launch_context=launch_context)
+    advisory = derive_strategy_advisory(feed_state, patterns=aggregate.patterns, feed_window=feed_window)
 
     run: DirectorRun | None = None
     if settings.director_run_persistence_enabled:
@@ -197,7 +206,17 @@ async def run_telegram_growth_director(
     services/telegram_growth_director.py never promotes one into a PerformancePattern on its own."""
     now = now or datetime.now(timezone.utc)
     aggregate = await compute_telegram_performance_aggregate(session, now=now)
-    advisory = derive_growth_director_advisory(aggregate.patterns, is_cold_start=aggregate.status != "OK")
+    # DIRECTOR-CONTROL-PLANE-1B §6: Growth Director sees the recent-feed window ONLY to explain
+    # WHY there is no PerformancePattern evidence yet (e.g. "all recent posts are pre-boundary
+    # legacy/transition content"). derive_growth_director_advisory()'s own contract never lets the
+    # window manufacture a signal/fatigue/amplification entry - PerformancePattern evidence stays
+    # the sole trusted source for those, so legacy VPN engagement is never learned as PULSE
+    # performance (spec §6). launch_context is the SAME one the aggregator already filtered through.
+    growth_launch_context = await get_current_context(session, SocialLaunchPlatform.TELEGRAM)
+    feed_window = await assemble_live_telegram_feed_window(session, launch_context=growth_launch_context)
+    advisory = derive_growth_director_advisory(
+        aggregate.patterns, is_cold_start=aggregate.status != "OK", feed_window=feed_window,
+    )
 
     run: DirectorRun | None = None
     if settings.director_run_persistence_enabled:
@@ -206,7 +225,7 @@ async def run_telegram_growth_director(
         # fingerprint lets a later staleness check (services/director_run_service.py::
         # is_run_context_stale()) detect a launch context change even though this run never reads
         # the context object directly itself.
-        launch_context = await get_current_context(session, SocialLaunchPlatform.TELEGRAM)
+        launch_context = growth_launch_context
         run = await create_director_run(
             session, director_type=DirectorType.TELEGRAM_GROWTH, platform="telegram", generated_at=now,
             input_fingerprint=compute_input_fingerprint(aggregate.total_posts_considered, aggregate.window),
@@ -225,7 +244,19 @@ async def run_instagram_growth_strategist(
     now = now or datetime.now(timezone.utc)
     snapshot = await get_business_context_snapshot(session, now=now)
     contexts = _product_opportunities_from_campaigns(snapshot)
-    strategy = generate_growth_strategy(opportunity_contexts=contexts, directives=list(snapshot.active_directives))
+    # DIRECTOR-CONTROL-PLANE-1B §7: the real Instagram feed context. No Graph API credentials
+    # exist in this environment, so build_instagram_account_context() reports connection_state
+    # "connection_required" -> readiness NOT_CONFIGURED and build_instagram_feed_context(None, ...)
+    # returns an honestly empty, prelaunch-labelled context (never fabricated posts/metrics). This
+    # call site is connection-ready: the moment real credentials + a fetch_recent_media()
+    # implementation exist, only `raw_media` changes here - the Director wiring is already done.
+    ig_account = await build_instagram_account_context(session, now=now)
+    ig_readiness = resolve_instagram_readiness_state(ig_account)
+    ig_launch_context = await get_current_context(session, SocialLaunchPlatform.INSTAGRAM)
+    feed_context = build_instagram_feed_context(None, readiness_state=ig_readiness, launch_context=ig_launch_context)
+    strategy = generate_growth_strategy(
+        opportunity_contexts=contexts, directives=list(snapshot.active_directives), feed_context=feed_context,
+    )
 
     run: DirectorRun | None = None
     if settings.director_run_persistence_enabled:
