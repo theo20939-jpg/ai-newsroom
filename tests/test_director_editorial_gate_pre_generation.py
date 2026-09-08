@@ -1,73 +1,56 @@
 """DIRECTOR-CONTROL-PLANE-1A §33-34: required pre-generation-gate + shadow-mode tests against the
 REAL run_content_cycle() loop. Reuses tests/test_content_worker_cycle.py's own established real-
-Postgres/fake-LLMGateway technique (independent_session_factory(), _real_capability_registry()) -
-imported, not duplicated. Small per-test fixtures duplicated per this codebase's own convention of
-never sharing pytest fixtures across test modules."""
+Postgres/fake-LLMGateway technique wholesale: `factory`, `test_source` (with its battle-hardened
+child-table teardown - these tests run real content generation, which writes
+news_event_article_acquisitions/stories/... rows a naive teardown would orphan) and
+`_isolated_freshness_window` are IMPORTED from that module, not re-implemented, so this file can
+never drift behind a newly-added FK-referencing table. Only `_gate_enabled` (specific to this
+phase) is defined locally."""
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
-from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.config import settings
-from database.models.content_draft import ContentDraft
-from database.models.director_editorial_decision import DirectorEditorialDecision
-from database.models.editorial_task import EditorialTask
+from database.models.director_editorial_decision import (
+    DirectorEditorialDecision,
+    EditorialGateReasonCode,
+)
 from database.models.news_event import NewsEvent
-from database.models.news_source import NewsSource, SourceType
-from tests.test_content_worker_cycle import _make_completed_news_analysis_task, _make_event, _real_capability_registry
-from tests.test_triage_orchestrator_claims import independent_session_factory
+from database.models.news_source import NewsSource
+from integrations.llm_gateway.protocol import GenerateResponse
+from integrations.prompts.file_repository import FilePromptRepository
+from schemas.capability import CapabilityUsage
+from services.director_editorial_gate_budget import STAGE_2_DIRECTOR_VERSION_MARKER
+from tests.fakes.fake_gateway import FakeLLMGateway
+from tests.test_content_worker_cycle import (
+    _isolated_freshness_window,  # noqa: F401,F811 - a pytest fixture, reused as a parameter name below
+    _make_completed_news_analysis_task,
+    _make_event,
+    _real_capability_registry,
+    factory,  # noqa: F401,F811 - a pytest fixture, reused as a parameter name below
+    test_source,  # noqa: F401,F811 - a pytest fixture, reused as a parameter name below
+)
 from worker.content_cycle import run_content_cycle
 
 _PROMPTS_ROOT_PATH = Path("prompts")
 
 
-@pytest_asyncio.fixture
-async def factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
-    engine, session_factory = independent_session_factory()
-    yield session_factory
-    await engine.dispose()
-
-
-@pytest_asyncio.fixture
-async def test_source(factory: async_sessionmaker[AsyncSession]) -> AsyncIterator[NewsSource]:
-    unique_name = f"director-gate-pregeneration-test-{uuid4()}"
-    async with factory() as session:
-        source = NewsSource(name=unique_name, type=SourceType.RSS, active=True)
-        session.add(source)
-        await session.commit()
-
-    try:
-        yield source
-    finally:
-        async with factory() as session:
-            event_ids = (
-                await session.execute(select(NewsEvent.id).where(NewsEvent.source_id == source.id))
-            ).scalars().all()
-            if event_ids:
-                await session.execute(delete(ContentDraft).where(ContentDraft.task_id.in_(
-                    select(EditorialTask.id).where(EditorialTask.event_id.in_(event_ids))
-                )))
-                await session.execute(delete(EditorialTask).where(EditorialTask.event_id.in_(event_ids)))
-                await session.execute(delete(DirectorEditorialDecision).where(DirectorEditorialDecision.event_id.in_(event_ids)))
-                await session.execute(delete(NewsEvent).where(NewsEvent.id.in_(event_ids)))
-            await session.execute(delete(NewsSource).where(NewsSource.id == source.id))
-            await session.commit()
-
-
-@pytest_asyncio.fixture
-async def _isolated_freshness_window() -> AsyncIterator[None]:
-    original = settings.content_generation_freshness_cutoff_hours
-    settings.content_generation_freshness_cutoff_hours = 0.05
-    try:
-        yield
-    finally:
-        settings.content_generation_freshness_cutoff_hours = original
+def _stage2_response(decision: str, reason_codes: list[str], short_reason: str) -> GenerateResponse:
+    return GenerateResponse(
+        text=None,
+        structured_output={
+            "decision": decision, "reason_codes": reason_codes,
+            "short_reason": short_reason, "confidence": 0.7,
+        },
+        finish_reason="stop", model_used="fake-gate-director-v1",
+        usage=CapabilityUsage(input_tokens=200, output_tokens=40),
+    )
 
 
 @pytest_asyncio.fixture
@@ -91,7 +74,7 @@ async def _make_event_with_content(
 
 @pytest.mark.asyncio
 async def test_gate_off_preserves_existing_pipeline_behavior_but_still_persists_decision(
-    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None,
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None,  # noqa: F811
 ) -> None:
     """Spec §7/§34: OFF -> normal queue unchanged, but a real DirectorEditorialDecision is still
     persisted (shadow, never suppressed)."""
@@ -120,7 +103,7 @@ async def test_gate_off_preserves_existing_pipeline_behavior_but_still_persists_
 
 @pytest.mark.asyncio
 async def test_gate_on_hold_prevents_content_generation(
-    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None,
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None,  # noqa: F811
     _gate_enabled: None,
 ) -> None:
     """Spec §33: HOLD -> content generator NOT CALLED. An event that IS eligible (has a completed
@@ -146,7 +129,7 @@ async def test_gate_on_hold_prevents_content_generation(
 
 @pytest.mark.asyncio
 async def test_gate_on_send_to_editor_continues_normal_generation(
-    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None,
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None,  # noqa: F811
     _gate_enabled: None,
 ) -> None:
     """Spec §33: SEND_TO_EDITOR -> normal generation continues."""
@@ -168,7 +151,7 @@ async def test_gate_on_send_to_editor_continues_normal_generation(
 
 @pytest.mark.asyncio
 async def test_gate_llm_unavailable_does_not_collapse_the_pipeline(
-    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None,
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None,  # noqa: F811
     _gate_enabled: None,
 ) -> None:
     """Spec §6/§33: a gate evaluation failure (simulated here as build_gate_input_for_event raising)
@@ -188,3 +171,124 @@ async def test_gate_llm_unavailable_does_not_collapse_the_pipeline(
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     assert result.completed == 1  # generation still happened - fail-open, queue never collapsed
+
+
+# --------------------------------------------------------------------------------------------------
+# DIRECTOR-CONTROL-PLANE-1B §2-4/§14: bounded, real, fail-soft Stage 2 Director judgment
+# --------------------------------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def _gate_llm_budget_zero() -> AsyncIterator[None]:
+    original = settings.director_editorial_gate_max_llm_reviews_per_day
+    settings.director_editorial_gate_max_llm_reviews_per_day = 0
+    try:
+        yield
+    finally:
+        settings.director_editorial_gate_max_llm_reviews_per_day = original
+
+
+async def _seed_escalation_worthy_event(session: AsyncSession, source: NewsSource) -> NewsEvent:
+    """An eligible event with a completed NEWS_ANALYSIS task and real content. Against an empty
+    feed its category is absent from the feed topic distribution -> Stage 1 attaches FEED_GAP_FILL
+    -> is_escalation_worthy() is True, so Stage 2 is actually reached."""
+    event = await _make_event_with_content(
+        session, source, published_at=datetime.now(timezone.utc),
+        content="Substantial real article content about a genuinely ambiguous AI industry development.",
+    )
+    await _make_completed_news_analysis_task(session, event, score=settings.content_generation_min_score)
+    return event
+
+
+@pytest.mark.asyncio
+async def test_stage2_real_director_judgment_is_applied_and_marked(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None,  # noqa: F811
+) -> None:
+    """Spec §2/§14: when a real gateway is threaded through and the candidate is escalation-worthy,
+    the persisted decision is the Director LLM's, and its row is marked v1-llm so the daily budget
+    counts it."""
+    async with factory() as session:
+        event = await _seed_escalation_worthy_event(session, test_source)
+
+    _gateway, registry = _real_capability_registry()
+    fake_bot = AsyncMock()
+    gate_gateway = FakeLLMGateway(generate_response=_stage2_response(
+        "priority", ["campaign_relevant", "major_industry_event"], "Genuinely strategic - prioritize.",
+    ))
+
+    result = await run_content_cycle(
+        registry, fake_bot, session_factory=factory,
+        gate_gateway=gate_gateway, gate_prompt_repository=FilePromptRepository(_PROMPTS_ROOT_PATH),
+    )
+
+    assert result.gate_stage2_llm_used == 1
+    assert result.gate_stage2_fell_back == 0
+    assert len(gate_gateway.received_requests) == 1  # exactly one paid call, not one per raw item
+
+    async with factory() as session:
+        decision = (await session.execute(
+            select(DirectorEditorialDecision).where(DirectorEditorialDecision.event_id == event.id)
+        )).scalar_one()
+    assert decision.director_version == STAGE_2_DIRECTOR_VERSION_MARKER
+    assert decision.decision.value == "priority"
+
+
+@pytest.mark.asyncio
+async def test_stage2_provider_failure_falls_soft_back_to_stage1(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None,  # noqa: F811
+) -> None:
+    """Spec §4: a Gateway failure -> deterministic Stage 1 outcome, pipeline continues, and the
+    row records the fallback provenance. Never DROP-everything."""
+    async with factory() as session:
+        event = await _seed_escalation_worthy_event(session, test_source)
+
+    _gateway, registry = _real_capability_registry()
+    fake_bot = AsyncMock()
+    gate_gateway = FakeLLMGateway(generate_error=RuntimeError("simulated provider outage"))
+
+    result = await run_content_cycle(
+        registry, fake_bot, session_factory=factory,
+        gate_gateway=gate_gateway, gate_prompt_repository=FilePromptRepository(_PROMPTS_ROOT_PATH),
+    )
+
+    assert result.completed == 1  # pipeline did not collapse
+    assert result.gate_stage2_fell_back == 1
+    assert result.gate_stage2_llm_used == 0
+    assert result.gate_send_to_editor + result.gate_priority + result.gate_breaking == 1  # Stage 1 still reached the editor
+
+    async with factory() as session:
+        decision = (await session.execute(
+            select(DirectorEditorialDecision).where(DirectorEditorialDecision.event_id == event.id)
+        )).scalar_one()
+    assert decision.director_version == STAGE_2_DIRECTOR_VERSION_MARKER  # an attempt was made - counts against the bound
+    assert EditorialGateReasonCode.LLM_UNAVAILABLE_FALLBACK.value in decision.reason_codes
+
+
+@pytest.mark.asyncio
+async def test_stage2_daily_budget_exhausted_uses_stage1_without_a_paid_call(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource, _isolated_freshness_window: None,  # noqa: F811
+    _gate_llm_budget_zero: None,
+) -> None:
+    """Spec §3: budget exhausted -> Stage 1 result, and no Gateway call is even attempted."""
+    async with factory() as session:
+        event = await _seed_escalation_worthy_event(session, test_source)
+
+    _gateway, registry = _real_capability_registry()
+    fake_bot = AsyncMock()
+    gate_gateway = FakeLLMGateway(generate_error=AssertionError("no paid call may be made when the daily budget is exhausted"))
+
+    result = await run_content_cycle(
+        registry, fake_bot, session_factory=factory,
+        gate_gateway=gate_gateway, gate_prompt_repository=FilePromptRepository(_PROMPTS_ROOT_PATH),
+    )
+
+    assert result.completed == 1
+    assert result.gate_stage2_budget_exhausted == 1
+    assert result.gate_stage2_llm_used == 0
+    assert gate_gateway.received_requests == []
+
+    async with factory() as session:
+        decision = (await session.execute(
+            select(DirectorEditorialDecision).where(DirectorEditorialDecision.event_id == event.id)
+        )).scalar_one()
+    assert decision.director_version == "v1"  # never marked as an LLM review - budget protected it

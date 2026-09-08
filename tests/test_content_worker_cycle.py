@@ -210,6 +210,20 @@ async def test_source(factory: async_sessionmaker[AsyncSession]) -> AsyncIterato
                 await session.execute(delete(ContentDraft).where(ContentDraft.id.in_(content_draft_ids)))
                 await session.execute(delete(EditorialTask).where(EditorialTask.event_id.in_(event_ids)))
 
+                # DIRECTOR-CONTROL-PLANE-1A/1B: director_editorial_decisions has no FK on event_id
+                # (database/models/director_editorial_decision.py: "no FK by convention"), so a
+                # leftover row never breaks the NewsEvent delete below - but run_pre_generation_gate()
+                # writes one real row per event during these tests, and an unscoped
+                # select(DirectorEditorialDecision) in a later test would otherwise see every prior
+                # test's rows (and the Stage 2 daily-budget counter would drift across the session).
+                # Guarded-delete like the blocks around it so the fixture still works pre-migration.
+                if await _table_exists(session, "director_editorial_decisions"):
+                    from database.models.director_editorial_decision import DirectorEditorialDecision
+
+                    await session.execute(
+                        delete(DirectorEditorialDecision).where(DirectorEditorialDecision.event_id.in_(event_ids))
+                    )
+
                 if story_ids and await _table_exists(session, "stories"):
                     from database.models.story import Story
 

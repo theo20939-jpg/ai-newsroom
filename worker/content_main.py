@@ -44,6 +44,10 @@ async def _run_enabled_loop() -> None:
             await run_content_cycle(
                 ai_layer.capability_registry, bot,
                 cost_tracker=ai_layer.cost_tracker, pricing_catalog=pricing_catalog,
+                # DIRECTOR-CONTROL-PLANE-1B §2: the real AI layer, threaded through to the
+                # pre-generation Editorial Gate's bounded Stage 2 Director judgment. Same objects
+                # constructed once above alongside the capability registry - no extra assembly.
+                gate_gateway=ai_layer.gateway, gate_prompt_repository=prompt_repository,
             )
         except Exception:
             logger.exception("content_cycle_failed")

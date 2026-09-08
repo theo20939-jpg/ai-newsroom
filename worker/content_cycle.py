@@ -91,7 +91,13 @@ from services.story_telegram_delivery import (
     persist_reply_routing_proposal,
     record_delivery,
 )
-from services.director_editorial_gate_shadow import reaches_editor_queue, run_pre_generation_gate
+from services.director_editorial_gate_shadow import (
+    STAGE2_BUDGET_EXHAUSTED as GATE_STAGE2_BUDGET_EXHAUSTED,
+    STAGE2_FAILED_FELL_BACK as GATE_STAGE2_FAILED_FELL_BACK,
+    STAGE2_USED as GATE_STAGE2_USED,
+    reaches_editor_queue,
+    run_pre_generation_gate,
+)
 from services.telegram_channel_director_shadow import run_channel_director_shadow
 from services.telegram_notifier import send_editorial_card, to_editorial_card
 from services.telegram_routing import (
@@ -662,6 +668,15 @@ class ContentCycleResult:
     # telegram_editorial_gate_enabled was True and the gate decided DROP/HOLD. Always 0 while the
     # flag is False (spec §7's own "OFF -> normal Founder NEWS queue remains unchanged" contract).
     gate_generation_suppressed: int = 0
+    # DIRECTOR-CONTROL-PLANE-1B §2-4/§22: bounded Stage 2 (real Director LLM) observability.
+    # gate_stage2_llm_used counts escalation-worthy candidates that got a real Gateway-backed
+    # judgment; gate_stage2_fell_back counts ones where the provider failed and the Stage 1
+    # deterministic outcome was kept (fail-soft); gate_stage2_budget_exhausted counts ones the
+    # daily director_editorial_gate_max_llm_reviews_per_day bound turned away. All 0 unless a real
+    # gateway was threaded through (worker/content_main.py's live call site).
+    gate_stage2_llm_used: int = 0
+    gate_stage2_fell_back: int = 0
+    gate_stage2_budget_exhausted: int = 0
 
 
 def _fact_safety_delivery_decision(
@@ -920,6 +935,14 @@ async def run_content_cycle(
     pricing_catalog: PricingCatalog | None = None,
     event_ids_override: list[UUID] | None = None,
     precomputed_outcomes: dict[UUID, ContentGenerationOutcome] | None = None,
+    # DIRECTOR-CONTROL-PLANE-1B §2: the real LLMGateway + PromptRepository, threaded straight
+    # through to services/director_editorial_gate_shadow.py::run_pre_generation_gate() for its
+    # bounded Stage 2 Director judgment. Deliberately typed `object | None` here (never the real
+    # protocol types) so this module still imports NOTHING from integrations.llm_gateway.* -
+    # test_i_content_cycle_module_imports_no_llm_gateway_or_capability_execution's own structural
+    # boundary. `None` (every test that does not opt in) -> Stage-1-only gate, unchanged behavior.
+    gate_gateway: object | None = None,
+    gate_prompt_repository: object | None = None,
 ) -> ContentCycleResult:
     """`event_ids_override` (Phase V2.6 §3): when provided, replaces the normal
     `_select_eligible_events()` scan entirely - the loop below still runs its exact, unmodified
@@ -1018,7 +1041,10 @@ async def run_content_cycle(
         gate_evaluation = None
         try:
             async with session_factory() as gate_session:
-                gate_evaluation = await run_pre_generation_gate(gate_session, event_id, now=datetime.now(timezone.utc))
+                gate_evaluation = await run_pre_generation_gate(
+                    gate_session, event_id, now=datetime.now(timezone.utc),
+                    gateway=gate_gateway, prompt_repository=gate_prompt_repository,
+                )
                 await gate_session.commit()
         except Exception:
             logger.warning("director_editorial_gate failed (fail-open, generation proceeds)", exc_info=True)
@@ -1028,6 +1054,12 @@ async def run_content_cycle(
             result.gate_cheap_prefilter_passed += 1
             if gate_evaluation.escalation_worthy:
                 result.gate_director_reviewed += 1
+            if gate_evaluation.stage2_status == GATE_STAGE2_USED:
+                result.gate_stage2_llm_used += 1
+            elif gate_evaluation.stage2_status == GATE_STAGE2_FAILED_FELL_BACK:
+                result.gate_stage2_fell_back += 1
+            elif gate_evaluation.stage2_status == GATE_STAGE2_BUDGET_EXHAUSTED:
+                result.gate_stage2_budget_exhausted += 1
             decision = gate_evaluation.outcome.decision
             if decision == EditorialGateDecision.DROP:
                 result.gate_drop += 1
