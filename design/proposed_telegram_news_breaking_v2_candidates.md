@@ -1,7 +1,11 @@
-# Proposed CANDIDATE specs — telegram_news v2 / telegram_breaking v2
+# telegram_news v2 / telegram_breaking v2 — Founder-approved, applied
 
-Status: **FOUNDER REVIEW REQUIRED. Not applied. No DB row created (VISUAL-RENDERER-
-RECONCILIATION-1 §19 forbids DB mutation this phase).** This document is the reviewable diff.
+Status: **APPROVED by the Founder and ACTIVATED (VISUAL-SPEC-V2-ACTIVATION-1).**
+Applied via the canonical registry lifecycle by `scripts/activate_visual_spec_v2.py`
+(`create_candidate_spec()` → `promote_candidate()`); v1 rows are SUPERSEDED by the lifecycle,
+never edited in place. Applied to the **development control-plane DB only** — the production
+control-plane DB is untouched (a later, explicitly-authorized deploy step replays the same
+idempotent script against it). The original reviewable diff follows unchanged for the record.
 
 ## Why
 
