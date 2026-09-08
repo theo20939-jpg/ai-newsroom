@@ -16,8 +16,8 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, String, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, DateTime, Enum, Integer, String, Text, func
+from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database.base import Base
@@ -58,6 +58,38 @@ class InstagramAccount(Base):
     # caution applies identically here).
     analytics_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # DIRECTOR-CONTROL-PLANE-1C §13/§16/§19: non-secret profile-presentation + read-health metadata
+    # cached from the last successful official read, so /accounts and the Directors can see the
+    # real account state WITHOUT this table having any live-network side effect (§19: /accounts
+    # performs 0 network calls). None of these is a secret: there is deliberately NO token / app-
+    # secret column anywhere on this model (§7/§24 - the token lives only in settings.SecretStr and
+    # is never persisted). Every column is nullable and additive (migration 4a1b7c9d2e3f).
+    #
+    # Why a migration was needed (§27): the pre-1C table stored only identity (ig_user_id/username)
+    # + connection_state + last_sync_at. It had NO column for profile presentation (biography,
+    # profile_picture_url, account_type), audience counts, per-capability detection results, or
+    # read-health (last_successful_read_at / last_read_error / token status). §13 requires the
+    # first group to reach Directors from cache and §19 requires all of it to render in /accounts
+    # without a live call - neither is representable in the existing schema, and no generic
+    # account-metadata store exists to reuse.
+    biography: Mapped[str | None] = mapped_column(Text, nullable=True)
+    profile_picture_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    account_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    followers_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    follows_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    media_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_successful_read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # A short, curated, token-free string (InstagramReadError.code + safe detail) - never a raw
+    # provider body.
+    last_read_error: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    # "VALID" | "EXPIRED" | "UNKNOWN" - derived from settings.instagram_access_token_expires_at,
+    # never from the token itself.
+    access_token_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    access_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # {"read_profile": "AVAILABLE", "read_media": "AVAILABLE", "read_insights": "UNAVAILABLE"} -
+    # populated from a REAL probe by services/instagram_connection_service.py, never assumed (§14).
+    capabilities: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

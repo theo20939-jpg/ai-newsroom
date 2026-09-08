@@ -1,4 +1,5 @@
 """Centralized application configuration loaded from environment variables."""
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -1162,13 +1163,33 @@ class Settings(BaseSettings):
     weekly_recap_adjacent_min_score: int = Field(default=70, ge=0, le=100)
     weekly_recap_adjacent_min_significance: float = Field(default=5.0, ge=0.0, le=10.0)
 
-    # DIRECTOR-CONTROL-PLANE-1 §6: Instagram Graph API adapter config - mirrors telegram_bot_token's
-    # own SecretStr pattern exactly. Both None by default (spec §6's own "do not invent credentials,
-    # do not hardcode tokens" instruction) - services/instagram_graph_adapter.py::is_configured()
-    # is False whenever either is unset, and every real caller reports CONNECTION_REQUIRED rather
-    # than fabricating a connected state.
+    # DIRECTOR-CONTROL-PLANE-1 §6 / 1C §7: Instagram API with Instagram Login (Business Login for
+    # Instagram) config - the OFFICIAL direct-Instagram OAuth route that replaced the deprecated
+    # Instagram Basic Display API. Mirrors telegram_bot_token's own SecretStr pattern exactly.
+    #   instagram_access_token          - the long-lived Instagram User access token (SecretStr;
+    #                                     the ONLY secret here). Scopes: instagram_business_basic
+    #                                     (profile+media) and, optionally, instagram_business_
+    #                                     manage_insights. NO write scopes are requested or used.
+    #   instagram_business_account_id   - the numeric IG user id the token authorizes (`/me` id).
+    # Both None by default (1C §7 "do not hardcode tokens") - services/instagram_account_reader.py
+    # ::is_configured() is False whenever either is unset, and every caller reports NOT_CONFIGURED
+    # rather than fabricating a connected state. 1C adds NO app-id/app-secret: the interactive
+    # OAuth token exchange / refresh is an operational flow documented in
+    # design/instagram_official_api.md, never automated with secrets in this phase (1C §16).
     instagram_access_token: SecretStr | None = None
     instagram_business_account_id: str | None = None
+    # DIRECTOR-CONTROL-PLANE-1C §9: the configured expected handle for identity verification. A
+    # connection whose returned username does not match this (when set) is ERROR / IDENTITY_MISMATCH,
+    # never silently accepted. Non-secret. Leading '@' tolerated.
+    instagram_expected_username: str | None = None
+    # DIRECTOR-CONTROL-PLANE-1C §28: pinned Graph API host + version - a version bump is a one-line
+    # config change, never an inline literal in the adapter ("do not freeze obsolete assumptions").
+    instagram_graph_base_url: str = "https://graph.instagram.com"
+    instagram_api_version: str = "v23.0"
+    # DIRECTOR-CONTROL-PLANE-1C §16: operator-supplied long-lived-token expiry, surfaced by
+    # /accounts as TOKEN_EXPIRY_AT / TOKEN_STATUS. Non-secret (a timestamp, never the token). The
+    # adapter never performs autonomous token refresh - see design/instagram_official_api.md.
+    instagram_access_token_expires_at: datetime | None = None
 
     # DIRECTOR-CONTROL-PLANE-1 §8/§12: the ONE new enforcement flag this phase introduces - gates
     # only whether services/director_editorial_gate.py's decision actually withholds DROP/HOLD
