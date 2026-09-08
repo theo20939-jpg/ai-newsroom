@@ -225,72 +225,71 @@ def derive_master_news_render_evidence(
 
 
 def derive_breaking_render_evidence(source_image_bytes: bytes | None) -> RenderEvidence:
-    """BREAKING production path (`render_branded_media` -> `render_breaking_frame`). The source is
-    composited at its NATIVE size (no fit / crop) -> `source_image_treatment=preserve`. The mark
-    is bottom-right (`_paste_svg_mark`, fixed margin `max(16, round(w*0.02))`). This template draws
-    no pulse/accent line, so `placement_zone` is genuinely not applicable.
+    """BREAKING production path (`render_branded_media` -> `render_breaking_frame`), corrected in
+    VISUAL-RENDERER-RECONCILIATION-1: the retired ~22% dark-gradient lower-third band + baked
+    "BREAKING" wordmark + red accent rule are GONE. BREAKING now composites the source at its
+    NATIVE size (no fit / crop -> `source_image_treatment=preserve`) with the exact MASTER NEWS
+    single lower signature (`select_master_news_branding()` on the native photo - one thin line +
+    pulse + exactly one canonical NNJ mark, adaptive safe-corner placement, single-brand-mark
+    invariant). This deriver REPLAYS that same helper.
 
-    DESIGN-SPEC-ENFORCEMENT-1 addendum §1 - `scrim_treatment` is MEASURED, not hidden:
-    `render_breaking_frame` UNCONDITIONALLY composites a bottom dark-gradient band
-    (`_BREAKING_BAND_HEIGHT_FRAC` = 0.22 of the canvas height, alpha ramping 0 ->
-    `_BREAKING_BAND_MAX_ALPHA`/255 = 0.82 at the frame bottom) that carries a baked "BREAKING"
-    banner + a red accent rule. Covering ~22% of the frame at up to 82% opacity IS a strong scrim
-    by any reading of the ScrimTreatment vocabulary. It contradicts (a) the ACTIVE telegram_breaking
-    v1 (`scrim_treatment=none`) and (b) docs/nnj_editorial_visual_system_v1.md, which states the
-    "dark-gradient band + 'BREAKING' text banner is retired - not approved against the real
-    prototype" and that BREAKING should be "the SAME minimal family as NEWS". This deriver reports
-    it truthfully as `scrim_treatment=strong` so SPEC_MATCH raises a real `SPEC_SCRIM_MISMATCH`
-    (soft REWORK) and DESIGN-SPEC-ENFORCEMENT-1 stays PARTIAL. The fix is a narrow future
-    `render_breaking_frame()` correction (drop the band + baked banner, adopt the NEWS pulse-line
-    family), NOT part of this enforcement phase."""
+    `scrim_treatment` is now genuinely `none` - the corrected renderer composites no band/scrim of
+    any kind over the source. `placement_zone` is NOT_MEASURED but APPLICABLE (the founder
+    telegram_breaking v1 declares placement_zone=lower_left, wrongly derived from the retired two-
+    corner render_news_hero note - the same discrepancy as NEWS): the fused NEWS-family signature
+    exposes no independent accent placement, so BREAKING SPEC_MATCH is PARTIAL_EVIDENCE with that
+    one field named, pending the founder-review `telegram_breaking v2` correction. font/line
+    params do not apply (BREAKING bakes no editorial typography)."""
     from PIL import Image
 
-    from services.brand_renderer import _BREAKING_BAND_HEIGHT_FRAC, _BREAKING_BAND_MAX_ALPHA, _CARD_HEIGHT, _CARD_WIDTH
+    from services.brand_renderer import _CARD_HEIGHT, _CARD_WIDTH
+    from services.nnj_master_news_overlay import _SAFE_INSET_FRAC, ComponentPlacement, select_master_news_branding
 
     if source_image_bytes is not None:
         with Image.open(io.BytesIO(source_image_bytes)) as im:
             canvas_w, canvas_h = im.width, im.height
+            decision = select_master_news_branding(im.convert("RGBA"))
+        placed = [
+            p for p in (decision.lower_signature.placement, decision.upper_mark.placement)
+            if p is not ComponentPlacement.OMITTED
+        ]
+        logo_count = len(placed)
+        logo_zone = _zone(placed[0]) if placed else NOT_MEASURED
         src_present = True
     else:
         canvas_w, canvas_h = _CARD_WIDTH, _CARD_HEIGHT
-        src_present = False
-
-    margin_px = max(16, round(canvas_w * 0.02))
-    peak_opacity = _BREAKING_BAND_MAX_ALPHA / 255
-    # Classify the real band: >=0.22 frame coverage at >=0.6 peak opacity is unambiguously "strong".
-    band_scrim = ScrimState.STRONG.value if (_BREAKING_BAND_HEIGHT_FRAC >= 0.15 and peak_opacity >= 0.5) else ScrimState.LIGHT.value
+        logo_count, logo_zone, src_present = 1, "lower_right", False
 
     notes = {
-        "scrim_treatment": (
-            f"MEASURED from render_breaking_frame: unconditional bottom dark-gradient band, "
-            f"{_BREAKING_BAND_HEIGHT_FRAC:.0%} of canvas height, peak opacity {peak_opacity:.0%}, "
-            f"carrying a baked 'BREAKING' banner + red accent rule. Contradicts ACTIVE "
-            f"telegram_breaking v1 (scrim_treatment=none) and the accepted visual-system doc "
-            f"(band retired, BREAKING = NEWS minimal family). -> SPEC_SCRIM_MISMATCH, phase PARTIAL."
+        "placement_zone": (
+            "MEASUREMENT GAP: BREAKING now uses the MASTER NEWS fused lower signature (line + pulse "
+            "+ one mark); no independent accent-placement decision exists to read. The founder "
+            "telegram_breaking v1 placement_zone=lower_left is the same wrongly-derived parameter as "
+            "NEWS - see the telegram_breaking v2 candidate proposal."
         ),
-        "placement_zone": "NOT APPLICABLE: render_breaking_frame draws no pulse/accent line",
-        "primary_font_size": "NOT APPLICABLE: the baked 'BREAKING'/code labels are template chrome, not spec-governed editorial typography",
+        "primary_font_size": "NOT APPLICABLE: BREAKING bakes no editorial typography (band + wordmark removed)",
+        "actual_line_count": "NOT APPLICABLE: BREAKING bakes no editorial typography",
     }
     if not src_present:
-        notes["source_image_treatment"] = "no source photo supplied - BREAKING rendered its solid fallback card; nothing to preserve or destroy"
+        notes["source_image_treatment"] = "no source photo supplied - BREAKING rendered its minimal solid card + one mark; nothing to preserve or destroy"
 
     return RenderEvidence(
         presentation_type="BREAKING",
-        renderer_variant="brand_renderer.render_breaking_frame",
-        renderer_version="pulse-breaking-v1",
+        renderer_variant="brand_renderer.render_breaking_frame -> nnj_master_news_overlay.select_master_news_branding",
+        renderer_version="pulse-breaking-v2",
         canvas_width=canvas_w,
         canvas_height=canvas_h,
-        safe_margin_frac=round(margin_px / canvas_w, 5),
-        logo_count=1,
-        logo_zone="lower_right",
+        safe_margin_frac=round(float(_SAFE_INSET_FRAC), 5),
+        logo_count=logo_count,
+        logo_zone=logo_zone,
         placement_zone=NOT_MEASURED,
-        scrim_applied=True,
-        scrim_treatment=band_scrim,
+        scrim_applied=False,
+        scrim_treatment=ScrimState.NONE.value,
         source_image_treatment=SourceTreatment.PRESERVE.value,
         source_preserved=True,
         presentation_mode=NOT_MEASURED,
         text_clipped=False,
-        not_applicable_fields=frozenset({"placement_zone", "primary_font_size", "secondary_font_size", "actual_line_count"}),
+        not_applicable_fields=frozenset({"primary_font_size", "secondary_font_size", "actual_line_count"}),
         notes=notes,
     )
 
