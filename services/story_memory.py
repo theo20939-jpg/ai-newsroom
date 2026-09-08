@@ -384,8 +384,12 @@ def _tokens(entity: str) -> set[str]:
     return {t for t in entity.split(" ") if t}
 
 
-# An explicit release/version token in a headline: "v0.32.3", "1.3", "17", "2026.1", "r2".
-_VERSION_TOKEN_RE = re.compile(r"\bv?\d+(?:\.\d+)+\b|\bv\d+\b|\br\d+\b", re.IGNORECASE)
+# An explicit release/version/edition token: "v0.32.3", "1.3", "2026.1", "r2", or a bare 4-digit
+# calendar year ("International Coding Olympiad 2025" vs "2026" is a different edition, not a
+# duplicate).
+_VERSION_TOKEN_RE = re.compile(
+    r"\bv?\d+(?:\.\d+)+\b|\bv\d+\b|\br\d+\b|\b(?:19|20)\d{2}\b", re.IGNORECASE
+)
 
 
 def _release_version_tokens(text: str) -> set[str]:
@@ -425,11 +429,31 @@ def _version_incompatible(new_distinctive: set[str], cand_distinctive: set[str])
     return any(_tokens(a) & _tokens(b) for a in new_distinctive for b in cand_distinctive)
 
 
+def _distinctive_match_keys(distinctive_entities: set[str]) -> set[str]:
+    """The whole entity string PLUS its own significant constituent tokens (>=4 chars, not
+    generic, not a mega-org) - so a distinctive run captured whole on one side ("openai zephyr
+    copilot", because three capitalized words were adjacent) still overlaps with the same product
+    captured split on the other ("zephyr copilot" + "openai") via the shared {zephyr, copilot}."""
+    keys: set[str] = set()
+    for e in distinctive_entities:
+        keys.add(e)
+        toks = _tokens(e)
+        if len(toks) > 1:
+            keys |= {
+                t for t in toks
+                if len(t) >= 4 and not _is_generic_token(t) and t not in _SUPPORTING_ORG_ENTITIES
+            }
+    return keys
+
+
 def compute_entity_evidence(new_entities: list[str], candidate_entities: list[str]) -> EntityEvidence:
     """Pure. The component-tiered replacement for a flat entity Jaccard - see EntityEvidence."""
     new_c = _classified_entities(new_entities)
     cand_c = _classified_entities(candidate_entities)
-    d = _jaccard(new_c[ENTITY_DISTINCTIVE], cand_c[ENTITY_DISTINCTIVE])
+    d = _jaccard(
+        _distinctive_match_keys(new_c[ENTITY_DISTINCTIVE]),
+        _distinctive_match_keys(cand_c[ENTITY_DISTINCTIVE]),
+    )
     s = _jaccard(new_c[ENTITY_SUPPORTING], cand_c[ENTITY_SUPPORTING])
     g = _jaccard(new_c[ENTITY_GENERIC], cand_c[ENTITY_GENERIC])
     shared_distinctive = tuple(sorted(new_c[ENTITY_DISTINCTIVE] & cand_c[ENTITY_DISTINCTIVE]))
@@ -1083,13 +1107,21 @@ async def match_story(
     # with almost no extractable named entities but near-syndicated wording (V2.22 "Memory prices"
     # cluster). Never lowers _HIGH_THRESHOLD itself; only adds a second, independent way in.
     if combined >= _HIGH_THRESHOLD or title_overlap >= _NEAR_VERBATIM_TITLE_OVERLAP_THRESHOLD:
-        # STORY-CONTINUITY-P0 (Section 9): a near-identical headline that names a DIFFERENT
-        # explicit release/version is a new release, not a duplicate ("...bedrock-sdk: v0.32.2"
-        # vs "v0.32.3"; "Muse Spark 1.2" vs "1.3"). Do not call it SEMANTIC_DUPLICATE - fall
-        # through to the distinctive-entity / claim logic below, which classifies it as a real
-        # development or, absent a distinctive shared entity, an UNCERTAIN_MATCH.
+        # STORY-CONTINUITY-P0 (Section 9): a headline that names a DIFFERENT explicit
+        # release/version, or a different specific product within the same family ("Muse Voice
+        # Transcribe" vs "Muse Spark 1.3"; "...bedrock-sdk: v0.32.2" vs "v0.32.3"), is a separate
+        # development - never a confident same-Story match however similar the wording. Return
+        # RELATED_STORY so the caller gives it its own Story.
         version_release_split = titles_differ_by_release_version(title, candidate.title)
-        if title_overlap >= _DUPLICATE_TITLE_OVERLAP_THRESHOLD and not version_release_split:
+        if version_release_split or best_ev.version_incompatible:
+            reason = (
+                f"different explicit release/version or a distinct product in the same family "
+                f"(version_release_split={version_release_split}, "
+                f"version_incompatible={best_ev.version_incompatible}, "
+                f"shared_distinctive={best_ev.shared_distinctive}) - a separate development"
+            )
+            return signature, _mk(RELATED_STORY, candidate.id, entity_overlap, reason)
+        if title_overlap >= _DUPLICATE_TITLE_OVERLAP_THRESHOLD:
             reason = (
                 f"near-identical title (title_overlap={title_overlap:.2f}) - same event, "
                 f"likely a different source's coverage (entity_overlap={entity_overlap:.2f}, "

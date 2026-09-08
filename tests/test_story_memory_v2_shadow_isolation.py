@@ -74,9 +74,11 @@ def test_triage_orchestrator_imports_v2_modules_for_logging_diagnostics_only() -
             f"expected services/triage_orchestrator.py to import {module_name} (Phase 23.1P diagnostics)"
         )
     source = Path("services/triage_orchestrator.py").read_text(encoding="utf-8")
-    assert "logger.info(\n        \"phase23_1p_story_memory_v2_diagnostics\"" in source or \
-        "phase23_1p_story_memory_v2_diagnostics" in source, (
-        "V2 outputs must be logged for observability, not silently computed"
+    # STORY-CONTINUITY-P0: the phase23_1p LOGGED-ONLY diagnostics block is superseded by the
+    # persisted-and-logged "story_continuity_decision" path (delta/confidence/would_suppress are
+    # now written to the NewsEventStoryLink row AND emitted in one structured log line).
+    assert "story_continuity_decision" in source, (
+        "V2 outputs must be persisted + logged for observability, not silently computed"
     )
 
 
@@ -110,7 +112,13 @@ def test_only_expected_files_import_the_v2_modules() -> None:
     allowed_prefixes = (
         "services/story_delta_engine.py", "services/story_suppression.py", "services/story_confidence.py",
         "services/story_context_serializer.py", "services/triage_orchestrator.py",
-        "services/story_duplicate_guard.py", "tests/", "scripts/phase20_story_memory_replay.py",
+        "services/story_duplicate_guard.py",
+        # STORY-CONTINUITY-P0: the deterministic continuity classifier consumes the delta/
+        # suppression/confidence outputs to produce ONE actionable outcome. Still never a worker,
+        # capability, or delivery entry point (the three test_*_never_imports_v2_modules above
+        # remain enforced).
+        "services/story_continuity.py",
+        "tests/", "scripts/phase20_story_memory_replay.py",
     )
     offenders: list[str] = []
     for path in Path(".").rglob("*.py"):
@@ -126,12 +134,14 @@ def test_only_expected_files_import_the_v2_modules() -> None:
     assert offenders == [], f"Unexpected importer(s) of Story Memory V2 modules: {offenders}"
 
 
-def test_migration_3c22be05f4e5_is_not_the_alembic_current_head_applied_marker() -> None:
-    """Sanity check on the shadow-neutrality claim itself: the ORM model (database/models/
-    story_link.py) must NOT yet declare the three new columns - see that file's own Phase 20 M10
-    docstring for why (SQLAlchemy includes every mapped column in every INSERT regardless of
-    whether it was explicitly set, so declaring them before the migration is applied would break
-    every real NewsEventStoryLink insert - verified empirically during M10)."""
+def test_v2_shadow_columns_are_declared_now_that_the_migration_is_applied() -> None:
+    """STORY-CONTINUITY-P0 (2026-09): migration 3c22be05f4e5 (delta_classification /
+    confidence_band / would_suppress) is confirmed APPLIED to the production DB (PHASE STORY-
+    MEMORY-V2-2 preflight via information_schema; re-verified this phase against the working DB).
+    The Phase 20 M10 hazard - a mapped column that does not exist in the table breaks every
+    INSERT - no longer applies, so the ORM model now DECLARES these three columns and
+    services/triage_orchestrator.py WRITES them through the canonical NewsEventStoryLink path.
+    They remain diagnostics: no runtime code reads `would_suppress` to drop a send."""
     source = Path("database/models/story_link.py").read_text(encoding="utf-8")
     for identifier in _V2_IDENTIFIERS:
-        assert f"{identifier}: Mapped" not in source, identifier
+        assert f"{identifier}: Mapped" in source, identifier

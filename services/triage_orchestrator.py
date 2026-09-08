@@ -255,6 +255,12 @@ async def _apply_story_memory(session: AsyncSession, event: NewsEvent, report: T
 
     creates_own_story = result.outcome in (NEW_STORY, RELATED_STORY) or (
         result.outcome == UNCERTAIN_MATCH and result.entity_overlap < _OWN_STORY_ENTITY_FLOOR
+    ) or (
+        # STORY-CONTINUITY-P0: an uncertain match whose only shared identity is an
+        # organization/generic token (no distinctive overlap) is not the same story - it gets
+        # its own Story, not even a provisional link.
+        result.outcome == UNCERTAIN_MATCH and result.company_only_match
+        and result.distinctive_overlap == 0.0
     )
 
     if creates_own_story:

@@ -190,14 +190,15 @@ def strip_wire_format_prefix(title: str) -> str:
 
 def normalize_story_identity_title(title: str) -> str:
     """Pure. The one shared identity-normalization pass Story Memory applies to every title
-    before entity/keyword extraction and before title-similarity scoring: strip the Google News
-    publisher suffix, the Russian legal-designation disclaimer, and a leading wire-format label.
-    Deliberately ordered suffix -> legal -> prefix so each regex sees the shape it expects. Never
-    strips ordinary words; every removal is a fixed, closed boilerplate marker. Returns the
-    cleaned title (still human-readable, not casefolded - callers that need casefolding apply
-    normalize_loose() themselves, exactly as before)."""
-    out = strip_google_news_title_suffix(title)
-    out = strip_ru_legal_designation(out)
+    before entity/keyword extraction and before title-similarity scoring: strip the Russian
+    legal-designation disclaimer and a leading wire-format label - both fixed, unambiguous
+    boilerplate phrases. Deliberately does NOT strip the Google News ' - Publisher' suffix: that
+    is shape-only and provenance-gated (a short genuine semantic tail ' - в России' has the same
+    shape), handled by callers that hold real URL provenance (see
+    services/story_delta_engine.py's own docstring on why shape alone is insufficient, and
+    services/triage_orchestrator.py::_apply_story_memory()'s provenance-gated strip). Never
+    strips ordinary words. Returns the cleaned title (human-readable, not casefolded)."""
+    out = strip_ru_legal_designation(title)
     out = strip_wire_format_prefix(out)
     return out.strip() or title.strip()
 

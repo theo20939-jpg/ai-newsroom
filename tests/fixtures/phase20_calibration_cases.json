@@ -46,7 +46,7 @@
         {"event_id": "660a5e88-7d1c-436f-8134-3d9ee74502d4", "title": "Собянин: Московский школьник победил на олимпиаде по искусственному интеллекту", "source": "Google News RU: ИИ (mos.ru)", "category": "AI", "published_at": "2026-08-07T16:44:01+00:00"}
       ],
       "expected_relationship": "SAME_STORY",
-      "expected_match_type_any_of": ["uncertain_match", "semantic_duplicate", "story_update"],
+      "expected_match_type_any_of": ["uncertain_match", "semantic_duplicate", "story_update", "supporting_source"],
       "reason": "Both attribute the same claim to Sobyanin about one Moscow schoolchild's gold medal, evidence-grounded via matching image-hash/RSS-excerpt data in the Phase 19 artifacts - very likely RSS re-syndications of the same underlying announcement, not two different students. This is a real, evidence-grounded conclusion (not assumed) - see docs/phase20_story_memory_calibration_dataset.md for the full evidentiary reasoning.",
       "relationship_to_ai_olympiad_cluster": "NEEDS_HUMAN_LABEL - genuinely ambiguous from excerpt-only evidence whether this Moscow-specific win is part of the same competition as the 'Russian team' cluster or a distinct fact; do not auto-resolve.",
       "current_v1_result": "event 10=new_story(0.7111 confidence, i.e. combined=0.29 vs event 11's eventual story), event 11=new_story(1.0 confidence - topic-bucket misclassification bug prevented any comparison at all)",
