@@ -13,7 +13,7 @@ per event" as a hard database constraint, not just an application-level conventi
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, String, Text, func
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -66,8 +66,23 @@ class NewsEventStoryLink(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    # --- PHASE STORY-MEMORY-V2-2 Phase 1 (2026-09-02) - reserved for the future AI Story Judge,
-    # unread/unwritten by any runtime code this phase (see class docstring above). ---
+    # --- STORY-CONTINUITY-P0 (2026-09): the three Story Memory V2 shadow columns from
+    # database/migrations/versions/3c22be05f4e5_add_story_memory_v2_shadow_columns.py - confirmed
+    # already applied to the production database (see class docstring above; PHASE STORY-MEMORY-
+    # V2-2 preflight verified them present via information_schema). Declared and written now so the
+    # deterministic continuity decision and its delta evidence are persisted through the canonical
+    # NewsEventStoryLink path (no new migration - DELTA_MIGRATION_REQUIRED=false). These are
+    # diagnostics for P1 and observability; no runtime code reads `would_suppress` to drop a send
+    # (services/story_duplicate_guard.py::check_duplicate_story_delivery() is unchanged and still
+    # unconditionally returns blocked=False). ---
+    delta_classification: Mapped[str | None] = mapped_column(String, nullable=True)
+    confidence_band: Mapped[str | None] = mapped_column(String, nullable=True)
+    would_suppress: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+
+    # --- PHASE STORY-MEMORY-V2-2 Phase 1 (2026-09-02), now WRITTEN by STORY-CONTINUITY-P0's
+    # deterministic classifier (distinguished from the future AI Story Judge by
+    # `decision_source = "story_continuity_p0"`; a later Judge phase can key on that to
+    # supersede). ---
     final_decision: Mapped[str | None] = mapped_column(String, nullable=True)
     decision_source: Mapped[str | None] = mapped_column(String, nullable=True)
     decision_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)

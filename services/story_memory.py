@@ -384,6 +384,25 @@ def _tokens(entity: str) -> set[str]:
     return {t for t in entity.split(" ") if t}
 
 
+# An explicit release/version token in a headline: "v0.32.3", "1.3", "17", "2026.1", "r2".
+_VERSION_TOKEN_RE = re.compile(r"\bv?\d+(?:\.\d+)+\b|\bv\d+\b|\br\d+\b", re.IGNORECASE)
+
+
+def _release_version_tokens(text: str) -> set[str]:
+    from services.text_normalization import normalize_loose
+
+    return {m.group(0).lstrip("vVрR").casefold() for m in _VERSION_TOKEN_RE.finditer(normalize_loose(text))}
+
+
+def titles_differ_by_release_version(a: str, b: str) -> bool:
+    """Pure. True when BOTH titles carry an explicit release/version token and the two sets are
+    disjoint - a near-identical headline about "v0.32.2" vs "v0.32.3" (or "Muse Spark 1.2" vs
+    "1.3") is a NEW RELEASE, not a duplicate. False if either side has no version token (so an
+    ordinary same-story pair is completely unaffected)."""
+    va, vb = _release_version_tokens(a), _release_version_tokens(b)
+    return bool(va) and bool(vb) and not (va & vb)
+
+
 def _version_incompatible(new_distinctive: set[str], cand_distinctive: set[str]) -> bool:
     """True when both sides carry a distinctive product/model identity that share a family token
     (e.g. "muse") but name a DIFFERENT specific product ("muse voice transcribe" vs "muse spark
@@ -1064,7 +1083,13 @@ async def match_story(
     # with almost no extractable named entities but near-syndicated wording (V2.22 "Memory prices"
     # cluster). Never lowers _HIGH_THRESHOLD itself; only adds a second, independent way in.
     if combined >= _HIGH_THRESHOLD or title_overlap >= _NEAR_VERBATIM_TITLE_OVERLAP_THRESHOLD:
-        if title_overlap >= _DUPLICATE_TITLE_OVERLAP_THRESHOLD:
+        # STORY-CONTINUITY-P0 (Section 9): a near-identical headline that names a DIFFERENT
+        # explicit release/version is a new release, not a duplicate ("...bedrock-sdk: v0.32.2"
+        # vs "v0.32.3"; "Muse Spark 1.2" vs "1.3"). Do not call it SEMANTIC_DUPLICATE - fall
+        # through to the distinctive-entity / claim logic below, which classifies it as a real
+        # development or, absent a distinctive shared entity, an UNCERTAIN_MATCH.
+        version_release_split = titles_differ_by_release_version(title, candidate.title)
+        if title_overlap >= _DUPLICATE_TITLE_OVERLAP_THRESHOLD and not version_release_split:
             reason = (
                 f"near-identical title (title_overlap={title_overlap:.2f}) - same event, "
                 f"likely a different source's coverage (entity_overlap={entity_overlap:.2f}, "
