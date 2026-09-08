@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from services.telegram_feed_window import TelegramFeedWindow
 from services.telegram_performance_memory import EvidenceStage, PerformancePattern
 
 _ACTIONABLE_STAGES = frozenset({
@@ -43,6 +44,7 @@ class GrowthDirectorAdvisory:
 
 def derive_growth_director_advisory(
     patterns: list[PerformancePattern], *, is_cold_start: bool = False,
+    feed_window: TelegramFeedWindow | None = None,
 ) -> GrowthDirectorAdvisory:
     """Never asserts a promising/fatigued pattern from a single ANOMALY-stage observation (spec
     §26's own anti-overfit requirement, already enforced upstream by
@@ -52,11 +54,23 @@ def derive_growth_director_advisory(
 
     `is_cold_start=True` (spec §5) additionally attaches growth_hypotheses - clearly-labeled
     starting-point measurement/experiment ideas for a platform with zero first-party evidence,
-    never presented as an already-observed pattern."""
+    never presented as an already-observed pattern.
+
+    DIRECTOR-CONTROL-PLANE-1A §13: `feed_window` (optional, None-default) only ever adds an
+    explanatory warning about WHY `patterns` is empty when the real feed has posts but none are
+    performance_learning_eligible yet (spec §10's own legacy-vs-eligible separation) - it never
+    manufactures a signal/fatigue/amplification entry, since PerformancePattern evidence is the
+    only trusted source for those (module docstring's own "NO PUBLICATION AUTHORITY" boundary)."""
     if not patterns:
         hypotheses = list(_DEFAULT_COLD_START_HYPOTHESES) if is_cold_start else []
+        warnings = ["insufficient evidence: no performance patterns available yet"]
+        if feed_window is not None and feed_window.surface_registered and feed_window.posts and not feed_window.learning_eligible_posts:
+            warnings.append(
+                f"real feed has {len(feed_window.posts)} recent posts, all before the learning "
+                "boundary (legacy/transition context only) - this is why no PerformancePattern evidence exists yet"
+            )
         return GrowthDirectorAdvisory(
-            warnings=["insufficient evidence: no performance patterns available yet"], confidence=0.0,
+            warnings=warnings, confidence=0.0,
             first_party_baseline="NONE", growth_hypotheses=hypotheses,
         )
 

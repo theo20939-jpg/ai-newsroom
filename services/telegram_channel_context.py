@@ -24,7 +24,24 @@ from database.models.telegram_surface import TelegramSurface
 
 logger = logging.getLogger(__name__)
 
-_RECENT_POST_LIMIT = 10
+# DIRECTOR-CONTROL-PLANE-1A §11: "recent 10-30 posts" - the upper end of that explicit range, a
+# single bounded Telethon fetch, never every raw message.
+_RECENT_POST_LIMIT = 30
+
+
+def _media_type(message: object) -> str | None:
+    """Coarse, deterministic media-type classification from Telethon's own already-fetched
+    Message object - never a new detector, just attribute presence checks on fields Telethon
+    itself already populates."""
+    if getattr(message, "photo", None) is not None:
+        return "photo"
+    if getattr(message, "video", None) is not None:
+        return "video"
+    if getattr(message, "document", None) is not None:
+        return "document"
+    if getattr(message, "media", None) is not None:
+        return "other"
+    return None
 
 
 def _build_client() -> TelegramClient:
@@ -64,6 +81,8 @@ async def fetch_owned_channel_context(surface: TelegramSurface) -> dict | None:
                 "message_id": message.id,
                 "date": message.date.isoformat() if message.date else None,
                 "has_media": message.media is not None,
+                "media_type": _media_type(message),
+                "text_length": len(message.text) if message.text else 0,
                 "views": message.views,
                 "forwards": message.forwards,
                 "reactions_total": (

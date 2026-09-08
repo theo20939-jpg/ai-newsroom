@@ -11,6 +11,7 @@ from __future__ import annotations
 import enum
 from dataclasses import dataclass, field
 
+from services.instagram_feed_context import InstagramFeedContext
 from services.instagram_objectives import ContentObjective
 
 
@@ -134,28 +135,50 @@ class FormatDecision:
     asset_requirements: list[str] = field(default_factory=list)
     risk: str = "low"
     confidence: float = 0.3
+    warnings: list[str] = field(default_factory=list)
 
 
 def evaluate_format_shadow(
     *, objective: ContentObjective, has_video_asset: bool, has_multi_step_narrative: bool,
+    feed_context: InstagramFeedContext | None = None,
 ) -> FormatDecision:
     """Deterministic, structural evaluator only (no learned model yet - spec §71's own "do not
     default everything to Reels" instruction is enforced here by NEVER recommending REEL merely
-    because it exists; a Reel is only recommended when a real video asset is actually available)."""
+    because it exists; a Reel is only recommended when a real video asset is actually available).
+
+    DIRECTOR-CONTROL-PLANE-1A §13: `feed_context` (optional, None-default - every pre-existing call
+    site is unaffected) only ever appends a `warnings` entry, never changes `recommended_format`
+    (computed before this block, same as every other field) - format repetition is advisory
+    information for a human/future learned model, not an automatic override."""
     if objective in (ContentObjective.SAVES, ContentObjective.COMMENTS) and has_multi_step_narrative:
-        return FormatDecision(
+        decision = FormatDecision(
             recommended_format=ContentFormat.CAROUSEL, alternatives=[ContentFormat.SINGLE],
             why="save/education objective with a multi-step narrative fits a carousel best",
             expected_role="education/reference", risk="low", confidence=0.4,
         )
-    if objective in (ContentObjective.REACH, ContentObjective.FOLLOWS) and has_video_asset:
-        return FormatDecision(
+    elif objective in (ContentObjective.REACH, ContentObjective.FOLLOWS) and has_video_asset:
+        decision = FormatDecision(
             recommended_format=ContentFormat.REEL, alternatives=[ContentFormat.CAROUSEL],
             why="reach/follow objective with a real video asset available", expected_role="discovery",
             risk="medium", confidence=0.4,
         )
-    return FormatDecision(
-        recommended_format=ContentFormat.SINGLE, alternatives=[ContentFormat.CAROUSEL],
-        why="no strong signal for carousel/reel - single post is the safe default",
-        expected_role="general", risk="low", confidence=0.2,
-    )
+    else:
+        decision = FormatDecision(
+            recommended_format=ContentFormat.SINGLE, alternatives=[ContentFormat.CAROUSEL],
+            why="no strong signal for carousel/reel - single post is the safe default",
+            expected_role="general", risk="low", confidence=0.2,
+        )
+
+    if feed_context is not None and feed_context.readiness_state.value != "CONNECTED":
+        return decision
+    if feed_context is not None and feed_context.media_type_distribution:
+        dominant_type, dominant_count = max(feed_context.media_type_distribution.items(), key=lambda kv: kv[1])
+        if dominant_count >= max(3, len(feed_context.posts) // 2):
+            decision = FormatDecision(
+                recommended_format=decision.recommended_format, alternatives=decision.alternatives,
+                why=decision.why, expected_role=decision.expected_role,
+                asset_requirements=decision.asset_requirements, risk=decision.risk,
+                confidence=decision.confidence,
+                warnings=[f"recent feed dominated by media_type={dominant_type!r} ({dominant_count} posts) - consider format variety"],
+            )
+    return decision

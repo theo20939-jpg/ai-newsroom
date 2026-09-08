@@ -85,6 +85,12 @@ class CreativeDirectorInput:
     product_mention_allowed: bool = False
     product_name: str | None = None
     launch_context_note: str = ""
+    # DIRECTOR-CONTROL-PLANE-1A §13: mirrors `launch_context_note`'s own established zero-to-one
+    # wiring - a plain caller-derived text line from the real InstagramFeedContext (services/
+    # instagram_feed_context.py), e.g. "account not yet connected; no first-party feed evidence" or
+    # "recent feed dominated by Reels; a Carousel may stand out." Empty by default so every
+    # pre-existing call site keeps its exact prior prompt text.
+    feed_context_note: str = ""
 
 
 @dataclass(frozen=True)
@@ -129,6 +135,7 @@ def _build_user_text(director_input: CreativeDirectorInput) -> str:
         f"RESTRICTED CLAIMS (never use): {director_input.restricted_claims}\n"
         f"PRODUCT_MENTION_ALLOWED: {director_input.product_mention_allowed}\n"
         f"LAUNCH CONTEXT: {director_input.launch_context_note or '(established account - no launch context)'}\n"
+        f"FEED CONTEXT: {director_input.feed_context_note or '(no real feed context available)'}\n"
         f"EVIDENCE BULLETS (use ONLY these for any factual claim):\n{evidence_block}"
     )
 

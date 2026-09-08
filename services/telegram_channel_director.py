@@ -25,6 +25,7 @@ from services.campaign_planner import CampaignPlan
 from services.social_launch_fit import LaunchFitAssessment, assess_launch_fit
 from services.telegram_editorial_need import EditorialNeed
 from services.telegram_feed_state import FeedState
+from services.telegram_feed_window import TelegramFeedWindow
 
 
 class ChannelDirectorDecision(str, enum.Enum):
@@ -60,7 +61,7 @@ def evaluate_channel_fit_shadow(
     *, news_importance: float, feed_state: FeedState, editorial_need: EditorialNeed,
     campaign_plan: CampaignPlan | None = None, campaign_mention_explicitly_allowed: bool = False,
     launch_context: SocialLaunchContext | None = None, timeliness: float = 0.7,
-    is_transition_related_story: bool = False,
+    is_transition_related_story: bool = False, feed_window: TelegramFeedWindow | None = None,
 ) -> ChannelDirectorResult:
     """`campaign_mention_explicitly_allowed` must come from the real CampaignPlan (§43's own
     "Channel Director may identify high campaign adjacency but must NOT rewrite it into an
@@ -137,6 +138,22 @@ def evaluate_channel_fit_shadow(
         else:
             decision = ChannelDirectorDecision.DEPRIORITIZE
             priority = 90
+
+    # DIRECTOR-CONTROL-PLANE-1A §13: real recent-feed context, purely additive - never changes
+    # `decision`/`priority` above (computed before this block), only enriches `reasons`/`warnings`
+    # with what the director can actually see about the real channel. `feed_window=None` (every
+    # pre-existing call site) leaves this Director's own output byte-identical to before.
+    if feed_window is not None and feed_window.surface_registered:
+        legacy_count = len(feed_window.legacy_posts)
+        eligible_count = len(feed_window.learning_eligible_posts)
+        reasons.append(
+            f"real feed window: {len(feed_window.posts)} recent posts "
+            f"({legacy_count} legacy/context-only, {eligible_count} performance-learning-eligible)"
+        )
+        if feed_window.media_type_distribution:
+            dominant_type, dominant_count = max(feed_window.media_type_distribution.items(), key=lambda kv: kv[1])
+            if dominant_count >= max(3, len(feed_window.posts) // 2):
+                warnings.append(f"recent feed dominated by media_type={dominant_type!r} ({dominant_count} posts) - consider visual variety")
 
     return ChannelDirectorResult(
         decision=decision, priority=priority, channel_fit=organic_relevance, feed_role=feed_role,

@@ -29,6 +29,7 @@ from services.campaign_planner import CampaignPlan
 from services.founder_directive_policy import directive_blocks_product
 from services.instagram_competitor_intelligence import CompetitorGap
 from services.instagram_content_opportunity import ContentOpportunity
+from services.instagram_feed_context import InstagramFeedContext
 from services.instagram_format_director import ContentFormat
 from services.instagram_objective_selection import recommend_objective
 from services.instagram_series import ContentSeries, is_recommendable_as_active
@@ -139,10 +140,18 @@ def generate_growth_strategy(
     *, opportunity_contexts: list[OpportunityContext], directives: list[StrategicDirective] | None = None,
     competitor_gaps: list[CompetitorGap] | None = None, series: list[ContentSeries] | None = None,
     trend_match_summaries: list[str] | None = None, platform: str = "instagram",
+    feed_context: InstagramFeedContext | None = None,
 ) -> InstagramGrowthStrategy:
     """Deterministic assembly (spec §60: no LLM call needed to combine already-resolved structured
     inputs) - the one function proving ContentOpportunity + StrategicDirective + CompetitorGap +
-    Series all actually feed a single advisory output, never several disconnected contracts."""
+    Series all actually feed a single advisory output, never several disconnected contracts.
+
+    DIRECTOR-CONTROL-PLANE-1A §13: `feed_context` (optional, None-default so every pre-existing
+    call site is byte-identical) is the real Instagram account/feed readiness
+    (services/instagram_feed_context.py) - it never changes `priority_opportunities`/
+    `objective_mix` above (those come only from ContentOpportunity/StrategicDirective/CompetitorGap/
+    Series), it only adds an honest `content_gaps` note about what first-party feed evidence, if
+    any, actually backs this strategy."""
     resolved_opportunities, avoidance_notes = apply_founder_directive_precedence(
         opportunity_contexts, directives or [], platform=platform,
     )
@@ -179,6 +188,22 @@ def generate_growth_strategy(
     confidence = round(
         sum(o.confidence for o in priority_opportunities) / len(priority_opportunities), 3
     ) if priority_opportunities else 0.1
+
+    if feed_context is not None:
+        if feed_context.readiness_state.value != "CONNECTED":
+            content_gaps.append(
+                f"real Instagram feed context: account readiness={feed_context.readiness_state.value} - "
+                "this strategy is based on ContentOpportunity/trend/competitor evidence only, no "
+                "first-party Instagram feed evidence exists yet"
+            )
+        elif feed_context.posts:
+            legacy_share = len(feed_context.legacy_posts) / len(feed_context.posts)
+            if legacy_share >= 0.5:
+                content_gaps.append(
+                    f"real Instagram feed context: {legacy_share:.0%} of the recent window is "
+                    "legacy/pre-boundary content - treat as transition context only, never as "
+                    "first-party performance evidence"
+                )
 
     return InstagramGrowthStrategy(
         priority_opportunities=priority_opportunities, objective_mix=objective_mix,

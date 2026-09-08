@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from services.telegram_feed_state import FeedState
+from services.telegram_feed_window import TelegramFeedWindow
 from services.telegram_performance_memory import (
     TELEGRAM_PLATFORM_CAPABILITIES,
     CapabilityStatus,
@@ -68,12 +69,18 @@ class StrategyDirectorAdvisory:
 
 def derive_strategy_advisory(
     feed_state: FeedState, patterns: list[PerformancePattern] | None = None,
+    feed_window: TelegramFeedWindow | None = None,
 ) -> StrategyDirectorAdvisory:
     """Spec §23: a real, structured synthesizer, not an empty dataclass - but every field is
     derived ONLY from real FeedState/PerformancePattern inputs, never invented. When neither
     carries any real evidence, every relevant field states insufficient evidence explicitly rather
     than fabricating a recommendation (spec §23's own "if no performance data exists, state
-    insufficient evidence rather than inventing recommendations")."""
+    insufficient evidence rather than inventing recommendations").
+
+    DIRECTOR-CONTROL-PLANE-1A §13: `feed_window` (optional, None-default - every pre-existing call
+    site is unaffected) is the real recent Telegram feed (services/telegram_feed_window.py) -
+    used only to add a real content_gaps note about legacy-vs-eligible feed composition, never to
+    change the FeedState-derived reasoning above."""
     patterns = patterns or []
     has_feed_history = feed_state.posts_24h > 0 or bool(feed_state.topic_distribution)
 
@@ -126,6 +133,14 @@ def derive_strategy_advisory(
         content_gaps.append("single-source saturation detected - consider diversifying sources")
     if not content_gaps:
         content_gaps.append("insufficient evidence: no content gap pattern observed yet")
+
+    if feed_window is not None and feed_window.surface_registered and feed_window.posts:
+        legacy_share = len(feed_window.legacy_posts) / len(feed_window.posts)
+        if legacy_share >= 0.5:
+            content_gaps.append(
+                f"real feed context: {legacy_share:.0%} of the recent window is legacy/pre-boundary "
+                "content - treat as transition context only, never as PULSE performance evidence"
+            )
 
     return StrategyDirectorAdvisory(
         priority_themes=priority_topics, content_balance_notes=content_balance_notes,
