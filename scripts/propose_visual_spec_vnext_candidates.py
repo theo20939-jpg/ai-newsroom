@@ -1,5 +1,11 @@
-"""FOUNDER-VISUAL-BOARD-ALIGNMENT-1 - create the telegram_data / telegram_quote vNEXT CANDIDATE
-Design Specs (see design/proposed_telegram_data_quote_vnext_candidates.md).
+"""FOUNDER-VISUAL-BOARD-ALIGNMENT-1 - create the telegram_quote vNEXT CANDIDATE Design Spec
+(see design/proposed_telegram_data_quote_vnext_candidates.md).
+
+NOTE: the telegram_data vNEXT candidate this script originally also created carried hero-only
+placement/logo/scrim fields that lie about the source-preserving MINIMAL render. It was
+superseded by the truthful telegram_data v3 in
+`scripts/propose_visual_spec_adaptive_candidates.py` (VISUAL-SPEC-VNEXT-PRODUCTION-ALIGNMENT-1)
+and is no longer created here.
 
 CANDIDATE ONLY. This script NEVER calls promote_candidate(). It is idempotent: on a DB that
 already has a vNEXT CANDIDATE (or a later ACTIVE) for a scope it does nothing for that scope.
@@ -25,15 +31,6 @@ from database.session import async_session_factory
 from services.design_spec_registry import create_candidate_spec, list_history
 
 _CANDIDATES: dict[str, dict] = {
-    "telegram_data": {
-        "font_size_max": 200,
-        "font_size_min": 88,
-        "max_line_count": 2,
-        "safe_margin_frac": 0.019,
-        "logo_zone": "lower_right",
-        "scrim_treatment": "none",
-        "placement_zone": "upper_left",
-    },
     "telegram_quote": {
         "safe_margin_frac": 0.019,
         "logo_zone": "lower_right",

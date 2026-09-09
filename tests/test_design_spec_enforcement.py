@@ -75,8 +75,10 @@ _DATA_PARAMS = {
 # treatment for. This is the proposed telegram_data vNEXT CANDIDATE shape (design/
 # proposed_telegram_data_quote_vnext_candidates.md); it is NOT promoted.
 _DATA_HERO_PARAMS = {
+    # aligned with telegram_data v3 CANDIDATE (VISUAL-SPEC-VNEXT-PRODUCTION-ALIGNMENT-1): no
+    # logo_zone / placement_zone / scrim_treatment - those differ between the hero card and the
+    # source-preserving MINIMAL render, so declaring hero-only values would lie about the latter.
     "font_size_max": 200, "font_size_min": 88, "max_line_count": 2, "safe_margin_frac": 0.019,
-    "logo_zone": "lower_right", "scrim_treatment": "none",
 }
 _QUOTE_PARAMS = {
     "safe_margin_frac": 0.019, "logo_zone": "lower_right", "scrim_treatment": "none",
