@@ -20,11 +20,6 @@ from PIL import Image, ImageDraw, ImageStat
 
 from services.brand_renderer import (
     _CARD_WIDTH,
-    _DATA_BLOCK_MARGIN,
-    _DATA_BLOCK_WIDTH_FRAC,
-    _data_signature_geometry,
-    _measure_data_stat_block,
-    _select_data_block_placement,
     _select_data_signature,
     render_breaking_frame,
     render_data_card,
@@ -227,37 +222,44 @@ def test_breaking_no_source_still_carries_exactly_one_mark_and_no_band() -> None
 # ==============================================================================================
 
 
-def test_data_full_evidence_matches_the_renderer_helpers_directly() -> None:
+def test_data_full_evidence_matches_the_hero_renderer_decisions_directly() -> None:
+    """FOUNDER-VISUAL-BOARD-ALIGNMENT-1: FULL_DATA_CARD renders the generated hero-metric card
+    (`brand_renderer.render_data_hero_card`) - a source-free graphite panel. Evidence replays that
+    renderer's OWN two deterministic decisions: the fitted primary-value font size and the wrapped
+    label line count."""
+    from services.brand_renderer import (
+        _HERO_LABEL_FONT_MAX,
+        _HERO_LABEL_FONT_MIN,
+        _HERO_LABEL_MAX_LINES,
+        _HERO_MARGIN,
+        _HERO_VALUE_FONT_MAX,
+        _HERO_VALUE_FONT_MIN,
+        _fit_single_line,
+        _fit_wrapped_block,
+    )
+
     raw = _photo(1280, 720)
     mode = DataPresentationMode.FULL_DATA_CARD
     ev = derive_data_render_evidence(raw, _CAND, presentation_mode=mode)
 
-    # Independently replay the same helper calls render_data_card() makes.
-    with Image.open(io.BytesIO(raw)) as im:
-        canvas = _fit_photo_to_canvas(im.convert("RGBA"), (_CANVAS_W, _CANVAS_H))
-    cw = canvas.size[0]
-    inset = max(1, round(_SAFE_INSET_FRAC * cw))
-    pad = max(1, round(_SCORE_PAD_PX_FRAC * cw))
-    plan = _select_data_signature(canvas, inset=inset, pad=pad)
-    assert plan is not None
-    assert ev.logo_zone == plan.placement.value
+    scratch = ImageDraw.Draw(Image.new("RGB", (_CANVAS_W, _CANVAS_H)))
+    inner_w = _CANVAS_W - _HERO_MARGIN * 2
+    value_font, _vs = _fit_single_line(
+        scratch, _CAND.value, font_max=_HERO_VALUE_FONT_MAX, font_min=_HERO_VALUE_FONT_MIN, max_width=inner_w,
+    )
+    label_lines, _lf, _ls = _fit_wrapped_block(
+        scratch, _CAND.label.strip().upper(), font_max=_HERO_LABEL_FONT_MAX,
+        font_min=_HERO_LABEL_FONT_MIN, max_width=inner_w, max_lines=_HERO_LABEL_MAX_LINES,
+    )
 
-    block_w = max(160, round(_DATA_BLOCK_WIDTH_FRAC * cw))
-    inner = max(1, block_w - _DATA_BLOCK_MARGIN * 2)
-    draw = ImageDraw.Draw(canvas)
-    _p, stat_font, _bb, label_lines, _lf, _llh, text_h = _measure_data_stat_block(draw, _CAND, max_width=inner)
-    mb, pb, lb = _data_signature_geometry(canvas.size, plan.placement, inset, plan.line_len)
-    avoid = (min(mb[0], pb[0], lb[0]), min(mb[1], pb[1], lb[1]), max(mb[2], pb[2], lb[2]), max(mb[3], pb[3], lb[3]))
-    placement = _select_data_block_placement(canvas, block_w=block_w, block_h=round(text_h) + _DATA_BLOCK_MARGIN * 2,
-                                             inset=inset, pad=pad, avoid_box=avoid)
-    if placement is None:
-        assert ev.primary_font_size is NOT_MEASURED
-        assert ev.actual_line_count == 0
-    else:
-        assert ev.primary_font_size == int(stat_font.size)
-        assert ev.actual_line_count == len(label_lines)
-    assert ev.safe_margin_frac == round(float(_SAFE_INSET_FRAC), 5)
-    assert ev.source_image_treatment == "preserve"
+    assert ev.renderer_variant == "brand_renderer.render_data_hero_card"
+    assert ev.primary_font_size == int(value_font.size)
+    assert ev.actual_line_count == len(label_lines)
+    assert ev.logo_count == 1 and ev.logo_zone == "lower_right"
+    assert ev.scrim_applied is False and ev.scrim_treatment == "none"
+    assert ev.safe_margin_frac == round(_HERO_MARGIN / _CANVAS_W, 5)
+    assert ev.source_image_treatment is NOT_MEASURED
+    assert "source_image_treatment" in ev.not_applicable_fields
     assert ev.presentation_mode == mode.value
 
 
@@ -289,6 +291,9 @@ def test_data_kirin_regression_evidence_is_faithful() -> None:
 
 
 def test_data_busy_photo_signature_falls_back_and_evidence_records_the_scrim() -> None:
+    # The bottom pulse+NNJ signature + its guaranteed opaque-scrim fallback live on the
+    # source-preserving DATA path (FOUNDER-VISUAL-BOARD-ALIGNMENT-1: FULL_DATA_CARD is now the
+    # source-free hero card and never composites over a busy photo).
     raw = _busy_photo()
     with Image.open(io.BytesIO(raw)) as im:
         canvas = _fit_photo_to_canvas(im.convert("RGBA"), (_CANVAS_W, _CANVAS_H))
@@ -296,7 +301,7 @@ def test_data_busy_photo_signature_falls_back_and_evidence_records_the_scrim() -
     inset = max(1, round(_SAFE_INSET_FRAC * cw))
     pad = max(1, round(_SCORE_PAD_PX_FRAC * cw))
     plan = _select_data_signature(canvas, inset=inset, pad=pad)
-    ev = derive_data_render_evidence(raw, _CAND, presentation_mode=DataPresentationMode.FULL_DATA_CARD)
+    ev = derive_data_render_evidence(raw, _CAND, presentation_mode=DataPresentationMode.MINIMAL_SOURCE_PRESERVING)
     if plan is None:
         # guaranteed fallback signature -> lower-right on an opaque scrim
         assert ev.logo_zone == "lower_right"
@@ -306,7 +311,7 @@ def test_data_busy_photo_signature_falls_back_and_evidence_records_the_scrim() -
         assert ev.logo_zone == plan.placement.value
     # render_data_card must still succeed on this input (never raises past the dispatch).
     assert render_data_card(_CAND, category="tech", editorial_code="NP-D1", source_image_bytes=raw,
-                            presentation_mode=DataPresentationMode.FULL_DATA_CARD)
+                            presentation_mode=DataPresentationMode.MINIMAL_SOURCE_PRESERVING)
 
 
 # ==============================================================================================

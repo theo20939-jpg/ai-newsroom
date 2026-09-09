@@ -69,6 +69,15 @@ _DATA_PARAMS = {
     "font_size_max": 88, "font_size_min": 48, "max_line_count": 2, "safe_margin_frac": 0.019,
     "logo_zone": "lower_right", "scrim_treatment": "none", "source_image_treatment": "preserve",
 }
+# FOUNDER-VISUAL-BOARD-ALIGNMENT-1: the generated FULL_DATA_CARD path now renders the Founder
+# hero-metric card (brand_renderer.render_data_hero_card) - a large primary number on a generated
+# graphite panel, so its font range is much larger and there is no source photo to declare a
+# treatment for. This is the proposed telegram_data vNEXT CANDIDATE shape (design/
+# proposed_telegram_data_quote_vnext_candidates.md); it is NOT promoted.
+_DATA_HERO_PARAMS = {
+    "font_size_max": 200, "font_size_min": 88, "max_line_count": 2, "safe_margin_frac": 0.019,
+    "logo_zone": "lower_right", "scrim_treatment": "none",
+}
 _QUOTE_PARAMS = {
     "safe_margin_frac": 0.019, "logo_zone": "lower_right", "scrim_treatment": "none",
     "source_image_treatment": "preserve",
@@ -222,25 +231,30 @@ def test_data_infographic_accepted_render_spec_match_passes() -> None:
 
 
 def test_data_photo_accepted_render_spec_match_passes() -> None:
-    """§15: a normal PHOTO-source DATA card - full DATA treatment - still yields SPEC_MATCH=PASS,
-    proving the DATA spec does not accidentally hard-code the infographic path."""
+    """§15 + FOUNDER-VISUAL-BOARD-ALIGNMENT-1: a non-infographic source classifies to FULL_DATA_CARD,
+    which now renders the Founder-approved generated hero-metric card. Evaluated against the
+    proposed telegram_data vNEXT hero parameter shape, its accepted render still yields
+    SPEC_MATCH=PASS: the large primary-value font is inside the hero range, exactly one NNJ mark,
+    and there is no source photo to declare a treatment for."""
     source_type = classify_source_presentation([])
     assert source_type != SourceType.EXISTING_INFOGRAPHIC
     mode = select_data_presentation_mode(source_type)
+    assert mode is DataPresentationMode.FULL_DATA_CARD
 
     rendered = render_data_card(
         _KIRIN_DATA_CANDIDATE, category="technology", editorial_code="NP-P1",
         source_image_bytes=_photo_16x9(), presentation_mode=mode,
     )
     evidence = derive_data_render_evidence(_photo_16x9(), _KIRIN_DATA_CANDIDATE, presentation_mode=mode)
-    assert evidence.source_image_treatment == "preserve"
-    assert evidence.source_preserved is True
-    dim = _evaluate_spec_match(_local_spec(_DATA_PARAMS), None, evidence)
+    assert evidence.renderer_variant == "brand_renderer.render_data_hero_card"
+    assert evidence.source_image_treatment is NOT_MEASURED
+    assert "source_image_treatment" in evidence.not_applicable_fields
+    assert evidence.logo_count == 1
+    dim = _evaluate_spec_match(_local_spec(_DATA_HERO_PARAMS), None, evidence)
     assert dim.status is DimensionStatus.PASS, dim.rationale
-    assert "font_size" in dim.checked_fields  # the photo path DOES render a stat block -> font is verified
+    assert "font_size" in dim.checked_fields  # the hero card's primary value font IS verified
     assert dim.not_measured_fields == []
-    if evidence.primary_font_size is not NOT_MEASURED:
-        assert 48 <= evidence.primary_font_size <= 88
+    assert 88 <= evidence.primary_font_size <= 200
     assert rendered
 
 
@@ -524,7 +538,12 @@ async def test_all_four_active_specs_evaluate_their_accepted_render_field_aware(
     news_ev = derive_master_news_render_evidence(photo, presentation_type="NEWS")
     render_breaking_frame(photo, category="technology", editorial_code="NP-B1")
     breaking_ev = derive_breaking_render_evidence(photo)
-    data_mode = select_data_presentation_mode(classify_source_presentation([]))
+    # FOUNDER-VISUAL-BOARD-ALIGNMENT-1: FULL_DATA_CARD now renders the generated hero-metric card
+    # (its own SPEC_MATCH coverage is test_data_photo_accepted_render_spec_match_passes). This
+    # four-spec canary keeps exercising the DATA spec's source-preserving field path via the
+    # infographic classification, where source_image_treatment IS a checked field.
+    data_mode = select_data_presentation_mode(classify_source_presentation(["possible_banner", "possible_logo"]))
+    assert data_mode is DataPresentationMode.MINIMAL_SOURCE_PRESERVING
     data_bytes = render_data_card(
         _KIRIN_DATA_CANDIDATE, category="technology", editorial_code="NP-D1",
         source_image_bytes=photo, presentation_mode=data_mode,
@@ -578,13 +597,34 @@ async def test_all_four_active_specs_evaluate_their_accepted_render_field_aware(
 
 
 def test_derive_data_evidence_reports_a_crop_when_the_source_aspect_differs() -> None:
-    ev_16x9 = derive_data_render_evidence(_photo_16x9(), _KIRIN_DATA_CANDIDATE, presentation_mode=DataPresentationMode.FULL_DATA_CARD)
+    # FOUNDER-VISUAL-BOARD-ALIGNMENT-1: crop detection (`_canvas_crop_treatment`) applies to the
+    # source-preserving DATA path; FULL_DATA_CARD is now the source-free generated hero card.
+    ev_16x9 = derive_data_render_evidence(
+        _photo_16x9(), _KIRIN_DATA_CANDIDATE, presentation_mode=DataPresentationMode.MINIMAL_SOURCE_PRESERVING,
+    )
     assert ev_16x9.source_image_treatment == "preserve"
     assert ev_16x9.source_preserved is True
 
-    ev_4x3 = derive_data_render_evidence(_photo_4x3(), _KIRIN_DATA_CANDIDATE, presentation_mode=DataPresentationMode.FULL_DATA_CARD)
+    ev_4x3 = derive_data_render_evidence(
+        _photo_4x3(), _KIRIN_DATA_CANDIDATE, presentation_mode=DataPresentationMode.MINIMAL_SOURCE_PRESERVING,
+    )
     assert ev_4x3.source_image_treatment == "crop"
     assert ev_4x3.source_preserved is False
+
+
+def test_derive_data_hero_evidence_is_source_free_and_reports_the_metric_font() -> None:
+    """FOUNDER-VISUAL-BOARD-ALIGNMENT-1: FULL_DATA_CARD evidence describes the generated hero card."""
+    ev = derive_data_render_evidence(
+        _photo_4x3(), _KIRIN_DATA_CANDIDATE, presentation_mode=DataPresentationMode.FULL_DATA_CARD,
+    )
+    assert ev.renderer_variant == "brand_renderer.render_data_hero_card"
+    assert ev.source_image_treatment is NOT_MEASURED
+    assert ev.source_preserved is NOT_MEASURED
+    assert "source_image_treatment" in ev.not_applicable_fields
+    assert ev.logo_count == 1 and ev.logo_zone == "lower_right"
+    assert ev.scrim_applied is False
+    assert isinstance(ev.primary_font_size, int) and ev.primary_font_size >= 88
+    assert ev.actual_line_count <= 2
 
 
 def test_derive_data_evidence_minimal_mode_measures_zero_lines_and_no_stat_font() -> None:

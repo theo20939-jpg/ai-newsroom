@@ -161,12 +161,24 @@ class DataCandidate:
     unit: str
     label: str
     evidence_fact: str
+    # FOUNDER-VISUAL-BOARD-ALIGNMENT-1: optional structured trend/delta inputs for the
+    # Founder-approved generated DATA hero-metric card. Both default to "absent" so every
+    # existing construction site (services/presentation_director.py's own fact extractors,
+    # every test) is byte-identical. The renderer NEVER invents either: no `series` -> no chart
+    # is drawn; no `delta` -> no delta pill. `series` values are plotted verbatim (no smoothing,
+    # no interpolation, no synthetic points).
+    series: tuple[float, ...] = ()
+    delta: str | None = None
 
 
 @dataclass(frozen=True)
 class QuoteCandidate:
     text: str
     speaker: str | None
+    # FOUNDER-VISUAL-BOARD-ALIGNMENT-1: optional author role/title (e.g. "ex-DIRECTOR OF AI,
+    # TESLA") for the Founder-approved QUOTE composition. Defaults to None; the renderer draws
+    # the role line only when it is supplied and NEVER fabricates one when it is absent.
+    role: str | None = None
 
 
 @dataclass(frozen=True)

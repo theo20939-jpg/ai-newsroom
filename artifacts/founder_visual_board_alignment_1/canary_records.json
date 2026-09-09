@@ -1,0 +1,263 @@
+[
+  {
+    "name": "news_current",
+    "format": "NEWS",
+    "evidence": {
+      "renderer_variant": "nnj_master_news_overlay.apply_master_news_branding",
+      "renderer_version": "master_news_v1",
+      "canvas": [
+        1280,
+        720
+      ],
+      "logo_count": 1,
+      "logo_zone": "upper_right",
+      "placement_zone": "NOT_MEASURED",
+      "scrim_treatment": "none",
+      "source_image_treatment": "crop",
+      "primary_font_size": "NOT_MEASURED",
+      "actual_line_count": "NOT_MEASURED",
+      "safe_margin_frac": 0.01875,
+      "not_applicable_fields": [
+        "actual_line_count",
+        "primary_font_size",
+        "secondary_font_size"
+      ]
+    },
+    "spec_overall": "rework",
+    "hard_failures": [],
+    "dimensions": {
+      "fact_safety": "pass",
+      "spec_match": "fail",
+      "reference_match": "not_applicable",
+      "source_preservation": "not_applicable",
+      "typography": "pass",
+      "layout": "pass",
+      "branding": "pass",
+      "visual_quality": "pass"
+    },
+    "merged_decision": "rework"
+  },
+  {
+    "name": "breaking_current",
+    "format": "BREAKING",
+    "evidence": {
+      "renderer_variant": "brand_renderer.render_breaking_frame -> nnj_master_news_overlay.select_master_news_branding",
+      "renderer_version": "pulse-breaking-v2",
+      "canvas": [
+        1122,
+        1402
+      ],
+      "logo_count": 1,
+      "logo_zone": "upper_right",
+      "placement_zone": "NOT_MEASURED",
+      "scrim_treatment": "none",
+      "source_image_treatment": "preserve",
+      "primary_font_size": "NOT_MEASURED",
+      "actual_line_count": "NOT_MEASURED",
+      "safe_margin_frac": 0.01875,
+      "not_applicable_fields": [
+        "actual_line_count",
+        "primary_font_size",
+        "secondary_font_size"
+      ]
+    },
+    "spec_overall": "rework",
+    "hard_failures": [],
+    "dimensions": {
+      "fact_safety": "pass",
+      "spec_match": "fail",
+      "reference_match": "not_applicable",
+      "source_preservation": "not_applicable",
+      "typography": "pass",
+      "layout": "pass",
+      "branding": "pass",
+      "visual_quality": "pass"
+    },
+    "merged_decision": "rework"
+  },
+  {
+    "name": "data_existing_infographic",
+    "format": "DATA (existing infographic)",
+    "evidence": {
+      "renderer_variant": "brand_renderer.render_data_card",
+      "renderer_version": "pulse-data-v1",
+      "canvas": [
+        1280,
+        720
+      ],
+      "logo_count": 1,
+      "logo_zone": "lower_right",
+      "placement_zone": "lower_right",
+      "scrim_treatment": "strong",
+      "source_image_treatment": "preserve",
+      "primary_font_size": "NOT_MEASURED",
+      "actual_line_count": 0,
+      "safe_margin_frac": 0.01875,
+      "not_applicable_fields": [
+        "primary_font_size",
+        "secondary_font_size"
+      ]
+    },
+    "spec_overall": "rework",
+    "hard_failures": [],
+    "dimensions": {
+      "fact_safety": "pass",
+      "spec_match": "fail",
+      "reference_match": "not_applicable",
+      "source_preservation": "pass",
+      "typography": "pass",
+      "layout": "pass",
+      "branding": "pass",
+      "visual_quality": "pass"
+    },
+    "merged_decision": "rework"
+  },
+  {
+    "name": "data_generated_hero",
+    "format": "DATA (generated hero)",
+    "evidence": {
+      "renderer_variant": "brand_renderer.render_data_hero_card",
+      "renderer_version": "pulse-data-hero-v1",
+      "canvas": [
+        1280,
+        720
+      ],
+      "logo_count": 1,
+      "logo_zone": "lower_right",
+      "placement_zone": "upper_left",
+      "scrim_treatment": "none",
+      "source_image_treatment": "NOT_MEASURED",
+      "primary_font_size": 200,
+      "actual_line_count": 1,
+      "safe_margin_frac": 0.05625,
+      "not_applicable_fields": [
+        "secondary_font_size",
+        "source_image_treatment",
+        "source_preserved"
+      ]
+    },
+    "vs_active_spec_v1": {
+      "spec_overall": "rework",
+      "hard_failures": [],
+      "dimensions": {
+        "fact_safety": "pass",
+        "spec_match": "fail",
+        "reference_match": "not_applicable",
+        "source_preservation": "not_applicable",
+        "typography": "pass",
+        "layout": "pass",
+        "branding": "pass",
+        "visual_quality": "pass"
+      },
+      "merged_decision": "rework"
+    },
+    "vs_candidate_spec_v2": {
+      "spec_overall": "pass_with_notes",
+      "hard_failures": [],
+      "dimensions": {
+        "fact_safety": "pass",
+        "spec_match": "not_applicable",
+        "reference_match": "not_applicable",
+        "source_preservation": "not_applicable",
+        "typography": "pass",
+        "layout": "pass",
+        "branding": "pass",
+        "visual_quality": "pass"
+      },
+      "merged_decision": "pass_with_notes"
+    },
+    "spec_overall": "pass_with_notes",
+    "hard_failures": [],
+    "dimensions": {
+      "fact_safety": "pass",
+      "spec_match": "not_applicable",
+      "reference_match": "not_applicable",
+      "source_preservation": "not_applicable",
+      "typography": "pass",
+      "layout": "pass",
+      "branding": "pass",
+      "visual_quality": "pass"
+    },
+    "merged_decision": "pass_with_notes"
+  },
+  {
+    "name": "quote_final",
+    "format": "QUOTE (portrait + role)",
+    "evidence": {
+      "renderer_variant": "brand_renderer.render_quote_card",
+      "renderer_version": "pulse-quote-v1",
+      "canvas": [
+        1200,
+        675
+      ],
+      "logo_count": 1,
+      "logo_zone": "lower_right",
+      "placement_zone": "NOT_MEASURED",
+      "scrim_treatment": "NOT_MEASURED",
+      "source_image_treatment": "preserve",
+      "primary_font_size": "NOT_MEASURED",
+      "actual_line_count": "NOT_MEASURED",
+      "safe_margin_frac": 0.05333,
+      "not_applicable_fields": [
+        "actual_line_count",
+        "placement_zone",
+        "primary_font_size",
+        "scrim_treatment",
+        "secondary_font_size"
+      ]
+    },
+    "spec_overall": "pass_with_notes",
+    "hard_failures": [],
+    "dimensions": {
+      "fact_safety": "pass",
+      "spec_match": "pass",
+      "reference_match": "not_applicable",
+      "source_preservation": "not_applicable",
+      "typography": "pass",
+      "layout": "pass",
+      "branding": "pass",
+      "visual_quality": "pass"
+    },
+    "merged_decision": "pass_with_notes"
+  },
+  {
+    "name": "quote_fallback_missing_role",
+    "format": "QUOTE (missing-role fallback)",
+    "evidence": {
+      "renderer_variant": "brand_renderer.render_quote_card",
+      "renderer_version": "pulse-quote-v1",
+      "canvas": [
+        1200,
+        675
+      ],
+      "logo_count": 1,
+      "logo_zone": "lower_right",
+      "placement_zone": "NOT_MEASURED",
+      "scrim_treatment": "NOT_MEASURED",
+      "source_image_treatment": "preserve",
+      "primary_font_size": "NOT_MEASURED",
+      "actual_line_count": "NOT_MEASURED",
+      "safe_margin_frac": 0.05333,
+      "not_applicable_fields": [
+        "actual_line_count",
+        "placement_zone",
+        "primary_font_size",
+        "scrim_treatment",
+        "secondary_font_size"
+      ]
+    },
+    "spec_overall": "pass_with_notes",
+    "hard_failures": [],
+    "dimensions": {
+      "fact_safety": "pass",
+      "spec_match": "pass",
+      "reference_match": "not_applicable",
+      "source_preservation": "not_applicable",
+      "typography": "pass",
+      "layout": "pass",
+      "branding": "pass",
+      "visual_quality": "pass"
+    },
+    "merged_decision": "pass_with_notes"
+  }
+]
