@@ -43,6 +43,7 @@ from services.story_memory import _RELATED_STORY_ENTITY_FLOOR as _OWN_STORY_ENTI
 from services.story_confidence import compute_confidence_band
 from services.story_continuity import classify_continuity
 from services.story_delta_engine import compute_story_delta, gate_delta_by_identity
+from services.story_identity_guard import assess_continuity_identity
 from services.story_suppression import compute_would_suppress
 from services.text_normalization import (
     is_google_news_provenance,
@@ -331,6 +332,7 @@ async def _apply_story_memory(session: AsyncSession, event: NewsEvent, report: T
     confidence_band: str | None = None
     would_suppress_flag: bool | None = None
     delta_reason = ""
+    identity_assessment = None
     if creates_own_story:
         continuity = classify_continuity(match_result=result, delta_result=None, creates_own_story=True)
     else:
@@ -353,10 +355,41 @@ async def _apply_story_memory(session: AsyncSession, event: NewsEvent, report: T
                 "story_continuity_delta_failed",
                 extra={"event_id": str(event.id), "story_id": str(story_id)},
             )
+        # STORY-CONTINUITY-P0.1: the abstract-quality / stable-document-identity firewall. Reads
+        # the matched Story's other events' (title, url) - the same bounded, indexed set the
+        # delta query above already touches - so a confident same-Story classification cannot
+        # rest on unsafe similarity between abstract-like titles (real production evidence:
+        # unrelated arXiv papers sharing templated abstract openings). Purely diagnostic here:
+        # create_task() below still runs unconditionally.
+        prior_doc_rows = (
+            await session.execute(
+                select(NewsEvent.title, NewsEvent.url)
+                .join(NewsEventStoryLink, NewsEventStoryLink.news_event_id == NewsEvent.id)
+                .where(
+                    NewsEventStoryLink.story_id == story_id,
+                    NewsEvent.id != event.id,
+                )
+            )
+        ).all()
+        identity_assessment = assess_continuity_identity(
+            new_title=event.title,
+            new_url=event.url,
+            new_summary=event.summary,
+            prior_documents=[(row.title, row.url) for row in prior_doc_rows],
+            match_is_exact_title_identity=(
+                result.outcome == SEMANTIC_DUPLICATE and result.confidence >= 1.0 - 1e-9
+            ),
+        )
         continuity = classify_continuity(
-            match_result=result, delta_result=delta, creates_own_story=False
+            match_result=result, delta_result=delta, creates_own_story=False,
+            identity_assessment=identity_assessment,
         )
         delta_classification = continuity.delta_class
+        # Section 8 - the persisted shadow record must model future enforcement safety: a match
+        # the firewall demoted to AMBIGUOUS must never carry would_suppress=True (an upstream
+        # polluted Story must not be able to make an event suppression-eligible).
+        if continuity.guard_forced_fail_open:
+            would_suppress_flag = False
 
     link = NewsEventStoryLink(
         news_event_id=event.id, story_id=story_id,
@@ -371,6 +404,9 @@ async def _apply_story_memory(session: AsyncSession, event: NewsEvent, report: T
         material_delta=list(continuity.reason_codes) or None,
         decision_reason=(
             f"{continuity.outcome} suppression_eligible={continuity.suppression_eligible} "
+            f"guard_forced_fail_open={continuity.guard_forced_fail_open} "
+            f"title_quality={continuity.title_semantic_quality} "
+            f"identity_status={continuity.stable_identity_status} "
             f"components={continuity.match_components} delta={delta_reason}"[:2000]
         ),
     )
@@ -396,6 +432,13 @@ async def _apply_story_memory(session: AsyncSession, event: NewsEvent, report: T
             "would_suppress": would_suppress_flag,
             "suppression_eligible": continuity.suppression_eligible,
             "reason_codes": list(continuity.reason_codes),
+            # STORY-CONTINUITY-P0.1 firewall diagnostics (Section 12) - bounded scalars only.
+            "title_semantic_quality": continuity.title_semantic_quality,
+            "stable_identity_status": continuity.stable_identity_status,
+            "stable_identity_namespace": (
+                identity_assessment.identity_namespace if identity_assessment is not None else None
+            ),
+            "guard_forced_fail_open": continuity.guard_forced_fail_open,
         },
     )
 
