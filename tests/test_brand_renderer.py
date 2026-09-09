@@ -144,13 +144,15 @@ def test_breaking_frame_preserves_source_dimensions_and_draws_no_dark_band():
 
 
 def test_breaking_frame_bakes_no_wordmark_and_no_band_in_source():
-    """§11: structural render metadata (not OCR) proves the baked-text + band removal."""
+    """§11 + FOUNDER-VISUAL-POLISH-2 §3: structural proof - no baked "BREAKING" text, no band, no
+    editorial-code chip; BREAKING draws its OWN red lower-media pulse + one restrained mark."""
     src = inspect.getsource(render_breaking_frame)
     body = src.split('"""')[2]  # everything after the docstring
     assert '"BREAKING"' not in body
     assert "band_height" not in body and "accent_height" not in body
     assert "_draw_code_label(" not in body
-    assert "select_master_news_branding(" in body  # reuses the canonical NEWS primitive (§7)
+    assert "_draw_pulse(" in body                        # the distinct BREAKING pulse motif
+    assert "_breaking_quieter_bottom_corner(" in body     # one restrained mark, least-busy corner
 
 
 def test_breaking_frame_works_with_no_source_image():

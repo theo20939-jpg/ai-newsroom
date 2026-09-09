@@ -152,6 +152,7 @@ def derive_master_news_render_evidence(
     *,
     presentation_type: str = "NEWS",
     subject_bbox: tuple[int, int, int, int] | None = None,
+    signature_style: str | None = None,
 ) -> RenderEvidence:
     """NEWS production path (`worker/content_cycle.py` -> `apply_master_news_branding()`), also the
     grouped-carousel branding path. Replays that function's own steps: fit the source to the
@@ -167,15 +168,17 @@ def derive_master_news_render_evidence(
         _CANVAS_H,
         _CANVAS_W,
         _SAFE_INSET_FRAC,
+        SIGNATURE_STYLE_MARK_ONLY,
         ComponentPlacement,
         _fit_photo_to_canvas,
         select_master_news_branding,
     )
 
+    style = signature_style if signature_style is not None else SIGNATURE_STYLE_MARK_ONLY
     with Image.open(io.BytesIO(source_image_bytes)) as im:
         src_w, src_h = im.width, im.height
         photo_fit = _fit_photo_to_canvas(im.convert("RGBA"), (_CANVAS_W, _CANVAS_H))
-        decision = select_master_news_branding(photo_fit, subject_bbox=subject_bbox)
+        decision = select_master_news_branding(photo_fit, subject_bbox=subject_bbox, signature_style=style)
 
     treatment, preserved = _canvas_crop_treatment(src_w, src_h, _CANVAS_W, _CANVAS_H)
 
@@ -210,13 +213,21 @@ def derive_master_news_render_evidence(
         source_preserved=preserved,
         presentation_mode=NOT_MEASURED,
         text_clipped=False,
-        # MASTER NEWS bakes no headline text -> the spec's font/line params genuinely do not apply.
-        not_applicable_fields=frozenset({"primary_font_size", "secondary_font_size", "actual_line_count"}),
+        # FOUNDER-VISUAL-POLISH-2: the MARK_ONLY NEWS treatment has no independent accent - the one
+        # small mark IS the whole branding unit, its corner is `logo_zone`. So `placement_zone`
+        # genuinely does not apply (distinct from the old fused-signature measurement gap). MASTER
+        # NEWS bakes no headline text -> the font/line params do not apply either.
+        not_applicable_fields=frozenset(
+            {"placement_zone", "primary_font_size", "secondary_font_size", "actual_line_count"}
+            if style == SIGNATURE_STYLE_MARK_ONLY
+            else {"primary_font_size", "secondary_font_size", "actual_line_count"}
+        ),
         notes={
+            "signature_style": style,
             "placement_zone": (
-                "MEASUREMENT GAP: MASTER NEWS fuses the pulse into the single lower brand-mark "
-                "signature; no independent accent-placement decision exists to read. The founder "
-                "placement_zone=lower_left describes the retired two-corner render_news_hero layout."
+                "NOT APPLICABLE: MARK_ONLY - one small NNJ mark, no independent accent (its corner is logo_zone)."
+                if style == SIGNATURE_STYLE_MARK_ONLY
+                else "MEASUREMENT GAP: fused lower signature exposes no independent accent-placement decision."
             ),
             "primary_font_size": "NOT APPLICABLE: MASTER NEWS contract bakes no headline text",
             "actual_line_count": "NOT APPLICABLE: MASTER NEWS contract bakes no headline text",
@@ -225,64 +236,61 @@ def derive_master_news_render_evidence(
 
 
 def derive_breaking_render_evidence(source_image_bytes: bytes | None) -> RenderEvidence:
-    """BREAKING production path (`render_branded_media` -> `render_breaking_frame`), corrected in
-    VISUAL-RENDERER-RECONCILIATION-1: the retired ~22% dark-gradient lower-third band + baked
-    "BREAKING" wordmark + red accent rule are GONE. BREAKING now composites the source at its
-    NATIVE size (no fit / crop -> `source_image_treatment=preserve`) with the exact MASTER NEWS
-    single lower signature (`select_master_news_branding()` on the native photo - one thin line +
-    pulse + exactly one canonical NNJ mark, adaptive safe-corner placement, single-brand-mark
-    invariant). This deriver REPLAYS that same helper.
+    """BREAKING production path (`render_branded_media` -> `render_breaking_frame`).
+    FOUNDER-VISUAL-POLISH-2 §3: BREAKING is now its OWN distinct treatment - the source photo at
+    NATIVE size (preserve, no fit/crop) + a red NINJA PULSE / ECG waveform crossing the LOWER
+    portion of the media + exactly ONE restrained canonical NNJ mark in the least-busy bottom
+    corner. Still no band, no baked wordmark, no scrim of any kind.
 
-    `scrim_treatment` is now genuinely `none` - the corrected renderer composites no band/scrim of
-    any kind over the source. `placement_zone` is NOT_MEASURED but APPLICABLE (the founder
-    telegram_breaking v1 declares placement_zone=lower_left, wrongly derived from the retired two-
-    corner render_news_hero note - the same discrepancy as NEWS): the fused NEWS-family signature
-    exposes no independent accent placement, so BREAKING SPEC_MATCH is PARTIAL_EVIDENCE with that
-    one field named, pending the founder-review `telegram_breaking v2` correction. font/line
-    params do not apply (BREAKING bakes no editorial typography)."""
-    from PIL import Image
+    `placement_zone` = the pulse's own position (lower-centre band), reported as `"lower_center"`;
+    `logo_zone` = the mark's chosen bottom corner. font/line params do not apply (BREAKING bakes
+    no editorial typography)."""
+    from PIL import Image, ImageDraw, ImageStat
 
-    from services.brand_renderer import _CARD_HEIGHT, _CARD_WIDTH
-    from services.nnj_master_news_overlay import _SAFE_INSET_FRAC, ComponentPlacement, select_master_news_branding
+    from services.brand_renderer import (
+        _BREAKING_MARK_W_FRAC,
+        _BREAKING_SAFE_INSET_FRAC,
+        _CARD_HEIGHT,
+        _CARD_WIDTH,
+        _breaking_quieter_bottom_corner,
+    )
+    from services.nnj_master_news_mark import rasterize_nnj_mark
+
+    _ = (ImageDraw, ImageStat)  # replayed indirectly via _breaking_quieter_bottom_corner
 
     if source_image_bytes is not None:
         with Image.open(io.BytesIO(source_image_bytes)) as im:
             canvas_w, canvas_h = im.width, im.height
-            decision = select_master_news_branding(im.convert("RGBA"))
-        placed = [
-            p for p in (decision.lower_signature.placement, decision.upper_mark.placement)
-            if p is not ComponentPlacement.OMITTED
-        ]
-        logo_count = len(placed)
-        logo_zone = _zone(placed[0]) if placed else NOT_MEASURED
+            photo = im.convert("RGBA").copy()
+        inset = max(8, round(_BREAKING_SAFE_INSET_FRAC * canvas_w))
+        mark = rasterize_nnj_mark(target_width=max(28, round(_BREAKING_MARK_W_FRAC * canvas_w)))
+        logo_zone = _breaking_quieter_bottom_corner(photo, mark_w=mark.width, mark_h=mark.height, inset=inset)
+        logo_count = 1
+        margin_frac = round(_BREAKING_SAFE_INSET_FRAC, 5)
         src_present = True
     else:
         canvas_w, canvas_h = _CARD_WIDTH, _CARD_HEIGHT
         logo_count, logo_zone, src_present = 1, "lower_right", False
+        margin_frac = round(64 / _CARD_WIDTH, 5)
 
     notes = {
-        "placement_zone": (
-            "MEASUREMENT GAP: BREAKING now uses the MASTER NEWS fused lower signature (line + pulse "
-            "+ one mark); no independent accent-placement decision exists to read. The founder "
-            "telegram_breaking v1 placement_zone=lower_left is the same wrongly-derived parameter as "
-            "NEWS - see the telegram_breaking v2 candidate proposal."
-        ),
-        "primary_font_size": "NOT APPLICABLE: BREAKING bakes no editorial typography (band + wordmark removed)",
+        "placement_zone": "the red BREAKING pulse crosses the lower-centre of the media (y ~86%); logo_zone is the mark's own corner",
+        "primary_font_size": "NOT APPLICABLE: BREAKING bakes no editorial typography",
         "actual_line_count": "NOT APPLICABLE: BREAKING bakes no editorial typography",
     }
     if not src_present:
-        notes["source_image_treatment"] = "no source photo supplied - BREAKING rendered its minimal solid card + one mark; nothing to preserve or destroy"
+        notes["source_image_treatment"] = "no source photo supplied - minimal solid card + one mark; nothing to preserve or destroy"
 
     return RenderEvidence(
         presentation_type="BREAKING",
-        renderer_variant="brand_renderer.render_breaking_frame -> nnj_master_news_overlay.select_master_news_branding",
-        renderer_version="pulse-breaking-v2",
+        renderer_variant="brand_renderer.render_breaking_frame",
+        renderer_version="pulse-breaking-v3",
         canvas_width=canvas_w,
         canvas_height=canvas_h,
-        safe_margin_frac=round(float(_SAFE_INSET_FRAC), 5),
+        safe_margin_frac=margin_frac,
         logo_count=logo_count,
         logo_zone=logo_zone,
-        placement_zone=NOT_MEASURED,
+        placement_zone="lower_center",
         scrim_applied=False,
         scrim_treatment=ScrimState.NONE.value,
         source_image_treatment=SourceTreatment.PRESERVE.value,

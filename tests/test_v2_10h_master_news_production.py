@@ -364,14 +364,14 @@ def test_detail_risk_field_present_and_gates_independently() -> None:
 
 
 def test_disable_lower_signature_forces_omitted_without_scoring_any_region() -> None:
-    branded, decision = apply_master_news_branding(_flat_photo(), disable_lower_signature=True)
+    branded, decision = apply_master_news_branding(_flat_photo(), disable_lower_signature=True, signature_style="fused")
     assert decision.lower_signature.placement is ComponentPlacement.OMITTED
     assert decision.lower_signature.attempts == ()
     assert decision.lower_signature.disabled_reason is not None
 
 
 def test_disable_lower_signature_does_not_affect_upper_mark() -> None:
-    branded, decision = apply_master_news_branding(_flat_photo(), disable_lower_signature=True)
+    branded, decision = apply_master_news_branding(_flat_photo(), disable_lower_signature=True, signature_style="fused")
     assert decision.upper_mark.placement is not ComponentPlacement.OMITTED  # still independently evaluated
 
 
@@ -494,7 +494,7 @@ def test_rescaled_safety_scoring_uses_the_new_larger_footprint_not_the_old_one()
     1280-wide reference canvas."""
     from services.nnj_master_news_overlay import _LOWER_TOTAL_WIDTH_FRAC
 
-    branded, decision = apply_master_news_branding(_flat_photo())
+    branded, decision = apply_master_news_branding(_flat_photo(), signature_style="fused")
     lower_right_attempts = [
         a for a in decision.lower_signature.attempts if a.placement is ComponentPlacement.LOWER_RIGHT
     ]

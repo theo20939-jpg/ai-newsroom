@@ -159,26 +159,25 @@ def test_news_geometry_is_the_fused_lower_right_signature_authoritative_evidence
 
 
 def test_breaking_evidence_matches_the_corrected_news_family_signature() -> None:
-    """VRR-1 §8/§11: the corrected renderer composites the source at NATIVE size with the exact
-    MASTER NEWS lower signature. The deriver replays select_master_news_branding() and must agree."""
+    """FOUNDER-VISUAL-POLISH-2 §3: BREAKING is its OWN distinct treatment now - source at NATIVE
+    size + a red pulse crossing the lower media + one restrained mark in the least-busy bottom
+    corner. Still no band, no scrim."""
+    from services.brand_renderer import _BREAKING_SAFE_INSET_FRAC
+
     raw = _photo(1280, 720)
     ev = derive_breaking_render_evidence(raw)
-    with Image.open(io.BytesIO(raw)) as im:
-        decision = select_master_news_branding(im.convert("RGBA"))
-    placed = [p for p in (decision.lower_signature.placement, decision.upper_mark.placement) if p is not ComponentPlacement.OMITTED]
 
-    assert ev.logo_count == len(placed)
-    assert ev.logo_zone == (placed[0].value if placed else NOT_MEASURED)
+    assert ev.renderer_version == "pulse-breaking-v3"
+    assert ev.logo_count == 1
+    assert ev.logo_zone in ("lower_right", "lower_left")
+    assert ev.placement_zone == "lower_center"            # the pulse crosses the lower media
     assert ev.source_image_treatment == "preserve"       # native size, no fit/crop
     assert ev.source_preserved is True
     assert ev.scrim_applied is False
-    assert ev.scrim_treatment == "none"                   # the band is GONE
-    assert ev.safe_margin_frac == round(float(_SAFE_INSET_FRAC), 5)
+    assert ev.scrim_treatment == "none"                   # no band, no scrim of any kind
+    assert ev.safe_margin_frac == round(_BREAKING_SAFE_INSET_FRAC, 5)
     for f in ("primary_font_size", "secondary_font_size", "actual_line_count"):
         assert f in ev.not_applicable_fields
-    # placement_zone stays an APPLICABLE measurement gap (same as NEWS) - NOT not_applicable.
-    assert "placement_zone" not in ev.not_applicable_fields
-    assert ev.placement_zone is NOT_MEASURED
 
 
 def test_breaking_corrected_pixels_have_no_dark_band_and_no_baked_wordmark() -> None:
@@ -339,16 +338,15 @@ def test_quote_evidence_matches_the_card_geometry(pw: int, ph: int) -> None:
     tl = ImageStat.Stat(im.crop((0, 0, 130, 130)))
     assert max(br.mean) > max(tl.mean) + 10 or br.stddev[0] > tl.stddev[0], "expected the NNJ mark in the bottom-right"
 
-    # Pixel parity for the "not a source scrim" claim: the portrait's far-right strip (well outside
-    # the 40px left-edge feather) is NOT darkened relative to the same strip of the ORIGINAL
-    # portrait - i.e. render_quote_card applies no legibility scrim over the source.
-    portrait_w = round(_CARD_HEIGHT * pw / ph)
-    with Image.open(io.BytesIO(raw)) as src_im:
-        src_scaled = src_im.convert("RGB").resize((portrait_w, _CARD_HEIGHT), Image.Resampling.LANCZOS)
-    strip = max(8, portrait_w // 6)
-    card_strip = ImageStat.Stat(im.crop((_CARD_WIDTH - strip, 0, _CARD_WIDTH, _CARD_HEIGHT)).convert("L")).mean[0]
-    src_strip = ImageStat.Stat(src_scaled.crop((portrait_w - strip, 0, portrait_w, _CARD_HEIGHT)).convert("L")).mean[0]
-    assert card_strip >= src_strip - 6, ("the portrait's right edge must not be scrim-darkened", card_strip, src_strip)
+    # FOUNDER-VISUAL-POLISH-2 §7/§8: the quote card is a DELIBERATE deep-graphite composition - the
+    # portrait is integrated (blended toward graphite + a left->right gradient + a brightness
+    # reduction), never a light panel. Prove the left column and the portrait's inner edge both
+    # read dark, and the whole card mean is dark.
+    inner_edge = ImageStat.Stat(im.crop((_CARD_WIDTH - round(_CARD_WIDTH * 0.44), 0,
+                                         _CARD_WIDTH - round(_CARD_WIDTH * 0.30), _CARD_HEIGHT)).convert("L")).mean[0]
+    left_col = ImageStat.Stat(im.crop((0, 0, round(_CARD_WIDTH * 0.30), _CARD_HEIGHT)).convert("L")).mean[0]
+    assert left_col < 60, ("the text column must be deep graphite", left_col)
+    assert inner_edge < 110, ("the portrait's inner edge must dissolve into the dark panel", inner_edge)
     assert "scrim_treatment" in ev.not_applicable_fields
 
 

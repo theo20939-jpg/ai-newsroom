@@ -27,7 +27,6 @@ from services.data_source_classification import DataPresentationMode
 from services.nnj_master_news_overlay import apply_master_news_branding
 from services.presentation_director import DataCandidate, QuoteCandidate
 from services.render_evidence import (
-    NOT_MEASURED,
     derive_breaking_render_evidence,
     derive_data_render_evidence,
     derive_master_news_render_evidence,
@@ -272,5 +271,7 @@ def test_breaking_render_evidence_unchanged_no_band_no_scrim() -> None:
     ev = derive_breaking_render_evidence(src)
     assert ev.scrim_treatment == "none"
     assert ev.source_image_treatment == "preserve"
-    assert ev.renderer_version == "pulse-breaking-v2"
-    assert ev.placement_zone is NOT_MEASURED
+    # FOUNDER-VISUAL-POLISH-2 §3: BREAKING is its own distinct treatment now (lower-media pulse).
+    assert ev.renderer_version == "pulse-breaking-v3"
+    assert ev.placement_zone == "lower_center"
+    assert ev.logo_count == 1

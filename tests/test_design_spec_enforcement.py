@@ -168,11 +168,14 @@ def test_news_accepted_render_spec_match_is_partial_evidence_never_whole_na() ->
     that ONE field named, never a whole-dimension NOT_APPLICABLE."""
     branded, _decision = apply_master_news_branding(_photo_16x9())
     evidence = derive_master_news_render_evidence(_photo_16x9(), presentation_type="NEWS")
+    # FOUNDER-VISUAL-POLISH-2: NEWS is now the restrained MARK_ONLY watermark - placement_zone
+    # is genuinely NOT APPLICABLE, so the spec field is skipped as a note and SPEC_MATCH PASSes.
+    assert "placement_zone" in evidence.not_applicable_fields
     dim = _evaluate_spec_match(_local_spec(_NEWS_PARAMS, scope="telegram_news"), None, evidence)
-    assert dim.status is DimensionStatus.PARTIAL_EVIDENCE, dim.rationale
+    assert dim.status is DimensionStatus.PASS, dim.rationale
     assert dim.reason_codes == []
     assert set(dim.checked_fields) >= {"safe_margin_frac", "logo_zone", "scrim_treatment", "source_image_treatment"}
-    assert dim.not_measured_fields == ["placement_zone"]
+    assert dim.not_measured_fields == []
     assert branded  # the real render succeeded
 
 
@@ -189,14 +192,15 @@ def test_breaking_corrected_render_has_no_band_no_scrim_mismatch_and_matches_new
     assert evidence.scrim_treatment == "none"
     assert evidence.source_image_treatment == "preserve"
 
+    # FOUNDER-VISUAL-POLISH-2 §3: BREAKING v3 places the pulse in the lower-centre band. Against
+    # the old params (placement_zone lower_left) that is a SOFT SPEC_PLACEMENT_ZONE_MISMATCH.
     dim = _evaluate_spec_match(_local_spec(_BREAKING_PARAMS, scope="telegram_breaking"), None, evidence)
-    assert dim.status is DimensionStatus.PARTIAL_EVIDENCE, dim.rationale
-    assert dim.reason_codes == []
+    assert dim.status is DimensionStatus.FAIL
+    assert dim.reason_codes == ["SPEC_PLACEMENT_ZONE_MISMATCH"]
     assert dim.hard_failure is False
     assert set(dim.checked_fields) >= {"safe_margin_frac", "logo_zone", "scrim_treatment", "source_image_treatment"}
-    assert dim.not_measured_fields == ["placement_zone"]
 
-    # A `telegram_breaking v2` with placement_zone dropped -> SPEC_MATCH = PASS (no evaluator change).
+    # A `telegram_breaking` spec with placement_zone dropped -> SPEC_MATCH = PASS.
     v2_params = {k: v for k, v in _BREAKING_PARAMS.items() if k != "placement_zone"}
     v2_dim = _evaluate_spec_match(_local_spec(v2_params, scope="telegram_breaking"), None, evidence)
     assert v2_dim.status is DimensionStatus.PASS
@@ -526,8 +530,10 @@ async def test_all_four_active_specs_evaluate_their_accepted_render_field_aware(
       * BREAKING   -> FAIL / SPEC_SCRIM_MISMATCH (the retired dark band is still drawn)
     No render is FORCED to PASS; no hard failure anywhere."""
     specs = {}
+    _news_p = {k: v for k, v in _NEWS_PARAMS.items() if k != "placement_zone"}
+    _brk_p = {k: v for k, v in _BREAKING_PARAMS.items() if k != "placement_zone"}
     for scope, params in [
-        ("telegram_news", _NEWS_PARAMS), ("telegram_breaking", _BREAKING_PARAMS),
+        ("telegram_news", _news_p), ("telegram_breaking", _brk_p),
         ("telegram_data", _DATA_PARAMS), ("telegram_quote", _QUOTE_PARAMS),
     ]:
         cand = await create_candidate_spec(
@@ -561,8 +567,8 @@ async def test_all_four_active_specs_evaluate_their_accepted_render_field_aware(
     # the SAME reason - the fused NEWS-family lower signature exposes no independent `placement_zone`
     # while telegram_news/breaking v1 still declare the wrongly-derived placement_zone=lower_left.
     expected = {
-        "telegram_news": DimensionStatus.PARTIAL_EVIDENCE,
-        "telegram_breaking": DimensionStatus.PARTIAL_EVIDENCE,
+        "telegram_news": DimensionStatus.PASS,       # FOUNDER-VISUAL-POLISH-2: MARK_ONLY, placement_zone N/A
+        "telegram_breaking": DimensionStatus.PASS,   # BREAKING v3 vs a placement_zone-free spec
         "telegram_data": DimensionStatus.PASS,
         "telegram_quote": DimensionStatus.PASS,
     }
@@ -582,15 +588,16 @@ async def test_all_four_active_specs_evaluate_their_accepted_render_field_aware(
         assert spec_dim.reason_codes == [], (scope, spec_dim.reason_codes)  # no mismatch anywhere
         # every case verifies at least the margin + logo zone + source treatment
         assert {"safe_margin_frac", "logo_zone", "source_image_treatment"} <= set(spec_dim.checked_fields), scope
-    # NEWS + BREAKING: the only not-measured field is placement_zone; nothing routes to BLOCK/REWORK.
+    # FOUNDER-VISUAL-POLISH-2: NEWS (MARK_ONLY) and BREAKING v3 both cleanly PASS a
+    # placement_zone-free spec - nothing routes to BLOCK/REWORK.
     for scope in ("telegram_news", "telegram_breaking"):
-        assert expected[scope] is DimensionStatus.PARTIAL_EVIDENCE
+        assert expected[scope] is DimensionStatus.PASS
     brk_merged, _ = finalize_art_direction(SpecEvaluationInput(
         base_result=evaluate_art_direction_shadow(_pixel_input(photo, "BREAKING")),
         active_spec=specs["telegram_breaking"], render_evidence=breaking_ev,
     ))
     assert brk_merged.decision is not ArtDirectorDecision.BLOCK
-    assert brk_merged.decision is not ArtDirectorDecision.REWORK  # PARTIAL_EVIDENCE never downgrades
+    assert brk_merged.decision is not ArtDirectorDecision.REWORK
 
 
 # ==============================================================================================
@@ -645,10 +652,10 @@ def test_derive_master_news_evidence_has_one_mark_and_placement_zone_is_a_measur
     assert ev.logo_count == 1
     assert ev.logo_zone in {"lower_right", "lower_left", "upper_right", "upper_left"}
     assert ev.placement_zone is NOT_MEASURED
-    # addendum §1: NOT in not_applicable_fields - it IS applicable, the renderer just can't expose
-    # it -> drives SPEC_MATCH PARTIAL_EVIDENCE and surfaces the two-corner-vs-fused-signature drift.
-    assert "placement_zone" not in ev.not_applicable_fields
-    assert "MEASUREMENT GAP" in ev.notes["placement_zone"]
+    # FOUNDER-VISUAL-POLISH-2: MARK_ONLY has no independent accent -> placement_zone is NOT
+    # APPLICABLE (the one mark's corner is logo_zone), not a measurement gap.
+    assert "placement_zone" in ev.not_applicable_fields
+    assert "NOT APPLICABLE" in ev.notes["placement_zone"]
     assert ev.source_image_treatment == "preserve"
     assert "primary_font_size" in ev.not_applicable_fields
 
@@ -678,10 +685,8 @@ def test_derive_breaking_evidence_reports_the_corrected_no_scrim_news_family_sig
     assert ev.scrim_applied is False
     assert ev.scrim_treatment == "none"
     assert ev.logo_count == 1
-    assert ev.renderer_version == "pulse-breaking-v2"
-    # placement_zone stays an APPLICABLE measurement gap (like NEWS), not not_applicable.
-    assert "placement_zone" not in ev.not_applicable_fields
-    assert "MEASUREMENT GAP" in ev.notes["placement_zone"] and "telegram_breaking v2" in ev.notes["placement_zone"]
+    assert ev.renderer_version == "pulse-breaking-v3"
+    assert ev.placement_zone == "lower_center"  # FOUNDER-VISUAL-POLISH-2: the red pulse crosses the lower media
 
 
 # --------------------------------------------------------------------------------------------------
