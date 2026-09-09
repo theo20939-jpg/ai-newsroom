@@ -227,39 +227,20 @@ _CALIBRATED_GENERIC_DESCRIPTOR_ENTITIES = frozenset({
     "утро", "новост", "день",
 })
 
-# STORY-CONTINUITY-P0 (2026-09, real production evidence META-AI-DUPLICATE forensics): broad
-# domain/format vocabulary that a headline routinely capitalizes ("AI", "Model", "Agent",
-# "Update") or opens a sentence with ("Will consumers trust it?" -> "will"), which then acts as a
-# spurious Story anchor or inflates entity_jaccard between two unrelated same-company items. Real
-# confirmed failures this set responds to, individually:
-#   - Story "Will you have spent more of your life with computers..." accumulated 7 editorially
-#     unrelated articles (gaming / solar / self-flying planes / AI-for-coders / a Meta Muse agent
-#     item) whose SOLE shared entity was the sentence-initial modal "will".
-#   - Story "Meta's new AI transcription model ..." (entities ["meta","ai"]) absorbed two
-#     Sept-8 Meta personal-agent items purely on the generic {meta, ai} overlap.
-# Two evidence-backed sub-categories (NOT a general stopword list - each member is a real
-# forensic finding or its direct linguistic class):
-#   - domain/product-category vocabulary, never an identity on its own: "ai", "ml", "llm",
-#     "model", "models", "agent", "agents", "app", "apps", "tool", "tools", "platform", "api",
-#     "technology", "tech", "software", "chatbot", "assistant", "feature", "features", "service",
-#     "startup", "company", "news", "launch", "update", "release", "version".
-#   - sentence-initial modal/opener verbs, capitalized only for position: "will", "can", "could",
-#     "should", "would", "does", "do", "is", "are", "here", "why", "how", "what", "meet".
-#   - Russian equivalents in post-normalize_for_entity_match() form: "ии", "модель", "модел",
-#     "приложение", "приложени", "технологи", "сервис", "компани" (already covered), "новост"
-#     (already covered), "запуск", "агент", "инструмент".
+# STORY-CONTINUITY-P0 (2026-09, real production evidence META-AI-DUPLICATE forensics).
+# Deliberately SMALL - only tokens that are (a) a broad AI-domain acronym essentially never part
+# of a real proper name, or (b) a sentence-initial modal/auxiliary capitalized purely for
+# position. Common nouns that DO appear inside genuine company/product names ("Model", "Agent",
+# "Technology", "Platform", "App", "System", "Labs", …) are deliberately NOT here - they stay
+# extractable, and _distinctive_shared_entities()'s document-frequency gate is what stops a
+# common noun carrying a confident match on its own. Real forensic anchor this responds to: the
+# Story "Will you have spent more of your life with computers..." held 7 editorially-unrelated
+# members together on the single sentence-opener "will"; "Meta's new AI transcription model"
+# reduced to {meta} once bare "AI" stopped counting.
 _GENERIC_DOMAIN_ENTITIES = frozenset({
-    "ai", "ml", "llm", "model", "models", "agent", "agents", "app", "apps", "tool", "tools",
-    "platform", "api", "technology", "tech", "software", "chatbot", "assistant", "feature",
-    "features", "service", "startup", "company", "news", "launch", "update", "release",
-    "version", "product", "system",
-    # sentence-initial modal / opener words - capitalized for position, never an identity
-    # (real forensic finding: the Story "Will you have spent more of your life with computers..."
-    # accumulated 7 unrelated articles anchored solely on "will").
-    "will", "can", "could", "should", "would", "does", "do", "is", "are", "was", "were",
-    "here", "why", "how", "what", "who", "when", "meet",
-    "ии", "модель", "модел", "приложение", "приложени", "технологи", "технология", "сервис",
-    "запуск", "агент", "инструмент", "продукт", "система",
+    "ai", "ml", "llm", "genai", "agi",
+    "ии", "модель", "модел", "модели", "нейросеть", "нейросет",
+    "will", "would", "should", "could",
 })
 
 # Union of every set _extract_entities() drops outright and classify_entity() calls "generic".
@@ -479,12 +460,17 @@ def compute_entity_evidence(new_entities: list[str], candidate_entities: list[st
 # intentional-narrow-duplication convention this codebase already uses between
 # capabilities/copywriting_capability.py's and capabilities/intelligence_capability.py's own
 # duplicated _floor_validate.
-# STORY-CONTINUITY-P0: a digit-led token (a version / model / generation number) is captured as
-# a CONTINUATION of a capitalized run, though never its start - so "iPhone 17" -> "phone 17",
-# "Muse Spark 1.3" -> "muse spark 1.3", "Google Pixel 11" -> "google pixel 11". This lets the
-# matcher tell two releases of one product line apart ("iPhone 17" vs "iPhone 16") instead of
-# collapsing both to the bare noun "phone".
-_ENTITY_RUN_RE = re.compile(r"[A-ZА-ЯЁ][\w\-.]*(?:\s+(?:[A-ZА-ЯЁ][\w\-.]*|\d[\w.\-]*))*")
+_ENTITY_RUN_RE = re.compile(r"[A-ZА-ЯЁ][\w\-.]*(?:\s+[A-ZА-ЯЁ][\w\-.]*)*")
+# STORY-CONTINUITY-P0: the MATCHING-ONLY variant. A digit-led token (a version / model /
+# generation number) is captured as a CONTINUATION of a capitalized run, never its start -
+# "iPhone 17" -> "phone 17", "Muse Spark 1.3" -> "muse spark 1.3". Lets the matcher tell two
+# releases of one product line apart. Used only by _extract_entities(..., aggressive=True),
+# i.e. only from match_story()/_score_components() - every other extract_story_signature()
+# consumer (recap integrity, event_recap raw-candidate facts, the golden suite) keeps the
+# original _ENTITY_RUN_RE behaviour unchanged.
+_ENTITY_RUN_RE_VERSIONED = re.compile(
+    r"[A-ZА-ЯЁ][\w\-.]*(?:\s+(?:[A-ZА-ЯЁ][\w\-.]*|\d[\w.\-]*))*"
+)
 _MIN_ENTITY_LEN = 2
 
 # Significant title keyword extraction - length-filtered, matches text_normalization's own
@@ -698,7 +684,6 @@ def _strip_leading_determiner(normalized_entity: str) -> str:
         or words[0] in _CALIBRATED_GENERIC_PREFIX_ENTITIES
         or words[0] in _GENERIC_FUNCTION_WORD_ENTITIES
         or words[0] in _CALIBRATED_GENERIC_DESCRIPTOR_ENTITIES
-        or words[0] in _GENERIC_DOMAIN_ENTITIES  # STORY-CONTINUITY-P0: "New Muse ..." -> "muse ..."
     ):
         return " ".join(words[1:])
     return normalized_entity
@@ -728,8 +713,20 @@ def _extract_entities(title: str) -> list[str]:
     see both sets' own docstrings for the real corpus evidence behind each. Same architecture,
     same call site, same "excluded outright when a spurious sentence-initial capital is the *only*
     extracted entity" rationale Checkpoint 6 already established - no new mechanism."""
+    return _extract_entities_impl(title, aggressive=False)
+
+
+def _extract_entities_impl(title: str, *, aggressive: bool) -> list[str]:
+    """`aggressive=False` (every extract_story_signature() consumer): the pre-P0 behaviour
+    verbatim - a capitalized run is kept whole unless the WHOLE normalized run is a single
+    generic token. `aggressive=True` (STORY-CONTINUITY-P0, only match_story()/_score_components()):
+    also captures a trailing version/generation number, drops generic domain/format vocabulary
+    from WITHIN a run ("new AI transcription model" -> the run "AI" -> dropped; "New Muse AI
+    Agent" -> "muse agent"), and drops a run that is only generic vocab or a Title-Case headline
+    fragment (>5 surviving tokens)."""
+    run_re = _ENTITY_RUN_RE_VERSIONED if aggressive else _ENTITY_RUN_RE
     seen: dict[str, None] = {}
-    for match in _ENTITY_RUN_RE.finditer(title):
+    for match in run_re.finditer(title):
         candidate = match.group(0).strip()
         if len(candidate) < _MIN_ENTITY_LEN:
             continue
@@ -739,21 +736,28 @@ def _extract_entities(title: str) -> list[str]:
             or normalized in _CALIBRATED_GENERIC_PREFIX_ENTITIES
             or normalized in _GENERIC_FUNCTION_WORD_ENTITIES
             or normalized in _CALIBRATED_GENERIC_DESCRIPTOR_ENTITIES
+            or (aggressive and _is_generic_token(normalized))
         ):
             continue
         normalized = _strip_leading_determiner(normalized)
-        # STORY-CONTINUITY-P0: a captured run can still carry generic domain/format vocabulary
-        # INSIDE it ("new AI transcription model" -> the run "AI" alone, or "New Muse AI Agent"
-        # -> "muse ai agent"). Drop the generic tokens from within the run so what survives is
-        # only the identifying words; drop the run entirely if nothing identifying survives or if
-        # it is a Title-Case headline fragment (too many surviving tokens to be a real name).
-        run_tokens = [t for t in normalized.split(" ") if t and not _is_generic_token(t)]
-        if not run_tokens or len(run_tokens) > _MAX_ENTITY_RUN_TOKENS:
-            continue
-        normalized = " ".join(run_tokens)
+        if aggressive:
+            normalized = _strip_leading_generic_domain(normalized)
+            run_tokens = [t for t in normalized.split(" ") if t and not _is_generic_token(t)]
+            if not run_tokens or len(run_tokens) > _MAX_ENTITY_RUN_TOKENS:
+                continue
+            normalized = " ".join(run_tokens)
         if normalized and normalized not in seen:
             seen[normalized] = None
     return list(seen.keys())
+
+
+def _strip_leading_generic_domain(normalized_entity: str) -> str:
+    """aggressive-only: "New Muse Agent" -> "muse agent" (strip a single leading generic-domain
+    token from a multi-word run)."""
+    words = normalized_entity.split(" ")
+    if len(words) > 1 and words[0] in _GENERIC_DOMAIN_ENTITIES:
+        return " ".join(words[1:])
+    return normalized_entity
 
 
 def _extract_keywords(title: str) -> list[str]:
@@ -787,24 +791,33 @@ def _classify_topic(title: str) -> str:
     return TOPIC_OTHER
 
 
-def extract_story_signature(title: str, category: EventCategory) -> StorySignature:
+def extract_story_signature(
+    title: str, category: EventCategory, *, aggressive_entities: bool = False
+) -> StorySignature:
     """Pure. Deterministic: identical input always produces an identical signature.
     `category` is accepted for interface symmetry with `match_story()` (both take the same two
     facts about an event) even though the signature itself does not currently vary by category -
     Phase 20 M3: category is a soft scoring bonus in `score_candidate()`, never a hard retrieval
-    filter (see this module's own docstring for why the original hard gate was removed)."""
-    del category  # not used in the signature itself - see docstring
-    # STORY-CONTINUITY-P0: one shared identity-normalization pass (Google News suffix + Russian
-    # legal-designation disclaimer + leading wire-format label) so publisher/format boilerplate
-    # never becomes a Story entity or inflates keyword overlap. A no-op for titles without any of
-    # that boilerplate. See services/text_normalization.py::normalize_story_identity_title().
-    from services.text_normalization import normalize_story_identity_title
+    filter (see this module's own docstring for why the original hard gate was removed).
 
-    identity_title = normalize_story_identity_title(title)
+    STORY-CONTINUITY-P0: `aggressive_entities` is set ONLY by match_story()/_score_components().
+    When True, the title first goes through normalize_story_identity_title() (strip the Russian
+    legal-designation disclaimer + a leading wire-format label - publisher/format boilerplate,
+    never Story identity) and entity extraction uses the aggressive rules (see
+    _extract_entities_impl). Default False = the pre-P0 behaviour verbatim, so every other
+    consumer (recap integrity, event_recap forensic facts, the golden suite, story_context) is
+    unchanged."""
+    del category  # not used in the signature itself - see docstring
+    if aggressive_entities:
+        from services.text_normalization import normalize_story_identity_title
+
+        src = normalize_story_identity_title(title)
+    else:
+        src = title
     return StorySignature(
-        entities=_extract_entities(identity_title),
-        keywords=_extract_keywords(identity_title),
-        topic_bucket=_classify_topic(identity_title),
+        entities=_extract_entities_impl(src, aggressive=aggressive_entities),
+        keywords=_extract_keywords(src),
+        topic_bucket=_classify_topic(src),
     )
 
 
@@ -836,7 +849,15 @@ def _score_components(
     """
     from services.text_normalization import normalize_story_identity_title
 
-    ev = compute_entity_evidence(list(signature.entities), list(candidate.entities or []))
+    # STORY-CONTINUITY-P0: compare AGGRESSIVE-extracted entities for BOTH sides, re-derived from
+    # the titles here rather than trusting the Story row's stored (non-aggressive) entities - so
+    # the matching is consistent regardless of when/how a candidate Story was first created, and
+    # no production Story rows need re-extraction.
+    new_entities = _extract_entities_impl(normalize_story_identity_title(title), aggressive=True)
+    cand_entities = _extract_entities_impl(
+        normalize_story_identity_title(candidate_title), aggressive=True
+    )
+    ev = compute_entity_evidence(new_entities, cand_entities)
     title_overlap = symmetric_token_overlap(
         normalize_story_identity_title(title), normalize_story_identity_title(candidate_title)
     )
@@ -1013,7 +1034,12 @@ async def match_story(
     services/editorial_scoring.py's own apply_editorial_scoring_v2() not owning persistence
     either)."""
     reference_now = now if now is not None else datetime.now(timezone.utc)
-    signature = extract_story_signature(title, category)
+    signature = extract_story_signature(title, category)  # non-aggressive - returned + stored
+    # STORY-CONTINUITY-P0: the aggressive-extracted entities used for identity comparison
+    # (re-derived for candidates inside _score_components, so no stored Story row is trusted).
+    from services.text_normalization import normalize_story_identity_title as _nsit
+
+    agg_new_entities = _extract_entities_impl(_nsit(title), aggressive=True)
     # Phase 20.7: Editorial Content Type - computed here, before Story Identity is evaluated
     # below, per the "identity before delta" ordering this module already establishes (a
     # relationship classification must never be more confident than the evidence for it - a
@@ -1078,7 +1104,11 @@ async def match_story(
     # unmodified `_distinctive_shared_entities()` check - never a single common word alone).
     # Computed once here and reused below (the same evidence used later for the SUPPORTING_
     # SOURCE/STORY_UPDATE gate) rather than recomputed twice.
-    distinctive_at_best = _distinctive_shared_entities(signature.entities, candidate.entities or [], entity_df, len(candidates))
+    distinctive_at_best = _distinctive_shared_entities(
+        agg_new_entities,
+        _extract_entities_impl(_nsit(candidate.title), aggressive=True),
+        entity_df, len(candidates),
+    )
     # Phase V2.22A: the bonus itself additionally requires a realistic-scale pool (see
     # _DISTINCTIVE_ENTITY_BONUS_MIN_POOL_SIZE's own comment) - `distinctive_at_best` is still
     # computed unconditionally above and reused below for the pre-existing, unaffected SUPPORTING_

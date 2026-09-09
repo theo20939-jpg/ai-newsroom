@@ -530,19 +530,18 @@ def test_government_wrapper_case_from_real_calibration_set() -> None:
 
 
 def test_calibration_negative_controls_preserved() -> None:
-    """Real negative controls from the checkpoint's own calibration. STORY-CONTINUITY-P0 note:
-    broad AI-domain vocabulary ("ai", "cloud", "model", "agent") is now GENERIC and dropped from
-    entity extraction outright (Section 4/7 - it must never anchor a Story), so the pre-P0
-    "ai cloud" composite entity is deliberately gone; the real distinctive identity ("nebius")
-    still survives. Every genuine company-prefixed product name below is untouched."""
+    """Real negative controls from the checkpoint's own calibration. STORY-CONTINUITY-P0: the
+    DEFAULT (non-aggressive) extract_story_signature() is byte-unchanged from d2dea2c - the
+    aggressive entity rules (drop generic vocab from within a run, capture a trailing version
+    number) apply ONLY in the match_story()/_score_components() path (aggressive_entities=True),
+    so every non-matching consumer keeps its exact pre-P0 entity set."""
     ai_sig = extract_story_signature(
         "Nebius увеличила выручку во II квартале в 5,5 раза за счет сегмента AI Cloud", EventCategory.AI,
     )
-    assert "nebius" in ai_sig.entities  # the real distinctive identity survives
-    assert "ai cloud" not in ai_sig.entities and "ai" not in ai_sig.entities  # P0: AI-domain vocab is generic
+    assert "ai cloud" in ai_sig.entities  # standalone "ai" (149 real corpus occurrences) never stripped
 
     pixel_sig = extract_story_signature("Google Pixel 11 launch: Live updates", EventCategory.GADGETS)
-    assert "google pixel 11" in pixel_sig.entities  # real company-prefixed product (P0: now version-qualified)
+    assert "google pixel" in pixel_sig.entities  # real company-prefixed product, untouched
 
     watch_sig = extract_story_signature("Apple Watch face gets new options", EventCategory.GADGETS)
     assert "apple watch" in watch_sig.entities
@@ -1106,11 +1105,17 @@ def test_p0_confident_match_threshold_is_unchanged() -> None:
         ("meta", ENTITY_SUPPORTING),                     # globally-recurring organization
         ("google", ENTITY_SUPPORTING),
         ("openai", ENTITY_SUPPORTING),
-        ("ai", ENTITY_GENERIC),
-        ("model", ENTITY_GENERIC),
-        ("agent", ENTITY_GENERIC),
+        ("ai", ENTITY_GENERIC),                          # broad domain acronym
+        ("llm", ENTITY_GENERIC),
         ("will", ENTITY_GENERIC),                        # sentence-initial modal
-        ("ai model", ENTITY_GENERIC),                    # all-generic multi-word
+        ("ии", ENTITY_GENERIC),
+        # STORY-CONTINUITY-P0: the generic set is deliberately tiny (acronyms + modals) so
+        # genuine names like "Marvell Technology" survive. Common product-category nouns
+        # ("model", "agent") stay extractable and DISTINCTIVE by shape - the
+        # _distinctive_shared_entities() document-frequency gate is what stops one carrying a
+        # confident match on its own.
+        ("model", ENTITY_DISTINCTIVE),
+        ("agent", ENTITY_DISTINCTIVE),
     ],
 )
 def test_p0_classify_entity(entity: str, expected: str) -> None:
@@ -1118,18 +1123,22 @@ def test_p0_classify_entity(entity: str, expected: str) -> None:
 
 
 def test_p0_generic_domain_vocab_dropped_from_extraction() -> None:
-    """"AI", "model", "agent", "will" must never survive as Story entities."""
+    """In the MATCHING path (aggressive_entities=True) broad AI-domain vocabulary and the
+    sentence-opener "will" must never survive as identity."""
     sig = extract_story_signature(
-        "Meta debuts its Muse AI agent. Will consumers trust it?", EventCategory.AI
+        "Meta debuts its Muse AI agent. Will consumers trust it?", EventCategory.AI,
+        aggressive_entities=True,
     )
     assert "muse" in sig.entities
     assert "meta" in sig.entities
-    assert not ({"ai", "agent", "will", "model"} & set(sig.entities))
+    assert not ({"ai", "will"} & set(sig.entities))
+    assert not any("will" in e.split() for e in sig.entities)
 
 
 def test_p0_russian_legal_prefix_does_not_survive_as_identity() -> None:
     sig = extract_story_signature(
-        "Запрещённая в России Meta представила ИИ-модель Muse Voice Transcribe", EventCategory.AI
+        "Запрещённая в России Meta представила ИИ-модель Muse Voice Transcribe", EventCategory.AI,
+        aggressive_entities=True,
     )
     assert "muse voice transcribe" in sig.entities
     assert not any("запрещ" in e or "росси" in e for e in sig.entities)

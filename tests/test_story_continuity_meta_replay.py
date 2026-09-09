@@ -274,8 +274,8 @@ async def test_adv_E_russian_legal_boilerplate_no_false_merge(db_session: AsyncS
 async def test_adv_F_publisher_suffix_prefix_noise_no_identity_distortion(db_session: AsyncSession) -> None:
     from services.story_memory import extract_story_signature as ess
 
-    a = ess("Investigation: Acme explored deep job cuts to become AI-native", EventCategory.TECH)
-    b = ess("Acme explored deep job cuts to become AI-native", EventCategory.TECH)
+    a = ess("Investigation: Acme explored deep job cuts to become AI-native", EventCategory.TECH, aggressive_entities=True)
+    b = ess("Acme explored deep job cuts to become AI-native", EventCategory.TECH, aggressive_entities=True)
     assert set(a.entities) == set(b.entities)  # wire-format label "Investigation:" doesn't add identity
 
 

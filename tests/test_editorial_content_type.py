@@ -173,14 +173,26 @@ async def test_case_d_research_vs_announcement(db_session: AsyncSession, monkeyp
 @pytest.mark.asyncio
 async def test_case_e_negative_control_same_story_different_wording_still_links(db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
     """Both sides are plain NEWS (no specific editorial marker) - the content-type gate must NOT
-    prevent this genuine same-story update (a real Checkpoint 6 genuine-update case, case 70 -
-    already independently confirmed to reach STORY_UPDATE on its own merits) from linking."""
+    be what blocks this pair.
+
+    STORY-CONTINUITY-P0 recalibration: the two headlines share ONLY the organization "SpaceX"
+    (the delta between "AI company" wordings is generic vocab). Section 7 - "organization overlap
+    alone cannot establish same Story" - so this now resolves to UNCERTAIN_MATCH (a non-merging
+    provisional link, continuity AMBIGUOUS), NOT a confident STORY_UPDATE. That is the intended
+    P0 trade-off: the same org-only signal that linked this correct pair was what false-merged
+    the Meta "Muse agent" burst into unrelated Meta Stories. The pair is not lost (matched_story_
+    id is set for review); a later semantic/keyword layer can promote it. What P0 asserts here:
+    the CONTENT-TYPE gate is not the blocker, and the match still attaches for observability."""
     root = await _seed_story(db_session, "SpaceX made more revenue as an AI company than a space company", category=EventCategory.GADGETS)
     _signature, result = await _match_against_only(
         monkeypatch, db_session, title="SpaceX's first public earnings statement shows the financials of an AI company in 2026",
         category=EventCategory.GADGETS, only_candidate=root,
     )
-    assert result.outcome in _SAME_STORY_OUTCOMES, f"content-type gate must not block this genuine update, got {result.outcome}: {result.similarity_reason}"
+    assert result.outcome in (*_SAME_STORY_OUTCOMES, "uncertain_match"), (
+        f"content-type gate must not hard-block; got {result.outcome}: {result.similarity_reason}"
+    )
+    assert result.matched_story_id == root.id  # not lost - attached for review
+    assert "content type" not in result.similarity_reason.lower()  # not a content-type mismatch
 
 
 @pytest.mark.asyncio
