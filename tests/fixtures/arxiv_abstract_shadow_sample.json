@@ -1,0 +1,786 @@
+{
+  "_comment": "STORY-CONTINUITY-P0.1 replay fixture. The 17 CONFIDENT (DUPLICATE_NO_DELTA / MATERIAL_UPDATE_CANDIDATE) Story-continuity decisions recorded in production during STORY-CONTINUITY-P0-SHADOW-PRODUCTION-ROLLOUT-1 (2026-09-09, automation_worker @ b45e384). arXiv abstracts are public; one non-latin news headline was encoding-lossy in the DB export and is replaced with a neutral label. No event ids, no secrets. Expectation: every case whose matched Story holds >= 2 distinct stable document identities, or whose own arXiv id conflicts with the cluster, must be demoted to AMBIGUOUS by the identity guard; the 4 clean single-paper re-collections and the 2 non-arXiv news items must be preserved.",
+  "source_phase": "STORY-CONTINUITY-P0-SHADOW-PRODUCTION-ROLLOUT-1",
+  "captured_utc": "2026-09-09",
+  "cases": [
+    {
+      "id": "prod_shadow_00",
+      "prod_final_decision": "DUPLICATE_NO_DELTA",
+      "match_type": "semantic_duplicate",
+      "match_score": 1.0,
+      "delta_classification": "NO_DELTA",
+      "prod_would_suppress": true,
+      "new_title": "Aims. The objective of this work is to adapt a deep neural network model to perform galaxy morphological classification",
+      "new_url": "https://arxiv.org/abs/2609.06316v1",
+      "new_summary": null,
+      "story_title": "Aims. The objective of this work is to adapt a deep neural network model to perform galaxy morphological classification",
+      "distinct_prior_document_ids": 1,
+      "prior_documents": [
+        {
+          "title": "Aims. The objective of this work is to adapt a deep neural network model to perform galaxy morphological classification",
+          "url": "https://arxiv.org/abs/2609.06316v1"
+        }
+      ]
+    },
+    {
+      "id": "prod_shadow_01",
+      "prod_final_decision": "DUPLICATE_NO_DELTA",
+      "match_type": "supporting_source",
+      "match_score": 0.9067,
+      "delta_classification": "NO_DELTA",
+      "prod_would_suppress": true,
+      "new_title": "Embodied visual tracking requires a robot not only to react to the current view, but to choose actions that preserve or",
+      "new_url": "https://arxiv.org/abs/2609.06302v1",
+      "new_summary": null,
+      "story_title": "Embodied navigation requires agents to translate heterogeneous goals and visual observations into actions across tasks,",
+      "distinct_prior_document_ids": 3,
+      "prior_documents": [
+        {
+          "title": "Embodied navigation requires agents to translate heterogeneous goals and visual observations into actions across tasks,",
+          "url": "https://arxiv.org/abs/2608.30935v1"
+        },
+        {
+          "title": "Embodied navigation requires agents to translate heterogeneous goals and visual observations into actions across tasks,",
+          "url": "https://arxiv.org/abs/2608.30935v1"
+        },
+        {
+          "title": "Embodied agents performing long-horizon tasks require a memory representation in which the state transitions of dynamic",
+          "url": "https://arxiv.org/abs/2609.04802v1"
+        },
+        {
+          "title": "Embodied visual tracking requires a robot not only to react to the current view, but to choose actions that preserve or",
+          "url": "https://arxiv.org/abs/2609.06302v1"
+        }
+      ]
+    },
+    {
+      "id": "prod_shadow_02",
+      "prod_final_decision": "DUPLICATE_NO_DELTA",
+      "match_type": "supporting_source",
+      "match_score": 0.978,
+      "delta_classification": "NO_DELTA",
+      "prod_would_suppress": true,
+      "new_title": "Self-supervised sign language representation learning must model two properties not central to natural-image SSL: signs",
+      "new_url": "https://arxiv.org/abs/2609.06296v1",
+      "new_summary": null,
+      "story_title": "Self-supervised learning (SSL) has driven substantial progress in audio representation learning, though existing",
+      "distinct_prior_document_ids": 6,
+      "prior_documents": [
+        {
+          "title": "Self-supervised learning (SSL) has driven substantial progress in audio representation learning, though existing",
+          "url": "https://arxiv.org/abs/2608.19863v1"
+        },
+        {
+          "title": "Self-supervised pretraining on remote sensing imagery typically treats all samples as equally informative, despite",
+          "url": "https://arxiv.org/abs/2608.19766v1"
+        },
+        {
+          "title": "Self-supervised learning (SSL) encoders are vulnerable to backdoor attacks, posing threats to both visual SSL encoders",
+          "url": "https://arxiv.org/abs/2608.25851v1"
+        },
+        {
+          "title": "Self-supervised learning (SSL) models are vulnerable to backdoor attacks. However, the systemic risks they pose in face",
+          "url": "https://arxiv.org/abs/2608.26861v1"
+        },
+        {
+          "title": "Self-supervised learning relies on so-called data augmentations $φ(x)$ of unlabeled datapoints $x$ --- for example,",
+          "url": "https://arxiv.org/abs/2609.05031v1"
+        },
+        {
+          "title": "Self-supervised learning relies on so-called data augmentations $φ(x)$ of unlabeled datapoints $x$ --- for example,",
+          "url": "https://arxiv.org/abs/2609.05031v1"
+        },
+        {
+          "title": "Self-supervised sign language representation learning must model two properties not central to natural-image SSL: signs",
+          "url": "https://arxiv.org/abs/2609.06296v1"
+        }
+      ]
+    },
+    {
+      "id": "prod_shadow_03",
+      "prod_final_decision": "DUPLICATE_NO_DELTA",
+      "match_type": "semantic_duplicate",
+      "match_score": 1.0,
+      "delta_classification": "NO_DELTA",
+      "prod_would_suppress": true,
+      "new_title": "Grounding natural-language instructions into reliable and executable actions remains a fundamental challenge for",
+      "new_url": "https://arxiv.org/abs/2609.06251v1",
+      "new_summary": null,
+      "story_title": "Grounding natural-language instructions into reliable and executable actions remains a fundamental challenge for",
+      "distinct_prior_document_ids": 1,
+      "prior_documents": [
+        {
+          "title": "Grounding natural-language instructions into reliable and executable actions remains a fundamental challenge for",
+          "url": "https://arxiv.org/abs/2609.06251v1"
+        }
+      ]
+    },
+    {
+      "id": "prod_shadow_04",
+      "prod_final_decision": "DUPLICATE_NO_DELTA",
+      "match_type": "supporting_source",
+      "match_score": 1.0,
+      "delta_classification": "NO_DELTA",
+      "prod_would_suppress": true,
+      "new_title": "Multimodal Large Language Models (MLLMs) perform strongly on general visual understanding tasks such as visual question",
+      "new_url": "https://arxiv.org/abs/2609.06245v1",
+      "new_summary": null,
+      "story_title": "Multimodal Large Language Models (MLLMs) can generate pathological descriptions from histological images, but gigapixel",
+      "distinct_prior_document_ids": 30,
+      "prior_documents": [
+        {
+          "title": "Multimodal Large Language Models (MLLMs) can generate pathological descriptions from histological images, but gigapixel",
+          "url": "https://arxiv.org/abs/2608.14309v1"
+        },
+        {
+          "title": "Multimodal large language models (MLLMs) exhibit substantial performance degradation in non-English visual reasoning,",
+          "url": "https://arxiv.org/abs/2608.15085v1"
+        },
+        {
+          "title": "The use of multimodal LLMs (MLLMs) for egocentric video understanding with wearable devices is constrained by the token",
+          "url": "https://arxiv.org/abs/2608.15614v1"
+        },
+        {
+          "title": "While Multimodal Large Language Models (MLLMs) have made significant strides in visual comprehension, their ability to",
+          "url": "https://arxiv.org/abs/2608.17895v1"
+        },
+        {
+          "title": "While Multimodal Large Language Models (MLLMs) have made significant strides in visual comprehension, their ability to",
+          "url": "https://arxiv.org/abs/2608.17895v1"
+        },
+        {
+          "title": "Recent Multimodal Large Language Models (MLLMs) are rapidly evolving into unified understanding and generation (UAG)",
+          "url": "https://arxiv.org/abs/2608.18937v1"
+        },
+        {
+          "title": "Recent Multimodal Large Language Models (MLLMs) are rapidly evolving into unified understanding and generation (UAG)",
+          "url": "https://arxiv.org/abs/2608.18937v1"
+        },
+        {
+          "title": "Multimodal large language models (MLLMs) combine linguistic reasoning with visual perception, yet their ability to",
+          "url": "https://arxiv.org/abs/2608.20237v1"
+        },
+        {
+          "title": "While multimodal large language models (MLLMs) extend model capabilities beyond text, they also make safety alignment",
+          "url": "https://arxiv.org/abs/2608.21100v1"
+        },
+        {
+          "title": "MLLMs are increasingly deployed in user-facing applications, yet they inherit backdoor risks from the pipelines used to",
+          "url": "https://arxiv.org/abs/2608.24354v1"
+        },
+        {
+          "title": "Multimodal large language models (MLLMs) can integrate long visual histories, reason under partial observability, and",
+          "url": "https://arxiv.org/abs/2608.24115v1"
+        },
+        {
+          "title": "Multimodal Large Language Models (MLLMs) have shown strong performance in video understanding. However, their ability",
+          "url": "https://arxiv.org/abs/2608.25529v1"
+        },
+        {
+          "title": "Multimodal Large Language Models (MLLMs) have demonstrated strong abilities in solving diverse visual and textual",
+          "url": "https://arxiv.org/abs/2608.25398v1"
+        },
+        {
+          "title": "Although Multimodal Large Language Models (MLLMs) have demonstrated impressive performance in Medical Visual Question",
+          "url": "https://arxiv.org/abs/2608.26856v1"
+        },
+        {
+          "title": "Decoding quality in diffusion multimodal language models (dMLLMs) depends heavily on the order in which masked tokens",
+          "url": "https://arxiv.org/abs/2608.26641v1"
+        },
+        {
+          "title": "Explicit visual intermediates can help multimodal large language models (MLLMs) externalize spatial evidence and",
+          "url": "https://arxiv.org/abs/2608.26993v1"
+        },
+        {
+          "title": "Although Multimodal Large Language Models (MLLMs) have demonstrated impressive performance in Medical Visual Question",
+          "url": "https://arxiv.org/abs/2608.26856v1"
+        },
+        {
+          "title": "While Multimodal Large Language Models (MLLMs) exhibit strong generalization, visual instruction tuning for downstream",
+          "url": "https://arxiv.org/abs/2608.26820v1"
+        },
+        {
+          "title": "Multimodal large language models (MLLMs) can interpret a street view, but urban agency depends on whether such local",
+          "url": "https://arxiv.org/abs/2608.27456v1"
+        },
+        {
+          "title": "Agent systems powered by multimodal large language models (MLLMs) have advanced rapidly in recent years, yet existing",
+          "url": "https://arxiv.org/abs/2608.28266v1"
+        },
+        {
+          "title": "Multimodal large language models (MLLMs) can memorize identity-specific facts about people in their fine-tuning data,",
+          "url": "https://arxiv.org/abs/2608.28312v1"
+        },
+        {
+          "title": "Multimodal large language models (MLLMs) can memorize identity-specific facts about people in their fine-tuning data,",
+          "url": "https://arxiv.org/abs/2608.28312v1"
+        },
+        {
+          "title": "Removing a specific individual's information from multimodal large language models (MLLMs) is often needed after",
+          "url": "https://arxiv.org/abs/2608.30649v1"
+        },
+        {
+          "title": "Multimodal Large Language Models (MLLMs) are increasingly deployed in multi-image scenarios requiring complex reasoning",
+          "url": "https://arxiv.org/abs/2608.30653v1"
+        },
+        {
+          "title": "Multimodal Large Language Models (MLLMs) have shown remarkable success in STEM domains, where progress is often driven",
+          "url": "https://arxiv.org/abs/2608.30498v1"
+        },
+        {
+          "title": "Multimodal Large Language Models (MLLMs) are increasingly deployed in multi-image scenarios requiring complex reasoning",
+          "url": "https://arxiv.org/abs/2608.30653v1"
+        },
+        {
+          "title": "Multimodal Large Language Models (MLLMs) are increasingly deployed in multi-image scenarios requiring complex reasoning",
+          "url": "https://arxiv.org/abs/2608.30653v1"
+        },
+        {
+          "title": "Removing a specific individual's information from multimodal large language models (MLLMs) is often needed after",
+          "url": "https://arxiv.org/abs/2608.30649v1"
+        },
+        {
+          "title": "Recent studies have shown that multimodal large language models (MLLMs) can serve as embodied agents, translating",
+          "url": "https://arxiv.org/abs/2608.30760v1"
+        },
+        {
+          "title": "Multimodal large language models (MLLMs) struggle with fine-grained Visual Search, the task of locating small or rare",
+          "url": "https://arxiv.org/abs/2608.30705v1"
+        },
+        {
+          "title": "Despite their strong multimodal understanding ability, multimodal large language models (MLLMs) incur substantial",
+          "url": "https://arxiv.org/abs/2609.01004v1"
+        },
+        {
+          "title": "Despite their strong multimodal understanding ability, multimodal large language models (MLLMs) incur substantial",
+          "url": "https://arxiv.org/abs/2609.01004v1"
+        },
+        {
+          "title": "Despite their strong multimodal understanding ability, multimodal large language models (MLLMs) incur substantial",
+          "url": "https://arxiv.org/abs/2609.01004v1"
+        },
+        {
+          "title": "Despite their strong multimodal understanding ability, multimodal large language models (MLLMs) incur substantial",
+          "url": "https://arxiv.org/abs/2609.01004v1"
+        },
+        {
+          "title": "Multimodal Large Language Models (MLLMs) are strong perceivers of images and video. We ask how far that reach extends",
+          "url": "https://arxiv.org/abs/2609.01404v1"
+        },
+        {
+          "title": "Visual token pruning reduces the inference overhead of multimodal large language models (MLLMs) by retaining only a",
+          "url": "https://arxiv.org/abs/2609.01224v1"
+        },
+        {
+          "title": "Multimodal Large Language Models (MLLMs) are strong perceivers of images and video. We ask how far that reach extends",
+          "url": "https://arxiv.org/abs/2609.01404v1"
+        },
+        {
+          "title": "Visual modality enhances the capabilities of multimodal large language models (MLLMs) but also introduces a safety",
+          "url": "https://arxiv.org/abs/2609.02082v1"
+        },
+        {
+          "title": "Beauty assessments from Multimodal Large Language Models (MLLMs) are increasingly popular amongst users, companies, and",
+          "url": "https://arxiv.org/abs/2609.02512v1"
+        },
+        {
+          "title": "Recent progress in multimodal large language models (MLLMs) has fueled significant enthusiasm in their potential to act",
+          "url": "https://arxiv.org/abs/2609.05224v1"
+        },
+        {
+          "title": "Multimodal Large Language Models (MLLMs) perform strongly on general visual understanding tasks such as visual question",
+          "url": "https://arxiv.org/abs/2609.06245v1"
+        }
+      ]
+    },
+    {
+      "id": "prod_shadow_05",
+      "prod_final_decision": "DUPLICATE_NO_DELTA",
+      "match_type": "semantic_duplicate",
+      "match_score": 1.0,
+      "delta_classification": "NO_DELTA",
+      "prod_would_suppress": true,
+      "new_title": "Ground-truth defect masks in industrial inspection datasets are typically reserved for evaluation. This paper",
+      "new_url": "https://arxiv.org/abs/2609.06232v1",
+      "new_summary": null,
+      "story_title": "Ground-truth defect masks in industrial inspection datasets are typically reserved for evaluation. This paper",
+      "distinct_prior_document_ids": 1,
+      "prior_documents": [
+        {
+          "title": "Ground-truth defect masks in industrial inspection datasets are typically reserved for evaluation. This paper",
+          "url": "https://arxiv.org/abs/2609.06232v1"
+        }
+      ]
+    },
+    {
+      "id": "prod_shadow_06",
+      "prod_final_decision": "DUPLICATE_NO_DELTA",
+      "match_type": "supporting_source",
+      "match_score": 0.8,
+      "delta_classification": "NO_DELTA",
+      "prod_would_suppress": true,
+      "new_title": "As the share of solar power grows, nowcasting weather-driven solar variability becomes critical for reliable energy",
+      "new_url": "https://arxiv.org/abs/2609.06187v1",
+      "new_summary": null,
+      "story_title": "As online dating goes into ‘salvage mode’, can AI solve all its problems?",
+      "distinct_prior_document_ids": 15,
+      "prior_documents": [
+        {
+          "title": "As online dating goes into ‘salvage mode’, can AI solve all its problems?",
+          "url": "https://www.theguardian.com/lifeandstyle/2026/aug/14/online-dating-salvage-mode--ai-bumble-app"
+        },
+        {
+          "title": "As artificial intelligence (AI) semiconductor-related stocks, such as Samsung Electronics and SK Hyn.. - 매일경제",
+          "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE9JWlNnd0RqdmROdFNlQmVTc3JDZWhicjVpb1U4VEpRbXJIZnpfdzhGV0VBSF9JRWhUZWRYdGUyLUNzRFZ5elNJOE9HYWdUcnc?oc=5"
+        },
+        {
+          "title": "As heterogeneous robotic systems deploy across diverse urban zones, maintaining safety amid complex human-robot",
+          "url": "https://arxiv.org/abs/2608.14481v1"
+        },
+        {
+          "title": "As heterogeneous robotic systems deploy across diverse urban zones, maintaining safety amid complex human-robot",
+          "url": "https://arxiv.org/abs/2608.14481v1"
+        },
+        {
+          "title": "As a new school year begins, some classrooms may use artificial intelligence tools to flag a student struggling with",
+          "url": "https://news.google.com/rss/articles/CBMi4AFBVV95cUxOQVJNbW5uSHFBdFBFdHZsWEQ3YlFDWFJuZERHellNWkFHRHdTNm1ENnItd0Q4bGpCN2VIYU02bXlCLWxWNlZKM3hQMjBvUVVRT2liN1cxSDJYdlBpbWYyWkQzX2NoaDdoUzRRWGpHaGR4ZlFxNGJ3dGIyWWZmeHI5bTRubzIxbHRCSTRpUHl0U3RkTFZpNFU3VFNibXVRbDd1dXZzaHZzZXlnWEdhdlp5eUc1OVhtNzFvZ1laa2RrWUZmdHBDZ0hONXBSUEZEOVNhcmxoNG5YaGo4UGRZcEJrTg?oc=5"
+        },
+        {
+          "title": "AI’s recursive self-improvement might not come so quickly after all",
+          "url": "https://www.technologyreview.com/2026/08/18/1142188/ai-recursive-self-improvement/"
+        },
+        {
+          "title": "As the government speeds up the introduction of artificial intelligence (AI) in the public sector, i.. - 매일경제",
+          "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTE9Ka1paZjR2WWNaUGc4SFdVczhtV0hCdTh3dUtaSHNLNnNvRnRKemRRQkxydEZpYTJyNEdCZ2NZdk9IUzg2U0M5eGg1TQ?oc=5"
+        },
+        {
+          "title": "AI \"nudify\" apps that can digitally undress any photo pose back-to-school risk - CBS News",
+          "url": "https://news.google.com/rss/articles/CBMiekFVX3lxTE9ZVE9RazZ1MGRRakNIVnhCZmVidjZnNzZ0UEsxNGUzQjg1MHhQQ1d5c1pnbW5DU2FKWlA5S0M0eHcxaThVOTZmVlh2OG5TQlZodXcyWGVYaFVOVTF2U0Iyb2hkbG9PVXdxb0ZSZU5aMXN6U3ZMeXRmanB3?oc=5"
+        },
+        {
+          "title": "As concerns spread that the introduction of artificial intelligence (AI) would reduce jobs, U.S. com.. - 매일경제",
+          "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTFBvM09YVUtmYjBFYzk5M2Vhem1wOTk5a1ZKX0wtT3RlaFZ2SzVqcXlhM1A1ZXF1Y3JDanBrdHh3RE9pMFZqZzZ3QlV5dw?oc=5"
+        },
+        {
+          "title": "AI agents can execute scientific analyses, but an analytic output becomes a defensible claim only after alternatives",
+          "url": "https://arxiv.org/abs/2608.19902v1"
+        },
+        {
+          "title": "As artificial intelligence (AI) begins to handle multiple tasks instead of humans, semiconductor des.. - 매일경제",
+          "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTFBaQ0VJbW1CNl9iRnNWMmUwVFhDUnpTS2NqTVJPbVZVZ2VRaE5YOC03dE9MU1BtMFhwYUlXNkMyWENMMFlWX2RNYmE5WQ?oc=5"
+        },
+        {
+          "title": "As generative AI tools find increasing use in research workflows, ongoing debates on their impact, appropriateness and",
+          "url": "https://arxiv.org/abs/2608.23271v1"
+        },
+        {
+          "title": "As large language models and increasingly capable AI agents are deployed in high-risk settings, aligning them with",
+          "url": "https://arxiv.org/abs/2608.27910v1"
+        },
+        {
+          "title": "As a precursor to high-dimensional biomedical data modeling, reliable feature selection can reduce computational",
+          "url": "https://arxiv.org/abs/2608.28552v1"
+        },
+        {
+          "title": "As demand for high-value-added parts for artificial intelligence (AI) data centers increases rapidly.. - mk.co.kr",
+          "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE5GYkQ4YS1SRnZmRXA2WXBEWUd1LXBpd2lDYjFKU094YVlHSHRaRGFmSjZtVmhlV2J5eDNEQlk4Q1Btb01xR1hyVzItWXFRLU0?oc=5"
+        },
+        {
+          "title": "As artificial intelligence (AI) spreads beyond smartphones to physical AI such as robots and autonom.. - 매일경제",
+          "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTE1TQVBMYXJuNmlPWVE1RGlKVzlaT3J5ZmZjUG93NG52QTNsc05DaTk2bTU1RFdyUFg1b2hOZ0lXVVRoRW1OYjhvaHhndw?oc=5"
+        },
+        {
+          "title": "As large AI models become increasingly prevalent across a wide range of applications, memory cost has become a critical",
+          "url": "https://arxiv.org/abs/2609.01550v1"
+        },
+        {
+          "title": "As large AI models become increasingly prevalent across a wide range of applications, memory cost has become a critical",
+          "url": "https://arxiv.org/abs/2609.01550v1"
+        },
+        {
+          "title": "As generative AI tools become increasingly powerful and easy to use, people can easily edit portrait images with a",
+          "url": "https://arxiv.org/abs/2609.02751v1"
+        },
+        {
+          "title": "As large language models (LLMs) become increasingly capable, the long-term value of AI systems depends not only on",
+          "url": "https://arxiv.org/abs/2609.03753v1"
+        },
+        {
+          "title": "As integrated circuit technology scales into the nanometer regime, the traditional disconnect between logic synthesis",
+          "url": "https://arxiv.org/abs/2609.03594v1"
+        },
+        {
+          "title": "As researchers begin applying AI to understand animal communication, bioethicists warn it could give humans new ways to",
+          "url": "https://www.techmeme.com/260905/p14#a260905p14"
+        },
+        {
+          "title": "As new school year begins, districts deal with artificial intelligence - nny360.com",
+          "url": "https://news.google.com/rss/articles/CBMi6gFBVV95cUxQbnRHY1k1amlaZWJJMGhaV2R4RmU2VUFUUlZyWjhRZ2ZTcTZfejZfdFRTN05YYVB2NXk5dHhQcE5mQjk3WEdGRmtGdzJRM01xaTZfWjkxUHhOWURaQmIzdU5aNW9CVzJFbFRKUjhvdHlwNGVET3ZfcV9BanJkYVhKUTFJVDg4UjQtZGZvRjhGUkpCMUZVd21aRXlNRVZlM2ZublVUYTNHQloweU1DcFlqZHBEaUdYV0dCeUY4WWJjMVFUQ1dVMFFlbkVmcWYybDFwT0pDX1ozbmZJZGNIVi1jRFNseldKRHFwOXc?oc=5"
+        },
+        {
+          "title": "As the scale of video surveillance data outpaces manual annotation capacities, weakly supervised video anomaly",
+          "url": "https://arxiv.org/abs/2609.05066v1"
+        },
+        {
+          "title": "As evolutionary transfer optimization (ETO) scales to larger collections of related tasks, problem evaluation can",
+          "url": "https://arxiv.org/abs/2609.05040v1"
+        },
+        {
+          "title": "As quantum hardware scales to larger devices, the classical software layers that interface with it must evolve in step.",
+          "url": "https://arxiv.org/abs/2609.05060v1"
+        },
+        {
+          "title": "As a potent greenhouse gas, methane is a major driver of climate change. Its effective mitigation relies on timely",
+          "url": "https://arxiv.org/abs/2609.04906v1"
+        },
+        {
+          "title": "As the scale of video surveillance data outpaces manual annotation capacities, weakly supervised video anomaly",
+          "url": "https://arxiv.org/abs/2609.05066v1"
+        },
+        {
+          "title": "As a potent greenhouse gas, methane is a major driver of climate change. Its effective mitigation relies on timely",
+          "url": "https://arxiv.org/abs/2609.04906v1"
+        },
+        {
+          "title": "As artificial intelligence (AI) rapidly penetrates into human work areas, the game industry is beari.. - 매일경제",
+          "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTE9lUF9DQ0ZrUThxRnRsZ0JIeVBKREtmOVd0RmhzeER0dWlrWExXZVJMaFRPaHFoeWZULWVaSTF4SXZ1TzdzZGFkM0Z4dw?oc=5"
+        },
+        {
+          "title": "As artificial intelligence (AI) rapidly penetrates into human work areas, the game industry is beari.. - 매일경제",
+          "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTFBSenF1X0JNMlpjcGJnTThWc0lGOXc4UTljalllM3ZHMmwzN3NpdHlWWnNXYzVKSWNWMTNMS2JGWk1pRVJYRmViRWFTZw?oc=5"
+        },
+        {
+          "title": "As machine translation (MT) systems continue to improve, standard benchmarks become less informative for exposing",
+          "url": "https://arxiv.org/abs/2609.06048v1"
+        },
+        {
+          "title": "As the share of solar power grows, nowcasting weather-driven solar variability becomes critical for reliable energy",
+          "url": "https://arxiv.org/abs/2609.06187v1"
+        }
+      ]
+    },
+    {
+      "id": "prod_shadow_07",
+      "prod_final_decision": "DUPLICATE_NO_DELTA",
+      "match_type": "semantic_duplicate",
+      "match_score": 1.0,
+      "delta_classification": "NO_DELTA",
+      "prod_would_suppress": true,
+      "new_title": "We study the identity straight-through estimator (STE) for training a two-layer binary-activation network with hinge",
+      "new_url": "https://arxiv.org/abs/2609.06430v1",
+      "new_summary": null,
+      "story_title": "We study the identity straight-through estimator (STE) for training a two-layer binary-activation network with hinge",
+      "distinct_prior_document_ids": 1,
+      "prior_documents": [
+        {
+          "title": "We study the identity straight-through estimator (STE) for training a two-layer binary-activation network with hinge",
+          "url": "https://arxiv.org/abs/2609.06430v1"
+        }
+      ]
+    },
+    {
+      "id": "prod_shadow_08",
+      "prod_final_decision": "MATERIAL_UPDATE_CANDIDATE",
+      "match_type": "supporting_source",
+      "match_score": 0.8667,
+      "delta_classification": "MINOR_DELTA",
+      "prod_would_suppress": false,
+      "new_title": "Developing microanastomosis skill requires repeated practice with timely, action-specific feedback, yet expert review",
+      "new_url": "https://arxiv.org/abs/2609.06380v1",
+      "new_summary": null,
+      "story_title": "Developing robots capable of understanding and manipulating objects requires compact, interpretable, and generalizable",
+      "distinct_prior_document_ids": 3,
+      "prior_documents": [
+        {
+          "title": "Developing robots capable of understanding and manipulating objects requires compact, interpretable, and generalizable",
+          "url": "https://arxiv.org/abs/2608.17628v1"
+        },
+        {
+          "title": "Developing robots capable of understanding and manipulating objects requires compact, interpretable, and generalizable",
+          "url": "https://arxiv.org/abs/2608.17628v1"
+        },
+        {
+          "title": "Developing competitive deep learning baselines for medical imaging remains a highly iterative process requiring",
+          "url": "https://arxiv.org/abs/2608.23336v1"
+        },
+        {
+          "title": "Developing humanoid robots capable of leveraging human behavioral data is essential for general-purpose embodiment, yet",
+          "url": "https://arxiv.org/abs/2609.03497v1"
+        }
+      ]
+    },
+    {
+      "id": "prod_shadow_09",
+      "prod_final_decision": "MATERIAL_UPDATE_CANDIDATE",
+      "match_type": "supporting_source",
+      "match_score": 0.864,
+      "delta_classification": "MINOR_DELTA",
+      "prod_would_suppress": false,
+      "new_title": "Generating long-form multi-shot videos requires coherent within-shot motion and visually consistent narratives across",
+      "new_url": "https://arxiv.org/abs/2609.06373v1",
+      "new_summary": null,
+      "story_title": "Generating complete 3D scenes from sparse, unconstrained views is a fundamental challenge in 3D vision which requires",
+      "distinct_prior_document_ids": 2,
+      "prior_documents": [
+        {
+          "title": "Generating complete 3D scenes from sparse, unconstrained views is a fundamental challenge in 3D vision which requires",
+          "url": "https://arxiv.org/abs/2609.03931v1"
+        },
+        {
+          "title": "Generating complete 3D scenes from sparse, unconstrained views is a fundamental challenge in 3D vision which requires",
+          "url": "https://arxiv.org/abs/2609.03931v1"
+        },
+        {
+          "title": "Generating categorical graphs requires choosing node and edge types that form a coherent structure without depending on",
+          "url": "https://arxiv.org/abs/2609.05328v1"
+        }
+      ]
+    },
+    {
+      "id": "prod_shadow_10",
+      "prod_final_decision": "MATERIAL_UPDATE_CANDIDATE",
+      "match_type": "supporting_source",
+      "match_score": 0.9333,
+      "delta_classification": "MINOR_DELTA",
+      "prod_would_suppress": false,
+      "new_title": "Training-free image editing steers diffusion or flow-matching generative models at inference time by modifying",
+      "new_url": "https://arxiv.org/abs/2609.06288v1",
+      "new_summary": null,
+      "story_title": "Training-free, camera-controlled novel view synthesis from a single image using pre-trained video diffusion models",
+      "distinct_prior_document_ids": 2,
+      "prior_documents": [
+        {
+          "title": "Training-free, camera-controlled novel view synthesis from a single image using pre-trained video diffusion models",
+          "url": "https://arxiv.org/abs/2609.03639v1"
+        },
+        {
+          "title": "Training-free zero-shot video anomaly detection (ZS-VAD) leverages vision-language models (VLMs) to localize anomaly",
+          "url": "https://arxiv.org/abs/2609.06360v1"
+        }
+      ]
+    },
+    {
+      "id": "prod_shadow_11",
+      "prod_final_decision": "MATERIAL_UPDATE_CANDIDATE",
+      "match_type": "supporting_source",
+      "match_score": 0.832,
+      "delta_classification": "MINOR_DELTA",
+      "prod_would_suppress": false,
+      "new_title": "Visual dubbing must synchronize mouth motion with replacement speech while preserving identity, appearance, and",
+      "new_url": "https://arxiv.org/abs/2609.06144v1",
+      "new_summary": null,
+      "story_title": "Visual on-policy distillation relies heavily on an informative teacher-student asymmetry, through either a larger,",
+      "distinct_prior_document_ids": 9,
+      "prior_documents": [
+        {
+          "title": "Visual on-policy distillation relies heavily on an informative teacher-student asymmetry, through either a larger,",
+          "url": "https://arxiv.org/abs/2608.14144v1"
+        },
+        {
+          "title": "Visual loco-manipulation policies that can generalize to novel scenes and objects have long been a goal of robotics",
+          "url": "https://arxiv.org/abs/2608.17027v1"
+        },
+        {
+          "title": "Visual world-model agents such as DreamerV3 act through a recurrent latent state rather than a single observation,",
+          "url": "https://arxiv.org/abs/2608.21114v1"
+        },
+        {
+          "title": "Visual prompting (VP) has emerged as a parameter-efficient method for adapting pre-trained models to downstream tasks.",
+          "url": "https://arxiv.org/abs/2608.21194v1"
+        },
+        {
+          "title": "Visual world-model agents such as DreamerV3 act through a recurrent latent state rather than a single observation,",
+          "url": "https://arxiv.org/abs/2608.21114v1"
+        },
+        {
+          "title": "Visual storytelling requires generating images that follow a narrative while preserving consistent character identities",
+          "url": "https://arxiv.org/abs/2608.27280v1"
+        },
+        {
+          "title": "Visual environmental risk recognition plays an important role in secure authentication, where a user's surroundings may",
+          "url": "https://arxiv.org/abs/2608.29489v1"
+        },
+        {
+          "title": "Visual instruction tuning is crucial for advancing the vision-language alignment and instruction-following capabilities",
+          "url": "https://arxiv.org/abs/2608.30209v1"
+        },
+        {
+          "title": "Visual grounding maps language referents to spatial targets and is central to open-vocabulary perception with",
+          "url": "https://arxiv.org/abs/2609.02359v1"
+        },
+        {
+          "title": "Visual reasoning tasks require a system to jointly perceive visual content and apply formal relational constraints---a",
+          "url": "https://arxiv.org/abs/2609.05388v1"
+        }
+      ]
+    },
+    {
+      "id": "prod_shadow_12",
+      "prod_final_decision": "MATERIAL_UPDATE_CANDIDATE",
+      "match_type": "supporting_source",
+      "match_score": 0.8141,
+      "delta_classification": "MINOR_DELTA",
+      "prod_would_suppress": false,
+      "new_title": "In the field of UI design, Scalable Vector Graphics (SVG) is widely used as a design medium. However, traditional SVG",
+      "new_url": "https://arxiv.org/abs/2609.06116v1",
+      "new_summary": null,
+      "story_title": "Scalable Vector Graphics (SVG) generation is attracting increasing attention as generative models improve in",
+      "distinct_prior_document_ids": 1,
+      "prior_documents": [
+        {
+          "title": "Scalable Vector Graphics (SVG) generation is attracting increasing attention as generative models improve in",
+          "url": "https://arxiv.org/abs/2609.03806v1"
+        },
+        {
+          "title": "Scalable Vector Graphics (SVG) generation is attracting increasing attention as generative models improve in",
+          "url": "https://arxiv.org/abs/2609.03806v1"
+        }
+      ]
+    },
+    {
+      "id": "prod_shadow_13",
+      "prod_final_decision": "MATERIAL_UPDATE_CANDIDATE",
+      "match_type": "supporting_source",
+      "match_score": 0.8286,
+      "delta_classification": "MINOR_DELTA",
+      "prod_would_suppress": false,
+      "new_title": "Most end-to-end autonomous-driving systems learn by imitating human driving logs, leaving their learned behavior",
+      "new_url": "https://arxiv.org/abs/2609.06055v1",
+      "new_summary": null,
+      "story_title": "Most trajectory forecasting models are trained on clean annotated histories, and are often evaluated under the same",
+      "distinct_prior_document_ids": 3,
+      "prior_documents": [
+        {
+          "title": "Most trajectory forecasting models are trained on clean annotated histories, and are often evaluated under the same",
+          "url": "https://arxiv.org/abs/2608.30899v1"
+        },
+        {
+          "title": "Most previous work on speech enhancement (SE) based on masked generative modeling relied on discrete token",
+          "url": "https://arxiv.org/abs/2609.03940v1"
+        },
+        {
+          "title": "Suffix prediction forecasts the remaining sequence of events of a running case until completion. Most approaches rely",
+          "url": "https://arxiv.org/abs/2609.06169v1"
+        }
+      ]
+    },
+    {
+      "id": "prod_shadow_14",
+      "prod_final_decision": "MATERIAL_UPDATE_CANDIDATE",
+      "match_type": "supporting_source",
+      "match_score": 0.814,
+      "delta_classification": "MINOR_DELTA",
+      "prod_would_suppress": false,
+      "new_title": "Learning with class-conditional label noise often relies on a transition model from latent clean classes to observed",
+      "new_url": "https://arxiv.org/abs/2609.05859v1",
+      "new_summary": null,
+      "story_title": "Learning from demonstration is a promising approach for dexterous manipulation, but collecting high-quality",
+      "distinct_prior_document_ids": 10,
+      "prior_documents": [
+        {
+          "title": "Learning from demonstration is a promising approach for dexterous manipulation, but collecting high-quality",
+          "url": "https://arxiv.org/abs/2608.16572v1"
+        },
+        {
+          "title": "Learning embodied urban navigation policies from real-world data is constrained by the cost of task-specific data",
+          "url": "https://arxiv.org/abs/2608.16476v1"
+        },
+        {
+          "title": "Learning a reward model from human feedback and optimizing a policy against it is one approach to aligning AI systems",
+          "url": "https://arxiv.org/abs/2608.18770v1"
+        },
+        {
+          "title": "Learning robotic policies requires dense rewards that remain informative when behavior departs from successful",
+          "url": "https://arxiv.org/abs/2608.18787v1"
+        },
+        {
+          "title": "Learning a reward model from human feedback and optimizing a policy against it is one approach to aligning AI systems",
+          "url": "https://arxiv.org/abs/2608.18770v1"
+        },
+        {
+          "title": "Learning about \"The Unix Time-Sharing System\"",
+          "url": "https://playtechnique.io/long/the-unix-time-sharing-system.html"
+        },
+        {
+          "title": "Learning operators from sequentially collected data arises in adaptive experimental design, Bayesian optimization, and",
+          "url": "https://arxiv.org/abs/2608.24426v1"
+        },
+        {
+          "title": "Learning from Demonstration (LfD) allows robots to learn manipulation tasks directly from humans, thereby supporting",
+          "url": "https://arxiv.org/abs/2608.24741v1"
+        },
+        {
+          "title": "Learning from demonstration (LfD) methods enable non-expert end users to teach robots novel skills without explicit",
+          "url": "https://arxiv.org/abs/2608.25196v1"
+        },
+        {
+          "title": "Learning generalizable algorithmic computations remains a challenge for neural networks, as reflected in persistent",
+          "url": "https://arxiv.org/abs/2608.31067v1"
+        },
+        {
+          "title": "Learning graph structures from data is a fundamental problem that spans a wide range of signal processing and machine",
+          "url": "https://arxiv.org/abs/2609.02286v1"
+        },
+        {
+          "title": "Learning graph structures from data is a fundamental problem that spans a wide range of signal processing and machine",
+          "url": "https://arxiv.org/abs/2609.02286v1"
+        },
+        {
+          "title": "Learning generalist policies for robust bimanual manipulation is bottlenecked by the scarcity of high quality large",
+          "url": "https://arxiv.org/abs/2609.03591v1"
+        },
+        {
+          "title": "Wearable Companies Gear Up With AI Watching, Listening, Learning - Bloomberg.com",
+          "url": "https://news.google.com/rss/articles/CBMiugFBVV95cUxNQ0J2Yy1paWtDM0xxZ28tWlJoOEFjakZuSmlMQVBMNFF4dVp5WTluaE9uRXc2VnpxZzhhdkp1YW5Hbm5aY3M5VDdMOXgzUUxIT3dTT21tWkNJTk5UcGg0Q1Jaa25FVmFudF91R2xWV2ctNmg2TUlWekF0OU5EeEhkTThwOEdyTHg0VjcyTG94a2tURXo4MkZ3VkM3TXQ0aEhKc2txUnVTbXZFTFgtamFQSFUwS0tvNjNXMFE?oc=5"
+        }
+      ]
+    },
+    {
+      "id": "prod_shadow_15",
+      "prod_final_decision": "MATERIAL_UPDATE_CANDIDATE",
+      "match_type": "supporting_source",
+      "match_score": 0.83,
+      "delta_classification": "MINOR_DELTA",
+      "prod_would_suppress": false,
+      "new_title": "Задача искоренения неграмотности в эпоху искусственного интеллекта. - vietnam.vn",
+      "new_url": "https://news.google.com/rss/articles/CBMic0FVX3lxTE9LVVNCMXpUVVBsLTBobXREXzlnTzBzMm9iVFpUX3lGVHpFRG1yUFlQcnNqSUV1OGVYMlVDOGZkUXlZQ1cwcDEwSm05TTlOUmhETUdHdlI1cEZocVVENUl6ZlRyeDdwZ3VNTy13R0hLa2dGbzg?oc=5",
+      "new_summary": null,
+      "story_title": "Задача про книжного червя",
+      "distinct_prior_document_ids": 0,
+      "prior_documents": [
+        {
+          "title": "Задача про книжного червя",
+          "url": "https://tproger.ru/articles/zadacha-pro-knizhnogo-chervya"
+        },
+        {
+          "title": "Задача формирования доверия к лидерам мнений в эпоху искусственного интеллекта на саммите KOL Summit 2026. - Vietnam.vn",
+          "url": "https://news.google.com/rss/articles/CBMiqgFBVV95cUxOZDRMci14X0lHYkRxcDgxbndCM192THdKbUcxVEtkYlRGWXBkdnpVX0l1Vmx4TV9uZ29CeU5TdEg0U1FBbzktQTBkNDU5aUNTUVRBSm1LUXpDbndPOE9IcFZyTXBnUThqQktULUo0WEFuT2s1eWl2dVRPNElDa2tIYkNNaG5ubFhQRUxVT2NPUU82clNpLTFjV1NvdVplRHItdmtWUllMWnMxZw?oc=5"
+        },
+        {
+          "title": "«Задача – подготовить единый датасет»: когда GigaChat заговорит на татарском - Газета «Республика Татарстан",
+          "url": "https://news.google.com/rss/articles/CBMipgFBVV95cUxPNF9ZT2FzSnhMLUY1OWp0WHFVNDdWZHpMYnBuZmVvcnVzRFVYaEMwcVUzVnkwb29VS3RTV2I1WTEzODczNThzdzB5NDU4SG9lZEFOQ0pVSmFYdzNtbFFSVGVRT3RwOXlOZXR5T3BTVy1ra0pId3JodEZXanFWMnhNWEFySUp4SEtWTExyXzlCWHJCaEVHNnk0VWQ1aEFuVDJ4Wkx2TUFB?oc=5"
+        }
+      ]
+    },
+    {
+      "id": "prod_shadow_16",
+      "prod_final_decision": "MATERIAL_UPDATE_CANDIDATE",
+      "match_type": "supporting_source",
+      "match_score": 0.7389,
+      "delta_classification": "MINOR_DELTA",
+      "prod_would_suppress": false,
+      "new_title": "iPhone Ultra is coming, here’s what the final rumors say",
+      "new_url": "https://9to5mac.com/2026/09/08/iphone-ultra-is-coming-heres-what-the-final-rumors-are-saying/",
+      "new_summary": null,
+      "story_title": "Dbrand already has iPhone Ultra cases, spoiling Apple's surprise",
+      "distinct_prior_document_ids": 0,
+      "prior_documents": [
+        {
+          "title": "Dbrand already has iPhone Ultra cases, spoiling Apple's surprise",
+          "url": "https://www.engadget.com/2252927/dbrand-already-has-iphone-ultra-cases-spoiling-apples-surprise/"
+        }
+      ]
+    }
+  ]
+}

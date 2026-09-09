@@ -207,3 +207,78 @@ def test_continuity_outcomes_are_mutually_exclusive() -> None:
         CONTINUITY_NEW_STORY, CONTINUITY_DUPLICATE_NO_DELTA,
         CONTINUITY_MATERIAL_UPDATE_CANDIDATE, CONTINUITY_AMBIGUOUS,
     }
+
+
+# --- STORY-CONTINUITY-P0.1: the abstract-quality / stable-document-identity firewall ----------
+
+def _identity(verdict: str, *, status: str = "INSUFFICIENT_DOCUMENT_IDENTITY",
+              quality: str = "ABSTRACT_LIKE", codes: tuple[str, ...] = ("test_guard_reason",)):
+    from services.story_identity_guard import ContinuityIdentityAssessment
+    return ContinuityIdentityAssessment(
+        verdict=verdict, identity_status=status, identity_namespace="arxiv",
+        title_quality=quality, new_identity=None, reason_codes=codes,
+    )
+
+
+def test_p0_1_guard_fail_open_demotes_confident_duplicate_to_ambiguous() -> None:
+    """The exact production failure class: SUPPORTING_SOURCE + NO_DELTA with a distinctive shared
+    entity would be DUPLICATE_NO_DELTA (suppression-eligible) - the identity firewall demotes it."""
+    r = classify_continuity(
+        match_result=_mr(SUPPORTING_SOURCE), delta_result=_delta(NO_NEW_FACTS), creates_own_story=False,
+        identity_assessment=_identity("FAIL_OPEN"),
+    )
+    assert r.outcome == CONTINUITY_AMBIGUOUS
+    assert r.guard_forced_fail_open is True
+    assert r.suppression_eligible is False
+    assert "guard_forced_fail_open" in r.reason_codes
+    assert "test_guard_reason" in r.reason_codes
+
+
+@pytest.mark.parametrize("delta", [NO_NEW_FACTS, "minor_delta", MATERIAL_UPDATE, UNCERTAIN_DELTA])
+def test_p0_1_guard_fail_open_never_leaves_a_suppression_eligible_outcome(delta: str) -> None:
+    for mt in (SEMANTIC_DUPLICATE, SUPPORTING_SOURCE, STORY_UPDATE):
+        r = classify_continuity(
+            match_result=_mr(mt), delta_result=_delta(delta), creates_own_story=False,
+            identity_assessment=_identity("FAIL_OPEN"),
+        )
+        assert r.outcome == CONTINUITY_AMBIGUOUS
+        assert r.suppression_eligible is False
+        assert r.guard_forced_fail_open is True
+
+
+def test_p0_1_guard_safe_leaves_confident_outcome_untouched() -> None:
+    r = classify_continuity(
+        match_result=_mr(SEMANTIC_DUPLICATE), delta_result=_delta(NO_NEW_FACTS), creates_own_story=False,
+        identity_assessment=_identity("SAFE", status="STABLE_IDENTITY_MATCH",
+                                     codes=("stable_document_identity_match",)),
+    )
+    assert r.outcome == CONTINUITY_DUPLICATE_NO_DELTA
+    assert r.guard_forced_fail_open is False
+    assert "stable_document_identity_match" in r.reason_codes
+
+
+def test_p0_1_absent_identity_assessment_is_byte_identical_behaviour() -> None:
+    """Default (None) must not change any outcome vs. the pre-P0.1 classifier."""
+    for mt in (NEW_STORY, RELATED_STORY, UNCERTAIN_MATCH, SEMANTIC_DUPLICATE, SUPPORTING_SOURCE, STORY_UPDATE):
+        for dc in (NO_NEW_FACTS, "minor_delta", MATERIAL_UPDATE, UNCERTAIN_DELTA):
+            for own in (True, False):
+                a = classify_continuity(
+                    match_result=_mr(mt, matched=not own), delta_result=_delta(dc), creates_own_story=own,
+                )
+                b = classify_continuity(
+                    match_result=_mr(mt, matched=not own), delta_result=_delta(dc), creates_own_story=own,
+                    identity_assessment=None,
+                )
+                assert a.outcome == b.outcome
+                assert a.suppression_eligible == b.suppression_eligible
+                assert b.guard_forced_fail_open is False
+                assert b.title_semantic_quality is None
+
+
+def test_p0_1_guard_does_not_touch_new_story_or_ambiguous_paths() -> None:
+    r = classify_continuity(
+        match_result=_mr(NEW_STORY, matched=False), delta_result=None, creates_own_story=True,
+        identity_assessment=_identity("FAIL_OPEN"),
+    )
+    assert r.outcome == CONTINUITY_NEW_STORY
+    assert r.guard_forced_fail_open is False  # branch 1 never carries the guard flag
