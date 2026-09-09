@@ -792,11 +792,171 @@ def _build_data_lower_signature_image(
     return canvas
 
 
+# ==================================================================================================
+# FOUNDER-VISUAL-BOARD-ALIGNMENT-1 - the Founder-approved GENERATED DATA "hero-metric" card.
+#
+# `docs/founder_telegram_board.png`, format 3 ("DATA - Инфографика с цифрами. Фирменный стиль:
+# чёрный фон, красный акцент, линейный импульс, техническая сетка."): a generated dark-graphite
+# infographic panel with ONE dominant primary number, unit in NNJ red, a smaller white label, a
+# grey secondary line, an optional red delta pill, an optional red trend line, a subtle technical
+# grid, and exactly one canonical NNJ mark. This REPLACES the retired V2.20 compact-corner-stat
+# treatment for FULL_DATA_CARD only - EXISTING_INFOGRAPHIC sources still route to
+# MINIMAL_SOURCE_PRESERVING (render_data_card() below, untouched), so a pre-made infographic's own
+# printed metric is never converted into a hero card (Founder decision, phase §3).
+# ==================================================================================================
+_HERO_BG = (14, 14, 16)              # graphite-black base
+_HERO_GRID_COLOR = (34, 34, 39)      # faint technical grid
+_HERO_GRID_STEP = 64
+_HERO_MARGIN = 72
+_HERO_VALUE_FONT_MAX = 200
+_HERO_VALUE_FONT_MIN = 88
+_HERO_UNIT_FONT_MAX = 128
+_HERO_UNIT_FONT_MIN = 44
+_HERO_LABEL_FONT_MAX = 46
+_HERO_LABEL_FONT_MIN = 24
+_HERO_LABEL_MAX_LINES = 2
+_HERO_DESC_FONT_MAX = 34
+_HERO_DESC_FONT_MIN = 20
+_HERO_DESC_MAX_LINES = 3
+_HERO_DESC_COLOR = (168, 170, 176)   # neutral grey secondary
+_HERO_PILL_TEXT_COLOR = _OFFICIAL_NNJ_WHITE
+_HERO_MARK_W_FRAC = 0.07
+_HERO_TEMPLATE = "pulse-data-hero-v1"
+
+
+def _draw_hero_grid(draw: ImageDraw.ImageDraw, w: int, h: int) -> None:
+    for x in range(_HERO_GRID_STEP, w, _HERO_GRID_STEP):
+        draw.line([(x, 0), (x, h)], fill=_HERO_GRID_COLOR, width=1)
+    for y in range(_HERO_GRID_STEP, h, _HERO_GRID_STEP):
+        draw.line([(0, y), (w, y)], fill=_HERO_GRID_COLOR, width=1)
+
+
+def _draw_hero_sparkline(
+    draw: ImageDraw.ImageDraw, series: tuple[float, ...], *, box: tuple[int, int, int, int],
+) -> None:
+    """Plots `series` VERBATIM inside `box` (x0, y0, x1, y1) - linear position on x, min-max
+    normalised on y, no smoothing / interpolation / synthetic points. A white end-dot marks the
+    latest value (the board's own treatment). Requires >= 2 points (guarded by the caller)."""
+    x0, y0, x1, y1 = box
+    lo, hi = min(series), max(series)
+    span = (hi - lo) or 1.0
+    n = len(series)
+    points = [
+        (x0 + (x1 - x0) * (i / (n - 1)), y1 - (y1 - y0) * ((v - lo) / span))
+        for i, v in enumerate(series)
+    ]
+    draw.line(points, fill=_OFFICIAL_NNJ_RED, width=5, joint="curve")
+    ex, ey = points[-1]
+    draw.ellipse([ex - 9, ey - 9, ex + 9, ey + 9], fill=_OFFICIAL_NNJ_WHITE)
+
+
+def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: bytes | None = None) -> bytes:
+    """FOUNDER-VISUAL-BOARD-ALIGNMENT-1 (board format 3). A deterministic, generated dark-graphite
+    DATA hero-metric card:
+
+      - `data_candidate.value` - the dominant primary number, white, font-fitted (never invented,
+        never reformatted - drawn exactly as the string given);
+      - `data_candidate.unit` - directly beneath, NNJ red, uppercased, font-fitted (skipped if empty);
+      - `data_candidate.label` - a smaller white line beneath, wrapped to <= 2 lines, no clipping;
+      - `data_candidate.evidence_fact` - a grey secondary line drawn VERBATIM, wrapped, no clipping;
+      - `data_candidate.delta` - an optional red-outlined pill (drawn only when supplied);
+      - `data_candidate.series` - an optional red trend line plotted verbatim (only when >= 2
+        points are supplied - never a synthetic/interpolated series);
+      - a subtle technical grid + a short red pulse motif;
+      - exactly ONE canonical NNJ mark, lower-right, inside the safe margin.
+
+    No source photo is used - the hero metric IS the visual (Founder decision, phase §3/§6).
+    `source_image_bytes` is accepted only for dispatch symmetry with render_data_card()'s other
+    modes and is deliberately ignored. Fail-safe: never raises past render_branded_media()."""
+    canvas = Image.new("RGB", (_CANVAS_W, _CANVAS_H), _HERO_BG)
+    draw = ImageDraw.Draw(canvas)
+    _draw_hero_grid(draw, _CANVAS_W, _CANVAS_H)
+
+    x = _HERO_MARGIN
+    inner_w = _CANVAS_W - _HERO_MARGIN * 2
+    y: float = _HERO_MARGIN + 8
+
+    value_text = data_candidate.value
+    value_font, _vs = _fit_single_line(
+        draw, value_text, font_max=_HERO_VALUE_FONT_MAX, font_min=_HERO_VALUE_FONT_MIN, max_width=inner_w,
+    )
+    vb = draw.textbbox((0, 0), value_text, font=value_font)
+    draw.text((x, y - vb[1]), value_text, font=value_font, fill=_OFFICIAL_NNJ_WHITE)
+    y += (vb[3] - vb[1]) + 6
+
+    unit_text = data_candidate.unit.strip().upper()
+    if unit_text:
+        unit_font, _us = _fit_single_line(
+            draw, unit_text, font_max=_HERO_UNIT_FONT_MAX, font_min=_HERO_UNIT_FONT_MIN, max_width=inner_w,
+        )
+        ub = draw.textbbox((0, 0), unit_text, font=unit_font)
+        draw.text((x, y - ub[1]), unit_text, font=unit_font, fill=_OFFICIAL_NNJ_RED)
+        y += (ub[3] - ub[1]) + 18
+
+    if data_candidate.label.strip():
+        label_lines, label_font, label_size = _fit_wrapped_block(
+            draw, data_candidate.label.strip().upper(), font_max=_HERO_LABEL_FONT_MAX,
+            font_min=_HERO_LABEL_FONT_MIN, max_width=inner_w, max_lines=_HERO_LABEL_MAX_LINES,
+        )
+        for line in label_lines:
+            draw.text((x, y), line, font=label_font, fill=_OFFICIAL_NNJ_WHITE)
+            y += label_size + 8
+        y += 14
+
+    if data_candidate.evidence_fact.strip():
+        desc_lines, desc_font, desc_size = _fit_wrapped_block(
+            draw, data_candidate.evidence_fact.strip(), font_max=_HERO_DESC_FONT_MAX,
+            font_min=_HERO_DESC_FONT_MIN, max_width=inner_w, max_lines=_HERO_DESC_MAX_LINES,
+        )
+        for line in desc_lines:
+            draw.text((x, y), line, font=desc_font, fill=_HERO_DESC_COLOR)
+            y += desc_size + 6
+        y += 20
+
+    if data_candidate.delta:
+        pill_font = _font(30)
+        pb = draw.textbbox((0, 0), data_candidate.delta, font=pill_font)
+        pw, ph = pb[2] - pb[0], pb[3] - pb[1]
+        pad_x, pad_y = 22, 14
+        pill_box = (x, y, x + pw + pad_x * 2, y + ph + pad_y * 2)
+        draw.rounded_rectangle(list(pill_box), radius=(ph + pad_y * 2) // 2, outline=_OFFICIAL_NNJ_RED, width=3)
+        draw.text((x + pad_x, y + pad_y - pb[1]), data_candidate.delta, font=pill_font, fill=_HERO_PILL_TEXT_COLOR)
+
+    series = tuple(data_candidate.series)
+    if len(series) >= 2:
+        _draw_hero_sparkline(
+            draw, series,
+            box=(_CANVAS_W // 2, round(_CANVAS_H * 0.30), _CANVAS_W - _HERO_MARGIN, round(_CANVAS_H * 0.82)),
+        )
+
+    _draw_pulse_line(
+        draw, x=_HERO_MARGIN, y=_CANVAS_H - _HERO_MARGIN - 26, width=200, color=_OFFICIAL_NNJ_RED,
+    )
+
+    canvas_rgba = canvas.convert("RGBA")
+    mark = rasterize_nnj_mark(target_width=max(48, round(_HERO_MARK_W_FRAC * _CANVAS_W)), red=True)
+    canvas_rgba.alpha_composite(
+        mark, (_CANVAS_W - mark.width - _HERO_MARGIN, _CANVAS_H - mark.height - _HERO_MARGIN),
+    )
+
+    out = io.BytesIO()
+    canvas_rgba.convert("RGB").save(out, format="JPEG", quality=95)
+    return out.getvalue()
+
+
 def render_data_card(
     data_candidate: DataCandidate, *, category: str, editorial_code: str, source_image_bytes: bytes,
     presentation_mode: DataPresentationMode = DataPresentationMode.FULL_DATA_CARD,
 ) -> bytes:
-    """Phase V2.20A - see the module comment above this function's constants for the full
+    """FOUNDER-VISUAL-BOARD-ALIGNMENT-1: `presentation_mode=FULL_DATA_CARD` now delegates to
+    `render_data_hero_card()` - the Founder-approved generated hero-metric card (board format 3).
+    The retired V2.20 compact-corner-stat-on-the-photo treatment is no longer a shipped path (its
+    helper functions - `_select_data_block_placement()`, `_measure_data_stat_block()`, the adaptive
+    backing - are retained for their direct unit coverage and a possible future mode, but are not
+    reached from any production dispatch). `MINIMAL_SOURCE_PRESERVING` / `NO_OVERLAY_SAFETY` are
+    completely unchanged below - an EXISTING_INFOGRAPHIC source is never converted into a hero card.
+
+    Phase V2.20A - see the module comment above this function's constants for the full
     approved-template rationale. The source/editorial image is composited directly (via the
     shared `_fit_photo_to_canvas()` helper - NOT apply_master_news_branding(), which would
     necessarily risk introducing MASTER's own separate upper mark, forbidden by the approved DATA
@@ -811,8 +971,10 @@ def render_data_card(
     Kirin 9050 Pro regression fix - services/data_source_classification.py's own module docstring)
     skips the stat-block step ENTIRELY and returns right after the NNJ signature is composited -
     the source image's own already-printed metric is never redrawn, overpainted, or risked
-    colliding with a second competing number. Default FULL_DATA_CARD is completely unchanged -
-    every existing caller that never passes this parameter gets byte-identical behavior."""
+    colliding with a second competing number."""
+    if presentation_mode == DataPresentationMode.FULL_DATA_CARD:
+        return render_data_hero_card(data_candidate, source_image_bytes=source_image_bytes)
+
     photo = Image.open(io.BytesIO(source_image_bytes)).convert("RGBA")
     canvas = _fit_photo_to_canvas(photo, (_CANVAS_W, _CANVAS_H))
     canvas_w, canvas_h = canvas.size
@@ -916,11 +1078,28 @@ def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFon
     return lines
 
 
+_QUOTE_MARK_GLYPH = "“"  # left double quotation mark - the board's large red quote-mark motif
+_QUOTE_BODY_FONT_MAX = 44
+_QUOTE_BODY_FONT_MIN = 28
+_QUOTE_BODY_MAX_LINES = 6
+_QUOTE_ROLE_COLOR = (168, 170, 176)  # neutral grey - matches the hero card's secondary grey
+
+
 def render_quote_card(
     quote_candidate: QuoteCandidate, *, category: str, editorial_code: str, portrait_bytes: bytes | None = None,
 ) -> bytes:
-    """Fully programmatic. `quote_candidate.text` is rendered EXACTLY as given - never paraphrased,
-    shortened, or reworded by this renderer (spec §23/§40)."""
+    """FOUNDER-VISUAL-BOARD-ALIGNMENT-1 (board format 4 "QUOTE"): a large red quote-mark motif, a
+    dominant white quote body, the author portrait on the supporting right-hand strip, the author
+    name in NNJ red, and the author role/title beneath it in smaller neutral grey. Exactly ONE
+    canonical NNJ mark (lower-right). The redundant Telegram-message metadata the board renders
+    NATIVELY - the `PULSE / QUOTE` label and the `NP-xxxx` editorial code - are NO LONGER baked
+    into the media (Founder decision, phase §3/§7); `category`/`editorial_code` are still accepted
+    for dispatch symmetry but are never drawn.
+
+    `quote_candidate.text` is rendered EXACTLY as given - never paraphrased, shortened, or
+    reworded (only deterministically font-fitted + word-wrapped, never mid-word clipped).
+    `quote_candidate.role` is drawn only when supplied; a missing role is never fabricated - the
+    layout simply omits that line."""
     canvas = Image.new("RGB", (_CARD_WIDTH, _CARD_HEIGHT), _OFFICIAL_NNJ_BLACK)
     if portrait_bytes is not None:
         try:
@@ -940,19 +1119,25 @@ def render_quote_card(
     margin = 64
     max_text_width = round(_CARD_WIDTH * 0.55) if portrait_bytes else _CARD_WIDTH - margin * 2
 
-    draw.text((margin, margin), f"PULSE / {category}", font=_font(24), fill=_OFFICIAL_NNJ_RED)
+    # Large red quote-mark motif - positioned below the top-left corner so it reads as the opening
+    # mark of the quote block, not a corner badge.
+    draw.text((margin, 118), _QUOTE_MARK_GLYPH, font=_font(132), fill=_OFFICIAL_NNJ_RED)
 
-    quote_font = _font(42)
-    lines = _wrap_text(draw, f"“{quote_candidate.text}”", quote_font, max_text_width)
-    y = round(_CARD_HEIGHT * 0.32)
-    for line in lines[:6]:
-        draw.text((margin, y), line, font=quote_font, fill=_OFFICIAL_NNJ_WHITE)
-        y += 54
+    body_lines, body_font, body_size = _fit_wrapped_block(
+        draw, f"“{quote_candidate.text}”", font_max=_QUOTE_BODY_FONT_MAX,
+        font_min=_QUOTE_BODY_FONT_MIN, max_width=max_text_width, max_lines=_QUOTE_BODY_MAX_LINES,
+    )
+    y = 250
+    for line in body_lines:
+        draw.text((margin, y), line, font=body_font, fill=_OFFICIAL_NNJ_WHITE)
+        y += body_size + 12
 
+    y += 20
     if quote_candidate.speaker:
-        draw.text((margin, y + 16), f"— {quote_candidate.speaker}", font=_font(28), fill=_OFFICIAL_NNJ_RED)
-
-    _draw_code_label(draw, x=margin, y=_CARD_HEIGHT - 56, text=editorial_code, color=_OFFICIAL_NNJ_WHITE, size=20)
+        draw.text((margin, y), quote_candidate.speaker, font=_font(30), fill=_OFFICIAL_NNJ_RED)
+        y += 42
+    if quote_candidate.role:
+        draw.text((margin, y), quote_candidate.role, font=_font(22), fill=_QUOTE_ROLE_COLOR)
 
     canvas_rgba = canvas.convert("RGBA")
     _paste_svg_mark(canvas_rgba, target_width=90, margin=margin)

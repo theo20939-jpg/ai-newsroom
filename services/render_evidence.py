@@ -294,6 +294,71 @@ def derive_breaking_render_evidence(source_image_bytes: bytes | None) -> RenderE
     )
 
 
+def _derive_data_hero_evidence(data_candidate: Any) -> RenderEvidence:
+    """FOUNDER-VISUAL-BOARD-ALIGNMENT-1: renderer-truthful evidence for
+    `brand_renderer.render_data_hero_card` (board format 3). Replays the two deterministic
+    font/wrap decisions the renderer makes and reads back the same locked constants."""
+    from PIL import Image, ImageDraw
+
+    from services.data_source_classification import DataPresentationMode
+
+    from services.brand_renderer import (
+        _CANVAS_H,
+        _CANVAS_W,
+        _HERO_LABEL_FONT_MAX,
+        _HERO_LABEL_FONT_MIN,
+        _HERO_LABEL_MAX_LINES,
+        _HERO_MARGIN,
+        _HERO_VALUE_FONT_MAX,
+        _HERO_VALUE_FONT_MIN,
+        _fit_single_line,
+        _fit_wrapped_block,
+    )
+
+    draw = ImageDraw.Draw(Image.new("RGB", (_CANVAS_W, _CANVAS_H)))
+    inner_w = _CANVAS_W - _HERO_MARGIN * 2
+    value_font, value_size = _fit_single_line(
+        draw, data_candidate.value, font_max=_HERO_VALUE_FONT_MAX,
+        font_min=_HERO_VALUE_FONT_MIN, max_width=inner_w,
+    )
+    label_lines: list[str] = []
+    if str(getattr(data_candidate, "label", "")).strip():
+        label_lines, _lf, _ls = _fit_wrapped_block(
+            draw, str(data_candidate.label).strip().upper(), font_max=_HERO_LABEL_FONT_MAX,
+            font_min=_HERO_LABEL_FONT_MIN, max_width=inner_w, max_lines=_HERO_LABEL_MAX_LINES,
+        )
+    size_attr = getattr(value_font, "size", value_size)
+    primary_font_size = int(size_attr) if isinstance(size_attr, (int, float)) else int(value_size)
+
+    return RenderEvidence(
+        presentation_type="DATA",
+        renderer_variant="brand_renderer.render_data_hero_card",
+        renderer_version="pulse-data-hero-v1",
+        canvas_width=_CANVAS_W,
+        canvas_height=_CANVAS_H,
+        safe_margin_frac=round(_HERO_MARGIN / _CANVAS_W, 5),
+        logo_count=1,
+        logo_zone="lower_right",
+        # The dominant metric block is the primary compositional accent - it sits in the upper-left.
+        placement_zone="upper_left",
+        scrim_applied=False,
+        scrim_treatment=ScrimState.NONE.value,
+        # The hero card is a NEW generated artifact, not a transform of a source photo - there is
+        # no source to preserve, recompose or crop. Distinct from a measurement gap.
+        source_image_treatment=NOT_MEASURED,
+        source_preserved=NOT_MEASURED,
+        presentation_mode=DataPresentationMode.FULL_DATA_CARD.value,
+        primary_font_size=primary_font_size,
+        actual_line_count=len(label_lines),
+        text_clipped=False,
+        not_applicable_fields=frozenset({"secondary_font_size", "source_image_treatment", "source_preserved"}),
+        notes={
+            "source_image_treatment": "NOT APPLICABLE: generated hero-metric card - no source photo is used",
+            "renderer": "render_data_hero_card: primary value font-fit + label wrapped <= 2 lines, deterministic",
+        },
+    )
+
+
 def derive_data_render_evidence(
     source_image_bytes: bytes,
     data_candidate: Any,
@@ -337,6 +402,14 @@ def derive_data_render_evidence(
 
     mode = presentation_mode if isinstance(presentation_mode, DataPresentationMode) else None
     mode_value: str | _NotMeasured = mode.value if mode is not None else NOT_MEASURED
+
+    # FOUNDER-VISUAL-BOARD-ALIGNMENT-1: FULL_DATA_CARD now renders the generated hero-metric card
+    # (`brand_renderer.render_data_hero_card`) - a source-free graphite panel, so none of the
+    # photo-fit / bottom-signature / corner-stat replay below applies. Replay the hero renderer's
+    # own two deterministic decisions instead: the fitted primary-value font size and the wrapped
+    # label line count.
+    if mode is DataPresentationMode.FULL_DATA_CARD:
+        return _derive_data_hero_evidence(data_candidate)
 
     with Image.open(io.BytesIO(source_image_bytes)) as im:
         src_w, src_h = im.width, im.height
