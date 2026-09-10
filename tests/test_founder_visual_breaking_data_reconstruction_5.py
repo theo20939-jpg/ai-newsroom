@@ -125,9 +125,9 @@ def test_breaking_pulse_sits_in_the_lower_media_left_half_no_band() -> None:
 def test_breaking_bakes_no_headline_and_one_mark() -> None:
     body = _body(render_breaking_frame)
     assert '"BREAKING"' not in body and "_draw_code_label(" not in body
-    assert body.count("alpha_composite(mark") == 1
+    assert body.count("_draw_breaking_watermark(") >= 1  # mutually-exclusive branches
     ev = derive_breaking_render_evidence(_b(_BRIGHT))
-    assert ev.renderer_version == "pulse-breaking-v5-board"
+    assert ev.renderer_version == "pulse-breaking-v6-board"
     assert ev.placement_zone == "lower_left"
     assert ev.logo_count == 1
     assert "founder_telegram_board.png" in ev.notes["overlay_asset"]
@@ -146,7 +146,7 @@ def test_hero_background_is_board_measured_near_black() -> None:
 
 def test_hero_value_and_unit_use_the_heavy_face() -> None:
     body = _body(render_data_hero_card)
-    assert body.count("heavy=True") >= 2  # value + unit
+    assert body.count('data_weight="black"') >= 2  # value + unit
     resolved = _resolve_heavy_font_path()
     assert resolved is None or isinstance(resolved, str)
 
@@ -169,7 +169,7 @@ def test_hero_graph_interpolation_never_overshoots_and_has_no_synthetic_points()
     ys = [y for _, y in curve]
     assert min(ys) >= min(series) - 1e-6 and max(ys) <= max(series) + 1e-6
     spark = inspect.getsource(br._draw_hero_sparkline)
-    assert "_monotone_cubic(" in spark and "VERBATIM" in spark
+    assert "_reduced_tension_path(" in spark and "VERBATIM" in spark
     assert "len(series) >= 2" in _body(render_data_hero_card)
     # data-driven: two different series -> two different images
     a = DataCandidate(value="9", unit="", label="", evidence_fact="", series=(1.0, 2.0, 9.0))
@@ -183,9 +183,9 @@ def test_hero_area_fill_is_a_restrained_glow_not_a_solid_block() -> None:
     # sample deep-bottom-left of the chart zone: the fill must have faded to ~background there
     deep = ImageStat.Stat(out.crop((580, 660, 760, 700))).mean
     assert deep[0] < 40, deep  # not a big red wedge reaching the bottom-left
-    # but there IS red near the curve's upper-right
+    # but there IS red where the curve actually runs (peak ~0.47h, ends ~0.87w)
     near = sum(
-        1 for y in range(120, 320, 3) for x in range(980, 1180, 3)
+        1 for y in range(300, 520, 3) for x in range(860, 1090, 3)
         if px[x, y][0] > 90 and px[x, y][0] - px[x, y][2] > 25
     )
     assert near > 0

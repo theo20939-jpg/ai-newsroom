@@ -154,7 +154,7 @@ def test_breaking_frame_bakes_no_wordmark_and_no_band_in_source():
     # FOUNDER-VISUAL-OVERLAY-RECOVERY-4 §7: the RECOVERED smooth waveform, not the retired triangle
     assert "_draw_recovered_pulse(" in body
     assert "_draw_pulse(" not in body                     # crude flat->spike->valley->flat retired here
-    assert "_breaking_quieter_bottom_corner(" in body     # one restrained mark, least-busy corner
+    assert "_draw_breaking_watermark(" in body            # BOARD-REBUILD-6: the large restrained grey watermark
 
 
 def test_breaking_frame_works_with_no_source_image():
@@ -174,7 +174,8 @@ def test_breaking_frame_works_with_no_source_image():
 def test_breaking_frame_no_longer_calls_paste_logo():
     source = inspect.getsource(render_breaking_frame)
     assert "_paste_logo(" not in source
-    assert "_paste_svg_mark(" in source
+    # BOARD-REBUILD-6: the corner mark is replaced by the large restrained grey watermark
+    assert "_draw_breaking_watermark(" in source
 
 
 def test_quote_card_no_longer_calls_paste_logo():

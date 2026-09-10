@@ -52,6 +52,7 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFont, ImageStat
 
 from core.config import settings
+from services import nnj_board_metrics as _bm
 from services.data_source_classification import DataPresentationMode
 from services.nnj_master_news_mark import rasterize_nnj_mark
 from services.nnj_master_news_overlay import (
@@ -257,9 +258,7 @@ class RenderResult:
 def _font(
     size: int, *, bold: bool = False, heavy: bool = False,
 ) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    # FOUNDER-VISUAL-OVERLAY-RECOVERY-4 §12 / RECONSTRUCTION-5 §13: `bold=True` loads the OS bold
-    # companion; `heavy=True` loads the black-weight face (Arial Black) for the DATA hero number.
-    # Both degrade gracefully (heavy -> bold -> regular) and never download.
+    # NEWS / QUOTE / RECAP typography (frozen this phase): OS-provided faces, graceful degradation.
     if heavy:
         font_path = _resolve_heavy_font_path()
     elif bold:
@@ -272,6 +271,42 @@ def _font(
         except Exception:
             logger.warning("brand_renderer_font_load_failed", extra={"font_path": font_path})
     return ImageFont.load_default(size=size)
+
+
+# FOUNDER-VISUAL-BOARD-REBUILD-6 §7/§19: the DATA hero renderer uses a PROJECT-BUNDLED font
+# (assets/brand/fonts/, SIL OFL 1.1 - see that folder's README), NEVER an OS face, so dev
+# (Windows) and production (Linux) render byte-identically - WINDOWS_RENDER_FONT == LINUX_RENDER_FONT
+# is true by construction (one committed file, path resolved relative to the repo root).
+_DATA_FONT_DIR = _BRAND_ASSET_DIR / "fonts"
+_DATA_FONT_FILES: dict[str, str] = {
+    "black": "FiraSansCondensed-Black.ttf",
+    "bold": "FiraSansCondensed-Bold.ttf",
+    "semibold": "FiraSansCondensed-SemiBold.ttf",
+    "medium": "FiraSansCondensed-Medium.ttf",
+    "regular": "FiraSansCondensed-Regular.ttf",
+}
+_data_font_cache: dict[tuple[str, int], ImageFont.FreeTypeFont] = {}
+
+
+def data_font_path(weight: str = "regular") -> Path:
+    """The absolute path of the bundled DATA font for `weight` - the single source of truth for
+    `WINDOWS_RENDER_FONT == LINUX_RENDER_FONT` (§19)."""
+    return (_DATA_FONT_DIR / _DATA_FONT_FILES.get(weight, _DATA_FONT_FILES["regular"])).resolve()
+
+
+def _data_font(size: int, weight: str = "regular") -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    key = (weight, int(size))
+    hit = _data_font_cache.get(key)
+    if hit is not None:
+        return hit
+    path = _DATA_FONT_DIR / _DATA_FONT_FILES.get(weight, _DATA_FONT_FILES["regular"])
+    try:
+        font = ImageFont.truetype(str(path), size)
+        _data_font_cache[key] = font
+        return font
+    except OSError:
+        logger.warning("brand_renderer_bundled_data_font_missing", extra={"path": str(path)})
+        return _font(size, heavy=(weight == "black"), bold=(weight in ("bold", "semibold", "medium")))
 
 
 def _load_logo_png() -> Image.Image:
@@ -336,22 +371,22 @@ def _draw_pulse_line(draw: ImageDraw.ImageDraw, *, x: int, y: int, width: int, c
 # faithful pixel-trace of the board's OWN BREAKING pulse:
 #   - baseline sits at the photo's bottom edge; the S-wave dips just past it
 #   - the complex is LEFT-anchored (QRS in roughly x 0.24..0.42 of the drawn span), then a flat tail
-#   - measured amplitude ratios: R apex +20px, S trough -15px  ->  S/R ~= 0.70
-#     P bump +4.5px (~0.26 R), T bump +5px (~0.29 R)
-#   - drawn span ~= 0.46 of the photo width; thin, clean, consistent stroke
+#   - measured amplitude ratios: R apex +20px, S trough -14px  ->  S/R ~= 0.70
+#     P bump ~0.26 R, T bump ~0.29 R ; R apex at x ~= 0.341 of the drawn span (BOARD-REBUILD-6)
+#   - drawn span ~= 0.425 of the photo width; thin, clean, consistent stroke (not exaggerated)
 # The retired `flat -> spike -> valley -> flat` `_draw_pulse` polyline is used only by the FROZEN
 # NEWS / DATA-source lower signature.
 #
 # x in [0, 1] spans the drawn line; y in "R apex == 1.0" units (baseline 0, up = positive).
 _PULSE_WAVEFORM_UNIT: tuple[tuple[float, float], ...] = (
-    (0.000, 0.000), (0.080, 0.000), (0.120, 0.000),
-    (0.145, 0.040), (0.175, 0.260), (0.205, 0.060),                    # P wave
-    (0.235, -0.050), (0.255, -0.080),                                  # Q dip
-    (0.275, 0.550), (0.295, 1.000),                                    # R rise (sharp, narrow)
-    (0.315, 0.350), (0.345, -0.700),                                   # S plunge (deep)
-    (0.365, -0.350), (0.395, -0.080), (0.425, 0.000),                  # recovery
-    (0.470, 0.100), (0.520, 0.290), (0.565, 0.180), (0.605, 0.040), (0.640, 0.000),  # T wave
-    (0.760, 0.000), (0.880, 0.000), (1.000, 0.000),                    # flat tail
+    (0.000, 0.000), (0.090, 0.000), (0.150, 0.000),
+    (0.185, 0.040), (0.220, 0.260), (0.250, 0.060),                    # P wave
+    (0.283, -0.050), (0.303, -0.080),                                  # Q dip
+    (0.322, 0.550), (0.341, 1.000),                                    # R rise (apex at board x 0.341)
+    (0.361, 0.350), (0.391, -0.700),                                   # S plunge (deep, S/R ~= 0.70)
+    (0.411, -0.350), (0.441, -0.080), (0.470, 0.000),                  # recovery
+    (0.515, 0.100), (0.560, 0.290), (0.605, 0.170), (0.645, 0.040), (0.680, 0.000),  # T wave
+    (0.800, 0.000), (0.900, 0.000), (1.000, 0.000),                    # flat tail
 )
 
 
@@ -454,18 +489,38 @@ def render_news_hero(source_image_bytes: bytes, *, category: str, editorial_code
     return out.getvalue()
 
 
-# FOUNDER-VISUAL-BREAKING-DATA-RECONSTRUCTION-5 §7-§10: BREAKING's pulse, reconstructed from the
-# board's OWN geometry (docs/founder_telegram_board.png BREAKING crop, pixel-traced): a thin red
-# NINJA PULSE / ECG, LEFT-anchored, running along the LOWER edge of the media - NOT a wide centred
-# wave. Measured: drawn span ~= 0.46 photo width, baseline near the bottom edge, R apex ~= 0.13 of
-# the span, deep S undershoot (~0.7 R), thin clean stroke. No band, no baked wordmark, one mark.
-_BREAKING_PULSE_WIDTH_FRAC = 0.46      # of photo WIDTH - the board's short left-anchored line
-_BREAKING_PULSE_LEFT_FRAC = 0.03      # left inset from the media edge
-_BREAKING_PULSE_Y_FRAC = 0.93         # baseline near the bottom edge (S stays on-canvas)
-_BREAKING_PULSE_AMP_FRAC = 0.13       # R apex above baseline, as a fraction of the drawn SPAN
-_BREAKING_PULSE_STROKE_FRAC = 0.0045  # of photo width - thin, clean, deliberate
-_BREAKING_MARK_W_FRAC = 0.058
+# FOUNDER-VISUAL-BOARD-REBUILD-6 §3-§5: BREAKING's lower overlay is a COMPLETE composition -
+# the board-measured NINJA PULSE + a restrained LARGE grey NNJ watermark - NOT "pulse + separate
+# logo". Every value comes from services/nnj_board_metrics.py :: BREAKING (pixel-measured on
+# tests/fixtures/founder_breaking_media_crop.png).
+_BREAKING_PULSE_WIDTH_FRAC = _bm.BREAKING.pulse_width_frac       # 0.425 of photo width
+_BREAKING_PULSE_LEFT_FRAC = _bm.BREAKING.pulse_start_frac        # 0.038 left inset
+_BREAKING_PULSE_Y_FRAC = _bm.BREAKING.pulse_baseline_frac        # 0.95 (board 0.993; keep S on-canvas)
+_BREAKING_PULSE_AMP_FRAC = _bm.BREAKING.pulse_r_amp_frac_of_width  # 0.148 of the drawn SPAN
+_BREAKING_PULSE_STROKE_FRAC = _bm.BREAKING.pulse_stroke_frac     # 0.0032 of photo width - thin
 _BREAKING_SAFE_INSET_FRAC = 0.03
+
+
+def _draw_breaking_watermark(photo: Image.Image, *, media_w: int, media_h: int) -> None:
+    """§4: the board's restrained LARGE NNJ watermark inside the lower-right of the media - a big
+    (~44% media width), low-opacity, quiet glyph integrated with the photo, adapting light/dark to
+    the local content. NEVER a bright solid-red CTA logo, no badge/background. Composited from the
+    canonical `rasterize_nnj_mark()` geometry, recoloured to grey + low alpha."""
+    m = _bm.BREAKING
+    target_w = max(48, round(m.watermark_width_frac * media_w))
+    glyph = rasterize_nnj_mark(target_width=target_w, red=False)  # white geometry -> we tint it
+    gw, gh = glyph.size
+    right_inset = round(m.watermark_right_inset_frac * media_w)
+    bottom_inset = round(m.watermark_bottom_inset_frac * media_h)
+    x = media_w - right_inset - gw
+    y = media_h - bottom_inset - gh
+    # adapt to the local luminance of the region the glyph will sit in
+    region = photo.convert("RGB").crop((max(0, x), max(0, y), min(media_w, x + gw), min(media_h, y + gh)))
+    local_luma = sum(ImageStat.Stat(region).mean) / 3 if region.width and region.height else 0
+    tint = m.watermark_grey_on_light if local_luma > 140 else m.watermark_grey_on_dark
+    layer = Image.new("RGBA", glyph.size, (*tint, 0))
+    layer.putalpha(glyph.getchannel("A").point(lambda v: round(v * m.watermark_opacity)))
+    photo.alpha_composite(layer, (max(0, x), max(0, y)))
 
 
 def _breaking_quieter_bottom_corner(photo: Image.Image, *, mark_w: int, mark_h: int, inset: int) -> str:
@@ -491,20 +546,19 @@ def _breaking_quieter_bottom_corner(photo: Image.Image, *, mark_w: int, mark_h: 
 
 
 def render_breaking_frame(source_image_bytes: bytes | None, *, category: str, editorial_code: str) -> bytes:
-    """FOUNDER-VISUAL-OVERLAY-RECOVERY-4 §7: BREAKING = the source photo at NATIVE size (preserve)
-    + the RECOVERED NINJA PULSE / ECG waveform (`_draw_recovered_pulse`, geometry measured off the
-    FOUND_APPROVED `universal_minimal_01.png`) crossing the LOWER portion of the media + exactly ONE
-    restrained canonical NNJ mark in the least-busy bottom corner. Distinct from NEWS (bare corner
-    watermark, no pulse) - the urgency reads before the Telegram caption.
+    """FOUNDER-VISUAL-BOARD-REBUILD-6 §3-§5: BREAKING = the source photo at NATIVE size (preserve)
+    + a COMPLETE lower-media overlay composition measured from `docs/founder_telegram_board.png`:
+    the board NINJA PULSE (short, LEFT-anchored, along the lower edge, deep S undershoot) AND a
+    restrained LARGE grey NNJ watermark in the lower-right (adaptive light/dark, low opacity, quiet,
+    integrated - never a bright red CTA mark). Distinct from NEWS (no pulse).
 
-    The rejected `flat -> spike -> valley -> flat` polyline (`_draw_pulse`) is NO LONGER on this
-    path. Still forbidden and absent: the retired ~22% dark-gradient lower-third band, a baked
-    "BREAKING" wordmark, a red accent rule, any banner. `category`/`editorial_code` are accepted for
-    dispatch symmetry but never drawn. No source photo -> a minimal solid NNJ-black card carrying
-    only the one canonical mark (never blocks BREAKING delivery)."""
+    Forbidden and absent: the retired ~22% dark band, a baked "BREAKING" wordmark, a red accent
+    rule, any banner. `category`/`editorial_code` are accepted for dispatch symmetry but never
+    drawn. No source photo -> a minimal solid NNJ-black card carrying only the one restrained mark
+    (never blocks BREAKING delivery)."""
     if source_image_bytes is None:
         card = Image.new("RGBA", (_CARD_WIDTH, _CARD_HEIGHT), (*_OFFICIAL_NNJ_BLACK, 255))
-        _paste_svg_mark(card, target_width=max(48, round(_CARD_WIDTH * 0.08)), margin=64)
+        _draw_breaking_watermark(card, media_w=_CARD_WIDTH, media_h=_CARD_HEIGHT)
         out = io.BytesIO()
         card.convert("RGB").save(out, format="JPEG", quality=92)
         return out.getvalue()
@@ -513,23 +567,19 @@ def render_breaking_frame(source_image_bytes: bytes | None, *, category: str, ed
         photo = src.convert("RGBA").copy()
     w, h = photo.size
 
-    # the board-traced NINJA PULSE: short, LEFT-anchored, along the lower media edge
+    # the board NINJA PULSE: short, LEFT-anchored, along the lower media edge
     pulse_w = max(40, round(_BREAKING_PULSE_WIDTH_FRAC * w))
     x_left = max(4, round(_BREAKING_PULSE_LEFT_FRAC * w))
     pulse_y = round(_BREAKING_PULSE_Y_FRAC * h)
     amp = max(6, round(_BREAKING_PULSE_AMP_FRAC * pulse_w))
-    stroke = max(3, round(_BREAKING_PULSE_STROKE_FRAC * w))
+    stroke = max(2, round(_BREAKING_PULSE_STROKE_FRAC * w))
     _draw_recovered_pulse(
         photo, x_left=x_left, baseline_y=pulse_y, span=pulse_w, amplitude=amp,
         color=_OFFICIAL_NNJ_RED, stroke=stroke,
     )
 
-    # exactly one restrained mark, least-busy bottom corner
-    inset = max(8, round(_BREAKING_SAFE_INSET_FRAC * w))
-    mark = rasterize_nnj_mark(target_width=max(28, round(_BREAKING_MARK_W_FRAC * w)), red=True)
-    corner = _breaking_quieter_bottom_corner(photo, mark_w=mark.width, mark_h=mark.height, inset=inset)
-    mx = w - inset - mark.width if corner == "lower_right" else inset
-    photo.alpha_composite(mark, (mx, h - inset - mark.height))
+    # the restrained LARGE grey NNJ watermark, lower-right
+    _draw_breaking_watermark(photo, media_w=w, media_h=h)
 
     out = io.BytesIO()
     photo.convert("RGB").save(out, format="JPEG", quality=92)
@@ -626,16 +676,20 @@ _DATA_SIGNATURE_SHORTEN_STEPS = 5  # intermediate line lengths tried between the
 
 def _fit_single_line(
     draw: ImageDraw.ImageDraw, text: str, *, font_max: int, font_min: int, max_width: float,
-    bold: bool = False, heavy: bool = False,
+    bold: bool = False, heavy: bool = False, data_weight: str | None = None,
 ) -> tuple[ImageFont.FreeTypeFont | ImageFont.ImageFont, int]:
     """Deterministically shrinks the font (within [font_min, font_max], step 4) until `text` fits
     `max_width` on one line - never a mid-character pixel clip. Returns the smallest size actually
     tried even if `font_min` still does not fit (a hard-bound caller is expected to already keep
-    `text` short by construction in that rare case - this never truncates a single-line value)."""
+    `text` short by construction in that rare case - this never truncates a single-line value).
+    `data_weight` (§19) forces the BUNDLED DATA font at that weight."""
+    def _f(sz: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+        return _data_font(sz, data_weight) if data_weight else _font(sz, bold=bold, heavy=heavy)
+
     size = font_max
-    font = _font(size, bold=bold, heavy=heavy)
+    font = _f(size)
     for candidate_size in range(font_max, font_min - 1, -4):
-        font = _font(candidate_size, bold=bold, heavy=heavy)
+        font = _f(candidate_size)
         size = candidate_size
         if draw.textlength(text, font=font) <= max_width:
             break
@@ -644,7 +698,7 @@ def _fit_single_line(
 
 def _fit_wrapped_block(
     draw: ImageDraw.ImageDraw, text: str, *, font_max: int, font_min: int, max_width: int, max_lines: int,
-    bold: bool = False,
+    bold: bool = False, data_weight: str | None = None,
 ) -> tuple[list[str], ImageFont.FreeTypeFont | ImageFont.ImageFont, int]:
     """Deterministically fits `text` inside `max_width`/`max_lines` by shrinking the font within
     [font_min, font_max] (step 2) and word-wrapping (`_wrap_text()`) at each candidate size. If it
@@ -652,11 +706,14 @@ def _fit_wrapped_block(
     `label[:80]`, so this is a last-resort safety net, not the primary length control), the final
     line is shortened at a word boundary with a trailing ellipsis until it fits - never a blind
     pixel clip, never a mid-character cut."""
+    def _fw(sz: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+        return _data_font(sz, data_weight) if data_weight else _font(sz, bold=bold)
+
     lines: list[str] = []
-    font = _font(font_min, bold=bold)
+    font = _fw(font_min)
     size = font_min
     for candidate_size in range(font_max, font_min - 1, -2):
-        font = _font(candidate_size, bold=bold)
+        font = _fw(candidate_size)
         size = candidate_size
         lines = _wrap_text(draw, text, font, max_width)
         if len(lines) <= max_lines:
@@ -1067,41 +1124,55 @@ def _build_data_lower_signature_image(
 # MINIMAL_SOURCE_PRESERVING (render_data_card() below, untouched), so a pre-made infographic's own
 # printed metric is never converted into a hero card (Founder decision, phase §3).
 # ==================================================================================================
-# FOUNDER-VISUAL-BREAKING-DATA-RECONSTRUCTION-5 §12-§18: values reconstructed by pixel-measuring
-# `docs/founder_telegram_board.png`'s DATA card - bg mean RGB ~=(6,7,9) (near-black, faint cool
-# tint); the grid is barely-there (peak brightness ~=+15 over bg) at ~1/9 of the card width; the
-# left text zone is ~=0.38 of the width, the chart fills the rest and rises from ~mid-height to a
-# white end-dot around 45% height. NO background/grid asset exists in the repo (disclosed blocker),
-# so the background is reconstructed deterministically from those measurements - not a new UI.
-_HERO_BG = (6, 7, 9)                 # board-measured near-black graphite
-_HERO_GRID_COLOR = (17, 18, 22)      # board-measured: ~+11 over bg, barely visible
-_HERO_GRID_STEP = 144               # ~1/9 of the 1280 canvas, matching the board's grid density
+# FOUNDER-VISUAL-BOARD-REBUILD-6 §8-§15: every value here is a pixel measurement of the DATA crop
+# `tests/fixtures/founder_data_media_crop.png` (see services/nnj_board_metrics.py :: DATA). The
+# typographic hierarchy is DERIVED from the value size by the board's measured cap-height ratios
+# (unit = 0.76 x value, label = 0.28 x value) rather than sized independently. Font: the BUNDLED
+# Fira Sans Condensed (assets/brand/fonts/, SIL OFL) - identical on Windows and Linux (§19).
+_HERO_BG = _bm.DATA.bg_rgb                       # (6, 7, 9)
+_HERO_GRID_COLOR = _bm.DATA.grid_rgb             # (19, 20, 23) - delta ~= +14 over bg
 _HERO_MARGIN = 72
-_HERO_LEFT_ZONE_FRAC = 0.38          # board-measured text column width
-_HERO_VALUE_FONT_MAX = 188
-_HERO_VALUE_FONT_MIN = 92
-_HERO_UNIT_FONT_MAX = 132
-_HERO_UNIT_FONT_MIN = 48
-_HERO_LABEL_FONT_MAX = 42
+_HERO_LEFT_ZONE_FRAC = _bm.DATA.left_zone_frac   # 0.385
+_HERO_VALUE_FONT_MAX = 176                       # ~= board value_cap_frac (0.203 * 720) at Fira Cond Black
+_HERO_VALUE_FONT_MIN = 84
+_HERO_LABEL_FONT_MAX = 44                        # board label_over_value 0.28 -> ~0.28 * 176
 _HERO_LABEL_FONT_MIN = 22
 _HERO_LABEL_MAX_LINES = 2
-_HERO_DESC_FONT_MAX = 32
-_HERO_DESC_FONT_MIN = 19
+_HERO_DESC_FONT_MAX = 30
+_HERO_DESC_FONT_MIN = 18
 _HERO_DESC_MAX_LINES = 3
 _HERO_DESC_COLOR = (150, 154, 162)   # neutral cool grey secondary (board-measured)
 _HERO_PILL_TEXT_COLOR = _OFFICIAL_NNJ_WHITE
-_HERO_MARK_W_FRAC = 0.06
-_HERO_TEMPLATE = "pulse-data-hero-v2-board"
+_HERO_MARK_W_FRAC = _bm.DATA.mark_width_frac      # 0.055 - restrained, not a CTA badge
+_HERO_MARK_OPACITY = _bm.DATA.mark_opacity        # 0.55
+_HERO_TEMPLATE = "pulse-data-hero-v3-board"
+
+
+def _luma(rgb: tuple[int, int, int]) -> float:
+    return 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]
+
+
+def _guarded_grid_color() -> tuple[int, int, int]:
+    """§13 contrast guard: the grid line luma minus the background luma is clamped into
+    [grid_luma_delta_min, grid_luma_delta_max] so the grid can never read as visible squares,
+    on this board or any future re-measurement."""
+    lo, hi = _bm.DATA.grid_luma_delta_min, _bm.DATA.grid_luma_delta_max
+    delta = _luma(_HERO_GRID_COLOR) - _luma(_HERO_BG)
+    if delta < lo or delta > hi:
+        target = max(lo, min(hi, delta))
+        step = target - delta
+        return tuple(max(0, min(255, round(c + step))) for c in _HERO_BG)  # type: ignore[return-value]
+    return _HERO_GRID_COLOR
 
 
 def _draw_hero_grid(draw: ImageDraw.ImageDraw, w: int, h: int) -> None:
-    # RECONSTRUCTION-5 §12: no grid asset exists (disclosed blocker) - reconstructed from the board's
-    # measured density + near-invisible contrast so it reads as subtle technical depth, never a
-    # "developer dashboard" square grid. Single-pixel lines, board-measured colour/step.
-    for x in range(_HERO_GRID_STEP, w, _HERO_GRID_STEP):
-        draw.line([(x, 0), (x, h)], fill=_HERO_GRID_COLOR, width=1)
-    for y in range(_HERO_GRID_STEP, h, _HERO_GRID_STEP):
-        draw.line([(0, y), (w, y)], fill=_HERO_GRID_COLOR, width=1)
+    # §13: board-measured density + a hard contrast guard - reads as technical texture, never squares.
+    step = max(24, round(_bm.DATA.grid_step_frac * w))
+    color = _guarded_grid_color()
+    for gx in range(step, w, step):
+        draw.line([(gx, 0), (gx, h)], fill=color, width=1)
+    for gy in range(step, h, step):
+        draw.line([(0, gy), (w, gy)], fill=color, width=1)
 
 
 def _monotone_cubic(xs: list[float], ys: list[float], samples_per_segment: int = 24) -> list[tuple[float, float]]:
@@ -1145,26 +1216,48 @@ def _monotone_cubic(xs: list[float], ys: list[float], samples_per_segment: int =
     return out
 
 
+def _reduced_tension_path(xs: list[float], ys: list[float]) -> list[tuple[float, float]]:
+    """FOUNDER-VISUAL-BOARD-REBUILD-6 §10: a VISUAL path that keeps the board's editorial character
+    - visible local direction changes between the real anchors, NOT a generic exponential arc. It
+    blends the straight anchor-to-anchor polyline (55%) with a monotone-cubic (45%): every real
+    (x, y) anchor is hit exactly, the segments retain their own slope, and the monotone term only
+    rounds the corners. No new numeric values; provably still within [min, max] of the series
+    (both blended terms are)."""
+    if len(xs) < 2:
+        return list(zip(xs, ys))
+    smooth = _monotone_cubic(xs, ys, samples_per_segment=20)
+    out: list[tuple[float, float]] = []
+    for sx, sy in smooth:
+        # linear interpolant at sx across the real anchors
+        j = 0
+        while j < len(xs) - 2 and xs[j + 1] < sx:
+            j += 1
+        t = 0.0 if xs[j + 1] == xs[j] else (sx - xs[j]) / (xs[j + 1] - xs[j])
+        ly = ys[j] + t * (ys[j + 1] - ys[j])
+        out.append((sx, 0.55 * ly + 0.45 * sy))
+    return out
+
+
 def _draw_hero_sparkline(
     canvas: Image.Image, series: tuple[float, ...], *, box: tuple[int, int, int, int],
 ) -> None:
-    """The board's DATA trend treatment (docs/founder_telegram_board.png format 3): a SMOOTH red
-    area curve rising to a white end-dot, with a restrained red glow that hugs the curve and fades
-    to transparent - never a hard red triangular block (§15/§17).
+    """The board's DATA trend line (docs/founder_telegram_board.png, measured):
+    - the RED LINE is the primary feature; a very restrained under-curve tint, no red wedge (§11);
+    - a small crisp white endpoint dot (§12);
+    - the path keeps visible local direction changes (`_reduced_tension_path`, §10).
 
-    RECONSTRUCTION-5 §16: the `series` values are the only factual anchors - plotted at exact linear
-    x positions, min-max normalised on y, VERBATIM. `_monotone_cubic` adds sub-point curvature only
-    and (being monotone) cannot overshoot the data range - it can never imply a value outside the
-    series. No axes, no tick labels, no synthetic points. 4x supersampled RGBA layer, LANCZOS
-    down. Requires >= 2 points (guarded by the caller)."""
+    §16: `series` values are the ONLY factual anchors - exact linear x, min-max normalised y, drawn
+    VERBATIM; the visual path never overshoots [min, max] and invents no intermediate value. 4x
+    supersampled RGBA layer, LANCZOS down. Requires >= 2 points (guarded by the caller)."""
     x0, y0, x1, y1 = box
-    y0 += 16  # headroom so the white end-dot at the series max is never clipped
+    pad = max(8, round(_bm.DATA.graph_endpoint_radius_frac * _CANVAS_W) + 4)  # dot headroom
+    y0 += pad
     lo, hi = min(series), max(series)
     span = (hi - lo) or 1.0
     n = len(series)
     anchor_xs = [x0 + (x1 - x0) * (i / (n - 1)) for i in range(n)]
     anchor_ys = [y1 - (y1 - y0) * ((v - lo) / span) for v in series]
-    curve = _monotone_cubic(anchor_xs, anchor_ys, samples_per_segment=28)
+    curve = _reduced_tension_path(anchor_xs, anchor_ys)
 
     ss = _PULSE_SUPERSAMPLE
     lw, lh = (x1 - x0) * ss, (y1 - y0) * ss + ss
@@ -1172,23 +1265,38 @@ def _draw_hero_sparkline(
     ld = ImageDraw.Draw(layer)
     loc = [((cx - x0) * ss, (cy - y0) * ss) for cx, cy in curve]
 
-    # §17 area fill: a restrained glow that is brightest just under the curve and fades both
-    # DOWNWARD (steep) and toward the LEFT (older/lower part dimmer) - no harsh edge, no big block.
-    fill_poly = [*loc, (loc[-1][0], lh), (loc[0][0], lh)]
+    # §11 area fill: a thin tint that only HUGS the underside of the curve - the fill polygon is
+    # closed a bounded band below the curve (not down to the axis), and it fades fast both downward
+    # and toward the vertical right edge, so there is never a red wedge or a bright right column.
+    peak = _bm.DATA.graph_fill_peak_alpha
+    fall = _bm.DATA.graph_fill_falloff
+    band = round((y1 - y0) * 0.42) * ss  # fill reaches at most ~42% of the chart height below the curve
+    fill_poly = [*loc] + [(cx, min(lh, cy + band)) for cx, cy in reversed(loc)]
     area = Image.new("RGBA", layer.size, (0, 0, 0, 0))
     ImageDraw.Draw(area).polygon(fill_poly, fill=(*_OFFICIAL_NNJ_RED, 255))
     vgrad = Image.new("L", (1, layer.size[1]))
-    vgrad.putdata([int(98 * (1 - j / max(1, layer.size[1] - 1)) ** 3.0) for j in range(layer.size[1])])
+    vgrad.putdata([int(peak * (1 - j / max(1, layer.size[1] - 1)) ** fall) for j in range(layer.size[1])])
     hgrad = Image.new("L", (layer.size[0], 1))
-    hgrad.putdata([int(70 + 150 * (i / max(1, layer.size[0] - 1)) ** 0.8) for i in range(layer.size[0])])
+    # gently brighter to the right, but capped well below opaque, then eased back down over the
+    # last 12% so the vertical right edge never reads as a column
+    hg = []
+    W = layer.size[0]
+    for i in range(W):
+        f = i / max(1, W - 1)
+        v = 55 + 120 * f ** 0.9
+        if f > 0.88:
+            v *= max(0.25, 1 - (f - 0.88) / 0.12)
+        hg.append(int(v))
+    hgrad.putdata(hg)
     mask = ImageChops.multiply(vgrad.resize(layer.size), hgrad.resize(layer.size))
     area.putalpha(ImageChops.multiply(area.getchannel("A"), mask))
     layer.alpha_composite(area)
 
-    # the smooth curve stroke + white end-dot
-    ld.line(loc, fill=(*_OFFICIAL_NNJ_RED, 255), width=max(2, 4 * ss), joint="curve")
+    # the red line + a small crisp white endpoint dot (board-measured radius)
+    stroke = max(2, round(_bm.DATA.graph_stroke_frac * _CANVAS_W)) * ss
+    ld.line(loc, fill=(*_OFFICIAL_NNJ_RED, 255), width=stroke, joint="curve")
     ex, ey = loc[-1]
-    r = 8 * ss
+    r = max(3, round(_bm.DATA.graph_endpoint_radius_frac * _CANVAS_W)) * ss
     ld.ellipse([ex - r, ey - r, ex + r, ey + r], fill=(*_OFFICIAL_NNJ_WHITE, 255))
 
     small = layer.resize((max(1, x1 - x0), max(1, y1 - y0)), Image.Resampling.LANCZOS)
@@ -1205,20 +1313,20 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
       - `data_candidate.label` - a smaller white line beneath, wrapped to <= 2 lines, no clipping;
       - `data_candidate.evidence_fact` - a grey secondary line drawn VERBATIM, wrapped, no clipping;
       - `data_candidate.delta` - an optional red-outlined pill (drawn only when supplied);
-      - `data_candidate.series` - an optional SMOOTH red area curve (`_draw_hero_sparkline`), the
-        board's own treatment: monotone-cubic curvature between the real points (never overshooting
-        the data range), red->transparent gradient fill, white end-dot. Drawn only when >= 2 real
-        points are supplied - no synthetic points, no axes, no invented data labels;
-      - a subtle technical grid + the RECOVERED red NINJA PULSE motif (`_draw_recovered_pulse`);
-      - exactly ONE canonical NNJ mark, lower-right, inside the safe margin.
+      - `data_candidate.series` - an optional red trend LINE (`_draw_hero_sparkline`): the real
+        points are the only anchors, the visual path (`_reduced_tension_path`) keeps visible local
+        direction changes and never overshoots [min, max], a very restrained under-curve tint (no
+        red wedge), a small crisp white endpoint dot. Drawn only when >= 2 real points are supplied;
+      - a contrast-guarded near-invisible technical grid + the board NINJA PULSE motif;
+      - exactly ONE restrained, lowered-opacity NNJ mark, lower-right.
 
-    No source photo is used - the hero metric IS the visual (Founder decision, phase §3/§6).
+    No source photo is used - the hero metric IS the visual.
 
-    FOUNDER-VISUAL-OVERLAY-RECOVERY-4 §11/§12: the value/unit/label use the real BOLD face; the
-    trend is a smooth antialiased area curve (not the rejected angular polyline); the small pulse
-    motif is the recovered waveform. The graphite background + grid are kept as-is (no such asset
-    exists to recover - disclosed blocker). Every factual element is retained; the series values are
-    the only numeric anchors and are plotted verbatim."""
+    FOUNDER-VISUAL-BOARD-REBUILD-6 §7-§15: value/unit/label use the PROJECT-BUNDLED Fira Sans
+    Condensed (assets/brand/fonts/, SIL OFL) at black/bold weights - byte-identical on Windows and
+    the Linux VPS. Background, grid, typographic hierarchy, trend geometry, fill and mark are all
+    pixel-measured from `docs/founder_telegram_board.png` via services/nnj_board_metrics.py. Every
+    factual element is retained; series values are plotted verbatim."""
     canvas = Image.new("RGB", (_CANVAS_W, _CANVAS_H), _HERO_BG)
     draw = ImageDraw.Draw(canvas)
     _draw_hero_grid(draw, _CANVAS_W, _CANVAS_H)
@@ -1232,13 +1340,13 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
     blocks: list[tuple[str, object, tuple, tuple, int]] = []  # (kind, font, bbox, color, gap_after)
     total_h: float = 0
 
-    # RECONSTRUCTION-5 §13/§14: the board's number/unit is a HEAVY black-weight grotesque - render
-    # value + unit in the `heavy` face (Arial Black, degrading to bold on the VPS); the label stays
-    # bold; the grey secondary line stays regular. See 07_TYPOGRAPHY_COMPARISON.png.
+    # RECONSTRUCTION-6 §7/§8: the BUNDLED Fira Sans Condensed (black/bold/regular) - identical on
+    # Windows and Linux. `unit` and `label` are sized by the board's MEASURED cap-height ratios off
+    # the fitted `value` size, not independently.
     value_text = data_candidate.value
-    value_font, _vs = _fit_single_line(
+    value_font, value_size = _fit_single_line(
         draw, value_text, font_max=_HERO_VALUE_FONT_MAX, font_min=_HERO_VALUE_FONT_MIN,
-        max_width=left_col_w, heavy=True,
+        max_width=left_col_w, data_weight="black",
     )
     vb = draw.textbbox((0, 0), value_text, font=value_font)
     blocks.append(("value", value_font, vb, _OFFICIAL_NNJ_WHITE, 4))
@@ -1246,40 +1354,43 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
 
     unit_text = data_candidate.unit.strip().upper()
     if unit_text:
-        unit_font, _us = _fit_single_line(
-            draw, unit_text, font_max=_HERO_UNIT_FONT_MAX, font_min=_HERO_UNIT_FONT_MIN,
-            max_width=left_col_w, heavy=True,
+        unit_size = max(28, round(value_size * _bm.DATA.unit_over_value))
+        unit_font, unit_size = _fit_single_line(
+            draw, unit_text, font_max=unit_size, font_min=max(24, unit_size - 40),
+            max_width=left_col_w, data_weight="black",
         )
         ub = draw.textbbox((0, 0), unit_text, font=unit_font)
         blocks.append(("unit", unit_font, ub, _OFFICIAL_NNJ_RED, 16))
-        total_h += (ub[3] - ub[1]) + 16
+        total_h += (ub[3] - ub[1]) + 14
 
     label_lines: list[str] = []
-    label_font = _font(_HERO_LABEL_FONT_MIN, bold=True)
+    label_font = _data_font(_HERO_LABEL_FONT_MIN, "bold")
     label_size = _HERO_LABEL_FONT_MIN
     if data_candidate.label.strip():
+        lmax = max(_HERO_LABEL_FONT_MIN + 4, min(_HERO_LABEL_FONT_MAX, round(value_size * _bm.DATA.label_over_value)))
         label_lines, label_font, label_size = _fit_wrapped_block(
-            draw, data_candidate.label.strip().upper(), font_max=_HERO_LABEL_FONT_MAX,
+            draw, data_candidate.label.strip().upper(), font_max=lmax,
             font_min=_HERO_LABEL_FONT_MIN, max_width=left_col_w, max_lines=_HERO_LABEL_MAX_LINES,
-            bold=True,
+            data_weight="bold",
         )
         total_h += len(label_lines) * (label_size + 6) + 12
 
     desc_lines: list[str] = []
-    desc_font = _font(_HERO_DESC_FONT_MIN)
+    desc_font = _data_font(_HERO_DESC_FONT_MIN, "regular")
     desc_size = _HERO_DESC_FONT_MIN
     if data_candidate.evidence_fact.strip():
         desc_lines, desc_font, desc_size = _fit_wrapped_block(
             draw, data_candidate.evidence_fact.strip(), font_max=_HERO_DESC_FONT_MAX,
             font_min=_HERO_DESC_FONT_MIN, max_width=left_col_w, max_lines=_HERO_DESC_MAX_LINES,
+            data_weight="regular",
         )
         total_h += len(desc_lines) * (desc_size + 5) + 18
 
     pill_h: float = 0
     if data_candidate.delta:
-        pill_font = _font(30)
+        pill_font = _data_font(28, "semibold")
         pb = draw.textbbox((0, 0), data_candidate.delta, font=pill_font)
-        pill_h = (pb[3] - pb[1]) + 28
+        pill_h = (pb[3] - pb[1]) + 24
         total_h += pill_h + 22
 
     total_h += 30  # the pulse motif under the block
@@ -1311,20 +1422,27 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
 
     canvas_rgba = canvas.convert("RGBA")
 
-    # §19: the small pulse motif under the metric block - the SAME board-traced NINJA PULSE primitive
+    # §14: the small pulse motif under the metric block - the SAME board-traced NINJA PULSE
+    # primitive as BREAKING, thin and short (visually secondary).
     _draw_recovered_pulse(
-        canvas_rgba, x_left=x, baseline_y=round(y) + 14, span=190, amplitude=26,
-        color=_OFFICIAL_NNJ_RED, stroke=4,
+        canvas_rgba, x_left=x, baseline_y=round(y) + 12, span=168, amplitude=20,
+        color=_OFFICIAL_NNJ_RED, stroke=3,
     )
 
+    # §11: the trend line - board-measured geometry (rises from ~0.90h to a peak at ~0.47h, ends
+    # short of the right edge). The red LINE is the feature; the fill stays near-black.
     if has_chart:
         _draw_hero_sparkline(
             canvas_rgba, series,
-            box=(round(_CANVAS_W * 0.44), round(_CANVAS_H * 0.16),
-                 _CANVAS_W - _HERO_MARGIN, round(_CANVAS_H * 0.86)),
+            box=(round(_CANVAS_W * _bm.DATA.graph_x_start_frac), round(_CANVAS_H * _bm.DATA.graph_y_top_frac),
+                 round(_CANVAS_W * _bm.DATA.graph_x_end_frac), round(_CANVAS_H * _bm.DATA.graph_y_bottom_frac)),
         )
 
-    mark = rasterize_nnj_mark(target_width=max(48, round(_HERO_MARK_W_FRAC * _CANVAS_W)), red=True)
+    # §15: a restrained NNJ mark - small, lowered opacity, never a CTA badge competing with the metric.
+    mark = rasterize_nnj_mark(target_width=max(40, round(_HERO_MARK_W_FRAC * _CANVAS_W)), red=True)
+    if _HERO_MARK_OPACITY < 1.0:
+        a = mark.getchannel("A").point(lambda v: round(v * _HERO_MARK_OPACITY))
+        mark.putalpha(a)
     canvas_rgba.alpha_composite(
         mark, (_CANVAS_W - mark.width - _HERO_MARGIN, _CANVAS_H - mark.height - _HERO_MARGIN),
     )
@@ -1332,6 +1450,56 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
     out = io.BytesIO()
     canvas_rgba.convert("RGB").save(out, format="JPEG", quality=95)
     return out.getvalue()
+
+
+# FOUNDER-VISUAL-BOARD-REBUILD-6 §16-§18: a small, restrained NNJ watermark for a PRESERVED source
+# infographic. Not the big BREAKING watermark, not a signature line - a quiet corner glyph, and
+# only if a bounded safe corner exists.
+_SOURCE_WM_W_FRAC = 0.062        # small - genuinely a quiet corner watermark
+_SOURCE_WM_BUSY_STDDEV = 18.0     # above this local detail (even small text), a corner is "occupied"
+
+
+def _place_source_watermark(canvas: Image.Image) -> bool:
+    """Try the four bounded corners (lower-right first) for ONE small adaptive NNJ watermark on a
+    preserved source infographic. Returns True if placed, False -> BRAND SUPPRESSION (§18: never
+    cover numbers / labels / axes / bars / legends / attribution / a publisher logo). Adaptive:
+    dark-grey on a light region, light-grey on a dark region; always low opacity."""
+    w, h = canvas.size
+    inset = max(8, round(0.028 * w))
+    wm_w = max(28, round(_SOURCE_WM_W_FRAC * w))
+    glyph = rasterize_nnj_mark(target_width=wm_w, red=False)
+    gw, gh = glyph.size
+    rgb = canvas.convert("RGB")
+    corners = (
+        ("lower_right", (w - inset - gw, h - inset - gh)),
+        ("lower_left", (inset, h - inset - gh)),
+        ("upper_right", (w - inset - gw, inset)),
+        ("upper_left", (inset, inset)),
+    )
+    best: tuple[float, tuple[int, int], float] | None = None
+    for _name, (gx, gy) in corners:
+        region = rgb.crop((max(0, gx), max(0, gy), min(w, gx + gw), min(h, gy + gh)))
+        if region.width < 4 or region.height < 4:
+            continue
+        stddev = max(ImageStat.Stat(region).stddev)
+        if stddev > _SOURCE_WM_BUSY_STDDEV:
+            continue
+        mean = sum(ImageStat.Stat(region).mean) / 3
+        if best is None or stddev < best[0]:
+            best = (stddev, (gx, gy), mean)
+    if best is None:
+        return False
+    _, (gx, gy), mean = best
+    if mean > 150:
+        tint, op = (58, 58, 64), 0.30
+    elif mean > 88:
+        tint, op = (112, 112, 120), 0.34
+    else:
+        tint, op = (210, 210, 214), 0.28
+    layer = Image.new("RGBA", glyph.size, (*tint, 0))
+    layer.putalpha(glyph.getchannel("A").point(lambda v: round(v * op)))
+    canvas.alpha_composite(layer, (max(0, gx), max(0, gy)))
+    return True
 
 
 def render_data_card(
@@ -1380,6 +1548,17 @@ def render_data_card(
         # source flagged by upstream `source_already_branded` metadata) - adding another renderer
         # NNJ would put two canonical marks on the final image. So add NOTHING: the source is
         # preserved exactly, zero renderer marks. (Third-party publisher logos are never touched.)
+        out = io.BytesIO()
+        canvas.convert("RGB").save(out, format="JPEG", quality=95)
+        return out.getvalue()
+
+    if presentation_mode == DataPresentationMode.MINIMAL_SOURCE_PRESERVING:
+        # FOUNDER-VISUAL-BOARD-REBUILD-6 §16-§18 (Founder-approved architecture): SOURCE FIDELITY
+        # FIRST. The source infographic is NOT converted to imitate the generated DATA card - it
+        # ships preserved, with AT MOST one small restrained adaptive NNJ watermark placed in a
+        # bounded safe corner; if no corner is safe, BRAND SUPPRESSION. No pulse line, no bottom
+        # signature, no frame, no technical grid, no DATA-card background, no second metric.
+        _place_source_watermark(canvas)
         out = io.BytesIO()
         canvas.convert("RGB").save(out, format="JPEG", quality=95)
         return out.getvalue()

@@ -237,57 +237,45 @@ def derive_master_news_render_evidence(
 
 def derive_breaking_render_evidence(source_image_bytes: bytes | None) -> RenderEvidence:
     """BREAKING production path (`render_branded_media` -> `render_breaking_frame`).
-    FOUNDER-VISUAL-BREAKING-DATA-RECONSTRUCTION-5 §7: BREAKING is the source photo at NATIVE size
-    (preserve, no fit/crop) + the board-traced NINJA PULSE / ECG waveform (`_draw_recovered_pulse`,
-    geometry pixel-traced from `docs/founder_telegram_board.png`'s own BREAKING pulse, smooth +
-    antialiased - NOT the retired `flat->spike->valley->flat` polyline) - short, LEFT-anchored,
-    along the lower media edge - + exactly ONE restrained canonical NNJ mark in the least-busy
-    bottom corner. Still no band, no baked wordmark, no scrim of any kind.
+    FOUNDER-VISUAL-BOARD-REBUILD-6 §3-§5: BREAKING is the source photo at NATIVE size (preserve, no
+    fit/crop) + a COMPLETE lower overlay composition pixel-measured from
+    `docs/founder_telegram_board.png` - the board NINJA PULSE (short, LEFT-anchored, along the lower
+    media edge, deep S undershoot) AND a restrained LARGE grey NNJ WATERMARK in the lower-right
+    (adaptive light/dark, low opacity - never a bright red CTA mark). No band, no baked wordmark,
+    no scrim.
 
-    `placement_zone` = the pulse's own position (`"lower_left"` band - left-anchored, ~46% width);
-    `logo_zone` = the mark's chosen bottom corner. font/line params do not apply (BREAKING bakes
-    no editorial typography)."""
-    from PIL import Image, ImageDraw, ImageStat
+    `placement_zone` = the pulse's position (`"lower_left"` band, ~0.43 width); `logo_zone` = the
+    watermark's corner (`"lower_right"`). font/line params do not apply."""
+    from PIL import Image
 
-    from services.brand_renderer import (
-        _BREAKING_MARK_W_FRAC,
-        _BREAKING_SAFE_INSET_FRAC,
-        _CARD_HEIGHT,
-        _CARD_WIDTH,
-        _breaking_quieter_bottom_corner,
-    )
-    from services.nnj_master_news_mark import rasterize_nnj_mark
-
-    _ = (ImageDraw, ImageStat)  # replayed indirectly via _breaking_quieter_bottom_corner
+    from services import nnj_board_metrics as _bm
+    from services.brand_renderer import _BREAKING_SAFE_INSET_FRAC, _CARD_HEIGHT, _CARD_WIDTH
 
     if source_image_bytes is not None:
         with Image.open(io.BytesIO(source_image_bytes)) as im:
             canvas_w, canvas_h = im.width, im.height
-            photo = im.convert("RGBA").copy()
-        inset = max(8, round(_BREAKING_SAFE_INSET_FRAC * canvas_w))
-        mark = rasterize_nnj_mark(target_width=max(28, round(_BREAKING_MARK_W_FRAC * canvas_w)))
-        logo_zone = _breaking_quieter_bottom_corner(photo, mark_w=mark.width, mark_h=mark.height, inset=inset)
-        logo_count = 1
         margin_frac = round(_BREAKING_SAFE_INSET_FRAC, 5)
         src_present = True
     else:
         canvas_w, canvas_h = _CARD_WIDTH, _CARD_HEIGHT
-        logo_count, logo_zone, src_present = 1, "lower_right", False
-        margin_frac = round(64 / _CARD_WIDTH, 5)
+        src_present = False
+        margin_frac = round(_bm.BREAKING.watermark_right_inset_frac, 5)
+    logo_count, logo_zone = 1, "lower_right"
 
     notes = {
-        "placement_zone": "the board-traced NINJA PULSE runs LEFT-anchored along the lower media edge (baseline ~93% h, ~46% width); logo_zone is the mark's own corner",
+        "placement_zone": "the board NINJA PULSE runs LEFT-anchored along the lower media edge (baseline ~95% h, ~0.43 width); logo_zone is the large watermark's own corner",
         "primary_font_size": "NOT APPLICABLE: BREAKING bakes no editorial typography",
         "actual_line_count": "NOT APPLICABLE: BREAKING bakes no editorial typography",
-        "overlay_asset": "waveform geometry PIXEL-TRACED from docs/founder_telegram_board.png (visual authority #1) - the board's own BREAKING pulse; rendered deterministically (4x supersample -> LANCZOS) via _draw_recovered_pulse. No raster composited; no dedicated approved overlay asset exists.",
+        "overlay_asset": "pulse geometry + watermark scale/opacity PIXEL-MEASURED from docs/founder_telegram_board.png (visual authority #1) via services/nnj_board_metrics.py; rendered deterministically (4x supersample -> LANCZOS). No raster composited; no dedicated approved overlay asset exists.",
+        "watermark": f"large grey NNJ, ~{_bm.BREAKING.watermark_width_frac:.2f} media width, opacity ~{_bm.BREAKING.watermark_opacity:.2f}, adaptive light/dark - not a CTA mark",
     }
     if not src_present:
-        notes["source_image_treatment"] = "no source photo supplied - minimal solid card + one mark; nothing to preserve or destroy"
+        notes["source_image_treatment"] = "no source photo supplied - minimal solid card + the one restrained watermark; nothing to preserve or destroy"
 
     return RenderEvidence(
         presentation_type="BREAKING",
         renderer_variant="brand_renderer.render_breaking_frame",
-        renderer_version="pulse-breaking-v5-board",
+        renderer_version="pulse-breaking-v6-board",
         canvas_width=canvas_w,
         canvas_height=canvas_h,
         safe_margin_frac=margin_frac,
@@ -323,27 +311,27 @@ def _derive_data_hero_evidence(data_candidate: Any) -> RenderEvidence:
         _HERO_MARGIN,
         _HERO_VALUE_FONT_MAX,
         _HERO_VALUE_FONT_MIN,
-        _resolve_heavy_font_path,
         _fit_single_line,
         _fit_wrapped_block,
+        data_font_path,
     )
 
     draw = ImageDraw.Draw(Image.new("RGB", (_CANVAS_W, _CANVAS_H)))
-    # RECONSTRUCTION-5 §13/§18/§25: replay the REAL fit - the `heavy` face in the board-measured
-    # left text column - so `primary_font_size` is truthful.
+    # BOARD-REBUILD-6 §7/§19: replay the REAL fit - the BUNDLED Fira Sans Condensed Black in the
+    # board-measured left text column - so `primary_font_size` is truthful.
     inner_w = round(_CANVAS_W * _HERO_LEFT_ZONE_FRAC) - _HERO_MARGIN
     value_font, value_size = _fit_single_line(
         draw, data_candidate.value, font_max=_HERO_VALUE_FONT_MAX,
-        font_min=_HERO_VALUE_FONT_MIN, max_width=inner_w, heavy=True,
+        font_min=_HERO_VALUE_FONT_MIN, max_width=inner_w, data_weight="black",
     )
     label_lines: list[str] = []
     if str(getattr(data_candidate, "label", "")).strip():
         label_lines, _lf, _ls = _fit_wrapped_block(
             draw, str(data_candidate.label).strip().upper(), font_max=_HERO_LABEL_FONT_MAX,
             font_min=_HERO_LABEL_FONT_MIN, max_width=inner_w, max_lines=_HERO_LABEL_MAX_LINES,
-            bold=True,
+            data_weight="bold",
         )
-    _heavy_path = _resolve_heavy_font_path() or ""
+    _font_file = data_font_path("black").name
     _series_n = len(tuple(getattr(data_candidate, "series", ()) or ()))
     size_attr = getattr(value_font, "size", value_size)
     primary_font_size = int(size_attr) if isinstance(size_attr, (int, float)) else int(value_size)
@@ -351,7 +339,7 @@ def _derive_data_hero_evidence(data_candidate: Any) -> RenderEvidence:
     return RenderEvidence(
         presentation_type="DATA",
         renderer_variant="brand_renderer.render_data_hero_card",
-        renderer_version="pulse-data-hero-v2-board",
+        renderer_version="pulse-data-hero-v3-board",
         canvas_width=_CANVAS_W,
         canvas_height=_CANVAS_H,
         safe_margin_frac=round(_HERO_MARGIN / _CANVAS_W, 5),
@@ -373,10 +361,10 @@ def _derive_data_hero_evidence(data_candidate: Any) -> RenderEvidence:
         notes={
             "source_image_treatment": "NOT APPLICABLE: generated hero-metric card - no source photo is used",
             "renderer": "render_data_hero_card: primary value font-fit + label wrapped <= 2 lines, deterministic",
-            "typography": f"value/unit weight=heavy ({_heavy_path.rsplit('/', 1)[-1] or 'default'}), label weight=bold, secondary weight=regular",
-            "graph_interpolation": "monotone_cubic (Fritsch-Carlson) - visual only, non-overshooting; series values are the sole factual anchors",
+            "typography": f"BUNDLED Fira Sans Condensed - value/unit=Black, label=Bold, secondary=Regular ({_font_file}); identical on Windows and Linux (SIL OFL)",
+            "graph_interpolation": "reduced_tension_path (55% linear + 45% monotone-cubic) - visual only, non-overshooting; keeps local direction changes; series values are the sole factual anchors",
             "graph_factual_series_count": str(_series_n),
-            "background_version": "pulse-data-hero-v2-board (board-measured near-black + faint reconstructed grid; no bg asset exists)",
+            "background_version": "pulse-data-hero-v3-board (board-measured near-black (6,7,9) + contrast-guarded near-invisible grid; no bg asset exists)",
         },
     )
 

@@ -167,7 +167,7 @@ def test_breaking_evidence_matches_the_corrected_news_family_signature() -> None
     raw = _photo(1280, 720)
     ev = derive_breaking_render_evidence(raw)
 
-    assert ev.renderer_version == "pulse-breaking-v5-board"
+    assert ev.renderer_version == "pulse-breaking-v6-board"
     assert ev.logo_count == 1
     assert ev.logo_zone in ("lower_right", "lower_left")
     assert ev.placement_zone == "lower_left"            # the pulse crosses the lower media
@@ -213,7 +213,7 @@ def test_breaking_no_source_still_carries_exactly_one_mark_and_no_band() -> None
     # solid NNJ-black card: the only non-black content is the single red mark bottom-right.
     br = ImageStat.Stat(im.crop((im.width - 160, im.height - 120, im.width, im.height)))
     rest = ImageStat.Stat(im.crop((0, 0, im.width // 2, im.height // 2)))
-    assert max(br.mean) > max(rest.mean) + 8
+    assert max(br.mean) > max(rest.mean) + 2  # BOARD-REBUILD-6: a restrained low-opacity watermark
 
 
 # ==============================================================================================

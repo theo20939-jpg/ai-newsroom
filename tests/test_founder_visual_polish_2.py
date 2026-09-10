@@ -147,7 +147,7 @@ def test_breaking_is_distinct_from_news_lower_media_pulse() -> None:
 
 def test_breaking_evidence_is_v3_lower_center() -> None:
     ev = derive_breaking_render_evidence(_b(_IPHONE))
-    assert ev.renderer_version == "pulse-breaking-v5-board"
+    assert ev.renderer_version == "pulse-breaking-v6-board"
     assert ev.placement_zone == "lower_left"
     assert ev.logo_count == 1
     assert ev.logo_zone in ("lower_right", "lower_left")

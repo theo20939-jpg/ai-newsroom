@@ -110,7 +110,7 @@ def test_recovered_pulse_renders_smooth_and_antialiased() -> None:
 
 def test_breaking_evidence_names_the_recovered_approved_asset() -> None:
     ev = derive_breaking_render_evidence(_b(_IPHONE))
-    assert ev.renderer_version == "pulse-breaking-v5-board"
+    assert ev.renderer_version == "pulse-breaking-v6-board"
     # RECONSTRUCTION-5: the geometry is now pixel-traced from the Founder board itself.
     assert "founder_telegram_board.png" in ev.notes["overlay_asset"]
     assert ev.logo_count == 1
@@ -157,7 +157,7 @@ def test_hero_curve_anchors_are_the_supplied_series_verbatim() -> None:
     body = _body(render_data_hero_card) + _body(br._draw_hero_sparkline)
     assert "len(series) >= 2" in body
     assert "min(series)" in body and "max(series)" in body
-    assert "_monotone_cubic(" in body  # smooth curvature only - between the real points
+    assert "_reduced_tension_path(" in body  # keeps local direction changes, non-overshooting
     assert "VERBATIM" in inspect.getsource(br._draw_hero_sparkline)
     # data-driven: a different series must produce a different image
     a = DataCandidate(value="9", unit="", label="", evidence_fact="", series=(1.0, 2.0, 9.0))
@@ -171,7 +171,7 @@ def test_hero_has_no_chart_below_two_points_and_never_a_crude_polyline() -> None
     spark = inspect.getsource(br._draw_hero_sparkline)
     # the rejected render was `draw.line(<raw anchor points>, joint="curve")`; now the curve is a
     # dense monotone-cubic path composited off a supersampled AA layer.
-    assert "_monotone_cubic(" in spark and "Image.Resampling.LANCZOS" in spark
+    assert "_reduced_tension_path(" in spark and "Image.Resampling.LANCZOS" in spark
     assert "_draw_hero_sparkline" in body and "_draw_recovered_pulse" in body
     one = DataCandidate(value="42", unit="%", label="x", evidence_fact="y", series=(3.0,))
     assert render_data_hero_card(one)  # renders, no crash, no chart
@@ -180,8 +180,8 @@ def test_hero_has_no_chart_below_two_points_and_never_a_crude_polyline() -> None
 def test_hero_value_unit_label_use_the_real_bold_face() -> None:
     # RECONSTRUCTION-5 §13: value + unit use the black-weight `heavy` face; the label stays bold.
     body = _body(render_data_hero_card)
-    assert body.count("heavy=True") >= 2  # value + unit
-    assert "bold=True" in body  # label
+    assert body.count('data_weight="black"') >= 2  # value + unit
+    assert 'data_weight="bold"' in body  # label
     assert _resolve_bold_font_path() is None or isinstance(_resolve_bold_font_path(), str)
 
 
