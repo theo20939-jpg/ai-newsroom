@@ -685,7 +685,7 @@ def test_derive_breaking_evidence_reports_the_corrected_no_scrim_news_family_sig
     assert ev.scrim_applied is False
     assert ev.scrim_treatment == "none"
     assert ev.logo_count == 1
-    assert ev.renderer_version == "pulse-breaking-v3"
+    assert ev.renderer_version == "pulse-breaking-v4-recovered"
     assert ev.placement_zone == "lower_center"  # FOUNDER-VISUAL-POLISH-2: the red pulse crosses the lower media
 
 

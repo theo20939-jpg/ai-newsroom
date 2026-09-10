@@ -873,6 +873,10 @@ class Settings(BaseSettings):
     # Unset by default - see services/brand_renderer.py's own module docstring for the OS-font
     # resolution fallback chain this drives (no font file is ever downloaded or shipped).
     brand_font_path: str | None = None
+    # FOUNDER-VISUAL-OVERLAY-RECOVERY-4 §12: optional pin for the BOLD face used by the DATA
+    # hero-metric hierarchy. Unset -> the OS-provided bold companion of `brand_font_path`'s family
+    # (see services/brand_renderer.py::_resolve_bold_font_path); never downloaded.
+    brand_font_bold_path: str | None = None
     watermark_enabled: bool = True
     watermark_opacity: float = Field(default=1.0, ge=0.0, le=1.0)
     pulse_line_enabled: bool = True

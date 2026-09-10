@@ -119,7 +119,7 @@ def test_breaking_is_distinct_from_news_lower_media_pulse() -> None:
     assert (
         "select_master_news_branding(" not in body
     )  # NOT the NEWS family signature anymore
-    assert "_draw_pulse(" in body  # its own pulse motif
+    assert "_draw_recovered_pulse(" in body  # its own RECOVERED pulse motif (not the crude triangle)
     assert (
         '"BREAKING"' not in body
         and "band" not in body.lower().split("bake")[0][:0] + body
@@ -147,7 +147,7 @@ def test_breaking_is_distinct_from_news_lower_media_pulse() -> None:
 
 def test_breaking_evidence_is_v3_lower_center() -> None:
     ev = derive_breaking_render_evidence(_b(_IPHONE))
-    assert ev.renderer_version == "pulse-breaking-v3"
+    assert ev.renderer_version == "pulse-breaking-v4-recovered"
     assert ev.placement_zone == "lower_center"
     assert ev.logo_count == 1
     assert ev.logo_zone in ("lower_right", "lower_left")
@@ -274,7 +274,7 @@ def test_hero_card_retains_every_element_and_no_synthetic_data() -> None:
         "data_candidate.delta",
         "_draw_hero_sparkline",
         "_draw_hero_grid",
-        "_draw_pulse_line",
+        "_draw_recovered_pulse",
         "rasterize_nnj_mark",
     ):
         assert token in body, token

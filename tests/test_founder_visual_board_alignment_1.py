@@ -272,6 +272,6 @@ def test_breaking_render_evidence_unchanged_no_band_no_scrim() -> None:
     assert ev.scrim_treatment == "none"
     assert ev.source_image_treatment == "preserve"
     # FOUNDER-VISUAL-POLISH-2 §3: BREAKING is its own distinct treatment now (lower-media pulse).
-    assert ev.renderer_version == "pulse-breaking-v3"
+    assert ev.renderer_version == "pulse-breaking-v4-recovered"
     assert ev.placement_zone == "lower_center"
     assert ev.logo_count == 1

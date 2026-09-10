@@ -237,10 +237,12 @@ def derive_master_news_render_evidence(
 
 def derive_breaking_render_evidence(source_image_bytes: bytes | None) -> RenderEvidence:
     """BREAKING production path (`render_branded_media` -> `render_breaking_frame`).
-    FOUNDER-VISUAL-POLISH-2 §3: BREAKING is now its OWN distinct treatment - the source photo at
-    NATIVE size (preserve, no fit/crop) + a red NINJA PULSE / ECG waveform crossing the LOWER
-    portion of the media + exactly ONE restrained canonical NNJ mark in the least-busy bottom
-    corner. Still no band, no baked wordmark, no scrim of any kind.
+    FOUNDER-VISUAL-OVERLAY-RECOVERY-4 §7: BREAKING is the source photo at NATIVE size (preserve, no
+    fit/crop) + the RECOVERED NINJA PULSE / ECG waveform (`_draw_recovered_pulse`, geometry measured
+    off the FOUND_APPROVED `universal_minimal_01.png`, smooth + antialiased - NOT the retired
+    `flat->spike->valley->flat` polyline) crossing the LOWER portion of the media + exactly ONE
+    restrained canonical NNJ mark in the least-busy bottom corner. Still no band, no baked wordmark,
+    no scrim of any kind.
 
     `placement_zone` = the pulse's own position (lower-centre band), reported as `"lower_center"`;
     `logo_zone` = the mark's chosen bottom corner. font/line params do not apply (BREAKING bakes
@@ -274,9 +276,10 @@ def derive_breaking_render_evidence(source_image_bytes: bytes | None) -> RenderE
         margin_frac = round(64 / _CARD_WIDTH, 5)
 
     notes = {
-        "placement_zone": "the red BREAKING pulse crosses the lower-centre of the media (y ~86%); logo_zone is the mark's own corner",
+        "placement_zone": "the recovered red BREAKING pulse crosses the lower-centre of the media (y ~86%); logo_zone is the mark's own corner",
         "primary_font_size": "NOT APPLICABLE: BREAKING bakes no editorial typography",
         "actual_line_count": "NOT APPLICABLE: BREAKING bakes no editorial typography",
+        "overlay_asset": "waveform geometry recovered from assets/brand/newsroom_visuals/v1/overlays/universal/universal_minimal_01.png (FOUND_APPROVED); rendered deterministically via _draw_recovered_pulse - no raster composited (4:5 -> 16:9 migration forbidden by the V1 product decision)",
     }
     if not src_present:
         notes["source_image_treatment"] = "no source photo supplied - minimal solid card + one mark; nothing to preserve or destroy"
@@ -284,7 +287,7 @@ def derive_breaking_render_evidence(source_image_bytes: bytes | None) -> RenderE
     return RenderEvidence(
         presentation_type="BREAKING",
         renderer_variant="brand_renderer.render_breaking_frame",
-        renderer_version="pulse-breaking-v3",
+        renderer_version="pulse-breaking-v4-recovered",
         canvas_width=canvas_w,
         canvas_height=canvas_h,
         safe_margin_frac=margin_frac,

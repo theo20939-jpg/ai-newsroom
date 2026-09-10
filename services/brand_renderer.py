@@ -49,7 +49,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageStat
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFont, ImageStat
 
 from core.config import settings
 from services.data_source_classification import DataPresentationMode
@@ -162,7 +162,24 @@ _FONT_CANDIDATE_PATHS: tuple[str, ...] = (
     "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
 )
 
+# FOUNDER-VISUAL-OVERLAY-RECOVERY-4 §6/§12 - typography forensics: NO font file has ever been
+# committed to this repo (git-history sweep) and `settings.brand_font_path` is unset by default, so
+# FONT_SOURCE = UNKNOWN - the exact Founder-board typeface cannot be recovered from any project
+# asset. The board's number/label hierarchy is fundamentally *weight*-driven (heavy value, medium
+# label), and the renderer previously could not render a bold face at all (`bold=` was a documented
+# no-op). Closest existing match, no download, same "opportunistically use whatever the OS ships"
+# rule already used for the regular face: the OS-provided BOLD companions of the same families
+# (Arial Bold on Windows; Liberation Sans Bold / DejaVu Sans Bold on the Linux VPS). Reported as a
+# disclosed gap - a real condensed grotesque would still need a Founder-supplied font asset.
+_FONT_BOLD_CANDIDATE_PATHS: tuple[str, ...] = (
+    "C:/Windows/Fonts/arialbd.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+)
+
 _font_path_resolution: list[str | None] = []  # single-element cache; [] means "not yet resolved"
+_font_bold_path_resolution: list[str | None] = []
 
 
 def _resolve_font_path() -> str | None:
@@ -179,6 +196,23 @@ def _resolve_font_path() -> str | None:
     return None
 
 
+def _resolve_bold_font_path() -> str | None:
+    """Closest existing BOLD face (§6). Falls back to the regular face when the OS ships no bold
+    companion - never downloads, never blocks a render."""
+    if _font_bold_path_resolution:
+        return _font_bold_path_resolution[0]
+    candidates = (
+        [settings.brand_font_bold_path] if getattr(settings, "brand_font_bold_path", None) else []
+    ) + list(_FONT_BOLD_CANDIDATE_PATHS)
+    for candidate in candidates:
+        if candidate and Path(candidate).exists():
+            logger.info("brand_renderer_bold_font_resolved", extra={"font_path": candidate})
+            _font_bold_path_resolution.append(candidate)
+            return candidate
+    _font_bold_path_resolution.append(_resolve_font_path())  # graceful: reuse the regular face
+    return _font_bold_path_resolution[0]
+
+
 @dataclass(frozen=True)
 class RenderResult:
     success: bool
@@ -189,9 +223,11 @@ class RenderResult:
 
 
 def _font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    # `bold` accepted for call-site readability/future extension - Arial/DejaVu/Liberation Sans
-    # are all installed as single (non-bold) faces here, so it has no effect yet.
-    font_path = _resolve_font_path()
+    # FOUNDER-VISUAL-OVERLAY-RECOVERY-4 §12: `bold=True` now really loads the OS-provided bold
+    # companion face (Arial Bold / Liberation Sans Bold / DejaVu Sans Bold) - the board's
+    # value/label hierarchy is weight-driven and this used to be a silent no-op. Falls back to the
+    # regular face when no bold companion is installed.
+    font_path = _resolve_bold_font_path() if bold else _resolve_font_path()
     if font_path is not None:
         try:
             return ImageFont.truetype(font_path, size)
@@ -247,6 +283,106 @@ def _draw_pulse_line(draw: ImageDraw.ImageDraw, *, x: int, y: int, width: int, c
         (x + segment * 4, y + width * 0.16), (x + segment * 5, y), (x + width, y),
     ]
     draw.line(points, fill=color, width=line_width, joint="curve")
+
+
+# ==================================================================================================
+# FOUNDER-VISUAL-OVERLAY-RECOVERY-4 §7/§8 - the RECOVERED NINJA PULSE / ECG waveform.
+#
+# Asset forensics (docs/founder_visual_overlay_recovery_4_report.md, §D/§E): there is NO vector
+# pulse asset anywhere in the repo or its full git history (only the two `nnj_logo*.svg` wordmarks),
+# and the only BREAKING-specific raster - `assets/brand/newsroom_visuals/v1/overlays/breaking/
+# breaking_minimal_01.png` - is FOUND_REJECTED (design/reference_manifest.md). What IS approved and
+# carries the refined waveform is the FOUND_APPROVED universal line:
+#   assets/brand/newsroom_visuals/v1/overlays/universal/universal_minimal_01.png
+#   assets/brand/newsroom_visuals/v1/overlays/universal/universal_graphite_red_pulse_01.png
+# Those are 1122x1402 (4:5) soft-glow design references, and the recorded V1 product decision
+# forbids compositing/stretching them into the 16:9 runtime canvas ("recreate deterministically").
+# So the waveform GEOMETRY is recovered, not the raster: the P-QRS-T morphology and proportions
+# below were MEASURED off `universal_minimal_01.png` at native resolution (baseline y=1285,
+# R apex +38px == +2.7% canvas height, S undershoot ~=0.28*R, small rounded P and T, a long calm
+# near-flat baseline). This replaces the rejected `flat -> spike -> valley -> flat` 6-point
+# polyline (`_draw_pulse`, kept only for the FROZEN NEWS / DATA-source lower signature) with a
+# smooth, antialiased, editorially-shaped pulse.
+#
+# x in [0, 1] spans the whole line; y in "R apex == 1.0" units (baseline 0, up = positive).
+_PULSE_WAVEFORM_UNIT: tuple[tuple[float, float], ...] = (
+    (0.000, 0.000), (0.070, 0.008), (0.140, -0.010), (0.210, 0.006), (0.280, -0.006),
+    (0.350, 0.004), (0.400, 0.000),
+    (0.430, 0.030), (0.452, 0.098), (0.474, 0.030), (0.495, 0.000),   # P wave
+    (0.505, -0.020), (0.515, -0.120),                                  # Q
+    (0.523, 0.520), (0.530, 1.000),                                    # R (sharp)
+    (0.539, 0.140), (0.548, -0.280), (0.556, -0.120), (0.566, 0.000),  # S + undershoot
+    (0.600, 0.055), (0.635, 0.165), (0.670, 0.120), (0.705, 0.030), (0.730, 0.000),  # T wave
+    (0.800, -0.006), (0.870, 0.006), (0.940, -0.006), (1.000, 0.000),
+)
+# Fraction of the total line width the P-QRS-T complex occupies (0.43..0.73 of the unit path). Held
+# roughly constant regardless of the drawn span so the spike never smears wide on a full-width line.
+_PULSE_QRS_UNIT_SPAN = 0.30
+
+
+def _catmull_rom(points: list[tuple[float, float]], samples_per_segment: int = 14) -> list[tuple[float, float]]:
+    """Centripetal Catmull-Rom spline through `points` (>= 2). Pure `math`, no numpy. Used only to
+    smooth an already-fixed control path for antialiased rendering - it introduces NO new data,
+    only sub-pixel curvature between the given control points."""
+    if len(points) < 3:
+        return list(points)
+    pts = [points[0], *points, points[-1]]
+    out: list[tuple[float, float]] = []
+    for i in range(1, len(pts) - 2):
+        p0, p1, p2, p3 = pts[i - 1], pts[i], pts[i + 1], pts[i + 2]
+        for s in range(samples_per_segment):
+            t = s / samples_per_segment
+            t2, t3 = t * t, t * t * t
+            x = 0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * t
+                       + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2
+                       + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3)
+            y = 0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * t
+                       + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2
+                       + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3)
+            out.append((x, y))
+    out.append(points[-1])
+    return out
+
+
+_PULSE_SUPERSAMPLE = 4
+
+
+def _draw_recovered_pulse(
+    base_rgba: Image.Image, *, cx: int, baseline_y: int, span: int, amplitude: int,
+    color: tuple[int, int, int], stroke: int,
+) -> None:
+    """Composite the RECOVERED NINJA PULSE waveform (`_PULSE_WAVEFORM_UNIT`) onto `base_rgba`,
+    horizontally centred on `cx`, its calm baseline at `baseline_y`, total width `span`, R apex
+    `amplitude` px above the baseline. Rendered on a 4x supersampled layer and LANCZOS-downscaled
+    for a smooth, consistently-stroked, cleanly-joined line (§8) - never Pillow's jagged direct
+    polyline. Adds nothing but the one waveform."""
+    span = max(40, span)
+    amplitude = max(4, amplitude)
+    stroke = max(2, stroke)
+    x_left = cx - span // 2
+    # vertical head-room: R apex up + the S undershoot down + stroke
+    pad = stroke * 3 + 6
+    top = int(baseline_y - amplitude - pad)
+    bottom = int(baseline_y + amplitude * 0.45 + pad)
+    layer_w = (span + pad * 2) * _PULSE_SUPERSAMPLE
+    layer_h = max(1, (bottom - top)) * _PULSE_SUPERSAMPLE
+    layer = Image.new("RGBA", (layer_w, layer_h), (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+
+    ox = pad * _PULSE_SUPERSAMPLE  # layer-local origin of x_left
+    oy = (baseline_y - top) * _PULSE_SUPERSAMPLE
+    control = [
+        (ox + xf * span * _PULSE_SUPERSAMPLE, oy - yf * amplitude * _PULSE_SUPERSAMPLE)
+        for xf, yf in _PULSE_WAVEFORM_UNIT
+    ]
+    smooth = _catmull_rom(control, samples_per_segment=16)
+    ld.line(smooth, fill=(*color, 255), width=max(1, stroke * _PULSE_SUPERSAMPLE), joint="curve")
+
+    small = layer.resize(
+        (max(1, layer_w // _PULSE_SUPERSAMPLE), max(1, layer_h // _PULSE_SUPERSAMPLE)),
+        Image.Resampling.LANCZOS,
+    )
+    base_rgba.alpha_composite(small, (int(x_left - pad), int(top)))
 
 
 def _draw_code_label(draw: ImageDraw.ImageDraw, *, x: int, y: int, text: str, color: tuple[int, int, int], size: int) -> None:
@@ -317,15 +453,17 @@ def _breaking_quieter_bottom_corner(photo: Image.Image, *, mark_w: int, mark_h: 
 
 
 def render_breaking_frame(source_image_bytes: bytes | None, *, category: str, editorial_code: str) -> bytes:
-    """FOUNDER-VISUAL-POLISH-2 §3: BREAKING = the source photo at NATIVE size (preserve) + a red
-    NINJA PULSE / ECG waveform crossing the LOWER portion of the media + exactly ONE restrained
-    canonical NNJ mark in the least-busy bottom corner. Distinct from NEWS (which is a bare corner
+    """FOUNDER-VISUAL-OVERLAY-RECOVERY-4 §7: BREAKING = the source photo at NATIVE size (preserve)
+    + the RECOVERED NINJA PULSE / ECG waveform (`_draw_recovered_pulse`, geometry measured off the
+    FOUND_APPROVED `universal_minimal_01.png`) crossing the LOWER portion of the media + exactly ONE
+    restrained canonical NNJ mark in the least-busy bottom corner. Distinct from NEWS (bare corner
     watermark, no pulse) - the urgency reads before the Telegram caption.
 
-    Still forbidden and absent: the retired ~22% dark-gradient lower-third band, a baked "BREAKING"
-    wordmark, a red accent rule, any banner. `category`/`editorial_code` are accepted for dispatch
-    symmetry with the other render_* funcs but are never drawn. No source photo -> a minimal solid
-    NNJ-black card carrying only the one canonical mark (never blocks BREAKING delivery)."""
+    The rejected `flat -> spike -> valley -> flat` polyline (`_draw_pulse`) is NO LONGER on this
+    path. Still forbidden and absent: the retired ~22% dark-gradient lower-third band, a baked
+    "BREAKING" wordmark, a red accent rule, any banner. `category`/`editorial_code` are accepted for
+    dispatch symmetry but never drawn. No source photo -> a minimal solid NNJ-black card carrying
+    only the one canonical mark (never blocks BREAKING delivery)."""
     if source_image_bytes is None:
         card = Image.new("RGBA", (_CARD_WIDTH, _CARD_HEIGHT), (*_OFFICIAL_NNJ_BLACK, 255))
         _paste_svg_mark(card, target_width=max(48, round(_CARD_WIDTH * 0.08)), margin=64)
@@ -336,15 +474,16 @@ def render_breaking_frame(source_image_bytes: bytes | None, *, category: str, ed
     with Image.open(io.BytesIO(source_image_bytes)) as src:
         photo = src.convert("RGBA").copy()
     w, h = photo.size
-    draw = ImageDraw.Draw(photo)
 
-    # the lower-media pulse
+    # the recovered lower-media pulse (smooth, antialiased - not the crude triangle)
     pulse_w = max(40, round(_BREAKING_PULSE_WIDTH_FRAC * w))
-    pulse_x0 = (w - pulse_w) // 2
     pulse_y = round(_BREAKING_PULSE_Y_FRAC * h)
     amp = max(6, round(_BREAKING_PULSE_AMPLITUDE_FRAC * h))
     stroke = max(3, round(_BREAKING_PULSE_STROKE_FRAC * h))
-    _draw_pulse(draw, pulse_x0, pulse_y, pulse_w, amp * 2, _OFFICIAL_NNJ_RED, stroke)
+    _draw_recovered_pulse(
+        photo, cx=w // 2, baseline_y=pulse_y, span=pulse_w, amplitude=amp,
+        color=_OFFICIAL_NNJ_RED, stroke=stroke,
+    )
 
     # exactly one restrained mark, least-busy bottom corner
     inset = max(8, round(_BREAKING_SAFE_INSET_FRAC * w))
@@ -448,15 +587,16 @@ _DATA_SIGNATURE_SHORTEN_STEPS = 5  # intermediate line lengths tried between the
 
 def _fit_single_line(
     draw: ImageDraw.ImageDraw, text: str, *, font_max: int, font_min: int, max_width: float,
+    bold: bool = False,
 ) -> tuple[ImageFont.FreeTypeFont | ImageFont.ImageFont, int]:
     """Deterministically shrinks the font (within [font_min, font_max], step 4) until `text` fits
     `max_width` on one line - never a mid-character pixel clip. Returns the smallest size actually
     tried even if `font_min` still does not fit (a hard-bound caller is expected to already keep
     `text` short by construction in that rare case - this never truncates a single-line value)."""
     size = font_max
-    font = _font(size)
+    font = _font(size, bold=bold)
     for candidate_size in range(font_max, font_min - 1, -4):
-        font = _font(candidate_size)
+        font = _font(candidate_size, bold=bold)
         size = candidate_size
         if draw.textlength(text, font=font) <= max_width:
             break
@@ -465,6 +605,7 @@ def _fit_single_line(
 
 def _fit_wrapped_block(
     draw: ImageDraw.ImageDraw, text: str, *, font_max: int, font_min: int, max_width: int, max_lines: int,
+    bold: bool = False,
 ) -> tuple[list[str], ImageFont.FreeTypeFont | ImageFont.ImageFont, int]:
     """Deterministically fits `text` inside `max_width`/`max_lines` by shrinking the font within
     [font_min, font_max] (step 2) and word-wrapping (`_wrap_text()`) at each candidate size. If it
@@ -473,10 +614,10 @@ def _fit_wrapped_block(
     line is shortened at a word boundary with a trailing ellipsis until it fits - never a blind
     pixel clip, never a mid-character cut."""
     lines: list[str] = []
-    font = _font(font_min)
+    font = _font(font_min, bold=bold)
     size = font_min
     for candidate_size in range(font_max, font_min - 1, -2):
-        font = _font(candidate_size)
+        font = _font(candidate_size, bold=bold)
         size = candidate_size
         lines = _wrap_text(draw, text, font, max_width)
         if len(lines) <= max_lines:
@@ -888,8 +1029,8 @@ def _build_data_lower_signature_image(
 # printed metric is never converted into a hero card (Founder decision, phase §3).
 # ==================================================================================================
 _HERO_BG = (14, 14, 16)              # graphite-black base
-_HERO_GRID_COLOR = (34, 34, 39)      # faint technical grid
-_HERO_GRID_STEP = 64
+_HERO_GRID_COLOR = (24, 24, 28)      # faint technical grid - lower contrast, wider step (§10)
+_HERO_GRID_STEP = 96
 _HERO_MARGIN = 72
 _HERO_VALUE_FONT_MAX = 200
 _HERO_VALUE_FONT_MIN = 88
@@ -908,29 +1049,101 @@ _HERO_TEMPLATE = "pulse-data-hero-v1"
 
 
 def _draw_hero_grid(draw: ImageDraw.ImageDraw, w: int, h: int) -> None:
+    # FOUNDER-VISUAL-OVERLAY-RECOVERY-4 §10: no grid/background asset exists anywhere in the repo
+    # or its history (disclosed blocker) - this stays a deterministic primitive, only made more
+    # restrained per the board (wider step, lower contrast) so it supports the hierarchy instead of
+    # dominating it. NOT a redesign.
     for x in range(_HERO_GRID_STEP, w, _HERO_GRID_STEP):
         draw.line([(x, 0), (x, h)], fill=_HERO_GRID_COLOR, width=1)
     for y in range(_HERO_GRID_STEP, h, _HERO_GRID_STEP):
         draw.line([(0, y), (w, y)], fill=_HERO_GRID_COLOR, width=1)
 
 
+def _monotone_cubic(xs: list[float], ys: list[float], samples_per_segment: int = 24) -> list[tuple[float, float]]:
+    """Fritsch-Carlson monotone cubic Hermite interpolation through (xs, ys). Pure `math`.
+
+    FOUNDER-VISUAL-OVERLAY-RECOVERY-4 §11: this is VISUAL interpolation only - it adds smooth
+    curvature *between* the real series points, and its monotone construction guarantees the curve
+    never overshoots the [min, max] of any adjacent pair, so it can never imply a value outside the
+    supplied series. No numeric label is derived from the interpolated path; the real points remain
+    the only factual anchors."""
+    n = len(xs)
+    if n < 3:
+        return list(zip(xs, ys))
+    dx = [xs[i + 1] - xs[i] for i in range(n - 1)]
+    slope = [(ys[i + 1] - ys[i]) / dx[i] if dx[i] else 0.0 for i in range(n - 1)]
+    m = [slope[0]] + [
+        0.0 if slope[i - 1] * slope[i] <= 0 else (slope[i - 1] + slope[i]) / 2
+        for i in range(1, n - 1)
+    ] + [slope[-1]]
+    for i in range(n - 1):
+        if slope[i] == 0:
+            m[i] = m[i + 1] = 0.0
+            continue
+        a, b = m[i] / slope[i], m[i + 1] / slope[i]
+        h = math.hypot(a, b)
+        if h > 3.0:
+            t = 3.0 / h
+            m[i], m[i + 1] = t * a * slope[i], t * b * slope[i]
+    out: list[tuple[float, float]] = []
+    for i in range(n - 1):
+        for s in range(samples_per_segment):
+            t = s / samples_per_segment
+            h00 = 2 * t**3 - 3 * t**2 + 1
+            h10 = t**3 - 2 * t**2 + t
+            h01 = -2 * t**3 + 3 * t**2
+            h11 = t**3 - t**2
+            x = xs[i] + t * dx[i]
+            y = h00 * ys[i] + h10 * dx[i] * m[i] + h01 * ys[i + 1] + h11 * dx[i] * m[i + 1]
+            out.append((x, y))
+    out.append((xs[-1], ys[-1]))
+    return out
+
+
 def _draw_hero_sparkline(
-    draw: ImageDraw.ImageDraw, series: tuple[float, ...], *, box: tuple[int, int, int, int],
+    canvas: Image.Image, series: tuple[float, ...], *, box: tuple[int, int, int, int],
 ) -> None:
-    """Plots `series` VERBATIM inside `box` (x0, y0, x1, y1) - linear position on x, min-max
-    normalised on y, no smoothing / interpolation / synthetic points. A white end-dot marks the
-    latest value (the board's own treatment). Requires >= 2 points (guarded by the caller)."""
+    """The board's DATA trend treatment (docs/founder_telegram_board.png format 3): a SMOOTH red
+    area curve rising to a white end-dot, with a red->transparent vertical gradient fill beneath it.
+
+    FOUNDER-VISUAL-OVERLAY-RECOVERY-4 §11: the `series` values are still the only factual anchors -
+    plotted at exact linear x positions, min-max normalised on y, drawn VERBATIM. `_monotone_cubic`
+    only adds sub-point curvature for the line's look and cannot overshoot the data range. No axes,
+    no tick labels, no synthetic points. Rendered on a 4x supersampled RGBA layer for a clean,
+    consistently-weighted curve (replaces the rejected angular `joint="curve"` polyline). Requires
+    >= 2 points (guarded by the caller)."""
     x0, y0, x1, y1 = box
+    y0 += 16  # headroom so the white end-dot at the series max is never clipped
     lo, hi = min(series), max(series)
     span = (hi - lo) or 1.0
     n = len(series)
-    points = [
-        (x0 + (x1 - x0) * (i / (n - 1)), y1 - (y1 - y0) * ((v - lo) / span))
-        for i, v in enumerate(series)
-    ]
-    draw.line(points, fill=_OFFICIAL_NNJ_RED, width=5, joint="curve")
-    ex, ey = points[-1]
-    draw.ellipse([ex - 9, ey - 9, ex + 9, ey + 9], fill=_OFFICIAL_NNJ_WHITE)
+    anchor_xs = [x0 + (x1 - x0) * (i / (n - 1)) for i in range(n)]
+    anchor_ys = [y1 - (y1 - y0) * ((v - lo) / span) for v in series]
+    curve = _monotone_cubic(anchor_xs, anchor_ys, samples_per_segment=28)
+
+    ss = _PULSE_SUPERSAMPLE
+    lw, lh = (x1 - x0) * ss, (y1 - y0) * ss + ss
+    layer = Image.new("RGBA", (max(1, lw), max(1, lh)), (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    loc = [((cx - x0) * ss, (cy - y0) * ss) for cx, cy in curve]
+
+    # gradient-filled area under the curve
+    fill_poly = [*loc, (loc[-1][0], lh), (loc[0][0], lh)]
+    area = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+    ImageDraw.Draw(area).polygon(fill_poly, fill=(*_OFFICIAL_NNJ_RED, 255))
+    grad = Image.new("L", (1, layer.size[1]))
+    grad.putdata([int(150 * (1 - j / max(1, layer.size[1] - 1)) ** 1.5) for j in range(layer.size[1])])
+    area.putalpha(ImageChops.multiply(area.getchannel("A"), grad.resize(layer.size)))
+    layer.alpha_composite(area)
+
+    # the smooth curve stroke + white end-dot
+    ld.line(loc, fill=(*_OFFICIAL_NNJ_RED, 255), width=max(2, 4 * ss), joint="curve")
+    ex, ey = loc[-1]
+    r = 9 * ss
+    ld.ellipse([ex - r, ey - r, ex + r, ey + r], fill=(*_OFFICIAL_NNJ_WHITE, 255))
+
+    small = layer.resize((max(1, x1 - x0), max(1, y1 - y0)), Image.Resampling.LANCZOS)
+    canvas.alpha_composite(small, (x0, y0))
 
 
 def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: bytes | None = None) -> bytes:
@@ -943,19 +1156,20 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
       - `data_candidate.label` - a smaller white line beneath, wrapped to <= 2 lines, no clipping;
       - `data_candidate.evidence_fact` - a grey secondary line drawn VERBATIM, wrapped, no clipping;
       - `data_candidate.delta` - an optional red-outlined pill (drawn only when supplied);
-      - `data_candidate.series` - an optional red trend line plotted verbatim (only when >= 2
-        points are supplied - never a synthetic/interpolated series);
-      - a subtle technical grid + a short red pulse motif;
+      - `data_candidate.series` - an optional SMOOTH red area curve (`_draw_hero_sparkline`), the
+        board's own treatment: monotone-cubic curvature between the real points (never overshooting
+        the data range), red->transparent gradient fill, white end-dot. Drawn only when >= 2 real
+        points are supplied - no synthetic points, no axes, no invented data labels;
+      - a subtle technical grid + the RECOVERED red NINJA PULSE motif (`_draw_recovered_pulse`);
       - exactly ONE canonical NNJ mark, lower-right, inside the safe margin.
 
     No source photo is used - the hero metric IS the visual (Founder decision, phase §3/§6).
 
-    FOUNDER-VISUAL-POLISH-2 §6 (polish only, no redesign): the metric block is bound to a LEFT
-    column (~46% width) and vertically centred so there is no large empty lower band; the trend
-    line fills a balanced RIGHT column; the short red pulse motif sits directly under the metric
-    block as part of the left composition. Every element is retained; nothing synthetic is added -
-    the trend line is drawn only from `data_candidate.series` (>= 2 real points), no axes, no
-    invented data labels."""
+    FOUNDER-VISUAL-OVERLAY-RECOVERY-4 §11/§12: the value/unit/label use the real BOLD face; the
+    trend is a smooth antialiased area curve (not the rejected angular polyline); the small pulse
+    motif is the recovered waveform. The graphite background + grid are kept as-is (no such asset
+    exists to recover - disclosed blocker). Every factual element is retained; the series values are
+    the only numeric anchors and are plotted verbatim."""
     canvas = Image.new("RGB", (_CANVAS_W, _CANVAS_H), _HERO_BG)
     draw = ImageDraw.Draw(canvas)
     _draw_hero_grid(draw, _CANVAS_W, _CANVAS_H)
@@ -969,9 +1183,13 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
     blocks: list[tuple[str, object, tuple, tuple, int]] = []  # (kind, font, bbox, color, gap_after)
     total_h: float = 0
 
+    # FOUNDER-VISUAL-OVERLAY-RECOVERY-4 §12: the board's value/unit/label hierarchy is weight-driven
+    # - render them in the real BOLD face (FONT_SOURCE disclosed as UNKNOWN; closest existing OS bold
+    # companion, see _resolve_bold_font_path). The grey secondary line stays regular per the board.
     value_text = data_candidate.value
     value_font, _vs = _fit_single_line(
-        draw, value_text, font_max=_HERO_VALUE_FONT_MAX, font_min=_HERO_VALUE_FONT_MIN, max_width=left_col_w,
+        draw, value_text, font_max=_HERO_VALUE_FONT_MAX, font_min=_HERO_VALUE_FONT_MIN,
+        max_width=left_col_w, bold=True,
     )
     vb = draw.textbbox((0, 0), value_text, font=value_font)
     blocks.append(("value", value_font, vb, _OFFICIAL_NNJ_WHITE, 4))
@@ -980,19 +1198,21 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
     unit_text = data_candidate.unit.strip().upper()
     if unit_text:
         unit_font, _us = _fit_single_line(
-            draw, unit_text, font_max=_HERO_UNIT_FONT_MAX, font_min=_HERO_UNIT_FONT_MIN, max_width=left_col_w,
+            draw, unit_text, font_max=_HERO_UNIT_FONT_MAX, font_min=_HERO_UNIT_FONT_MIN,
+            max_width=left_col_w, bold=True,
         )
         ub = draw.textbbox((0, 0), unit_text, font=unit_font)
         blocks.append(("unit", unit_font, ub, _OFFICIAL_NNJ_RED, 16))
         total_h += (ub[3] - ub[1]) + 16
 
     label_lines: list[str] = []
-    label_font = _font(_HERO_LABEL_FONT_MIN)
+    label_font = _font(_HERO_LABEL_FONT_MIN, bold=True)
     label_size = _HERO_LABEL_FONT_MIN
     if data_candidate.label.strip():
         label_lines, label_font, label_size = _fit_wrapped_block(
             draw, data_candidate.label.strip().upper(), font_max=_HERO_LABEL_FONT_MAX,
             font_min=_HERO_LABEL_FONT_MIN, max_width=left_col_w, max_lines=_HERO_LABEL_MAX_LINES,
+            bold=True,
         )
         total_h += len(label_lines) * (label_size + 6) + 12
 
@@ -1039,16 +1259,22 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
         draw.rounded_rectangle(list(pill_box), radius=pill_h // 2, outline=_OFFICIAL_NNJ_RED, width=3)
         draw.text((x + 22, y + 14 - pb[1]), data_candidate.delta, font=pill_font, fill=_HERO_PILL_TEXT_COLOR)
         y += pill_h + 22
-    _draw_pulse_line(draw, x=x, y=round(y) + 6, width=180, color=_OFFICIAL_NNJ_RED)
+
+    canvas_rgba = canvas.convert("RGBA")
+
+    # the recovered NINJA PULSE motif under the metric block (replaces the crude _draw_pulse_line)
+    _draw_recovered_pulse(
+        canvas_rgba, cx=x + 110, baseline_y=round(y) + 12, span=200, amplitude=22,
+        color=_OFFICIAL_NNJ_RED, stroke=4,
+    )
 
     if has_chart:
         _draw_hero_sparkline(
-            draw, series,
+            canvas_rgba, series,
             box=(round(_CANVAS_W * 0.50), round(_CANVAS_H * 0.20),
                  _CANVAS_W - _HERO_MARGIN, round(_CANVAS_H * 0.84)),
         )
 
-    canvas_rgba = canvas.convert("RGBA")
     mark = rasterize_nnj_mark(target_width=max(48, round(_HERO_MARK_W_FRAC * _CANVAS_W)), red=True)
     canvas_rgba.alpha_composite(
         mark, (_CANVAS_W - mark.width - _HERO_MARGIN, _CANVAS_H - mark.height - _HERO_MARGIN),

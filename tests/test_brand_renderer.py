@@ -151,7 +151,9 @@ def test_breaking_frame_bakes_no_wordmark_and_no_band_in_source():
     assert '"BREAKING"' not in body
     assert "band_height" not in body and "accent_height" not in body
     assert "_draw_code_label(" not in body
-    assert "_draw_pulse(" in body                        # the distinct BREAKING pulse motif
+    # FOUNDER-VISUAL-OVERLAY-RECOVERY-4 §7: the RECOVERED smooth waveform, not the retired triangle
+    assert "_draw_recovered_pulse(" in body
+    assert "_draw_pulse(" not in body                     # crude flat->spike->valley->flat retired here
     assert "_breaking_quieter_bottom_corner(" in body     # one restrained mark, least-busy corner
 
 
