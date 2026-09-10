@@ -126,9 +126,21 @@ def test_finalization_ignores_new_params_once_already_finalized() -> None:
 # test_data_card_never_ships_with_zero_branding_on_a_maximally_busy_photo - not duplicated here.)
 # ---------------------------------------------------------------------------
 
-def test_news_light_photo_has_exactly_one_mark() -> None:
+def test_news_light_photo_mark_only_stays_at_or_below_one_mark() -> None:
+    """FOUNDER-VISUAL-POLISH-2 §2/§4: NEWS now defaults to the restrained MARK_ONLY watermark - one
+    small canonical NNJ in the least-busy safe corner, or NONE when the low-opacity red mark cannot
+    be placed with enough contrast (the same safe-suppression principle the DATA source path
+    already uses). The invariant is on the FINAL media: FINAL_VISIBLE_NNJ_COUNT <= 1 - never a
+    fixed count, never a fixed corner. A flat near-white frame gives the red mark no usable
+    contrast, so it resolves to 0 - and that MUST be a coherent `no_overlay` suppression with the
+    upper-mark slot omitted (mutual exclusion), not an accidental drop or a second mark.
+    (`test_news_dark_photo_has_exactly_one_mark` covers the "mark IS placed -> exactly one" side.)"""
     _branded, decision = apply_master_news_branding(_flat_photo(color=(230, 230, 230)))
-    assert _brand_mark_count(decision) == 1
+    count = _brand_mark_count(decision)
+    assert count <= 1  # mutual exclusion holds - never two
+    if count == 0:
+        assert decision.degradation_mode == "no_overlay"  # a deliberate safe suppression
+        assert decision.upper_mark.placement is ComponentPlacement.OMITTED
 
 
 def test_news_dark_photo_has_exactly_one_mark() -> None:
@@ -144,31 +156,34 @@ def test_news_busy_photo_never_exceeds_one_mark_and_may_safely_suppress() -> Non
         assert decision.degradation_mode == "no_overlay"
 
 
-def test_breaking_places_exactly_one_brand_mark(monkeypatch: pytest.MonkeyPatch) -> None:
-    """VISUAL-RENDERER-RECONCILIATION-1 §7: BREAKING now composites the source with the SAME
-    MASTER NEWS lower signature as NEWS (`select_master_news_branding()` +
-    `composite_master_news_decision()`), so the single-brand-mark invariant is enforced structurally
-    in exactly one place. Spy on `select_master_news_branding` to prove BREAKING routes through it
-    once and the returned decision carries <= 1 canonical mark."""
+def test_breaking_places_exactly_one_brand_mark() -> None:
+    """FOUNDER-VISUAL-POLISH-2 §2 / -BOARD-REBUILD-6 / -FINAL-BOARD-MATCH-7: BREAKING no longer
+    borrows the NEWS fused signature (`select_master_news_branding()` is gone from
+    `brand_renderer`). `render_breaking_frame()` composites its OWN board-derived lower-media NINJA
+    PULSE plus exactly ONE restrained grey NNJ watermark (`_draw_breaking_watermark()`); there is
+    no red CTA mark, no second rasterized mark, no NEWS-fused route. The single-brand-mark
+    invariant is `FINAL_VISIBLE_NNJ_COUNT <= 1` on the final media - proven here structurally: the
+    render succeeds, RenderEvidence reports exactly one logo, and the renderer's ONLY mark
+    primitive is the watermark helper."""
+    import inspect
+
     from services import brand_renderer as brand_renderer_module
-    from services import nnj_master_news_overlay as overlay_module
+    from services.render_evidence import derive_breaking_render_evidence
 
-    decisions: list[MasterNewsBrandingDecision] = []
-    original = overlay_module.select_master_news_branding
-
-    def _spy(photo, **kwargs):
-        d = original(photo, **kwargs)
-        decisions.append(d)
-        return d
-
-    monkeypatch.setattr(overlay_module, "select_master_news_branding", _spy)
-    monkeypatch.setattr(brand_renderer_module, "select_master_news_branding", _spy)
     result = render_branded_media(
         presentation_type=BREAKING, source_image_bytes=_flat_photo(), category="technology", editorial_code="NP-0001",
     )
     assert result.success
-    assert len(decisions) == 1
-    assert _brand_mark_count(decisions[0]) <= 1  # mutual exclusion - never two marks
+    assert derive_breaking_render_evidence(_flat_photo()).logo_count == 1  # exactly one canonical NNJ on the final media
+
+    # the retired NEWS-fused route is gone; the ONLY mark primitive is the board watermark helper
+    assert not hasattr(brand_renderer_module, "select_master_news_branding")
+    src = inspect.getsource(brand_renderer_module.render_breaking_frame)
+    body = src.split('"""')[2] if src.count('"""') >= 2 else src  # skip the docstring
+    assert "_draw_breaking_watermark(" in body
+    assert "select_master_news_branding(" not in body
+    assert "rasterize_nnj_mark(" not in body  # only _draw_breaking_watermark composites a mark
+    assert "_paste_svg_mark(" not in body and "_paste_logo(" not in body
 
 
 def test_quote_places_exactly_one_brand_mark(monkeypatch: pytest.MonkeyPatch) -> None:

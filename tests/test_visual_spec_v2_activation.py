@@ -14,7 +14,7 @@ import pytest
 from PIL import Image, ImageDraw
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models.design_spec_version import DesignSpecStatus, DesignSpecType
+from database.models.design_spec_version import DesignSpecStatus, DesignSpecType, DesignSpecVersion
 from services.brand_renderer import render_breaking_frame, render_data_card, render_quote_card
 from services.data_source_classification import (
     DataPresentationMode,
@@ -52,6 +52,18 @@ _V1_QUOTE = {
     "source_image_treatment": "preserve",
 }
 _V2_ONLY_CHANGE = "placement_zone"  # the ONLY key that may differ between v1 and v2
+
+# FOUNDER-VISUAL-V8-FINAL-RELEASE-PREP-1 §17-19 - the truthful `telegram_data` candidate for the
+# approved V8 renderer. The FULL_DATA_CARD path now renders the generated hero-metric card on the
+# near-square 1280x1172 board-media canvas (FOUNDER-VISUAL-CANVAS-COMPOSITION-CORRECTION-8), so its
+# board-proportional primary value font fits at ~270 - the retired `_V1_DATA` range [48, 88]
+# described the pre-V8 compact-corner stat and no longer applies to the hero. The source-preserving
+# MINIMAL path is unchanged and is still evaluated against `_V1_DATA`. No `placement_zone` /
+# `logo_zone` / `scrim_treatment` - those differ between the two modes, so declaring hero-only
+# values would lie about the MINIMAL render.
+_V8_DATA_HERO = {
+    "font_size_max": 300, "font_size_min": 100, "max_line_count": 2, "safe_margin_frac": 0.019,
+}
 
 _KIRIN = DataCandidate(value="42", unit="%", label="of Kirin 9050 Pro benchmark improvement", evidence_fact="42% improvement reported")
 
@@ -139,15 +151,27 @@ async def test_v2_lifecycle_only_removes_placement_zone_and_supersedes_v1(db_ses
 
 @pytest.mark.asyncio
 async def test_final_matrix_all_pass_no_placement_zone_partial(db_session: AsyncSession) -> None:
-    """§4-7: with telegram_news v2 / telegram_breaking v2 ACTIVE and telegram_data/quote v1 ACTIVE,
-    every accepted render is SPEC_MATCH=PASS - and NEWS/BREAKING carry no placement_zone
-    PARTIAL_EVIDENCE. DATA/QUOTE/Kirin behaviour is unchanged."""
+    """§4-7: with telegram_news v2 / telegram_breaking v2 ACTIVE, every accepted render is
+    SPEC_MATCH=PASS - and NEWS/BREAKING carry no placement_zone PARTIAL_EVIDENCE.
+
+    FOUNDER-VISUAL-V8-FINAL-RELEASE-PREP-1 §17-19: the DATA *source-preserving* MINIMAL render is
+    still evaluated against telegram_data v1 (`_V1_DATA`); the DATA *generated hero* (FULL_DATA_CARD)
+    render is evaluated against the truthful V8 telegram_data candidate (`_V8_DATA_HERO`, font
+    100-300) because the approved V8 hero card renders on the near-square 1280x1172 board-media
+    canvas with a board-proportional value font (~270). QUOTE/Kirin behaviour is unchanged."""
     await _seed_v1_active(db_session, "telegram_news", _V1_NEWS)
     news_spec = await _activate_v2(db_session, "telegram_news", _V1_NEWS)
     await _seed_v1_active(db_session, "telegram_breaking", _V1_BREAKING)
     breaking_spec = await _activate_v2(db_session, "telegram_breaking", _V1_BREAKING)
     data_spec = await _seed_v1_active(db_session, "telegram_data", _V1_DATA)
     quote_spec = await _seed_v1_active(db_session, "telegram_quote", _V1_QUOTE)
+    # the truthful V8 telegram_data candidate for the generated hero (no DB round-trip needed - the
+    # SPEC_MATCH comparator is pure; same shape create_candidate_spec() would store).
+    data_hero_spec = DesignSpecVersion(
+        platform="telegram", surface="channel", presentation_type="DATA",
+        spec_type=DesignSpecType.DECLARATIVE_VISUAL_PARAMS, scope="telegram_data", version=99,
+        status=DesignSpecStatus.ACTIVE, parameters=_V8_DATA_HERO,
+    )
 
     photo = _photo()
 
@@ -186,12 +210,16 @@ async def test_final_matrix_all_pass_no_placement_zone_partial(db_session: Async
                               source_type=st, presentation_mode=mode)
     assert dim.status is DimensionStatus.PASS, dim.rationale
 
-    # DATA photo -> PASS
+    # DATA photo -> FULL_DATA_CARD generated hero -> PASS against the truthful V8 telegram_data
+    # candidate (`_V8_DATA_HERO`, font 100-300). The approved V8 hero value font is ~270.
     st2 = classify_source_presentation([])
     mode2 = select_data_presentation_mode(st2)
+    assert mode2 is DataPresentationMode.FULL_DATA_CARD
     dp = render_data_card(_KIRIN, category="tech", editorial_code="NP-P", source_image_bytes=photo, presentation_mode=mode2)
-    dim, _ = await _spec_match(data_spec, "DATA", dp, derive_data_render_evidence(photo, _KIRIN, presentation_mode=mode2),
-                              source_type=st2, presentation_mode=mode2)
+    hero_ev = derive_data_render_evidence(photo, _KIRIN, presentation_mode=mode2)
+    assert isinstance(hero_ev.primary_font_size, int)  # the generated hero always measures a real value
+    assert 100 <= hero_ev.primary_font_size <= 300  # board-proportional hero font, materially > the retired [48, 88]
+    dim, _ = await _spec_match(data_hero_spec, "DATA", dp, hero_ev, source_type=st2, presentation_mode=mode2)
     assert dim.status is DimensionStatus.PASS, dim.rationale
 
     # QUOTE -> PASS
@@ -200,11 +228,12 @@ async def test_final_matrix_all_pass_no_placement_zone_partial(db_session: Async
     dim, _ = await _spec_match(quote_spec, "QUOTE", q, derive_quote_render_evidence(_portrait()))
     assert dim.status is DimensionStatus.PASS, dim.rationale
 
-    # Kirin regression - unchanged
+    # Kirin regression - FULL_DATA_CARD forced over a classified infographic still hard-BLOCKS
+    # (INFOGRAPHIC_DESTROYED), independent of which telegram_data spec the render is scored against.
     bad = render_data_card(_KIRIN, category="tech", editorial_code="NP-K", source_image_bytes=_kirin_infographic(),
                            presentation_mode=DataPresentationMode.FULL_DATA_CARD)
     _dim, bad_merged = await _spec_match(
-        data_spec, "DATA", bad,
+        data_hero_spec, "DATA", bad,
         derive_data_render_evidence(_kirin_infographic(), _KIRIN, presentation_mode=DataPresentationMode.FULL_DATA_CARD),
         source_type=st, presentation_mode=DataPresentationMode.FULL_DATA_CARD,
     )
