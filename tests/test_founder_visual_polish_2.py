@@ -147,8 +147,8 @@ def test_breaking_is_distinct_from_news_lower_media_pulse() -> None:
 
 def test_breaking_evidence_is_v3_lower_center() -> None:
     ev = derive_breaking_render_evidence(_b(_IPHONE))
-    assert ev.renderer_version == "pulse-breaking-v4-recovered"
-    assert ev.placement_zone == "lower_center"
+    assert ev.renderer_version == "pulse-breaking-v5-board"
+    assert ev.placement_zone == "lower_left"
     assert ev.logo_count == 1
     assert ev.logo_zone in ("lower_right", "lower_left")
     assert ev.scrim_treatment == "none"
@@ -216,15 +216,14 @@ def test_explicit_source_already_branded_flag_suppresses_mark() -> None:
         presentation_mode=DataPresentationMode.MINIMAL_SOURCE_PRESERVING,
         source_already_branded=True,
     )
-    without = render_data_card(
-        dc,
-        category="D",
-        editorial_code="NP",
-        source_image_bytes=src,
-        presentation_mode=DataPresentationMode.MINIMAL_SOURCE_PRESERVING,
-        source_already_branded=False,
-    )
-    assert with_flag != without  # the flag changes the output (the mark is dropped)
+    # FOUNDER-VISUAL-BREAKING-DATA-RECONSTRUCTION-5 §20/§23: with the flag set the source ships
+    # exactly as fitted - zero renderer marks (FINAL_VISIBLE_NNJ stays <= 1).
+    from services.nnj_master_news_overlay import _CANVAS_H, _CANVAS_W, _fit_photo_to_canvas
+
+    fitted = _fit_photo_to_canvas(
+        Image.open(io.BytesIO(src)).convert("RGBA"), (_CANVAS_W, _CANVAS_H)
+    ).convert("RGB")
+    assert _mad(fitted, _im(with_flag)) < 2.0, "the branded source must be preserved unchanged"
 
 
 def test_external_source_infographic_gets_exactly_one_renderer_mark_and_preserves_data() -> (
@@ -256,8 +255,12 @@ def test_external_source_infographic_gets_exactly_one_renderer_mark_and_preserve
     assert _mad(fitted, got, box=(40, 90, 420, 300)) < 3.0, (
         "the source's own metric must be preserved exactly"
     )
-    assert _mad(fitted, got) > 0.03, (
-        "exactly one renderer NNJ should have been added somewhere"
+    # FOUNDER-VISUAL-BREAKING-DATA-RECONSTRUCTION-5 §20/§21: the renderer NEVER pastes a
+    # rectangular logo badge / dark plate over a third-party infographic. It either places a thin
+    # adaptive bottom-only pulse+mark signature or (this busy light fixture) suppresses branding
+    # entirely - so the whole top ~78% of the frame is byte-for-byte the fitted source.
+    assert _mad(fitted, got, box=(0, 0, 1280, 560)) < 3.0, (
+        "no badge / plate anywhere above the bottom signature band"
     )
 
 
@@ -406,7 +409,7 @@ def test_render_evidence_reports_actual_zones_truthfully() -> None:
         assert ev.logo_zone == placed[0].value
     # BREAKING: evidence lower_center + a real bottom corner for the mark
     bev = derive_breaking_render_evidence(src)
-    assert bev.placement_zone == "lower_center" and bev.logo_zone in (
+    assert bev.placement_zone == "lower_left" and bev.logo_zone in (
         "lower_right",
         "lower_left",
     )

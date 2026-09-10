@@ -192,15 +192,16 @@ def test_breaking_corrected_render_has_no_band_no_scrim_mismatch_and_matches_new
     assert evidence.scrim_treatment == "none"
     assert evidence.source_image_treatment == "preserve"
 
-    # FOUNDER-VISUAL-POLISH-2 §3: BREAKING v3 places the pulse in the lower-centre band. Against
-    # the old params (placement_zone lower_left) that is a SOFT SPEC_PLACEMENT_ZONE_MISMATCH.
+    # FOUNDER-VISUAL-BREAKING-DATA-RECONSTRUCTION-5 §7: BREAKING v5's pulse is genuinely
+    # LEFT-anchored (`lower_left`), pixel-traced from the board - it now AGREES with
+    # telegram_breaking v1's historical `placement_zone: lower_left` -> SPEC_MATCH = PASS.
     dim = _evaluate_spec_match(_local_spec(_BREAKING_PARAMS, scope="telegram_breaking"), None, evidence)
-    assert dim.status is DimensionStatus.FAIL
-    assert dim.reason_codes == ["SPEC_PLACEMENT_ZONE_MISMATCH"]
+    assert dim.status is DimensionStatus.PASS
+    assert dim.reason_codes == []
     assert dim.hard_failure is False
-    assert set(dim.checked_fields) >= {"safe_margin_frac", "logo_zone", "scrim_treatment", "source_image_treatment"}
+    assert set(dim.checked_fields) >= {"safe_margin_frac", "logo_zone", "scrim_treatment", "source_image_treatment", "placement_zone"}
 
-    # A `telegram_breaking` spec with placement_zone dropped -> SPEC_MATCH = PASS.
+    # dropping placement_zone from the spec -> still PASS.
     v2_params = {k: v for k, v in _BREAKING_PARAMS.items() if k != "placement_zone"}
     v2_dim = _evaluate_spec_match(_local_spec(v2_params, scope="telegram_breaking"), None, evidence)
     assert v2_dim.status is DimensionStatus.PASS
@@ -685,8 +686,8 @@ def test_derive_breaking_evidence_reports_the_corrected_no_scrim_news_family_sig
     assert ev.scrim_applied is False
     assert ev.scrim_treatment == "none"
     assert ev.logo_count == 1
-    assert ev.renderer_version == "pulse-breaking-v4-recovered"
-    assert ev.placement_zone == "lower_center"  # FOUNDER-VISUAL-POLISH-2: the red pulse crosses the lower media
+    assert ev.renderer_version == "pulse-breaking-v5-board"
+    assert ev.placement_zone == "lower_left"  # FOUNDER-VISUAL-POLISH-2: the red pulse crosses the lower media
 
 
 # --------------------------------------------------------------------------------------------------

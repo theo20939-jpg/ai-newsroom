@@ -877,6 +877,10 @@ class Settings(BaseSettings):
     # hero-metric hierarchy. Unset -> the OS-provided bold companion of `brand_font_path`'s family
     # (see services/brand_renderer.py::_resolve_bold_font_path); never downloaded.
     brand_font_bold_path: str | None = None
+    # FOUNDER-VISUAL-BREAKING-DATA-RECONSTRUCTION-5 §13: optional pin for the black-weight face used
+    # by the DATA hero number. Unset -> Arial Black on Windows / the bold face on the Linux VPS
+    # (see services/brand_renderer.py::_resolve_heavy_font_path); never downloaded.
+    brand_font_heavy_path: str | None = None
     watermark_enabled: bool = True
     watermark_opacity: float = Field(default=1.0, ge=0.0, le=1.0)
     pulse_line_enabled: bool = True

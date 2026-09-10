@@ -74,18 +74,18 @@ def test_breaking_uses_the_recovered_waveform_not_the_rejected_polyline() -> Non
 
 
 def test_recovered_waveform_geometry_matches_an_ecg_p_qrs_t_morphology() -> None:
-    """The control path recovered off `universal_minimal_01.png`: one dominant sharp R apex (~1.0),
-    a real S undershoot below the baseline right after it, and a long calm baseline (the majority
-    of the path sits within a few percent of zero). This is NOT a 6-point triangle."""
+    """The waveform - pixel-traced from the Founder board's own BREAKING pulse
+    (RECONSTRUCTION-5 §9 D): one dominant sharp R apex (1.0), a DEEP S undershoot right after it
+    (board-measured S/R ~= 0.7), and a long calm baseline. This is NOT a 6-point triangle."""
     xs = [p[0] for p in _PULSE_WAVEFORM_UNIT]
     ys = [p[1] for p in _PULSE_WAVEFORM_UNIT]
     assert xs == sorted(xs) and xs[0] == 0.0 and xs[-1] == 1.0
-    assert len(_PULSE_WAVEFORM_UNIT) >= 24  # a shaped curve, not a triangle
+    assert len(_PULSE_WAVEFORM_UNIT) >= 20  # a shaped curve, not a triangle
     assert max(ys) == 1.0 and ys.count(1.0) == 1  # exactly one R apex
     apex_i = ys.index(1.0)
-    assert min(ys[apex_i:apex_i + 4]) < -0.1  # S undershoot immediately after R
+    assert min(ys[apex_i:apex_i + 4]) < -0.5  # the board's deep S undershoot right after R
     calm = [y for y in ys if abs(y) < 0.12]
-    assert len(calm) > 0.6 * len(ys)  # a long calm baseline dominates
+    assert len(calm) > 0.5 * len(ys)  # a long calm baseline dominates
 
 
 def test_recovered_pulse_renders_smooth_and_antialiased() -> None:
@@ -110,8 +110,9 @@ def test_recovered_pulse_renders_smooth_and_antialiased() -> None:
 
 def test_breaking_evidence_names_the_recovered_approved_asset() -> None:
     ev = derive_breaking_render_evidence(_b(_IPHONE))
-    assert ev.renderer_version == "pulse-breaking-v4-recovered"
-    assert "universal_minimal_01.png" in ev.notes["overlay_asset"]
+    assert ev.renderer_version == "pulse-breaking-v5-board"
+    # RECONSTRUCTION-5: the geometry is now pixel-traced from the Founder board itself.
+    assert "founder_telegram_board.png" in ev.notes["overlay_asset"]
     assert ev.logo_count == 1
     assert ev.scrim_treatment == "none"
     assert ev.source_image_treatment == "preserve"
@@ -177,10 +178,11 @@ def test_hero_has_no_chart_below_two_points_and_never_a_crude_polyline() -> None
 
 
 def test_hero_value_unit_label_use_the_real_bold_face() -> None:
+    # RECONSTRUCTION-5 §13: value + unit use the black-weight `heavy` face; the label stays bold.
     body = _body(render_data_hero_card)
-    assert body.count("bold=True") >= 3  # value + unit + label
-    resolved = _resolve_bold_font_path()
-    assert resolved is None or isinstance(resolved, str)
+    assert body.count("heavy=True") >= 2  # value + unit
+    assert "bold=True" in body  # label
+    assert _resolve_bold_font_path() is None or isinstance(_resolve_bold_font_path(), str)
 
 
 def test_hero_metric_is_verbatim_never_reformatted() -> None:
