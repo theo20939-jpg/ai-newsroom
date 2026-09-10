@@ -147,7 +147,7 @@ def test_breaking_is_distinct_from_news_lower_media_pulse() -> None:
 
 def test_breaking_evidence_is_v3_lower_center() -> None:
     ev = derive_breaking_render_evidence(_b(_IPHONE))
-    assert ev.renderer_version == "pulse-breaking-v6-board"
+    assert ev.renderer_version == "pulse-breaking-v7-board"
     assert ev.placement_zone == "lower_left"
     assert ev.logo_count == 1
     assert ev.logo_zone in ("lower_right", "lower_left")
@@ -294,7 +294,7 @@ def test_hero_card_retains_every_element_and_no_synthetic_data() -> None:
         delta="+8%",
     )
     with Image.open(io.BytesIO(render_data_hero_card(with_series))) as im:
-        assert im.size == (1280, 720)
+        assert im.size == (1280, 1172)
 
 
 def test_hero_card_metric_is_verbatim() -> None:

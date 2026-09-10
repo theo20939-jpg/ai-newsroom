@@ -167,7 +167,7 @@ def test_breaking_evidence_matches_the_corrected_news_family_signature() -> None
     raw = _photo(1280, 720)
     ev = derive_breaking_render_evidence(raw)
 
-    assert ev.renderer_version == "pulse-breaking-v6-board"
+    assert ev.renderer_version == "pulse-breaking-v7-board"
     assert ev.logo_count == 1
     assert ev.logo_zone in ("lower_right", "lower_left")
     assert ev.placement_zone == "lower_left"            # the pulse crosses the lower media

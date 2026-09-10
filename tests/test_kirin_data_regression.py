@@ -23,6 +23,9 @@ from services.data_source_classification import (
 from services.presentation_director import DATA, DataCandidate
 
 _CANVAS = (1280, 720)
+# CANVAS-COMPOSITION-CORRECTION-8: FULL_DATA_CARD renders the generated hero on its own near-square
+# canvas at the measured board-media aspect; MINIMAL_SOURCE_PRESERVING keeps the 1280x720 source.
+_HERO_CANVAS = (1280, 1172)
 
 
 def _kirin_style_infographic_bytes() -> bytes:
@@ -97,7 +100,7 @@ def test_full_data_card_mode_still_calls_the_stat_block_path_for_non_infographic
         presentation_mode=DataPresentationMode.FULL_DATA_CARD,
     )
     out = Image.open(io.BytesIO(result_bytes))
-    assert out.size == _CANVAS
+    assert out.size == _HERO_CANVAS
 
 
 def test_render_branded_media_end_to_end_routes_minimal_mode_through_to_data_card() -> None:

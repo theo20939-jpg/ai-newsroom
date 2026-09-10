@@ -127,7 +127,7 @@ def test_breaking_bakes_no_headline_and_one_mark() -> None:
     assert '"BREAKING"' not in body and "_draw_code_label(" not in body
     assert body.count("_draw_breaking_watermark(") >= 1  # mutually-exclusive branches
     ev = derive_breaking_render_evidence(_b(_BRIGHT))
-    assert ev.renderer_version == "pulse-breaking-v6-board"
+    assert ev.renderer_version == "pulse-breaking-v7-board"
     assert ev.placement_zone == "lower_left"
     assert ev.logo_count == 1
     assert "founder_telegram_board.png" in ev.notes["overlay_asset"]
@@ -183,9 +183,11 @@ def test_hero_area_fill_is_a_restrained_glow_not_a_solid_block() -> None:
     # sample deep-bottom-left of the chart zone: the fill must have faded to ~background there
     deep = ImageStat.Stat(out.crop((580, 660, 760, 700))).mean
     assert deep[0] < 40, deep  # not a big red wedge reaching the bottom-left
-    # but there IS red where the curve actually runs (peak ~0.47h, ends ~0.87w)
+    # but there IS red where the curve actually runs. CANVAS-COMPOSITION-CORRECTION-8: on the
+    # near-square 1280x1172 canvas the chart box is x 512..1126, y 504..1090; the rising _HERO
+    # series climbs through the upper-right of that box.
     near = sum(
-        1 for y in range(300, 520, 3) for x in range(860, 1090, 3)
+        1 for y in range(560, 900, 4) for x in range(840, 1100, 4)
         if px[x, y][0] > 90 and px[x, y][0] - px[x, y][2] > 25
     )
     assert near > 0

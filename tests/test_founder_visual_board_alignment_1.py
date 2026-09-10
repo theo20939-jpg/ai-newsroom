@@ -57,13 +57,13 @@ _HERO_CAND = DataCandidate(
 # --------------------------------------------------------------------------------------------------
 # DATA - generated hero-metric card (board format 3)
 # --------------------------------------------------------------------------------------------------
-def test_hero_card_is_1280x720_jpeg_and_deterministic() -> None:
+def test_hero_card_is_near_square_jpeg_and_deterministic() -> None:
     a = render_data_hero_card(_HERO_CAND)
     b = render_data_hero_card(_HERO_CAND)
     assert a == b  # no randomness / timing leakage
     with Image.open(io.BytesIO(a)) as im:
         assert im.format == "JPEG"
-        assert im.size == (1280, 720)
+        assert im.size == (1280, 1172)  # CANVAS-COMPOSITION-CORRECTION-8: board-media aspect
 
 
 def test_hero_card_never_reformats_or_invents_the_metric() -> None:
@@ -272,6 +272,6 @@ def test_breaking_render_evidence_unchanged_no_band_no_scrim() -> None:
     assert ev.scrim_treatment == "none"
     assert ev.source_image_treatment == "preserve"
     # FOUNDER-VISUAL-POLISH-2 §3: BREAKING is its own distinct treatment now (lower-media pulse).
-    assert ev.renderer_version == "pulse-breaking-v6-board"
+    assert ev.renderer_version == "pulse-breaking-v7-board"
     assert ev.placement_zone == "lower_left"
     assert ev.logo_count == 1

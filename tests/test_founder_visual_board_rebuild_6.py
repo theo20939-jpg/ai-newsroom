@@ -133,7 +133,7 @@ def test_breaking_bakes_no_headline_and_at_most_one_nnj() -> None:
     assert body.count("_draw_breaking_watermark(") >= 1
     assert "rasterize_nnj_mark(" not in body        # only the watermark helper composites a mark
     ev = derive_breaking_render_evidence(_b(_BRIGHT))
-    assert ev.renderer_version == "pulse-breaking-v6-board"
+    assert ev.renderer_version == "pulse-breaking-v7-board"
     assert ev.logo_count == 1
     assert ev.scrim_treatment == "none" and ev.source_image_treatment == "preserve"
     assert "watermark" in ev.notes
@@ -206,7 +206,7 @@ def test_data_hero_mark_is_restrained_and_at_most_one() -> None:
     assert bm.DATA.mark_opacity <= 0.40            # must not compete with the graph endpoint
     ev = derive_data_render_evidence(b"", _HERO, presentation_mode=DataPresentationMode.FULL_DATA_CARD)
     assert ev.logo_count == 1
-    assert ev.renderer_version == "pulse-data-hero-v3-board"
+    assert ev.renderer_version == "pulse-data-hero-v4-square"
     assert "Fira Sans Condensed" in ev.notes["typography"]
 
 

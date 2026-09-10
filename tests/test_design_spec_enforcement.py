@@ -78,7 +78,9 @@ _DATA_HERO_PARAMS = {
     # aligned with telegram_data v3 CANDIDATE (VISUAL-SPEC-VNEXT-PRODUCTION-ALIGNMENT-1): no
     # logo_zone / placement_zone / scrim_treatment - those differ between the hero card and the
     # source-preserving MINIMAL render, so declaring hero-only values would lie about the latter.
-    "font_size_max": 200, "font_size_min": 88, "max_line_count": 2, "safe_margin_frac": 0.019,
+    # CANVAS-COMPOSITION-CORRECTION-8: the generated DATA card is now the near-square 1280x1172
+    # board-media aspect (was 16:9), so the board-proportional primary value font is much larger.
+    "font_size_max": 300, "font_size_min": 100, "max_line_count": 2, "safe_margin_frac": 0.019,
 }
 _QUOTE_PARAMS = {
     "safe_margin_frac": 0.019, "logo_zone": "lower_right", "scrim_treatment": "none",
@@ -261,7 +263,10 @@ def test_data_photo_accepted_render_spec_match_passes() -> None:
     assert dim.status is DimensionStatus.PASS, dim.rationale
     assert "font_size" in dim.checked_fields  # the hero card's primary value font IS verified
     assert dim.not_measured_fields == []
-    assert 88 <= evidence.primary_font_size <= 200
+    # CANVAS-COMPOSITION-CORRECTION-8: the near-square DATA canvas is 1172 tall, so the hero value
+    # font is derived from the board cap-height (0.163 h) and lands materially larger than the old
+    # 16:9 range. It is still bounded (proportion-matched, not "maximise").
+    assert 200 <= evidence.primary_font_size <= 300
     assert rendered
 
 
@@ -686,7 +691,7 @@ def test_derive_breaking_evidence_reports_the_corrected_no_scrim_news_family_sig
     assert ev.scrim_applied is False
     assert ev.scrim_treatment == "none"
     assert ev.logo_count == 1
-    assert ev.renderer_version == "pulse-breaking-v6-board"
+    assert ev.renderer_version == "pulse-breaking-v7-board"
     assert ev.placement_zone == "lower_left"  # FOUNDER-VISUAL-POLISH-2: the red pulse crosses the lower media
 
 

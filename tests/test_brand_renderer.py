@@ -241,7 +241,7 @@ def test_data_card_renders_large_plain_integer_without_overflow():
     )
     assert result.success
     with Image.open(io.BytesIO(result.image_bytes)) as img:
-        assert img.size == (_CANVAS_W, _CANVAS_H)  # DATA always fits to MASTER's own canvas size
+        assert img.size == (1280, 1172)  # CANVAS-COMPOSITION-CORRECTION-8: DATA hero is its own near-square canvas
 
 
 def test_data_card_is_deterministic_for_identical_input():
@@ -480,7 +480,7 @@ def test_data_card_renders_successfully_with_representative_long_label():
         source_image_bytes=_solid_jpeg(1600, 900, color=(15, 15, 15)),
     )
     with Image.open(io.BytesIO(out)) as img:
-        assert img.size == (1280, 720)
+        assert img.size == (1280, 1172)  # DATA hero: near-square board-media aspect
 
 
 # ---------------------------------------------------------------------------
@@ -551,16 +551,16 @@ def test_data_card_source_image_role_is_mode_dependent(monkeypatch):
     )
     assert len(calls) == 1  # source-preserving mode fits the real source bytes exactly once
     with Image.open(io.BytesIO(minimal)) as img:
-        assert img.size == (1280, 720)
+        assert img.size == (_CANVAS_W, _CANVAS_H)  # MINIMAL keeps the frozen 1280x720 source canvas
 
-    calls.clear()
+    calls.clear()  # FULL_DATA_CARD -> the generated hero card (its own near-square canvas)
     hero = render_data_card(
         _V2_20_DATA_CANDIDATE, category="TECH", editorial_code="NP-2000", source_image_bytes=source,
         presentation_mode=DataPresentationMode.FULL_DATA_CARD,
     )
     assert calls == []  # the hero card is a generated panel - the source photo is never fitted
     with Image.open(io.BytesIO(hero)) as img:
-        assert img.size == (1280, 720)
+        assert img.size == (1280, 1172)
 
 
 def test_data_card_primary_stat_fits_within_block_bounds():
@@ -649,7 +649,7 @@ def test_data_card_end_to_end_with_unsafe_source_still_returns_valid_unclipped_i
     )
     with Image.open(io.BytesIO(out)) as img:
         assert img.format == "JPEG"
-        assert img.size == (1280, 720)
+        assert img.size == (1280, 1172)
 
 
 def test_data_card_no_source_image_fails_safe_via_render_branded_media():
@@ -782,7 +782,7 @@ def test_samsung_ssd_data_card_end_to_end_regression():
     )
     with Image.open(io.BytesIO(out)) as img:
         assert img.format == "JPEG"
-        assert img.size == (1280, 720)
+        assert img.size == (1280, 1172)
 
 
 def test_news_renderer_unaffected_by_data_redesign():

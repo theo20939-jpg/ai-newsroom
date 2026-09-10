@@ -501,11 +501,11 @@ def render_news_hero(source_image_bytes: bytes, *, category: str, editorial_code
 # the board-measured NINJA PULSE + a restrained LARGE grey NNJ watermark - NOT "pulse + separate
 # logo". Every value comes from services/nnj_board_metrics.py :: BREAKING (pixel-measured on
 # tests/fixtures/founder_breaking_media_crop.png).
-_BREAKING_PULSE_WIDTH_FRAC = _bm.BREAKING.pulse_width_frac       # 0.425 of photo width
-_BREAKING_PULSE_LEFT_FRAC = _bm.BREAKING.pulse_start_frac        # 0.038 left inset
-_BREAKING_PULSE_Y_FRAC = _bm.BREAKING.pulse_baseline_frac        # 0.95 (board 0.993; keep S on-canvas)
-_BREAKING_PULSE_AMP_FRAC = _bm.BREAKING.pulse_r_amp_frac_of_width  # 0.148 of the drawn SPAN
-_BREAKING_PULSE_STROKE_FRAC = _bm.BREAKING.pulse_stroke_frac     # 0.0032 of photo width - thin
+_BREAKING_PULSE_WIDTH_FRAC = _bm.BREAKING.pulse_width_frac       # 0.795 of photo width (board full span)
+_BREAKING_PULSE_LEFT_FRAC = _bm.BREAKING.pulse_start_frac        # 0.065 left inset
+_BREAKING_PULSE_Y_FRAC = _bm.BREAKING.pulse_baseline_frac        # 0.972 (board 0.958; runtime clamps S)
+_BREAKING_PULSE_AMP_FRAC = _bm.BREAKING.pulse_r_amp_frac_of_width  # 0.078 of the drawn SPAN
+_BREAKING_PULSE_STROKE_FRAC = _bm.BREAKING.pulse_stroke_frac     # 0.0034 of photo width - thin
 _BREAKING_SAFE_INSET_FRAC = 0.03
 
 
@@ -1132,28 +1132,32 @@ def _build_data_lower_signature_image(
 # MINIMAL_SOURCE_PRESERVING (render_data_card() below, untouched), so a pre-made infographic's own
 # printed metric is never converted into a hero card (Founder decision, phase §3).
 # ==================================================================================================
-# FOUNDER-VISUAL-BOARD-REBUILD-6 §8-§15: every value here is a pixel measurement of the DATA crop
-# `tests/fixtures/founder_data_media_crop.png` (see services/nnj_board_metrics.py :: DATA). The
-# typographic hierarchy is DERIVED from the value size by the board's measured cap-height ratios
-# (unit = 0.76 x value, label = 0.28 x value) rather than sized independently. Font: the BUNDLED
-# Fira Sans Condensed (assets/brand/fonts/, SIL OFL) - identical on Windows and Linux (§19).
+# FOUNDER-VISUAL-CANVAS-COMPOSITION-CORRECTION-8 §2-§6: the generated DATA card is NO LONGER a
+# 16:9 composition. The Founder board's DATA MEDIA rectangle (chrome excluded) is 322x295 ->
+# aspect ~= 1.09, near-square. Telegram accepts non-16:9 photo media, so DATA gets its OWN
+# deterministic canvas: `_HERO_CW` x `_HERO_CH` = 1280 x 1172 (width kept at the production-safe
+# 1280, height = 1280 * 295 / 322). Every fraction below is re-measured against the 322x295 media
+# (services/nnj_board_metrics.py :: DATA). The metric block is TOP-anchored at the board-measured
+# `value_top_frac`, not vertically centred, so it does not float inside a tall canvas.
+_HERO_CW = _bm.DATA.canvas_w                     # 1280
+_HERO_CH = _bm.DATA.canvas_h                     # 1172  (aspect 1.0922)
 _HERO_BG = _bm.DATA.bg_rgb                       # (6, 7, 9)
-_HERO_GRID_COLOR = _bm.DATA.grid_rgb             # (19, 20, 23) - delta ~= +14 over bg
-_HERO_MARGIN = 72
-_HERO_LEFT_ZONE_FRAC = _bm.DATA.left_zone_frac   # 0.385
-_HERO_VALUE_FONT_MAX = 176                       # ~= board value_cap_frac (0.203 * 720) at Fira Cond Black
-_HERO_VALUE_FONT_MIN = 84
-_HERO_LABEL_FONT_MAX = 44                        # board label_over_value 0.28 -> ~0.28 * 176
-_HERO_LABEL_FONT_MIN = 22
+_HERO_GRID_COLOR = _bm.DATA.grid_rgb             # (13, 14, 17) - contrast-guarded
+_HERO_MARGIN = 76
+_HERO_LEFT_ZONE_FRAC = _bm.DATA.left_zone_frac   # 0.41
+_HERO_VALUE_FONT_MAX = 270                       # board "500" cap = 0.163 * 1172 ~= 191px -> Fira Cond Black ~270
+_HERO_VALUE_FONT_MIN = 120
+_HERO_LABEL_FONT_MAX = 66                        # board label_over_value 0.188
+_HERO_LABEL_FONT_MIN = 26
 _HERO_LABEL_MAX_LINES = 2
-_HERO_DESC_FONT_MAX = 30
-_HERO_DESC_FONT_MIN = 18
+_HERO_DESC_FONT_MAX = 62                         # board desc_over_value 0.21
+_HERO_DESC_FONT_MIN = 22
 _HERO_DESC_MAX_LINES = 3
 _HERO_DESC_COLOR = (150, 154, 162)   # neutral cool grey secondary (board-measured)
 _HERO_PILL_TEXT_COLOR = _OFFICIAL_NNJ_WHITE
-_HERO_MARK_W_FRAC = _bm.DATA.mark_width_frac      # 0.055 - restrained, not a CTA badge
-_HERO_MARK_OPACITY = _bm.DATA.mark_opacity        # 0.55
-_HERO_TEMPLATE = "pulse-data-hero-v3-board"
+_HERO_MARK_W_FRAC = _bm.DATA.mark_width_frac      # 0.040 - very restrained (board media shows NO mark)
+_HERO_MARK_OPACITY = _bm.DATA.mark_opacity        # 0.26
+_HERO_TEMPLATE = "pulse-data-hero-v4-square"
 
 
 def _luma(rgb: tuple[int, int, int]) -> float:
@@ -1250,7 +1254,7 @@ def _draw_hero_sparkline(
     §12: `series` values are the ONLY factual anchors - exact linear x, min-max normalised y, drawn
     VERBATIM; the renderer synthesises NO points. Requires >= 2 points (guarded by the caller)."""
     x0, y0, x1, y1 = box
-    pad = max(8, round(_bm.DATA.graph_endpoint_radius_frac * _CANVAS_W) + 4)  # dot headroom
+    pad = max(8, round(_bm.DATA.graph_endpoint_radius_frac * _HERO_CW) + 4)  # dot headroom
     y0 += pad
     lo, hi = min(series), max(series)
     span = (hi - lo) or 1.0
@@ -1293,10 +1297,10 @@ def _draw_hero_sparkline(
     layer.alpha_composite(area)
 
     # the red line + a small crisp white endpoint dot (board-measured radius)
-    stroke = max(2, round(_bm.DATA.graph_stroke_frac * _CANVAS_W)) * ss
+    stroke = max(2, round(_bm.DATA.graph_stroke_frac * _HERO_CW)) * ss
     ld.line(loc, fill=(*_OFFICIAL_NNJ_RED, 255), width=stroke, joint="curve")
     ex, ey = loc[-1]
-    r = max(3, round(_bm.DATA.graph_endpoint_radius_frac * _CANVAS_W)) * ss
+    r = max(3, round(_bm.DATA.graph_endpoint_radius_frac * _HERO_CW)) * ss
     ld.ellipse([ex - r, ey - r, ex + r, ey + r], fill=(*_OFFICIAL_NNJ_WHITE, 255))
 
     small = layer.resize((max(1, x1 - x0), max(1, y1 - y0)), Image.Resampling.LANCZOS)
@@ -1314,29 +1318,29 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
       - `data_candidate.evidence_fact` - a grey secondary line drawn VERBATIM, wrapped, no clipping;
       - `data_candidate.delta` - an optional red-outlined pill (drawn only when supplied);
       - `data_candidate.series` - an optional red trend LINE (`_draw_hero_sparkline`): the real
-        points are the only anchors, the visual path (`_reduced_tension_path`) keeps visible local
-        direction changes and never overshoots [min, max], a very restrained under-curve tint (no
-        red wedge), a small crisp white endpoint dot. Drawn only when >= 2 real points are supplied;
-      - a contrast-guarded near-invisible technical grid + the board NINJA PULSE motif;
-      - exactly ONE restrained, lowered-opacity NNJ mark, lower-right.
+        points are the only anchors, connected DIRECTLY (`_segmented_anchor_path`, clean segmented
+        editorial line, no spline, no synthetic points), a very subtle under-curve tint, a small
+        crisp white endpoint dot. Drawn only when >= 2 real points are supplied;
+      - a contrast-guarded grid concentrated behind the graph + the board NINJA PULSE motif;
+      - one very restrained NNJ mark (the board DATA media itself shows none - see report §M).
 
     No source photo is used - the hero metric IS the visual.
 
-    FOUNDER-VISUAL-BOARD-REBUILD-6 §7-§15: value/unit/label use the PROJECT-BUNDLED Fira Sans
-    Condensed (assets/brand/fonts/, SIL OFL) at black/bold weights - byte-identical on Windows and
-    the Linux VPS. Background, grid, typographic hierarchy, trend geometry, fill and mark are all
-    pixel-measured from `docs/founder_telegram_board.png` via services/nnj_board_metrics.py. Every
-    factual element is retained; series values are plotted verbatim."""
-    canvas = Image.new("RGB", (_CANVAS_W, _CANVAS_H), _HERO_BG)
+    FOUNDER-VISUAL-CANVAS-COMPOSITION-CORRECTION-8: the canvas is `_HERO_CW` x `_HERO_CH` =
+    1280 x 1172 (aspect ~1.09, the MEASURED board DATA-media aspect - NOT 16:9). The metric block
+    is TOP-anchored at the board-measured `value_top_frac`. value/unit use the BUNDLED Fira Sans
+    Condensed Black, label SemiBold, secondary Medium (assets/brand/fonts/, SIL OFL - identical on
+    Windows and Linux). Every proportion is pixel-measured from `docs/founder_telegram_board.png`
+    via services/nnj_board_metrics.py. Every factual element is retained; series values verbatim."""
+    canvas = Image.new("RGB", (_HERO_CW, _HERO_CH), _HERO_BG)
     draw = ImageDraw.Draw(canvas)
-    _draw_hero_grid(draw, _CANVAS_W, _CANVAS_H)
+    _draw_hero_grid(draw, _HERO_CW, _HERO_CH)
 
     x = _HERO_MARGIN
-    left_col_w = round(_CANVAS_W * _HERO_LEFT_ZONE_FRAC) - _HERO_MARGIN  # §18 board-measured text column
+    left_col_w = round(_HERO_CW * _HERO_LEFT_ZONE_FRAC) - _HERO_MARGIN  # board-measured text column
     series = tuple(data_candidate.series)
     has_chart = len(series) >= 2
 
-    # --- measure the whole metric block first (so it can be vertically centred) --------------
     blocks: list[tuple[str, object, tuple, tuple, int]] = []  # (kind, font, bbox, color, gap_after)
     total_h: float = 0
 
@@ -1399,8 +1403,9 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
 
     total_h += 26  # the small pulse motif under the block
 
-    # --- draw, vertically centred in the left column --------------------------------------------
-    y: float = max(_HERO_MARGIN, (_CANVAS_H - total_h) / 2)
+    # --- draw, TOP-anchored at the board-measured metric position (not vertically centred, so the
+    #     block does not float inside the tall canvas) -------------------------------------------
+    y: float = max(_HERO_MARGIN, min(_bm.DATA.value_top_frac * _HERO_CH, _HERO_CH - total_h - _HERO_MARGIN))
 
     draw.text((x, y - vb[1]), value_text, font=value_font, fill=_OFFICIAL_NNJ_WHITE)
     y += (vb[3] - vb[1]) + 4
@@ -1433,22 +1438,24 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
         color=_OFFICIAL_NNJ_RED, stroke=2,
     )
 
-    # §17: the trend line - board-measured geometry (rises from the near-bottom to a peak at
-    # ~0.47h, ends well short of the right edge). The red LINE is the feature; the fill stays dark.
+    # §13: the trend line - board-measured geometry on the near-square canvas: it begins right
+    # after the metric block (x 0.40) and fills the lower-right, integrated with the metric block,
+    # no oversized empty gap. The red LINE is the feature; the fill stays dark.
     if has_chart:
         _draw_hero_sparkline(
             canvas_rgba, series,
-            box=(round(_CANVAS_W * _bm.DATA.graph_x_start_frac), round(_CANVAS_H * _bm.DATA.graph_y_top_frac),
-                 round(_CANVAS_W * _bm.DATA.graph_x_end_frac), round(_CANVAS_H * _bm.DATA.graph_y_bottom_frac)),
+            box=(round(_HERO_CW * _bm.DATA.graph_x_start_frac), round(_HERO_CH * _bm.DATA.graph_y_top_frac),
+                 round(_HERO_CW * _bm.DATA.graph_x_end_frac), round(_HERO_CH * _bm.DATA.graph_y_bottom_frac)),
         )
 
-    # §19: a restrained NNJ mark - small, low opacity, must NOT compete with the graph endpoint.
-    mark = rasterize_nnj_mark(target_width=max(34, round(_HERO_MARK_W_FRAC * _CANVAS_W)), red=True)
+    # §18: one very restrained NNJ mark (the board DATA media shows none - kept for the prior
+    # one-mark decision, flagged for Founder review). Small, low opacity, must not compete.
+    mark = rasterize_nnj_mark(target_width=max(30, round(_HERO_MARK_W_FRAC * _HERO_CW)), red=True)
     if _HERO_MARK_OPACITY < 1.0:
         a = mark.getchannel("A").point(lambda v: round(v * _HERO_MARK_OPACITY))
         mark.putalpha(a)
     canvas_rgba.alpha_composite(
-        mark, (_CANVAS_W - mark.width - _HERO_MARGIN, _CANVAS_H - mark.height - _HERO_MARGIN),
+        mark, (_HERO_CW - mark.width - _HERO_MARGIN, _HERO_CH - mark.height - _HERO_MARGIN),
     )
 
     out = io.BytesIO()

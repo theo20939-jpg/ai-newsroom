@@ -110,7 +110,7 @@ def test_recovered_pulse_renders_smooth_and_antialiased() -> None:
 
 def test_breaking_evidence_names_the_recovered_approved_asset() -> None:
     ev = derive_breaking_render_evidence(_b(_IPHONE))
-    assert ev.renderer_version == "pulse-breaking-v6-board"
+    assert ev.renderer_version == "pulse-breaking-v7-board"
     # RECONSTRUCTION-5: the geometry is now pixel-traced from the Founder board itself.
     assert "founder_telegram_board.png" in ev.notes["overlay_asset"]
     assert ev.logo_count == 1
