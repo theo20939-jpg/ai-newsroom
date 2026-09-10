@@ -152,6 +152,7 @@ def derive_master_news_render_evidence(
     *,
     presentation_type: str = "NEWS",
     subject_bbox: tuple[int, int, int, int] | None = None,
+    signature_style: str | None = None,
 ) -> RenderEvidence:
     """NEWS production path (`worker/content_cycle.py` -> `apply_master_news_branding()`), also the
     grouped-carousel branding path. Replays that function's own steps: fit the source to the
@@ -167,15 +168,17 @@ def derive_master_news_render_evidence(
         _CANVAS_H,
         _CANVAS_W,
         _SAFE_INSET_FRAC,
+        SIGNATURE_STYLE_MARK_ONLY,
         ComponentPlacement,
         _fit_photo_to_canvas,
         select_master_news_branding,
     )
 
+    style = signature_style if signature_style is not None else SIGNATURE_STYLE_MARK_ONLY
     with Image.open(io.BytesIO(source_image_bytes)) as im:
         src_w, src_h = im.width, im.height
         photo_fit = _fit_photo_to_canvas(im.convert("RGBA"), (_CANVAS_W, _CANVAS_H))
-        decision = select_master_news_branding(photo_fit, subject_bbox=subject_bbox)
+        decision = select_master_news_branding(photo_fit, subject_bbox=subject_bbox, signature_style=style)
 
     treatment, preserved = _canvas_crop_treatment(src_w, src_h, _CANVAS_W, _CANVAS_H)
 
@@ -210,13 +213,21 @@ def derive_master_news_render_evidence(
         source_preserved=preserved,
         presentation_mode=NOT_MEASURED,
         text_clipped=False,
-        # MASTER NEWS bakes no headline text -> the spec's font/line params genuinely do not apply.
-        not_applicable_fields=frozenset({"primary_font_size", "secondary_font_size", "actual_line_count"}),
+        # FOUNDER-VISUAL-POLISH-2: the MARK_ONLY NEWS treatment has no independent accent - the one
+        # small mark IS the whole branding unit, its corner is `logo_zone`. So `placement_zone`
+        # genuinely does not apply (distinct from the old fused-signature measurement gap). MASTER
+        # NEWS bakes no headline text -> the font/line params do not apply either.
+        not_applicable_fields=frozenset(
+            {"placement_zone", "primary_font_size", "secondary_font_size", "actual_line_count"}
+            if style == SIGNATURE_STYLE_MARK_ONLY
+            else {"primary_font_size", "secondary_font_size", "actual_line_count"}
+        ),
         notes={
+            "signature_style": style,
             "placement_zone": (
-                "MEASUREMENT GAP: MASTER NEWS fuses the pulse into the single lower brand-mark "
-                "signature; no independent accent-placement decision exists to read. The founder "
-                "placement_zone=lower_left describes the retired two-corner render_news_hero layout."
+                "NOT APPLICABLE: MARK_ONLY - one small NNJ mark, no independent accent (its corner is logo_zone)."
+                if style == SIGNATURE_STYLE_MARK_ONLY
+                else "MEASUREMENT GAP: fused lower signature exposes no independent accent-placement decision."
             ),
             "primary_font_size": "NOT APPLICABLE: MASTER NEWS contract bakes no headline text",
             "actual_line_count": "NOT APPLICABLE: MASTER NEWS contract bakes no headline text",
@@ -225,64 +236,69 @@ def derive_master_news_render_evidence(
 
 
 def derive_breaking_render_evidence(source_image_bytes: bytes | None) -> RenderEvidence:
-    """BREAKING production path (`render_branded_media` -> `render_breaking_frame`), corrected in
-    VISUAL-RENDERER-RECONCILIATION-1: the retired ~22% dark-gradient lower-third band + baked
-    "BREAKING" wordmark + red accent rule are GONE. BREAKING now composites the source at its
-    NATIVE size (no fit / crop -> `source_image_treatment=preserve`) with the exact MASTER NEWS
-    single lower signature (`select_master_news_branding()` on the native photo - one thin line +
-    pulse + exactly one canonical NNJ mark, adaptive safe-corner placement, single-brand-mark
-    invariant). This deriver REPLAYS that same helper.
+    """BREAKING production path (`render_branded_media` -> `render_breaking_frame`).
+    FOUNDER-VISUAL-BOARD-REBUILD-6 §3-§5: BREAKING is the source photo at NATIVE size (preserve, no
+    fit/crop) + a COMPLETE lower overlay composition pixel-measured from
+    `docs/founder_telegram_board.png` - the board NINJA PULSE (short, LEFT-anchored, along the lower
+    media edge, deep S undershoot) AND a restrained LARGE grey NNJ WATERMARK in the lower-right
+    (adaptive light/dark, low opacity - never a bright red CTA mark). No band, no baked wordmark,
+    no scrim.
 
-    `scrim_treatment` is now genuinely `none` - the corrected renderer composites no band/scrim of
-    any kind over the source. `placement_zone` is NOT_MEASURED but APPLICABLE (the founder
-    telegram_breaking v1 declares placement_zone=lower_left, wrongly derived from the retired two-
-    corner render_news_hero note - the same discrepancy as NEWS): the fused NEWS-family signature
-    exposes no independent accent placement, so BREAKING SPEC_MATCH is PARTIAL_EVIDENCE with that
-    one field named, pending the founder-review `telegram_breaking v2` correction. font/line
-    params do not apply (BREAKING bakes no editorial typography)."""
+    `placement_zone` = the pulse's position (`"lower_left"` band, ~0.43 width); `logo_zone` = the
+    watermark's corner (`"lower_right"`). font/line params do not apply."""
     from PIL import Image
 
-    from services.brand_renderer import _CARD_HEIGHT, _CARD_WIDTH
-    from services.nnj_master_news_overlay import _SAFE_INSET_FRAC, ComponentPlacement, select_master_news_branding
+    from services import nnj_board_metrics as _bm
+    from services.brand_renderer import _BREAKING_SAFE_INSET_FRAC, _CARD_HEIGHT, _CARD_WIDTH
 
     if source_image_bytes is not None:
         with Image.open(io.BytesIO(source_image_bytes)) as im:
             canvas_w, canvas_h = im.width, im.height
-            decision = select_master_news_branding(im.convert("RGBA"))
-        placed = [
-            p for p in (decision.lower_signature.placement, decision.upper_mark.placement)
-            if p is not ComponentPlacement.OMITTED
-        ]
-        logo_count = len(placed)
-        logo_zone = _zone(placed[0]) if placed else NOT_MEASURED
+        margin_frac = round(_BREAKING_SAFE_INSET_FRAC, 5)
         src_present = True
     else:
         canvas_w, canvas_h = _CARD_WIDTH, _CARD_HEIGHT
-        logo_count, logo_zone, src_present = 1, "lower_right", False
+        src_present = False
+        margin_frac = round(_bm.BREAKING.watermark_right_inset_frac, 5)
+    logo_count, logo_zone = 1, "lower_right"
 
+    _b = _bm.BREAKING
+    line_start = _b.pulse_start_frac
+    line_end = _b.pulse_start_frac + _b.pulse_width_frac
+    wm_left = 1.0 - _b.watermark_right_inset_frac - _b.watermark_width_frac
     notes = {
         "placement_zone": (
-            "MEASUREMENT GAP: BREAKING now uses the MASTER NEWS fused lower signature (line + pulse "
-            "+ one mark); no independent accent-placement decision exists to read. The founder "
-            "telegram_breaking v1 placement_zone=lower_left is the same wrongly-derived parameter as "
-            "NEWS - see the telegram_breaking v2 candidate proposal."
+            f"the board NINJA PULSE runs LEFT-anchored along the lower media edge: baseline y-frac "
+            f"{_b.pulse_baseline_frac:.3f}, drawn x-frac {line_start:.3f}..{line_end:.3f} "
+            f"(BREAKING_LINE_TOTAL_WIDTH_FRAC={_b.pulse_width_frac:.3f}); the P-QRS-T event sits at "
+            f"~{_b.pulse_pre_flat_frac:.2f}..{_b.pulse_pre_flat_frac + _b.pulse_complex_frac:.2f} of "
+            f"the COMPLETE line, then a calm tail; R apex {_b.pulse_r_amp_frac_of_width:.3f} of the "
+            f"drawn line, S clamped to the canvas edge. logo_zone is the watermark's own corner."
         ),
-        "primary_font_size": "NOT APPLICABLE: BREAKING bakes no editorial typography (band + wordmark removed)",
+        "primary_font_size": "NOT APPLICABLE: BREAKING bakes no editorial typography",
         "actual_line_count": "NOT APPLICABLE: BREAKING bakes no editorial typography",
+        "overlay_asset": "pulse geometry + watermark scale/opacity PIXEL-MEASURED from docs/founder_telegram_board.png (visual authority #1) via services/nnj_board_metrics.py; rendered deterministically (4x supersample -> LANCZOS). No raster composited; no dedicated approved overlay asset exists.",
+        "watermark": (
+            f"grey NNJ watermark, EFFECTIVE VISIBLE zone media x-frac {wm_left:.3f}.."
+            f"{1.0 - _b.watermark_right_inset_frac:.3f} (WIDTH {_b.watermark_width_frac:.2f}, entirely "
+            f"right of centre), height ~{_b.watermark_bottom_inset_frac:.3f} bottom inset, drawn "
+            f"opacity {_b.watermark_opacity:.2f}, adaptive light/dark - a background watermark, not a CTA mark"
+        ),
+        "logo_count": "exactly 1 visible NNJ - the lower-right watermark (the pulse carries no mark)",
     }
     if not src_present:
-        notes["source_image_treatment"] = "no source photo supplied - BREAKING rendered its minimal solid card + one mark; nothing to preserve or destroy"
+        notes["source_image_treatment"] = "no source photo supplied - minimal solid card + the one restrained watermark; nothing to preserve or destroy"
 
     return RenderEvidence(
         presentation_type="BREAKING",
-        renderer_variant="brand_renderer.render_breaking_frame -> nnj_master_news_overlay.select_master_news_branding",
-        renderer_version="pulse-breaking-v2",
+        renderer_variant="brand_renderer.render_breaking_frame",
+        renderer_version="pulse-breaking-v7-board",
         canvas_width=canvas_w,
         canvas_height=canvas_h,
-        safe_margin_frac=round(float(_SAFE_INSET_FRAC), 5),
+        safe_margin_frac=margin_frac,
         logo_count=logo_count,
         logo_zone=logo_zone,
-        placement_zone=NOT_MEASURED,
+        placement_zone="lower_left",
         scrim_applied=False,
         scrim_treatment=ScrimState.NONE.value,
         source_image_treatment=SourceTreatment.PRESERVE.value,
@@ -291,6 +307,86 @@ def derive_breaking_render_evidence(source_image_bytes: bytes | None) -> RenderE
         text_clipped=False,
         not_applicable_fields=frozenset({"primary_font_size", "secondary_font_size", "actual_line_count"}),
         notes=notes,
+    )
+
+
+def _derive_data_hero_evidence(data_candidate: Any) -> RenderEvidence:
+    """FOUNDER-VISUAL-BOARD-ALIGNMENT-1: renderer-truthful evidence for
+    `brand_renderer.render_data_hero_card` (board format 3). Replays the two deterministic
+    font/wrap decisions the renderer makes and reads back the same locked constants."""
+    from PIL import Image, ImageDraw
+
+    from services.data_source_classification import DataPresentationMode
+
+    from services import nnj_board_metrics as _bm
+    from services.brand_renderer import (
+        _HERO_CH,
+        _HERO_CW,
+        _HERO_LABEL_FONT_MAX,
+        _HERO_LABEL_FONT_MIN,
+        _HERO_LABEL_MAX_LINES,
+        _HERO_LEFT_ZONE_FRAC,
+        _HERO_MARGIN,
+        _HERO_VALUE_FONT_MAX,
+        _HERO_VALUE_FONT_MIN,
+        _fit_single_line,
+        _fit_wrapped_block,
+        data_font_path,
+    )
+
+    draw = ImageDraw.Draw(Image.new("RGB", (_HERO_CW, _HERO_CH)))
+    # CANVAS-COMPOSITION-CORRECTION-8: replay the REAL fit on the near-square 1280x1172 canvas so
+    # `primary_font_size` is truthful.
+    inner_w = round(_HERO_CW * _HERO_LEFT_ZONE_FRAC) - _HERO_MARGIN
+    value_font, value_size = _fit_single_line(
+        draw, data_candidate.value, font_max=_HERO_VALUE_FONT_MAX,
+        font_min=_HERO_VALUE_FONT_MIN, max_width=inner_w, data_weight="black",
+    )
+    label_lines: list[str] = []
+    if str(getattr(data_candidate, "label", "")).strip():
+        label_lines, _lf, _ls = _fit_wrapped_block(
+            draw, str(data_candidate.label).strip().upper(), font_max=_HERO_LABEL_FONT_MAX,
+            font_min=_HERO_LABEL_FONT_MIN, max_width=inner_w, max_lines=_HERO_LABEL_MAX_LINES,
+            data_weight="semibold",
+        )
+    _font_file = data_font_path("black").name
+    _series_n = len(tuple(getattr(data_candidate, "series", ()) or ()))
+    size_attr = getattr(value_font, "size", value_size)
+    primary_font_size = int(size_attr) if isinstance(size_attr, (int, float)) else int(value_size)
+
+    return RenderEvidence(
+        presentation_type="DATA",
+        renderer_variant="brand_renderer.render_data_hero_card",
+        renderer_version="pulse-data-hero-v4-square",
+        canvas_width=_HERO_CW,
+        canvas_height=_HERO_CH,
+        safe_margin_frac=round(_HERO_MARGIN / _HERO_CW, 5),
+        logo_count=1,
+        logo_zone="lower_right",
+        # The dominant metric block is the primary compositional accent - it sits in the upper-left.
+        placement_zone="upper_left",
+        scrim_applied=False,
+        scrim_treatment=ScrimState.NONE.value,
+        # The hero card is a NEW generated artifact, not a transform of a source photo - there is
+        # no source to preserve, recompose or crop. Distinct from a measurement gap.
+        source_image_treatment=NOT_MEASURED,
+        source_preserved=NOT_MEASURED,
+        presentation_mode=DataPresentationMode.FULL_DATA_CARD.value,
+        primary_font_size=primary_font_size,
+        actual_line_count=len(label_lines),
+        text_clipped=False,
+        not_applicable_fields=frozenset({"secondary_font_size", "source_image_treatment", "source_preserved"}),
+        notes={
+            "source_image_treatment": "NOT APPLICABLE: generated hero-metric card - no source photo is used",
+            "renderer": "render_data_hero_card: primary value font-fit + label wrapped <= 2 lines, deterministic",
+            "typography": f"BUNDLED Fira Sans Condensed - value/unit=Black, label=SemiBold, secondary=Medium ({_font_file}); identical on Windows and Linux (SIL OFL)",
+            "graph_interpolation": "segmented_anchor_path - the real series points connected DIRECTLY (clean segmented editorial line); renderer synthesises NO points; no spline",
+            "graph_mode": f"segmented_anchor_path over {_series_n} real series anchors, x-frac {_bm.DATA.graph_x_start_frac:.2f}..{_bm.DATA.graph_x_end_frac:.2f}",
+            "grid_mode": f"graph-zone only (gx >= zone_x); left text region clean; grid_luma-bg_luma clamped [{_bm.DATA.grid_luma_delta_min}, {_bm.DATA.grid_luma_delta_max}]; NOT full-canvas",
+            "canvas_aspect": f"{_HERO_CW}x{_HERO_CH} = {_HERO_CW / _HERO_CH:.3f} (board DATA-media aspect {_bm.DATA.aspect:.3f}); DATA_16_9_REQUIRED=false",
+            "graph_factual_series_count": str(_series_n),
+            "background_version": "pulse-data-hero-v4-square (near-square 1280x1172 board-media aspect; near-black (6,7,9) + contrast-guarded near-invisible grid; no bg asset exists)",
+        },
     )
 
 
@@ -337,6 +433,14 @@ def derive_data_render_evidence(
 
     mode = presentation_mode if isinstance(presentation_mode, DataPresentationMode) else None
     mode_value: str | _NotMeasured = mode.value if mode is not None else NOT_MEASURED
+
+    # FOUNDER-VISUAL-BOARD-ALIGNMENT-1: FULL_DATA_CARD now renders the generated hero-metric card
+    # (`brand_renderer.render_data_hero_card`) - a source-free graphite panel, so none of the
+    # photo-fit / bottom-signature / corner-stat replay below applies. Replay the hero renderer's
+    # own two deterministic decisions instead: the fitted primary-value font size and the wrapped
+    # label line count.
+    if mode is DataPresentationMode.FULL_DATA_CARD:
+        return _derive_data_hero_evidence(data_candidate)
 
     with Image.open(io.BytesIO(source_image_bytes)) as im:
         src_w, src_h = im.width, im.height

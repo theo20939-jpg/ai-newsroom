@@ -372,6 +372,22 @@ def _build_upper_mark_image(canvas_size: tuple[int, int], placement: ComponentPl
     return canvas
 
 
+def _build_corner_mark_image(canvas_size: tuple[int, int], placement: ComponentPlacement, inset: int) -> Image.Image:
+    """FOUNDER-VISUAL-POLISH-2 §2: the RESTRAINED NEWS treatment - ONE small canonical NNJ mark in
+    a safe corner, nothing else (no connecting line, no pulse). The board's "лёгкий фирменный
+    водяной знак" for NEWS. Generalises `_build_upper_mark_image()` to all four corners so the
+    adaptive scorer can pick whichever is least busy; the mark is identical (`rasterize_nnj_mark()`),
+    never mirrored."""
+    w, h = canvas_size
+    mark_w = max(1, round(_UPPER_MARK_W_FRAC * w))
+    mark = rasterize_nnj_mark(target_width=mark_w, red=True)
+    canvas = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
+    x = inset if placement in (ComponentPlacement.UPPER_LEFT, ComponentPlacement.LOWER_LEFT) else w - inset - mark.width
+    y = inset if placement in (ComponentPlacement.UPPER_LEFT, ComponentPlacement.UPPER_RIGHT) else h - inset - mark.height
+    canvas.alpha_composite(mark, (x, y))
+    return canvas
+
+
 def _draw_pulse(draw, x0: int, y_mid: int, width: int, height: int, color, line_w: int) -> None:
     top, bottom = y_mid - height // 2, y_mid + height // 2
     pts = [
@@ -430,8 +446,13 @@ def _fit_photo_to_canvas(photo: Image.Image, size: tuple[int, int]) -> Image.Ima
     return scaled.crop((x0, y0, x0 + target_w, y0 + target_h))
 
 
+SIGNATURE_STYLE_FUSED = "fused"        # line + pulse + mark, one fused unit (DATA / RECAP / grouped)
+SIGNATURE_STYLE_MARK_ONLY = "mark_only"  # FOUNDER-VISUAL-POLISH-2: the restrained NEWS watermark
+
+
 def select_master_news_branding(
     photo: Image.Image, *, subject_bbox: BoundingBox | None = None, disable_lower_signature: bool = False,
+    signature_style: str = SIGNATURE_STYLE_FUSED,
 ) -> MasterNewsBrandingDecision:
     """The one deterministic selection function (Phase V2.10H §3/§4/§6, extended Phase V2.10I §7,
     VISUAL-SINGLE-BRAND-MARK-1 §6): evaluates the LOWER SIGNATURE first (LOWER_RIGHT ->
@@ -453,6 +474,33 @@ def select_master_news_branding(
     region is scored at all."""
     canvas_size = (photo.width, photo.height)
     inset = max(1, round(_SAFE_INSET_FRAC * canvas_size[0]))
+
+    if signature_style == SIGNATURE_STYLE_MARK_ONLY:
+        # FOUNDER-VISUAL-POLISH-2 §2: one small canonical mark in the least-busy safe corner,
+        # nothing else. No fused line, no pulse. Carried in the `lower_signature` slot so the
+        # single-brand-mark / degradation-mode bookkeeping is unchanged (it is still "the one
+        # branding unit"), and the upper-mark slot stays OMITTED (mutual exclusion holds).
+        mark_w = max(1, round(_UPPER_MARK_W_FRAC * canvas_size[0]))
+        mark_h = rasterize_nnj_mark(target_width=mark_w).height
+        mark_placement, _mbox, mark_attempts = _evaluate_placements(
+            photo, component_size=(mark_w, mark_h),
+            candidates=(ComponentPlacement.LOWER_RIGHT, ComponentPlacement.LOWER_LEFT,
+                        ComponentPlacement.UPPER_RIGHT, ComponentPlacement.UPPER_LEFT),
+            inset=inset, subject_bbox=subject_bbox,
+        )
+        mark_image = (
+            _build_corner_mark_image(canvas_size, mark_placement, inset)
+            if mark_placement is not ComponentPlacement.OMITTED else None
+        )
+        skip = ComponentDecision(placement=ComponentPlacement.OMITTED, image=None, attempts=())
+        return MasterNewsBrandingDecision(
+            upper_mark=skip,
+            lower_signature=ComponentDecision(
+                placement=mark_placement, image=mark_image, attempts=mark_attempts,
+                disabled_reason=None,
+            ),
+            canvas_size=canvas_size,
+        )
 
     if disable_lower_signature:
         lower_placement = ComponentPlacement.OMITTED
@@ -549,11 +597,18 @@ def _read_finalized_marker(photo: Image.Image) -> bool | None:
 
 def apply_master_news_branding(
     source_image_bytes: bytes, *, subject_bbox: BoundingBox | None = None, disable_lower_signature: bool = False,
+    signature_style: str = SIGNATURE_STYLE_MARK_ONLY,
 ) -> tuple[bytes, MasterNewsBrandingDecision]:
-    """Phase V2.10H - the ONE production compositing entry point for the locked MASTER NEWS
-    contract. Fits `source_image_bytes` to the 1280x720 canvas, evaluates and composites the
-    upper mark and lower signature - now mutually exclusive (VISUAL-SINGLE-BRAND-MARK-1 §6), never
-    both at once - and returns `(jpeg_bytes, decision)`. Works identically for an ORIGINAL_SOURCE
+    """Phase V2.10H - the ONE production compositing entry point for the NEWS family (NEWS,
+    grouped carousels, RECAP media, the Final-Post-Review preview). Fits `source_image_bytes` to
+    the 1280x720 canvas, evaluates and composites exactly ONE canonical NNJ mark, and returns
+    `(jpeg_bytes, decision)`.
+
+    FOUNDER-VISUAL-POLISH-2 §2/§4: `signature_style` defaults to MARK_ONLY - the board's restrained
+    "лёгкий фирменный водяной знак": one small mark in the least-busy safe corner, no connecting
+    line, no pulse (the earlier fused line+pulse read as an intrusive watermark competing with the
+    source photo - Founder verdict NEWS=FAIL). Pass `signature_style="fused"` only where the older
+    line+pulse+mark unit is explicitly wanted. Works identically for an ORIGINAL_SOURCE
     image or a successfully-recomposed one - the caller decides which bytes to pass in; this
     function has no opinion about where they came from. `disable_lower_signature` - see
     select_master_news_branding()'s own docstring (Phase V2.10I §7).
@@ -579,7 +634,10 @@ def apply_master_news_branding(
     photo = opened.convert("RGBA")
     photo_fit = _fit_photo_to_canvas(photo, (_CANVAS_W, _CANVAS_H))
 
-    decision = select_master_news_branding(photo_fit, subject_bbox=subject_bbox, disable_lower_signature=disable_lower_signature)
+    decision = select_master_news_branding(
+        photo_fit, subject_bbox=subject_bbox, disable_lower_signature=disable_lower_signature,
+        signature_style=signature_style,
+    )
 
     branded = composite_master_news_decision(photo_fit, decision)
     buf = io.BytesIO()
