@@ -248,6 +248,36 @@ async def _apply_story_memory(
     like any other Story) can still attach to it normally via the confirmed-outcome path above,
     naturally converging the cluster's future growth without retroactively re-parenting already-
     linked events (out of scope as more than "the smallest fix")."""
+    # STORY-CONTINUITY-P0-ENFORCEMENT-WIRING-FIX-1: idempotency guard. This event may already
+    # carry a NewsEventStoryLink from an earlier pass - the constrained-enforcement suppress path
+    # (STORY-CONTINUITY-P0-CONSTRAINED-ENFORCEMENT-1) commits the link *without* a task, and a
+    # later stale-recovery pass then re-enters this function. `news_event_story_links` has a
+    # PRIMARY KEY on `news_event_id`, so re-running match_story() + session.add(
+    # NewsEventStoryLink(...)) below would raise `news_event_story_links_pkey` UniqueViolation
+    # AND double-bump `Story.event_count`. When a link already exists this event's Story Memory
+    # analysis is complete: do NOT re-match, re-link, re-create a Story, or re-bump. Re-derive
+    # the suppression decision from the persisted link so _run_phase_b()'s suppress branch can
+    # still settle the event's terminal status (`ANALYZED`). Under the atomic claim / recovery-
+    # ownership discipline no two workers process the same event concurrently, so this
+    # SELECT-then-skip has no TOCTOU window.
+    existing_link = (
+        await session.execute(
+            select(NewsEventStoryLink).where(NewsEventStoryLink.news_event_id == event.id)
+        )
+    ).scalar_one_or_none()
+    if existing_link is not None:
+        already_suppressed = "actually_suppressed=True" in (existing_link.decision_reason or "")
+        logger.info(
+            "story_continuity_link_already_exists",
+            extra={
+                "event_id": str(event.id),
+                "story_id": str(existing_link.story_id),
+                "final_decision": existing_link.final_decision,
+                "actually_suppressed": already_suppressed,
+            },
+        )
+        return already_suppressed
+
     # Phase 23 shadow calibration: Google News RSS titles append a publisher attribution
     # suffix (e.g. " - Vietnam.vn"). That suffix is source provenance, not Story identity.
     # Strip it only when real provenance proves this is a Google News wrapper; title shape
@@ -586,6 +616,16 @@ async def _run_phase_b(session: AsyncSession, event_id: UUID, report: TriageCycl
             # explicitly so the NewsEventStoryLink + Story row (the full audit evidence written
             # in _apply_story_memory) still persist. The NewsEvent, Story membership, history
             # and prior tasks are untouched; no publication behaviour changes.
+            #
+            # STORY-CONTINUITY-P0-ENFORCEMENT-WIRING-FIX-1: advance the event to the terminal
+            # `ANALYZED` state - the correct end state for a successfully processed event that
+            # intentionally produces no editorial task - so it is NEVER a stale-recovery
+            # candidate (_select_recovery_candidates only ever selects status == PROCESSING).
+            # Same shape as the invalid-title path's `event.status = EventStatus.REJECTED;
+            # await session.commit()`. This runs only after the suppression decision and its
+            # audit persistence (the NewsEventStoryLink added in _apply_story_memory) succeed,
+            # and is committed atomically with them.
+            event.status = EventStatus.ANALYZED
             await session.commit()
             logger.info(
                 "phase9_editorial_task_suppressed_by_story_continuity",
