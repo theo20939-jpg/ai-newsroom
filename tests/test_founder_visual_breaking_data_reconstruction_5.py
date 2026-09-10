@@ -146,7 +146,7 @@ def test_hero_background_is_board_measured_near_black() -> None:
 
 def test_hero_value_and_unit_use_the_heavy_face() -> None:
     body = _body(render_data_hero_card)
-    assert body.count('data_weight="black"') >= 2  # value + unit
+    assert body.count('data_weight="black"') >= 2  # value + unit (label/secondary use lighter weights)
     resolved = _resolve_heavy_font_path()
     assert resolved is None or isinstance(resolved, str)
 
@@ -169,7 +169,7 @@ def test_hero_graph_interpolation_never_overshoots_and_has_no_synthetic_points()
     ys = [y for _, y in curve]
     assert min(ys) >= min(series) - 1e-6 and max(ys) <= max(series) + 1e-6
     spark = inspect.getsource(br._draw_hero_sparkline)
-    assert "_reduced_tension_path(" in spark and "VERBATIM" in spark
+    assert "_segmented_anchor_path(" in spark and "VERBATIM" in spark
     assert "len(series) >= 2" in _body(render_data_hero_card)
     # data-driven: two different series -> two different images
     a = DataCandidate(value="9", unit="", label="", evidence_fact="", series=(1.0, 2.0, 9.0))

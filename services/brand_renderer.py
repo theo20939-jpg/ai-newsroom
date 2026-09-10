@@ -377,16 +377,22 @@ def _draw_pulse_line(draw: ImageDraw.ImageDraw, *, x: int, y: int, width: int, c
 # The retired `flat -> spike -> valley -> flat` `_draw_pulse` polyline is used only by the FROZEN
 # NEWS / DATA-source lower signature.
 #
-# x in [0, 1] spans the drawn line; y in "R apex == 1.0" units (baseline 0, up = positive).
+# FINAL-BOARD-MATCH-7 §5: re-measured same-scale - the line reads as a RESTRAINED LOWER-MEDIA
+# BRANDED LINE WITH A COMPACT PULSE EVENT, not a standalone ECG. x in [0, 1] spans the drawn line;
+# y in "R apex == 1.0" units (baseline 0, up = positive). Board proportions:
+#   calm baseline before the complex   ~= 0.23 of the line   (_bm.BREAKING.pulse_pre_flat_frac)
+#   the P-QRS-T complex                 ~= 0.28 of the line   (_bm.BREAKING.pulse_complex_frac)
+#   a LONG calm tail after              ~= 0.49 of the line
+#   R apex inside the complex at 0.341  (_bm.BREAKING.pulse_apex_at_frac)  ->  line x ~= 0.325
 _PULSE_WAVEFORM_UNIT: tuple[tuple[float, float], ...] = (
-    (0.000, 0.000), (0.090, 0.000), (0.150, 0.000),
-    (0.185, 0.040), (0.220, 0.260), (0.250, 0.060),                    # P wave
-    (0.283, -0.050), (0.303, -0.080),                                  # Q dip
-    (0.322, 0.550), (0.341, 1.000),                                    # R rise (apex at board x 0.341)
-    (0.361, 0.350), (0.391, -0.700),                                   # S plunge (deep, S/R ~= 0.70)
-    (0.411, -0.350), (0.441, -0.080), (0.470, 0.000),                  # recovery
-    (0.515, 0.100), (0.560, 0.290), (0.605, 0.170), (0.645, 0.040), (0.680, 0.000),  # T wave
-    (0.800, 0.000), (0.900, 0.000), (1.000, 0.000),                    # flat tail
+    (0.000, 0.000), (0.120, 0.000), (0.210, 0.000),                    # calm baseline (0.23)
+    (0.235, 0.040), (0.262, 0.240), (0.286, 0.060),                    # P wave
+    (0.300, -0.050), (0.315, -0.090),                                  # Q dip
+    (0.322, 0.520), (0.325, 1.000),                                    # R rise (sharp, narrow)
+    (0.333, 0.360), (0.348, -0.720),                                   # S plunge (deep, S/R ~= 0.72)
+    (0.362, -0.360), (0.386, -0.080), (0.410, 0.000),                  # recovery
+    (0.442, 0.090), (0.475, 0.230), (0.505, 0.130), (0.525, 0.030), (0.545, 0.000),  # T wave
+    (0.650, 0.000), (0.780, 0.000), (0.900, 0.000), (1.000, 0.000),    # long calm tail (0.49)
 )
 
 
@@ -433,8 +439,10 @@ def _draw_recovered_pulse(
     amplitude = max(4, amplitude)
     stroke = max(2, stroke)
     pad = stroke * 3 + 6
-    top = int(baseline_y - amplitude - pad)
-    bottom = int(baseline_y + amplitude * 0.80 + pad)  # room for the deep S undershoot
+    top = max(0, int(baseline_y - amplitude - pad))
+    # room for the deep S undershoot, but never past the media bottom (FINAL-BOARD-MATCH-7 §5: the
+    # baseline hugs the lower edge; the S may kiss it - like the board - but is not drawn off-canvas)
+    bottom = min(base_rgba.height, int(baseline_y + amplitude * 0.85 + pad))
     layer_w = (span + pad * 2) * _PULSE_SUPERSAMPLE
     layer_h = max(1, (bottom - top)) * _PULSE_SUPERSAMPLE
     layer = Image.new("RGBA", (layer_w, layer_h), (0, 0, 0, 0))
@@ -1166,13 +1174,17 @@ def _guarded_grid_color() -> tuple[int, int, int]:
 
 
 def _draw_hero_grid(draw: ImageDraw.ImageDraw, w: int, h: int) -> None:
-    # §13: board-measured density + a hard contrast guard - reads as technical texture, never squares.
+    # FINAL-BOARD-MATCH-7 §9/§10: the board does NOT read as full-canvas graph paper - the grid
+    # belongs to the RIGHT GRAPH ZONE and supports the chart. The LEFT text zone stays clean
+    # near-black. A tiny, contrast-guarded bleed into a narrow transition band is barely perceptible.
     step = max(24, round(_bm.DATA.grid_step_frac * w))
     color = _guarded_grid_color()
+    zone_x = round((_bm.DATA.graph_x_start_frac - 0.03) * w)  # a hair before the graph starts
     for gx in range(step, w, step):
-        draw.line([(gx, 0), (gx, h)], fill=color, width=1)
+        if gx >= zone_x:
+            draw.line([(gx, 0), (gx, h)], fill=color, width=1)
     for gy in range(step, h, step):
-        draw.line([(0, gy), (w, gy)], fill=color, width=1)
+        draw.line([(zone_x, gy), (w, gy)], fill=color, width=1)
 
 
 def _monotone_cubic(xs: list[float], ys: list[float], samples_per_segment: int = 24) -> list[tuple[float, float]]:
@@ -1216,39 +1228,27 @@ def _monotone_cubic(xs: list[float], ys: list[float], samples_per_segment: int =
     return out
 
 
-def _reduced_tension_path(xs: list[float], ys: list[float]) -> list[tuple[float, float]]:
-    """FOUNDER-VISUAL-BOARD-REBUILD-6 §10: a VISUAL path that keeps the board's editorial character
-    - visible local direction changes between the real anchors, NOT a generic exponential arc. It
-    blends the straight anchor-to-anchor polyline (55%) with a monotone-cubic (45%): every real
-    (x, y) anchor is hit exactly, the segments retain their own slope, and the monotone term only
-    rounds the corners. No new numeric values; provably still within [min, max] of the series
-    (both blended terms are)."""
-    if len(xs) < 2:
-        return list(zip(xs, ys))
-    smooth = _monotone_cubic(xs, ys, samples_per_segment=20)
-    out: list[tuple[float, float]] = []
-    for sx, sy in smooth:
-        # linear interpolant at sx across the real anchors
-        j = 0
-        while j < len(xs) - 2 and xs[j + 1] < sx:
-            j += 1
-        t = 0.0 if xs[j + 1] == xs[j] else (sx - xs[j]) / (xs[j + 1] - xs[j])
-        ly = ys[j] + t * (ys[j + 1] - ys[j])
-        out.append((sx, 0.55 * ly + 0.45 * sy))
-    return out
+def _segmented_anchor_path(xs: list[float], ys: list[float]) -> list[tuple[float, float]]:
+    """FINAL-BOARD-MATCH-7 §11-§13: a CLEAN SEGMENTED EDITORIAL LINE. The real anchors are
+    connected DIRECTLY - this returns exactly the supplied `(x, y)` points, in order, and NOTHING
+    else. The renderer owns STYLE (antialiasing, rounded joins, glow); the input owns SHAPE. No
+    spline, no densification, no fabricated intermediate value, no synthetic wiggle, no overshoot
+    (there is nothing between anchors to overshoot with)."""
+    return list(zip(xs, ys))
 
 
 def _draw_hero_sparkline(
     canvas: Image.Image, series: tuple[float, ...], *, box: tuple[int, int, int, int],
 ) -> None:
-    """The board's DATA trend line (docs/founder_telegram_board.png, measured):
-    - the RED LINE is the primary feature; a very restrained under-curve tint, no red wedge (§11);
-    - a small crisp white endpoint dot (§12);
-    - the path keeps visible local direction changes (`_reduced_tension_path`, §10).
+    """The board's DATA trend line (docs/founder_telegram_board.png, re-measured same-scale):
+    - the RED LINE is the PRIMARY feature (§15); the under-curve tint is VERY subtle, no red wedge;
+    - a small crisp white endpoint dot (§16);
+    - a CLEAN SEGMENTED path (`_segmented_anchor_path`, §11-§13) - real anchors connected directly,
+      antialiased with rounded joins via a 4x supersampled layer + LANCZOS; visible directional
+      changes are preserved because the segments are not splined away.
 
-    §16: `series` values are the ONLY factual anchors - exact linear x, min-max normalised y, drawn
-    VERBATIM; the visual path never overshoots [min, max] and invents no intermediate value. 4x
-    supersampled RGBA layer, LANCZOS down. Requires >= 2 points (guarded by the caller)."""
+    §12: `series` values are the ONLY factual anchors - exact linear x, min-max normalised y, drawn
+    VERBATIM; the renderer synthesises NO points. Requires >= 2 points (guarded by the caller)."""
     x0, y0, x1, y1 = box
     pad = max(8, round(_bm.DATA.graph_endpoint_radius_frac * _CANVAS_W) + 4)  # dot headroom
     y0 += pad
@@ -1257,7 +1257,7 @@ def _draw_hero_sparkline(
     n = len(series)
     anchor_xs = [x0 + (x1 - x0) * (i / (n - 1)) for i in range(n)]
     anchor_ys = [y1 - (y1 - y0) * ((v - lo) / span) for v in series]
-    curve = _reduced_tension_path(anchor_xs, anchor_ys)
+    curve = _segmented_anchor_path(anchor_xs, anchor_ys)
 
     ss = _PULSE_SUPERSAMPLE
     lw, lh = (x1 - x0) * ss, (y1 - y0) * ss + ss
@@ -1265,12 +1265,12 @@ def _draw_hero_sparkline(
     ld = ImageDraw.Draw(layer)
     loc = [((cx - x0) * ss, (cy - y0) * ss) for cx, cy in curve]
 
-    # §11 area fill: a thin tint that only HUGS the underside of the curve - the fill polygon is
-    # closed a bounded band below the curve (not down to the axis), and it fades fast both downward
-    # and toward the vertical right edge, so there is never a red wedge or a bright right column.
+    # §15 area fill: a VERY subtle tint that only hugs the underside of the segments - a bounded
+    # band below the line, fast downward fade, eased off at the vertical right edge. Most of the
+    # chart area stays dark; the line is the feature.
     peak = _bm.DATA.graph_fill_peak_alpha
     fall = _bm.DATA.graph_fill_falloff
-    band = round((y1 - y0) * 0.42) * ss  # fill reaches at most ~42% of the chart height below the curve
+    band = round((y1 - y0) * _bm.DATA.graph_fill_band_frac) * ss
     fill_poly = [*loc] + [(cx, min(lh, cy + band)) for cx, cy in reversed(loc)]
     area = Image.new("RGBA", layer.size, (0, 0, 0, 0))
     ImageDraw.Draw(area).polygon(fill_poly, fill=(*_OFFICIAL_NNJ_RED, 255))
@@ -1363,37 +1363,41 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
         blocks.append(("unit", unit_font, ub, _OFFICIAL_NNJ_RED, 16))
         total_h += (ub[3] - ub[1]) + 14
 
+    # FINAL-BOARD-MATCH-7 §7/§8: SEPARATE the weights - label is SemiBold (V6's Bold was too
+    # heavy), secondary copy is Medium (V6's Regular read too weak). Board cap-height ratios:
+    # label = 0.19 x value, secondary = 0.165 x value.
     label_lines: list[str] = []
-    label_font = _data_font(_HERO_LABEL_FONT_MIN, "bold")
+    label_font = _data_font(_HERO_LABEL_FONT_MIN, "semibold")
     label_size = _HERO_LABEL_FONT_MIN
     if data_candidate.label.strip():
-        lmax = max(_HERO_LABEL_FONT_MIN + 4, min(_HERO_LABEL_FONT_MAX, round(value_size * _bm.DATA.label_over_value)))
+        lmax = max(_HERO_LABEL_FONT_MIN + 2, min(_HERO_LABEL_FONT_MAX, round(value_size * _bm.DATA.label_over_value)))
         label_lines, label_font, label_size = _fit_wrapped_block(
             draw, data_candidate.label.strip().upper(), font_max=lmax,
             font_min=_HERO_LABEL_FONT_MIN, max_width=left_col_w, max_lines=_HERO_LABEL_MAX_LINES,
-            data_weight="bold",
+            data_weight="semibold",
         )
-        total_h += len(label_lines) * (label_size + 6) + 12
+        total_h += len(label_lines) * (label_size + 6) + 10
 
     desc_lines: list[str] = []
-    desc_font = _data_font(_HERO_DESC_FONT_MIN, "regular")
+    desc_font = _data_font(_HERO_DESC_FONT_MIN, "medium")
     desc_size = _HERO_DESC_FONT_MIN
     if data_candidate.evidence_fact.strip():
+        dmax = max(_HERO_DESC_FONT_MIN + 2, min(_HERO_DESC_FONT_MAX, round(value_size * _bm.DATA.desc_over_value)))
         desc_lines, desc_font, desc_size = _fit_wrapped_block(
-            draw, data_candidate.evidence_fact.strip(), font_max=_HERO_DESC_FONT_MAX,
+            draw, data_candidate.evidence_fact.strip(), font_max=dmax,
             font_min=_HERO_DESC_FONT_MIN, max_width=left_col_w, max_lines=_HERO_DESC_MAX_LINES,
-            data_weight="regular",
+            data_weight="medium",
         )
-        total_h += len(desc_lines) * (desc_size + 5) + 18
+        total_h += len(desc_lines) * (desc_size + 5) + 16
 
     pill_h: float = 0
     if data_candidate.delta:
-        pill_font = _data_font(28, "semibold")
+        pill_font = _data_font(max(22, round(value_size * 0.17)), "semibold")
         pb = draw.textbbox((0, 0), data_candidate.delta, font=pill_font)
-        pill_h = (pb[3] - pb[1]) + 24
-        total_h += pill_h + 22
+        pill_h = (pb[3] - pb[1]) + 22
+        total_h += pill_h + 20
 
-    total_h += 30  # the pulse motif under the block
+    total_h += 26  # the small pulse motif under the block
 
     # --- draw, vertically centred in the left column --------------------------------------------
     y: float = max(_HERO_MARGIN, (_CANVAS_H - total_h) / 2)
@@ -1402,17 +1406,17 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
     y += (vb[3] - vb[1]) + 4
     if unit_text:
         draw.text((x, y - ub[1]), unit_text, font=unit_font, fill=_OFFICIAL_NNJ_RED)
-        y += (ub[3] - ub[1]) + 16
+        y += (ub[3] - ub[1]) + 14
     for line in label_lines:
         draw.text((x, y), line, font=label_font, fill=_OFFICIAL_NNJ_WHITE)
         y += label_size + 6
     if label_lines:
-        y += 12
+        y += 10
     for line in desc_lines:
         draw.text((x, y), line, font=desc_font, fill=_HERO_DESC_COLOR)
         y += desc_size + 5
     if desc_lines:
-        y += 18
+        y += 16
     if data_candidate.delta:
         pw = pb[2] - pb[0]
         pill_box = (x, y, x + pw + 44, y + pill_h)
@@ -1422,15 +1426,15 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
 
     canvas_rgba = canvas.convert("RGBA")
 
-    # §14: the small pulse motif under the metric block - the SAME board-traced NINJA PULSE
-    # primitive as BREAKING, thin and short (visually secondary).
+    # §18: the small pulse motif under the metric block - the SAME board line family as BREAKING,
+    # thin and short, VISUALLY SECONDARY (it must not compete with +38% or the chart).
     _draw_recovered_pulse(
-        canvas_rgba, x_left=x, baseline_y=round(y) + 12, span=168, amplitude=20,
-        color=_OFFICIAL_NNJ_RED, stroke=3,
+        canvas_rgba, x_left=x, baseline_y=round(y) + 10, span=132, amplitude=13,
+        color=_OFFICIAL_NNJ_RED, stroke=2,
     )
 
-    # §11: the trend line - board-measured geometry (rises from ~0.90h to a peak at ~0.47h, ends
-    # short of the right edge). The red LINE is the feature; the fill stays near-black.
+    # §17: the trend line - board-measured geometry (rises from the near-bottom to a peak at
+    # ~0.47h, ends well short of the right edge). The red LINE is the feature; the fill stays dark.
     if has_chart:
         _draw_hero_sparkline(
             canvas_rgba, series,
@@ -1438,8 +1442,8 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
                  round(_CANVAS_W * _bm.DATA.graph_x_end_frac), round(_CANVAS_H * _bm.DATA.graph_y_bottom_frac)),
         )
 
-    # §15: a restrained NNJ mark - small, lowered opacity, never a CTA badge competing with the metric.
-    mark = rasterize_nnj_mark(target_width=max(40, round(_HERO_MARK_W_FRAC * _CANVAS_W)), red=True)
+    # §19: a restrained NNJ mark - small, low opacity, must NOT compete with the graph endpoint.
+    mark = rasterize_nnj_mark(target_width=max(34, round(_HERO_MARK_W_FRAC * _CANVAS_W)), red=True)
     if _HERO_MARK_OPACITY < 1.0:
         a = mark.getchannel("A").point(lambda v: round(v * _HERO_MARK_OPACITY))
         mark.putalpha(a)
