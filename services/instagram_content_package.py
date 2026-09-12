@@ -97,6 +97,20 @@ class InstagramContentPackage:
     render_profiles: list[str]
     slide_count: int | None
 
+    # -- INSTAGRAM-VISUAL-SYSTEM-V1-1 section 2: the only two fields this phase adds, strictly
+    # required to support truthful visual composition. Both additive with safe defaults - every
+    # Foundation-phase package/test that never set them keeps behaving exactly as before.
+    #   `presentation_family` - which Instagram-native visual treatment (section 6: "news"/
+    #   "breaking"/"data"/"quote") a SINGLE package asks the renderer for. None/unrecognized ->
+    #   the safe NEWS default (never a fabricated inference from freetext copy).
+    #   `source_image_ref` - a traceable STRING reference to a real source image (e.g. an asset
+    #   path/id), never raw bytes - the package stays plain-JSON-serializable exactly as before.
+    #   The actual image bytes are always a renderer-time keyword argument (mirrors Telegram's own
+    #   `render_data_card(candidate, *, source_image_bytes=...)` precedent) - this field only
+    #   records THAT a real image was associated with this package, for evidence/traceability.
+    presentation_family: str | None = None
+    source_image_ref: str | None = None
+
     # -- publication metadata (empty at package-build time; the publish layer appends to a COPY) --
     publication_metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -128,6 +142,8 @@ class InstagramContentPackage:
             "director_evidence": self.director_evidence,
             "render_profiles": list(self.render_profiles),
             "slide_count": self.slide_count,
+            "presentation_family": self.presentation_family,
+            "source_image_ref": self.source_image_ref,
             "publication_metadata": self.publication_metadata,
             "created_at": self.created_at.isoformat(),
         }
@@ -206,6 +222,7 @@ def build_instagram_content_package(
     *, opportunity: ContentOpportunity, format_decision: FormatDecision, shadow_plan: ShadowPlanResult,
     creative_outcome: CreativeGenerationOutcome | None = None, account_key: str = "default",
     external_video_asset_ref: str | None = None, hashtags: list[str] | None = None,
+    presentation_family: str | None = None, source_image_ref: str | None = None,
 ) -> InstagramContentPackage:
     """Assembles a package from the REAL upstream Director objects. `creative_outcome` is optional
     (mirrors `build_shadow_plan()`'s own optionality) - without it, the package carries only the
@@ -275,6 +292,8 @@ def build_instagram_content_package(
             "format_decision_confidence": format_decision.confidence,
             "format_decision_warnings": list(format_decision.warnings),
         },
+        presentation_family=presentation_family,
+        source_image_ref=source_image_ref,
         render_profiles=_render_profiles_for(fmt, slide_count=slide_count),
         slide_count=slide_count,
     )

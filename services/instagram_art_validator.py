@@ -89,14 +89,40 @@ def validate_instagram_art(
         if not ev.text_regions:
             blocking.append(f"unreadable_or_empty_content: no text regions rendered, slide_index={ev.slide_index}")
 
-        # 6. source/media destruction - not applicable yet, this renderer never composites a source
-        #    photo (section 6: a generated card, not a photo transform); disclosed, not silently skipped.
-        if ev.source_image_treatment not in ("none",):
-            warnings.append(f"source_image_treatment={ev.source_image_treatment!r} not yet validated by this module")
+        # 6. source/media consistency (INSTAGRAM-VISUAL-SYSTEM-V1-1: this renderer now genuinely
+        #    composites real source imagery - section 13). Any value outside the image-handling
+        #    module's own truthful vocabulary would mean the evidence lied about what happened to
+        #    the pixels - that is a BLOCKING integrity failure, not a warning.
+        if ev.source_image_treatment not in ("none", "cover_cropped", "contain_preserved"):
+            blocking.append(f"unknown_source_image_treatment: {ev.source_image_treatment!r} slide_index={ev.slide_index}")
+        # a package that recorded a real `source_image_ref` but whose render shows no image was
+        # actually applied usually means the caller forgot to pass the real bytes at render time -
+        # a warning (not blocking: a legitimate no-image fallback render can still be intentional).
+        if package.source_image_ref and ev.source_image_treatment == "none":
+            warnings.append(
+                f"source_image_ref_recorded_but_not_applied: package.source_image_ref={package.source_image_ref!r} "
+                f"but this render's source_image_treatment is 'none' (slide_index={ev.slide_index})"
+            )
 
         # 7. caption/media package consistency
         if ev.caption_linkage != package.package_id:
             blocking.append(f"package_linkage_mismatch: render carries caption_linkage={ev.caption_linkage!r}, expected {package.package_id!r}")
+
+        # 8. DATA number integrity (section 9/21: never a fabricated chart) - the graph variant is
+        #    only ever a truthful renderer response to >=2 real supplied points; if evidence claims
+        #    that variant without the series-point count to back it up, something upstream lied.
+        if ev.notes.get("layout_variant") == "data_with_graph" and int(ev.notes.get("series_points", 0)) < 2:
+            blocking.append(f"data_graph_without_real_series: slide_index={ev.slide_index} series_points={ev.notes.get('series_points')}")
+
+        # 9. REEL COVER critical-content placement (section 12) - the hook text must fall inside
+        #    the renderer's own recorded grid/profile-crop-safe band, not just the app-chrome safe
+        #    zone, or it will be cropped away in the Reels tab / profile grid thumbnail.
+        grid_band = ev.notes.get("grid_safe_band")
+        if grid_band:
+            band_top, band_bottom = grid_band
+            for region in ev.text_regions:
+                if region.kind == "hook" and (region.box[1] > band_bottom or region.box[3] < band_top):
+                    blocking.append(f"reel_hook_outside_grid_safe_band: box={region.box} band={grid_band}")
 
     # carousel-specific: slide_count/slide_index consistency across the whole set
     if package.content_format.value == "carousel":
@@ -109,6 +135,13 @@ def validate_instagram_art(
         indices = sorted(idx for idx in raw_indices if idx is not None)
         if indices != list(range(len(render_results))):
             blocking.append(f"slide_index_sequence_invalid: {indices}")
+
+        # carousel visual GRAMMAR (section 11/21): a real carousel should not present as the
+        # identical layout on every slide after the hook - a warning (not blocking: a short, all-
+        # detail-role deck can legitimately share one layout), so an editor can still see it.
+        non_hook_variants = {r.evidence.notes.get("layout_variant") for r in render_results if r.evidence.slide_index != 0}
+        if len(render_results) >= 3 and len(non_hook_variants) <= 1:
+            warnings.append(f"carousel_layout_diversity_low: non-hook slides all use layout_variant={non_hook_variants}")
 
     passed = not blocking
     return InstagramArtValidationResult(
