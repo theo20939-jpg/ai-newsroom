@@ -81,7 +81,7 @@ async def test_related_story_root_event_gets_its_own_story(db_session: AsyncSess
     unrelated = await _seed_existing_story(db_session, "Unrelated older story about something else entirely")
     new_event = await _new_event(db_session, "Cloudflare launches Kitesurf, a browser built for AI agents")
 
-    async def _fake_match_story(_session, *, title, category):  # noqa: ANN001
+    async def _fake_match_story(_session, *, title, category, url=None, now=None):  # noqa: ANN001
         signature = extract_story_signature(title, category)
         return signature, MatchResult(
             RELATED_STORY, unrelated.id, 0.25, "test: related but not same story", entity_overlap=0.25,
@@ -119,7 +119,7 @@ async def test_uncertain_match_with_weak_entity_overlap_gets_its_own_story(
         db_session, "Российские школьники в третий раз стали чемпионами на Международной олимпиаде по ИИ",
     )
 
-    async def _fake_match_story(_session, *, title, category):  # noqa: ANN001
+    async def _fake_match_story(_session, *, title, category, url=None, now=None):  # noqa: ANN001
         signature = extract_story_signature(title, category)
         return signature, MatchResult(
             UNCERTAIN_MATCH, unrelated.id, 0.46, "test: coincidental uncertain match", entity_overlap=0.1,
@@ -155,7 +155,7 @@ async def test_related_story_dispatch_never_merges_the_unrelated_story(
     other_product_story = await _seed_existing_story(db_session, "Tesla launches new Model Y refresh with longer range")
     new_event = await _new_event(db_session, "Tesla faces new regulatory investigation over Autopilot claims")
 
-    async def _fake_match_story(_session, *, title, category):  # noqa: ANN001
+    async def _fake_match_story(_session, *, title, category, url=None, now=None):  # noqa: ANN001
         signature = extract_story_signature(title, category)
         return signature, MatchResult(
             RELATED_STORY, other_product_story.id, 0.22, "test: same entity family, different event", entity_overlap=0.22,
@@ -187,7 +187,7 @@ async def test_later_strong_evidence_converges_onto_the_provisional_story(
     unrelated = await _seed_existing_story(db_session, "Some unrelated older story")
     first_event = await _new_event(db_session, "Школьная сборная России стала чемпионом на олимпиаде по ИИ")
 
-    async def _fake_uncertain(_session, *, title, category):  # noqa: ANN001
+    async def _fake_uncertain(_session, *, title, category, url=None, now=None):  # noqa: ANN001
         signature = extract_story_signature(title, category)
         return signature, MatchResult(
             UNCERTAIN_MATCH, unrelated.id, 0.46, "test: coincidental uncertain match", entity_overlap=0.1,
@@ -202,7 +202,7 @@ async def test_later_strong_evidence_converges_onto_the_provisional_story(
 
     second_event = await _new_event(db_session, "Школьная сборная России во второй раз подряд стала чемпионом на олимпиаде по ИИ")
 
-    async def _fake_confident_update(_session, *, title, category):  # noqa: ANN001
+    async def _fake_confident_update(_session, *, title, category, url=None, now=None):  # noqa: ANN001
         signature = extract_story_signature(title, category)
         return signature, MatchResult(
             STORY_UPDATE, provisional_story_id, 0.71, "test: later strong evidence", entity_overlap=0.55,
@@ -236,7 +236,7 @@ async def test_uncertain_match_with_strong_entity_overlap_does_not_fragment(
         db_session, "Собянин: Московский школьник победил на олимпиаде по искусственному интеллекту",
     )
 
-    async def _fake_match_story(_session, *, title, category):  # noqa: ANN001
+    async def _fake_match_story(_session, *, title, category, url=None, now=None):  # noqa: ANN001
         signature = extract_story_signature(title, category)
         return signature, MatchResult(
             UNCERTAIN_MATCH, true_story.id, 0.528, "test: genuine uncertain match, real entity overlap", entity_overlap=0.4,

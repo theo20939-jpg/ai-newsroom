@@ -333,7 +333,7 @@ async def test_integration_exact_title_duplicate_suppressed_when_flag_on(
     db_session.add(new_event)
     await db_session.flush()
 
-    async def _fake(_s, *, title, category):  # noqa: ANN001, ARG001
+    async def _fake(_s, *, title, category, url=None, now=None):  # noqa: ANN001, ARG001
         return sig, MatchResult(
             SEMANTIC_DUPLICATE, story.id, 1.0, "exact normalized title match",
             entity_overlap=0.0, has_distinctive_shared_entity=True,
@@ -372,7 +372,7 @@ async def test_integration_flag_off_never_suppresses(
     db_session.add(new_event)
     await db_session.flush()
 
-    async def _fake(_s, *, title, category):  # noqa: ANN001, ARG001
+    async def _fake(_s, *, title, category, url=None, now=None):  # noqa: ANN001, ARG001
         return sig, MatchResult(
             SEMANTIC_DUPLICATE, story.id, 1.0, "exact normalized title match",
             entity_overlap=0.0, has_distinctive_shared_entity=True,
@@ -406,7 +406,7 @@ async def test_integration_low_score_fails_open_even_with_flag_on(
     db_session.add(new_event)
     await db_session.flush()
 
-    async def _fake(_s, *, title, category):  # noqa: ANN001, ARG001
+    async def _fake(_s, *, title, category, url=None, now=None):  # noqa: ANN001, ARG001
         return sig, MatchResult(
             SUPPORTING_SOURCE, story.id, 0.83, "supporting source, sub-threshold",
             entity_overlap=0.5, has_distinctive_shared_entity=True,

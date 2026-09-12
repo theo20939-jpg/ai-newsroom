@@ -365,3 +365,60 @@ def assess_continuity_identity(
         reason_codes=(REASON_TITLE_LIKE_OK,),
         measurements=measurements,
     )
+
+
+# --- ARXIV-STORY-CLUSTERING-REPAIR-1 (2026-09): upstream candidate-eligibility check ----------
+# The P0.1 guard above is DEFENSIVE - it runs after Story Memory has already matched an event
+# into a Story and only demotes the *continuity classification*. This helper is used one step
+# earlier, by services/story_memory.py::match_story(), to drop a candidate Story from the
+# eligible set BEFORE any fuzzy score can attach the event to it. Same primitives
+# (extract_document_identity, _STORY_IDENTITY_POLLUTION_FLOOR) so identity semantics stay
+# centralized and deterministic; pure, no I/O. Story Memory does NOT import Story Continuity, so
+# there is no circular dependency (this module imports only services/text_normalization.py).
+CANDIDATE_ELIGIBLE = "ELIGIBLE"
+CANDIDATE_INELIGIBLE = "INELIGIBLE"
+
+REASON_CANDIDATE_NO_STABLE_IDENTITY = "new_event_has_no_stable_identity"
+REASON_CANDIDATE_NO_COMPARABLE_IDENTITY = "candidate_has_no_comparable_identity"
+
+
+def candidate_story_identity_verdict(
+    *,
+    new_url: str | None,
+    new_title: str | None,
+    candidate_documents: Sequence[tuple[str | None, str | None]],
+) -> tuple[str, str]:
+    """Whether a candidate Story is still eligible to be matched against `new_event`, on stable
+    document identity alone. `candidate_documents` is `(title, url)` for the candidate Story's
+    OWN member events.
+
+    Returns ``(CANDIDATE_ELIGIBLE | CANDIDATE_INELIGIBLE, reason_code)``:
+
+    * new event has no extractable stable id                     -> ELIGIBLE (never a conflict)
+    * candidate holds >= 2 distinct stable document ids (polluted)-> INELIGIBLE (polluted_multi_document_story)
+    * candidate holds no id in the new event's namespace         -> ELIGIBLE (absence is not a conflict, spec sec 6)
+    * candidate holds the SAME base id (any version)             -> ELIGIBLE (stable_document_identity_match)
+    * candidate holds a DIFFERENT base id in the same namespace  -> INELIGIBLE (<namespace>_identity_mismatch)
+
+    Version suffixes are already stripped by extract_document_identity(), so
+    ``2609.06385`` / ``v1`` / ``v2`` are one identity and never a conflict.
+    """
+    new_identity = extract_document_identity(url=new_url, title=new_title)
+    if new_identity is None:
+        return CANDIDATE_ELIGIBLE, REASON_CANDIDATE_NO_STABLE_IDENTITY
+
+    prior_identities = [
+        ident
+        for (title, url) in candidate_documents
+        if (ident := extract_document_identity(url=url, title=title)) is not None
+    ]
+    distinct_keys = {(p.namespace, p.identifier) for p in prior_identities}
+    if len(distinct_keys) >= _STORY_IDENTITY_POLLUTION_FLOOR:
+        return CANDIDATE_INELIGIBLE, REASON_POLLUTED_STORY
+
+    same_namespace = [p for p in prior_identities if p.namespace == new_identity.namespace]
+    if not same_namespace:
+        return CANDIDATE_ELIGIBLE, REASON_CANDIDATE_NO_COMPARABLE_IDENTITY
+    if any(p.identifier == new_identity.identifier for p in same_namespace):
+        return CANDIDATE_ELIGIBLE, REASON_STABLE_IDENTITY_MATCH
+    return CANDIDATE_INELIGIBLE, f"{new_identity.namespace}_identity_mismatch"

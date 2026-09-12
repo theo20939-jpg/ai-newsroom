@@ -292,7 +292,7 @@ async def _apply_story_memory(
     is_google_news = is_google_news_provenance(event.url, source.url if source is not None else None)
     story_match_title = strip_google_news_title_suffix(event.title) if is_google_news else event.title
     signature, result = await match_story(
-        session, title=story_match_title, category=event.category
+        session, title=story_match_title, category=event.category, url=event.url
     )
 
     creates_own_story = result.outcome in (NEW_STORY, RELATED_STORY) or (

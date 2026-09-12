@@ -139,7 +139,7 @@ async def test_first_pass_still_inserts_exactly_one_link(
     db_session.add(evt)
     await db_session.flush()
 
-    async def _fake(_s, *, title, category):  # noqa: ANN001, ARG001
+    async def _fake(_s, *, title, category, url=None, now=None):  # noqa: ANN001, ARG001
         return sig, MatchResult(
             SEMANTIC_DUPLICATE, story.id, 1.0, "exact normalized title match",
             entity_overlap=0.0, has_distinctive_shared_entity=True,
@@ -231,7 +231,7 @@ async def test_recovery_of_suppressed_event_no_unique_violation_and_terminal(
             src_id, story_id, evt_id = src.id, story.id, evt.id
             await s.commit()
 
-        async def _fake(_s, *, title, category):  # noqa: ANN001, ARG001
+        async def _fake(_s, *, title, category, url=None, now=None):  # noqa: ANN001, ARG001
             return sig, MatchResult(
                 SEMANTIC_DUPLICATE, story_id, 1.0, "exact normalized title match",
                 entity_overlap=0.0, has_distinctive_shared_entity=True,
@@ -315,7 +315,7 @@ async def test_flag_off_leaves_duplicate_no_delta_in_normal_flow(
     db_session.add(evt)
     await db_session.flush()
 
-    async def _fake(_s, *, title, category):  # noqa: ANN001, ARG001
+    async def _fake(_s, *, title, category, url=None, now=None):  # noqa: ANN001, ARG001
         return sig, MatchResult(
             SEMANTIC_DUPLICATE, story.id, 1.0, "exact normalized title match",
             entity_overlap=0.0, has_distinctive_shared_entity=True,

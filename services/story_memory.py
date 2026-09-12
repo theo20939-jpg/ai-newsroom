@@ -34,10 +34,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
-from database.models.news_event import EventCategory
+from database.models.news_event import EventCategory, NewsEvent
 from database.models.story import Story
+from database.models.story_link import NewsEventStoryLink
 from services.editorial_content_type import classify_content_type, is_content_type_mismatch
 from services.fact_safety import ClaimType, extract_claims
+from services.story_identity_guard import (
+    CANDIDATE_ELIGIBLE,
+    candidate_story_identity_verdict,
+    extract_document_identity,
+)
 from services.text_normalization import normalize_for_entity_match, normalize_loose, symmetric_token_overlap
 
 # Phase V2.22A: mirrors services/story_delta_engine.py's own _MATERIAL_CLAIM_TYPES verbatim (never
@@ -1019,8 +1025,60 @@ def _distinctive_shared_entities(
     )
 
 
+async def _filter_academic_identity_conflicts(
+    session: AsyncSession,
+    *,
+    new_url: str | None,
+    new_title: str,
+    candidates: list[Story],
+) -> tuple[list[Story], list[tuple[UUID, str]]]:
+    """ARXIV-STORY-CLUSTERING-REPAIR-1: drop candidate Stories whose trusted stable document
+    identity CONFLICTS with this event's, before any fuzzy score can attach the event to them
+    (spec sec 2/5/10). Only runs when the new event ITSELF carries an extractable stable id
+    (arXiv base id / DOI) - for normal news it is a pure no-op with zero extra queries, so
+    non-academic clustering is byte-identical (spec sec 6/16). One bounded indexed query over
+    the already-capped candidate set (<= STORY_MATCH_CANDIDATE_LIMIT stories). Returns the
+    surviving candidates plus (story_id, reason) for each one removed.
+    """
+    if not candidates:
+        return candidates, []
+    if extract_document_identity(url=new_url, title=new_title) is None:
+        return candidates, []  # non-academic event - identity filter does not apply
+
+    story_ids = [c.id for c in candidates]
+    rows = (
+        await session.execute(
+            select(NewsEventStoryLink.story_id, NewsEvent.title, NewsEvent.url)
+            .join(NewsEvent, NewsEvent.id == NewsEventStoryLink.news_event_id)
+            .where(NewsEventStoryLink.story_id.in_(story_ids))
+        )
+    ).all()
+    docs_by_story: dict[UUID, list[tuple[str | None, str | None]]] = {}
+    for story_id, ev_title, ev_url in rows:
+        docs_by_story.setdefault(story_id, []).append((ev_title, ev_url))
+
+    eligible: list[Story] = []
+    removed: list[tuple[UUID, str]] = []
+    for candidate in candidates:
+        verdict, reason = candidate_story_identity_verdict(
+            new_url=new_url,
+            new_title=new_title,
+            candidate_documents=docs_by_story.get(candidate.id, []),
+        )
+        if verdict == CANDIDATE_ELIGIBLE:
+            eligible.append(candidate)
+        else:
+            removed.append((candidate.id, reason))
+    return eligible, removed
+
+
 async def match_story(
-    session: AsyncSession, *, title: str, category: EventCategory, now: datetime | None = None
+    session: AsyncSession,
+    *,
+    title: str,
+    category: EventCategory,
+    now: datetime | None = None,
+    url: str | None = None,
 ) -> tuple[StorySignature, MatchResult]:
     """The only orchestration entry point services/triage_orchestrator.py calls. Does one bounded,
     indexed query (see `_fetch_candidate_stories`) - never an unbounded table scan. Category is no
@@ -1048,12 +1106,21 @@ async def match_story(
     new_content_type = classify_content_type(title)
     fetched = await _fetch_candidate_stories(session, now=reference_now)
     candidates = _preselect_candidates(signature, fetched)
+    # ARXIV-STORY-CLUSTERING-REPAIR-1: a hard stable-document-identity conflict removes a
+    # candidate from eligibility BEFORE the exact-title short-circuit or any fuzzy scoring below
+    # (spec sec 5). No-op for non-academic events.
+    candidates, _identity_ineligible = await _filter_academic_identity_conflicts(
+        session, new_url=url, new_title=title, candidates=candidates
+    )
     entity_df = _entity_document_frequencies(candidates)
 
     if not candidates:
-        return signature, MatchResult(
-            NEW_STORY, None, 1.0, "no candidate stories in the lookback window", entity_overlap=0.0,
+        reason = (
+            "all lookback candidates blocked by a different stable-document-identity conflict"
+            if _identity_ineligible
+            else "no candidate stories in the lookback window"
         )
+        return signature, MatchResult(NEW_STORY, None, 1.0, reason, entity_overlap=0.0)
 
     # Shadow calibration: an exactly identical normalized title is sufficient evidence for a
     # semantic duplicate even when entity extraction yields no entities (for example GitHub
