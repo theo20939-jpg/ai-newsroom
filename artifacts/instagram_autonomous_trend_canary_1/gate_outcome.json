@@ -1,0 +1,11 @@
+{
+  "decision": "ready_for_editor",
+  "reason_codes": [
+    "art_warning:source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=1)",
+    "art_warning:source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=2)",
+    "art_warning:source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=3)",
+    "art_warning:source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=4)",
+    "art_warning:source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=5)"
+  ],
+  "short_reason": "passed with non-blocking warnings"
+}

@@ -1,0 +1,156 @@
+--- story_id=9fac0988-20b7-4187-b357-a4522b279d6d sources=8 events=15 cat=GADGETS bucket=other hist_total=47
+  story_title: iPhone Duo?
+    [2026-09-12T14:16:43.833345+00:00] (Engadget) Where should Apple go after the iPhone Duo? Bring on smaller and larger foldables
+    [2026-09-12T14:16:47.212297+00:00] (CNET) iPhone Duo vs. Pixel 11 Pro Fold: 2 Durable Foldables Face Off
+    [2026-09-12T14:16:53.226794+00:00] (9to5Google) Apple on wide Android foldables beating iPhone Duo; ‘they got the aspect ratio’
+    [2026-09-12T14:16:53.670638+00:00] (9to5Mac) Report: iPhone price hike ‘better than feared,’ iPhone Duo to drive demand for the cycle
+    [2026-09-12T14:16:53.670638+00:00] (9to5Mac) 9to5Mac Overtime 081: iPhone Duo thoughts and impressions
+    [2026-09-12T14:16:53.670638+00:00] (9to5Mac) Leaker says Apple will pay $250 per iPhone Duo display in three-year Samsung deal
+    [2026-09-12T14:16:54.294446+00:00] (MacRumors) iPhone Duo is Missing These 10 iPhone 18 Pro Features
+    [2026-09-12T14:16:54.294446+00:00] (MacRumors) IMAX Reacts to iPhone Duo's 1:1.4 Aspect Ratio Displays
+    [2026-09-12T14:16:54.992794+00:00] (Windows Central) Apple's iPhone Duo announcement contains a trolling Surface Easter egg
+    [2026-09-12T14:17:57.53091+00:00] (iXBT News) Apple сожалеет об утечке информации о iPhone Duo, но конкуренты не смогли полностью скопировать смартфон
+    [2026-09-12T14:17:57.53091+00:00] (iXBT News) Китайцы выстраиваются в очередь за складным iPhone Duo: только на JD.com оформлено почти 1,55 млн предзаказов
+    [2026-09-12T14:17:58.564245+00:00] (3DNews) Samsung разогнала рекламу складных Galaxy Z после анонса Apple iPhone Duo
+    [2026-09-12T14:17:58.564245+00:00] (3DNews) iPhone Duo не спасёт рынок складных смартфонов — Apple заберёт почти четверть рынка, но он почти не вырастет
+    [2026-09-12T15:44:54.845558+00:00] (9to5Mac) iPhone Duo can add fake bezel to the outside screen for better case compatibility
+    [2026-09-12T17:03:30.532732+00:00] (9to5Mac) Apple nailed iPhone Duo split screen, even as iPad multitasking feels convoluted
+--- story_id=90ea20b8-6fa3-4e2e-99bf-0201c0cd0a73 sources=5 events=5 cat=AI bucket=other hist_total=4
+  story_title: OpenAI agents carried out an undisclosed attack on RubyGems
+    [2026-09-12T14:17:02.25457+00:00] (Techmeme) Researchers: OpenAI agents attacked Ruby package manager RubyGems in May; OpenAI says its agents used RubyGems
+    [2026-09-12T14:17:05.685284+00:00] (Lobsters) OpenAI agents carried out an undisclosed attack on RubyGems
+    [2026-09-12T14:17:06.284103+00:00] (Habr: Artificial Intelligence) Рой агентов OpenAI взломал еще один внешний сервис – RubyGems
+    [2026-09-12T14:17:07.234177+00:00] (Habr: Machine Learning) Рой агентов OpenAI взломал еще один внешний сервис – RubyGems
+    [2026-09-12T17:07:04.840562+00:00] (Google News RU: ИИ) Рой агентов OpenAI взломал еще один внешний сервис – RubyGems - Хабр
+--- story_id=2ec7a160-0b01-4e64-8f11-62393904bc62 sources=4 events=5 cat=AI bucket=other hist_total=1
+  story_title: Redditors say Anthropic's expensive Claude plans offer far less usage than advertised - Mashable
+    [2026-09-12T14:17:58.564245+00:00] (3DNews) Anthropic поймала DeepSeek и Moonshot на том, что они перенаправляют запросы клиентов в Claude вместо собствен
+    [2026-09-12T14:17:58.564245+00:00] (3DNews) Anthropic предотвратила несколько попыток создания биологического оружия с помощью Claude
+    [2026-09-12T15:07:30.718208+00:00] (Google News RU: ИИ) ИИ Claude пытались использовать для создания биологического оружия. Anthropic заявила, что эти попытки были пр
+    [2026-09-12T15:44:49.699425+00:00] (Tom's Hardware) Iran and Houthi rebels used Anthropic's Claude AI to target US warships and build hypersonic missiles — Houthi
+    [2026-09-12T16:25:51.360609+00:00] (Google News: Artificial Intelligence) Iran and Houthi rebels used Anthropic's Claude AI to target US warships and build hypersonic missiles — Houthi
+--- story_id=08e141c6-b8c0-4e08-a446-1a5aaf9e6a79 sources=4 events=4 cat=AI bucket=other hist_total=4
+  story_title: Efficient and accurate systems for querying unstructured data
+    [2026-09-12T14:17:59.929434+00:00] (Google Research Blog) ToolGrad: Efficient tool-use dataset generation with textual "gradients"
+    [2026-09-12T14:18:23.560987+00:00] (arXiv cs.AI) Efficient language learning requires methods to reduce the reliance on large data and computational resources.
+    [2026-09-12T14:18:24.398232+00:00] (arXiv cs.CL) Efficient language learning requires methods to reduce the reliance on large data and computational resources.
+    [2026-09-12T14:18:25.441329+00:00] (arXiv cs.LG) Efficient language learning requires methods to reduce the reliance on large data and computational resources.
+--- story_id=6ecf859c-60df-454c-bc98-fb601dbc75cc sources=3 events=7 cat=AI bucket=other hist_total=1
+  story_title: Как пересобрать метрики команды после внедрения AI‑агентов без ложного роста velocity
+    [2026-09-12T14:17:06.284103+00:00] (Habr: Artificial Intelligence) Как озвучить текст с помощью ИИ в 2026 году
+    [2026-09-12T14:17:06.284103+00:00] (Habr: Artificial Intelligence) Как использовать фреймворк Perseus для решения задач
+    [2026-09-12T14:17:07.234177+00:00] (Habr: Machine Learning) Как использовать фреймворк Perseus для решения задач
+    [2026-09-12T14:17:07.234177+00:00] (Habr: Machine Learning) Как озвучить текст с помощью ИИ в 2026 году
+    [2026-09-12T14:18:29.757054+00:00] (Google News RU: ИИ) Как должны измениться цели образования в эпоху искусственного интеллекта? - Vietnam.vn
+    [2026-09-12T15:45:04.242671+00:00] (Habr: Artificial Intelligence) Как я автоматизировал почти всю работу в CRM
+    [2026-09-12T18:28:11.232059+00:00] (Google News RU: ИИ) Как безопасно жить и работать в мире искусственного интеллекта - mos.ru
+--- story_id=4a865d1d-b6e8-46a2-af4b-8fb5bfcd98f8 sources=3 events=5 cat=AI bucket=corporate hist_total=5
+  story_title: Anthropic CEO calls for the AI industry to slow down
+    [2026-09-12T15:47:08.377499+00:00] (Google News: Artificial Intelligence) Anthropic CEO calls for the AI industry to slow down - The Washington Post
+    [2026-09-12T16:23:27.44417+00:00] (TechCrunch AI) Anthropic CEO outlines plan to ‘pace the frontier’
+    [2026-09-12T17:03:17.800924+00:00] (The Verge AI) Anthropic CEO says it’s time to pump the brakes on AI
+    [2026-09-12T17:07:03.875456+00:00] (Google News: Artificial Intelligence) Anthropic CEO seeks immediate slowdown on AI - Politico
+    [2026-09-12T17:47:07.027062+00:00] (Google News: Artificial Intelligence) Anthropic CEO calls for slowing the AI race as safety warnings mount - NBC News
+--- story_id=22821489-964e-4d29-8eb2-1d87f049668f sources=3 events=4 cat=AI bucket=corporate hist_total=2
+  story_title: ‘We must slow the pace’: CEO of Anthropic calls for an AI slowdown
+    [2026-09-12T16:23:42.987315+00:00] (The Guardian Technology) ‘We must slow the pace’: CEO of Anthropic calls for an AI slowdown
+    [2026-09-12T17:03:21.454423+00:00] (Engadget) Anthropic's CEO proposes a three-step plan to curb AI development
+    [2026-09-12T17:47:07.027062+00:00] (Google News: Artificial Intelligence) The CEO of Anthropic said Saturday the artificial-intelligence industry should slow its fast-moving developmen
+    [2026-09-12T19:09:37.446156+00:00] (Google News: Artificial Intelligence) ‘We must slow the pace’: CEO of Anthropic calls for an AI slowdown - The Guardian
+--- story_id=fea4dde0-08bb-4de2-89b5-533906ccfd0e sources=3 events=4 cat=AI bucket=legal_regulatory hist_total=1
+  story_title: Sony Music and Warner Chappell sue Anthropic, Dario Amodei, and Benjamin Mann, alleging tens of thousands of
+    [2026-09-12T14:17:02.25457+00:00] (Techmeme) Dario Amodei proposes steps for pacing the frontier: embedded evaluators, coordinating among democracies, and 
+    [2026-09-12T15:06:09.833162+00:00] (Techmeme) Dario Amodei says Anthropic is "unilaterally committing" to giving third-party evaluators permanent access to 
+    [2026-09-12T15:44:56.37644+00:00] (BBC Technology) Anthropic boss Dario Amodei calls for AI development to slow down
+    [2026-09-12T15:47:08.377499+00:00] (Google News: Artificial Intelligence) Anthropic boss Dario Amodei calls for AI development to slow down - BBC
+--- story_id=d4b3018c-79ff-456e-98cd-319c7080fab4 sources=3 events=4 cat=AI bucket=product hist_total=4
+  story_title: Apple researchers unveil SimpleDesign, a new AI model for protein design
+    [2026-09-12T14:16:53.670638+00:00] (9to5Mac) Apple researchers unveil SimpleDesign, a new AI model for protein design
+    [2026-09-12T14:17:58.564245+00:00] (3DNews) Apple разработала ИИ-модель SimpleDesign для проектирования белков
+    [2026-09-12T14:18:29.757054+00:00] (Google News RU: ИИ) Apple разработала ИИ-модель SimpleDesign для проектирования белков - 3DNews
+    [2026-09-12T15:07:30.718208+00:00] (Google News RU: ИИ) Apple разработала ИИ-модель SimpleDesign для проектирования белков - 3DNews
+--- story_id=2494b3f9-7516-4893-ad9b-ff3e7f16412a sources=3 events=3 cat=GADGETS bucket=other hist_total=3
+  story_title: Diablo V is coming out in spring 2029
+    [2026-09-12T19:47:27.496484+00:00] (Engadget) Diablo V is coming out in spring 2029
+    [2026-09-12T19:48:38.826642+00:00] (3DNews) Blizzard неожиданно анонсировала Diablo V — игра выйдет весной 2029 года
+    [2026-09-12T20:27:48.827239+00:00] (iXBT News) Blizzard анонсировала Diablo V — релиз в 2029 году
+--- story_id=f49a0cdc-6051-421c-a3e4-90770fc23615 sources=3 events=3 cat=AI bucket=other hist_total=2
+  story_title: BlizzCon 2026 preview: Speculation, hopes, dreams — what to expect for Warcraft, StarCraft, Overwatch, Diablo, and even
+    [2026-09-12T15:06:03.509819+00:00] (PC Gamer) BlizzCon 2026 Opening Ceremony live coverage and how to watch—what's next for Warcraft, Overwatch, Diablo, and
+    [2026-09-12T18:24:39.125881+00:00] (CNET) BlizzCon 2026: The Starcraft Shooter Is Real, Diablo Series Coming to Netflix
+    [2026-09-12T18:24:46.22957+00:00] (Windows Central) 'STARCRAFT' revealed at Blizzcon: The squad shooter is coming in 2030, and here's the first cinematic
+--- story_id=ffe57afd-7753-45d1-87b1-5f7bddb38ba9 sources=3 events=3 cat=AI bucket=other hist_total=3
+  story_title: Открываем претрейн Alice AI Search: как устроена модель быстрых ответов Алисы на Поиске
+    [2026-09-12T14:17:06.284103+00:00] (Habr: Artificial Intelligence) Открываем претрейн Alice AI Search: как устроена модель быстрых ответов Алисы на Поиске
+    [2026-09-12T14:17:07.234177+00:00] (Habr: Machine Learning) Открываем претрейн Alice AI Search: как устроена модель быстрых ответов Алисы на Поиске
+    [2026-09-12T17:47:07.683761+00:00] (Google News RU: ИИ) Открываем претрейн Alice AI Search: как устроена модель быстрых ответов Алисы на Поиске / Хабр - Хабр
+--- story_id=7fa9ad93-563f-44ad-b3f9-919d30d90c4e sources=3 events=3 cat=AI bucket=other hist_total=3
+  story_title: Generalization under distribution shift remains a core challenge in modern machine learning, yet existing learning
+    [2026-09-12T14:18:23.560987+00:00] (arXiv cs.AI) Generalization under distribution shift remains a core challenge in modern machine learning, yet existing lear
+    [2026-09-12T14:18:25.441329+00:00] (arXiv cs.LG) Generalization under distribution shift remains a core challenge in modern machine learning, yet existing lear
+    [2026-09-12T14:18:27.43864+00:00] (arXiv stat.ML) Generalization under distribution shift remains a core challenge in modern machine learning, yet existing lear
+--- story_id=9ca64950-1121-45c9-aaa9-a34eb801e3d0 sources=3 events=3 cat=AI bucket=other hist_total=3
+  story_title: Generative artificial intelligence changes how firms reach customers, but standard marketing data do not record how
+    [2026-09-12T14:18:23.560987+00:00] (arXiv cs.AI) Generative artificial intelligence changes how firms reach customers, but standard marketing data do not recor
+    [2026-09-12T14:18:25.441329+00:00] (arXiv cs.LG) Generative artificial intelligence changes how firms reach customers, but standard marketing data do not recor
+    [2026-09-12T14:18:27.43864+00:00] (arXiv stat.ML) Generative artificial intelligence changes how firms reach customers, but standard marketing data do not recor
+--- story_id=03533451-cf55-4f4b-bbc0-75aeeb7435b0 sources=3 events=3 cat=AI bucket=other hist_total=3
+  story_title: Collective intelligence depends not only on the capabilities of individual members, but also on how those members are
+    [2026-09-12T14:18:23.560987+00:00] (arXiv cs.AI) Collective intelligence depends not only on the capabilities of individual members, but also on how those memb
+    [2026-09-12T14:18:25.441329+00:00] (arXiv cs.LG) Collective intelligence depends not only on the capabilities of individual members, but also on how those memb
+    [2026-09-12T14:18:26.705917+00:00] (arXiv cs.RO) Collective intelligence depends not only on the capabilities of individual members, but also on how those memb
+--- story_id=1bf4f3cd-8c2f-4b87-ae74-f6133ffeef25 sources=3 events=3 cat=AI bucket=other hist_total=3
+  story_title: Visual Autoregressive Models (VAR) generate images through next-scale prediction, producing all tokens within each
+    [2026-09-12T14:18:23.560987+00:00] (arXiv cs.AI) Visual Autoregressive Models (VAR) generate images through next-scale prediction, producing all tokens within 
+    [2026-09-12T14:18:25.441329+00:00] (arXiv cs.LG) Visual Autoregressive Models (VAR) generate images through next-scale prediction, producing all tokens within 
+    [2026-09-12T14:18:26.1149+00:00] (arXiv cs.CV) Visual Autoregressive Models (VAR) generate images through next-scale prediction, producing all tokens within 
+--- story_id=c2edb6d5-2f3a-4a9d-9bd6-1256149b5382 sources=3 events=3 cat=AI bucket=other hist_total=3
+  story_title: Spatial reasoning depends not only on metric properties such as distance, angle, and shape, but also on topological
+    [2026-09-12T14:18:23.560987+00:00] (arXiv cs.AI) Spatial reasoning depends not only on metric properties such as distance, angle, and shape, but also on topolo
+    [2026-09-12T14:18:24.398232+00:00] (arXiv cs.CL) Spatial reasoning depends not only on metric properties such as distance, angle, and shape, but also on topolo
+    [2026-09-12T14:18:26.1149+00:00] (arXiv cs.CV) Spatial reasoning depends not only on metric properties such as distance, angle, and shape, but also on topolo
+--- story_id=802691f7-1fba-42e5-a48a-631ee3c6dbdf sources=3 events=3 cat=AI bucket=other hist_total=3
+  story_title: Per-token gating of forward/reverse KL losses has become a standard technique for on-policy knowledge distillation
+    [2026-09-12T14:18:23.560987+00:00] (arXiv cs.AI) Per-token gating of forward/reverse KL losses has become a standard technique for on-policy knowledge distilla
+    [2026-09-12T14:18:24.398232+00:00] (arXiv cs.CL) Per-token gating of forward/reverse KL losses has become a standard technique for on-policy knowledge distilla
+    [2026-09-12T14:18:25.441329+00:00] (arXiv cs.LG) Per-token gating of forward/reverse KL losses has become a standard technique for on-policy knowledge distilla
+--- story_id=c0ed7384-48f5-4fac-bd0b-ac91392e1435 sources=3 events=3 cat=AI bucket=other hist_total=3
+  story_title: Large language models generate fluent text that can contain unfaithful claims -- a phenomenon known as hallucination.
+    [2026-09-12T14:18:23.560987+00:00] (arXiv cs.AI) Large language models generate fluent text that can contain unfaithful claims -- a phenomenon known as halluci
+    [2026-09-12T14:18:24.398232+00:00] (arXiv cs.CL) Large language models generate fluent text that can contain unfaithful claims -- a phenomenon known as halluci
+    [2026-09-12T14:18:25.441329+00:00] (arXiv cs.LG) Large language models generate fluent text that can contain unfaithful claims -- a phenomenon known as halluci
+--- story_id=c0bf887f-1137-4020-848b-7153ee975592 sources=3 events=3 cat=AI bucket=other hist_total=3
+  story_title: Recursive self-improvement (RSI) enables AI systems to turn experience and feedback into persistent changes that
+    [2026-09-12T14:18:23.560987+00:00] (arXiv cs.AI) Recursive self-improvement (RSI) enables AI systems to turn experience and feedback into persistent changes th
+    [2026-09-12T14:18:24.398232+00:00] (arXiv cs.CL) Recursive self-improvement (RSI) enables AI systems to turn experience and feedback into persistent changes th
+    [2026-09-12T14:18:25.441329+00:00] (arXiv cs.LG) Recursive self-improvement (RSI) enables AI systems to turn experience and feedback into persistent changes th
+--- story_id=aeb4ade7-ec35-41e9-8349-d0f57990e34a sources=3 events=3 cat=AI bucket=other hist_total=3
+  story_title: For industrial content risk control, the real deployment constraint is not average accuracy but how much risk can be
+    [2026-09-12T14:18:23.560987+00:00] (arXiv cs.AI) For industrial content risk control, the real deployment constraint is not average accuracy but how much risk 
+    [2026-09-12T14:18:24.398232+00:00] (arXiv cs.CL) For industrial content risk control, the real deployment constraint is not average accuracy but how much risk 
+    [2026-09-12T14:18:25.441329+00:00] (arXiv cs.LG) For industrial content risk control, the real deployment constraint is not average accuracy but how much risk 
+--- story_id=f1fcf323-c6f6-453e-bdc8-572e1457df42 sources=3 events=3 cat=AI bucket=product hist_total=3
+  story_title: Large language model serving costs scale directly with output sequence length, yet standard preference alignment often
+    [2026-09-12T14:18:23.560987+00:00] (arXiv cs.AI) Large language model serving costs scale directly with output sequence length, yet standard preference alignme
+    [2026-09-12T14:18:24.398232+00:00] (arXiv cs.CL) Large language model serving costs scale directly with output sequence length, yet standard preference alignme
+    [2026-09-12T14:18:25.441329+00:00] (arXiv cs.LG) Large language model serving costs scale directly with output sequence length, yet standard preference alignme
+--- story_id=0965a304-d5e6-4168-a136-0f6b69ba6956 sources=3 events=3 cat=GADGETS bucket=other hist_total=3
+  story_title: Xbox swoops in to publish Hideo Kojima's 'Physint' after Sony dropped out
+    [2026-09-12T14:16:54.992794+00:00] (Windows Central) Bloomberg discovers potential reasons why Sony tried to cancel Physint, Hideo Kojima's newest IP and Metal Gea
+    [2026-09-12T14:16:55.587589+00:00] (PC Gamer) Sony reportedly dropped Hideo Kojima's next game because it kept missing deadlines, was over budget, and would
+    [2026-09-12T14:17:58.564245+00:00] (3DNews) Аналитики объяснили, почему Sony бросила шпионский экшен нового поколения Physint от Кодзимы
+--- story_id=d6121977-57ca-4610-9790-1db8d96defac sources=3 events=3 cat=GADGETS bucket=security_incident hist_total=1
+  story_title: Lenovo's Googlebook 15 seems decidedly premium based on a new leak
+    [2026-09-12T14:16:43.833345+00:00] (Engadget) Lenovo's Googlebook 15 seems decidedly premium based on a new leak
+    [2026-09-12T14:16:47.212297+00:00] (CNET) Lenovo’s Googlebook 15 Gets a New Specs Leak. Brace Your Wallet for Impact
+    [2026-09-12T14:16:53.226794+00:00] (9to5Google) ‘Lenovo Googlebook 15’ specs leak in full with ‘Google facial authentication’
+--- story_id=12707a4a-1964-4094-8c8e-7bd5a0ba0931 sources=2 events=8 cat=AI bucket=other hist_total=3
+  story_title: 25 лауреатов Филдсовской премии забили тревогу из-за успехов ИИ в математике
+    [2026-09-12T14:17:58.564245+00:00] (3DNews) 25 лауреатов Филдсовской премии забили тревогу из-за успехов ИИ в математике
+    [2026-09-12T14:18:29.757054+00:00] (Google News RU: ИИ) 25 лауреатов Филдсовской премии предупредили об угрозе ИИ для математики - Компьютерра
+    [2026-09-12T14:18:29.757054+00:00] (Google News RU: ИИ) Группа из 25 лауреатов Филдсовской премии выпустила обращение о вреде ИИ - Life.ru
+    [2026-09-12T14:18:29.757054+00:00] (Google News RU: ИИ) Лауреаты Филдсовской премии по математике объявили о вреде ИИ - Национальная Служба Новостей
+    [2026-09-12T14:18:29.757054+00:00] (Google News RU: ИИ) «Цели серьезно расходятся»: 25 лауреатов Филдсовской премии выступили против бесконтрольного внедрения ИИ в на
+    [2026-09-12T14:18:29.757054+00:00] (Google News RU: ИИ) Лауреаты Филдсовской премии заявили об угрозах ИИ для математики - Реальное время
+    [2026-09-12T14:18:29.757054+00:00] (Google News RU: ИИ) 25 лауреатов Филдсовской премии забили тревогу из-за успехов ИИ в математике - 3DNews
+    [2026-09-12T14:18:29.757054+00:00] (Google News RU: ИИ) Лауреаты Филдсовской премии предупредили об угрозе ИИ для науки - Эксперт

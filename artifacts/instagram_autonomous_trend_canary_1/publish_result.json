@@ -1,0 +1,23 @@
+{
+  "platform": "instagram",
+  "account_key": "ninja_pulse_canary",
+  "package_id": "b01441fd-a18c-4d5e-b7da-85553659a879",
+  "content_format": "carousel",
+  "status": "shadow_success",
+  "shadow": true,
+  "container_ids": [
+    "shadow_ed7a813927fe8ec5",
+    "shadow_0ebea97abc60d079",
+    "shadow_21d58f218db838b4",
+    "shadow_c1c20db56c09a0b0",
+    "shadow_7b94c8f305629a15",
+    "shadow_fb68fd43029445c2",
+    "shadow_35b7c12bc7627978"
+  ],
+  "media_id": "shadow_b2d9a047b4f28dc4",
+  "failure_class": null,
+  "retryable": false,
+  "attempts_used": 1,
+  "requested_at": "2026-09-12 22:02:16.515855+00:00",
+  "completed_at": "2026-09-12 22:02:16.516048+00:00"
+}

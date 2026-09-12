@@ -1,0 +1,6 @@
+0.988 | GADGETS | sources=8 events=15 | iPhone Duo?
+0.702 | AI | sources=2 events=8 | 25 лауреатов Филдсовской премии забили тревогу из-за успехов ИИ в математике
+0.697 | GADGETS | sources=4 events=5 | Redditors say Anthropic's expensive Claude plans offer far less usage than advertised - Mashable
+0.688 | AI | sources=1 events=9 | Минпросвещения определило, с какого класса школьники могут пользоваться ИИ
+0.656 | AI | sources=3 events=7 | Как пересобрать метрики команды после внедрения AI‑агентов без ложного роста velocity
+0.646 | AI | sources=1 events=7 | Искусственный интеллект помог студентам в Несвиже обсудить события 17 сентября 1939 года
