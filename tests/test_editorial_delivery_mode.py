@@ -137,7 +137,14 @@ async def test_case_3_router_mode_live_send_includes_correct_chat_and_thread_id(
 ) -> None:
     """End-to-end, unpatched: the real services.telegram_routing.send_to_editorial_destination()
     runs, and the real card-rendering path runs - only the outermost `bot` is a fake. This is the
-    strongest proof available that the actual outgoing aiogram call carries the right values."""
+    strongest proof available that the actual outgoing aiogram call carries the right values.
+
+    TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1: real candidate discovery against the test DB
+    finds no image for this event (nothing here mocks `get_editorial_image_candidates`), so this
+    now HOLDs for visual recovery rather than completing as a normal post - the exact production
+    defect this phase repairs. This test's own actual purpose - proving the real routing call
+    carries the correct chat id/thread id - is unaffected either way, since `_hold_for_visual_
+    recovery()`'s recovery notice reuses the exact same `send_to_editorial_destination()` call."""
     settings.editorial_delivery_mode = "router"
     monkeypatch.setattr(settings, "newsroom_telegram_chat_id", _REAL_CHAT_ID)
     monkeypatch.setattr(settings, "news_topic_id", _REAL_NEWS_TOPIC_ID)
@@ -154,7 +161,7 @@ async def test_case_3_router_mode_live_send_includes_correct_chat_and_thread_id(
     args, kwargs = fake_bot.send_message.call_args
     assert args[0] == _REAL_CHAT_ID
     assert kwargs["message_thread_id"] == _REAL_NEWS_TOPIC_ID
-    assert result.notified == 1
+    assert result.visual_required_held == 1
 
 
 # ---------------------------------------------------------------------------
@@ -268,12 +275,19 @@ async def test_phase23_1e_router_mode_v6_news_card_hides_url_and_has_source_butt
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """End-to-end, nothing patched except the outer `bot`: a real V6 draft flows through the real
-    pipeline, the real compact-body/source-button wiring in worker/content_cycle.py, and the real
-    (unmodified) Phase 22 routing function. Confirms all three phase-brief requirements together:
-    no raw source URL in the visible body (case A), the delivered message still targets the exact
-    real canary chat_id/message_thread_id (case E), and a source button with the real URL is
-    attached to the send."""
+    """End-to-end, only the outer `bot` and (this phase) the image candidate lookup patched: a
+    real V6 draft flows through the real pipeline, the real compact-body/source-button wiring in
+    worker/content_cycle.py, and the real (unmodified) Phase 22 routing function. Confirms all
+    three phase-brief requirements together: no raw source URL in the visible body (case A), the
+    delivered message still targets the exact real canary chat_id/message_thread_id (case E), and
+    a source button with the real URL is attached to the send.
+
+    TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1: real candidate discovery against the test DB
+    finds no image for this event, and this test's own case B/C assertion (a source button
+    attached to the send) requires a real, keyboard-bearing post - a no-visual HOLD's recovery
+    notice deliberately carries no keyboard at all (the exact Founder invariant this phase adds).
+    A resolvable image candidate is mocked in (same pattern as this suite's sibling "with image"
+    tests) so this still exercises a real delivered `send_photo` post."""
     settings.editorial_delivery_mode = "router"
     monkeypatch.setattr(settings, "newsroom_telegram_chat_id", _REAL_CHAT_ID)
     monkeypatch.setattr(settings, "news_topic_id", _REAL_NEWS_TOPIC_ID)
@@ -293,13 +307,20 @@ async def test_phase23_1e_router_mode_v6_news_card_hides_url_and_has_source_butt
 
     _gateway, registry = _v6_capability_registry()
     fake_bot = AsyncMock()
-    fake_bot.send_message.return_value.message_id = 1
+    fake_bot.send_photo.return_value.message_id = 1
 
-    result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+    from tests.test_router_media_integration import _fake_candidate
+
+    with patch(
+        "worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate()]),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     assert result.notified == 1
-    args, kwargs = fake_bot.send_message.call_args
-    sent_text = args[1]
+    assert result.visual_required_held == 0
+    fake_bot.send_photo.assert_called_once()
+    args, kwargs = fake_bot.send_photo.call_args
+    sent_text = kwargs["caption"]
 
     # CASE A - no raw source URL anywhere in the visible body.
     assert source_url not in sent_text

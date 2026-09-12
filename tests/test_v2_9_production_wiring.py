@@ -484,14 +484,26 @@ async def test_non_news_presentation_type_gets_canonical_source_and_meme_keyboar
     The overwrite call site is now deleted outright, not merely re-gated, so a non-NEWS
     presentation_type must now receive the exact same canonical
     bot.keyboards.image_preview.build_editorial_send_keyboard() result NEWS gets: source button +
-    meme button, never a subscribe/CTA button - proving the fix, not merely its absence."""
+    meme button, never a subscribe/CTA button - proving the fix, not merely its absence.
+
+    TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1: `data_candidate=None` deliberately makes
+    render_branded_media() fail for this forced DATA decision (demoting to NEWS internally, per
+    the pre-existing "Fail-safe (spec S29)" - unrelated to and unchanged by this phase) - with
+    zero image candidates too, that used to still complete as a normal finished text-only post
+    (the exact bug this phase repairs); it now correctly HOLDs instead, per the Founder invariant.
+    Since this test's real target is the *keyboard* (`build_editorial_send_keyboard()` is built
+    once, unconditionally, before any presentation-type branching - untouched by whether the post
+    is later demoted to NEWS or held), a resolvable image candidate is mocked in so the post still
+    completes as a normal (now NEWS-shaped, since the DATA render failed) `send_photo` delivery
+    carrying that same canonical keyboard - keeping this test's own actual assertion meaningful
+    without depending on DATA-specific render success."""
     _common_settings(monkeypatch)
     settings.editorial_recomposition_mode = "off"
     source_url = "https://example.com/data-card-article"
     await _seed_eligible_event_with_url(factory, test_source, url=source_url)
     _gateway, registry = _v6_capability_registry()
     fake_bot = AsyncMock()
-    fake_bot.send_message.return_value.message_id = 111
+    fake_bot.send_photo.return_value.message_id = 111
 
     forced_decision = PresentationDecision(
         presentation_type=PRESENTATION_DATA, category="TECH", caption_position="BELOW",
@@ -499,20 +511,23 @@ async def test_non_news_presentation_type_gets_canonical_source_and_meme_keyboar
         data_candidate=None, quote_candidate=None, reason="test_forced_data",
     )
 
+    from tests.test_router_media_integration import _fake_candidate
+
     with (
         patch("worker.content_cycle._classify_event_for_router_treatment", new=AsyncMock(return_value=_standard_decision())),
-        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[])),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate()])),
         patch("worker.content_cycle.decide_presentation", return_value=forced_decision),
         caplog.at_level("INFO"),
     ):
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     assert result.notified == 1
+    assert result.visual_required_held == 0
     branding_records = [r for r in caplog.records if r.msg == "master_news_branding_applied"]
     assert len(branding_records) == 0  # non-NEWS never reaches the MASTER NEWS director
 
-    fake_bot.send_message.assert_called_once()
-    keyboard = fake_bot.send_message.call_args.kwargs["reply_markup"]
+    fake_bot.send_photo.assert_called_once()
+    keyboard = fake_bot.send_photo.call_args.kwargs["reply_markup"]
     assert keyboard is not None
     rows = keyboard.inline_keyboard
     all_button_text = " ".join(b.text for row in rows for b in row)

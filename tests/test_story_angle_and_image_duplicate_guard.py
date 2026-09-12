@@ -180,12 +180,18 @@ async def test_get_recently_attached_image_source_urls_excludes_the_events_own_r
 
 
 @pytest.mark.asyncio
-async def test_router_skips_a_recently_duplicated_image_and_falls_back_to_text_only(
+async def test_router_skips_a_recently_duplicated_image_and_holds_for_visual_recovery(
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """CASE 10 integration proof: the router's own image-selection loop must skip a candidate
-    whose source_url was already used by a different, unrelated recent post, per Part J."""
+    whose source_url was already used by a different, unrelated recent post, per Part J.
+
+    TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1 (Founder product invariant): with the only
+    candidate skipped as a cross-event duplicate, zero eligible candidates remain - this used to
+    fall back to a normal finished text-only post (this test's old name/assertions -
+    `falls_back_to_text_only` - were the exact bug). It must HOLD instead, same shape as
+    `test_case_b_no_image_candidates_holds_for_visual_recovery`."""
     settings.editorial_delivery_mode = "router"
     monkeypatch.setattr(settings, "newsroom_telegram_chat_id", _REAL_CHAT_ID)
     monkeypatch.setattr(settings, "news_topic_id", _REAL_NEWS_TOPIC_ID)
@@ -245,11 +251,24 @@ async def test_router_skips_a_recently_duplicated_image_and_falls_back_to_text_o
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     fake_bot.send_photo.assert_not_called()
-    fake_bot.send_message.assert_called_once()
-    assert result.notified == 1
+    fake_bot.send_message.assert_called_once()  # the recovery notice, not a normal post
+    args, kwargs = fake_bot.send_message.call_args
+    assert kwargs["reply_markup"] is None  # no Source/Meme buttons - never mistakable for a real post
+    assert "⚠️" in args[1]
+    assert result.notified == 0
+    assert result.visual_required_held == 1
     assert result.router_image_sent == 0
 
     async with factory() as session:
-        from sqlalchemy import delete
+        from sqlalchemy import delete, select
+
+        from worker.content_cycle import HOLD_FOR_VISUAL_STATUS
+
+        drafts = (
+            await session.execute(
+                select(ContentDraft).order_by(ContentDraft.created_at.desc()).limit(1)
+            )
+        ).scalars().all()
+        assert drafts[0].status == HOLD_FOR_VISUAL_STATUS
         await session.execute(delete(ImageCandidateRecord).where(ImageCandidateRecord.news_event_id == other_event_id))
         await session.commit()
