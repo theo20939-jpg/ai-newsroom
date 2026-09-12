@@ -154,8 +154,21 @@ def test_instagram_feature_flags_default_false() -> None:
     assert settings.instagram_creative_director_shadow_enabled is False
 
 
-def test_no_publication_flag_exists_at_all() -> None:
-    """Spec §92/§96: paid boost and publication are FUTURE ONLY - there must be no flag anywhere
-    that could ever be flipped to make this codebase publish to Instagram."""
-    assert not hasattr(settings, "instagram_publication_enabled")
+def test_no_ad_spend_flag_exists_at_all() -> None:
+    """Spec §92/§96: paid boost remains FUTURE ONLY - there must be no flag anywhere that could
+    ever be flipped to make this codebase spend ad budget on Instagram.
+
+    INSTAGRAM-EXECUTION-FOUNDATION-1 supersedes this test's original "no publication flag exists"
+    half of the claim: `settings.instagram_publication_enabled` now exists BY DESIGN (section 18) -
+    the one hard-disabled (default False) safety gate `services/instagram_publish_adapter.py`
+    fails CLOSED on for any real (non-shadow) write. Its existence is the safety mechanism, not a
+    violation of it - see `test_instagram_publication_flag_defaults_false_and_gates_real_writes`
+    below for the current, correct invariant."""
     assert not hasattr(settings, "instagram_ad_spend_enabled")
+
+
+def test_instagram_publication_flag_defaults_false_and_gates_real_writes() -> None:
+    assert settings.instagram_publication_enabled is False
+    # a real (non-shadow) publish is refused before any client/network call when this is False -
+    # see tests/test_instagram_publish_adapter.py::test_live_publish_fails_closed_when_flag_disabled_and_never_touches_the_client
+    assert settings.instagram_write_scopes == ("instagram_business_content_publish",)

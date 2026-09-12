@@ -1,0 +1,34 @@
+INSTAGRAM PLAN
+
+Campaign:
+NINJA Launch 2026
+
+Phase:
+LAUNCH
+
+Opportunity:
+NEWS opportunity (id=canary-reel-1)
+
+Primary objective:
+REACH
+
+Audience:
+AI-curious tech audience, 18-34
+
+Recommended format:
+REEL
+
+Creative concept:
+This changes everything
+
+Alternative:
+SHARES
+
+Product mention:
+ALLOWED
+
+Evidence:
+source_type=news; campaign_phase='LAUNCH'; format_director: canary fixture for reel
+
+Confidence:
+0.367

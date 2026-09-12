@@ -50,7 +50,13 @@ def test_all_new_feature_flags_default_false() -> None:
     assert settings.instagram_calendar_enabled is False
     assert settings.instagram_semantic_matching_enabled is False
     assert settings.instagram_creative_director_shadow_enabled is False
-    assert not hasattr(settings, "instagram_publication_enabled")
+    # INSTAGRAM-EXECUTION-FOUNDATION-1 (section 18) deliberately adds ONE new flag,
+    # `instagram_publication_enabled`, as the hard-disabled publish safety gate itself - its
+    # existence is not a regression of "no publication code path exists in the modules this test
+    # checks" (still true - see test_no_publication_or_meta_write_symbol_anywhere_in_new_modules
+    # above, unaffected: services/instagram_publish_adapter.py is not one of _NEW_MODULES). It
+    # still defaults False, same as every flag above.
+    assert settings.instagram_publication_enabled is False
     assert not hasattr(settings, "instagram_ad_spend_enabled")
 
 

@@ -1,0 +1,206 @@
+{
+  "art_validation": {
+    "blocking_issues": [],
+    "max_retries": 1,
+    "passed": true,
+    "retries_used": 0,
+    "retry_recommended": false,
+    "warnings": []
+  },
+  "campaign_context": "NINJA Launch 2026, AWARENESS, campaign_id=canary-campaign-1",
+  "caption": "Why this launch matters",
+  "caption_is_draft": true,
+  "content_format": "carousel",
+  "created_at": "2026-09-12T15:09:53.792440+00:00",
+  "cta": "Swipe to learn more",
+  "director_reasoning_summary": "objective=saves | format=carousel | confidence=0.367 | why=canary fixture for carousel | evidence=source_type=news; campaign_phase='AWARENESS'; format_director: canary fixture for carousel",
+  "hashtags": [],
+  "media_render_evidence": [
+    {
+      "canvas_height": 1350,
+      "canvas_width": 1080,
+      "caption_linkage": "74ab655b-d435-4bda-bea9-e0b5ca9e388c",
+      "content_format": "carousel",
+      "content_identity": "a586030e298ac6b4",
+      "notes": {
+        "mark_box": [
+          907,
+          1196,
+          1004,
+          1234
+        ]
+      },
+      "profile": "carousel_slide",
+      "render_version": "instagram-render-v1",
+      "slide_count": 4,
+      "slide_index": 0,
+      "source_image_treatment": "none",
+      "text_clipped": false,
+      "text_regions": [
+        {
+          "box": [
+            76,
+            439,
+            855,
+            565
+          ],
+          "clipped": false,
+          "kind": "headline"
+        },
+        {
+          "box": [
+            76,
+            604,
+            473,
+            687
+          ],
+          "clipped": false,
+          "kind": "headline"
+        }
+      ],
+      "visible_brand_mark_count": 1
+    },
+    {
+      "canvas_height": 1350,
+      "canvas_width": 1080,
+      "caption_linkage": "74ab655b-d435-4bda-bea9-e0b5ca9e388c",
+      "content_format": "carousel",
+      "content_identity": "861b7bb060b833c5",
+      "notes": {
+        "mark_box": [
+          907,
+          1196,
+          1004,
+          1234
+        ]
+      },
+      "profile": "carousel_slide",
+      "render_version": "instagram-render-v1",
+      "slide_count": 4,
+      "slide_index": 1,
+      "source_image_treatment": "none",
+      "text_clipped": false,
+      "text_regions": [
+        {
+          "box": [
+            76,
+            445,
+            873,
+            564
+          ],
+          "clipped": false,
+          "kind": "headline"
+        },
+        {
+          "box": [
+            74,
+            585,
+            848,
+            679
+          ],
+          "clipped": false,
+          "kind": "headline"
+        }
+      ],
+      "visible_brand_mark_count": 1
+    },
+    {
+      "canvas_height": 1350,
+      "canvas_width": 1080,
+      "caption_linkage": "74ab655b-d435-4bda-bea9-e0b5ca9e388c",
+      "content_format": "carousel",
+      "content_identity": "32f323437a42fa37",
+      "notes": {
+        "mark_box": [
+          907,
+          1196,
+          1004,
+          1234
+        ]
+      },
+      "profile": "carousel_slide",
+      "render_version": "instagram-render-v1",
+      "slide_count": 4,
+      "slide_index": 2,
+      "source_image_treatment": "none",
+      "text_clipped": false,
+      "text_regions": [
+        {
+          "box": [
+            76,
+            451,
+            719,
+            545
+          ],
+          "clipped": false,
+          "kind": "headline"
+        },
+        {
+          "box": [
+            76,
+            559,
+            965,
+            660
+          ],
+          "clipped": false,
+          "kind": "headline"
+        }
+      ],
+      "visible_brand_mark_count": 1
+    },
+    {
+      "canvas_height": 1350,
+      "canvas_width": 1080,
+      "caption_linkage": "74ab655b-d435-4bda-bea9-e0b5ca9e388c",
+      "content_format": "carousel",
+      "content_identity": "50579c274d3d31e0",
+      "notes": {
+        "mark_box": [
+          907,
+          1196,
+          1004,
+          1234
+        ]
+      },
+      "profile": "carousel_slide",
+      "render_version": "instagram-render-v1",
+      "slide_count": 4,
+      "slide_index": 3,
+      "source_image_treatment": "none",
+      "text_clipped": false,
+      "text_regions": [
+        {
+          "box": [
+            76,
+            445,
+            884,
+            564
+          ],
+          "clipped": false,
+          "kind": "headline"
+        },
+        {
+          "box": [
+            75,
+            585,
+            657,
+            679
+          ],
+          "clipped": false,
+          "kind": "headline"
+        }
+      ],
+      "visible_brand_mark_count": 1
+    }
+  ],
+  "package_id": "74ab655b-d435-4bda-bea9-e0b5ca9e388c",
+  "publish_ready": true,
+  "risk_warnings": [],
+  "source_refs": {
+    "campaign_id": "canary-campaign-1",
+    "opportunity_id": "canary-carousel-1",
+    "story_id": "canary-story-2",
+    "trend_id": null
+  },
+  "validation_failures": []
+}

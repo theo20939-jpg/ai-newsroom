@@ -1,0 +1,34 @@
+INSTAGRAM PLAN
+
+Campaign:
+NINJA Launch 2026
+
+Phase:
+AWARENESS
+
+Opportunity:
+NEWS opportunity (id=canary-carousel-1)
+
+Primary objective:
+SAVES
+
+Audience:
+AI-curious tech audience, 18-34
+
+Recommended format:
+CAROUSEL
+
+Creative concept:
+4-slide carousel: Why this launch matters
+
+Alternative:
+COMMENTS
+
+Product mention:
+ALLOWED
+
+Evidence:
+source_type=news; campaign_phase='AWARENESS'; format_director: canary fixture for carousel
+
+Confidence:
+0.367
