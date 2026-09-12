@@ -2,6 +2,7 @@
 CONTENT_GENERATION content for each via the existing, unmodified scripts/run_content_generation.py
 pipeline, and send a Telegram notification for each resulting ContentDraft. No business logic of
 its own - orchestration only (docs/phase14_autonomous_newsroom_implementation_plan.md §4)."""
+import html
 import logging
 import re
 import time
@@ -13,7 +14,7 @@ from uuid import UUID
 
 from aiogram import Bot
 from aiogram.types import BufferedInputFile, MediaUnion
-from sqlalchemy import exists, func, select
+from sqlalchemy import exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
@@ -23,6 +24,7 @@ from bot.image_preview_media import resolve_photo_input
 from bot.keyboards.image_preview import build_editorial_send_keyboard
 from capabilities.registry import CapabilityRegistry
 from core.config import settings
+from database.models.content_draft import ContentDraft
 from database.models.content_draft_story_link import ContentDraftStoryLink
 from database.models.director_editorial_decision import EditorialGateDecision
 from database.models.editorial_task import EditorialTask, TaskStatus
@@ -559,6 +561,73 @@ _meme_auto_storage_singleton = None
 
 logger = logging.getLogger(__name__)
 
+# TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1 (Founder product invariant): an ordinary
+# router-mode NEWS/BREAKING/DATA/QUOTE post must never silently complete as a normal finished
+# text-only send merely because no valid final visual could be resolved/delivered. `content_
+# drafts.status` is an existing, unconstrained varchar column that (before this phase) only ever
+# received the literal "draft" at creation and was never read anywhere else - reused here rather
+# than adding a new DB status/migration, per the phase's own "do not invent a new DB status
+# unless necessary" instruction.
+HOLD_FOR_VISUAL_STATUS = "hold_for_visual"
+
+# Distinct root-cause strings persisted on the hold (structured audit, never free text) - mirrors
+# this file's own established "one stable string per outcome" convention (e.g.
+# NEWS_BRANDING_NO_SOURCE_BYTES below).
+HOLD_REASON_NO_VISUAL_RESOLVED = "no_visual_resolved"
+HOLD_REASON_MEDIA_SEND_FAILED = "media_send_failed"
+
+
+async def _hold_for_visual_recovery(
+    session_factory: async_sessionmaker[AsyncSession], bot: Bot, *,
+    draft_id: UUID, event: NewsEvent, presentation_type: str, reason: str, dry_run: bool,
+) -> None:
+    """Founder invariant: HOLD instead of a normal finished text-only send (spec §9-D/§12/§13).
+
+    Two, and only two, call sites use this (both already gated to the exact cases where a
+    router-mode V8-family NEWS/BREAKING/DATA/QUOTE post is about to complete via the plain-text
+    `send_to_editorial_destination()` path with no valid visual behind it):
+    1. no visual was ever resolved at all (no source media, no renderable fallback);
+    2. a visual WAS resolved and rendered, but the live Telegram photo/media-group/video send
+       itself failed (the pre-existing one-shot text-fallback site).
+
+    Does NOT touch the separate, pre-existing, disclosed caption-too-long-degrades-to-text
+    tradeoff (Phase 23.1H/23.1Q) - that path keeps sending its real photo-bearing text exactly as
+    before; a caption that does not fit a photo caption is a text-budget decision, not a missing
+    visual, and is out of this phase's scope.
+
+    Persists the failure (never loses the editorial content - `content_drafts.status` +
+    `content_drafts.body`/`title` remain fully intact, only `status` changes) and sends one
+    short, clearly non-editorial recovery notice to the same newsroom chat this draft would
+    otherwise have posted to - deliberately NO inline keyboard (no Source/Meme buttons) and a
+    distinct "⚠️" prefix, so it can never be mistaken for a real finished post. Reuses the
+    existing `send_to_editorial_destination()` transport - no new Telegram integration, no new
+    send path. Fully respects `dry_run` (never sends the recovery notice in dry-run, exactly
+    like every other send in this file) and is itself a single, bounded, one-shot notice - never
+    retried, never a loop.
+    """
+    async with session_factory() as session:
+        await session.execute(
+            update(ContentDraft).where(ContentDraft.id == draft_id).values(status=HOLD_FOR_VISUAL_STATUS)
+        )
+        await session.commit()
+    logger.warning(
+        "visual_required_hold",
+        extra={
+            "draft_id": str(draft_id), "event_id": str(event.id),
+            "presentation_type": presentation_type, "hold_reason": reason,
+        },
+    )
+    if dry_run:
+        return
+    notice_html = (
+        "⚠️ <b>Требуется визуал — материал удержан для восстановления</b>\n"
+        f"{html.escape(event.title or '', quote=False)}\n"
+        f"Тип: {html.escape(presentation_type, quote=False)} · Причина: {html.escape(reason, quote=False)}"
+    )
+    await send_to_editorial_destination(
+        bot, EditorialDestination.NEWS, notice_html, dry_run=False, reply_markup=None,
+    )
+
 
 @dataclass
 class ContentCycleResult:
@@ -623,6 +692,13 @@ class ContentCycleResult:
     # group_sent's own established "strict subset of notified, named after the shape actually
     # delivered" counting convention.
     router_text_fallback_sent: int = 0
+    # TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1: counts a router-mode V8-family NEWS/BREAKING/
+    # DATA/QUOTE post that would previously have completed as a normal finished text-only send
+    # (either "no visual was ever resolved" or "a resolved visual's live Telegram send failed")
+    # and was instead held for editor-visible recovery (see `_hold_for_visual_recovery()`).
+    # Disjoint from `notified`/`notification_failed` - a held draft is neither a successful send
+    # nor a bare failure, it is a deliberate, audited non-send. Never counted in `notified`.
+    visual_required_held: int = 0
     # Phase 23.1I Part B: counts an event whose standalone NEWS delivery was blocked by
     # services/story_duplicate_guard.py because its Story already has a delivered root post and
     # this event's own Story Memory match_type is SEMANTIC_DUPLICATE/SUPPORTING_SOURCE. Always 0
@@ -1310,6 +1386,15 @@ async def run_content_cycle(
             # copywriting output isn't available at all (a disclosed, safe degradation, never a
             # crash - report §13).
             keyboard = None
+            # TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1: a safe default, always defined - the
+            # HOLD gate further below (shared by every path: router-mode AND the legacy
+            # `copywriting_output is None` fallback) needs a presentation-type label for its
+            # diagnostic log even on paths where `presentation_decision` itself is never computed
+            # (copywriting_output is None, not V8-family output, presentation_director_mode ==
+            # "off", or the rich-media block's own preconditions aren't met). Overwritten below,
+            # only where `presentation_decision` is actually assigned, with the real value
+            # captured before any later DATA/QUOTE/BREAKING-render-failure demotion to NEWS.
+            original_presentation_type_for_hold: str = "NEWS"
             # Phase 23.1H: resolved below, only inside the `copywriting_output is not None` branch
             # (the disclosed V4/no-structured-output fallback below keeps attaching no image at
             # all - same scope discipline as its own pre-existing "no keyboard either" behavior).
@@ -1622,6 +1707,14 @@ async def run_content_cycle(
                         breaking_max_per_cycle=settings.presentation_breaking_max_per_cycle,
                         breaking_enabled=settings.presentation_breaking_enabled,
                     )
+                    # TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1: captured before the
+                    # pre-existing "Fail-safe (spec S29)" DATA/QUOTE/BREAKING-render-failure
+                    # branch (below) may demote presentation_decision.presentation_type to
+                    # "NEWS" - used only as a diagnostic label on the HOLD path so an audit can
+                    # still see which presentation format actually failed to render, without
+                    # changing the demotion itself (that fail-safe's own send-path behavior is
+                    # unmodified by this phase).
+                    original_presentation_type_for_hold = presentation_decision.presentation_type
                     logger.info(
                         "presentation_decision",
                         extra={
@@ -2108,10 +2201,38 @@ async def run_content_cycle(
                         show_caption_above_media=show_caption_above_media,
                     )
                 else:
-                    routing_outcome = await send_to_editorial_destination(
-                        bot, EditorialDestination.NEWS, html, dry_run=effective_dry_run, reply_markup=keyboard,
-                        reply_to_message_id=reply_to_message_id,
+                    # TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1 (Founder product invariant):
+                    # this `else` is reached for two structurally different reasons, and only one
+                    # of them may still send plain text. (1) A real visual (photo_input/
+                    # media_group_items/video_only_input) WAS resolved, but `fits_caption_budget`
+                    # was False - the separate, pre-existing, disclosed Phase 23.1H/23.1Q caption-
+                    # length tradeoff (a text-budget decision, not a missing visual) - completely
+                    # UNCHANGED by this phase. (2) NO visual was resolved at all - previously
+                    # silently sent as an indistinguishable-from-normal finished text post; now
+                    # held for editor-visible recovery instead (spec §9-D/§12/§13).
+                    had_any_visual = (
+                        photo_input is not None or bool(media_group_items) or video_only_input is not None
                     )
+                    # `not effective_dry_run` guard mirrors every other real side effect in this
+                    # function (dry-run must stay exactly as side-effect-free as before this
+                    # phase - no content_drafts.status write, no notice send): a dry-run cycle
+                    # keeps falling through to the pre-existing send_to_editorial_destination(...,
+                    # dry_run=True) call below, which itself already no-ops safely and is counted
+                    # via the unchanged `dry_run_rendered` path further down.
+                    if not had_any_visual and not effective_dry_run:
+                        await _hold_for_visual_recovery(
+                            session_factory, bot,
+                            draft_id=outcome.content_draft.id, event=event,
+                            presentation_type=original_presentation_type_for_hold,
+                            reason=HOLD_REASON_NO_VISUAL_RESOLVED, dry_run=effective_dry_run,
+                        )
+                        result.visual_required_held += 1
+                        routing_outcome = None
+                    else:
+                        routing_outcome = await send_to_editorial_destination(
+                            bot, EditorialDestination.NEWS, html, dry_run=effective_dry_run, reply_markup=keyboard,
+                            reply_to_message_id=reply_to_message_id,
+                        )
 
                 # Delivery-gap fix (2026-08-16 production forensic): a real photo/media-group
                 # send timing out (or any other live TelegramAPIError) previously dropped a fully
@@ -2124,29 +2245,41 @@ async def run_content_cycle(
                 # the plain-text path (including the existing caption-too-long-degrades-to-text
                 # case, upstream of this block), so it never re-enters its own fallback.
                 #
+                # TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1 (Founder product invariant):
+                # `routing_outcome` may be `None` here (the `visual_required_held` branch just
+                # above never attempted a send at all) - guarded first, so the pre-existing
+                # fallback below can keep reading `.sent` unchanged for every other case.
+                #
                 # Residual, disclosed limitation (not fixed, not in scope this checkpoint): a
                 # Telegram network timeout can occur after Telegram has already accepted the
                 # photo/media-group but before this process received the response (exactly the
                 # real production case that motivated this fix) - RoutingOutcome.sent=False is
                 # this codebase's only signal and cannot distinguish "never reached Telegram"
-                # from "Telegram accepted it, response was lost." In that ambiguous case, this
-                # one-shot text fallback can produce a real photo+text duplicate for the same
-                # story. No idempotency/dedup redesign is introduced here - the fallback is
-                # capped at exactly one plain-text attempt, and the original media send itself is
-                # never retried, so the worst case stays bounded (at most one extra message),
-                # never an unbounded retry loop.
+                # from "Telegram accepted it, response was lost." Previously, this ambiguous case
+                # triggered a one-shot plain-text fallback that could produce a real photo+text
+                # duplicate for the same story. Per the Founder invariant above, a resolved-but-
+                # undeliverable visual must now HOLD instead of silently completing as that
+                # plain-text duplicate - still a single, bounded, one-shot outcome, never a retry
+                # loop, never an unbounded generation attempt (MAX_VISUAL_FALLBACK_ATTEMPTS=0
+                # extra renders - this path never re-renders, it only changes whether the
+                # already-rendered result's failed send becomes a HOLD or a silent text send).
                 used_text_fallback = False
                 if (
-                    not effective_dry_run and not routing_outcome.sent
+                    routing_outcome is not None and not effective_dry_run and not routing_outcome.sent
                     and (send_as_media_group or send_as_photo or send_as_video_only)
                 ):
-                    routing_outcome = await send_to_editorial_destination(
-                        bot, EditorialDestination.NEWS, html, dry_run=effective_dry_run, reply_markup=keyboard,
-                        reply_to_message_id=reply_to_message_id,
+                    await _hold_for_visual_recovery(
+                        session_factory, bot,
+                        draft_id=outcome.content_draft.id, event=event,
+                        presentation_type=original_presentation_type_for_hold,
+                        reason=HOLD_REASON_MEDIA_SEND_FAILED, dry_run=effective_dry_run,
                     )
-                    used_text_fallback = True
+                    result.visual_required_held += 1
+                    routing_outcome = None
 
-                if effective_dry_run:
+                if routing_outcome is None:
+                    pass  # already accounted for in result.visual_required_held above
+                elif effective_dry_run:
                     result.dry_run_rendered += 1  # expected outcome in dry-run mode, not a failure
                 elif routing_outcome.sent:
                     result.notified += 1

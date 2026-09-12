@@ -509,14 +509,19 @@ async def test_router_mode_story_update_with_existing_root_replies_to_it(
     delivery, which it silently never did before this phase. Uses V8-family output (not V6) so
     this also exercises the real render_v81_news_card_html() path - Phase V2.12I: Phase 23.1Q's
     NINJA PULSE caption footer is the restored, approved contract; this test proves it survives
-    an UPDATE reply exactly like it does a root post."""
+    an UPDATE reply exactly like it does a root post.
+
+    TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1: a resolvable image candidate is now mocked in -
+    real candidate discovery against the test DB finds none, and a no-visual NEWS post now HOLDs
+    rather than silently completing as plain text (the exact production defect this phase
+    repairs) - so reply-threading is now proven via `send_photo` instead of `send_message`."""
     _router_settings(monkeypatch)
     monkeypatch.setattr(settings, "story_memory_mode", "shadow")
     monkeypatch.setattr(settings, "telegram_story_reply_mode", "enforce")
     monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
     from database.models.story_link import NewsEventStoryLink
     from services.story_memory import STORY_UPDATE
-    from tests.test_router_media_integration import _v82_capability_registry
+    from tests.test_router_media_integration import _fake_candidate, _v82_capability_registry
 
     async with factory() as probe_session:
         if not await _table_exists(probe_session, "content_draft_reply_routing_proposals"):
@@ -552,20 +557,24 @@ async def test_router_mode_story_update_with_existing_root_replies_to_it(
 
     _gateway, registry = _v82_capability_registry()
     fake_bot = AsyncMock()
-    fake_bot.send_message.return_value.message_id = 1001
+    fake_bot.send_photo.return_value.message_id = 1001
 
-    result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+    with patch(
+        "worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate()]),
+    ):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
-    fake_bot.send_message.assert_called_once()
-    assert fake_bot.send_message.call_args.kwargs["reply_to_message_id"] == 999
+    fake_bot.send_photo.assert_called_once()
+    assert fake_bot.send_photo.call_args.kwargs["reply_to_message_id"] == 999
     assert result.story_fail_closed_review == 0
     assert result.notified == 1
+    assert result.visual_required_held == 0
 
     # Phase V2.12I: Phase 23.1Q's footer is the restored, approved contract - it must survive an
     # UPDATE reply exactly like a root post (reply-threading is purely about reply_to_message_id,
     # never about which renderer built the HTML - both use the identical render_v81_news_card_
     # html() output).
-    sent_text = fake_bot.send_message.call_args.args[1]
+    sent_text = fake_bot.send_photo.call_args.kwargs["caption"]
     assert sent_text.count("NINJA PULSE. Подписаться 🥷") == 1
     assert '<a href="https://t.me/nnjvpn">NINJA PULSE. Подписаться 🥷</a>' in sent_text
 
@@ -593,11 +602,16 @@ async def test_router_mode_verified_quote_renders_in_the_v8_family_card(
     hand-seed a full verification pipeline" convention - see tests/test_router_media_integration.
     py's own module docstring) must actually appear in the delivered V8-family card once
     quote_telegram_rendering_mode == "enforce" - the exact gap docs/phase23_1p_story_memory_
-    quotes_gate_report.md §19 disclosed (a real quote was extracted but never displayed)."""
+    quotes_gate_report.md §19 disclosed (a real quote was extracted but never displayed).
+
+    TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1: a resolvable image candidate is now mocked in -
+    real candidate discovery against the test DB finds none, and a no-visual NEWS post now HOLDs
+    rather than silently completing as plain text (the exact production defect this phase
+    repairs) - so the quote is now proven via `send_photo`'s caption instead of `send_message`."""
     _router_settings(monkeypatch)
     monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
     monkeypatch.setattr(settings, "quote_telegram_rendering_mode", "enforce")
-    from tests.test_router_media_integration import _v82_capability_registry
+    from tests.test_router_media_integration import _fake_candidate, _v82_capability_registry
 
     async with factory() as session:
         event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
@@ -613,14 +627,20 @@ async def test_router_mode_verified_quote_renders_in_the_v8_family_card(
 
     _gateway, registry = _v82_capability_registry()
     fake_bot = AsyncMock()
-    fake_bot.send_message.return_value.message_id = 2001
+    fake_bot.send_photo.return_value.message_id = 2001
 
-    with patch("worker.content_cycle.get_quote_for_draft", new=AsyncMock(return_value=fake_quote)):
+    with (
+        patch("worker.content_cycle.get_quote_for_draft", new=AsyncMock(return_value=fake_quote)),
+        patch(
+            "worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate()]),
+        ),
+    ):
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     assert result.notified == 1
-    fake_bot.send_message.assert_called_once()
-    sent_text = fake_bot.send_message.call_args.args[1]
+    assert result.visual_required_held == 0
+    fake_bot.send_photo.assert_called_once()
+    sent_text = fake_bot.send_photo.call_args.kwargs["caption"]
     assert "<blockquote>We built this because reasoning matters more than raw speed.</blockquote>" in sent_text
     assert "— A Company Spokesperson" in sent_text
     # The mandatory one-paragraph main body must still survive whole, unmodified by the quote.
@@ -639,11 +659,17 @@ async def test_router_mode_quote_shadow_mode_never_renders(
     """quote_telegram_rendering_mode == "shadow" (this project's real, current .env value) must
     look the quote up (proving the lookup path works) without ever changing real output - the
     exact "shadow never changes production behavior" guarantee this codebase already establishes
-    for story_memory_mode/fact_safety_mode, now also verified for quotes specifically."""
+    for story_memory_mode/fact_safety_mode, now also verified for quotes specifically.
+
+    TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1: a resolvable image candidate is now mocked in -
+    real candidate discovery against the test DB finds none, and a no-visual NEWS post now HOLDs
+    rather than silently completing as plain text (the exact production defect this phase
+    repairs) - so shadow-mode's "no visible change" guarantee is now proven via `send_photo`'s
+    caption instead of `send_message`."""
     _router_settings(monkeypatch)
     monkeypatch.setattr(settings, "copywriting_prompt_version", "8.2")
     monkeypatch.setattr(settings, "quote_telegram_rendering_mode", "shadow")
-    from tests.test_router_media_integration import _v82_capability_registry
+    from tests.test_router_media_integration import _fake_candidate, _v82_capability_registry
 
     async with factory() as session:
         event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
@@ -658,16 +684,22 @@ async def test_router_mode_quote_shadow_mode_never_renders(
 
     _gateway, registry = _v82_capability_registry()
     fake_bot = AsyncMock()
-    fake_bot.send_message.return_value.message_id = 2002
+    fake_bot.send_photo.return_value.message_id = 2002
 
-    with patch(
-        "worker.content_cycle.get_quote_for_draft", new=AsyncMock(return_value=fake_quote),
-    ) as mock_get_quote:
+    with (
+        patch(
+            "worker.content_cycle.get_quote_for_draft", new=AsyncMock(return_value=fake_quote),
+        ) as mock_get_quote,
+        patch(
+            "worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate()]),
+        ),
+    ):
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     mock_get_quote.assert_called_once()  # the lookup path runs even in shadow
     assert result.notified == 1
-    sent_text = fake_bot.send_message.call_args.args[1]
+    assert result.visual_required_held == 0
+    sent_text = fake_bot.send_photo.call_args.kwargs["caption"]
     assert "<blockquote>" not in sent_text
     assert "We built this" not in sent_text
 
@@ -784,14 +816,16 @@ async def test_router_mode_multi_image_update_preserves_reply_to_message_id(
 
 
 @pytest.mark.asyncio
-async def test_router_mode_photo_timeout_fallback_persists_the_fallback_message_id(
+async def test_router_mode_photo_timeout_holds_for_visual_recovery_no_reply_delivery_row(
     factory: async_sessionmaker[AsyncSession], test_source, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Reproduces the real production gap directly: send_photo raises TelegramAPIError (the real
-    ~60s timeout shape), the plain-text fallback then succeeds, and the ONE delivery row this
-    draft ever gets must carry the fallback's message_id - not be missing, and not be a second,
-    duplicate row alongside a phantom photo delivery."""
+    """TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1 (supersedes this test's old name/premise): the
+    real production gap this test reproduces - send_photo raising TelegramAPIError (the real
+    ~60s timeout shape) - now holds for visual recovery instead of silently completing via the
+    old plain-text fallback. Exactly one recovery notice is sent; NO new StoryTelegramDelivery
+    REPLY row is ever written for it (nothing was actually delivered as a real reply post), and
+    the pre-existing ROOT delivery (999) is completely untouched."""
     from aiogram.exceptions import TelegramAPIError
 
     _router_settings(monkeypatch)
@@ -845,12 +879,13 @@ async def test_router_mode_photo_timeout_fallback_persists_the_fallback_message_
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     fake_bot.send_photo.assert_called_once()  # the real, failing attempt - never retried
-    fake_bot.send_message.assert_called_once()  # exactly one text fallback attempt
-    assert fake_bot.send_message.call_args.kwargs["reply_to_message_id"] == 999
-    assert result.notified == 1
+    fake_bot.send_message.assert_called_once()  # exactly one recovery notice, not a normal reply post
+    assert fake_bot.send_message.call_args.kwargs["reply_markup"] is None
+    assert result.notified == 0
     assert result.notification_failed == 0
     assert result.router_image_sent == 0
-    assert result.router_text_fallback_sent == 1
+    assert result.router_text_fallback_sent == 0
+    assert result.visual_required_held == 1
 
     async with factory() as session:
         deliveries = (
@@ -861,21 +896,30 @@ async def test_router_mode_photo_timeout_fallback_persists_the_fallback_message_
                 )
             )
         ).scalars().all()
-        # Exactly one delivery row for this draft - never a duplicate, and it must carry the
-        # fallback's own message_id, never the (never-persisted) failed photo attempt's.
-        assert len(deliveries) == 1
-        assert deliveries[0].reply_to_message_id == 999
-        assert deliveries[0].telegram_message_id == 1001
+        # No REPLY delivery row for a held (never actually delivered) draft.
+        assert len(deliveries) == 0
+        # The pre-existing ROOT delivery is completely unaffected.
+        root_deliveries = (
+            await session.execute(
+                select(StoryTelegramDelivery).where(
+                    StoryTelegramDelivery.story_id == story.id,
+                    StoryTelegramDelivery.delivery_type == DeliveryType.ROOT,
+                )
+            )
+        ).scalars().all()
+        assert len(root_deliveries) == 1
+        assert root_deliveries[0].telegram_message_id == 999
 
 
 @pytest.mark.asyncio
-async def test_router_mode_photo_and_fallback_both_fail_records_no_delivery(
+async def test_router_mode_photo_and_recovery_notice_both_fail_still_holds_records_no_delivery(
     factory: async_sessionmaker[AsyncSession], test_source, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """When the text fallback also fails, notification_failed increments exactly once and no
-    delivery row is ever written - a failed send has nothing to record, exactly like the
-    pre-existing "notification failed, nothing recorded" contract for every other delivery mode."""
+    """TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1 (supersedes this test's old premise): even
+    when the recovery notice's own send also fails, this is a HOLD (visual_required_held), never
+    the old notification_failed/silent-text-completion outcome - no delivery row is ever written
+    either way (nothing was actually delivered)."""
     from aiogram.exceptions import TelegramAPIError
 
     _router_settings(monkeypatch)
@@ -929,11 +973,12 @@ async def test_router_mode_photo_and_fallback_both_fail_records_no_delivery(
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     fake_bot.send_photo.assert_called_once()
-    fake_bot.send_message.assert_called_once()  # exactly one fallback attempt, never retried again
+    fake_bot.send_message.assert_called_once()  # exactly one recovery-notice attempt, never retried again
     assert result.notified == 0
-    assert result.notification_failed == 1
+    assert result.notification_failed == 0
     assert result.router_image_sent == 0
     assert result.router_text_fallback_sent == 0
+    assert result.visual_required_held == 1
 
     async with factory() as session:
         deliveries = (
