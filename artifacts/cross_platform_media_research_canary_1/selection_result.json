@@ -7,7 +7,7 @@
       "asset_url": "https://images.macrumors.com/t/a4h0iUkXuwX_hWmZSFCIFS-FEUo=/400x0/article-new/2026/09/iphone-duo.jpg?lossy",
       "publisher_domain": "macrumors.com",
       "discovery_query": "Apple iPhone Duo",
-      "discovered_at": "2026-09-13T00:01:09.971220Z",
+      "discovered_at": "2026-09-13T03:12:55.925269Z",
       "discovery_tier": "tier3_corroborating_editorial",
       "caption_or_alt": "iphone duo",
       "content_identity_sha256": null,
@@ -23,12 +23,12 @@
     "usage_classification": "editorial_review_required",
     "subject_match": {
       "version": "v1",
-      "depicted_subject_description": "A person holds an Apple-style foldable smartphone open in landscape orientation, showing a large uninterrupted inner display with a desert landscape wallpaper and the time 9:41.",
+      "depicted_subject_description": "A person holds an Apple-style smartphone opened flat in landscape orientation, with a large single display, a visible central fold crease, thin black bezels, and a lock screen showing 9:41 over a desert landscape wallpaper.",
       "subject_match": "exact_subject",
       "must_not_imply_violated": false,
       "violated_statements": [],
       "confidence": "high",
-      "reason": "The image visibly shows an open foldable phone rather than an ordinary non-foldable iPhone, and the candidate-specific caption and origin page identify this consistent device as the iPhone Duo."
+      "reason": "The image visibly shows a foldable phone opened into a wider display rather than an ordinary non-foldable iPhone. This is visually consistent with the candidate caption identifying it as “iphone duo” and the supplied MacRumors announcement-page origin for Apple’s foldable iPhone Duo."
     },
     "image_candidate_record_id": null,
     "existing_relevance_score": null,
@@ -43,7 +43,7 @@
     "exact_subject": 3
   },
   "rejection_reasons": [
-    "tier1_local_ordinary_iphone: subject_match=mismatch (The candidate caption identifies it only as a generic hero iPhone photo, and the visual shows conventional non-folding iPhone-style slab devices. Presenting it as the named iPhone Duo would specifically misrepresent an ordinary iPhone as that product.)"
+    "tier1_local_ordinary_iphone: subject_match=mismatch (The candidate visibly depicts conventional non-foldable iPhones, while the claimed iPhone Duo would need to be represented as the distinct foldable/Duo product. The supplied caption only identifies it generically as a hero iPhone photo and does not establish the specific model.)"
   ],
   "notes": []
 }

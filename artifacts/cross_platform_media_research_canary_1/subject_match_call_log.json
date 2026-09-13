@@ -1,52 +1,52 @@
 [
   {
     "candidate_id": "tier1_local_ordinary_iphone",
-    "local_path": "C:\\Users\\Theodor\\ai-newsroom-media-research-1\\assets\\brand\\newsroom_visuals\\v2_1_bakeoff_sources\\case1_hero_product_iphone.jpg",
+    "local_path": "C:\\Users\\Theodor\\ai-newsroom-unified-pipeline-1\\assets\\brand\\newsroom_visuals\\v2_1_bakeoff_sources\\case1_hero_product_iphone.jpg",
     "output": {
-      "depicted_subject_description": "A stylized orange Apple iPhone promotional render showing the back of a triple-camera phone with an Apple logo and the front of a separate, ordinary rectangular slab phone with a pill-shaped display cutout. Neither device is visibly folded or foldable.",
+      "depicted_subject_description": "A stylized orange Apple iPhone product image showing the back of a triple-camera phone and the front of a separate conventional slab-shaped phone with a pill-shaped top display cutout. Neither device is shown folded or with a hinge.",
       "subject_match": "mismatch",
       "must_not_imply_violated": true,
       "violated_statements": [
         "that an ordinary, non-foldable iPhone is the iPhone Duo"
       ],
       "confidence": "high",
-      "reason": "The candidate caption identifies it only as a generic hero iPhone photo, and the visual shows conventional non-folding iPhone-style slab devices. Presenting it as the named iPhone Duo would specifically misrepresent an ordinary iPhone as that product."
+      "reason": "The candidate visibly depicts conventional non-foldable iPhones, while the claimed iPhone Duo would need to be represented as the distinct foldable/Duo product. The supplied caption only identifies it generically as a hero iPhone photo and does not establish the specific model."
     }
   },
   {
     "candidate_id": "web:0:macrumors.com",
-    "local_path": "C:\\Users\\Theodor\\ai-newsroom-media-research-1\\artifacts\\cross_platform_media_research_canary_1\\cache\\377c5f200b7c965804e7b6e469f8c711128ad32973818aabbe2e6a87b6503c1e.jpg",
+    "local_path": "C:\\Users\\Theodor\\ai-newsroom-unified-pipeline-1\\artifacts\\cross_platform_media_research_canary_1\\cache\\377c5f200b7c965804e7b6e469f8c711128ad32973818aabbe2e6a87b6503c1e.jpg",
     "output": {
-      "depicted_subject_description": "A person holds an Apple-style foldable smartphone open in landscape orientation, showing a large uninterrupted inner display with a desert landscape wallpaper and the time 9:41.",
+      "depicted_subject_description": "A person holds an Apple-style smartphone opened flat in landscape orientation, with a large single display, a visible central fold crease, thin black bezels, and a lock screen showing 9:41 over a desert landscape wallpaper.",
       "subject_match": "exact_subject",
       "must_not_imply_violated": false,
       "violated_statements": [],
       "confidence": "high",
-      "reason": "The image visibly shows an open foldable phone rather than an ordinary non-foldable iPhone, and the candidate-specific caption and origin page identify this consistent device as the iPhone Duo."
+      "reason": "The image visibly shows a foldable phone opened into a wider display rather than an ordinary non-foldable iPhone. This is visually consistent with the candidate caption identifying it as “iphone duo” and the supplied MacRumors announcement-page origin for Apple’s foldable iPhone Duo."
     }
   },
   {
     "candidate_id": "web:1:techcrunch.com",
-    "local_path": "C:\\Users\\Theodor\\ai-newsroom-media-research-1\\artifacts\\cross_platform_media_research_canary_1\\cache\\a1f7e05c879958e19a268e2ee234c0cd5cb94aac52c91084ad1cff35da74a733.jpg",
+    "local_path": "C:\\Users\\Theodor\\ai-newsroom-unified-pipeline-1\\artifacts\\cross_platform_media_research_canary_1\\cache\\a1f7e05c879958e19a268e2ee234c0cd5cb94aac52c91084ad1cff35da74a733.jpg",
     "output": {
-      "depicted_subject_description": "A person holds an open, book-style foldable smartphone with one continuous large inner display, a central crease, and an iOS-style home screen and widgets.",
+      "depicted_subject_description": "A person holding an open, book-style foldable smartphone with one large interior display, a visible center crease/hinge, and an iOS-style home screen.",
       "subject_match": "exact_subject",
       "must_not_imply_violated": false,
       "violated_statements": [],
       "confidence": "high",
-      "reason": "The image visibly shows a foldable iPhone-style device rather than an ordinary non-foldable iPhone. This is visually consistent with the candidate's originating TechCrunch article identifying it as Apple's first foldable, the iPhone Duo."
+      "reason": "The image visibly shows a foldable iPhone-like device rather than an ordinary non-foldable iPhone. This is visually consistent with the candidate’s originating article and caption identifying it as Apple imagery for the iPhone Duo."
     }
   },
   {
     "candidate_id": "web:2:engadget.com",
-    "local_path": "C:\\Users\\Theodor\\ai-newsroom-media-research-1\\artifacts\\cross_platform_media_research_canary_1\\cache\\55c0a4d13aa397abde34f5eafd5796a8ea0a15bcf68d5f0bf6b13b1a5eb808f9.jpg",
+    "local_path": "C:\\Users\\Theodor\\ai-newsroom-unified-pipeline-1\\artifacts\\cross_platform_media_research_canary_1\\cache\\55c0a4d13aa397abde34f5eafd5796a8ea0a15bcf68d5f0bf6b13b1a5eb808f9.jpg",
     "output": {
-      "depicted_subject_description": "A person holds a large, thin, landscape-oriented Apple-style touchscreen device with a nearly square unfolded display, showing a desert-and-mountains wallpaper, the time 9:41, and iOS-style interface icons.",
+      "depicted_subject_description": "A person holds a wide, unfolded, phone-like Apple-style device in landscape orientation. It has a single expansive edge-to-edge display showing a desert wallpaper and the time 9:41.",
       "subject_match": "exact_subject",
       "must_not_imply_violated": false,
       "violated_statements": [],
       "confidence": "high",
-      "reason": "The candidate’s own caption identifies this specific image as a folded-out iPhone Duo, and the visible device is consistent with an unfolded foldable rather than an ordinary non-foldable iPhone: it has a substantially larger, tablet-like landscape display and is shown being held open with two hands. Nothing visibly contradicts the supplied corroboration."
+      "reason": "The candidate’s own caption identifies it as a folded-out iPhone Duo, and the visible device is consistent with that description: it is shown as an unusually wide unfolded handset rather than an ordinary non-foldable iPhone."
     }
   }
 ]

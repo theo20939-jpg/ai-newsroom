@@ -1254,6 +1254,19 @@ class Settings(BaseSettings):
     # every PUBLICATION-facing flag (final_post_publication_enabled, telegram_channel_director_
     # shadow_enabled, telegram_art_director_enforcement_enabled), none of which this flag touches.
     telegram_editorial_gate_enabled: bool = False
+
+    # UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-1: gates whether worker/content_cycle.py's router-mode
+    # dispatch delegates to the new shared services/editorial_pipeline/ orchestrator instead of its
+    # own inline media/presentation/render/fallback logic. Default False for the entire duration of
+    # this phase - the new pipeline exists, is tested, and can run in shadow (dual-run) mode, but
+    # the legacy path remains the only one actually reachable in production until a Founder-
+    # approved future phase flips this on. Never set True by this phase's own code.
+    unified_editorial_pipeline_enabled: bool = False
+    # UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-1 §27: when true (and unified_editorial_pipeline_
+    # enabled is True), run the new pipeline ALONGSIDE the legacy path for comparison only - never
+    # a second real Telegram/Instagram send. Meaningless while unified_editorial_pipeline_enabled
+    # is False. Default False.
+    unified_editorial_pipeline_shadow_mode: bool = False
     # DIRECTOR-CONTROL-PLANE-1A §29 / 1B §3: the daily bound on Stage 2 (real Director LLM)
     # editorial-gate reviews - services/director_editorial_gate_budget.py's own real, tested guard.
     # As of 1B, Stage 2 IS wired into the live pre-generation path (worker/content_main.py ->
