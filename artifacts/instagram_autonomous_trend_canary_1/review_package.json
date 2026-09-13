@@ -1,0 +1,436 @@
+{
+  "package_id": "b01441fd-a18c-4d5e-b7da-85553659a879",
+  "content_format": "carousel",
+  "caption": "iPhone Duo объявлен — и весь рынок складных смартфонов реагирует",
+  "caption_is_draft": true,
+  "cta": "Что думаете о новом формате Apple?",
+  "hashtags": [],
+  "director_reasoning_summary": "objective=saves | format=carousel | confidence=0.333 | why=save/education objective with a multi-step narrative fits a carousel best | evidence=Engadget: Where should Apple go after the iPhone Duo? Bring on smaller and larger foldables; CNET: iPhone Duo vs. Pixel 11 Pro Fold: 2 Durable Foldables Face Off; 9to5Google: Apple on wide Android foldables beating iPhone Duo; ‘they got the aspect ratio’; 9to5Mac: Report: iPhone price hike ‘better than feared,’ iPhone Duo to drive demand for the cycle; 9to5Mac: 9to5Mac Overtime 081: iPhone Duo thoughts and impressions; 9to5Mac: Leaker says Apple will pay $250 per iPhone Duo display in three-year Samsung deal; MacRumors: iPhone Duo is Missing These 10 iPhone 18 Pro Features; MacRumors: IMAX Reacts to iPhone Duo's 1:1.4 Aspect Ratio Displays; source_type=news; campaign_phase=None; format_director: save/education objective with a multi-step narrative fits a carousel best",
+  "campaign_context": "no campaign context",
+  "source_refs": {
+    "opportunity_id": "canary-trend-9fac0988-20b7-4187-b357-a4522b279d6d",
+    "story_id": "9fac0988-20b7-4187-b357-a4522b279d6d",
+    "trend_id": null,
+    "campaign_id": null
+  },
+  "media_render_evidence": [
+    {
+      "render_version": "instagram-render-v1",
+      "content_format": "carousel",
+      "profile": "carousel_slide",
+      "canvas_width": 1080,
+      "canvas_height": 1350,
+      "visible_brand_mark_count": 1,
+      "text_regions": [
+        {
+          "kind": "headline",
+          "box": [
+            86,
+            992,
+            882,
+            1060
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "headline",
+          "box": [
+            86,
+            1096,
+            888,
+            1159
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "headline",
+          "box": [
+            86,
+            1155,
+            886,
+            1236
+          ],
+          "clipped": false
+        }
+      ],
+      "text_clipped": false,
+      "source_image_treatment": "cover_cropped",
+      "slide_index": 0,
+      "slide_count": 6,
+      "caption_linkage": "b01441fd-a18c-4d5e-b7da-85553659a879",
+      "content_identity": "579471c5acd7db5b",
+      "notes": {
+        "layout_variant": "carousel_hook"
+      }
+    },
+    {
+      "render_version": "instagram-render-v1",
+      "content_format": "carousel",
+      "profile": "carousel_slide",
+      "canvas_width": 1080,
+      "canvas_height": 1350,
+      "visible_brand_mark_count": 1,
+      "text_regions": [
+        {
+          "kind": "body",
+          "box": [
+            86,
+            623,
+            719,
+            687
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "body",
+          "box": [
+            86,
+            696,
+            746,
+            764
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "body",
+          "box": [
+            86,
+            778,
+            800,
+            845
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "body",
+          "box": [
+            86,
+            861,
+            894,
+            925
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "body",
+          "box": [
+            86,
+            935,
+            591,
+            1001
+          ],
+          "clipped": false
+        }
+      ],
+      "text_clipped": false,
+      "source_image_treatment": "none",
+      "slide_index": 1,
+      "slide_count": 6,
+      "caption_linkage": "b01441fd-a18c-4d5e-b7da-85553659a879",
+      "content_identity": "d75c8790aa0e9d76",
+      "notes": {
+        "layout_variant": "carousel_detail"
+      }
+    },
+    {
+      "render_version": "instagram-render-v1",
+      "content_format": "carousel",
+      "profile": "carousel_slide",
+      "canvas_width": 1080,
+      "canvas_height": 1350,
+      "visible_brand_mark_count": 1,
+      "text_regions": [
+        {
+          "kind": "body",
+          "box": [
+            86,
+            598,
+            761,
+            647
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "body",
+          "box": [
+            86,
+            656,
+            901,
+            714
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "body",
+          "box": [
+            86,
+            743,
+            499,
+            787
+          ],
+          "clipped": false
+        }
+      ],
+      "text_clipped": false,
+      "source_image_treatment": "none",
+      "slide_index": 2,
+      "slide_count": 6,
+      "caption_linkage": "b01441fd-a18c-4d5e-b7da-85553659a879",
+      "content_identity": "321a1b38a675814b",
+      "notes": {
+        "layout_variant": "carousel_fact"
+      }
+    },
+    {
+      "render_version": "instagram-render-v1",
+      "content_format": "carousel",
+      "profile": "carousel_slide",
+      "canvas_width": 1080,
+      "canvas_height": 1350,
+      "visible_brand_mark_count": 1,
+      "text_regions": [
+        {
+          "kind": "comparison_side",
+          "box": [
+            86,
+            588,
+            400,
+            641
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "comparison_side",
+          "box": [
+            85,
+            662,
+            432,
+            718
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "comparison_side",
+          "box": [
+            86,
+            740,
+            452,
+            776
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "comparison_side",
+          "box": [
+            85,
+            779,
+            410,
+            839
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "comparison_side",
+          "box": [
+            583,
+            578,
+            857,
+            631
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "comparison_side",
+          "box": [
+            582,
+            661,
+            992,
+            711
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "comparison_side",
+          "box": [
+            583,
+            706,
+            821,
+            760
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "comparison_side",
+          "box": [
+            583,
+            773,
+            828,
+            841
+          ],
+          "clipped": false
+        }
+      ],
+      "text_clipped": false,
+      "source_image_treatment": "none",
+      "slide_index": 3,
+      "slide_count": 6,
+      "caption_linkage": "b01441fd-a18c-4d5e-b7da-85553659a879",
+      "content_identity": "df3022164d125acd",
+      "notes": {
+        "layout_variant": "carousel_comparison"
+      }
+    },
+    {
+      "render_version": "instagram-render-v1",
+      "content_format": "carousel",
+      "profile": "carousel_slide",
+      "canvas_width": 1080,
+      "canvas_height": 1350,
+      "visible_brand_mark_count": 1,
+      "text_regions": [
+        {
+          "kind": "body",
+          "box": [
+            86,
+            671,
+            799,
+            724
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "body",
+          "box": [
+            86,
+            736,
+            857,
+            804
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "body",
+          "box": [
+            86,
+            818,
+            766,
+            884
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "body",
+          "box": [
+            86,
+            913,
+            611,
+            964
+          ],
+          "clipped": false
+        }
+      ],
+      "text_clipped": false,
+      "source_image_treatment": "none",
+      "slide_index": 4,
+      "slide_count": 6,
+      "caption_linkage": "b01441fd-a18c-4d5e-b7da-85553659a879",
+      "content_identity": "071425560d647e25",
+      "notes": {
+        "layout_variant": "carousel_detail"
+      }
+    },
+    {
+      "render_version": "instagram-render-v1",
+      "content_format": "carousel",
+      "profile": "carousel_slide",
+      "canvas_width": 1080,
+      "canvas_height": 1350,
+      "visible_brand_mark_count": 1,
+      "text_regions": [
+        {
+          "kind": "body",
+          "box": [
+            85,
+            496,
+            742,
+            563
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "body",
+          "box": [
+            86,
+            573,
+            867,
+            644
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "body",
+          "box": [
+            86,
+            655,
+            879,
+            726
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "body",
+          "box": [
+            86,
+            758,
+            883,
+            814
+          ],
+          "clipped": false
+        },
+        {
+          "kind": "body",
+          "box": [
+            86,
+            814,
+            427,
+            884
+          ],
+          "clipped": false
+        }
+      ],
+      "text_clipped": false,
+      "source_image_treatment": "none",
+      "slide_index": 5,
+      "slide_count": 6,
+      "caption_linkage": "b01441fd-a18c-4d5e-b7da-85553659a879",
+      "content_identity": "2aa7ddae66c8492e",
+      "notes": {
+        "layout_variant": "carousel_closing"
+      }
+    }
+  ],
+  "art_validation": {
+    "passed": true,
+    "blocking_issues": [],
+    "warnings": [
+      "source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=1)",
+      "source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=2)",
+      "source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=3)",
+      "source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=4)",
+      "source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=5)"
+    ],
+    "retry_recommended": false,
+    "retries_used": 0,
+    "max_retries": 1
+  },
+  "risk_warnings": [
+    "source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=1)",
+    "source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=2)",
+    "source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=3)",
+    "source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=4)",
+    "source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=5)"
+  ],
+  "validation_failures": [],
+  "publish_ready": true,
+  "created_at": "2026-09-12T22:02:16.514034+00:00"
+}

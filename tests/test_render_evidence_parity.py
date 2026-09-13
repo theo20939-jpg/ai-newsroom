@@ -20,11 +20,6 @@ from PIL import Image, ImageDraw, ImageStat
 
 from services.brand_renderer import (
     _CARD_WIDTH,
-    _DATA_BLOCK_MARGIN,
-    _DATA_BLOCK_WIDTH_FRAC,
-    _data_signature_geometry,
-    _measure_data_stat_block,
-    _select_data_block_placement,
     _select_data_signature,
     render_breaking_frame,
     render_data_card,
@@ -164,26 +159,25 @@ def test_news_geometry_is_the_fused_lower_right_signature_authoritative_evidence
 
 
 def test_breaking_evidence_matches_the_corrected_news_family_signature() -> None:
-    """VRR-1 §8/§11: the corrected renderer composites the source at NATIVE size with the exact
-    MASTER NEWS lower signature. The deriver replays select_master_news_branding() and must agree."""
+    """FOUNDER-VISUAL-POLISH-2 §3: BREAKING is its OWN distinct treatment now - source at NATIVE
+    size + a red pulse crossing the lower media + one restrained mark in the least-busy bottom
+    corner. Still no band, no scrim."""
+    from services.brand_renderer import _BREAKING_SAFE_INSET_FRAC
+
     raw = _photo(1280, 720)
     ev = derive_breaking_render_evidence(raw)
-    with Image.open(io.BytesIO(raw)) as im:
-        decision = select_master_news_branding(im.convert("RGBA"))
-    placed = [p for p in (decision.lower_signature.placement, decision.upper_mark.placement) if p is not ComponentPlacement.OMITTED]
 
-    assert ev.logo_count == len(placed)
-    assert ev.logo_zone == (placed[0].value if placed else NOT_MEASURED)
+    assert ev.renderer_version == "pulse-breaking-v7-board"
+    assert ev.logo_count == 1
+    assert ev.logo_zone in ("lower_right", "lower_left")
+    assert ev.placement_zone == "lower_left"            # the pulse crosses the lower media
     assert ev.source_image_treatment == "preserve"       # native size, no fit/crop
     assert ev.source_preserved is True
     assert ev.scrim_applied is False
-    assert ev.scrim_treatment == "none"                   # the band is GONE
-    assert ev.safe_margin_frac == round(float(_SAFE_INSET_FRAC), 5)
+    assert ev.scrim_treatment == "none"                   # no band, no scrim of any kind
+    assert ev.safe_margin_frac == round(_BREAKING_SAFE_INSET_FRAC, 5)
     for f in ("primary_font_size", "secondary_font_size", "actual_line_count"):
         assert f in ev.not_applicable_fields
-    # placement_zone stays an APPLICABLE measurement gap (same as NEWS) - NOT not_applicable.
-    assert "placement_zone" not in ev.not_applicable_fields
-    assert ev.placement_zone is NOT_MEASURED
 
 
 def test_breaking_corrected_pixels_have_no_dark_band_and_no_baked_wordmark() -> None:
@@ -219,7 +213,7 @@ def test_breaking_no_source_still_carries_exactly_one_mark_and_no_band() -> None
     # solid NNJ-black card: the only non-black content is the single red mark bottom-right.
     br = ImageStat.Stat(im.crop((im.width - 160, im.height - 120, im.width, im.height)))
     rest = ImageStat.Stat(im.crop((0, 0, im.width // 2, im.height // 2)))
-    assert max(br.mean) > max(rest.mean) + 8
+    assert max(br.mean) > max(rest.mean) + 2  # BOARD-REBUILD-6: a restrained low-opacity watermark
 
 
 # ==============================================================================================
@@ -227,37 +221,44 @@ def test_breaking_no_source_still_carries_exactly_one_mark_and_no_band() -> None
 # ==============================================================================================
 
 
-def test_data_full_evidence_matches_the_renderer_helpers_directly() -> None:
+def test_data_full_evidence_matches_the_hero_renderer_decisions_directly() -> None:
+    """FOUNDER-VISUAL-BOARD-ALIGNMENT-1: FULL_DATA_CARD renders the generated hero-metric card
+    (`brand_renderer.render_data_hero_card`) - a source-free graphite panel. Evidence replays that
+    renderer's OWN two deterministic decisions: the fitted primary-value font size and the wrapped
+    label line count."""
+    from services.brand_renderer import (
+        _HERO_LABEL_FONT_MAX,
+        _HERO_LABEL_FONT_MIN,
+        _HERO_LABEL_MAX_LINES,
+        _HERO_MARGIN,
+        _HERO_VALUE_FONT_MAX,
+        _HERO_VALUE_FONT_MIN,
+        _fit_single_line,
+        _fit_wrapped_block,
+    )
+
     raw = _photo(1280, 720)
     mode = DataPresentationMode.FULL_DATA_CARD
     ev = derive_data_render_evidence(raw, _CAND, presentation_mode=mode)
 
-    # Independently replay the same helper calls render_data_card() makes.
-    with Image.open(io.BytesIO(raw)) as im:
-        canvas = _fit_photo_to_canvas(im.convert("RGBA"), (_CANVAS_W, _CANVAS_H))
-    cw = canvas.size[0]
-    inset = max(1, round(_SAFE_INSET_FRAC * cw))
-    pad = max(1, round(_SCORE_PAD_PX_FRAC * cw))
-    plan = _select_data_signature(canvas, inset=inset, pad=pad)
-    assert plan is not None
-    assert ev.logo_zone == plan.placement.value
+    scratch = ImageDraw.Draw(Image.new("RGB", (_CANVAS_W, _CANVAS_H)))
+    inner_w = _CANVAS_W - _HERO_MARGIN * 2
+    value_font, _vs = _fit_single_line(
+        scratch, _CAND.value, font_max=_HERO_VALUE_FONT_MAX, font_min=_HERO_VALUE_FONT_MIN, max_width=inner_w,
+    )
+    label_lines, _lf, _ls = _fit_wrapped_block(
+        scratch, _CAND.label.strip().upper(), font_max=_HERO_LABEL_FONT_MAX,
+        font_min=_HERO_LABEL_FONT_MIN, max_width=inner_w, max_lines=_HERO_LABEL_MAX_LINES,
+    )
 
-    block_w = max(160, round(_DATA_BLOCK_WIDTH_FRAC * cw))
-    inner = max(1, block_w - _DATA_BLOCK_MARGIN * 2)
-    draw = ImageDraw.Draw(canvas)
-    _p, stat_font, _bb, label_lines, _lf, _llh, text_h = _measure_data_stat_block(draw, _CAND, max_width=inner)
-    mb, pb, lb = _data_signature_geometry(canvas.size, plan.placement, inset, plan.line_len)
-    avoid = (min(mb[0], pb[0], lb[0]), min(mb[1], pb[1], lb[1]), max(mb[2], pb[2], lb[2]), max(mb[3], pb[3], lb[3]))
-    placement = _select_data_block_placement(canvas, block_w=block_w, block_h=round(text_h) + _DATA_BLOCK_MARGIN * 2,
-                                             inset=inset, pad=pad, avoid_box=avoid)
-    if placement is None:
-        assert ev.primary_font_size is NOT_MEASURED
-        assert ev.actual_line_count == 0
-    else:
-        assert ev.primary_font_size == int(stat_font.size)
-        assert ev.actual_line_count == len(label_lines)
-    assert ev.safe_margin_frac == round(float(_SAFE_INSET_FRAC), 5)
-    assert ev.source_image_treatment == "preserve"
+    assert ev.renderer_variant == "brand_renderer.render_data_hero_card"
+    assert ev.primary_font_size == int(value_font.size)
+    assert ev.actual_line_count == len(label_lines)
+    assert ev.logo_count == 1 and ev.logo_zone == "lower_right"
+    assert ev.scrim_applied is False and ev.scrim_treatment == "none"
+    assert ev.safe_margin_frac == round(_HERO_MARGIN / _CANVAS_W, 5)
+    assert ev.source_image_treatment is NOT_MEASURED
+    assert "source_image_treatment" in ev.not_applicable_fields
     assert ev.presentation_mode == mode.value
 
 
@@ -289,6 +290,9 @@ def test_data_kirin_regression_evidence_is_faithful() -> None:
 
 
 def test_data_busy_photo_signature_falls_back_and_evidence_records_the_scrim() -> None:
+    # The bottom pulse+NNJ signature + its guaranteed opaque-scrim fallback live on the
+    # source-preserving DATA path (FOUNDER-VISUAL-BOARD-ALIGNMENT-1: FULL_DATA_CARD is now the
+    # source-free hero card and never composites over a busy photo).
     raw = _busy_photo()
     with Image.open(io.BytesIO(raw)) as im:
         canvas = _fit_photo_to_canvas(im.convert("RGBA"), (_CANVAS_W, _CANVAS_H))
@@ -296,7 +300,7 @@ def test_data_busy_photo_signature_falls_back_and_evidence_records_the_scrim() -
     inset = max(1, round(_SAFE_INSET_FRAC * cw))
     pad = max(1, round(_SCORE_PAD_PX_FRAC * cw))
     plan = _select_data_signature(canvas, inset=inset, pad=pad)
-    ev = derive_data_render_evidence(raw, _CAND, presentation_mode=DataPresentationMode.FULL_DATA_CARD)
+    ev = derive_data_render_evidence(raw, _CAND, presentation_mode=DataPresentationMode.MINIMAL_SOURCE_PRESERVING)
     if plan is None:
         # guaranteed fallback signature -> lower-right on an opaque scrim
         assert ev.logo_zone == "lower_right"
@@ -306,7 +310,7 @@ def test_data_busy_photo_signature_falls_back_and_evidence_records_the_scrim() -
         assert ev.logo_zone == plan.placement.value
     # render_data_card must still succeed on this input (never raises past the dispatch).
     assert render_data_card(_CAND, category="tech", editorial_code="NP-D1", source_image_bytes=raw,
-                            presentation_mode=DataPresentationMode.FULL_DATA_CARD)
+                            presentation_mode=DataPresentationMode.MINIMAL_SOURCE_PRESERVING)
 
 
 # ==============================================================================================
@@ -334,16 +338,15 @@ def test_quote_evidence_matches_the_card_geometry(pw: int, ph: int) -> None:
     tl = ImageStat.Stat(im.crop((0, 0, 130, 130)))
     assert max(br.mean) > max(tl.mean) + 10 or br.stddev[0] > tl.stddev[0], "expected the NNJ mark in the bottom-right"
 
-    # Pixel parity for the "not a source scrim" claim: the portrait's far-right strip (well outside
-    # the 40px left-edge feather) is NOT darkened relative to the same strip of the ORIGINAL
-    # portrait - i.e. render_quote_card applies no legibility scrim over the source.
-    portrait_w = round(_CARD_HEIGHT * pw / ph)
-    with Image.open(io.BytesIO(raw)) as src_im:
-        src_scaled = src_im.convert("RGB").resize((portrait_w, _CARD_HEIGHT), Image.Resampling.LANCZOS)
-    strip = max(8, portrait_w // 6)
-    card_strip = ImageStat.Stat(im.crop((_CARD_WIDTH - strip, 0, _CARD_WIDTH, _CARD_HEIGHT)).convert("L")).mean[0]
-    src_strip = ImageStat.Stat(src_scaled.crop((portrait_w - strip, 0, portrait_w, _CARD_HEIGHT)).convert("L")).mean[0]
-    assert card_strip >= src_strip - 6, ("the portrait's right edge must not be scrim-darkened", card_strip, src_strip)
+    # FOUNDER-VISUAL-POLISH-2 §7/§8: the quote card is a DELIBERATE deep-graphite composition - the
+    # portrait is integrated (blended toward graphite + a left->right gradient + a brightness
+    # reduction), never a light panel. Prove the left column and the portrait's inner edge both
+    # read dark, and the whole card mean is dark.
+    inner_edge = ImageStat.Stat(im.crop((_CARD_WIDTH - round(_CARD_WIDTH * 0.44), 0,
+                                         _CARD_WIDTH - round(_CARD_WIDTH * 0.30), _CARD_HEIGHT)).convert("L")).mean[0]
+    left_col = ImageStat.Stat(im.crop((0, 0, round(_CARD_WIDTH * 0.30), _CARD_HEIGHT)).convert("L")).mean[0]
+    assert left_col < 60, ("the text column must be deep graphite", left_col)
+    assert inner_edge < 110, ("the portrait's inner edge must dissolve into the dark panel", inner_edge)
     assert "scrim_treatment" in ev.not_applicable_fields
 
 

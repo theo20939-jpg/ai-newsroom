@@ -69,6 +69,19 @@ _DATA_PARAMS = {
     "font_size_max": 88, "font_size_min": 48, "max_line_count": 2, "safe_margin_frac": 0.019,
     "logo_zone": "lower_right", "scrim_treatment": "none", "source_image_treatment": "preserve",
 }
+# FOUNDER-VISUAL-BOARD-ALIGNMENT-1: the generated FULL_DATA_CARD path now renders the Founder
+# hero-metric card (brand_renderer.render_data_hero_card) - a large primary number on a generated
+# graphite panel, so its font range is much larger and there is no source photo to declare a
+# treatment for. This is the proposed telegram_data vNEXT CANDIDATE shape (design/
+# proposed_telegram_data_quote_vnext_candidates.md); it is NOT promoted.
+_DATA_HERO_PARAMS = {
+    # aligned with telegram_data v3 CANDIDATE (VISUAL-SPEC-VNEXT-PRODUCTION-ALIGNMENT-1): no
+    # logo_zone / placement_zone / scrim_treatment - those differ between the hero card and the
+    # source-preserving MINIMAL render, so declaring hero-only values would lie about the latter.
+    # CANVAS-COMPOSITION-CORRECTION-8: the generated DATA card is now the near-square 1280x1172
+    # board-media aspect (was 16:9), so the board-proportional primary value font is much larger.
+    "font_size_max": 300, "font_size_min": 100, "max_line_count": 2, "safe_margin_frac": 0.019,
+}
 _QUOTE_PARAMS = {
     "safe_margin_frac": 0.019, "logo_zone": "lower_right", "scrim_treatment": "none",
     "source_image_treatment": "preserve",
@@ -157,11 +170,14 @@ def test_news_accepted_render_spec_match_is_partial_evidence_never_whole_na() ->
     that ONE field named, never a whole-dimension NOT_APPLICABLE."""
     branded, _decision = apply_master_news_branding(_photo_16x9())
     evidence = derive_master_news_render_evidence(_photo_16x9(), presentation_type="NEWS")
+    # FOUNDER-VISUAL-POLISH-2: NEWS is now the restrained MARK_ONLY watermark - placement_zone
+    # is genuinely NOT APPLICABLE, so the spec field is skipped as a note and SPEC_MATCH PASSes.
+    assert "placement_zone" in evidence.not_applicable_fields
     dim = _evaluate_spec_match(_local_spec(_NEWS_PARAMS, scope="telegram_news"), None, evidence)
-    assert dim.status is DimensionStatus.PARTIAL_EVIDENCE, dim.rationale
+    assert dim.status is DimensionStatus.PASS, dim.rationale
     assert dim.reason_codes == []
     assert set(dim.checked_fields) >= {"safe_margin_frac", "logo_zone", "scrim_treatment", "source_image_treatment"}
-    assert dim.not_measured_fields == ["placement_zone"]
+    assert dim.not_measured_fields == []
     assert branded  # the real render succeeded
 
 
@@ -178,14 +194,16 @@ def test_breaking_corrected_render_has_no_band_no_scrim_mismatch_and_matches_new
     assert evidence.scrim_treatment == "none"
     assert evidence.source_image_treatment == "preserve"
 
+    # FOUNDER-VISUAL-BREAKING-DATA-RECONSTRUCTION-5 §7: BREAKING v5's pulse is genuinely
+    # LEFT-anchored (`lower_left`), pixel-traced from the board - it now AGREES with
+    # telegram_breaking v1's historical `placement_zone: lower_left` -> SPEC_MATCH = PASS.
     dim = _evaluate_spec_match(_local_spec(_BREAKING_PARAMS, scope="telegram_breaking"), None, evidence)
-    assert dim.status is DimensionStatus.PARTIAL_EVIDENCE, dim.rationale
+    assert dim.status is DimensionStatus.PASS
     assert dim.reason_codes == []
     assert dim.hard_failure is False
-    assert set(dim.checked_fields) >= {"safe_margin_frac", "logo_zone", "scrim_treatment", "source_image_treatment"}
-    assert dim.not_measured_fields == ["placement_zone"]
+    assert set(dim.checked_fields) >= {"safe_margin_frac", "logo_zone", "scrim_treatment", "source_image_treatment", "placement_zone"}
 
-    # A `telegram_breaking v2` with placement_zone dropped -> SPEC_MATCH = PASS (no evaluator change).
+    # dropping placement_zone from the spec -> still PASS.
     v2_params = {k: v for k, v in _BREAKING_PARAMS.items() if k != "placement_zone"}
     v2_dim = _evaluate_spec_match(_local_spec(v2_params, scope="telegram_breaking"), None, evidence)
     assert v2_dim.status is DimensionStatus.PASS
@@ -222,25 +240,33 @@ def test_data_infographic_accepted_render_spec_match_passes() -> None:
 
 
 def test_data_photo_accepted_render_spec_match_passes() -> None:
-    """§15: a normal PHOTO-source DATA card - full DATA treatment - still yields SPEC_MATCH=PASS,
-    proving the DATA spec does not accidentally hard-code the infographic path."""
+    """§15 + FOUNDER-VISUAL-BOARD-ALIGNMENT-1: a non-infographic source classifies to FULL_DATA_CARD,
+    which now renders the Founder-approved generated hero-metric card. Evaluated against the
+    proposed telegram_data vNEXT hero parameter shape, its accepted render still yields
+    SPEC_MATCH=PASS: the large primary-value font is inside the hero range, exactly one NNJ mark,
+    and there is no source photo to declare a treatment for."""
     source_type = classify_source_presentation([])
     assert source_type != SourceType.EXISTING_INFOGRAPHIC
     mode = select_data_presentation_mode(source_type)
+    assert mode is DataPresentationMode.FULL_DATA_CARD
 
     rendered = render_data_card(
         _KIRIN_DATA_CANDIDATE, category="technology", editorial_code="NP-P1",
         source_image_bytes=_photo_16x9(), presentation_mode=mode,
     )
     evidence = derive_data_render_evidence(_photo_16x9(), _KIRIN_DATA_CANDIDATE, presentation_mode=mode)
-    assert evidence.source_image_treatment == "preserve"
-    assert evidence.source_preserved is True
-    dim = _evaluate_spec_match(_local_spec(_DATA_PARAMS), None, evidence)
+    assert evidence.renderer_variant == "brand_renderer.render_data_hero_card"
+    assert evidence.source_image_treatment is NOT_MEASURED
+    assert "source_image_treatment" in evidence.not_applicable_fields
+    assert evidence.logo_count == 1
+    dim = _evaluate_spec_match(_local_spec(_DATA_HERO_PARAMS), None, evidence)
     assert dim.status is DimensionStatus.PASS, dim.rationale
-    assert "font_size" in dim.checked_fields  # the photo path DOES render a stat block -> font is verified
+    assert "font_size" in dim.checked_fields  # the hero card's primary value font IS verified
     assert dim.not_measured_fields == []
-    if evidence.primary_font_size is not NOT_MEASURED:
-        assert 48 <= evidence.primary_font_size <= 88
+    # CANVAS-COMPOSITION-CORRECTION-8: the near-square DATA canvas is 1172 tall, so the hero value
+    # font is derived from the board cap-height (0.163 h) and lands materially larger than the old
+    # 16:9 range. It is still bounded (proportion-matched, not "maximise").
+    assert 200 <= evidence.primary_font_size <= 300
     assert rendered
 
 
@@ -510,8 +536,10 @@ async def test_all_four_active_specs_evaluate_their_accepted_render_field_aware(
       * BREAKING   -> FAIL / SPEC_SCRIM_MISMATCH (the retired dark band is still drawn)
     No render is FORCED to PASS; no hard failure anywhere."""
     specs = {}
+    _news_p = {k: v for k, v in _NEWS_PARAMS.items() if k != "placement_zone"}
+    _brk_p = {k: v for k, v in _BREAKING_PARAMS.items() if k != "placement_zone"}
     for scope, params in [
-        ("telegram_news", _NEWS_PARAMS), ("telegram_breaking", _BREAKING_PARAMS),
+        ("telegram_news", _news_p), ("telegram_breaking", _brk_p),
         ("telegram_data", _DATA_PARAMS), ("telegram_quote", _QUOTE_PARAMS),
     ]:
         cand = await create_candidate_spec(
@@ -524,7 +552,12 @@ async def test_all_four_active_specs_evaluate_their_accepted_render_field_aware(
     news_ev = derive_master_news_render_evidence(photo, presentation_type="NEWS")
     render_breaking_frame(photo, category="technology", editorial_code="NP-B1")
     breaking_ev = derive_breaking_render_evidence(photo)
-    data_mode = select_data_presentation_mode(classify_source_presentation([]))
+    # FOUNDER-VISUAL-BOARD-ALIGNMENT-1: FULL_DATA_CARD now renders the generated hero-metric card
+    # (its own SPEC_MATCH coverage is test_data_photo_accepted_render_spec_match_passes). This
+    # four-spec canary keeps exercising the DATA spec's source-preserving field path via the
+    # infographic classification, where source_image_treatment IS a checked field.
+    data_mode = select_data_presentation_mode(classify_source_presentation(["possible_banner", "possible_logo"]))
+    assert data_mode is DataPresentationMode.MINIMAL_SOURCE_PRESERVING
     data_bytes = render_data_card(
         _KIRIN_DATA_CANDIDATE, category="technology", editorial_code="NP-D1",
         source_image_bytes=photo, presentation_mode=data_mode,
@@ -540,8 +573,8 @@ async def test_all_four_active_specs_evaluate_their_accepted_render_field_aware(
     # the SAME reason - the fused NEWS-family lower signature exposes no independent `placement_zone`
     # while telegram_news/breaking v1 still declare the wrongly-derived placement_zone=lower_left.
     expected = {
-        "telegram_news": DimensionStatus.PARTIAL_EVIDENCE,
-        "telegram_breaking": DimensionStatus.PARTIAL_EVIDENCE,
+        "telegram_news": DimensionStatus.PASS,       # FOUNDER-VISUAL-POLISH-2: MARK_ONLY, placement_zone N/A
+        "telegram_breaking": DimensionStatus.PASS,   # BREAKING v3 vs a placement_zone-free spec
         "telegram_data": DimensionStatus.PASS,
         "telegram_quote": DimensionStatus.PASS,
     }
@@ -561,15 +594,16 @@ async def test_all_four_active_specs_evaluate_their_accepted_render_field_aware(
         assert spec_dim.reason_codes == [], (scope, spec_dim.reason_codes)  # no mismatch anywhere
         # every case verifies at least the margin + logo zone + source treatment
         assert {"safe_margin_frac", "logo_zone", "source_image_treatment"} <= set(spec_dim.checked_fields), scope
-    # NEWS + BREAKING: the only not-measured field is placement_zone; nothing routes to BLOCK/REWORK.
+    # FOUNDER-VISUAL-POLISH-2: NEWS (MARK_ONLY) and BREAKING v3 both cleanly PASS a
+    # placement_zone-free spec - nothing routes to BLOCK/REWORK.
     for scope in ("telegram_news", "telegram_breaking"):
-        assert expected[scope] is DimensionStatus.PARTIAL_EVIDENCE
+        assert expected[scope] is DimensionStatus.PASS
     brk_merged, _ = finalize_art_direction(SpecEvaluationInput(
         base_result=evaluate_art_direction_shadow(_pixel_input(photo, "BREAKING")),
         active_spec=specs["telegram_breaking"], render_evidence=breaking_ev,
     ))
     assert brk_merged.decision is not ArtDirectorDecision.BLOCK
-    assert brk_merged.decision is not ArtDirectorDecision.REWORK  # PARTIAL_EVIDENCE never downgrades
+    assert brk_merged.decision is not ArtDirectorDecision.REWORK
 
 
 # ==============================================================================================
@@ -578,13 +612,34 @@ async def test_all_four_active_specs_evaluate_their_accepted_render_field_aware(
 
 
 def test_derive_data_evidence_reports_a_crop_when_the_source_aspect_differs() -> None:
-    ev_16x9 = derive_data_render_evidence(_photo_16x9(), _KIRIN_DATA_CANDIDATE, presentation_mode=DataPresentationMode.FULL_DATA_CARD)
+    # FOUNDER-VISUAL-BOARD-ALIGNMENT-1: crop detection (`_canvas_crop_treatment`) applies to the
+    # source-preserving DATA path; FULL_DATA_CARD is now the source-free generated hero card.
+    ev_16x9 = derive_data_render_evidence(
+        _photo_16x9(), _KIRIN_DATA_CANDIDATE, presentation_mode=DataPresentationMode.MINIMAL_SOURCE_PRESERVING,
+    )
     assert ev_16x9.source_image_treatment == "preserve"
     assert ev_16x9.source_preserved is True
 
-    ev_4x3 = derive_data_render_evidence(_photo_4x3(), _KIRIN_DATA_CANDIDATE, presentation_mode=DataPresentationMode.FULL_DATA_CARD)
+    ev_4x3 = derive_data_render_evidence(
+        _photo_4x3(), _KIRIN_DATA_CANDIDATE, presentation_mode=DataPresentationMode.MINIMAL_SOURCE_PRESERVING,
+    )
     assert ev_4x3.source_image_treatment == "crop"
     assert ev_4x3.source_preserved is False
+
+
+def test_derive_data_hero_evidence_is_source_free_and_reports_the_metric_font() -> None:
+    """FOUNDER-VISUAL-BOARD-ALIGNMENT-1: FULL_DATA_CARD evidence describes the generated hero card."""
+    ev = derive_data_render_evidence(
+        _photo_4x3(), _KIRIN_DATA_CANDIDATE, presentation_mode=DataPresentationMode.FULL_DATA_CARD,
+    )
+    assert ev.renderer_variant == "brand_renderer.render_data_hero_card"
+    assert ev.source_image_treatment is NOT_MEASURED
+    assert ev.source_preserved is NOT_MEASURED
+    assert "source_image_treatment" in ev.not_applicable_fields
+    assert ev.logo_count == 1 and ev.logo_zone == "lower_right"
+    assert ev.scrim_applied is False
+    assert isinstance(ev.primary_font_size, int) and ev.primary_font_size >= 88
+    assert ev.actual_line_count <= 2
 
 
 def test_derive_data_evidence_minimal_mode_measures_zero_lines_and_no_stat_font() -> None:
@@ -603,10 +658,10 @@ def test_derive_master_news_evidence_has_one_mark_and_placement_zone_is_a_measur
     assert ev.logo_count == 1
     assert ev.logo_zone in {"lower_right", "lower_left", "upper_right", "upper_left"}
     assert ev.placement_zone is NOT_MEASURED
-    # addendum §1: NOT in not_applicable_fields - it IS applicable, the renderer just can't expose
-    # it -> drives SPEC_MATCH PARTIAL_EVIDENCE and surfaces the two-corner-vs-fused-signature drift.
-    assert "placement_zone" not in ev.not_applicable_fields
-    assert "MEASUREMENT GAP" in ev.notes["placement_zone"]
+    # FOUNDER-VISUAL-POLISH-2: MARK_ONLY has no independent accent -> placement_zone is NOT
+    # APPLICABLE (the one mark's corner is logo_zone), not a measurement gap.
+    assert "placement_zone" in ev.not_applicable_fields
+    assert "NOT APPLICABLE" in ev.notes["placement_zone"]
     assert ev.source_image_treatment == "preserve"
     assert "primary_font_size" in ev.not_applicable_fields
 
@@ -636,10 +691,8 @@ def test_derive_breaking_evidence_reports_the_corrected_no_scrim_news_family_sig
     assert ev.scrim_applied is False
     assert ev.scrim_treatment == "none"
     assert ev.logo_count == 1
-    assert ev.renderer_version == "pulse-breaking-v2"
-    # placement_zone stays an APPLICABLE measurement gap (like NEWS), not not_applicable.
-    assert "placement_zone" not in ev.not_applicable_fields
-    assert "MEASUREMENT GAP" in ev.notes["placement_zone"] and "telegram_breaking v2" in ev.notes["placement_zone"]
+    assert ev.renderer_version == "pulse-breaking-v7-board"
+    assert ev.placement_zone == "lower_left"  # FOUNDER-VISUAL-POLISH-2: the red pulse crosses the lower media
 
 
 # --------------------------------------------------------------------------------------------------

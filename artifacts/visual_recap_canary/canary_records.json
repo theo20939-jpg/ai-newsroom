@@ -1,0 +1,866 @@
+[
+  {
+    "name": "news_01_dark_photo",
+    "format": "NEWS",
+    "renderer_variant": "nnj_master_news_overlay.apply_master_news_branding",
+    "renderer_version": "master_news_v1",
+    "canvas": [
+      1280,
+      720
+    ],
+    "logo_count": 1,
+    "logo_zone": "lower_right",
+    "placement_zone": "NOT_MEASURED",
+    "scrim_treatment": "none",
+    "source_image_treatment": "preserve",
+    "source_preserved": true,
+    "actual_line_count": "NOT_MEASURED",
+    "primary_font_size": "NOT_MEASURED",
+    "not_applicable_fields": [
+      "actual_line_count",
+      "secondary_font_size",
+      "primary_font_size"
+    ],
+    "spec_overall": "pass",
+    "spec_dimensions": {
+      "fact_safety": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "spec_match": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [
+          "safe_margin_frac",
+          "logo_zone",
+          "scrim_treatment",
+          "source_image_treatment"
+        ],
+        "not_measured": []
+      },
+      "reference_match": {
+        "status": "not_applicable",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "source_preservation": {
+        "status": "not_applicable",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "typography": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "layout": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "branding": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "visual_quality": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      }
+    },
+    "hard_failures": [],
+    "merged_decision": "pass",
+    "merged_issue_codes": [],
+    "merged_instructions": "Safe degradation (no visible brand mark) - not a failure.",
+    "renderer_decision_metadata": {
+      "upper_mark": {
+        "placement": "omitted"
+      },
+      "lower_signature": {
+        "placement": "lower_right"
+      },
+      "degradation_mode": "lower_signature_only"
+    }
+  },
+  {
+    "name": "news_02_light_photo",
+    "format": "NEWS",
+    "renderer_variant": "nnj_master_news_overlay.apply_master_news_branding",
+    "renderer_version": "master_news_v1",
+    "canvas": [
+      1280,
+      720
+    ],
+    "logo_count": 1,
+    "logo_zone": "lower_right",
+    "placement_zone": "NOT_MEASURED",
+    "scrim_treatment": "none",
+    "source_image_treatment": "preserve",
+    "source_preserved": true,
+    "actual_line_count": "NOT_MEASURED",
+    "primary_font_size": "NOT_MEASURED",
+    "not_applicable_fields": [
+      "actual_line_count",
+      "secondary_font_size",
+      "primary_font_size"
+    ],
+    "spec_overall": "pass",
+    "spec_dimensions": {
+      "fact_safety": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "spec_match": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [
+          "safe_margin_frac",
+          "logo_zone",
+          "scrim_treatment",
+          "source_image_treatment"
+        ],
+        "not_measured": []
+      },
+      "reference_match": {
+        "status": "not_applicable",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "source_preservation": {
+        "status": "not_applicable",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "typography": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "layout": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "branding": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "visual_quality": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      }
+    },
+    "hard_failures": [],
+    "merged_decision": "pass",
+    "merged_issue_codes": [],
+    "merged_instructions": "Safe degradation (no visible brand mark) - not a failure.",
+    "renderer_decision_metadata": {
+      "upper_mark": {
+        "placement": "omitted"
+      },
+      "lower_signature": {
+        "placement": "lower_right"
+      },
+      "degradation_mode": "lower_signature_only"
+    }
+  },
+  {
+    "name": "breaking_03_dark_dramatic",
+    "format": "BREAKING",
+    "renderer_variant": "brand_renderer.render_breaking_frame -> nnj_master_news_overlay.select_master_news_branding",
+    "renderer_version": "pulse-breaking-v2",
+    "canvas": [
+      1122,
+      1402
+    ],
+    "logo_count": 1,
+    "logo_zone": "upper_right",
+    "placement_zone": "NOT_MEASURED",
+    "scrim_treatment": "none",
+    "source_image_treatment": "preserve",
+    "source_preserved": true,
+    "actual_line_count": "NOT_MEASURED",
+    "primary_font_size": "NOT_MEASURED",
+    "not_applicable_fields": [
+      "actual_line_count",
+      "secondary_font_size",
+      "primary_font_size"
+    ],
+    "spec_overall": "rework",
+    "spec_dimensions": {
+      "fact_safety": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "spec_match": {
+        "status": "fail",
+        "hard_failure": false,
+        "reason_codes": [
+          "SPEC_LOGO_ZONE_MISMATCH"
+        ],
+        "checked": [
+          "safe_margin_frac",
+          "logo_zone",
+          "scrim_treatment",
+          "source_image_treatment"
+        ],
+        "not_measured": []
+      },
+      "reference_match": {
+        "status": "not_applicable",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "source_preservation": {
+        "status": "not_applicable",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "typography": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "layout": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "branding": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "visual_quality": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      }
+    },
+    "hard_failures": [],
+    "merged_decision": "rework",
+    "merged_issue_codes": [],
+    "merged_instructions": "No structural checks failed (shadow evaluator - no real pixel analysis yet). spec/reference notes: SPEC_LOGO_ZONE_MISMATCH",
+    "renderer_decision_metadata": null
+  },
+  {
+    "name": "breaking_04_light_photo",
+    "format": "BREAKING",
+    "renderer_variant": "brand_renderer.render_breaking_frame -> nnj_master_news_overlay.select_master_news_branding",
+    "renderer_version": "pulse-breaking-v2",
+    "canvas": [
+      1600,
+      900
+    ],
+    "logo_count": 1,
+    "logo_zone": "lower_right",
+    "placement_zone": "NOT_MEASURED",
+    "scrim_treatment": "none",
+    "source_image_treatment": "preserve",
+    "source_preserved": true,
+    "actual_line_count": "NOT_MEASURED",
+    "primary_font_size": "NOT_MEASURED",
+    "not_applicable_fields": [
+      "actual_line_count",
+      "secondary_font_size",
+      "primary_font_size"
+    ],
+    "spec_overall": "pass_with_notes",
+    "spec_dimensions": {
+      "fact_safety": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "spec_match": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [
+          "safe_margin_frac",
+          "logo_zone",
+          "scrim_treatment",
+          "source_image_treatment"
+        ],
+        "not_measured": []
+      },
+      "reference_match": {
+        "status": "not_applicable",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "source_preservation": {
+        "status": "not_applicable",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "typography": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "layout": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "branding": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "visual_quality": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      }
+    },
+    "hard_failures": [],
+    "merged_decision": "pass_with_notes",
+    "merged_issue_codes": [],
+    "merged_instructions": "No structural checks failed (shadow evaluator - no real pixel analysis yet).",
+    "renderer_decision_metadata": null
+  },
+  {
+    "name": "data_05_existing_infographic",
+    "format": "DATA",
+    "renderer_variant": "brand_renderer.render_data_card",
+    "renderer_version": "pulse-data-v1",
+    "canvas": [
+      1280,
+      720
+    ],
+    "logo_count": 1,
+    "logo_zone": "lower_right",
+    "placement_zone": "lower_right",
+    "scrim_treatment": "strong",
+    "source_image_treatment": "preserve",
+    "source_preserved": true,
+    "actual_line_count": 0,
+    "primary_font_size": "NOT_MEASURED",
+    "not_applicable_fields": [
+      "secondary_font_size",
+      "primary_font_size"
+    ],
+    "spec_overall": "rework",
+    "spec_dimensions": {
+      "fact_safety": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "spec_match": {
+        "status": "fail",
+        "hard_failure": false,
+        "reason_codes": [
+          "SPEC_SCRIM_MISMATCH"
+        ],
+        "checked": [
+          "max_line_count",
+          "safe_margin_frac",
+          "logo_zone",
+          "scrim_treatment",
+          "source_image_treatment"
+        ],
+        "not_measured": []
+      },
+      "reference_match": {
+        "status": "not_applicable",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "source_preservation": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "typography": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "layout": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "branding": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "visual_quality": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      }
+    },
+    "hard_failures": [],
+    "merged_decision": "rework",
+    "merged_issue_codes": [],
+    "merged_instructions": "No structural checks failed (shadow evaluator - no real pixel analysis yet). spec/reference notes: SPEC_SCRIM_MISMATCH",
+    "renderer_decision_metadata": null
+  },
+  {
+    "name": "data_05b_infographic_full_card_DESTROY_TEST",
+    "format": "DATA",
+    "renderer_variant": "brand_renderer.render_data_card",
+    "renderer_version": "pulse-data-v1",
+    "canvas": [
+      1280,
+      720
+    ],
+    "logo_count": 1,
+    "logo_zone": "lower_right",
+    "placement_zone": "lower_right",
+    "scrim_treatment": "none",
+    "source_image_treatment": "preserve",
+    "source_preserved": true,
+    "actual_line_count": 2,
+    "primary_font_size": 84,
+    "not_applicable_fields": [
+      "secondary_font_size"
+    ],
+    "spec_overall": "block",
+    "spec_dimensions": {
+      "fact_safety": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "spec_match": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [
+          "font_size",
+          "max_line_count",
+          "safe_margin_frac",
+          "logo_zone",
+          "scrim_treatment",
+          "source_image_treatment"
+        ],
+        "not_measured": []
+      },
+      "reference_match": {
+        "status": "not_applicable",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "source_preservation": {
+        "status": "fail",
+        "hard_failure": true,
+        "reason_codes": [
+          "INFOGRAPHIC_DESTROYED"
+        ],
+        "checked": [],
+        "not_measured": []
+      },
+      "typography": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "layout": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "branding": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "visual_quality": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      }
+    },
+    "hard_failures": [
+      "INFOGRAPHIC_DESTROYED"
+    ],
+    "merged_decision": "block",
+    "merged_issue_codes": [],
+    "merged_instructions": "Hard art-direction failure (INFOGRAPHIC_DESTROYED). No structural checks failed (shadow evaluator - no real pixel analysis yet).",
+    "renderer_decision_metadata": null
+  },
+  {
+    "name": "data_06_generated_card",
+    "format": "DATA",
+    "renderer_variant": "brand_renderer.render_data_card",
+    "renderer_version": "pulse-data-v1",
+    "canvas": [
+      1280,
+      720
+    ],
+    "logo_count": 1,
+    "logo_zone": "lower_left",
+    "placement_zone": "lower_left",
+    "scrim_treatment": "none",
+    "source_image_treatment": "crop",
+    "source_preserved": false,
+    "actual_line_count": 1,
+    "primary_font_size": 88,
+    "not_applicable_fields": [
+      "secondary_font_size"
+    ],
+    "spec_overall": "rework",
+    "spec_dimensions": {
+      "fact_safety": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "spec_match": {
+        "status": "fail",
+        "hard_failure": false,
+        "reason_codes": [
+          "SPEC_LOGO_ZONE_MISMATCH",
+          "SPEC_SOURCE_TREATMENT_MISMATCH"
+        ],
+        "checked": [
+          "font_size",
+          "max_line_count",
+          "safe_margin_frac",
+          "logo_zone",
+          "scrim_treatment",
+          "source_image_treatment"
+        ],
+        "not_measured": []
+      },
+      "reference_match": {
+        "status": "not_applicable",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "source_preservation": {
+        "status": "not_applicable",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "typography": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "layout": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "branding": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "visual_quality": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      }
+    },
+    "hard_failures": [],
+    "merged_decision": "rework",
+    "merged_issue_codes": [],
+    "merged_instructions": "No structural checks failed (shadow evaluator - no real pixel analysis yet). spec/reference notes: SPEC_LOGO_ZONE_MISMATCH; SPEC_SOURCE_TREATMENT_MISMATCH",
+    "renderer_decision_metadata": null
+  },
+  {
+    "name": "quote_07_light_portrait",
+    "format": "QUOTE",
+    "renderer_variant": "brand_renderer.render_quote_card",
+    "renderer_version": "pulse-quote-v1",
+    "canvas": [
+      1200,
+      675
+    ],
+    "logo_count": 1,
+    "logo_zone": "lower_right",
+    "placement_zone": "NOT_MEASURED",
+    "scrim_treatment": "NOT_MEASURED",
+    "source_image_treatment": "preserve",
+    "source_preserved": true,
+    "actual_line_count": "NOT_MEASURED",
+    "primary_font_size": "NOT_MEASURED",
+    "not_applicable_fields": [
+      "actual_line_count",
+      "scrim_treatment",
+      "placement_zone",
+      "secondary_font_size",
+      "primary_font_size"
+    ],
+    "spec_overall": "pass_with_notes",
+    "spec_dimensions": {
+      "fact_safety": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "spec_match": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [
+          "safe_margin_frac",
+          "logo_zone",
+          "source_image_treatment"
+        ],
+        "not_measured": []
+      },
+      "reference_match": {
+        "status": "not_applicable",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "source_preservation": {
+        "status": "not_applicable",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "typography": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "layout": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "branding": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "visual_quality": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      }
+    },
+    "hard_failures": [],
+    "merged_decision": "pass_with_notes",
+    "merged_issue_codes": [],
+    "merged_instructions": "No structural checks failed (shadow evaluator - no real pixel analysis yet).",
+    "renderer_decision_metadata": null
+  },
+  {
+    "name": "quote_08_dark_portrait",
+    "format": "QUOTE",
+    "renderer_variant": "brand_renderer.render_quote_card",
+    "renderer_version": "pulse-quote-v1",
+    "canvas": [
+      1200,
+      675
+    ],
+    "logo_count": 1,
+    "logo_zone": "lower_right",
+    "placement_zone": "NOT_MEASURED",
+    "scrim_treatment": "NOT_MEASURED",
+    "source_image_treatment": "preserve",
+    "source_preserved": true,
+    "actual_line_count": "NOT_MEASURED",
+    "primary_font_size": "NOT_MEASURED",
+    "not_applicable_fields": [
+      "actual_line_count",
+      "scrim_treatment",
+      "placement_zone",
+      "secondary_font_size",
+      "primary_font_size"
+    ],
+    "spec_overall": "pass_with_notes",
+    "spec_dimensions": {
+      "fact_safety": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "spec_match": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [
+          "safe_margin_frac",
+          "logo_zone",
+          "source_image_treatment"
+        ],
+        "not_measured": []
+      },
+      "reference_match": {
+        "status": "not_applicable",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "source_preservation": {
+        "status": "not_applicable",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "typography": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "layout": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "branding": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      },
+      "visual_quality": {
+        "status": "pass",
+        "hard_failure": false,
+        "reason_codes": [],
+        "checked": [],
+        "not_measured": []
+      }
+    },
+    "hard_failures": [],
+    "merged_decision": "pass_with_notes",
+    "merged_issue_codes": [],
+    "merged_instructions": "No structural checks failed (shadow evaluator - no real pixel analysis yet).",
+    "renderer_decision_metadata": null
+  },
+  {
+    "name": "recap_09_fallback_background",
+    "format": "RECAP",
+    "note": "Tier-3 fallback background - carries NO branding by contract; apply_master_news_branding() adds the single NNJ mark once at Final Post Review + publication time.",
+    "render_success": true,
+    "template_version": "pulse-recap-fallback-background-v1"
+  }
+]

@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "blocking_issues": [],
+  "warnings": [
+    "source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=1)",
+    "source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=2)",
+    "source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=3)",
+    "source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=4)",
+    "source_image_ref_recorded_but_not_applied: package.source_image_ref='assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg' but this render's source_image_treatment is 'none' (slide_index=5)"
+  ],
+  "retry_recommended": false,
+  "retries_used": 0,
+  "max_retries": 1
+}

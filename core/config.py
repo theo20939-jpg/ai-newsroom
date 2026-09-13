@@ -1213,6 +1213,21 @@ class Settings(BaseSettings):
     # adapter never performs autonomous token refresh - see design/instagram_official_api.md.
     instagram_access_token_expires_at: datetime | None = None
 
+    # INSTAGRAM-EXECUTION-FOUNDATION-1 section 18: the ONE hard publication safety flag for
+    # services/instagram_publish_adapter.py. Default False (fail CLOSED) - a real (non-shadow)
+    # publish attempt raises InstagramPublishErrorCode.PUBLICATION_DISABLED immediately, before any
+    # client call is made, whenever this is False. Shadow/fake publish execution (no network write,
+    # no real credential) is unaffected by this flag either way - it is always available for
+    # testing. Independent of any Telegram publication concept; flipping it changes nothing about
+    # Telegram. Turning this True in production is a separate, explicitly-authorized future step
+    # (this phase never sets it True anywhere, never reads a real access token for a write call).
+    instagram_publication_enabled: bool = False
+    # The official write scope this flag conceptually gates, kept separate from the READ scopes
+    # services/instagram_account_reader.py already uses (instagram_business_basic /
+    # ..._manage_insights) - section 17's own "separate READ_SCOPES and WRITE_SCOPES" instruction.
+    # Documented here, never silently requested/added to any live OAuth flow by this phase.
+    instagram_write_scopes: tuple[str, ...] = ("instagram_business_content_publish",)
+
     # DIRECTOR-CONTROL-PLANE-1 §8/§12: the ONE new enforcement flag this phase introduces - gates
     # only whether services/director_editorial_gate.py's decision actually withholds DROP/HOLD
     # candidates from the real Founder NEWS queue. Default False: every gate evaluation still runs

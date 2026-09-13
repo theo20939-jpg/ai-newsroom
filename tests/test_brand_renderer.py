@@ -144,13 +144,17 @@ def test_breaking_frame_preserves_source_dimensions_and_draws_no_dark_band():
 
 
 def test_breaking_frame_bakes_no_wordmark_and_no_band_in_source():
-    """§11: structural render metadata (not OCR) proves the baked-text + band removal."""
+    """§11 + FOUNDER-VISUAL-POLISH-2 §3: structural proof - no baked "BREAKING" text, no band, no
+    editorial-code chip; BREAKING draws its OWN red lower-media pulse + one restrained mark."""
     src = inspect.getsource(render_breaking_frame)
     body = src.split('"""')[2]  # everything after the docstring
     assert '"BREAKING"' not in body
     assert "band_height" not in body and "accent_height" not in body
     assert "_draw_code_label(" not in body
-    assert "select_master_news_branding(" in body  # reuses the canonical NEWS primitive (§7)
+    # FOUNDER-VISUAL-OVERLAY-RECOVERY-4 §7: the RECOVERED smooth waveform, not the retired triangle
+    assert "_draw_recovered_pulse(" in body
+    assert "_draw_pulse(" not in body                     # crude flat->spike->valley->flat retired here
+    assert "_draw_breaking_watermark(" in body            # BOARD-REBUILD-6: the large restrained grey watermark
 
 
 def test_breaking_frame_works_with_no_source_image():
@@ -170,7 +174,8 @@ def test_breaking_frame_works_with_no_source_image():
 def test_breaking_frame_no_longer_calls_paste_logo():
     source = inspect.getsource(render_breaking_frame)
     assert "_paste_logo(" not in source
-    assert "_paste_svg_mark(" in source
+    # BOARD-REBUILD-6: the corner mark is replaced by the large restrained grey watermark
+    assert "_draw_breaking_watermark(" in source
 
 
 def test_quote_card_no_longer_calls_paste_logo():
@@ -236,7 +241,7 @@ def test_data_card_renders_large_plain_integer_without_overflow():
     )
     assert result.success
     with Image.open(io.BytesIO(result.image_bytes)) as img:
-        assert img.size == (_CANVAS_W, _CANVAS_H)  # DATA always fits to MASTER's own canvas size
+        assert img.size == (1280, 1172)  # CANVAS-COMPOSITION-CORRECTION-8: DATA hero is its own near-square canvas
 
 
 def test_data_card_is_deterministic_for_identical_input():
@@ -475,7 +480,7 @@ def test_data_card_renders_successfully_with_representative_long_label():
         source_image_bytes=_solid_jpeg(1600, 900, color=(15, 15, 15)),
     )
     with Image.open(io.BytesIO(out)) as img:
-        assert img.size == (1280, 720)
+        assert img.size == (1280, 1172)  # DATA hero: near-square board-media aspect
 
 
 # ---------------------------------------------------------------------------
@@ -524,7 +529,12 @@ def test_data_card_never_uses_boxed_logo_treatment():
     assert "_paste_logo" not in source
 
 
-def test_data_card_uses_source_image_as_primary_visual(monkeypatch):
+def test_data_card_source_image_role_is_mode_dependent(monkeypatch):
+    """FOUNDER-VISUAL-BOARD-ALIGNMENT-1: MINIMAL_SOURCE_PRESERVING keeps the source photo as the
+    primary visual (fits it to the canvas exactly once); FULL_DATA_CARD now renders the generated
+    hero-metric card and never touches the source photo at all."""
+    from services.data_source_classification import DataPresentationMode
+
     calls: list = []
     original = brand_renderer_module._fit_photo_to_canvas
 
@@ -534,10 +544,23 @@ def test_data_card_uses_source_image_as_primary_visual(monkeypatch):
 
     monkeypatch.setattr(brand_renderer_module, "_fit_photo_to_canvas", _spy)
     source = _solid_jpeg(1600, 900, color=(20, 20, 20))
-    out = render_data_card(_V2_20_DATA_CANDIDATE, category="TECH", editorial_code="NP-2000", source_image_bytes=source)
-    assert len(calls) == 1  # the real source bytes reach the shared canvas-fit helper exactly once
-    with Image.open(io.BytesIO(out)) as img:
-        assert img.size == (1280, 720)
+
+    minimal = render_data_card(
+        _V2_20_DATA_CANDIDATE, category="TECH", editorial_code="NP-2000", source_image_bytes=source,
+        presentation_mode=DataPresentationMode.MINIMAL_SOURCE_PRESERVING,
+    )
+    assert len(calls) == 1  # source-preserving mode fits the real source bytes exactly once
+    with Image.open(io.BytesIO(minimal)) as img:
+        assert img.size == (_CANVAS_W, _CANVAS_H)  # MINIMAL keeps the frozen 1280x720 source canvas
+
+    calls.clear()  # FULL_DATA_CARD -> the generated hero card (its own near-square canvas)
+    hero = render_data_card(
+        _V2_20_DATA_CANDIDATE, category="TECH", editorial_code="NP-2000", source_image_bytes=source,
+        presentation_mode=DataPresentationMode.FULL_DATA_CARD,
+    )
+    assert calls == []  # the hero card is a generated panel - the source photo is never fitted
+    with Image.open(io.BytesIO(hero)) as img:
+        assert img.size == (1280, 1172)
 
 
 def test_data_card_primary_stat_fits_within_block_bounds():
@@ -626,7 +649,7 @@ def test_data_card_end_to_end_with_unsafe_source_still_returns_valid_unclipped_i
     )
     with Image.open(io.BytesIO(out)) as img:
         assert img.format == "JPEG"
-        assert img.size == (1280, 720)
+        assert img.size == (1280, 1172)
 
 
 def test_data_card_no_source_image_fails_safe_via_render_branded_media():
@@ -702,34 +725,33 @@ def test_data_card_falls_back_to_backing_when_every_corner_needs_one():
     assert needs_backing is True
 
 
-def test_data_card_backing_is_sized_to_content_not_the_full_block_when_unavoidable():
-    """When a backing genuinely cannot be avoided, it must stay the smallest possible legibility
-    aid - sized to the REAL rendered text, never the fixed nominal block width reserved for
-    corner-safety scoring. A short "5%" value must leave the far edge of that nominal footprint
-    completely untouched (matching the original photo pixels there), while pixels right next to
-    the actual text are visibly tinted."""
-    w, h = 1280, 720
+def test_data_card_backing_sizing_helper_still_sizes_to_content(monkeypatch):
+    """The retired V2.20 corner-stat backing is no longer a shipped path (FOUNDER-VISUAL-BOARD-
+    ALIGNMENT-1), but its placement/sizing helpers are retained. This pins that
+    `_select_data_block_placement()` still reaches for a backing only when every corner needs one,
+    and that a short "5%" value's measured stat block is far narrower than the nominal scoring
+    footprint - i.e. any backing built from it would be content-tight, not full-block."""
+    w = 1280
     patch = _textured_patch()
-    canvas = Image.new("RGB", (w, h), (30, 30, 30))
-    for xy in ((0, 0), (0, h - 260), (w - 500, 0), (w - 500, h - 260)):
+    canvas = Image.new("RGB", (w, 720), (30, 30, 30))
+    for xy in ((0, 0), (0, 720 - 260), (w - 500, 0), (w - 500, 720 - 260)):
         canvas.paste(patch, xy)
-    buf = io.BytesIO()
-    canvas.save(buf, format="JPEG", quality=95)
+    canvas_rgba = canvas.convert("RGBA")
 
-    short_candidate = DataCandidate(value="5", unit="%", label="", evidence_fact="x")
-    out = render_data_card(short_candidate, category="TECH", editorial_code="NP-1", source_image_bytes=buf.getvalue())
-    rendered = Image.open(io.BytesIO(out)).convert("RGB")
-
+    inset = max(1, round(brand_renderer_module._SAFE_INSET_FRAC * w))
+    pad = max(1, round(brand_renderer_module._SCORE_PAD_PX_FRAC * w))
     block_w = max(160, round(brand_renderer_module._DATA_BLOCK_WIDTH_FRAC * w))
-    far_x, near_x, sample_y = block_w - 10, 40, 50
-    original_far = canvas.getpixel((far_x, sample_y))
-    rendered_far = rendered.getpixel((far_x, sample_y))
-    rendered_near = rendered.getpixel((near_x, sample_y))
+    result = _select_data_block_placement(canvas_rgba, block_w=block_w, block_h=200, inset=inset, pad=pad, avoid_box=None)
+    assert result is not None
+    _box, _color, needs_backing = result
+    assert needs_backing is True
 
-    far_diff = sum(abs(a - b) for a, b in zip(original_far, rendered_far))
-    near_diff = sum(abs(a - b) for a, b in zip(original_far, rendered_near))
-    assert far_diff < 15, f"backing leaked past the actual text content: far edge diff={far_diff}"
-    assert near_diff > far_diff  # near the real text, a real tint is visible
+    scratch = ImageDraw.Draw(Image.new("RGB", (w, 720)))
+    inner_margin = brand_renderer_module._DATA_BLOCK_MARGIN
+    short_candidate = DataCandidate(value="5", unit="%", label="", evidence_fact="x")
+    primary_text, stat_font, *_ = _measure_data_stat_block(scratch, short_candidate, max_width=block_w - inner_margin * 2)
+    content_width = scratch.textlength(primary_text, font=stat_font)
+    assert content_width + inner_margin * 2 < block_w  # a backing from this would be content-tight
 
 
 def test_samsung_ssd_data_card_end_to_end_regression():
@@ -760,7 +782,7 @@ def test_samsung_ssd_data_card_end_to_end_regression():
     )
     with Image.open(io.BytesIO(out)) as img:
         assert img.format == "JPEG"
-        assert img.size == (1280, 720)
+        assert img.size == (1280, 1172)
 
 
 def test_news_renderer_unaffected_by_data_redesign():

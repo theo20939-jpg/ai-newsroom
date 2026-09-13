@@ -1,0 +1,106 @@
+{
+  "schema_version": "v1",
+  "package_id": "b01441fd-a18c-4d5e-b7da-85553659a879",
+  "platform": "instagram",
+  "account_key": "ninja_pulse_canary",
+  "content_format": "carousel",
+  "caption": "iPhone Duo объявлен — и весь рынок складных смартфонов реагирует",
+  "caption_is_draft": true,
+  "on_image_copy": null,
+  "cta": "Что думаете о новом формате Apple?",
+  "hashtags": [],
+  "media_plan": {
+    "kind": "carousel",
+    "objective": "saves",
+    "slides": [
+      {
+        "index": 0,
+        "role": "hook",
+        "text": "iPhone Duo объявлен — и весь рынок складных смартфонов реагирует",
+        "visual_direction": "Крупный, привлекающий внимание кадр iPhone-семейства как визуальный якорь слайда.",
+        "source_evidence": "Engadget, 9to5Mac, MacRumors — 12 сент. 2026"
+      },
+      {
+        "index": 1,
+        "role": "context",
+        "text": "После лет слухов Apple анонсировала складной iPhone Duo — на фоне уже привычных Samsung Galaxy Z и Google Pixel Fold",
+        "visual_direction": "Текстовый слайд-контекст, тёмный фон, без фото.",
+        "source_evidence": "9to5Mac Overtime 081; CNET — 12 сент. 2026"
+      },
+      {
+        "index": 2,
+        "role": "data",
+        "text": "Только на JD.com в Китае на iPhone Duo оформлено почти 1,55 млн предзаказов",
+        "visual_direction": "Крупная цифра-акцент, без фото.",
+        "source_evidence": "iXBT News — 12 сент. 2026 (со ссылкой на данные JD.com)"
+      },
+      {
+        "index": 3,
+        "role": "comparison",
+        "text": "iPhone Duo: защита IP68, соотношение экрана 1:1.4 vs Pixel Fold: экран шире, но не такой прочный",
+        "visual_direction": "Двухпанельное сравнение, без фото.",
+        "source_evidence": "CNET (durability face-off); 9to5Google (aspect ratio) — 12 сент. 2026"
+      },
+      {
+        "index": 4,
+        "role": "explanation",
+        "text": "iPhone Duo лишился части функций iPhone 18 Pro, зато обошёл iPad по удобству разделения экрана",
+        "visual_direction": "Текстовый слайд с деталями, без фото.",
+        "source_evidence": "MacRumors (missing features); 9to5Mac (split screen vs iPad) — 12 сент. 2026"
+      },
+      {
+        "index": 5,
+        "role": "cta",
+        "text": "Samsung уже усилила рекламу Galaxy Z, а Apple, по оценкам, займёт около четверти рынка складных телефонов",
+        "visual_direction": "Закрывающий слайд, красный акцент, без фото.",
+        "source_evidence": "3DNews (market-share estimate + Samsung ad response) — 12 сент. 2026"
+      }
+    ]
+  },
+  "external_video_asset_ref": null,
+  "opportunity_id": "canary-trend-9fac0988-20b7-4187-b357-a4522b279d6d",
+  "story_id": "9fac0988-20b7-4187-b357-a4522b279d6d",
+  "trend_id": null,
+  "campaign_id": null,
+  "campaign_name": null,
+  "campaign_phase": null,
+  "approved_claims": [],
+  "restricted_claims": [],
+  "product_mention_allowed": true,
+  "director_evidence": {
+    "evidence": [
+      "Engadget: Where should Apple go after the iPhone Duo? Bring on smaller and larger foldables",
+      "CNET: iPhone Duo vs. Pixel 11 Pro Fold: 2 Durable Foldables Face Off",
+      "9to5Google: Apple on wide Android foldables beating iPhone Duo; ‘they got the aspect ratio’",
+      "9to5Mac: Report: iPhone price hike ‘better than feared,’ iPhone Duo to drive demand for the cycle",
+      "9to5Mac: 9to5Mac Overtime 081: iPhone Duo thoughts and impressions",
+      "9to5Mac: Leaker says Apple will pay $250 per iPhone Duo display in three-year Samsung deal",
+      "MacRumors: iPhone Duo is Missing These 10 iPhone 18 Pro Features",
+      "MacRumors: IMAX Reacts to iPhone Duo's 1:1.4 Aspect Ratio Displays",
+      "source_type=news",
+      "campaign_phase=None",
+      "format_director: save/education objective with a multi-step narrative fits a carousel best"
+    ],
+    "confidence": 0.333,
+    "primary_objective": "saves",
+    "recommended_format": "carousel",
+    "hook_family": null,
+    "format_decision_why": "save/education objective with a multi-step narrative fits a carousel best",
+    "format_decision_risk": "low",
+    "format_decision_confidence": 0.4,
+    "format_decision_warnings": []
+  },
+  "render_profiles": [
+    "carousel_slide",
+    "carousel_slide",
+    "carousel_slide",
+    "carousel_slide",
+    "carousel_slide",
+    "carousel_slide"
+  ],
+  "slide_count": 6,
+  "presentation_family": null,
+  "source_image_ref": "assets/brand/newsroom_visuals/v2_1_bakeoff_sources/case1_hero_product_iphone.jpg",
+  "publication_metadata": {},
+  "created_at": "2026-09-12T22:02:15.996324+00:00"
+}

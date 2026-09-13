@@ -1,0 +1,420 @@
+[
+  {
+    "story_id": "9fac0988-20b7-4187-b357-a4522b279d6d",
+    "story_title": "iPhone Duo?",
+    "topic_bucket": "other",
+    "category": "GADGETS",
+    "window_event_count": 15,
+    "distinct_source_count": 8,
+    "sources": [
+      "3DNews",
+      "9to5Google",
+      "9to5Mac",
+      "CNET",
+      "Engadget",
+      "MacRumors",
+      "Windows Central",
+      "iXBT News"
+    ],
+    "historical_total_event_count": 47,
+    "first_seen": "2026-09-12T14:16:43.833345+00:00",
+    "last_seen": "2026-09-12T17:03:30.532732+00:00",
+    "score_source_diversity": 1.0,
+    "score_frequency": 1.0,
+    "score_category_fit": 0.95,
+    "score_storytelling_potential": 1.0,
+    "score_composite": 0.988
+  },
+  {
+    "story_id": "12707a4a-1964-4094-8c8e-7bd5a0ba0931",
+    "story_title": "25 лауреатов Филдсовской премии забили тревогу из-за успехов ИИ в математике",
+    "topic_bucket": "other",
+    "category": "AI",
+    "window_event_count": 8,
+    "distinct_source_count": 2,
+    "sources": [
+      "3DNews",
+      "Google News RU: ИИ"
+    ],
+    "historical_total_event_count": 3,
+    "first_seen": "2026-09-12T14:17:58.564245+00:00",
+    "last_seen": "2026-09-12T14:18:29.757054+00:00",
+    "score_source_diversity": 0.333,
+    "score_frequency": 0.667,
+    "score_category_fit": 1.0,
+    "score_storytelling_potential": 0.925,
+    "score_composite": 0.702
+  },
+  {
+    "story_id": "2ec7a160-0b01-4e64-8f11-62393904bc62",
+    "story_title": "Redditors say Anthropic's expensive Claude plans offer far less usage than advertised - Mashable",
+    "topic_bucket": "other",
+    "category": "GADGETS",
+    "window_event_count": 5,
+    "distinct_source_count": 4,
+    "sources": [
+      "3DNews",
+      "Google News RU: ИИ",
+      "Google News: Artificial Intelligence",
+      "Tom's Hardware"
+    ],
+    "historical_total_event_count": 1,
+    "first_seen": "2026-09-12T14:17:58.564245+00:00",
+    "last_seen": "2026-09-12T16:25:51.360609+00:00",
+    "score_source_diversity": 0.667,
+    "score_frequency": 0.417,
+    "score_category_fit": 0.95,
+    "score_storytelling_potential": 0.775,
+    "score_composite": 0.697
+  },
+  {
+    "story_id": "f4a36895-5b92-4a8d-83e5-c40c224b10d6",
+    "story_title": "Минпросвещения определило, с какого класса школьники могут пользоваться ИИ",
+    "topic_bucket": "other",
+    "category": "AI",
+    "window_event_count": 9,
+    "distinct_source_count": 1,
+    "sources": [
+      "Google News RU: ИИ"
+    ],
+    "historical_total_event_count": 7,
+    "first_seen": "2026-09-12T14:18:29.757054+00:00",
+    "last_seen": "2026-09-12T16:25:52.227198+00:00",
+    "score_source_diversity": 0.167,
+    "score_frequency": 0.75,
+    "score_category_fit": 1.0,
+    "score_storytelling_potential": 1.0,
+    "score_composite": 0.688
+  },
+  {
+    "story_id": "6ecf859c-60df-454c-bc98-fb601dbc75cc",
+    "story_title": "Как пересобрать метрики команды после внедрения AI‑агентов без ложного роста velocity",
+    "topic_bucket": "other",
+    "category": "AI",
+    "window_event_count": 7,
+    "distinct_source_count": 3,
+    "sources": [
+      "Google News RU: ИИ",
+      "Habr: Artificial Intelligence",
+      "Habr: Machine Learning"
+    ],
+    "historical_total_event_count": 1,
+    "first_seen": "2026-09-12T14:17:06.284103+00:00",
+    "last_seen": "2026-09-12T18:28:11.232059+00:00",
+    "score_source_diversity": 0.5,
+    "score_frequency": 0.583,
+    "score_category_fit": 1.0,
+    "score_storytelling_potential": 0.55,
+    "score_composite": 0.656
+  },
+  {
+    "story_id": "3989afd6-f223-4e8f-b12a-0e52cad2ed28",
+    "story_title": "Искусственный интеллект помог студентам в Несвиже обсудить события 17 сентября 1939 года",
+    "topic_bucket": "other",
+    "category": "AI",
+    "window_event_count": 7,
+    "distinct_source_count": 1,
+    "sources": [
+      "Google News RU: ИИ"
+    ],
+    "historical_total_event_count": 1,
+    "first_seen": "2026-09-12T14:18:29.757054+00:00",
+    "last_seen": "2026-09-12T19:49:06.383329+00:00",
+    "score_source_diversity": 0.167,
+    "score_frequency": 0.583,
+    "score_category_fit": 1.0,
+    "score_storytelling_potential": 1.0,
+    "score_composite": 0.646
+  },
+  {
+    "story_id": "90ea20b8-6fa3-4e2e-99bf-0201c0cd0a73",
+    "story_title": "OpenAI agents carried out an undisclosed attack on RubyGems",
+    "topic_bucket": "other",
+    "category": "SOFTWARE",
+    "window_event_count": 5,
+    "distinct_source_count": 5,
+    "sources": [
+      "Google News RU: ИИ",
+      "Habr: Artificial Intelligence",
+      "Habr: Machine Learning",
+      "Lobsters",
+      "Techmeme"
+    ],
+    "historical_total_event_count": 4,
+    "first_seen": "2026-09-12T14:17:02.25457+00:00",
+    "last_seen": "2026-09-12T17:07:04.840562+00:00",
+    "score_source_diversity": 0.833,
+    "score_frequency": 0.417,
+    "score_category_fit": 0.85,
+    "score_storytelling_potential": 0.35,
+    "score_composite": 0.637
+  },
+  {
+    "story_id": "72dbf951-e0ed-4d36-9880-de1046af13fd",
+    "story_title": "Google избежала разделения бизнеса в сфере рекламных технологий после признания компании монополистом в суде США",
+    "topic_bucket": "other",
+    "category": "AI",
+    "window_event_count": 5,
+    "distinct_source_count": 2,
+    "sources": [
+      "3DNews",
+      "Google News RU: ИИ"
+    ],
+    "historical_total_event_count": 1,
+    "first_seen": "2026-09-12T14:17:58.564245+00:00",
+    "last_seen": "2026-09-12T19:49:06.383329+00:00",
+    "score_source_diversity": 0.333,
+    "score_frequency": 0.417,
+    "score_category_fit": 1.0,
+    "score_storytelling_potential": 0.85,
+    "score_composite": 0.624
+  },
+  {
+    "story_id": "f99b3eac-b776-4d4f-9a90-41b4e2d22617",
+    "story_title": "Глава Anthropic призвал замедлить темпы совершенствования ИИ-моделей",
+    "topic_bucket": "other",
+    "category": "AI",
+    "window_event_count": 8,
+    "distinct_source_count": 1,
+    "sources": [
+      "Google News RU: ИИ"
+    ],
+    "historical_total_event_count": 8,
+    "first_seen": "2026-09-12T15:47:09.104863+00:00",
+    "last_seen": "2026-09-12T19:49:06.383329+00:00",
+    "score_source_diversity": 0.167,
+    "score_frequency": 0.667,
+    "score_category_fit": 1.0,
+    "score_storytelling_potential": 0.75,
+    "score_composite": 0.617
+  },
+  {
+    "story_id": "08e141c6-b8c0-4e08-a446-1a5aaf9e6a79",
+    "story_title": "Efficient and accurate systems for querying unstructured data",
+    "topic_bucket": "other",
+    "category": "AI",
+    "window_event_count": 4,
+    "distinct_source_count": 4,
+    "sources": [
+      "Google Research Blog",
+      "arXiv cs.AI",
+      "arXiv cs.CL",
+      "arXiv cs.LG"
+    ],
+    "historical_total_event_count": 4,
+    "first_seen": "2026-09-12T14:17:59.929434+00:00",
+    "last_seen": "2026-09-12T14:18:25.441329+00:00",
+    "score_source_diversity": 0.667,
+    "score_frequency": 0.333,
+    "score_category_fit": 1.0,
+    "score_storytelling_potential": 0.4,
+    "score_composite": 0.613
+  },
+  {
+    "story_id": "0965a304-d5e6-4168-a136-0f6b69ba6956",
+    "story_title": "Xbox swoops in to publish Hideo Kojima's 'Physint' after Sony dropped out",
+    "topic_bucket": "other",
+    "category": "AI",
+    "window_event_count": 3,
+    "distinct_source_count": 3,
+    "sources": [
+      "3DNews",
+      "PC Gamer",
+      "Windows Central"
+    ],
+    "historical_total_event_count": 3,
+    "first_seen": "2026-09-12T14:16:54.992794+00:00",
+    "last_seen": "2026-09-12T14:17:58.564245+00:00",
+    "score_source_diversity": 0.5,
+    "score_frequency": 0.25,
+    "score_category_fit": 1.0,
+    "score_storytelling_potential": 0.725,
+    "score_composite": 0.608
+  },
+  {
+    "story_id": "8741d20a-faa8-416f-817c-17f2ea74d85d",
+    "story_title": "Цукерберг и Маск призвали строить больше дата-центров для ИИ - RB.ru",
+    "topic_bucket": "other",
+    "category": "AI",
+    "window_event_count": 5,
+    "distinct_source_count": 2,
+    "sources": [
+      "3DNews",
+      "Google News RU: ИИ"
+    ],
+    "historical_total_event_count": 1,
+    "first_seen": "2026-09-12T14:17:58.564245+00:00",
+    "last_seen": "2026-09-12T21:07:12.789132+00:00",
+    "score_source_diversity": 0.333,
+    "score_frequency": 0.417,
+    "score_category_fit": 1.0,
+    "score_storytelling_potential": 0.7,
+    "score_composite": 0.594
+  },
+  {
+    "story_id": "4a865d1d-b6e8-46a2-af4b-8fb5bfcd98f8",
+    "story_title": "Anthropic CEO calls for the AI industry to slow down",
+    "topic_bucket": "corporate",
+    "category": "AI",
+    "window_event_count": 5,
+    "distinct_source_count": 3,
+    "sources": [
+      "Google News: Artificial Intelligence",
+      "TechCrunch AI",
+      "The Verge AI"
+    ],
+    "historical_total_event_count": 5,
+    "first_seen": "2026-09-12T15:47:08.377499+00:00",
+    "last_seen": "2026-09-12T17:47:07.027062+00:00",
+    "score_source_diversity": 0.5,
+    "score_frequency": 0.417,
+    "score_category_fit": 1.0,
+    "score_storytelling_potential": 0.4,
+    "score_composite": 0.584
+  },
+  {
+    "story_id": "22821489-964e-4d29-8eb2-1d87f049668f",
+    "story_title": "‘We must slow the pace’: CEO of Anthropic calls for an AI slowdown",
+    "topic_bucket": "corporate",
+    "category": "AI",
+    "window_event_count": 4,
+    "distinct_source_count": 3,
+    "sources": [
+      "Engadget",
+      "Google News: Artificial Intelligence",
+      "The Guardian Technology"
+    ],
+    "historical_total_event_count": 2,
+    "first_seen": "2026-09-12T16:23:42.987315+00:00",
+    "last_seen": "2026-09-12T19:09:37.446156+00:00",
+    "score_source_diversity": 0.5,
+    "score_frequency": 0.333,
+    "score_category_fit": 1.0,
+    "score_storytelling_potential": 0.35,
+    "score_composite": 0.553
+  },
+  {
+    "story_id": "d4b3018c-79ff-456e-98cd-319c7080fab4",
+    "story_title": "Apple researchers unveil SimpleDesign, a new AI model for protein design",
+    "topic_bucket": "product",
+    "category": "GADGETS",
+    "window_event_count": 4,
+    "distinct_source_count": 3,
+    "sources": [
+      "3DNews",
+      "9to5Mac",
+      "Google News RU: ИИ"
+    ],
+    "historical_total_event_count": 4,
+    "first_seen": "2026-09-12T14:16:53.670638+00:00",
+    "last_seen": "2026-09-12T15:07:30.718208+00:00",
+    "score_source_diversity": 0.5,
+    "score_frequency": 0.333,
+    "score_category_fit": 0.95,
+    "score_storytelling_potential": 0.325,
+    "score_composite": 0.536
+  },
+  {
+    "story_id": "f49a0cdc-6051-421c-a3e4-90770fc23615",
+    "story_title": "BlizzCon 2026 preview: Speculation, hopes, dreams — what to expect for Warcraft, StarCraft, Overwatch, Diablo, and even",
+    "topic_bucket": "other",
+    "category": "HARDWARE",
+    "window_event_count": 3,
+    "distinct_source_count": 3,
+    "sources": [
+      "CNET",
+      "PC Gamer",
+      "Windows Central"
+    ],
+    "historical_total_event_count": 2,
+    "first_seen": "2026-09-12T15:06:03.509819+00:00",
+    "last_seen": "2026-09-12T18:24:46.22957+00:00",
+    "score_source_diversity": 0.5,
+    "score_frequency": 0.25,
+    "score_category_fit": 0.8,
+    "score_storytelling_potential": 0.6,
+    "score_composite": 0.532
+  },
+  {
+    "story_id": "f1fcf323-c6f6-453e-bdc8-572e1457df42",
+    "story_title": "Large language model serving costs scale directly with output sequence length, yet standard preference alignment often",
+    "topic_bucket": "product",
+    "category": "AI",
+    "window_event_count": 3,
+    "distinct_source_count": 3,
+    "sources": [
+      "arXiv cs.AI",
+      "arXiv cs.CL",
+      "arXiv cs.LG"
+    ],
+    "historical_total_event_count": 3,
+    "first_seen": "2026-09-12T14:18:23.560987+00:00",
+    "last_seen": "2026-09-12T14:18:25.441329+00:00",
+    "score_source_diversity": 0.5,
+    "score_frequency": 0.25,
+    "score_category_fit": 1.0,
+    "score_storytelling_potential": 0.35,
+    "score_composite": 0.532
+  },
+  {
+    "story_id": "d6121977-57ca-4610-9790-1db8d96defac",
+    "story_title": "Lenovo's Googlebook 15 seems decidedly premium based on a new leak",
+    "topic_bucket": "security_incident",
+    "category": "GADGETS",
+    "window_event_count": 3,
+    "distinct_source_count": 3,
+    "sources": [
+      "9to5Google",
+      "CNET",
+      "Engadget"
+    ],
+    "historical_total_event_count": 1,
+    "first_seen": "2026-09-12T14:16:43.833345+00:00",
+    "last_seen": "2026-09-12T14:16:53.226794+00:00",
+    "score_source_diversity": 0.5,
+    "score_frequency": 0.25,
+    "score_category_fit": 0.95,
+    "score_storytelling_potential": 0.4,
+    "score_composite": 0.53
+  },
+  {
+    "story_id": "1bf4f3cd-8c2f-4b87-ae74-f6133ffeef25",
+    "story_title": "Visual Autoregressive Models (VAR) generate images through next-scale prediction, producing all tokens within each",
+    "topic_bucket": "other",
+    "category": "AI",
+    "window_event_count": 3,
+    "distinct_source_count": 3,
+    "sources": [
+      "arXiv cs.AI",
+      "arXiv cs.CV",
+      "arXiv cs.LG"
+    ],
+    "historical_total_event_count": 3,
+    "first_seen": "2026-09-12T14:18:23.560987+00:00",
+    "last_seen": "2026-09-12T14:18:26.1149+00:00",
+    "score_source_diversity": 0.5,
+    "score_frequency": 0.25,
+    "score_category_fit": 1.0,
+    "score_storytelling_potential": 0.3,
+    "score_composite": 0.522
+  },
+  {
+    "story_id": "46df4bc1-450b-44f4-8ee7-ea05056d55a6",
+    "story_title": "Artificial intelligence (AI) In Hospital Operation Market Trends And Forecast Analysis Reveal Strong Long-Term",
+    "topic_bucket": "other",
+    "category": "AI",
+    "window_event_count": 4,
+    "distinct_source_count": 1,
+    "sources": [
+      "Google News: Artificial Intelligence"
+    ],
+    "historical_total_event_count": 4,
+    "first_seen": "2026-09-12T14:18:28.651666+00:00",
+    "last_seen": "2026-09-12T14:18:28.651666+00:00",
+    "score_source_diversity": 0.167,
+    "score_frequency": 0.333,
+    "score_category_fit": 1.0,
+    "score_storytelling_potential": 0.675,
+    "score_composite": 0.518
+  }
+]

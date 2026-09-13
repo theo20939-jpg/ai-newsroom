@@ -1,0 +1,84 @@
+{
+  "art_validation": {
+    "blocking_issues": [],
+    "max_retries": 1,
+    "passed": true,
+    "retries_used": 0,
+    "retry_recommended": false,
+    "warnings": []
+  },
+  "campaign_context": "NINJA Launch 2026, LAUNCH, campaign_id=canary-campaign-1",
+  "caption": "We just reached a huge milestone together - thank you for being part of it.",
+  "caption_is_draft": true,
+  "content_format": "single",
+  "created_at": "2026-09-12T15:09:53.665711+00:00",
+  "cta": "Learn more",
+  "director_reasoning_summary": "objective=reach | format=single | confidence=0.367 | why=canary fixture for single | evidence=source_type=news; campaign_phase='LAUNCH'; format_director: canary fixture for single",
+  "hashtags": [],
+  "media_render_evidence": [
+    {
+      "canvas_height": 1350,
+      "canvas_width": 1080,
+      "caption_linkage": "dc0dd8ea-d5e6-40bd-8e57-3d16ed86ef96",
+      "content_format": "single",
+      "content_identity": "9ad7264d57fe2391",
+      "notes": {
+        "mark_box": [
+          907,
+          1196,
+          1004,
+          1234
+        ]
+      },
+      "profile": "portrait_feed",
+      "render_version": "instagram-render-v1",
+      "slide_count": null,
+      "slide_index": null,
+      "source_image_treatment": "none",
+      "text_clipped": false,
+      "text_regions": [
+        {
+          "box": [
+            76,
+            432,
+            703,
+            520
+          ],
+          "clipped": false,
+          "kind": "headline"
+        },
+        {
+          "box": [
+            76,
+            541,
+            397,
+            629
+          ],
+          "clipped": false,
+          "kind": "headline"
+        },
+        {
+          "box": [
+            76,
+            676,
+            309,
+            711
+          ],
+          "clipped": false,
+          "kind": "caption_overlay"
+        }
+      ],
+      "visible_brand_mark_count": 1
+    }
+  ],
+  "package_id": "dc0dd8ea-d5e6-40bd-8e57-3d16ed86ef96",
+  "publish_ready": true,
+  "risk_warnings": [],
+  "source_refs": {
+    "campaign_id": "canary-campaign-1",
+    "opportunity_id": "canary-feed-1",
+    "story_id": "canary-story-1",
+    "trend_id": null
+  },
+  "validation_failures": []
+}
