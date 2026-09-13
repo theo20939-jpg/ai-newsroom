@@ -1395,6 +1395,13 @@ async def run_content_cycle(
             # only where `presentation_decision` is actually assigned, with the real value
             # captured before any later DATA/QUOTE/BREAKING-render-failure demotion to NEWS.
             original_presentation_type_for_hold: str = "NEWS"
+            # UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-1: the same safe-default-then-overwrite
+            # pattern as `original_presentation_type_for_hold` immediately above, for the exact
+            # same reason - `research_facts` is otherwise only ever assigned inside the
+            # `presentation_director_mode != "off"` branch far below, and the new pipeline's
+            # shadow-comparison hook (S25/S26/S27, gated on `unified_editorial_pipeline_enabled`,
+            # default False everywhere) must never risk a NameError reaching the legacy path.
+            research_facts_for_shadow: list[str] = []
             # Phase 23.1H: resolved below, only inside the `copywriting_output is not None` branch
             # (the disclosed V4/no-structured-output fallback below keeps attaching no image at
             # all - same scope discipline as its own pre-existing "no keyboard either" behavior).
@@ -1695,6 +1702,7 @@ async def run_content_cycle(
                         research_facts, presentation_score = await _fetch_router_presentation_signals(
                             presentation_session, event.id,
                         )
+                    research_facts_for_shadow = research_facts
                     presentation_decision = decide_presentation(
                         title=event.title, content=event.content,
                         copywriting_output=outcome.copywriting_output,
@@ -2264,6 +2272,39 @@ async def run_content_cycle(
                 # extra renders - this path never re-renders, it only changes whether the
                 # already-rendered result's failed send becomes a HOLD or a silent text send).
                 used_text_fallback = False
+
+                # UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-1 (S25/S26/S27): the one, single, worker-
+                # reachable entry point into the new shared editorial pipeline - reached here,
+                # after every one of the four send_as_media_group/send_as_video_only/send_as_photo/
+                # else branches above has run (not only the no-visual one), so the shadow
+                # comparison sees representative data for every outcome, not just failures. Gated
+                # on `unified_editorial_pipeline_enabled` (default False in every environment this
+                # phase touches) and wrapped in its own blanket exception boundary so a bug in
+                # this brand-new, not-yet-production-proven code can never affect the legacy send
+                # path above, which remains completely unmodified and is the only path that ever
+                # actually sends anything. Shadow-only (S27): never a duplicate Telegram send,
+                # never a duplicate real render (the passthrough renderer just hands back this
+                # exact cycle's own already-computed `photo_input`/`html`) - purely a structured
+                # comparison log for future analysis, never anything else observable from outside
+                # this block.
+                if settings.unified_editorial_pipeline_enabled:
+                    try:
+                        from services.editorial_pipeline.shadow import build_passthrough_render, run_shadow_comparison
+
+                        legacy_had_visual = (
+                            photo_input is not None or bool(media_group_items) or video_only_input is not None
+                        )
+                        await run_shadow_comparison(
+                            content_draft_id=outcome.content_draft.id, news_event_id=event.id, story_id=None,
+                            source_url=event.url, title=event.title, main_body=event.content,
+                            research_facts=research_facts_for_shadow,
+                            legacy_presentation_type=original_presentation_type_for_hold,
+                            legacy_had_visual=legacy_had_visual,
+                            render=build_passthrough_render(photo_input, html),
+                        )
+                    except Exception:  # noqa: BLE001 - S4-E: never let shadow-mode affect the real send path
+                        logger.exception("unified_pipeline_shadow_hook_failed", extra={"draft_id": str(outcome.content_draft.id)})
+
                 if (
                     routing_outcome is not None and not effective_dry_run and not routing_outcome.sent
                     and (send_as_media_group or send_as_photo or send_as_video_only)

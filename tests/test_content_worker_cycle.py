@@ -207,6 +207,20 @@ async def test_source(factory: async_sessionmaker[AsyncSession]) -> AsyncIterato
                         delete(NewsEventStoryLink).where(NewsEventStoryLink.news_event_id.in_(event_ids))
                     )
 
+                # UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-1 source reconciliation: content_draft_
+                # editorial_plans.event_id FK-references news_events.id directly (database/models/
+                # content_draft_editorial_plan.py) - same reasoning as the `stories` block above
+                # (unconditional on content_draft_ids, since the FK is on event_id, not a
+                # content_draft join), guarded by the same table-existence check since this table
+                # is newly reconciled into this worktree and may not exist in every environment
+                # this fixture runs against.
+                if await _table_exists(session, "content_draft_editorial_plans"):
+                    from database.models.content_draft_editorial_plan import ContentDraftEditorialPlan
+
+                    await session.execute(
+                        delete(ContentDraftEditorialPlan).where(ContentDraftEditorialPlan.event_id.in_(event_ids))
+                    )
+
                 await session.execute(delete(ContentDraft).where(ContentDraft.id.in_(content_draft_ids)))
                 await session.execute(delete(EditorialTask).where(EditorialTask.event_id.in_(event_ids)))
 
