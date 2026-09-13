@@ -62,6 +62,11 @@ _CAPABILITY_NAME_TO_AI_CAPABILITY: dict[str, AICapability] = {
     # synthesis), mirroring "article_generation" -> COPYWRITING's own precedent exactly ("it IS
     # writing copy, just long-form/RECAP-authoring-scoped").
     "final_post_authoring": AICapability.COPYWRITING,
+    # CROSS-PLATFORM-MEDIA-RESEARCH-SELECTION-1: a review/validation step over one already-
+    # discovered candidate image - semantically identical rationale to "media_vision_review" ->
+    # QUALITY above (a different question - subject identity, not safety/usability - but the same
+    # kind of step), reused rather than adding a new enum value/migration.
+    "media_subject_match": AICapability.QUALITY,
 }
 
 

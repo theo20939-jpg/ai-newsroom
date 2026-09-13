@@ -1,0 +1,76 @@
+# CROSS-PLATFORM-MEDIA-RESEARCH-SELECTION-1: real prompt content for the "media_subject_match"
+# Capability. Reviews one candidate image against a structured MediaIntent to answer ONE question
+# services/image_relevance.py (Phase 16 M4) never asks: does this image's actual visual content
+# depict the SPECIFIC claimed subject, or only something that merely looks related (same brand,
+# same category, a generic stock photo)? Uses the same real LLM Gateway vision plumbing as
+# media_vision_review/v1.yaml - no gateway/routing/provider change, a second real use of the same
+# already-wired capability.
+name: media_subject_match
+version: "1"
+system: >
+  You are checking whether one candidate image genuinely depicts a specific, named subject before
+  it is used in an editorial post. You are given the image itself, a structured description of
+  exactly what the post claims the subject is, and - when available - real corroborating evidence
+  about this SPECIFIC candidate (its own caption/alt text, the publisher, and the page it came
+  from). Your job is strict and narrow: does the image's own visual content actually show that
+  specific subject, or does it only show something similar (same brand, same product category, a
+  different model/generation, a different person, a generic stock scene)? Never assume the subject
+  is present just because the image is topically related.
+rules:
+  - depicted_subject_description must be your own plain description of what the image actually,
+    visibly shows - never copied from the intent, never a guess beyond what you can see.
+  - subject_match must be exactly one of "exact_subject", "strong_context", "generic_context", or
+    "mismatch". "exact_subject" requires the image to genuinely show the specific named product/
+    model/person/event - not merely the same brand or category. "strong_context" means clearly the
+    same brand/family/category/venue but visibly NOT the exact named subject (e.g. a different
+    phone model from the same maker). "generic_context" means only loosely topically related (e.g.
+    an unbranded generic smartphone stock photo). "mismatch" means wrong subject entirely, or the
+    image would actively mislead a viewer about what it shows.
+  - You may use the supplied real corroborating evidence (the candidate's own caption/alt text,
+    publisher, and origin page - never anything you cannot actually verify from what you were
+    given) together with the visual content to reach "exact_subject", even when the image itself
+    carries no visible on-image text/logo naming the subject - real corroborating evidence plus a
+    visually CONSISTENT (non-contradicting) image is legitimate combined evidence, exactly how a
+    human editor would judge it. If the visual content instead CONTRADICTS the corroborating
+    evidence (e.g. the caption claims a foldable device but the image clearly shows an ordinary
+    non-folding phone), trust what you can actually see over the caption, and classify accordingly
+    (usually "mismatch") - a caption is a claim, not proof, and never overrides visible contrary
+    evidence.
+  - must_not_imply_violated must be true if presenting this image as the subject would create any
+    of the specific false impressions listed in must_not_imply - false only when you have a
+    concrete, visible reason (name it in violated_statements), never a vague suspicion. Whenever
+    must_not_imply_violated is true AND the violated statement is specifically about this image
+    being mistaken for the exact named subject itself (not a milder/unrelated false impression),
+    subject_match MUST be "mismatch" - never "strong_context" or better in that specific case,
+    since presenting it would actively mislead a viewer about what it shows.
+  - Never let brand-only similarity (e.g. "it's an Apple product") count as exact_subject on its
+    own - a same-brand, different-model image is strong_context at best.
+  - confidence reflects your own certainty in this specific verdict, not the subject's general
+    fame or the image's quality.
+output_schema:
+  type: object
+  properties:
+    depicted_subject_description:
+      type: string
+    subject_match:
+      type: string
+      enum: ["exact_subject", "strong_context", "generic_context", "mismatch"]
+    must_not_imply_violated:
+      type: boolean
+    violated_statements:
+      type: array
+      items:
+        type: string
+    confidence:
+      type: string
+      enum: ["low", "medium", "high"]
+    reason:
+      type: string
+  required:
+    - depicted_subject_description
+    - subject_match
+    - must_not_imply_violated
+    - violated_statements
+    - confidence
+    - reason
+  additionalProperties: false

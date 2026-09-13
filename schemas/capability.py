@@ -185,6 +185,17 @@ class BusinessContext(BaseModel):
     # zero prior candidates - `capabilities/meme_concept_capability.py::MemeConceptCapability`
     # degrades gracefully in that case (module docstring), never treating absence as an error.
     meme_recent_diversity_context: str | None = None
+    # CROSS-PLATFORM-MEDIA-RESEARCH-SELECTION-1: mirrors media_review_image_data_uri/
+    # media_review_story_summary's own exact precedent, for a DIFFERENT question - not "is this
+    # image safe/relevant to publish" (media_vision_review_capability's job, unchanged) but "does
+    # this image's visual content actually depict the specific claimed subject" (section 10's
+    # EXACT_SUBJECT/STRONG_CONTEXT/GENERIC_CONTEXT/MISMATCH classification). Both always None in
+    # every live production path - capabilities.executor.CapabilityExecutor._build_context() never
+    # populates either field; only scripts/_cross_platform_media_research_canary_1.py (a manually-
+    # invoked, never-auto-run harness, same shape as scripts/phase19_m13_vision_review_manual.py)
+    # constructs a CapabilityContext with these set.
+    media_subject_match_image_data_uri: str | None = None
+    media_subject_match_intent_summary: str | None = None
 
 
 class RuntimeContext(BaseModel):

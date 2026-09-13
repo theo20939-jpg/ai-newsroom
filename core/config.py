@@ -487,6 +487,24 @@ class Settings(BaseSettings):
     # is defined now so a future milestone can add that hook without a new settings migration.
     media_vision_review_mode: Literal["off", "shadow"] = "off"
 
+    # CROSS-PLATFORM-MEDIA-RESEARCH-SELECTION-1: mirrors media_vision_review_mode's own exact
+    # two-state convention, for the sibling media_subject_match Capability. "off" (default): no
+    # live path reaches it (there is none yet regardless). "shadow": reserved the same way
+    # media_vision_review_mode's "shadow" is - no automatic hook exists yet; only the manually-
+    # invoked harness (scripts/_cross_platform_media_research_canary_1.py) ever makes a real call,
+    # independent of this setting's value.
+    media_subject_match_mode: Literal["off", "shadow"] = "off"
+    # A brand-new capability this phase adds: real, external web-based image discovery (section 5
+    # Tiers 2-4 of the phase's own spec) - confirmed by direct code audit to not exist anywhere
+    # else in this codebase (services/image_intelligence.py only ever fetches the NewsEvent's own
+    # article URL). "off" (default, and the only state with a real backend today): services.
+    # media_web_discovery.NullWebDiscoveryClient - zero network calls, zero results, a true no-op.
+    # "shadow" is defined now, matching this codebase's own off/shadow staging convention, for a
+    # FUTURE milestone that wires a real search-API-backed WebDiscoveryClient behind it; no such
+    # backend exists yet, and selecting "shadow" today has no effect (no code branches on this
+    # setting's value yet - a future integration is the one that would).
+    media_web_discovery_mode: Literal["off", "shadow"] = "off"
+
     # Phase 19 M14: capability-level routing-objective overrides (docs/phase19_m14_cost_quality_
     # analysis.md). Empty by default - every real capability in this codebase relies on the
     # RoutingCriteria default (LOWEST_COST, see integrations/llm_gateway/routing/criteria.py's own

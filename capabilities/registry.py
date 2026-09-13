@@ -60,6 +60,10 @@ from capabilities.media_vision_review_capability import (
     MEDIA_VISION_REVIEW_CAPABILITY_DEFINITION,
     MediaVisionReviewCapability,
 )
+from capabilities.media_subject_match_capability import (
+    MEDIA_SUBJECT_MATCH_CAPABILITY_DEFINITION,
+    MediaSubjectMatchCapability,
+)
 from capabilities.engagement_capability import ENGAGEMENT_CAPABILITY_DEFINITION, EngagementCapability
 from capabilities.event_recap_capability import EVENT_RECAP_CAPABILITY_DEFINITION, EventRecapCapability
 from capabilities.final_post_authoring_capability import (
@@ -177,6 +181,14 @@ def build_registry(
     # never-auto-run harness script (scripts/phase19_m13_vision_review_manual.py) - there is no
     # scheduled/automatic live-worker path to this capability at all.
     registry.register(MEDIA_VISION_REVIEW_CAPABILITY_DEFINITION, MediaVisionReviewCapability(gateway, prompt_repository))
+    # CROSS-PLATFORM-MEDIA-RESEARCH-SELECTION-1: registered like every other capability (real,
+    # resolvable, cost-tracked via capability_mapping.py's "media_subject_match" -> AICapability.
+    # QUALITY entry) even though no live WorkflowDefinition step references it - mirrors
+    # media_vision_review's own identical dormant-registration precedent exactly. The only caller
+    # of its real, LLM-backed execute() is the manually-invoked, never-auto-run harness script
+    # (scripts/_cross_platform_media_research_canary_1.py) - no scheduled/automatic live-worker
+    # path reaches it.
+    registry.register(MEDIA_SUBJECT_MATCH_CAPABILITY_DEFINITION, MediaSubjectMatchCapability(gateway, prompt_repository))
     # Phase 18 M2: registered like every other capability (real, resolvable, cost-tracked via
     # capability_mapping.py's "meme_concept" -> AICapability.CREATIVE entry) even though no
     # WorkflowDefinition references it yet - WorkflowType.MEME_GENERATION itself stays
