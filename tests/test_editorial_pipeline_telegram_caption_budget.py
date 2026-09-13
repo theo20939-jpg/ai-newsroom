@@ -29,7 +29,6 @@ def test_a_caption_that_fits_is_sent_as_is_no_visual_dropped() -> None:
 def test_dropping_only_the_non_factual_footer_can_recover_the_budget() -> None:
     # Sized so the full text (with footer) exceeds the limit, but the body alone (footer removed)
     # fits - proving the footer, not factual content, is what gets trimmed first.
-    footer_len = len(build_ninja_pulse_footer_html())
     body_units = CAPTION_SAFE_LIMIT - 20  # comfortably fits alone
     html = _long_html(body_units, with_footer=True)
     assert len(html.encode("utf-16-le")) // 2 > CAPTION_SAFE_LIMIT  # confirm the fixture is actually over budget

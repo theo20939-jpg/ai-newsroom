@@ -90,8 +90,6 @@ def _check_platform_budget(caption_or_copy: str, platform: Platform) -> QualityC
     (S19 - see platforms/telegram.py::plan_telegram_caption_budget()); this check only confirms
     the FINAL text handed to the gate is within the platform's own hard limit, as a last-resort
     safety net, never the mechanism that decides fallback behavior."""
-    from bot.image_preview_formatting import CAPTION_SAFE_LIMIT
-
     if platform == Platform.TELEGRAM:
         length = len(caption_or_copy.encode("utf-16-le")) // 2
         if length > 4096:  # Telegram's own plain-message hard limit - the true ceiling this gate enforces
