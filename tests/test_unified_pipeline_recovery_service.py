@@ -172,10 +172,14 @@ async def test_persisted_state_survives_a_fresh_service_instance_after_a_simulat
     """S20: 'worker restart/fresh service instance -> persisted recovery state remains
     recoverable'. RecoveryService holds no state of its own - a brand-new instance reading the
     same session/row sees identical durable data, simulating a fresh process after a restart."""
+    # MEDIA_SEND_FAILED (a bounded-retryable, non-forced-terminal reason code) - this test's own
+    # concern is fresh-instance persistence, not AMBIGUOUS_TRANSPORT_RESULT's own FINAL-HARDENING-1
+    # always-terminal behavior (covered separately, see
+    # tests/test_unified_pipeline_final_hardening_1.py).
     service_before_restart = RecoveryService()
     job = await service_before_restart.create_or_retry(
         db_session, content_draft_id=real_content_draft.id, platform=Platform.TELEGRAM,
-        reason_code=RecoveryReasonCode.AMBIGUOUS_TRANSPORT_RESULT, failed_stage="telegram_transport", max_attempts=3,
+        reason_code=RecoveryReasonCode.MEDIA_SEND_FAILED, failed_stage="telegram_transport", max_attempts=3,
     )
     job_id = job.id
 
@@ -185,7 +189,7 @@ async def test_persisted_state_survives_a_fresh_service_instance_after_a_simulat
     assert reloaded is not None
     assert reloaded.state == RecoveryJobState.PENDING
     assert reloaded.attempt_count == 1
-    assert reloaded.reason_code.value == "AMBIGUOUS_TRANSPORT_RESULT"
+    assert reloaded.reason_code.value == "MEDIA_SEND_FAILED"
 
     found_open = await service_after_restart.find_open_recovery(db_session, content_draft_id=real_content_draft.id)
     assert found_open is not None

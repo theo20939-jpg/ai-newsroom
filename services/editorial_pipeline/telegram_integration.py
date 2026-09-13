@@ -59,6 +59,7 @@ from services.editorial_pipeline.contracts import (
 from services.editorial_pipeline.evidence import build_evidence_pack
 from services.editorial_pipeline.orchestrator import run_editorial_production_pipeline
 from services.editorial_pipeline.recovery_service import RecoveryService
+from services.editorial_pipeline.subject_match import classify_subject_match
 from services.image_persistence import (
     EditorialImageCandidate,
     get_editorial_image_candidates,
@@ -129,11 +130,24 @@ def _wrap_legacy_candidate_as_tier1(candidate: EditorialImageCandidate) -> Resol
     function runs), never a second, competing discovery mechanism. `usage_classification=
     APPROVED_SOURCE_MEDIA`/`discovery_tier=TIER1_CURRENT_SOURCE` matches this candidate's own real
     provenance (it came from the NewsEvent's own already-vetted source, exactly what Tier 1 means -
-    schemas/media_subject_match.py's own `DiscoveryTier` docstring). `subject_match` is left unset
-    (`None`) - deliberately: this module injects no `subject_match_classifier` into
-    `MediaResearchService.research()` (no real vision-LLM call is added by this phase), so the
-    candidate is scored via `services/media_candidate_scoring.py`'s own conservative unclassified
-    default, never assumed EXACT_SUBJECT."""
+    schemas/media_subject_match.py's own `DiscoveryTier` docstring).
+
+    FINAL-HARDENING-1: `subject_match` is still left unset (`None`) here, and `provenance.
+    caption_or_alt` is still `None` - both HONESTLY, not as an oversight: `EditorialImageCandidate`
+    (the legacy Phase 16 record this wraps) carries no subject-descriptive text field of any kind
+    (`relevance_reason` describes WHY the image was judged relevant to the article, never WHAT it
+    depicts) - there is no real text evidence to give the classifier for this specific candidate
+    shape today. `run_unified_telegram_delivery()` DOES now inject a real `subject_match_classifier`
+    (`services.editorial_pipeline.subject_match.classify_subject_match`) into `MediaResearchService.
+    research()` - closing the Founder review's own HIGH finding (no central authority was ever
+    invoked at all) - but for THIS candidate shape specifically, that classifier will correctly
+    return `GENERIC_CONTEXT` (its own explicit "no evidence" branch), never a fabricated
+    `EXACT_SUBJECT`. This is the safe, honest behavior for missing evidence (Founder review §6), and
+    is unrelated to whether the classifier itself runs - it runs, and will correctly produce
+    `EXACT_SUBJECT`/`STRONG_CONTEXT`/`MISMATCH` the moment a candidate DOES carry real descriptive
+    text (already true today for any real Tier 2-5 web-discovered candidate via
+    `services/media_web_discovery.py`'s own `caption_or_alt` field - not exercised by this specific
+    wrapper, which only ever builds a Tier-1 candidate)."""
     return ResolvedMediaCandidate(
         candidate_id=str(candidate.id),
         provenance=MediaProvenance(
@@ -324,6 +338,11 @@ async def run_unified_telegram_delivery(
             platform=Platform.TELEGRAM, render=render, quote_candidate=quote_candidate_for_orchestrator,
             tier1_candidates=tier1_candidates, session=session, recovery_service=recovery_service,
             require_media=True,
+            # FINAL-HARDENING-1 (Founder review HIGH finding): the real, central subject-match
+            # authority - see services/editorial_pipeline/subject_match.py's own module docstring.
+            # This is the ONE classifier MediaResearchService.research() ever receives from this
+            # call site; it is never duplicated or re-decided anywhere else in this pipeline.
+            subject_match_classifier=classify_subject_match,
         )
         await session.commit()
 

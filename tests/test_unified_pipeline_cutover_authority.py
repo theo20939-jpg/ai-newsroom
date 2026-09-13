@@ -371,7 +371,12 @@ async def test_replay_h_ambiguous_transport_timeout_never_auto_resent(
     row = await _find_recovery_row(factory)
     assert row is not None
     assert row.reason_code.value == "AMBIGUOUS_TRANSPORT_RESULT"
-    assert row.state == RecoveryJobState.PENDING
+    # FINAL-HARDENING-1: forced TERMINAL_HOLD on the very first occurrence, never PENDING/RETRYING -
+    # an ambiguous result must never be structurally visible to any retry-consumer (see
+    # tests/test_unified_pipeline_final_hardening_1.py for the dedicated hardening test suite).
+    assert row.state == RecoveryJobState.TERMINAL_HOLD
+    assert row.next_retry_at is None
+    assert row.max_attempts == 1
 
 
 # ---------------------------------------------------------------------------

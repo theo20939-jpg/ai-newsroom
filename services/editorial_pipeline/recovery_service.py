@@ -33,6 +33,20 @@ this same real state machine, not a special case) on its very first failure: a q
 verdict does not change on a blind retry of unchanged content, and the orchestrator surfaces it to
 the worker as `OrchestratorVerdict.BLOCK`, never `RETRY` (see `orchestrator.py`'s own mapping).
 
+UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-FINAL-HARDENING-1: `AMBIGUOUS_TRANSPORT_RESULT` receives the
+SAME always-terminal-on-first-occurrence treatment as `QUALITY_GATE_FAILED` - but enforced HERE,
+centrally, inside `create_or_retry()` itself (`_ALWAYS_TERMINAL_ON_FIRST_FAILURE_REASON_CODES`
+below), not merely by a caller remembering to pass `max_attempts=1`. This is the Founder-mandated
+fix for "duplicate published post is worse than a HOLD": an ambiguous Telegram result means this
+service cannot prove whether Telegram already accepted the post, so bounded-retry semantics (which
+exist precisely to let a transient, DEFINITELY-failed-before-acceptance error be tried again) must
+never apply - the row goes straight to `TERMINAL_HOLD`, `next_retry_at=None`, on the very FIRST
+occurrence, regardless of what `max_attempts` value any caller (present or future) supplies. Since
+`find_open_recovery()` only ever returns `PENDING`/`RETRYING` rows, a `TERMINAL_HOLD` row is
+structurally invisible to any retry-consumer, present or future (S9/S12: "generic retry processing
+CANNOT automatically resend it... require reconciliation/operator decision"). No new migration, no
+new state, no second retry subsystem - the existing state machine already expresses this safely.
+
 Durable by construction (S9: "do not pretend an in-memory state machine is durable"): every method
 here takes an explicit `AsyncSession` and calls only `session.add()`/`session.flush()` - it never
 commits (the caller's own `async with session_factory() as session: ... await session.commit()`
@@ -91,6 +105,19 @@ def _next_retry_delay_seconds(attempt_count: int) -> int:
     return _BACKOFF_SCHEDULE_SECONDS[index]
 
 
+_ALWAYS_TERMINAL_ON_FIRST_FAILURE_REASON_CODES = frozenset({
+    RecoveryReasonCode.QUALITY_GATE_FAILED,
+    RecoveryReasonCode.AMBIGUOUS_TRANSPORT_RESULT,
+})
+"""FINAL-HARDENING-1: reason codes this service itself forces to `max_attempts=1` (terminal on
+first occurrence), regardless of the `max_attempts` value any caller passes. `QUALITY_GATE_FAILED`
+already got this treatment from `orchestrator.py`'s own caller-side `max_attempts=1`; enforcing it
+here too makes that defense-in-depth rather than the only guard. `AMBIGUOUS_TRANSPORT_RESULT` is
+the new, Founder-mandated addition - see the module docstring's own "duplicate published post is
+worse than a HOLD" reasoning. This set is deliberately narrow and explicit - it is never inferred
+from a "looks risky" heuristic, only these two named, reviewed reason codes."""
+
+
 class RecoveryService:
     """Stateless (holds no per-call state of its own - safe to construct fresh per call, per
     request, or once per process; every method takes its own `session` explicitly, matching this
@@ -130,11 +157,20 @@ class RecoveryService:
         """The one real entry point for every failure site (S9). Increments an existing open job
         in place (a genuine retry - the exact gap the Founder review flagged as missing:
         "no mechanism anywhere... that takes an EXISTING RecoveryJob, increments its attempt_count,
-        and re-evaluates it") rather than always constructing attempt_count=1 from scratch."""
+        and re-evaluates it") rather than always constructing attempt_count=1 from scratch.
+
+        FINAL-HARDENING-1: `effective_max_attempts` overrides the caller-supplied `max_attempts` to
+        `1` whenever `reason_code` is in `_ALWAYS_TERMINAL_ON_FIRST_FAILURE_REASON_CODES` - this is
+        a service-level invariant, not a per-caller convention, so it holds even for a caller that
+        forgets (or a future caller that does not yet exist) to pass `max_attempts=1` itself. When
+        an EXISTING open row (created under a different, bounded-retry reason code) receives a NEW
+        failure whose reason code is in that set, the row is forced terminal immediately on this
+        very call, regardless of its own prior `attempt_count`/`max_attempts` history."""
         now = now or datetime.now(timezone.utc)
         db_reason = _REASON_TO_DB[reason_code]
         diagnostics = list(candidate_diagnostics or [])
         last_error_summary = (last_error or "")[:500] or None
+        effective_max_attempts = 1 if reason_code in _ALWAYS_TERMINAL_ON_FIRST_FAILURE_REASON_CODES else max_attempts
 
         existing = await self.find_open_recovery(session, content_draft_id=content_draft_id)
         if existing is not None:
@@ -143,7 +179,7 @@ class RecoveryService:
             existing.failed_stage = failed_stage
             existing.last_error_summary = last_error_summary
             existing.candidate_diagnostics = diagnostics
-            existing.max_attempts = max_attempts
+            existing.max_attempts = effective_max_attempts
             if existing.attempt_count >= existing.max_attempts:
                 existing.state = RecoveryJobState.TERMINAL_HOLD
                 existing.next_retry_at = None
@@ -154,7 +190,7 @@ class RecoveryService:
             job = existing
         else:
             attempt_count = 1
-            is_terminal_immediately = attempt_count >= max_attempts
+            is_terminal_immediately = attempt_count >= effective_max_attempts
             job = RecoveryJobRow(
                 id=uuid4(),
                 content_draft_id=content_draft_id,
@@ -163,7 +199,7 @@ class RecoveryService:
                 failed_stage=failed_stage,
                 state=RecoveryJobState.TERMINAL_HOLD if is_terminal_immediately else RecoveryJobState.PENDING,
                 attempt_count=attempt_count,
-                max_attempts=max_attempts,
+                max_attempts=effective_max_attempts,
                 next_retry_at=(
                     None if is_terminal_immediately
                     else now + timedelta(seconds=_next_retry_delay_seconds(attempt_count))
