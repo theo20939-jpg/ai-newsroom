@@ -265,13 +265,13 @@ touches_the_network`. Shadow-only.
 
 ## R. Regression tests
 
-**New**: 8 test files under `tests/test_editorial_pipeline_*.py` + `tests/test_unified_pipeline_
-shadow_wiring.py`, 46 tests total, all passing (`test_editorial_pipeline_data_content.py` 4,
-`test_editorial_pipeline_media_research.py` 5, `test_editorial_pipeline_composition_quality.py` 9,
+**New**: 9 test files under `tests/test_editorial_pipeline_*.py` + `tests/test_unified_pipeline_
+shadow_wiring.py`, 48 tests total, all passing (`test_editorial_pipeline_data_content.py` 4,
+`test_editorial_pipeline_media_research.py` 4, `test_editorial_pipeline_composition_quality.py` 9,
 `test_editorial_pipeline_language_qa.py` 7, `test_editorial_pipeline_recovery.py` 3, `test_editorial_
 pipeline_telegram_caption_budget.py` 4, `test_editorial_pipeline_instagram_adapter.py` 4, `test_
 editorial_pipeline_orchestrator.py` 7, `test_editorial_pipeline_shadow.py` 3, `test_unified_pipeline_
-shadow_wiring.py` 3 - counts sum to 49, matching file-by-file `-q` runs).
+shadow_wiring.py` 3 - counts sum to 48, confirmed via a single combined `-q` run).
 
 **Existing-suite regression**: every one of the 18 test files that imports `worker.content_cycle`
 (the file this phase's own worker-wiring touches), run together: **460 passed, 17 failed, 1

@@ -107,7 +107,7 @@ stays `false`, untouched, throughout.
 
 ## Test summary
 
-- 49 new tests across 10 files in `services/editorial_pipeline/`'s own test suite — all passing.
+- 48 new tests across 9 files in `services/editorial_pipeline/`'s own test suite — all passing.
 - 460 passed / 17 failed (all pre-existing, independently confirmed) / 0 errors across the 18
   existing test files that exercise `worker/content_cycle.py` — **NEW_FAILURES = 0**.
 - `ruff` + `mypy`: 0 new errors.
