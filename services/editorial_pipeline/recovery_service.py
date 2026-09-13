@@ -64,6 +64,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models.recovery_job import RecoveryJob as RecoveryJobRow
@@ -124,17 +125,32 @@ class RecoveryService:
     codebase's own `async with session_factory() as session:` convention rather than the service
     holding a session across calls)."""
 
-    async def find_open_recovery(self, session: AsyncSession, *, content_draft_id: UUID) -> RecoveryJobRow | None:
-        """'(content_draft_id, state)' is the meaningful lookup (see the model's own docstring) -
-        'open' means not yet resolved (`RECOVERED`/`TERMINAL_HOLD`). The most recently created open
-        row is returned when more than one somehow exists (should not happen in practice, since
-        `create_or_retry()` always reuses an existing open row rather than creating a second one)."""
+    async def find_open_recovery(
+        self, session: AsyncSession, *, content_draft_id: UUID, platform: Platform | None = None,
+    ) -> RecoveryJobRow | None:
+        """'(content_draft_id, platform, state)' is the meaningful lookup (RUNTIME-CLOSURE-1 S22 -
+        the model's own docstring previously said `(content_draft_id, state)`, which was the actual
+        Founder audit gap: a Telegram recovery lookup could accidentally return/reuse an Instagram
+        recovery row for the SAME draft, since both platforms can recover the same underlying
+        `ContentDraft`). 'open' means not yet resolved (`RECOVERED`/`TERMINAL_HOLD`).
+
+        `platform=None` preserves the old, unscoped lookup for any caller that has a genuine reason
+        to look across platforms (none exists in this codebase today - kept only so this is an
+        additive, backward-compatible signature change, not a breaking one). Every real call site
+        in this module (`create_or_retry()`) always passes a real `platform` now - see there.
+
+        The most recently created open row is returned when more than one somehow exists (should
+        not happen in practice for a given (content_draft_id, platform) pair - the DB-level partial
+        unique index `ix_recovery_jobs_open_lifecycle_identity` (§23) makes this structurally
+        enforced going forward, not merely a convention)."""
         stmt = (
             select(RecoveryJobRow)
             .where(RecoveryJobRow.content_draft_id == content_draft_id)
             .where(RecoveryJobRow.state.in_((RecoveryJobState.PENDING, RecoveryJobState.RETRYING)))
-            .order_by(RecoveryJobRow.created_at.desc())
         )
+        if platform is not None:
+            stmt = stmt.where(RecoveryJobRow.platform == _PLATFORM_TO_DB[platform])
+        stmt = stmt.order_by(RecoveryJobRow.created_at.desc())
         result = await session.execute(stmt)
         return result.scalars().first()
 
@@ -172,22 +188,28 @@ class RecoveryService:
         last_error_summary = (last_error or "")[:500] or None
         effective_max_attempts = 1 if reason_code in _ALWAYS_TERMINAL_ON_FIRST_FAILURE_REASON_CODES else max_attempts
 
-        existing = await self.find_open_recovery(session, content_draft_id=content_draft_id)
-        if existing is not None:
-            existing.attempt_count += 1
-            existing.reason_code = db_reason
-            existing.failed_stage = failed_stage
-            existing.last_error_summary = last_error_summary
-            existing.candidate_diagnostics = diagnostics
-            existing.max_attempts = effective_max_attempts
-            if existing.attempt_count >= existing.max_attempts:
-                existing.state = RecoveryJobState.TERMINAL_HOLD
-                existing.next_retry_at = None
-                existing.resolved_at = now
+        def _increment(row: RecoveryJobRow) -> RecoveryJobRow:
+            row.attempt_count += 1
+            row.reason_code = db_reason
+            row.failed_stage = failed_stage
+            row.last_error_summary = last_error_summary
+            row.candidate_diagnostics = diagnostics
+            row.max_attempts = effective_max_attempts
+            if row.attempt_count >= row.max_attempts:
+                row.state = RecoveryJobState.TERMINAL_HOLD
+                row.next_retry_at = None
+                row.resolved_at = now
             else:
-                existing.state = RecoveryJobState.RETRYING
-                existing.next_retry_at = now + timedelta(seconds=_next_retry_delay_seconds(existing.attempt_count))
-            job = existing
+                row.state = RecoveryJobState.RETRYING
+                row.next_retry_at = now + timedelta(seconds=_next_retry_delay_seconds(row.attempt_count))
+            return row
+
+        # RUNTIME-CLOSURE-1 (S22): platform-scoped - a Telegram failure for this draft must never
+        # find/increment an Instagram recovery row for the same draft, or vice versa.
+        existing = await self.find_open_recovery(session, content_draft_id=content_draft_id, platform=platform)
+        if existing is not None:
+            job = _increment(existing)
+            await session.flush()
         else:
             attempt_count = 1
             is_terminal_immediately = attempt_count >= effective_max_attempts
@@ -208,9 +230,27 @@ class RecoveryService:
                 candidate_diagnostics=diagnostics,
                 resolved_at=now if is_terminal_immediately else None,
             )
-            session.add(job)
-
-        await session.flush()
+            # RUNTIME-CLOSURE-1 (S23): real, DB-level concurrency safety - two concurrent
+            # transactions can both pass the `find_open_recovery()` check above (neither has
+            # committed yet) and both reach this insert. A SAVEPOINT (`begin_nested()`) isolates
+            # the insert attempt: if the partial unique index `ix_recovery_jobs_open_lifecycle_
+            # identity` (§23 migration) rejects it as a duplicate, only this savepoint rolls back -
+            # the OUTER transaction/session stays healthy - and the loser re-reads (now finding the
+            # winner's row, committed-or-not-within-the-same-transaction-visible-via-flush) and
+            # increments it instead, via the SAME `_increment()` the normal retry path uses. This
+            # is "a safe upsert pattern" (§23's own phrasing), not merely a Python-side check.
+            try:
+                async with session.begin_nested():
+                    session.add(job)
+                    await session.flush()
+            except IntegrityError:
+                winner = await self.find_open_recovery(session, content_draft_id=content_draft_id, platform=platform)
+                if winner is None:  # pragma: no cover - would mean the row that caused the
+                    # violation vanished between the failed insert and this re-read; re-raise
+                    # rather than silently losing this failure report.
+                    raise
+                job = _increment(winner)
+                await session.flush()
         event_name = "recovery_created" if job.attempt_count == 1 else "recovery_retry_scheduled"
         logger.warning(
             event_name,

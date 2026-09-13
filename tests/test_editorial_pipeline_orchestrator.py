@@ -19,7 +19,7 @@ _MAXUS_BODY = (
 )
 
 
-async def _fake_render_success(composition_plan, structured_content):
+async def _fake_render_success(composition_plan, structured_content, media_selection):
     if structured_content is None:
         return None
     text = getattr(structured_content, "metric_label", None) or getattr(structured_content, "headline", "")
@@ -47,7 +47,7 @@ async def test_data_pipeline_end_to_end_produces_a_ready_package_with_the_maxus_
 async def test_render_failure_produces_recovery_never_a_silent_text_completion() -> None:
     evidence = build_evidence_pack(news_event_id=uuid4(), story_id=None, source_url=None, research_facts=[])
 
-    async def always_fails(composition_plan, structured_content):
+    async def always_fails(composition_plan, structured_content, media_selection):
         return None
 
     result = await run_editorial_production_pipeline(
@@ -67,7 +67,7 @@ async def test_no_suitable_media_still_produces_a_ready_text_appropriate_package
     photo_input=None with real caption text, and the pipeline still reaches READY."""
     evidence = build_evidence_pack(news_event_id=uuid4(), story_id=None, source_url=None, research_facts=["a real, verified fact"])
 
-    async def render_text_only(composition_plan, structured_content):
+    async def render_text_only(composition_plan, structured_content, media_selection):
         return None, f"<b>{structured_content.headline}</b>\nBody text here."
 
     result = await run_editorial_production_pipeline(
@@ -84,7 +84,7 @@ async def test_the_real_maxus_defect_text_never_reaches_a_ready_package() -> Non
     DeliveryPackage is ever produced - defense in depth, not reliance on a single fix point."""
     evidence = build_evidence_pack(news_event_id=uuid4(), story_id=None, source_url=None, research_facts=[_MAXUS_FACT])
 
-    async def render_with_the_old_defect(composition_plan, structured_content):
+    async def render_with_the_old_defect(composition_plan, structured_content, media_selection):
         return "photo", "Рекомендованная цена автомобиля начинается с юаней (примерно 3,8 млн рублей)."
 
     result = await run_editorial_production_pipeline(
@@ -99,7 +99,7 @@ async def test_the_real_maxus_defect_text_never_reaches_a_ready_package() -> Non
 async def test_caption_too_long_holds_never_drops_the_visual_for_plain_text() -> None:
     evidence = build_evidence_pack(news_event_id=uuid4(), story_id=None, source_url=None, research_facts=[])
 
-    async def render_too_long(composition_plan, structured_content):
+    async def render_too_long(composition_plan, structured_content, media_selection):
         return "photo", "<b>Заголовок</b>\n" + ("А" * 2000)
 
     result = await run_editorial_production_pipeline(
@@ -115,7 +115,7 @@ async def test_quote_pipeline_uses_structured_quote_content() -> None:
     evidence = build_evidence_pack(news_event_id=uuid4(), story_id=None, source_url=None, research_facts=[fact])
     quote_candidate = QuoteCandidate(text="Мы верим в будущее продукта", speaker="Директор компании", role=None)
 
-    async def render_quote(composition_plan, structured_content):
+    async def render_quote(composition_plan, structured_content, media_selection):
         return "photo", f"<blockquote>{structured_content.quote}</blockquote> — {structured_content.speaker}"
 
     result = await run_editorial_production_pipeline(

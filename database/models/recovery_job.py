@@ -24,7 +24,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -50,6 +50,7 @@ class RecoveryReasonCode(str, enum.Enum):
     CAPTION_BUDGET_FAILED = "CAPTION_BUDGET_FAILED"
     RENDER_FAILED = "RENDER_FAILED"
     QUALITY_GATE_FAILED = "QUALITY_GATE_FAILED"
+    MEDIA_RESOLUTION_FAILED = "MEDIA_RESOLUTION_FAILED"
 
 
 class RecoveryJobState(str, enum.Enum):
@@ -64,7 +65,27 @@ class RecoveryJobState(str, enum.Enum):
 
 
 class RecoveryJob(Base):
+    """RUNTIME-CLOSURE-1 (§22/§23): `ix_recovery_jobs_open_lifecycle_identity` is the real,
+    DB-level concurrency guarantee for "at most one OPEN recovery lifecycle per
+    (content_draft_id, platform)" - a partial unique index, enforced by Postgres itself, not
+    merely by an application-level SELECT-then-INSERT check (which two concurrent transactions can
+    both pass before either commits). `services.editorial_pipeline.recovery_service.
+    RecoveryService.create_or_retry()` is written to expect and safely recover from the
+    `IntegrityError` this index raises on a genuine race (§23's "concurrency-safe, not merely
+    checked in Python before insert"). The index is partial (`state IN ('PENDING','RETRYING')`)
+    specifically so a draft may freely accumulate multiple RESOLVED/TERMINAL_HOLD rows over its
+    lifetime (the model's own pre-existing, unchanged docstring already documents this) - only
+    OPEN rows are mutually exclusive per (content_draft_id, platform)."""
+
     __tablename__ = "recovery_jobs"
+    __table_args__ = (
+        Index(
+            "ix_recovery_jobs_open_lifecycle_identity",
+            "content_draft_id", "platform",
+            unique=True,
+            postgresql_where=text("state IN ('PENDING', 'RETRYING')"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     content_draft_id: Mapped[uuid.UUID] = mapped_column(

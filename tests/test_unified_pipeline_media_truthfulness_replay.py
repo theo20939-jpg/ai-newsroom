@@ -30,7 +30,13 @@ pytestmark = pytest.mark.asyncio
 def _candidate(
     candidate_id: str, caption_or_alt: str, *,
     discovery_tier: DiscoveryTier = DiscoveryTier.TIER4_WEB_IMAGE_DISCOVERY,
-    usage_classification: MediaUsageClassification = MediaUsageClassification.EDITORIAL_REVIEW_REQUIRED,
+    # RUNTIME-CLOSURE-1 (S14/S34): default changed from EDITORIAL_REVIEW_REQUIRED to
+    # APPROVED_SOURCE_MEDIA - `is_selectable()` now correctly excludes EDITORIAL_REVIEW_REQUIRED
+    # from automatic selection (services/media_candidate_scoring.py), so these subject-match-
+    # DOMINANCE tests need a rights-clear default to keep isolating the thing they actually test.
+    # The interaction between rights and truthfulness gets its own dedicated test below
+    # (`test_exact_subject_but_rights_unclear_does_not_auto_publish`).
+    usage_classification: MediaUsageClassification = MediaUsageClassification.APPROVED_SOURCE_MEDIA,
     width: int | None = 1600, height: int | None = 1200,
 ) -> ResolvedMediaCandidate:
     return ResolvedMediaCandidate(
@@ -158,3 +164,130 @@ async def test_low_quality_exact_candidate_beats_high_quality_mismatch_at_select
     assert selection.selected.candidate_id == "candidate-c-exact-foldable"
     assert selection.selected.width == 800  # confirms the LOWER-resolution candidate won on
     # identity, never merely because it happened to also be technically better
+
+
+# ---------------------------------------------------------------------------
+# RUNTIME-CLOSURE-1 (S14/S34) - rights and truthfulness are independent gates; neither may
+# override the other. A genuinely exact-subject candidate must still lose automatic selection
+# when its rights are unverified (EDITORIAL_REVIEW_REQUIRED) - "do not weaken rights handling
+# simply to increase visual success rate" (S14's own explicit instruction).
+# ---------------------------------------------------------------------------
+
+
+async def test_exact_subject_but_rights_unclear_does_not_auto_publish() -> None:
+    """C is genuinely the exact subject (would win on truthfulness grounds alone - see
+    test_low_quality_exact_candidate_beats_high_quality_mismatch_at_selection above) but its
+    rights are unverified. It must NOT win automatic selection merely because it is the most
+    truthful candidate available; the system must fall back to B (rights-clear, truthful
+    contextual fallback) instead - exactly the disclosed §14 option "cause truthful alternate
+    composition", never a silent rights bypass."""
+    rights_unclear_exact_foldable = _candidate(
+        "candidate-c-exact-foldable-unreviewed",
+        "Apple's newly unveiled foldable iPhone concept, folded and unfolded views showing the foldable design",
+        discovery_tier=DiscoveryTier.TIER3_CORROBORATING_EDITORIAL,
+        usage_classification=MediaUsageClassification.EDITORIAL_REVIEW_REQUIRED,
+    )
+    service = MediaResearchService()
+    selection = await service.research(
+        _FOLDABLE_IPHONE_INTENT,
+        tier1_candidates=[_CANDIDATE_A_ORDINARY_IPHONE, _CANDIDATE_B_CONTEXTUAL_APPLE, rights_unclear_exact_foldable],
+        subject_match_classifier=classify_subject_match,
+    )
+    assert selection.selected is not None
+    assert selection.selected.candidate_id == "candidate-b-contextual-apple"
+    assert selection.selected.candidate_id != "candidate-c-exact-foldable-unreviewed"
+    assert any("editorial_review_required" in r for r in selection.rejection_reasons)
+
+
+# ---------------------------------------------------------------------------
+# RUNTIME-CLOSURE-1 (S31/R8) - a named-person story: the wrong person's photo must never win.
+# Cross-domain proof that the truthfulness machinery is not overfit to products/Apple/iPhone.
+# ---------------------------------------------------------------------------
+
+_NAMED_PERSON_INTENT = MediaIntent(
+    subject_type=MediaSubjectType.PERSON,
+    primary_entity="Dario Amodei",
+    person="Dario Amodei",
+    must_not_imply=["a different AI company executive"],
+    desired_visual_type=DesiredVisualType.PORTRAIT,
+)
+
+
+async def test_r8_named_person_wrong_persons_photo_never_wins() -> None:
+    wrong_person = _candidate(
+        "wrong-executive-portrait",
+        "Sam Altman speaking on stage at a technology conference, a different AI company executive",
+        discovery_tier=DiscoveryTier.TIER3_CORROBORATING_EDITORIAL, width=4000, height=3000,
+    )
+    correct_person = _candidate(
+        "dario-amodei-portrait",
+        "Dario Amodei speaking in a recent interview about AI safety",
+        discovery_tier=DiscoveryTier.TIER4_WEB_IMAGE_DISCOVERY, width=800, height=600,
+    )
+    service = MediaResearchService()
+    selection = await service.research(
+        _NAMED_PERSON_INTENT, tier1_candidates=[wrong_person, correct_person],
+        subject_match_classifier=classify_subject_match,
+    )
+    assert selection.selected is not None
+    assert selection.selected.candidate_id == "dario-amodei-portrait"
+    assert selection.selected.candidate_id != "wrong-executive-portrait"
+
+
+async def test_r8_named_person_only_wrong_candidate_never_selected_as_exact() -> None:
+    wrong_person = _candidate(
+        "wrong-executive-portrait-only",
+        "Sam Altman speaking on stage, a different AI company executive",
+        discovery_tier=DiscoveryTier.TIER3_CORROBORATING_EDITORIAL,
+    )
+    service = MediaResearchService()
+    selection = await service.research(
+        _NAMED_PERSON_INTENT, tier1_candidates=[wrong_person], subject_match_classifier=classify_subject_match,
+    )
+    assert selection.selected is None
+    assert selection.exact_subject_media_not_found is True
+
+
+# ---------------------------------------------------------------------------
+# RUNTIME-CLOSURE-1 (S31/R9) - a GPT/model story: a wrong, generic company/product photo must not
+# masquerade as the exact model.
+# ---------------------------------------------------------------------------
+
+_GPT6_INTENT = MediaIntent(
+    subject_type=MediaSubjectType.PRODUCT,
+    primary_entity="GPT-6",
+    product_name="GPT",
+    model_name="GPT-6",
+    company="OpenAI",
+    must_not_imply=["an earlier GPT generation"],
+    desired_visual_type=DesiredVisualType.SCREENSHOT,
+)
+
+
+async def test_r9_gpt_model_generic_company_logo_does_not_masquerade_as_exact_model() -> None:
+    generic_company_photo = _candidate(
+        "openai-generic-office-photo", "OpenAI corporate office building exterior, generic company photo",
+        discovery_tier=DiscoveryTier.TIER2_OFFICIAL_PRIMARY, usage_classification=MediaUsageClassification.OFFICIAL_PRESS_ASSET,
+        width=6000, height=4000,
+    )
+    exact_model_screenshot = _candidate(
+        "gpt6-announcement-screenshot", "GPT-6 announcement screenshot showing the new model's interface",
+        discovery_tier=DiscoveryTier.TIER4_WEB_IMAGE_DISCOVERY, width=800, height=600,
+    )
+    service = MediaResearchService()
+    selection = await service.research(
+        _GPT6_INTENT, tier1_candidates=[generic_company_photo, exact_model_screenshot],
+        subject_match_classifier=classify_subject_match,
+    )
+    assert selection.selected is not None
+    assert selection.selected.candidate_id == "gpt6-announcement-screenshot"
+    assert selection.exact_subject_media_not_found is False
+
+
+async def test_r9_gpt_model_wrong_earlier_generation_is_mismatch() -> None:
+    earlier_generation = _candidate(
+        "gpt5-announcement-screenshot", "GPT-5 announcement screenshot, an earlier GPT generation",
+        discovery_tier=DiscoveryTier.TIER4_WEB_IMAGE_DISCOVERY,
+    )
+    result = await classify_subject_match(earlier_generation, _GPT6_INTENT)
+    assert result.subject_match == SubjectMatchClassification.MISMATCH

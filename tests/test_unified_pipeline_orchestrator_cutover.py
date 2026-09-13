@@ -40,11 +40,11 @@ async def _make_content_draft(session: AsyncSession) -> ContentDraft:
     return draft
 
 
-async def _render_success(composition_plan, structured_content):
+async def _render_success(composition_plan, structured_content, media_selection):
     return "photo", f"<b>{getattr(structured_content, 'headline', 'x')}</b>"
 
 
-async def _render_none(composition_plan, structured_content):
+async def _render_none(composition_plan, structured_content, media_selection):
     return None
 
 
@@ -83,7 +83,7 @@ async def test_quality_gate_failure_is_terminal_on_first_failure_and_maps_to_blo
     )
     recovery_service = RecoveryService()
 
-    async def render_with_defect(composition_plan, structured_content):
+    async def render_with_defect(composition_plan, structured_content, media_selection):
         return "photo", "Рекомендованная цена автомобиля начинается с юаней."
 
     result = await run_editorial_production_pipeline(
@@ -163,7 +163,7 @@ async def test_require_media_true_holds_news_without_a_render_attempt_when_no_ca
     recovery_service = RecoveryService()
     render_calls = []
 
-    async def render_that_must_never_be_called(composition_plan, structured_content):
+    async def render_that_must_never_be_called(composition_plan, structured_content, media_selection):
         render_calls.append(1)
         return "photo", "should never happen"
 
@@ -189,7 +189,7 @@ async def test_require_media_false_still_allows_a_text_appropriate_ready_package
     evidence = build_evidence_pack(news_event_id=uuid.uuid4(), story_id=None, source_url=None, research_facts=["fact"])
     recovery_service = RecoveryService()
 
-    async def render_text_only(composition_plan, structured_content):
+    async def render_text_only(composition_plan, structured_content, media_selection):
         return None, f"<b>{structured_content.headline}</b>\nBody"
 
     result = await run_editorial_production_pipeline(
@@ -218,7 +218,7 @@ async def test_require_media_true_data_format_never_triggers_no_suitable_media(
     evidence = build_evidence_pack(news_event_id=uuid.uuid4(), story_id=None, source_url=None, research_facts=[maxus_fact])
     recovery_service = RecoveryService()
 
-    async def render_data(composition_plan, structured_content):
+    async def render_data(composition_plan, structured_content, media_selection):
         return None, f"<b>{structured_content.metric_label}</b>\n{structured_content.metric_value} {structured_content.metric_unit}"
 
     result = await run_editorial_production_pipeline(

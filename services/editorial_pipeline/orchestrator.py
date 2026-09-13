@@ -75,6 +75,7 @@ from services.editorial_pipeline.contracts import (
     CompositionPlan,
     DeliveryPackage,
     EvidencePack,
+    MediaResolutionFailure,
     OrchestratorVerdict,
     Platform,
     PresentationFormat,
@@ -106,16 +107,31 @@ never `RETRY`."""
 
 
 class RenderCallable(Protocol):
-    """`(composition_plan, structured_content) -> (rendered_photo_input, rendered_caption_html) |
-    None`. Returns None exactly when rendering could not honestly produce a valid visual (S4-E:
-    RENDER_FAILED) - never a placeholder image, never fabricated content. `rendered_photo_input`
-    stays `None` for a text-appropriate composition (S4-C's own carve-out) or when `composition_
-    plan.data_strategy == DATA_TYPOGRAPHIC` and the caller's own renderer produces a typographic
-    card as the photo input itself (both are legitimate - this Protocol does not prescribe which)."""
+    """`(composition_plan, structured_content, media_selection) -> (rendered_photo_input,
+    rendered_caption_html) | None | MediaResolutionFailure`.
+
+    RUNTIME-CLOSURE-1 (S3.1/S6): `media_selection` is the SAME `MediaSelectionResult` this
+    orchestrator computed and already used for composition planning and the quality gate - never a
+    candidate a caller closed over independently before `MediaResearchService.research()` ran. This
+    is the structural fix for the Founder audit's same-asset divergence gap: a render callback that
+    resolves its own photo input MUST resolve `media_selection.selected`, because that is the only
+    candidate reference this Protocol ever hands it - there is no other candidate available to use
+    by mistake.
+
+    Three possible outcomes:
+    - `(photo_input, caption_html)` - a normal, successful render (`photo_input` may legitimately
+      be `None` only for a text-appropriate composition, e.g. DATA_TYPOGRAPHIC or a format that
+      never required media in the first place - never as a stand-in for "resolution failed").
+    - `None` - a real rendering/branding exception on already-resolved bytes (S4-E: RENDER_FAILED).
+    - `MediaResolutionFailure` - `media_selection.selected` names a real candidate, but this
+      specific candidate's exact bytes/file_id could not be resolved (S7/S17: MEDIA_RESOLUTION_
+      FAILED) - distinguishable from both of the above, and NEVER silently converted into an
+      ordinary text send by any caller."""
 
     def __call__(
         self, composition_plan: CompositionPlan, structured_content: StructuredContent | None,
-    ) -> Awaitable[tuple[object | None, str]]: ...
+        media_selection: MediaSelectionResult,
+    ) -> Awaitable[tuple[object | None, str] | "MediaResolutionFailure"]: ...
 
 
 @dataclass(frozen=True)
@@ -291,13 +307,42 @@ async def run_editorial_production_pipeline(
     )
 
     # --- render (S17 - delegated, never performed here) ---
-    render_outcome = await render(composition_plan, structured_content)
+    # RUNTIME-CLOSURE-1 (S3.1/S6): `media_selection` is passed through unchanged - the render
+    # callback receives EXACTLY the candidate this orchestrator already selected, never a
+    # separately closed-over one (the structural same-asset fix).
+    render_outcome = await render(composition_plan, structured_content, media_selection)
+    if isinstance(render_outcome, MediaResolutionFailure):
+        logger.warning(
+            "media_resolution_failed",
+            extra={"content_draft_id": str(content_draft_id), "candidate_id": render_outcome.candidate_id, "detail": render_outcome.detail},
+        )
+        return await _recover(
+            content_draft_id=content_draft_id, platform=platform, reason_code=RecoveryReasonCode.MEDIA_RESOLUTION_FAILED,
+            failed_stage="media_resolution", last_error=render_outcome.detail, session=session, recovery_service=recovery_service,
+        )
     if render_outcome is None:
         return await _recover(
             content_draft_id=content_draft_id, platform=platform, reason_code=RecoveryReasonCode.RENDER_FAILED,
             failed_stage="render", session=session, recovery_service=recovery_service,
         )
     photo_input, caption_or_copy = render_outcome
+
+    # --- S18: final pre-transport visual assertion, defense-in-depth INSIDE the orchestrator
+    # itself - even if a render callback has a bug and returns (None, html) for a format that
+    # `require_media=True` already confirmed HAD a real selected candidate, this orchestrator must
+    # never let that reach a READY DeliveryPackage silently. This is deliberately a hard
+    # `AssertionError` (a genuine upstream contract violation - a caller's render callback
+    # disagreeing with its own inputs - not a normal recoverable runtime condition like a network
+    # hiccup), not a recovery path: it should never fire in practice and exists purely so a defect
+    # this severe fails loudly in tests/CI rather than silently completing as a text send.
+    if require_media and presentation_format != PresentationFormat.DATA and media_selection.selected is not None and photo_input is None:
+        raise AssertionError(
+            f"content_draft_id={content_draft_id}: require_media=True and a candidate "
+            f"({media_selection.selected.candidate_id}) was selected, but the render callback "
+            f"returned photo_input=None instead of a MediaResolutionFailure - this render callback "
+            f"violates the RenderCallable contract (S17/S18)."
+        )
+
     composition_plan = CompositionPlan(
         presentation_format=composition_plan.presentation_format, data_strategy=composition_plan.data_strategy,
         photo_input=photo_input, media_group_items=composition_plan.media_group_items,

@@ -88,6 +88,11 @@ async def research_and_select_media(
         classification_counts[label] += 1
         if candidate.usage_classification is MediaUsageClassification.NOT_USABLE:
             rejection_reasons.append(f"{candidate.candidate_id}: usage_classification=not_usable")
+        elif candidate.usage_classification is MediaUsageClassification.EDITORIAL_REVIEW_REQUIRED:
+            # RUNTIME-CLOSURE-1 (S14/S36): a real, observable rights rejection - a candidate
+            # excluded here is not silently dropped; a human editor can see exactly which
+            # candidate needs review and why, never just an unexplained "nothing selected".
+            rejection_reasons.append(f"{candidate.candidate_id}: usage_classification=editorial_review_required (not auto-selectable)")
         elif candidate.subject_match is not None and candidate.subject_match.subject_match is SubjectMatchClassification.MISMATCH:
             rejection_reasons.append(f"{candidate.candidate_id}: subject_match=mismatch ({candidate.subject_match.reason})")
 

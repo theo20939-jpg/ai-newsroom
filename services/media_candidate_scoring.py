@@ -73,8 +73,23 @@ def _freshness_score(candidate: ResolvedMediaCandidate, intent: MediaIntent) -> 
 
 
 def is_selectable(candidate: ResolvedMediaCandidate) -> bool:
-    """Section 8/10's hard exclusions - never a matter of score."""
-    if candidate.usage_classification is MediaUsageClassification.NOT_USABLE:
+    """Section 8/10's hard exclusions - never a matter of score.
+
+    RUNTIME-CLOSURE-1 (S14/S34): `EDITORIAL_REVIEW_REQUIRED` is excluded here too, not merely
+    low-scored - Founder audit finding "a candidate called EDITORIAL_REVIEW_REQUIRED must not
+    silently become an automatic publication asset". Before this fix, only `NOT_USABLE` and
+    `MISMATCH` were hard-excluded; a high-scoring, subject-verified-correct but rights-unverified
+    third-party photo could still win automatic selection - exactly the silent-approval gap S14
+    describes. `APPROVED_SOURCE_MEDIA` (Tier 1 - the NewsEvent's own already-vetted source) and
+    `OFFICIAL_PRESS_ASSET` remain selectable; only `EDITORIAL_REVIEW_REQUIRED` (S14's own "a human
+    editor must decide before this ever becomes a publication asset") and `NOT_USABLE` are
+    excluded from AUTOMATIC selection here. This does not delete the candidate: a caller may still
+    surface it for human review, use it as the basis for a truthful fallback search, or choose a
+    truthful alternate composition (S14's own disclosed options) - `is_selectable()` only answers
+    "may this be chosen without a human in the loop", never "does this candidate exist"."""
+    if candidate.usage_classification in (
+        MediaUsageClassification.NOT_USABLE, MediaUsageClassification.EDITORIAL_REVIEW_REQUIRED,
+    ):
         return False
     if candidate.subject_match is not None and candidate.subject_match.subject_match is SubjectMatchClassification.MISMATCH:
         return False

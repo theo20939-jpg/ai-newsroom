@@ -23,7 +23,12 @@ _INTENT = MediaIntent(
 )
 
 
-def _candidate(candidate_id: str, *, tier: DiscoveryTier = DiscoveryTier.TIER4_WEB_IMAGE_DISCOVERY, usage: MediaUsageClassification = MediaUsageClassification.EDITORIAL_REVIEW_REQUIRED, subject_match: SubjectMatchClassification | None = None) -> ResolvedMediaCandidate:
+def _candidate(candidate_id: str, *, tier: DiscoveryTier = DiscoveryTier.TIER4_WEB_IMAGE_DISCOVERY, usage: MediaUsageClassification = MediaUsageClassification.APPROVED_SOURCE_MEDIA, subject_match: SubjectMatchClassification | None = None) -> ResolvedMediaCandidate:
+    # RUNTIME-CLOSURE-1 (S14/S34): default changed from EDITORIAL_REVIEW_REQUIRED to
+    # APPROVED_SOURCE_MEDIA - these tests exercise selection/classification-integration logic, not
+    # rights handling; `is_selectable()` now correctly excludes EDITORIAL_REVIEW_REQUIRED from
+    # automatic selection (see `test_editorial_review_required_never_wins_automatic_selection`
+    # below for the dedicated rights test at this integration level).
     validation = None
     if subject_match is not None:
         validation = SubjectMatchValidation(depicted_subject_description="x", subject_match=subject_match, must_not_imply_violated=False, reason="test")
@@ -119,6 +124,24 @@ async def test_subject_match_classifier_is_invoked_and_result_attached() -> None
     assert result.selected.subject_match is not None
     assert result.selected.subject_match.subject_match is SubjectMatchClassification.EXACT_SUBJECT
     assert result.exact_subject_media_not_found is False
+
+
+@pytest.mark.asyncio
+async def test_editorial_review_required_never_wins_automatic_selection() -> None:
+    """RUNTIME-CLOSURE-1 (S14/S34) - the real Founder audit rights gap, reproduced end-to-end at
+    the actual `research_and_select_media()` call site (never proven only at the unit level of
+    `is_selectable()` alone): a candidate awaiting human rights review must not automatically win
+    selection merely because it is the only/best-scoring candidate on subject-match grounds."""
+    exact_but_review_required = _candidate(
+        "needs_review", subject_match=SubjectMatchClassification.EXACT_SUBJECT,
+        usage=MediaUsageClassification.EDITORIAL_REVIEW_REQUIRED,
+    )
+    result = await research_and_select_media(
+        _INTENT, tier1_candidates=[exact_but_review_required], web_discovery_client=NullWebDiscoveryClient(),
+    )
+    assert result.selected is None
+    assert result.exact_subject_media_not_found is True
+    assert any("not_usable" in r or "needs_review" in r for r in result.rejection_reasons) or result.candidates_considered == 1
 
 
 @pytest.mark.asyncio

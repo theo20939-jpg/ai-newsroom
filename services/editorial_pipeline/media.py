@@ -49,19 +49,44 @@ def build_visual_intent_from_evidence(
     *, title: str, category: str | None, evidence: EvidencePack, platform: str = "generic",
 ) -> MediaIntent:
     """A deliberately conservative default intent for the common NEWS/BREAKING/DATA/QUOTE case,
-    where no richer, hand-built MediaIntent exists yet: `subject_type=CONCEPT` (S11's own "no
-    single concrete real-world subject" category - the safe default absent a real entity extractor
-    wired here) and `desired_visual_type=PRODUCT_PHOTO` only when the title's own token shape
-    suggests a named product (reuses the same bounded heuristic content.py uses for DATA subjects,
-    not a second competing one)."""
-    from services.editorial_pipeline.content import _extract_subject_from_title  # bounded, shared heuristic
+    where no richer, hand-built MediaIntent exists yet.
 
-    subject = _extract_subject_from_title(title)
+    RUNTIME-CLOSURE-1 (S9): subject identity now comes from `services.editorial_pipeline.
+    subject_extraction.extract_media_subject()` - a real, generic, deterministic extractor built
+    for THIS purpose (media-subject-identity, not DATA-metric-label construction; deliberately not
+    the old `content._extract_subject_from_title()`, which stays untouched for DATA - see that
+    module's own docstring). Closes the Founder audit finding that the old single "capitalized-
+    word-plus-digit" regex could not recognize "iPhone 17", "GPT-6", "Dario Amodei", "OpenAI", or
+    "foldable iPhone" - real production title shapes, not just idealized test fixtures (S32)."""
+    from services.editorial_pipeline.subject_extraction import extract_media_subject
+
+    extracted = extract_media_subject(title)
+    if extracted is None:
+        return MediaIntent(
+            subject_type=MediaSubjectType.CONCEPT, primary_entity=title[:200],
+            desired_visual_type=DesiredVisualType.GRAPHIC_LAYOUT,
+            orientation_preference=OrientationPreference.ANY,
+            platform=platform if platform in ("instagram", "telegram") else "generic",  # type: ignore[arg-type]
+            context_summary=(evidence.research_facts[0] if evidence.research_facts else None),
+        )
+
+    # The most specific real identity string this extraction found, in specificity order - the
+    # single anchor `primary_entity` (MediaIntent's own "the exact thing the image must depict"
+    # field) uses. `model_name` is set ONLY for a genuinely versioned subject (S9's own two-tier
+    # required/category model - see subject_match.py) - never fabricated for a bare brand/person.
+    primary_entity = extracted.versioned_form or extracted.proper_noun_run or extracted.brand_form or title[:200]
+    product_name = extracted.brand_form  # a category-level signal for either tier
     return MediaIntent(
-        subject_type=MediaSubjectType.PRODUCT if subject else MediaSubjectType.CONCEPT,
-        primary_entity=subject or title[:200],
-        product_name=subject,
-        desired_visual_type=DesiredVisualType.PRODUCT_PHOTO if subject else DesiredVisualType.GRAPHIC_LAYOUT,
+        subject_type=MediaSubjectType.PRODUCT if (extracted.versioned_form or extracted.brand_form) else MediaSubjectType.PERSON,
+        primary_entity=primary_entity[:200],
+        product_name=product_name,
+        model_name=extracted.versioned_form,
+        # A 2-3 word proper-noun run with no product/brand token alongside it is, in ordinary news
+        # prose, far more often a person's full name than anything else (S9's own disclosed,
+        # non-hardcoded heuristic - never a specific name list). When a brand/versioned token is
+        # ALSO present, the run is left as `person=None` rather than guessing.
+        person=extracted.proper_noun_run if (extracted.proper_noun_run and not extracted.brand_form and not extracted.versioned_form) else None,
+        desired_visual_type=DesiredVisualType.PRODUCT_PHOTO if (extracted.versioned_form or extracted.brand_form) else DesiredVisualType.PORTRAIT,
         orientation_preference=OrientationPreference.ANY,
         platform=platform if platform in ("instagram", "telegram") else "generic",  # type: ignore[arg-type]
         context_summary=(evidence.research_facts[0] if evidence.research_facts else None),

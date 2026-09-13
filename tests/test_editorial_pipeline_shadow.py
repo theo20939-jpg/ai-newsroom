@@ -13,7 +13,7 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_shadow_comparison_never_raises_even_on_internal_failure(caplog) -> None:
-    async def broken_render(composition_plan, structured_content):
+    async def broken_render(composition_plan, structured_content, media_selection):
         raise RuntimeError("simulated internal pipeline bug")
 
     with caplog.at_level("WARNING"):
@@ -45,5 +45,5 @@ async def test_shadow_comparison_logs_agreement_when_new_pipeline_matches_legacy
 
 async def test_passthrough_render_performs_no_new_rendering() -> None:
     render = build_passthrough_render("photo-x", "html-y")
-    result = await render(composition_plan=object(), structured_content=object())
+    result = await render(composition_plan=object(), structured_content=object(), media_selection=object())
     assert result == ("photo-x", "html-y")

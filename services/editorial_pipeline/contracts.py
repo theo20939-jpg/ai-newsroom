@@ -70,6 +70,7 @@ __all__ = [
     "PresentationFormat", "StructuredNewsContent", "StructuredBreakingContent",
     "StructuredDataContent", "StructuredQuoteContent", "StructuredContent",
     "SlidePlan", "CarouselPlan",
+    "MediaAssetResolutionMethod", "SelectedMediaAsset", "MediaResolutionFailure",
     "DataCompositionStrategy", "CompositionPlan",
     "QualityCheckName", "QualityCheckResult", "QualityGateVerdict", "QualityGateResult",
     "Platform", "DeliveryOutcome", "DeliveryPackage",
@@ -234,6 +235,75 @@ class DataCompositionStrategy(str, enum.Enum):
     DATA_TYPOGRAPHIC = "data_typographic"
 
 
+# ---------------------------------------------------------------------------
+# RUNTIME-CLOSURE-1 (§5/§6/§7): the ONE authoritative final-media-asset contract. Every stage from
+# render onward (render, QA, transport) receives and inspects THIS object - never a candidate/bytes
+# captured independently before `MediaResearchService` finished (§3.1's "structurally impossible"
+# same-asset invariant). Built exactly once, by `services.editorial_pipeline.media_asset_resolver.
+# resolve_selected_media_asset()`, from exactly the `ResolvedMediaCandidate` that
+# `MediaSelectionResult.selected` names - never a different candidate.
+# ---------------------------------------------------------------------------
+
+
+class MediaAssetResolutionMethod(str, enum.Enum):
+    TELEGRAM_FILE_ID = "telegram_file_id"  # a valid, reusable, already-cached Telegram file_id
+    LOCAL_STORAGE_BYTES = "local_storage_bytes"  # freshly-read bytes from this app's own storage
+    BOUNDED_DOWNLOAD = "bounded_download"  # a bounded, policy-checked download from the exact
+    # selected candidate's own asset_url (Tier 2-5 web-discovered candidates only)
+    NONE_TEXT_APPROPRIATE = "none_text_appropriate"  # no candidate was selected AND the format
+    # legitimately does not require one (DATA_TYPOGRAPHIC) - never used for a visual-required format
+
+
+@dataclass(frozen=True)
+class SelectedMediaAsset:
+    """The one object representing the authoritative final media asset, carried unchanged from
+    resolution through render, QA, and transport (§5/§19's "ONE OBJECT" requirement).
+    `candidate_id` is always `MediaSelectionResult.selected.candidate_id` when a candidate was
+    selected - the identity every downstream stage's own diagnostic/invariant check compares
+    against (`services.editorial_pipeline.telegram_integration`'s pre-transport assertion,
+    `tests/test_unified_pipeline_same_asset_invariant.py`)."""
+
+    candidate_id: str | None
+    resolution_method: MediaAssetResolutionMethod
+    source_url: str | None
+    origin_url: str | None
+    discovery_tier: DiscoveryTier | None
+    usage_classification: MediaUsageClassification | None
+    subject_match: SubjectMatchClassification | None
+    subject_confidence: str | None
+    telegram_file_id: str | None = None
+    resolved_bytes: bytes | None = None
+    mime_type: str | None = None
+    width: int | None = None
+    height: int | None = None
+    sha256: str | None = None
+
+    @property
+    def photo_input_ready(self) -> bool:
+        """True exactly when this asset carries something a Telegram send call can use directly
+        (a cached file_id or real bytes) - `False` for `NONE_TEXT_APPROPRIATE` and for a resolution
+        that genuinely failed (see `MediaResolutionOutcome` below, which is returned instead of a
+        `SelectedMediaAsset` in that case - this property exists for defensive/diagnostic use, the
+        resolver itself never returns a "ready" asset with neither field set)."""
+        return self.telegram_file_id is not None or self.resolved_bytes is not None
+
+
+class MediaResolutionFailure:
+    """RUNTIME-CLOSURE-1 (§7/§17): the typed sentinel a `RenderCallable` returns instead of `None`
+    when a real candidate WAS selected but its exact bytes/file_id could not be resolved -
+    distinguishable from `None` (generic `RENDER_FAILED`: a rendering/branding exception on
+    otherwise-resolved bytes) and from a legitimate `(None, html)` text-appropriate composition.
+    The orchestrator maps this specific sentinel to `RecoveryReasonCode.MEDIA_RESOLUTION_FAILED`
+    (§18: 'never ordinary text delivery' for a visual-required format whose selected asset could
+    not actually be resolved)."""
+
+    __slots__ = ("candidate_id", "detail")
+
+    def __init__(self, *, candidate_id: str | None, detail: str) -> None:
+        self.candidate_id = candidate_id
+        self.detail = detail
+
+
 @dataclass(frozen=True)
 class CompositionPlan:
     presentation_format: PresentationFormat
@@ -256,7 +326,13 @@ class CompositionPlan:
 
 
 class QualityCheckName(str, enum.Enum):
-    FACT_SUPPORT = "FACT_SUPPORT"
+    STRUCTURED_CONTENT_PRESENT = "STRUCTURED_CONTENT_PRESENT"
+    """RUNTIME-CLOSURE-1 (§20): renamed from the old `FACT_SUPPORT` - that name claimed an
+    independent fact-support/traceability verification this check never actually performed (it
+    only ever checked "is `content` not None"). `CLAIM_TRACEABILITY` (below) is the check that
+    actually verifies traceability to an `EvidenceClaim`; this one is honestly named for what it
+    checks. No new checker was added - semantic honesty, not a second expensive validator (§20's
+    own explicit instruction)."""
     CLAIM_TRACEABILITY = "CLAIM_TRACEABILITY"
     LANGUAGE_QUALITY = "LANGUAGE_QUALITY"
     VISUAL_TRUTHFULNESS = "VISUAL_TRUTHFULNESS"
@@ -338,6 +414,14 @@ class RecoveryReasonCode(str, enum.Enum):
     CAPTION_BUDGET_FAILED = "CAPTION_BUDGET_FAILED"
     RENDER_FAILED = "RENDER_FAILED"
     QUALITY_GATE_FAILED = "QUALITY_GATE_FAILED"
+    MEDIA_RESOLUTION_FAILED = "MEDIA_RESOLUTION_FAILED"
+    """RUNTIME-CLOSURE-1 (§7/§17): MediaResearch selected a real candidate (`media_selection.
+    selected is not None`), but the exact bytes/file_id that specific candidate needs could not be
+    resolved (local storage missing/unreadable AND no valid cached Telegram file_id AND no bounded
+    download succeeded) - Founder audit Case A/B. Distinct from the generic `RENDER_FAILED` (a
+    rendering/branding exception) so this specific, previously-invisible failure mode is
+    observable on its own. Bounded-retryable (a storage/network hiccup may be transient), never a
+    silent text-only completion - see `services.editorial_pipeline.media_asset_resolver`."""
 
 
 class RecoveryState(str, enum.Enum):

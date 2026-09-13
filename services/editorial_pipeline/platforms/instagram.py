@@ -61,7 +61,7 @@ def evaluate_instagram_package(
     gate_result = run_quality_gate(
         # Instagram's own structured content lives in `package` itself, not yet threaded through
         # StructuredContent (report's own "remaining intentional limitations" section discloses
-        # this explicitly) - `content=None` would make quality.py's own FACT_SUPPORT/
+        # this explicitly) - `content=None` would make quality.py's own STRUCTURED_CONTENT_PRESENT/
         # CLAIM_TRACEABILITY checks fail as "nothing to check", which is correct and desired for
         # Telegram (content really is expected there) but would misrepresent a genuine, disclosed
         # gap as a quality failure for Instagram specifically - overridden explicitly below, never
@@ -78,7 +78,7 @@ def evaluate_instagram_package(
     )
     overridden_checks = []
     for check in gate_result.checks:
-        if check.name in (QualityCheckName.FACT_SUPPORT, QualityCheckName.CLAIM_TRACEABILITY) and not check.passed:
+        if check.name in (QualityCheckName.STRUCTURED_CONTENT_PRESENT, QualityCheckName.CLAIM_TRACEABILITY) and not check.passed:
             overridden_checks.append(QualityCheckResult(check.name, True, _NOT_EVALUATED_REASON))
         elif check.name == QualityCheckName.ART_VALIDATION and not art_result.passed:
             overridden_checks.append(QualityCheckResult(QualityCheckName.ART_VALIDATION, False, "; ".join(art_result.blocking_issues)))

@@ -27,6 +27,29 @@ Real recovery integration (Founder review gap #2's fix - S9/S20): every reason c
 produced by a REAL call site and persisted via `RecoveryService`, never a decorative enum value.
 `AMBIGUOUS_TRANSPORT_RESULT` is never auto-resent (S11's own explicit rule) - it becomes a durable
 row and this cycle's delivery simply ends without a second send attempt.
+
+RUNTIME-CLOSURE-1 (S2/S6/S8): the Founder audit's gap A ("selected media and rendered media can
+diverge") and gap D ("candidate pool prematurely reduced") both traced to this module specifically:
+`_resolve_single_photo_candidate()` reduced the eligible pool to exactly ONE candidate via legacy
+ranking BEFORE `MediaResearchService`/subject verification ever ran, and the render callback used
+that ONE candidate's pre-captured bytes unconditionally - regardless of what `MediaSelectionResult.
+selected` actually decided. Fixed here by:
+
+- `_resolve_photo_candidate_pool()` (renamed, bounded to `MAX_CANDIDATE_POOL_SIZE`) now hands
+  MediaResearchService a real, bounded MULTI-candidate pool - subject verification and MISMATCH/
+  EDITORIAL_REVIEW_REQUIRED exclusion happen BEFORE any single candidate is picked, never after.
+- The render callback no longer closes over a pre-selected candidate's bytes. It receives
+  `media_selection` directly (the orchestrator's own new `RenderCallable` contract - see
+  `services.editorial_pipeline.orchestrator`) and resolves EXACTLY `media_selection.selected` via
+  `services.editorial_pipeline.media_asset_resolver.resolve_selected_media_asset()` - the same
+  object every other stage (composition, quality gate) already inspected. There is no candidate
+  reference in this module's own closure state for the render callback to use by mistake.
+- A resolution failure for a real, selected candidate (Case A/B: local bytes gone, no cached
+  file_id) returns a `MediaResolutionFailure` sentinel - the orchestrator maps this to a real,
+  reason-coded `MEDIA_RESOLUTION_FAILED` recovery, never an ordinary text send (S17/S18).
+- A valid cached Telegram file_id resolves and delivers safely even when local bytes are gone
+  (Case B/S16) - reusing `bot/image_preview_media.py`'s own proven "file_id first" policy via the
+  resolver, never HELD merely because a local temp file expired.
 """
 from __future__ import annotations
 
@@ -50,6 +73,9 @@ from schemas.media_subject_match import (
 from services.brand_renderer import render_branded_media
 from services.data_source_classification import classify_source_presentation, select_data_presentation_mode
 from services.editorial_pipeline.contracts import (
+    DataCompositionStrategy,
+    MediaResolutionFailure,
+    MediaSelectionResult,
     OrchestratorVerdict,
     Platform,
     PresentationFormat,
@@ -57,6 +83,7 @@ from services.editorial_pipeline.contracts import (
     RecoveryReasonCode,
 )
 from services.editorial_pipeline.evidence import build_evidence_pack
+from services.editorial_pipeline.media_asset_resolver import resolve_selected_media_asset
 from services.editorial_pipeline.orchestrator import run_editorial_production_pipeline
 from services.editorial_pipeline.recovery_service import RecoveryService
 from services.editorial_pipeline.subject_match import classify_subject_match
@@ -64,9 +91,9 @@ from services.image_persistence import (
     EditorialImageCandidate,
     get_editorial_image_candidates,
     get_recently_attached_image_source_urls,
-    read_candidate_bytes,
     sanitize_url,
 )
+from services.media_web_discovery import WebDiscoveryClient
 from services.nnj_master_news_overlay import apply_master_news_branding
 from services.presentation_director import (
     DataCandidate,
@@ -90,6 +117,17 @@ _FORMAT_BY_LEGACY_STRING = {
     "NEWS": PresentationFormat.NEWS, "BREAKING": PresentationFormat.BREAKING,
     "DATA": PresentationFormat.DATA, "QUOTE": PresentationFormat.QUOTE,
 }
+
+MAX_CANDIDATE_POOL_SIZE = 10
+"""RUNTIME-CLOSURE-1 (S8): the bounded ceiling on how many eligible legacy candidates are wrapped
+and handed to `MediaResearchService` for real subject verification. Chosen from this codebase's own
+existing characteristics: `MediaResearchService.max_web_candidates_to_classify` already defaults to
+8 (services/editorial_pipeline/media.py) for the SAME per-candidate classification cost (one
+`subject_match_classifier` call each); 10 keeps the Tier-1 legacy pool in the same order of
+magnitude rather than inventing an unrelated second bound. Not unlimited (S8's own explicit
+instruction) - a NewsEvent's `image_candidates` table can accumulate far more than 10 rows over
+time, and classifying all of them would scale badly with zero truthfulness benefit past the
+legacy ranking's own top handful."""
 
 
 def is_unified_router_eligible(copywriting_output: dict | None) -> bool:
@@ -183,7 +221,7 @@ def _build_quote_candidate_for_render(structured) -> QuoteCandidate:
 
 
 def _make_render_callback(
-    *, resolved_candidate: EditorialImageCandidate | None, photo_bytes: bytes | None,
+    *, legacy_candidates_by_id: dict[str, EditorialImageCandidate],
     copywriting_output: dict, treatment: str, quote_text: str | None, quote_speaker: str | None,
     category: str, editorial_code: str,
 ):
@@ -194,38 +232,92 @@ def _make_render_callback(
     pixel itself - S17's own "renderer does only layout/typography/crop/brand treatment/drawing"
     boundary, delegated entirely to these three real functions.
 
-    A branding/card-render failure here returns `None` (RENDER_FAILED, a real bounded recovery) -
-    a deliberate, disclosed departure from the legacy path's own silent "demote to NEWS" fail-safe
-    for DATA/QUOTE/BREAKING (`worker/content_cycle.py`'s own spec-S29 comment): the unified path
-    treats a genuine render failure as a real, reason-coded, recoverable event, never a silent
-    format downgrade the worker itself would otherwise have to notice and re-decide (which is
-    exactly the kind of post-hoc editorial re-decision S5 forbids the worker from making)."""
+    RUNTIME-CLOSURE-1 (S3.1/S6/S7): resolves the EXACT candidate `media_selection.selected` names,
+    at render time, via `resolve_selected_media_asset()` - never a candidate/bytes closed over
+    before `MediaResearchService` ran. `legacy_candidates_by_id` is the SAME dict the caller built
+    from the SAME bounded pool that was wrapped into `tier1_candidates`, so this function can never
+    resolve a candidate the orchestrator's own `media_selection` did not actually select.
 
-    async def _render(composition_plan, structured_content):
+    A branding/card-render failure here returns `None` (RENDER_FAILED, a real bounded recovery); a
+    resolution failure for a real selected candidate returns `MediaResolutionFailure`
+    (MEDIA_RESOLUTION_FAILED) - two distinguishable, never-silently-downgraded outcomes (S17/S18).
+    Both are a deliberate, disclosed departure from the legacy path's own silent "demote to NEWS"/
+    "demote to text" fail-safes (`worker/content_cycle.py`'s own spec-S29 comment): the unified path
+    treats every such failure as a real, reason-coded, recoverable event, never a silent downgrade
+    the worker would otherwise have to notice and re-decide (exactly the post-hoc editorial
+    re-decision S5 forbids the worker from making)."""
+
+    async def _render(composition_plan, structured_content, media_selection: MediaSelectionResult):
         fmt = composition_plan.presentation_format
         html = render_v81_news_card_html(
             copywriting_output, treatment=treatment, quote_text=quote_text, quote_speaker=quote_speaker,
             include_ninja_pulse_footer=True,
         )
 
+        resolution = await resolve_selected_media_asset(media_selection, legacy_candidates_by_id=legacy_candidates_by_id)
+        if resolution.failed:
+            return MediaResolutionFailure(
+                candidate_id=media_selection.selected.candidate_id if media_selection.selected else None,
+                detail=resolution.failure_detail or "media resolution failed",
+            )
+        asset = resolution.asset  # None exactly when nothing was selected (a legitimate,
+        # text-appropriate/no-media outcome the orchestrator's own require_media/DATA_TYPOGRAPHIC
+        # logic already approved before this callback was ever invoked).
+
         if fmt == PresentationFormat.NEWS:
-            if photo_bytes is None:
+            if asset is None:
                 return None, html  # legitimate text-appropriate NEWS (only reachable if the
                 # caller did not set require_media=True - kept for defensiveness/reuse elsewhere)
-            try:
-                branded_bytes, _decision = apply_master_news_branding(photo_bytes, disable_lower_signature=False)
-            except Exception:  # noqa: BLE001 - a render failure must become a real recovery, never a crash
-                logger.warning("unified_news_branding_failed", exc_info=True)
-                return None
-            return BufferedInputFile(branded_bytes, filename="pulse.jpg"), html
+            if asset.resolved_bytes is not None:
+                try:
+                    branded_bytes, _decision = apply_master_news_branding(asset.resolved_bytes, disable_lower_signature=False)
+                except Exception:  # noqa: BLE001 - a render failure must become a real recovery, never a crash
+                    logger.warning("unified_news_branding_failed", exc_info=True)
+                    return None
+                return BufferedInputFile(branded_bytes, filename="pulse.jpg"), html
+            if asset.telegram_file_id is not None:
+                # S16/Case B: a valid, already-cached Telegram asset for THIS SAME selected
+                # candidate - delivered directly. Disclosed, bounded trade-off: the master-news
+                # corner-mark overlay cannot be freshly re-applied without raw pixels, so this
+                # specific fallback path reuses the cached asset as-is rather than re-branding it -
+                # preferring a truthful, correct-subject delivery over branding-freshness, exactly
+                # Case B's own explicit priority ("do not HOLD merely because a local temporary
+                # file disappeared if a valid Telegram-native reusable media reference exists").
+                return asset.telegram_file_id, html
+            return MediaResolutionFailure(candidate_id=asset.candidate_id, detail="asset resolved with neither bytes nor file_id")
 
         data_candidate = _build_data_candidate(structured_content) if fmt == PresentationFormat.DATA and structured_content is not None else None
         quote_candidate = _build_quote_candidate_for_render(structured_content) if fmt == PresentationFormat.QUOTE and structured_content is not None else None
+
+        if asset is not None and asset.resolved_bytes is None:
+            # BREAKING/DATA/QUOTE render an entirely new branded CARD from the source image
+            # (never just an overlay) - render_branded_media() has no way to compose one without
+            # real pixels. A cached file_id alone cannot produce a truthful card here, unlike
+            # NEWS's lightweight overlay above. DATA has its own legitimate no-photo strategies
+            # (DATA_TYPOGRAPHIC/DATA_WITH_GRAPH, decided upstream in composition.py) that never
+            # needed this image in the first place; only genuinely reaching for
+            # DATA_WITH_SOURCE_IMAGE/BREAKING/QUOTE with an unresolvable photo is a real failure.
+            if fmt != PresentationFormat.DATA or composition_plan.data_strategy == DataCompositionStrategy.DATA_WITH_SOURCE_IMAGE:
+                return MediaResolutionFailure(
+                    candidate_id=asset.candidate_id,
+                    detail="only a cached file_id was resolved; this format's card render requires real source bytes",
+                )
+
+        source_bytes = asset.resolved_bytes if asset is not None else None
+        legacy_record = (
+            legacy_candidates_by_id.get(asset.candidate_id)
+            if asset is not None and asset.candidate_id is not None else None
+        )
+        # `image_candidate_record_id` (not `candidate_id`) is the actual key `legacy_candidates_by_id`
+        # is built from - see `_wrap_legacy_candidate_as_tier1()`; for a Tier-1 candidate these are
+        # equal (str(row.id) is used for both), so this lookup is correct for every candidate this
+        # module's own pool can currently produce (web-discovered Tier 2-5 candidates are not in
+        # this dict at all, and `legacy_record` correctly stays None for them).
         data_presentation_mode = select_data_presentation_mode(
-            classify_source_presentation(resolved_candidate.warnings if resolved_candidate is not None else None)
+            classify_source_presentation(legacy_record.warnings if legacy_record is not None else None)
         )
         render_result = render_branded_media(
-            presentation_type=fmt.value, source_image_bytes=photo_bytes, category=category,
+            presentation_type=fmt.value, source_image_bytes=source_bytes, category=category,
             editorial_code=editorial_code, branding_strength="STANDARD",
             data_candidate=data_candidate, quote_candidate=quote_candidate,
             data_presentation_mode=data_presentation_mode,
@@ -241,17 +333,22 @@ def _make_render_callback(
     return _render
 
 
-async def _resolve_single_photo_candidate(
+async def _resolve_photo_candidate_pool(
     session_factory: async_sessionmaker[AsyncSession], *, content_draft_id: UUID, news_event_id: UUID,
-) -> EditorialImageCandidate | None:
-    """Single-photo only (disclosed scope limitation - see module docstring): reuses the EXISTING,
-    real candidate retrieval/ranking/duplicate-guard the legacy path already relies on
+    limit: int = MAX_CANDIDATE_POOL_SIZE,
+) -> list[EditorialImageCandidate]:
+    """RUNTIME-CLOSURE-1 (S8): renamed from `_resolve_single_photo_candidate` - returns a real,
+    BOUNDED multi-candidate pool (never reduced to one before subject verification runs), reusing
+    the EXISTING, real candidate retrieval/duplicate-guard the legacy path already relies on
     (`get_editorial_image_candidates()`, `get_recently_attached_image_source_urls()`) - no second
     discovery/ranking pipeline. Local import of `worker.content_cycle._select_top_ranked_image_
     candidates` (module-private, matching `services.editorial_pipeline.recovery.
     apply_telegram_recovery()`'s own established lazy-import precedent for exactly this reason:
     avoiding a hard import-time dependency from this platform-neutral package onto
-    `worker.content_cycle`, which itself imports this module)."""
+    `worker.content_cycle`, which itself imports this module). The legacy ranking still orders the
+    pool (best-legacy-rank first) - only the `limit=1` truncation is removed; `MediaResearchService`
+    itself decides the final winner from real subject-match/rights evidence, never merely inheriting
+    whatever this legacy rank happened to put first."""
     from worker.content_cycle import _select_top_ranked_image_candidates
 
     async with session_factory() as session:
@@ -261,8 +358,7 @@ async def _resolve_single_photo_candidate(
         c for c in candidates
         if not c.is_expired and not (c.source_url and sanitize_url(c.source_url) in recently_used_urls)
     ]
-    top = _select_top_ranked_image_candidates(eligible, limit=1)
-    return top[0] if top else None
+    return _select_top_ranked_image_candidates(eligible, limit=limit)
 
 
 async def run_unified_telegram_delivery(
@@ -285,10 +381,19 @@ async def run_unified_telegram_delivery(
     breaking_max_per_cycle: int,
     breaking_enabled: bool,
     story_id: UUID | None = None,
+    web_discovery_client: WebDiscoveryClient | None = None,
 ) -> UnifiedTelegramDeliveryOutcome:
     """The one call site (S25 for the cutover) - `worker/content_cycle.py`'s router-mode V8-family
     branch calls this INSTEAD OF its own legacy decision tree (never alongside it - S2). Owns
-    format selection through delivery/recovery; the worker only reads back the result."""
+    format selection through delivery/recovery; the worker only reads back the result.
+
+    RUNTIME-CLOSURE-1 (S12): `web_discovery_client` defaults to `None` (-> `MediaResearchService`'s
+    own `NullWebDiscoveryClient`, zero network calls, unchanged from every previous phase) -
+    genuinely no automated search-API/press-kit/stock-photo client exists anywhere in this codebase
+    today (confirmed by direct audit; see `services/media_web_discovery.py`'s own module
+    docstring), so there is nothing production-safe to default this to instead. The parameter
+    exists purely as the structural wiring point: the day a real client IS built, injecting it here
+    is a one-line change at this ONE call site, never a second call site or an architecture change."""
     recovery_service = RecoveryService()
 
     # --- format selection (S1: `decide_presentation()` reused for FORMAT/category/BREAKING-rate-
@@ -314,19 +419,24 @@ async def run_unified_telegram_delivery(
         news_event_id=event.id, story_id=story_id, source_url=event.url, research_facts=research_facts,
     )
 
-    resolved_candidate = await _resolve_single_photo_candidate(
+    # RUNTIME-CLOSURE-1 (S8): a real, BOUNDED multi-candidate pool - never reduced to one before
+    # MediaResearchService's own subject verification/rights exclusion runs (Founder audit gap D).
+    candidate_pool = await _resolve_photo_candidate_pool(
         session_factory, content_draft_id=content_draft_id, news_event_id=event.id,
     )
-    photo_bytes = read_candidate_bytes(resolved_candidate) if resolved_candidate is not None else None
-    tier1_candidates = [_wrap_legacy_candidate_as_tier1(resolved_candidate)] if resolved_candidate is not None else []
+    tier1_candidates = [_wrap_legacy_candidate_as_tier1(c) for c in candidate_pool]
+    legacy_candidates_by_id = {str(c.id): c for c in candidate_pool}
 
     quote_candidate_for_orchestrator = (
         PipelineQuoteCandidate(text=quote_text, speaker=quote_speaker, role=None)
         if presentation_format == PresentationFormat.QUOTE and quote_text else None
     )
 
+    # RUNTIME-CLOSURE-1 (S3.1/S6): no candidate/bytes closed over here - the render callback
+    # resolves EXACTLY whatever `media_selection.selected` ends up being, at render time, via
+    # `legacy_candidates_by_id` (the same pool `tier1_candidates` above was built from).
     render = _make_render_callback(
-        resolved_candidate=resolved_candidate, photo_bytes=photo_bytes, copywriting_output=copywriting_output,
+        legacy_candidates_by_id=legacy_candidates_by_id, copywriting_output=copywriting_output,
         treatment=treatment, quote_text=quote_text, quote_speaker=quote_speaker,
         category=presentation_decision.category, editorial_code=build_editorial_code(task_id),
     )
@@ -343,6 +453,10 @@ async def run_unified_telegram_delivery(
             # This is the ONE classifier MediaResearchService.research() ever receives from this
             # call site; it is never duplicated or re-decided anywhere else in this pipeline.
             subject_match_classifier=classify_subject_match,
+            # RUNTIME-CLOSURE-1 (S12): structural wiring only - see this function's own docstring;
+            # `None` here (the only value any real caller passes today) is identical to every
+            # previous phase's behavior.
+            web_discovery_client=web_discovery_client,
         )
         await session.commit()
 
@@ -369,6 +483,37 @@ async def run_unified_telegram_delivery(
     # own docstring); this module's own render callback (`_make_render_callback()` above) only
     # ever returns `str | BufferedInputFile | None` for it, so this narrowing is always correct.
     assert photo_input is None or isinstance(photo_input, (str, BufferedInputFile))
+
+    # --- S18: final pre-transport visual assertion - the last safety net even if every upstream
+    # gate somehow agreed to a READY package with no visual for a format that structurally needs
+    # one. NEWS/BREAKING/QUOTE always require a photo here (require_media=True already enforced
+    # this before render ever ran); DATA only requires one when its own composition strategy chose
+    # DATA_WITH_SOURCE_IMAGE (DATA_TYPOGRAPHIC/DATA_WITH_GRAPH are legitimately photo-less). If this
+    # ever fires, it means a real defect exists upstream - it must NEVER be silently routed to an
+    # ordinary text send; instead this becomes a real, reason-coded, durable recovery.
+    visual_required_for_send = (
+        presentation_format != PresentationFormat.DATA
+        or package.composition_plan.data_strategy == DataCompositionStrategy.DATA_WITH_SOURCE_IMAGE
+    )
+    if visual_required_for_send and photo_input is None:
+        logger.warning(
+            "unified_pretransport_visual_assertion_failed",
+            extra={"draft_id": str(content_draft_id), "presentation_format": presentation_format.value},
+        )
+        async with session_factory() as session:
+            row = await recovery_service.create_or_retry(
+                session, content_draft_id=content_draft_id, platform=Platform.TELEGRAM,
+                reason_code=RecoveryReasonCode.MEDIA_RESOLUTION_FAILED, failed_stage="pretransport_visual_assertion",
+                last_error="a visual-required READY package reached transport with no photo_input",
+            )
+            await session.commit()
+            recovery_job_id = row.id
+        return UnifiedTelegramDeliveryOutcome(
+            verdict=OrchestratorVerdict.HOLD, presentation_type=presentation_decision.presentation_type,
+            sent=False, dry_run=False, sent_message_id=None, sent_chat_id=None,
+            had_photo=False, held=True, recovery_reason=RecoveryReasonCode.MEDIA_RESOLUTION_FAILED.value,
+            recovery_job_id=recovery_job_id,
+        )
 
     if photo_input is not None:
         routing_outcome: RoutingOutcome = await send_photo_to_editorial_destination(

@@ -129,13 +129,19 @@ async def discover_web_candidates(
 ) -> list[ResolvedMediaCandidate]:
     """Section 5 Tiers 2-4 in one pass (tier is assigned per-result from its own resolved domain,
     not per-query) + section 7's provenance requirement enforced structurally - a candidate is
-    only ever constructed from a real `ResolvedPageImage`, never from a bare `WebSearchHit`."""
+    only ever constructed from a real `ResolvedPageImage`, never from a bare `WebSearchHit`.
+
+    RUNTIME-CLOSURE-1 (S13/S35): `hits[:max_results_per_query]` below is a real, enforced bound at
+    THIS call site - `max_results` is passed to `client.search()` as a request, never trusted as a
+    guarantee (a real or future `WebDiscoveryClient` implementation returning more than it was
+    asked for must never be able to inflate the number of `resolve_page_image()` calls/candidates
+    beyond this function's own documented bound)."""
     queries = generate_search_queries(intent, max_variants=max_query_variants)
     candidates: list[ResolvedMediaCandidate] = []
     seen_asset_urls: set[str] = set()
 
     for query in queries:
-        hits = await client.search(query, max_results=max_results_per_query)
+        hits = (await client.search(query, max_results=max_results_per_query))[:max_results_per_query]
         for hit in hits:
             resolved = await client.resolve_page_image(hit)
             if resolved is None:

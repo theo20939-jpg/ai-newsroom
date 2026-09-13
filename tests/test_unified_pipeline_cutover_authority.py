@@ -231,9 +231,9 @@ async def test_replay_d_maxus_data_label_fix_reaches_the_real_sent_caption(
         # DATA's own real, unmodified V8 renderer requires a real source photo (Phase V2.20: "DATA
         # no longer has a source-photo-free synthetic card form") - a real candidate is supplied
         # here for exactly that reason, not to test media selection itself (covered elsewhere).
-        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate()])),
-        patch("services.editorial_pipeline.telegram_integration.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate()])),
-        patch("services.editorial_pipeline.telegram_integration.read_candidate_bytes", return_value=b"fake-jpeg-bytes"),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate(resolvable=False)])),
+        patch("services.editorial_pipeline.telegram_integration.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate(resolvable=False)])),
+        patch("services.editorial_pipeline.media_asset_resolver.read_candidate_bytes", return_value=b"fake-jpeg-bytes"),
         patch("services.brand_renderer.render_data_card", return_value=b"rendered-data-card-bytes"),
     ):
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
@@ -273,9 +273,9 @@ async def test_replay_f_caption_too_long_never_completes_text_only(
     with (
         patch("worker.content_cycle._classify_event_for_router_treatment", new=AsyncMock(return_value=_standard_decision())),
         patch("worker.content_cycle._fetch_router_presentation_signals", new=AsyncMock(return_value=([], None))),
-        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate()])),
-        patch("services.editorial_pipeline.telegram_integration.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate()])),
-        patch("services.editorial_pipeline.telegram_integration.read_candidate_bytes", return_value=b"fake-jpeg-bytes"),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate(resolvable=False)])),
+        patch("services.editorial_pipeline.telegram_integration.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate(resolvable=False)])),
+        patch("services.editorial_pipeline.media_asset_resolver.read_candidate_bytes", return_value=b"fake-jpeg-bytes"),
         patch("services.editorial_pipeline.telegram_integration.apply_master_news_branding", return_value=(b"branded-bytes", None)),
     ):
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
@@ -315,9 +315,9 @@ async def test_replay_g_media_send_failure_becomes_a_durable_recovery(
             "worker.content_cycle._fetch_router_presentation_signals",
             new=AsyncMock(return_value=(["Some plain NEWS content, real and verified."], None)),
         ),
-        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate()])),
-        patch("services.editorial_pipeline.telegram_integration.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate()])),
-        patch("services.editorial_pipeline.telegram_integration.read_candidate_bytes", return_value=b"fake-jpeg-bytes"),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate(resolvable=False)])),
+        patch("services.editorial_pipeline.telegram_integration.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate(resolvable=False)])),
+        patch("services.editorial_pipeline.media_asset_resolver.read_candidate_bytes", return_value=b"fake-jpeg-bytes"),
         patch("services.editorial_pipeline.telegram_integration.apply_master_news_branding", return_value=(b"branded-bytes", None)),
     ):
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
@@ -357,9 +357,9 @@ async def test_replay_h_ambiguous_transport_timeout_never_auto_resent(
             "worker.content_cycle._fetch_router_presentation_signals",
             new=AsyncMock(return_value=(["Plain, real, verified content for the timeout replay."], None)),
         ),
-        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate()])),
-        patch("services.editorial_pipeline.telegram_integration.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate()])),
-        patch("services.editorial_pipeline.telegram_integration.read_candidate_bytes", return_value=b"fake-jpeg-bytes"),
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate(resolvable=False)])),
+        patch("services.editorial_pipeline.telegram_integration.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate(resolvable=False)])),
+        patch("services.editorial_pipeline.media_asset_resolver.read_candidate_bytes", return_value=b"fake-jpeg-bytes"),
         patch("services.editorial_pipeline.telegram_integration.apply_master_news_branding", return_value=(b"branded-bytes", None)),
     ):
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)

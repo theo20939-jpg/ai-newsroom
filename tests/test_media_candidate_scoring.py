@@ -19,7 +19,12 @@ _INTENT = MediaIntent(subject_type=MediaSubjectType.PRODUCT, primary_entity="iPh
 
 def _candidate(
     *, subject_match: SubjectMatchClassification | None, tier: DiscoveryTier, width: int | None = 2000,
-    height: int | None = 1500, usage: MediaUsageClassification = MediaUsageClassification.EDITORIAL_REVIEW_REQUIRED,
+    height: int | None = 1500, usage: MediaUsageClassification = MediaUsageClassification.APPROVED_SOURCE_MEDIA,
+    # RUNTIME-CLOSURE-1 (S14/S34): the scoring-dominance tests below are about subject-match/tier/
+    # quality scoring, not rights classification - they need a usage class `is_selectable()` never
+    # excludes so the dominance invariant they actually test remains observable. The dedicated
+    # `EDITORIAL_REVIEW_REQUIRED`-exclusion behavior itself has its own explicit test below
+    # (`test_editorial_review_required_is_not_selectable_regardless_of_subject_match`).
 ) -> ResolvedMediaCandidate:
     validation = None
     if subject_match is not None:
@@ -47,6 +52,29 @@ def test_not_usable_is_not_selectable_regardless_of_subject_match() -> None:
     candidate = _candidate(subject_match=SubjectMatchClassification.EXACT_SUBJECT, tier=DiscoveryTier.TIER2_OFFICIAL_PRIMARY, usage=MediaUsageClassification.NOT_USABLE)
     assert not is_selectable(candidate)
     assert score_candidate(candidate, _INTENT) == 0.0
+
+
+def test_editorial_review_required_is_not_selectable_regardless_of_subject_match() -> None:
+    """RUNTIME-CLOSURE-1 (S14/S34) - Founder audit finding: a candidate awaiting human rights
+    review must never silently become an automatic publication asset, no matter how strong its
+    subject-match verdict is."""
+    candidate = _candidate(
+        subject_match=SubjectMatchClassification.EXACT_SUBJECT, tier=DiscoveryTier.TIER2_OFFICIAL_PRIMARY,
+        usage=MediaUsageClassification.EDITORIAL_REVIEW_REQUIRED,
+    )
+    assert not is_selectable(candidate)
+    assert score_candidate(candidate, _INTENT) == 0.0
+
+
+def test_official_press_asset_remains_selectable() -> None:
+    """The fix must not overreach: OFFICIAL_PRESS_ASSET (the entity's own manufacturer/press
+    domain) is not "awaiting review" - it stays selectable, unlike EDITORIAL_REVIEW_REQUIRED."""
+    candidate = _candidate(
+        subject_match=SubjectMatchClassification.EXACT_SUBJECT, tier=DiscoveryTier.TIER2_OFFICIAL_PRIMARY,
+        usage=MediaUsageClassification.OFFICIAL_PRESS_ASSET,
+    )
+    assert is_selectable(candidate)
+    assert score_candidate(candidate, _INTENT) > 0.0
 
 
 def test_dominance_invariant_weak_exact_subject_beats_strong_everything_else_mismatch() -> None:

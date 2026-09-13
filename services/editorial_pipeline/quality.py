@@ -4,7 +4,7 @@ passes through here before it may be sent - no downstream sender may override a 
 adapter's send path when `run_quality_gate()` did not return READY).
 
 Each check function is independently callable and independently testable (S35's own required test
-classes map 1:1 onto these): `FACT_SUPPORT`/`CLAIM_TRACEABILITY` check the structured content
+classes map 1:1 onto these): `STRUCTURED_CONTENT_PRESENT`/`CLAIM_TRACEABILITY` check the structured content
 against its `EvidencePack`; `VISUAL_TRUTHFULNESS`/`MEDIA_PROVENANCE` check the media selection;
 `FORMAT_REQUIREMENTS`/`PLATFORM_BUDGET` check the composition/caption against the target platform;
 `ART_VALIDATION` delegates to the existing Instagram Art validator when the platform is Instagram
@@ -29,10 +29,15 @@ from services.editorial_pipeline.contracts import (
 from services.editorial_pipeline.language_qa import check_language_quality
 
 
-def _check_fact_support(content: StructuredContent | None) -> QualityCheckResult:
+def _check_structured_content_present(content: StructuredContent | None) -> QualityCheckResult:
+    """RUNTIME-CLOSURE-1 (S20): renamed from `_check_fact_support` - this check only ever verified
+    "is `content` not None", never any actual fact-support/traceability property (that is
+    `_check_claim_traceability` below, which really does verify traceability to an EvidenceClaim).
+    Keeping the old name would be a false safety claim (S20's own "do not claim a safety property
+    the code does not establish") - no new checker was added, this is a rename only."""
     if content is None:
-        return QualityCheckResult(QualityCheckName.FACT_SUPPORT, False, "no structured content to check")
-    return QualityCheckResult(QualityCheckName.FACT_SUPPORT, True, "structured content present")
+        return QualityCheckResult(QualityCheckName.STRUCTURED_CONTENT_PRESENT, False, "no structured content to check")
+    return QualityCheckResult(QualityCheckName.STRUCTURED_CONTENT_PRESENT, True, "structured content present")
 
 
 def _check_claim_traceability(content: StructuredContent | None, evidence: EvidencePack) -> QualityCheckResult:
@@ -111,7 +116,7 @@ def run_quality_gate(
     caption_or_copy: str, platform: Platform,
 ) -> QualityGateResult:
     checks = (
-        _check_fact_support(content),
+        _check_structured_content_present(content),
         _check_claim_traceability(content, evidence),
         check_language_quality(caption_or_copy),
         _check_visual_truthfulness(media_selection),

@@ -75,7 +75,7 @@ def build_passthrough_render(photo_input: object | None, html: str) -> Callable[
     production mutation merely to collect shadow output" - extended here to also mean no duplicate
     real rendering work, which this codebase's own renderers are not free to run twice)."""
 
-    async def _render(composition_plan: object, structured_content: object) -> tuple[object | None, str]:
+    async def _render(composition_plan: object, structured_content: object, media_selection: object) -> tuple[object | None, str]:
         return photo_input, html
 
     return _render
