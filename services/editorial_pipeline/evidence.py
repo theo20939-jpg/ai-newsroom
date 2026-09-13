@@ -11,9 +11,12 @@ no new fact-extraction of its own - each fact string becomes exactly one claim, 
 from __future__ import annotations
 
 import hashlib
+import logging
 from uuid import UUID
 
 from services.editorial_pipeline.contracts import EvidenceClaim, EvidencePack
+
+logger = logging.getLogger(__name__)
 
 
 def _claim_id(news_event_id: UUID, index: int, text: str) -> str:
@@ -36,6 +39,11 @@ def build_evidence_pack(
         EvidenceClaim(claim_id=_claim_id(news_event_id, i, fact), text=fact.strip(), source_url=source_url, raw_fact_text=fact)
         for i, fact in enumerate(facts)
     )
-    return EvidencePack(
+    pack = EvidencePack(
         news_event_id=news_event_id, story_id=story_id, claims=claims, source_url=source_url, research_facts=facts,
     )
+    logger.info(
+        "evidence_ready",
+        extra={"news_event_id": str(news_event_id), "story_id": str(story_id) if story_id else None, "claim_count": len(claims)},
+    )
+    return pack

@@ -21,9 +21,19 @@ Production-safety posture, unchanged from the reused module's own documented def
 (zero network calls) unless a caller explicitly supplies one - this module does not change that
 default, and the orchestrator (S25/S26) does not supply a real one while `unified_editorial_
 pipeline_enabled` is False.
+
+Real, concrete gap found and fixed HERE (S14: "network failure must fail soft into the next tier"):
+the reused `services.media_web_discovery.discover_web_candidates()` has no exception handling of
+its own around `client.search()`/`client.resolve_page_image()` - a real network failure there would
+propagate straight out of `research_and_select_media()` uncaught, crashing the whole selection
+rather than falling back to whatever Tier 1 candidates already exist. `MediaResearchService.
+research()` below is the fail-soft boundary: a web-discovery failure is caught, logged, and the
+selection proceeds on Tier 1 candidates alone - never a crash, and never silently pretending
+discovery ran cleanly when it did not (the failure is genuinely logged, not swallowed unlabeled).
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from schemas.media_intent import DesiredVisualType, MediaIntent, MediaSubjectType, OrientationPreference
@@ -31,6 +41,8 @@ from schemas.media_subject_match import MediaSelectionResult, ResolvedMediaCandi
 from services.editorial_pipeline.contracts import EvidencePack
 from services.media_research_selection import SubjectMatchClassifier, research_and_select_media
 from services.media_web_discovery import NullWebDiscoveryClient, WebDiscoveryClient
+
+logger = logging.getLogger(__name__)
 
 
 def build_visual_intent_from_evidence(
@@ -72,12 +84,25 @@ class MediaResearchService:
         subject_match_classifier: SubjectMatchClassifier | None = None,
         fallback_candidate: ResolvedMediaCandidate | None = None,
     ) -> MediaSelectionResult:
-        return await research_and_select_media(
-            intent,
-            tier1_candidates=tier1_candidates,
-            web_discovery_client=web_discovery_client or NullWebDiscoveryClient(),
-            subject_match_classifier=subject_match_classifier,
-            fallback_candidate=fallback_candidate,
-            official_domains=self.official_domains,
-            max_web_candidates_to_classify=self.max_web_candidates_to_classify,
-        )
+        client = web_discovery_client or NullWebDiscoveryClient()
+        try:
+            return await research_and_select_media(
+                intent,
+                tier1_candidates=tier1_candidates,
+                web_discovery_client=client,
+                subject_match_classifier=subject_match_classifier,
+                fallback_candidate=fallback_candidate,
+                official_domains=self.official_domains,
+                max_web_candidates_to_classify=self.max_web_candidates_to_classify,
+            )
+        except Exception as exc:  # noqa: BLE001 - S14: a web-discovery failure must fail soft, never crash selection
+            logger.warning("media_web_discovery_failed_soft", extra={"primary_entity": intent.primary_entity, "error": type(exc).__name__})
+            return await research_and_select_media(
+                intent,
+                tier1_candidates=tier1_candidates,
+                web_discovery_client=NullWebDiscoveryClient(),  # retry on Tier 1 only - never re-attempt the failing client
+                subject_match_classifier=subject_match_classifier,
+                fallback_candidate=fallback_candidate,
+                official_domains=self.official_domains,
+                max_web_candidates_to_classify=self.max_web_candidates_to_classify,
+            )

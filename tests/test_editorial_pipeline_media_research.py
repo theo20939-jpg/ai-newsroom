@@ -101,3 +101,37 @@ async def test_no_candidates_at_all_reports_not_found_truthfully() -> None:
     assert result.selected is None
     assert result.exact_subject_media_not_found is True
     assert result.candidates_considered == 0
+
+
+async def test_external_search_failure_fails_soft_to_tier1_only(caplog: pytest.LogCaptureFixture) -> None:
+    """S14: 'network failure must fail soft into the next tier' - a real, concrete gap this phase
+    found in the reused services.media_web_discovery.discover_web_candidates() (no exception
+    handling of its own around client.search()/resolve_page_image()) and fixed in
+    MediaResearchService.research() itself. A broken web-discovery client must never crash the
+    whole selection - Tier 1 candidates (already resolved, no network needed) must still be
+    considered and selectable."""
+    tier1_correct = _candidate("tier1_correct", tier=DiscoveryTier.TIER1_CURRENT_SOURCE, quality_hint="modest_but_correct")
+
+    class BrokenWebDiscoveryClient:
+        async def search(self, query: str, *, max_results: int):
+            raise ConnectionError("simulated network failure")
+
+        async def resolve_page_image(self, hit):
+            raise ConnectionError("simulated network failure")
+
+    async def classifier(candidate: ResolvedMediaCandidate, intent: MediaIntent) -> SubjectMatchValidation:
+        return SubjectMatchValidation(
+            depicted_subject_description="test", subject_match=SubjectMatchClassification.EXACT_SUBJECT,
+            must_not_imply_violated=False, confidence="high", reason="test fixture",
+        )
+
+    service = MediaResearchService()
+    with caplog.at_level("WARNING"):
+        result = await service.research(
+            _INTENT, tier1_candidates=[tier1_correct], web_discovery_client=BrokenWebDiscoveryClient(),
+            subject_match_classifier=classifier,
+        )
+
+    assert result.selected is not None  # never crashed - Tier 1 still considered
+    assert result.selected.candidate_id == "tier1_correct"
+    assert any(r.msg == "media_web_discovery_failed_soft" for r in caplog.records)
