@@ -34,10 +34,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
-from database.models.news_event import EventCategory
+from database.models.news_event import EventCategory, NewsEvent
 from database.models.story import Story
+from database.models.story_link import NewsEventStoryLink
 from services.editorial_content_type import classify_content_type, is_content_type_mismatch
 from services.fact_safety import ClaimType, extract_claims
+from services.story_identity_guard import (
+    CANDIDATE_ELIGIBLE,
+    candidate_story_identity_verdict,
+    extract_document_identity,
+)
 from services.text_normalization import normalize_for_entity_match, normalize_loose, symmetric_token_overlap
 
 # Phase V2.22A: mirrors services/story_delta_engine.py's own _MATERIAL_CLAIM_TYPES verbatim (never
@@ -227,6 +233,231 @@ _CALIBRATED_GENERIC_DESCRIPTOR_ENTITIES = frozenset({
     "утро", "новост", "день",
 })
 
+# STORY-CONTINUITY-P0 (2026-09, real production evidence META-AI-DUPLICATE forensics).
+# Deliberately SMALL - only tokens that are (a) a broad AI-domain acronym essentially never part
+# of a real proper name, or (b) a sentence-initial modal/auxiliary capitalized purely for
+# position. Common nouns that DO appear inside genuine company/product names ("Model", "Agent",
+# "Technology", "Platform", "App", "System", "Labs", …) are deliberately NOT here - they stay
+# extractable, and _distinctive_shared_entities()'s document-frequency gate is what stops a
+# common noun carrying a confident match on its own. Real forensic anchor this responds to: the
+# Story "Will you have spent more of your life with computers..." held 7 editorially-unrelated
+# members together on the single sentence-opener "will"; "Meta's new AI transcription model"
+# reduced to {meta} once bare "AI" stopped counting.
+_GENERIC_DOMAIN_ENTITIES = frozenset({
+    "ai", "ml", "llm", "genai", "agi",
+    "ии", "модель", "модел", "модели", "нейросеть", "нейросет",
+    "will", "would", "should", "could",
+})
+
+# Union of every set _extract_entities() drops outright and classify_entity() calls "generic".
+_ALL_GENERIC_ENTITY_SETS: tuple[frozenset[str], ...] = (
+    _GENERIC_DETERMINER_ENTITIES,
+    _CALIBRATED_GENERIC_PREFIX_ENTITIES,
+    _GENERIC_FUNCTION_WORD_ENTITIES,
+    _CALIBRATED_GENERIC_DESCRIPTOR_ENTITIES,
+    _GENERIC_DOMAIN_ENTITIES,
+)
+
+# STORY-CONTINUITY-P0: globally-recurring organizations / platforms whose bare name appears
+# across many editorially-unrelated stories in any candidate pool ("a mega-corp, a head of
+# state" - the exact class services/story_memory.py::_distinctive_shared_entities()'s own
+# docstring already names as NOT story-identifying on its own). A single bare token in this set
+# classifies as SUPPORTING, never DISTINCTIVE - so "Meta launches X" and "Meta sues Y" cannot
+# reach a confident same-Story match on the shared "meta" alone. NOT a calibration list of one
+# incident's names: it is the standard set of always-present tech subjects. A specific
+# product / project / model name (e.g. "muse", "llama", "gemini", "copilot") is deliberately
+# NOT here - those DO identify a story and stay DISTINCTIVE.
+_SUPPORTING_ORG_ENTITIES = frozenset({
+    "meta", "facebook", "instagram", "whatsapp", "threads",
+    "google", "alphabet", "youtube", "android", "chrome", "waymo",
+    "apple", "microsoft", "windows", "xbox", "linkedin", "github",
+    "amazon", "aws", "twitch",
+    "openai", "anthropic", "nvidia", "amd", "intel", "qualcomm", "arm", "tsmc",
+    "samsung", "sony", "tesla", "spacex", "netflix", "spotify", "uber", "adobe",
+    "ibm", "oracle", "salesforce", "snap", "snapchat", "pinterest", "reddit",
+    "tiktok", "bytedance", "baidu", "alibaba", "tencent", "huawei", "xiaomi",
+    "x", "twitter", "yandex", "vk", "telegram", "discord",
+    "eu", "ftc", "doj", "sec",
+    "мета", "гугл", "эпл", "майкрософт", "яндекс",
+})
+
+
+def _is_generic_token(token: str) -> bool:
+    if any(token in s for s in _ALL_GENERIC_ENTITY_SETS):
+        return True
+    # a hyphenated compound of only-generic parts is itself generic: "ИИ-модель" ->
+    # "ии-модель" -> ["ии", "модель"] (both generic); "AI-agent". "muse-spark" is NOT.
+    if "-" in token:
+        parts = [p for p in token.split("-") if p]
+        return len(parts) > 1 and all(
+            any(p in s for s in _ALL_GENERIC_ENTITY_SETS) for p in parts
+        )
+    return False
+
+
+# A cleaned entity run longer than this many tokens is almost never a real named identity - it
+# is a Title-Case headline fragment the capitalized-run regex swept up whole ("Meta Targets Mass
+# Market Automation With New Muse AI Agent"). Dropped rather than kept as a spurious entity.
+_MAX_ENTITY_RUN_TOKENS = 5
+
+
+# STORY-CONTINUITY-P0 entity-evidence tiers (docs continuity contract §4/§6). Deterministic, no
+# registry, no LLM:
+#   DISTINCTIVE - a named product / model / version / feature: a multi-word run that is not
+#     entirely generic vocabulary, OR any run carrying a digit (a version/model number). Carries
+#     the most evidentiary weight; an incompatible distinctive identity is negative evidence.
+#   SUPPORTING - a bare proper-noun token (organization / person / platform): a single non-
+#     generic word. Real identity, but organization overlap ALONE must never establish "same
+#     Story" (a Meta launch and a Meta lawsuit share "meta" and nothing else).
+#   GENERIC   - domain/format vocabulary (see the sets above): ~zero matching weight.
+ENTITY_DISTINCTIVE = "distinctive"
+ENTITY_SUPPORTING = "supporting"
+ENTITY_GENERIC = "generic"
+
+
+def classify_entity(entity: str) -> str:
+    """Pure. `entity` is already normalize_for_entity_match()-normalized (lowercased, RU-case-
+    stripped), as produced by _extract_entities()."""
+    tokens = [t for t in entity.split(" ") if t]
+    if not tokens:
+        return ENTITY_GENERIC
+    if all(_is_generic_token(t) for t in tokens):
+        return ENTITY_GENERIC
+    if len(tokens) == 1 and tokens[0] in _SUPPORTING_ORG_ENTITIES:
+        return ENTITY_SUPPORTING
+    if any(ch.isdigit() for ch in entity) or len(tokens) >= 2:
+        return ENTITY_DISTINCTIVE
+    # a single bare non-generic, non-mega-org token: a specific project / product / model /
+    # surname / place name - identifying, so DISTINCTIVE (the SUPPORTING_SOURCE / STORY_UPDATE
+    # path still additionally requires _distinctive_shared_entities()'s df-rarity gate, so a
+    # coincidental common word cannot ride this alone into a confident merge).
+    return ENTITY_DISTINCTIVE
+
+
+def _classified_entities(entities: list[str]) -> dict[str, set[str]]:
+    out: dict[str, set[str]] = {
+        ENTITY_DISTINCTIVE: set(), ENTITY_SUPPORTING: set(), ENTITY_GENERIC: set()
+    }
+    for e in entities:
+        out[classify_entity(e)].add(e)
+    return out
+
+
+@dataclass(frozen=True)
+class EntityEvidence:
+    """Component entity-overlap evidence between a new event and a candidate Story - all pure
+    Jaccard over the classified entity sets, plus one derived `effective` score the matcher uses
+    in place of a flat entity_jaccard. Persisted/logged for diagnostics; never chain-of-thought."""
+    distinctive_overlap: float
+    supporting_overlap: float
+    generic_overlap: float
+    effective: float
+    shared_distinctive: tuple[str, ...]
+    company_only: bool  # the ONLY shared identity evidence is supporting/generic (no distinctive)
+    version_incompatible: bool  # both sides name a product in the same family but a DIFFERENT one
+
+
+# Weights for the effective entity score. Distinctive overlap dominates; supporting overlap
+# contributes a capped, secondary amount; generic overlap contributes nothing. Reasoned, not
+# fit to the Meta fixture - the intent is qualitative (generic tokens can't carry a match),
+# not a tuned magic number. The 0.65 confident-match threshold in match_story() is UNCHANGED.
+_DISTINCTIVE_OVERLAP_WEIGHT = 1.0
+_SUPPORTING_OVERLAP_WEIGHT = 0.35
+_SUPPORTING_ONLY_EFFECTIVE_CAP = 0.45  # supporting+generic overlap alone can't exceed this
+_VERSION_INCOMPATIBLE_PENALTY = 0.30   # subtracted from combined in score_candidate()
+
+
+def _tokens(entity: str) -> set[str]:
+    return {t for t in entity.split(" ") if t}
+
+
+# An explicit release/version/edition token: "v0.32.3", "1.3", "2026.1", "r2", or a bare 4-digit
+# calendar year ("International Coding Olympiad 2025" vs "2026" is a different edition, not a
+# duplicate).
+_VERSION_TOKEN_RE = re.compile(
+    r"\bv?\d+(?:\.\d+)+\b|\bv\d+\b|\br\d+\b|\b(?:19|20)\d{2}\b", re.IGNORECASE
+)
+
+
+def _release_version_tokens(text: str) -> set[str]:
+    from services.text_normalization import normalize_loose
+
+    return {m.group(0).lstrip("vVрR").casefold() for m in _VERSION_TOKEN_RE.finditer(normalize_loose(text))}
+
+
+def titles_differ_by_release_version(a: str, b: str) -> bool:
+    """Pure. True when BOTH titles carry an explicit release/version token and the two sets are
+    disjoint - a near-identical headline about "v0.32.2" vs "v0.32.3" (or "Muse Spark 1.2" vs
+    "1.3") is a NEW RELEASE, not a duplicate. False if either side has no version token (so an
+    ordinary same-story pair is completely unaffected)."""
+    va, vb = _release_version_tokens(a), _release_version_tokens(b)
+    return bool(va) and bool(vb) and not (va & vb)
+
+
+def _version_incompatible(new_distinctive: set[str], cand_distinctive: set[str]) -> bool:
+    """True when both sides carry a distinctive product/model identity that share a family token
+    (e.g. "muse") but name a DIFFERENT specific product ("muse voice transcribe" vs "muse spark
+    1.3") - a strong signal these are separate launches, not one Story. Not triggered when one
+    distinctive entity's tokens are a subset of the other's (same product, more/less version
+    detail: "muse spark" vs "muse spark 1.3")."""
+    if not new_distinctive or not cand_distinctive:
+        return False
+    if new_distinctive & cand_distinctive:
+        return False  # an exact distinctive match -> same product
+    for a in new_distinctive:
+        ta = _tokens(a)
+        for b in cand_distinctive:
+            tb = _tokens(b)
+            if not (ta & tb):
+                continue  # unrelated distinctive entities - no family relationship asserted
+            if ta <= tb or tb <= ta:
+                return False  # prefix/superset -> same product at different version granularity
+    # every shared-family distinctive pair names a different product
+    return any(_tokens(a) & _tokens(b) for a in new_distinctive for b in cand_distinctive)
+
+
+def _distinctive_match_keys(distinctive_entities: set[str]) -> set[str]:
+    """The whole entity string PLUS its own significant constituent tokens (>=4 chars, not
+    generic, not a mega-org) - so a distinctive run captured whole on one side ("openai zephyr
+    copilot", because three capitalized words were adjacent) still overlaps with the same product
+    captured split on the other ("zephyr copilot" + "openai") via the shared {zephyr, copilot}."""
+    keys: set[str] = set()
+    for e in distinctive_entities:
+        keys.add(e)
+        toks = _tokens(e)
+        if len(toks) > 1:
+            keys |= {
+                t for t in toks
+                if len(t) >= 4 and not _is_generic_token(t) and t not in _SUPPORTING_ORG_ENTITIES
+            }
+    return keys
+
+
+def compute_entity_evidence(new_entities: list[str], candidate_entities: list[str]) -> EntityEvidence:
+    """Pure. The component-tiered replacement for a flat entity Jaccard - see EntityEvidence."""
+    new_c = _classified_entities(new_entities)
+    cand_c = _classified_entities(candidate_entities)
+    d = _jaccard(
+        _distinctive_match_keys(new_c[ENTITY_DISTINCTIVE]),
+        _distinctive_match_keys(cand_c[ENTITY_DISTINCTIVE]),
+    )
+    s = _jaccard(new_c[ENTITY_SUPPORTING], cand_c[ENTITY_SUPPORTING])
+    g = _jaccard(new_c[ENTITY_GENERIC], cand_c[ENTITY_GENERIC])
+    shared_distinctive = tuple(sorted(new_c[ENTITY_DISTINCTIVE] & cand_c[ENTITY_DISTINCTIVE]))
+    if d > 0.0:
+        effective = min(1.0, _DISTINCTIVE_OVERLAP_WEIGHT * d + _SUPPORTING_OVERLAP_WEIGHT * s)
+        company_only = False
+    else:
+        effective = min(_SUPPORTING_ONLY_EFFECTIVE_CAP, _SUPPORTING_OVERLAP_WEIGHT * s)
+        company_only = (s > 0.0 or g > 0.0)
+    return EntityEvidence(
+        distinctive_overlap=d, supporting_overlap=s, generic_overlap=g, effective=effective,
+        shared_distinctive=shared_distinctive, company_only=company_only,
+        version_incompatible=_version_incompatible(
+            new_c[ENTITY_DISTINCTIVE], cand_c[ENTITY_DISTINCTIVE]
+        ),
+    )
+
 # Capitalized-run entity heuristic: one or more consecutive words each starting with an
 # uppercase Latin/Cyrillic letter, allowing internal digits/hyphens/dots (so "GPT-4", "GPT-5.6",
 # "iPhone"-style would still need the leading capital - a documented, narrow heuristic, not a
@@ -236,6 +467,16 @@ _CALIBRATED_GENERIC_DESCRIPTOR_ENTITIES = frozenset({
 # capabilities/copywriting_capability.py's and capabilities/intelligence_capability.py's own
 # duplicated _floor_validate.
 _ENTITY_RUN_RE = re.compile(r"[A-ZА-ЯЁ][\w\-.]*(?:\s+[A-ZА-ЯЁ][\w\-.]*)*")
+# STORY-CONTINUITY-P0: the MATCHING-ONLY variant. A digit-led token (a version / model /
+# generation number) is captured as a CONTINUATION of a capitalized run, never its start -
+# "iPhone 17" -> "phone 17", "Muse Spark 1.3" -> "muse spark 1.3". Lets the matcher tell two
+# releases of one product line apart. Used only by _extract_entities(..., aggressive=True),
+# i.e. only from match_story()/_score_components() - every other extract_story_signature()
+# consumer (recap integrity, event_recap raw-candidate facts, the golden suite) keeps the
+# original _ENTITY_RUN_RE behaviour unchanged.
+_ENTITY_RUN_RE_VERSIONED = re.compile(
+    r"[A-ZА-ЯЁ][\w\-.]*(?:\s+(?:[A-ZА-ЯЁ][\w\-.]*|\d[\w.\-]*))*"
+)
 _MIN_ENTITY_LEN = 2
 
 # Significant title keyword extraction - length-filtered, matches text_normalization's own
@@ -406,6 +647,15 @@ class MatchResult:
     # treated as a confirmed MATERIAL_UPDATE to this specific Story). False whenever no candidate
     # was scored at all (NEW_STORY with an empty pool).
     has_distinctive_shared_entity: bool = False
+    # STORY-CONTINUITY-P0: per-tier entity-overlap evidence for the winning candidate, surfaced
+    # for the continuity classifier, the delta-persistence path and structured observability
+    # (never chain-of-thought). All 0.0 / empty for NEW_STORY with no candidates.
+    distinctive_overlap: float = 0.0
+    supporting_overlap: float = 0.0
+    generic_overlap: float = 0.0
+    shared_distinctive_entities: tuple[str, ...] = ()
+    company_only_match: bool = False
+    version_incompatible: bool = False
 
 
 def _strip_leading_determiner(normalized_entity: str) -> str:
@@ -469,8 +719,20 @@ def _extract_entities(title: str) -> list[str]:
     see both sets' own docstrings for the real corpus evidence behind each. Same architecture,
     same call site, same "excluded outright when a spurious sentence-initial capital is the *only*
     extracted entity" rationale Checkpoint 6 already established - no new mechanism."""
+    return _extract_entities_impl(title, aggressive=False)
+
+
+def _extract_entities_impl(title: str, *, aggressive: bool) -> list[str]:
+    """`aggressive=False` (every extract_story_signature() consumer): the pre-P0 behaviour
+    verbatim - a capitalized run is kept whole unless the WHOLE normalized run is a single
+    generic token. `aggressive=True` (STORY-CONTINUITY-P0, only match_story()/_score_components()):
+    also captures a trailing version/generation number, drops generic domain/format vocabulary
+    from WITHIN a run ("new AI transcription model" -> the run "AI" -> dropped; "New Muse AI
+    Agent" -> "muse agent"), and drops a run that is only generic vocab or a Title-Case headline
+    fragment (>5 surviving tokens)."""
+    run_re = _ENTITY_RUN_RE_VERSIONED if aggressive else _ENTITY_RUN_RE
     seen: dict[str, None] = {}
-    for match in _ENTITY_RUN_RE.finditer(title):
+    for match in run_re.finditer(title):
         candidate = match.group(0).strip()
         if len(candidate) < _MIN_ENTITY_LEN:
             continue
@@ -480,12 +742,28 @@ def _extract_entities(title: str) -> list[str]:
             or normalized in _CALIBRATED_GENERIC_PREFIX_ENTITIES
             or normalized in _GENERIC_FUNCTION_WORD_ENTITIES
             or normalized in _CALIBRATED_GENERIC_DESCRIPTOR_ENTITIES
+            or (aggressive and _is_generic_token(normalized))
         ):
             continue
         normalized = _strip_leading_determiner(normalized)
+        if aggressive:
+            normalized = _strip_leading_generic_domain(normalized)
+            run_tokens = [t for t in normalized.split(" ") if t and not _is_generic_token(t)]
+            if not run_tokens or len(run_tokens) > _MAX_ENTITY_RUN_TOKENS:
+                continue
+            normalized = " ".join(run_tokens)
         if normalized and normalized not in seen:
             seen[normalized] = None
     return list(seen.keys())
+
+
+def _strip_leading_generic_domain(normalized_entity: str) -> str:
+    """aggressive-only: "New Muse Agent" -> "muse agent" (strip a single leading generic-domain
+    token from a multi-word run)."""
+    words = normalized_entity.split(" ")
+    if len(words) > 1 and words[0] in _GENERIC_DOMAIN_ENTITIES:
+        return " ".join(words[1:])
+    return normalized_entity
 
 
 def _extract_keywords(title: str) -> list[str]:
@@ -519,17 +797,33 @@ def _classify_topic(title: str) -> str:
     return TOPIC_OTHER
 
 
-def extract_story_signature(title: str, category: EventCategory) -> StorySignature:
+def extract_story_signature(
+    title: str, category: EventCategory, *, aggressive_entities: bool = False
+) -> StorySignature:
     """Pure. Deterministic: identical input always produces an identical signature.
     `category` is accepted for interface symmetry with `match_story()` (both take the same two
     facts about an event) even though the signature itself does not currently vary by category -
     Phase 20 M3: category is a soft scoring bonus in `score_candidate()`, never a hard retrieval
-    filter (see this module's own docstring for why the original hard gate was removed)."""
+    filter (see this module's own docstring for why the original hard gate was removed).
+
+    STORY-CONTINUITY-P0: `aggressive_entities` is set ONLY by match_story()/_score_components().
+    When True, the title first goes through normalize_story_identity_title() (strip the Russian
+    legal-designation disclaimer + a leading wire-format label - publisher/format boilerplate,
+    never Story identity) and entity extraction uses the aggressive rules (see
+    _extract_entities_impl). Default False = the pre-P0 behaviour verbatim, so every other
+    consumer (recap integrity, event_recap forensic facts, the golden suite, story_context) is
+    unchanged."""
     del category  # not used in the signature itself - see docstring
+    if aggressive_entities:
+        from services.text_normalization import normalize_story_identity_title
+
+        src = normalize_story_identity_title(title)
+    else:
+        src = title
     return StorySignature(
-        entities=_extract_entities(title),
-        keywords=_extract_keywords(title),
-        topic_bucket=_classify_topic(title),
+        entities=_extract_entities_impl(src, aggressive=aggressive_entities),
+        keywords=_extract_keywords(src),
+        topic_bucket=_classify_topic(src),
     )
 
 
@@ -539,24 +833,72 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(a | b)
 
 
-def score_candidate(
+def _score_components(
     title: str, signature: StorySignature, category: EventCategory, candidate_title: str, candidate: Story
-) -> tuple[float, float, float]:
-    """Pure. Returns (combined_score, entity_overlap, title_overlap) for one candidate story.
-    Phase 20 M3/M4/M5: category/topic_bucket are now small additive bonuses (never a hard gate -
-    the caller no longer pre-filters candidates by either), and title_overlap now uses the
-    symmetric Dice measure (services/text_normalization.py::symmetric_token_overlap()) rather than
-    the original asymmetric ratio - see this module's own docstring for the calibration-dataset
-    case (a longer, differently-worded restatement of the same story) that motivated the switch."""
-    candidate_entities = set(candidate.entities or [])
-    entity_overlap = _jaccard(set(signature.entities), candidate_entities)
-    title_overlap = symmetric_token_overlap(title, candidate_title)
+) -> tuple[float, float, float, EntityEvidence]:
+    """Pure. STORY-CONTINUITY-P0 component-tiered scoring - returns
+    (combined_score, effective_entity_overlap, title_overlap, entity_evidence).
+
+    Changes from the pre-P0 flat scorer, all in the FEATURES, never the 0.65 confident threshold:
+      - the entity component is `EntityEvidence.effective` (distinctive overlap dominates,
+        supporting overlap is capped-secondary, generic overlap contributes nothing) instead of a
+        flat Jaccard over undifferentiated entities. See compute_entity_evidence().
+      - COMPANY-ONLY GUARD: when the only shared identity evidence is an organization/generic
+        token (no distinctive overlap), `combined` is capped just below the confident threshold
+        so it can never become a confident SEMANTIC_DUPLICATE / SUPPORTING_SOURCE / STORY_UPDATE
+        - it can still be RELATED_STORY / UNCERTAIN_MATCH (attach for observability, never merge).
+      - VERSION-INCOMPATIBLE PENALTY: when both sides name a DIFFERENT product in the same family
+        ("Muse Voice Transcribe" vs "Muse Spark 1.3"), a fixed penalty pushes `combined` down so
+        two adjacent-but-distinct launches stay separate Stories.
+      - title_overlap is measured on identity-normalized titles (publisher/legal/format
+        boilerplate stripped) so a shared disclaimer or wire label can't inflate it.
+    """
+    from services.text_normalization import normalize_story_identity_title
+
+    # STORY-CONTINUITY-P0: compare AGGRESSIVE-extracted entities for BOTH sides, re-derived from
+    # the titles here rather than trusting the Story row's stored (non-aggressive) entities - so
+    # the matching is consistent regardless of when/how a candidate Story was first created, and
+    # no production Story rows need re-extraction.
+    new_entities = _extract_entities_impl(normalize_story_identity_title(title), aggressive=True)
+    cand_entities = _extract_entities_impl(
+        normalize_story_identity_title(candidate_title), aggressive=True
+    )
+    ev = compute_entity_evidence(new_entities, cand_entities)
+    title_overlap = symmetric_token_overlap(
+        normalize_story_identity_title(title), normalize_story_identity_title(candidate_title)
+    )
     bonus = 0.0
     if candidate.category == category:
         bonus += _CATEGORY_BONUS
     if candidate.topic_bucket == signature.topic_bucket:
         bonus += _TOPIC_BONUS
-    combined = min(1.0, _ENTITY_WEIGHT * entity_overlap + _TITLE_WEIGHT * title_overlap + bonus)
+    combined = min(1.0, _ENTITY_WEIGHT * ev.effective + _TITLE_WEIGHT * title_overlap + bonus)
+    if ev.version_incompatible:
+        combined = max(0.0, combined - _VERSION_INCOMPATIBLE_PENALTY)
+    # COMPANY-ONLY GUARD: shared organization/generic tokens with NO distinctive overlap can't
+    # carry a confident same-Story match - UNLESS the wording is itself substantially similar
+    # (a near-rewording is independent same-story evidence, the V2.22 "Memory prices" / VK
+    # "Отчёт VK" rationale). So the cap is skipped once title_overlap clears the supporting-
+    # source similarity bar.
+    if (
+        ev.company_only
+        and ev.distinctive_overlap == 0.0
+        and title_overlap < _SUPPORTING_SOURCE_TITLE_OVERLAP_THRESHOLD
+    ):
+        combined = min(combined, _HIGH_THRESHOLD - 0.001)
+    return combined, ev.effective, title_overlap, ev
+
+
+def score_candidate(
+    title: str, signature: StorySignature, category: EventCategory, candidate_title: str, candidate: Story
+) -> tuple[float, float, float]:
+    """Pure. Returns (combined_score, effective_entity_overlap, title_overlap) - the pre-P0
+    3-tuple shape kept verbatim for existing callers/tests. STORY-CONTINUITY-P0 enriched the
+    feature model behind it; see _score_components() for the full evidence including the
+    per-tier EntityEvidence."""
+    combined, entity_overlap, title_overlap, _ = _score_components(
+        title, signature, category, candidate_title, candidate
+    )
     return combined, entity_overlap, title_overlap
 
 
@@ -683,8 +1025,60 @@ def _distinctive_shared_entities(
     )
 
 
+async def _filter_academic_identity_conflicts(
+    session: AsyncSession,
+    *,
+    new_url: str | None,
+    new_title: str,
+    candidates: list[Story],
+) -> tuple[list[Story], list[tuple[UUID, str]]]:
+    """ARXIV-STORY-CLUSTERING-REPAIR-1: drop candidate Stories whose trusted stable document
+    identity CONFLICTS with this event's, before any fuzzy score can attach the event to them
+    (spec sec 2/5/10). Only runs when the new event ITSELF carries an extractable stable id
+    (arXiv base id / DOI) - for normal news it is a pure no-op with zero extra queries, so
+    non-academic clustering is byte-identical (spec sec 6/16). One bounded indexed query over
+    the already-capped candidate set (<= STORY_MATCH_CANDIDATE_LIMIT stories). Returns the
+    surviving candidates plus (story_id, reason) for each one removed.
+    """
+    if not candidates:
+        return candidates, []
+    if extract_document_identity(url=new_url, title=new_title) is None:
+        return candidates, []  # non-academic event - identity filter does not apply
+
+    story_ids = [c.id for c in candidates]
+    rows = (
+        await session.execute(
+            select(NewsEventStoryLink.story_id, NewsEvent.title, NewsEvent.url)
+            .join(NewsEvent, NewsEvent.id == NewsEventStoryLink.news_event_id)
+            .where(NewsEventStoryLink.story_id.in_(story_ids))
+        )
+    ).all()
+    docs_by_story: dict[UUID, list[tuple[str | None, str | None]]] = {}
+    for story_id, ev_title, ev_url in rows:
+        docs_by_story.setdefault(story_id, []).append((ev_title, ev_url))
+
+    eligible: list[Story] = []
+    removed: list[tuple[UUID, str]] = []
+    for candidate in candidates:
+        verdict, reason = candidate_story_identity_verdict(
+            new_url=new_url,
+            new_title=new_title,
+            candidate_documents=docs_by_story.get(candidate.id, []),
+        )
+        if verdict == CANDIDATE_ELIGIBLE:
+            eligible.append(candidate)
+        else:
+            removed.append((candidate.id, reason))
+    return eligible, removed
+
+
 async def match_story(
-    session: AsyncSession, *, title: str, category: EventCategory, now: datetime | None = None
+    session: AsyncSession,
+    *,
+    title: str,
+    category: EventCategory,
+    now: datetime | None = None,
+    url: str | None = None,
 ) -> tuple[StorySignature, MatchResult]:
     """The only orchestration entry point services/triage_orchestrator.py calls. Does one bounded,
     indexed query (see `_fetch_candidate_stories`) - never an unbounded table scan. Category is no
@@ -698,7 +1092,12 @@ async def match_story(
     services/editorial_scoring.py's own apply_editorial_scoring_v2() not owning persistence
     either)."""
     reference_now = now if now is not None else datetime.now(timezone.utc)
-    signature = extract_story_signature(title, category)
+    signature = extract_story_signature(title, category)  # non-aggressive - returned + stored
+    # STORY-CONTINUITY-P0: the aggressive-extracted entities used for identity comparison
+    # (re-derived for candidates inside _score_components, so no stored Story row is trusted).
+    from services.text_normalization import normalize_story_identity_title as _nsit
+
+    agg_new_entities = _extract_entities_impl(_nsit(title), aggressive=True)
     # Phase 20.7: Editorial Content Type - computed here, before Story Identity is evaluated
     # below, per the "identity before delta" ordering this module already establishes (a
     # relationship classification must never be more confident than the evidence for it - a
@@ -707,12 +1106,21 @@ async def match_story(
     new_content_type = classify_content_type(title)
     fetched = await _fetch_candidate_stories(session, now=reference_now)
     candidates = _preselect_candidates(signature, fetched)
+    # ARXIV-STORY-CLUSTERING-REPAIR-1: a hard stable-document-identity conflict removes a
+    # candidate from eligibility BEFORE the exact-title short-circuit or any fuzzy scoring below
+    # (spec sec 5). No-op for non-academic events.
+    candidates, _identity_ineligible = await _filter_academic_identity_conflicts(
+        session, new_url=url, new_title=title, candidates=candidates
+    )
     entity_df = _entity_document_frequencies(candidates)
 
     if not candidates:
-        return signature, MatchResult(
-            NEW_STORY, None, 1.0, "no candidate stories in the lookback window", entity_overlap=0.0,
+        reason = (
+            "all lookback candidates blocked by a different stable-document-identity conflict"
+            if _identity_ineligible
+            else "no candidate stories in the lookback window"
         )
+        return signature, MatchResult(NEW_STORY, None, 1.0, reason, entity_overlap=0.0)
 
     # Shadow calibration: an exactly identical normalized title is sufficient evidence for a
     # semantic duplicate even when entity extraction yields no entities (for example GitHub
@@ -730,14 +1138,31 @@ async def match_story(
                 has_distinctive_shared_entity=True,
             )
 
-    best: tuple[float, float, float, Story] | None = None
+    best: tuple[float, float, float, EntityEvidence, Story] | None = None
     for candidate in candidates:
-        combined, entity_overlap, title_overlap = score_candidate(title, signature, category, candidate.title, candidate)
+        combined, entity_overlap, title_overlap, ev = _score_components(
+            title, signature, category, candidate.title, candidate
+        )
         if best is None or combined > best[0]:
-            best = (combined, entity_overlap, title_overlap, candidate)
+            best = (combined, entity_overlap, title_overlap, ev, candidate)
 
     assert best is not None  # candidates is non-empty, so the loop ran at least once
-    combined, entity_overlap, title_overlap, candidate = best
+    combined, entity_overlap, title_overlap, best_ev, candidate = best
+
+    # STORY-CONTINUITY-P0: inject the winning candidate's per-tier entity evidence into every
+    # MatchResult this branch returns, without editing each return site individually.
+    def _mk(outcome: str, story_id: UUID | None, conf: float, reason: str, **kw: object) -> MatchResult:
+        kw.setdefault("entity_overlap", entity_overlap)
+        return MatchResult(
+            outcome, story_id, conf, reason,
+            distinctive_overlap=best_ev.distinctive_overlap,
+            supporting_overlap=best_ev.supporting_overlap,
+            generic_overlap=best_ev.generic_overlap,
+            shared_distinctive_entities=best_ev.shared_distinctive,
+            company_only_match=best_ev.company_only,
+            version_incompatible=best_ev.version_incompatible,
+            **kw,  # type: ignore[arg-type]
+        )
 
     # Phase V2.22: distinctive-shared-entity bonus, applied to the winning candidate's own
     # combined score before any threshold check - see _DISTINCTIVE_ENTITY_MATCH_BONUS's own
@@ -746,7 +1171,11 @@ async def match_story(
     # unmodified `_distinctive_shared_entities()` check - never a single common word alone).
     # Computed once here and reused below (the same evidence used later for the SUPPORTING_
     # SOURCE/STORY_UPDATE gate) rather than recomputed twice.
-    distinctive_at_best = _distinctive_shared_entities(signature.entities, candidate.entities or [], entity_df, len(candidates))
+    distinctive_at_best = _distinctive_shared_entities(
+        agg_new_entities,
+        _extract_entities_impl(_nsit(candidate.title), aggressive=True),
+        entity_df, len(candidates),
+    )
     # Phase V2.22A: the bonus itself additionally requires a realistic-scale pool (see
     # _DISTINCTIVE_ENTITY_BONUS_MIN_POOL_SIZE's own comment) - `distinctive_at_best` is still
     # computed unconditionally above and reused below for the pre-existing, unaffected SUPPORTING_
@@ -762,16 +1191,12 @@ async def match_story(
                 f"{combined:.2f} below low threshold {_LOW_THRESHOLD:.2f} (title_overlap="
                 f"{title_overlap:.2f}) - same entity family, not confidently the same story"
             )
-            return signature, MatchResult(
-                RELATED_STORY, candidate.id, entity_overlap, reason, entity_overlap=entity_overlap,
-            )
+            return signature, _mk(RELATED_STORY, candidate.id, entity_overlap, reason)
         reason = (
             f"best candidate score {combined:.2f} below low threshold "
             f"{_LOW_THRESHOLD:.2f} (entity_overlap={entity_overlap:.2f}, title_overlap={title_overlap:.2f})"
         )
-        return signature, MatchResult(
-            NEW_STORY, None, 1.0 - combined, reason, entity_overlap=entity_overlap,
-        )
+        return signature, _mk(NEW_STORY, None, 1.0 - combined, reason)
 
     # Phase V2.22: a near-verbatim title alone (see _NEAR_VERBATIM_TITLE_OVERLAP_THRESHOLD's own
     # comment) is independently sufficient to enter the confident-match branch, even when the
@@ -779,14 +1204,28 @@ async def match_story(
     # with almost no extractable named entities but near-syndicated wording (V2.22 "Memory prices"
     # cluster). Never lowers _HIGH_THRESHOLD itself; only adds a second, independent way in.
     if combined >= _HIGH_THRESHOLD or title_overlap >= _NEAR_VERBATIM_TITLE_OVERLAP_THRESHOLD:
+        # STORY-CONTINUITY-P0 (Section 9): a headline that names a DIFFERENT explicit
+        # release/version, or a different specific product within the same family ("Muse Voice
+        # Transcribe" vs "Muse Spark 1.3"; "...bedrock-sdk: v0.32.2" vs "v0.32.3"), is a separate
+        # development - never a confident same-Story match however similar the wording. Return
+        # RELATED_STORY so the caller gives it its own Story.
+        version_release_split = titles_differ_by_release_version(title, candidate.title)
+        if version_release_split or best_ev.version_incompatible:
+            reason = (
+                f"different explicit release/version or a distinct product in the same family "
+                f"(version_release_split={version_release_split}, "
+                f"version_incompatible={best_ev.version_incompatible}, "
+                f"shared_distinctive={best_ev.shared_distinctive}) - a separate development"
+            )
+            return signature, _mk(RELATED_STORY, candidate.id, entity_overlap, reason)
         if title_overlap >= _DUPLICATE_TITLE_OVERLAP_THRESHOLD:
             reason = (
                 f"near-identical title (title_overlap={title_overlap:.2f}) - same event, "
                 f"likely a different source's coverage (entity_overlap={entity_overlap:.2f}, "
                 f"candidate topic_bucket={candidate.topic_bucket}, category={candidate.category})"
             )
-            return signature, MatchResult(
-                SEMANTIC_DUPLICATE, candidate.id, combined, reason, entity_overlap=entity_overlap,
+            return signature, _mk(
+                SEMANTIC_DUPLICATE, candidate.id, combined, reason,
                 has_distinctive_shared_entity=True,  # near-identical wording is sufficient alone
             )
 
@@ -816,8 +1255,8 @@ async def match_story(
                     f"{distinctive}, content_type={new_content_type}/{candidate_content_type}, "
                     f"candidate topic_bucket={candidate.topic_bucket}, category={candidate.category})"
                 )
-                return signature, MatchResult(
-                    SUPPORTING_SOURCE, candidate.id, combined, reason, entity_overlap=entity_overlap,
+                return signature, _mk(
+                    SUPPORTING_SOURCE, candidate.id, combined, reason,
                     has_distinctive_shared_entity=True,
                 )
             # Phase V2.22A (real production evidence, Cluster A: Sony Music/Warner Chappell vs.
@@ -848,8 +1287,8 @@ async def match_story(
                     f"candidate's own title already carries - a corroborating report, not new substance "
                     f"(candidate topic_bucket={candidate.topic_bucket}, category={candidate.category})"
                 )
-                return signature, MatchResult(
-                    SUPPORTING_SOURCE, candidate.id, combined, reason, entity_overlap=entity_overlap,
+                return signature, _mk(
+                    SUPPORTING_SOURCE, candidate.id, combined, reason,
                     has_distinctive_shared_entity=True,
                 )
             reason = (
@@ -859,8 +1298,8 @@ async def match_story(
                 f"{new_material_claims}, candidate topic_bucket={candidate.topic_bucket}, "
                 f"category={candidate.category})"
             )
-            return signature, MatchResult(
-                STORY_UPDATE, candidate.id, combined, reason, entity_overlap=entity_overlap,
+            return signature, _mk(
+                STORY_UPDATE, candidate.id, combined, reason,
                 has_distinctive_shared_entity=True,
             )
 
@@ -880,8 +1319,8 @@ async def match_story(
                 f"avoid a confident same-story claim resting on a coincidental generic-entity match "
                 f"(entity_overlap={entity_overlap:.2f})"
             )
-        return signature, MatchResult(
-            UNCERTAIN_MATCH, candidate.id, combined, reason, entity_overlap=entity_overlap,
+        return signature, _mk(
+            UNCERTAIN_MATCH, candidate.id, combined, reason,
             has_distinctive_shared_entity=bool(distinctive),
         )
 
@@ -890,7 +1329,7 @@ async def match_story(
         f"{_HIGH_THRESHOLD:.2f}) - not confidently new or matched "
         f"(entity_overlap={entity_overlap:.2f}, title_overlap={title_overlap:.2f})"
     )
-    return signature, MatchResult(
-        UNCERTAIN_MATCH, candidate.id, combined, reason, entity_overlap=entity_overlap,
+    return signature, _mk(
+        UNCERTAIN_MATCH, candidate.id, combined, reason,
         has_distinctive_shared_entity=bool(distinctive_at_best),
     )

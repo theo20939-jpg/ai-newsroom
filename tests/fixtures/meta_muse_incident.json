@@ -1,0 +1,55 @@
+{
+  "_comment": "STORY-CONTINUITY-P0 frozen regression fixture. Sanitized read-only extract of the confirmed live Meta 'Muse' incident from the production DB (VPS 31.77.219.165, ai_newsroom) captured 2026-09-09. No credentials, URLs, or article bodies. `prev_*` = the pre-P0 persisted NewsEventStoryLink state (the behaviour this phase fixes).",
+  "incident": "Meta Muse - personal AI agent launch burst + Muse Voice Transcribe / Muse Spark 1.3 precursors",
+  "captured_at": "2026-09-09",
+  "meta_old_story_count_sept8_agent_burst": 7,
+  "meta_old_false_merges": 2,
+
+  "pre_existing_stories": [
+    {
+      "id": "will-garbage-cluster",
+      "title": "Will you have spent more of your life with computers than your family?",
+      "category": "STARTUPS",
+      "topic_bucket": "other",
+      "entities": ["will"],
+      "note": "pre-P0 real Story anchored solely on the sentence-opener 'will'; accumulated 7 editorially-unrelated members (gaming, solar, self-flying planes, AI-for-coders) plus a Meta Muse agent item."
+    },
+    {
+      "id": "voice-transcribe-story",
+      "title": "Meta's new AI transcription model can distinguish between multiple speakers and languages in real-time",
+      "category": "GADGETS",
+      "topic_bucket": "product",
+      "entities": ["meta", "ai"],
+      "note": "pre-P0 real Story (Sept 1 Voice Transcribe) with only the generic {meta, ai} entities; later absorbed two Sept-8 personal-agent items."
+    }
+  ],
+
+  "muse_voice_transcribe_sept1": [
+    {"source": "9to5Mac", "category": "GADGETS", "title": "Meta launches Muse Voice Transcribe for real-time voice dictation on Mac", "prev_match_type": "new_story", "prev_match_score": 0.7222},
+    {"source": "Techmeme", "category": "TECH", "title": "Meta launches Muse Voice Transcribe, MSL's first real-time audio perception model, with streaming automatic speech", "prev_match_type": "uncertain_match", "prev_match_score": 0.55}
+  ],
+
+  "muse_spark_sept2_3": [
+    {"source": "Techmeme", "category": "TECH", "title": "Meta rolls out Muse Spark 1.3 in Muse Code and Meta Model API, saying it significantly improves coding and agentic performance", "prev_match_type": "uncertain_match", "prev_match_score": 0.4103},
+    {"source": "3DNews", "category": "GADGETS", "title": "Meta releases Muse Spark 1.3 model - improved programming and agentic-task skills", "prev_match_type": "uncertain_match", "prev_match_score": 0.3696}
+  ],
+
+  "muse_agent_sept8": [
+    {"n": 1, "source": "The Verge AI", "category": "GADGETS", "title": "Meta bets on AI agent Muse to catch up in AI race", "prev_story": "voice-transcribe-story", "prev_match_type": "uncertain_match", "prev_match_score": 0.45},
+    {"n": 2, "source": "TechCrunch AI", "category": "STARTUPS", "title": "Meta debuts its Muse AI agent. Will consumers trust it?", "prev_story": "will-garbage-cluster", "prev_match_type": "uncertain_match", "prev_match_score": 0.4421},
+    {"n": 3, "source": "Techmeme", "category": "TECH", "title": "Meta launches Muse, a personal AI agent that runs on a dedicated VM in Meta's cloud, initially available in the US", "prev_match_type": "related_story", "prev_match_score": 0.40},
+    {"n": 4, "source": "Google News: Artificial Intelligence", "category": "AI", "title": "Meta launches personal AI agent, Muse, emphasizes safety and privacy - WRAL", "prev_match_type": "supporting_source", "prev_match_score": 0.6918},
+    {"n": 5, "source": "Techmeme", "category": "TECH", "title": "Meta says users can connect their apps to Muse to send emails, turn recipe Reels into grocery lists, make purchases via agents", "prev_match_type": "uncertain_match", "prev_match_score": 0.40},
+    {"n": 6, "source": "9to5Mac", "category": "GADGETS", "title": "Meta AI launches Muse personal agent, including a new mobile app for iPhone", "prev_match_type": "uncertain_match", "prev_match_score": 0.4024},
+    {"n": 7, "source": "Techmeme", "category": "TECH", "title": "Meta's personal AI agent Muse is powered by Muse Spark 1.3 and is free for up to 100M tokens per week, with $20 and $200 paid tiers", "prev_match_type": "uncertain_match", "prev_match_score": 0.5685},
+    {"n": 8, "source": "Hacker News Front Page", "category": "STARTUPS", "title": "Muse: Meta's personal AI agent, features and capabilities", "prev_match_type": "uncertain_match", "prev_match_score": 0.62},
+    {"n": 9, "source": "WIRED AI", "category": "STARTUPS", "title": "Meta Releases Muse, a Personal AI Agent With Privacy Built Into It", "prev_match_type": "new_story", "prev_match_score": 0.7737},
+    {"n": 10, "source": "Google News: Artificial Intelligence", "category": "AI", "title": "Meta launches personal AI agent, Muse, to help with everyday tasks - PBS", "prev_match_type": "supporting_source", "prev_match_score": 0.6918},
+    {"n": 11, "source": "Google News: Artificial Intelligence", "category": "AI", "title": "Meta Targets Mass Market Automation With New Muse AI Agent - PYMNTS.com", "prev_match_type": "new_story", "prev_match_score": 0.78}
+  ],
+
+  "roundups_and_noise": [
+    {"source": "CNET", "category": "GADGETS", "title": "GPT-6 Stole the Show, but Anthropic, Meta and Google Also Had New AI Models This Week", "note": "roundup - must not false-merge into any single Meta story on Meta/AI vocab alone"},
+    {"source": "Tom's Hardware", "category": "HARDWARE", "title": "Lexar announces world's thinnest portable SSD - Lexar Muse drive", "note": "unrelated 'Muse' (an SSD brand) - must not merge with the Meta Muse agent"}
+  ]
+}

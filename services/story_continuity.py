@@ -1,0 +1,352 @@
+"""STORY-CONTINUITY-P0 (2026-09): the single deterministic continuity classification.
+
+`classify_continuity()` collapses Story Memory's six retrieval-only `match_type` values plus the
+Delta Engine's five classifications into ONE actionable, non-overlapping outcome per event:
+
+    NEW_STORY                 - a genuinely different real-world development.
+    DUPLICATE_NO_DELTA        - confidently the same Story, adds no meaningful new fact.
+    MATERIAL_UPDATE_CANDIDATE - confidently the same Story, adds a real new fact (P1 will decide
+                                how to present it; in P0 it still flows down the existing NEWS
+                                path, never dropped).
+    AMBIGUOUS                 - not enough evidence to assert same-Story identity confidently.
+                                Never merges unrelated Stories, never suppresses a distinct
+                                development - diagnostics retained, optional future review.
+
+Pure, deterministic, no I/O, no LLM. The result is structured evidence only - never chain-of-
+thought. `suppression_eligible` is a DIAGNOSTIC flag: nothing in P0 reads it to drop a send
+(services/story_duplicate_guard.py::check_duplicate_story_delivery() unconditionally returns
+blocked=False, unchanged by this phase). Real duplicate suppression is a separately-authorized
+rollout step.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from uuid import UUID
+
+from services.story_confidence import HIGH, MEDIUM, compute_confidence_band
+from services.story_delta_engine import (
+    DELTA_MATERIAL,
+    DELTA_MINOR,
+    DELTA_NONE,
+    DeltaResult,
+    coarse_delta_class,
+)
+from services.story_identity_guard import (
+    GUARD_FAIL_OPEN,
+    GUARD_SAFE,
+    IDENTITY_CONFLICT,
+    IDENTITY_MATCH,
+    REASON_POLLUTED_STORY,
+    REASON_STABLE_IDENTITY_CONFLICT,
+    ContinuityIdentityAssessment,
+)
+from services.story_memory import (
+    NEW_STORY,
+    RELATED_STORY,
+    SEMANTIC_DUPLICATE,
+    STORY_UPDATE,
+    SUPPORTING_SOURCE,
+    UNCERTAIN_MATCH,
+    MatchResult,
+)
+
+# --- outcomes ---------------------------------------------------------------------------------
+CONTINUITY_NEW_STORY = "NEW_STORY"
+CONTINUITY_DUPLICATE_NO_DELTA = "DUPLICATE_NO_DELTA"
+CONTINUITY_MATERIAL_UPDATE_CANDIDATE = "MATERIAL_UPDATE_CANDIDATE"
+CONTINUITY_AMBIGUOUS = "AMBIGUOUS"
+
+ALL_CONTINUITY_OUTCOMES: tuple[str, ...] = (
+    CONTINUITY_NEW_STORY,
+    CONTINUITY_DUPLICATE_NO_DELTA,
+    CONTINUITY_MATERIAL_UPDATE_CANDIDATE,
+    CONTINUITY_AMBIGUOUS,
+)
+
+# Story Memory match_type values that assert a CONFIDENT same-Story relationship.
+_CONFIDENT_SAME_STORY_MATCH_TYPES = frozenset({SEMANTIC_DUPLICATE, SUPPORTING_SOURCE, STORY_UPDATE})
+
+
+@dataclass(frozen=True)
+class ContinuityResult:
+    """The one structured continuity result. `reason_codes` are concise, machine-readable, and
+    stable; `match_components` carries the per-tier entity-overlap evidence for P1 / observability
+    / audit. Nothing here is free-text reasoning."""
+
+    outcome: str
+    matched_story_id: UUID | None
+    match_score: float
+    confidence_band: str  # story_confidence band for the match ("high"/"medium"/"low")
+    delta_class: str | None  # NO_DELTA | MINOR_DELTA | MATERIAL_DELTA, or None (NEW_STORY)
+    suppression_eligible: bool  # DIAGNOSTIC ONLY - P0 never acts on it
+    reason_codes: tuple[str, ...] = ()
+    match_components: dict[str, float] = field(default_factory=dict)
+    new_signals: tuple[str, ...] = ()       # new factual signals this event adds to the Story
+    repeated_signals: tuple[str, ...] = ()  # signals already carried by the Story's prior titles
+    # STORY-CONTINUITY-P0.1 (2026-09): the abstract-quality / stable-document-identity firewall
+    # (services/story_identity_guard.py). `guard_forced_fail_open` is True when the identity
+    # check demoted an otherwise-confident same-Story match to AMBIGUOUS. The other two mirror
+    # the assessment for observability / the next shadow rollout's Section 12 counters.
+    guard_forced_fail_open: bool = False
+    title_semantic_quality: str | None = None   # TITLE_LIKE | ABSTRACT_LIKE | UNKNOWN
+    stable_identity_status: str | None = None    # STABLE_IDENTITY_MATCH | ..._CONFLICT | INSUFFICIENT_...
+
+
+def _components(match_result: MatchResult) -> dict[str, float]:
+    return {
+        "match_score": round(float(match_result.confidence), 4),
+        "entity_overlap": round(float(match_result.entity_overlap), 4),
+        "distinctive_overlap": round(float(match_result.distinctive_overlap), 4),
+        "supporting_overlap": round(float(match_result.supporting_overlap), 4),
+        "generic_overlap": round(float(match_result.generic_overlap), 4),
+    }
+
+
+def classify_continuity(
+    *,
+    match_result: MatchResult,
+    delta_result: DeltaResult | None,
+    creates_own_story: bool,
+    identity_assessment: ContinuityIdentityAssessment | None = None,
+) -> ContinuityResult:
+    """Pure. `match_result` is services/story_memory.py::match_story()'s result;
+    `delta_result` is services/story_delta_engine.py::compute_story_delta()'s result (None when
+    the event creates its own Story, so there are no prior titles to diff against);
+    `creates_own_story` mirrors triage_orchestrator's own dispatch bool exactly.
+
+    STORY-CONTINUITY-P0.1: `identity_assessment` (services/story_identity_guard.py) is the
+    abstract-quality / stable-document-identity firewall. When it is `GUARD_FAIL_OPEN` the
+    confident same-Story branch is SKIPPED and the event falls through to `AMBIGUOUS` - a shared
+    Story link and high title similarity are not, on their own, evidence of the same document
+    (production evidence: unrelated arXiv papers with templated abstract openings). Passing
+    `None` (the default) leaves behaviour byte-identical to before this phase."""
+    components = _components(match_result)
+    outcome_mt = match_result.outcome
+    band = (
+        compute_confidence_band(match_result.confidence)
+        if outcome_mt in (SEMANTIC_DUPLICATE, SUPPORTING_SOURCE, STORY_UPDATE, UNCERTAIN_MATCH)
+        else "low"
+    )
+    guard_fail_open = (
+        identity_assessment is not None and identity_assessment.verdict == GUARD_FAIL_OPEN
+    )
+    identity_reason_codes: tuple[str, ...] = (
+        identity_assessment.reason_codes if identity_assessment is not None else ()
+    )
+
+    def _result(**kw: object) -> ContinuityResult:
+        kw.setdefault("guard_forced_fail_open", False)
+        kw.setdefault(
+            "title_semantic_quality",
+            identity_assessment.title_quality if identity_assessment is not None else None,
+        )
+        kw.setdefault(
+            "stable_identity_status",
+            identity_assessment.identity_status if identity_assessment is not None else None,
+        )
+        return ContinuityResult(**kw)  # type: ignore[arg-type]
+
+    new_signals: tuple[str, ...] = ()
+    repeated_signals: tuple[str, ...] = ()
+    delta_class: str | None = None
+    if delta_result is not None:
+        delta_class = coarse_delta_class(delta_result)
+        new_signals = tuple(delta_result.new_material_claims) + tuple(delta_result.new_keywords)
+
+    # 1. NEW_STORY / RELATED_STORY / a story-creating uncertain match -> a distinct development.
+    if creates_own_story or outcome_mt in (NEW_STORY, RELATED_STORY):
+        new_story_codes: tuple[str, ...] = (
+            ("new_story",) if outcome_mt == NEW_STORY
+            else ("related_story_not_merged",) if outcome_mt == RELATED_STORY
+            else ("uncertain_match_low_entity_own_story",)
+        )
+        return _result(
+            outcome=CONTINUITY_NEW_STORY, matched_story_id=None,
+            match_score=round(float(match_result.confidence), 4), confidence_band=band,
+            delta_class=None, suppression_eligible=False, reason_codes=new_story_codes,
+            match_components=components,
+        )
+
+    matched_id = match_result.matched_story_id
+
+    # 2. A confident same-Story match (SEMANTIC_DUPLICATE / SUPPORTING_SOURCE / STORY_UPDATE),
+    #    but only if a genuinely distinctive shared entity backs it (Section 7) AND the P0.1
+    #    identity firewall did not flag the match as unsafe (a stable-id conflict, or an
+    #    abstract-like title with no stable document identity - Section 6 Cases A/C).
+    if (
+        outcome_mt in _CONFIDENT_SAME_STORY_MATCH_TYPES
+        and match_result.has_distinctive_shared_entity
+        and not guard_fail_open
+    ):
+        same_story_prefix: tuple[str, ...] = ("same_story",)
+        if identity_assessment is not None and identity_assessment.identity_status == IDENTITY_MATCH:
+            same_story_prefix = ("same_story", "stable_document_identity_match")
+        if outcome_mt == STORY_UPDATE:
+            # Story Memory already judged the title materially different; honour that as an
+            # update candidate. delta_class refines the evidence but never demotes it to a
+            # duplicate.
+            eff_delta = delta_class or DELTA_MATERIAL
+            return _result(
+                outcome=CONTINUITY_MATERIAL_UPDATE_CANDIDATE, matched_story_id=matched_id,
+                match_score=round(float(match_result.confidence), 4), confidence_band=band,
+                delta_class=eff_delta, suppression_eligible=False,
+                reason_codes=(*same_story_prefix, "story_update", f"delta_{eff_delta.lower()}"),
+                match_components=components, new_signals=new_signals, repeated_signals=repeated_signals,
+            )
+        # SEMANTIC_DUPLICATE / SUPPORTING_SOURCE - the delta decides.
+        if delta_class == DELTA_NONE:
+            return _result(
+                outcome=CONTINUITY_DUPLICATE_NO_DELTA, matched_story_id=matched_id,
+                match_score=round(float(match_result.confidence), 4), confidence_band=band,
+                delta_class=DELTA_NONE, suppression_eligible=True,
+                reason_codes=(*same_story_prefix, outcome_mt, "no_new_facts"),
+                match_components=components, new_signals=(), repeated_signals=repeated_signals,
+            )
+        if delta_class == DELTA_MATERIAL:
+            return _result(
+                outcome=CONTINUITY_MATERIAL_UPDATE_CANDIDATE, matched_story_id=matched_id,
+                match_score=round(float(match_result.confidence), 4), confidence_band=band,
+                delta_class=DELTA_MATERIAL, suppression_eligible=False,
+                reason_codes=(*same_story_prefix, outcome_mt, "material_delta"),
+                match_components=components, new_signals=new_signals, repeated_signals=repeated_signals,
+            )
+        # DELTA_MINOR (or delta not computable): SAFE semantics (Section 11) - treat as an update
+        # candidate, NOT suppression-eligible, so a potentially important small fact is never
+        # silently dropped. P1 may still choose to present it as a light UPDATE or fold it in.
+        return _result(
+            outcome=CONTINUITY_MATERIAL_UPDATE_CANDIDATE, matched_story_id=matched_id,
+            match_score=round(float(match_result.confidence), 4), confidence_band=band,
+            delta_class=DELTA_MINOR, suppression_eligible=False,
+            reason_codes=(*same_story_prefix, outcome_mt, "minor_delta", "not_suppressed_conservative"),
+            match_components=components, new_signals=new_signals, repeated_signals=repeated_signals,
+        )
+
+    # 3. Everything else - a confident score without a distinctive entity, an UNCERTAIN_MATCH
+    #    that attached for observability, or a confident match the P0.1 identity firewall
+    #    demoted. AMBIGUOUS: no merge, no suppression, evidence retained.
+    codes: tuple[str, ...]
+    if guard_fail_open:
+        codes = (*identity_reason_codes, "guard_forced_fail_open", outcome_mt)
+    elif outcome_mt in _CONFIDENT_SAME_STORY_MATCH_TYPES:
+        codes = (outcome_mt, "no_distinctive_shared_entity", "identity_not_confident")
+    elif match_result.company_only_match:
+        codes = ("uncertain_match", "company_only_overlap", "identity_not_confident")
+    else:
+        codes = ("uncertain_match", "identity_not_confident")
+    return _result(
+        outcome=CONTINUITY_AMBIGUOUS, matched_story_id=matched_id,
+        match_score=round(float(match_result.confidence), 4),
+        confidence_band=band if band in (HIGH, MEDIUM) else "low",
+        delta_class=delta_class, suppression_eligible=False, reason_codes=codes,
+        match_components=components, new_signals=new_signals, repeated_signals=repeated_signals,
+        guard_forced_fail_open=guard_fail_open,
+    )
+
+
+# --- STORY-CONTINUITY-P0-CONSTRAINED-ENFORCEMENT-1 (2026-09) ---------------------------------
+# The FIRST Founder-authorized enforcement predicate. Deliberately the narrowest possible: it
+# only ever suppresses editorial-task creation for a *near-certain* DUPLICATE_NO_DELTA - and
+# even then only when a stable document identity OR an exact normalized-title equality backs it,
+# no material delta was found, and the P0.1 identity guard raised no fail-open concern. Pure and
+# deterministic (no I/O, no LLM). "Suppress" means ONLY: do not create a new duplicate editorial
+# task for this event. The NewsEvent, the Story link, and all decision/audit evidence stay
+# persisted (see services/triage_orchestrator.py::_apply_story_memory). Everything that does not
+# pass every gate below fails open and creates the normal task.
+CONSTRAINED_ENFORCEMENT_POLICY_VERSION = "p0_constrained_v1"
+
+# EXACT_NORMALIZED_TITLE_MATCH normalization - byte-identical to services/story_memory.py's own
+# exact-normalized-title short-circuit in match_story() (whitespace-collapse + casefold only;
+# no word stripping, no number removal, no fuzzy/semantic equivalence - spec §2).
+def normalize_title_for_exact_match(title: str) -> str:
+    """The single deterministic title normalization the enforcement predicate treats as
+    'exact'. Only established safe formatting differences are collapsed."""
+    return " ".join((title or "").split()).casefold()
+
+
+@dataclass(frozen=True)
+class ConstrainedEnforcementDecision:
+    """`suppress` is the only field the caller acts on (True -> skip create_task() for this
+    event). `reason` is `ACTUAL_SUPPRESSION_REASON` when suppressing, or the first failing gate
+    when failing open. `evidence` is the structured audit record (no article bodies, no
+    secrets)."""
+
+    suppress: bool
+    reason: str
+    evidence: dict[str, object] = field(default_factory=dict)
+
+
+# The nine Founder-approved conditions (STORY-CONTINUITY-P0-CONSTRAINED-ENFORCEMENT-1 §0). A
+# decision is ACTUALLY SUPPRESSED only when every one holds; the first that fails is recorded as
+# the fail-open reason.
+def evaluate_constrained_enforcement(
+    *,
+    enabled: bool,
+    continuity: ContinuityResult,
+    would_suppress_flag: bool | None,
+    identity_assessment: ContinuityIdentityAssessment | None,
+    exact_normalized_title_match: bool,
+) -> ConstrainedEnforcementDecision:
+    """Pure. Returns whether this continuity decision may have its editorial task suppressed
+    under the constrained P0 enforcement policy. Fails open (suppress=False) on anything that is
+    not a near-certain, identity-backed, delta-free DUPLICATE_NO_DELTA."""
+    ra = identity_assessment
+    codes = tuple(ra.reason_codes) if ra is not None else ()
+    polluted_story = REASON_POLLUTED_STORY in codes
+    identity_conflict = (
+        continuity.stable_identity_status == IDENTITY_CONFLICT
+        or REASON_STABLE_IDENTITY_CONFLICT in codes
+    )
+    stable_identity_match = ra is not None and ra.identity_status == IDENTITY_MATCH
+    guard_wants_fail_open = ra is not None and ra.verdict != GUARD_SAFE
+
+    evidence: dict[str, object] = {
+        "policy_version": CONSTRAINED_ENFORCEMENT_POLICY_VERSION,
+        "enabled": enabled,
+        "classification": continuity.outcome,
+        "score": continuity.match_score,
+        "delta_class": continuity.delta_class,
+        "suppression_eligible": continuity.suppression_eligible,
+        "would_suppress": would_suppress_flag,
+        "guard_forced_fail_open": continuity.guard_forced_fail_open,
+        "stable_identity_status": continuity.stable_identity_status,
+        "identity_verdict": ra.verdict if ra is not None else None,
+        "identity_namespace": ra.identity_namespace if ra is not None else None,
+        "stable_identity_match": stable_identity_match,
+        "exact_normalized_title_match": exact_normalized_title_match,
+        "polluted_story": polluted_story,
+        "identity_conflict": identity_conflict,
+        "reason_codes": list(codes),
+    }
+
+    # Ordered gate list - (condition_holds, fail_open_reason). First False → fail open.
+    gates: tuple[tuple[bool, str], ...] = (
+        (enabled, "flag_disabled"),
+        (continuity.outcome == CONTINUITY_DUPLICATE_NO_DELTA,
+         f"classification={continuity.outcome}_not_DUPLICATE_NO_DELTA"),
+        (continuity.suppression_eligible is True, "not_suppression_eligible"),
+        (continuity.delta_class == DELTA_NONE, f"delta_class={continuity.delta_class}_not_NO_DELTA"),
+        (continuity.match_score >= 0.99, f"score_{continuity.match_score}_below_0.99"),
+        (would_suppress_flag is True, "would_suppress_not_true"),
+        (continuity.guard_forced_fail_open is False, "guard_forced_fail_open"),
+        (not guard_wants_fail_open, "identity_guard_verdict_not_safe"),
+        (not identity_conflict, "stable_identity_conflict"),
+        (not polluted_story, "polluted_multi_document_story"),
+        (stable_identity_match or exact_normalized_title_match,
+         "no_stable_identity_match_and_no_exact_title_match"),
+    )
+    for holds, fail_reason in gates:
+        if not holds:
+            return ConstrainedEnforcementDecision(
+                suppress=False, reason=f"fail_open:{fail_reason}", evidence=evidence
+            )
+
+    basis = "STABLE_IDENTITY_MATCH" if stable_identity_match else "EXACT_NORMALIZED_TITLE_MATCH"
+    return ConstrainedEnforcementDecision(
+        suppress=True,
+        reason=(
+            f"actually_suppressed:DUPLICATE_NO_DELTA score={continuity.match_score} "
+            f"basis={basis} delta=NO_DELTA guard_forced_fail_open=False polluted_story=False "
+            f"identity_conflict=False policy={CONSTRAINED_ENFORCEMENT_POLICY_VERSION}"
+        ),
+        evidence=evidence,
+    )

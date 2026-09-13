@@ -280,6 +280,20 @@ class Settings(BaseSettings):
     # before this phase's own shadow-mode bake period produces real calibration data.
     story_memory_mode: Literal["off", "shadow", "enforce"] = "off"
 
+    # STORY-CONTINUITY-P0-CONSTRAINED-ENFORCEMENT-1 (2026-09): the FIRST, deliberately very
+    # narrow Story Continuity enforcement. When True (production may enable it only during the
+    # authorized rollout - default stays False everywhere in code/config templates), a
+    # continuity decision may have its editorial-task creation suppressed, but ONLY when it is a
+    # near-certain DUPLICATE_NO_DELTA that passes every gate in services/story_continuity.py::
+    # evaluate_constrained_enforcement() (score >= 0.99, stable-identity or exact-normalized-
+    # title match, no material delta, not guard-forced, not polluted, not an identity conflict).
+    # Everything else still fails open and creates the normal task. "Suppress" means ONLY: skip
+    # create_task() for that event - the NewsEvent, Story link and audit evidence stay
+    # persisted. No effect at all unless story_memory_mode != "off" (the pipeline that produces
+    # the decision). Independent of story_memory_mode's own "enforce" value, which is a
+    # different, broader Story Memory concept and is NOT wired to any suppression.
+    story_continuity_p0_constrained_enforcement_enabled: bool = False
+
     # Phase 20 M3: candidate-retrieval time window for services/story_memory.py::match_story() -
     # previously a module-level constant (STORY_MATCH_LOOKBACK_DAYS = 14), now tunable without a
     # code deploy, matching services/editorial_scoring.py's own established "reasoned default,

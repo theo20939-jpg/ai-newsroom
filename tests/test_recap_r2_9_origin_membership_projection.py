@@ -109,7 +109,7 @@ async def _apply_related_or_uncertain_root(
     unrelated = await _seed_existing_story(session, "Unrelated older story about something else entirely", category=category)
     root_event = await _new_event(session, title, category=category)
 
-    async def _fake_match_story(_session, *, title, category):  # noqa: ANN001
+    async def _fake_match_story(_session, *, title, category, url=None, now=None):  # noqa: ANN001
         signature = extract_story_signature(title, category)
         return signature, MatchResult(outcome, unrelated.id, 0.3, "test", entity_overlap=entity_overlap)
 

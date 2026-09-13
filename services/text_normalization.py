@@ -119,6 +119,120 @@ def strip_google_news_title_suffix(title: str) -> str:
     return _GOOGLE_NEWS_TITLE_SUFFIX_RE.sub("", title.strip()).strip()
 
 
+# --- STORY-CONTINUITY-P0 (2026-09): identity-normalization for Story matching -----------------
+# Boilerplate that is publisher/format provenance, NOT story identity. Every pattern below is a
+# fixed, closed, linguistically/journalistically-principled marker - never a calibration-derived
+# list of any one incident's company or product names (mirrors the same discipline
+# services/story_memory.py's own generic-entity sets already document).
+
+# Russian legal-designation boilerplate. Real production evidence (META-AI-DUPLICATE forensics):
+# every Russian-language Meta item carries a mandatory legal disclaimer prefix/parenthetical
+# ("Запрещённая в России Meta ...", "Meta (признана экстремистской и запрещена в РФ) ...") which,
+# left in place, dominates title-token overlap so that two editorially-unrelated Meta stories
+# score a high title_dice purely on the shared disclaimer. Matched case-insensitively against the
+# already-casefolded output of normalize_loose(). Deliberately narrow: only the disclaimer's own
+# fixed phrasing, plus the trailing organization token it always wraps, is removed - no other
+# word is touched.
+_RU_LEGAL_DESIGNATION_RE = re.compile(
+    r"(?:запрещённая\s+в\s+россии|запрещенная\s+в\s+россии|"
+    r"признанн(?:ая|ой)\s+экстремистской(?:\s+и\s+запрещённой?\s+в\s+(?:рф|россии))?|"
+    r"экстремистск(?:ая|ой)\s+и\s+запрещённая\s+в\s+(?:рф|россии)|"
+    r"принадлежит\s+запрещённой\s+в\s+россии|принадлежащ(?:ая|ей)\s+запрещённой)"
+    r"(?:\s+(?:организации|компании))?",
+    re.IGNORECASE,
+)
+# A parenthetical carrying only the disclaimer, e.g. "Meta (признана экстремистской...)".
+_RU_LEGAL_PARENTHETICAL_RE = re.compile(
+    r"\s*\((?:[^()]*(?:запрещ|экстремист)[^()]*)\)", re.IGNORECASE
+)
+
+# Leading wire-service / editorial-format labels. These announce the ARTICLE FORMAT (an
+# investigation, a Q&A, an internal memo, an opinion column) - not a different real-world story.
+# Two unrelated same-company items can both open "Investigation: ..." and must not gain identity
+# similarity from that shared label. Closed English/Russian set, anchored to the start of the
+# title only, single leading label stripped (never recursively).
+_WIRE_FORMAT_PREFIX_RE = re.compile(
+    r"^\s*(?:investigation|exclusive|analysis|opinion|editorial|explainer|explained|"
+    r"q&a(?:\s+with[^:]{0,80})?|memo|report|update|breaking|live|watch|video|photos?|"
+    r"review|first\s+look|hands[- ]on|deep\s+dive|the\s+download|расследование|"
+    r"мнение|интервью|обзор|видео|фото|репортаж|эксклюзив)\s*[:\-–—]\s+",
+    re.IGNORECASE,
+)
+
+# URL tracking / session params that never change which article a URL points at. Removing them
+# lets two syndicated copies of the same story with differently-decorated URLs canonicalize to
+# one key. Closed, well-known set - not a generic "strip every query param" (some params are
+# load-bearing, e.g. ?id=, ?p=, ?story=).
+_URL_TRACKING_PARAM_PREFIXES: tuple[str, ...] = (
+    "utm_", "fbclid", "gclid", "gclsrc", "dclid", "msclkid", "mc_cid", "mc_eid",
+    "igshid", "ref", "ref_src", "ref_url", "cmpid", "ncid", "spm", "_hsenc", "_hsmi",
+    "vero_id", "yclid", "oc", "share", "__twitter_impression", "s_kwcid", "at_medium",
+    "at_campaign", "cid",
+)
+
+
+def strip_ru_legal_designation(title: str) -> str:
+    """Pure. Removes the fixed Russian legal-designation disclaimer (a mandatory publisher
+    boilerplate around the word "Meta"/"Instagram"/"Facebook", never part of the actual
+    headline). A no-op when no such phrasing is present. Comparison/identity use only - the raw
+    title is never mutated in place."""
+    out = _RU_LEGAL_PARENTHETICAL_RE.sub("", title)
+    out = _RU_LEGAL_DESIGNATION_RE.sub("", out)
+    return _WHITESPACE_RE.sub(" ", out).strip(" —–-:,;")
+
+
+def strip_wire_format_prefix(title: str) -> str:
+    """Pure. Removes a single leading wire-service / editorial-format label ("Investigation:",
+    "Q&A with X on ...:", "Memo: ...", "Опрос: ..."). Format provenance, not story identity. A
+    no-op when the title does not open with a recognised label."""
+    return _WIRE_FORMAT_PREFIX_RE.sub("", title, count=1).strip()
+
+
+def normalize_story_identity_title(title: str) -> str:
+    """Pure. The one shared identity-normalization pass Story Memory applies to every title
+    before entity/keyword extraction and before title-similarity scoring: strip the Russian
+    legal-designation disclaimer and a leading wire-format label - both fixed, unambiguous
+    boilerplate phrases. Deliberately does NOT strip the Google News ' - Publisher' suffix: that
+    is shape-only and provenance-gated (a short genuine semantic tail ' - в России' has the same
+    shape), handled by callers that hold real URL provenance (see
+    services/story_delta_engine.py's own docstring on why shape alone is insufficient, and
+    services/triage_orchestrator.py::_apply_story_memory()'s provenance-gated strip). Never
+    strips ordinary words. Returns the cleaned title (human-readable, not casefolded)."""
+    out = strip_ru_legal_designation(title)
+    out = strip_wire_format_prefix(out)
+    return out.strip() or title.strip()
+
+
+def canonicalize_url(url: str | None) -> str | None:
+    """Pure, no network. Lower-cases the host, drops the fragment, removes well-known tracking /
+    session query params (see _URL_TRACKING_PARAM_PREFIXES), sorts the surviving params, and
+    trims a trailing slash - so two syndicated copies of the same article whose URLs differ only
+    by tracking decoration produce the same canonical key. Returns None for None/empty input and
+    leaves an unparseable URL untouched (returned casefolded-trimmed only)."""
+    if not url:
+        return None
+    try:
+        parts = urlsplit(url.strip())
+    except ValueError:
+        return url.strip().casefold() or None
+    if not parts.scheme and not parts.netloc:
+        return url.strip().casefold() or None
+    kept: list[str] = []
+    for pair in parts.query.split("&"):
+        if not pair:
+            continue
+        key = pair.split("=", 1)[0].lower()
+        if any(key == p or key.startswith(p) for p in _URL_TRACKING_PARAM_PREFIXES):
+            continue
+        kept.append(pair)
+    query = "&".join(sorted(kept))
+    path = parts.path.rstrip("/") or "/"
+    host = (parts.hostname or "").lower()
+    if parts.port:
+        host = f"{host}:{parts.port}"
+    return f"{parts.scheme.lower()}://{host}{path}" + (f"?{query}" if query else "")
+
+
 def strip_ru_case_suffix(token: str) -> str:
     """Conservative single-pass suffix stripping - a small, explicit, hand-curated ending list,
     never a general morphological analyzer. Skipped entirely for short tokens (<=4 chars) and

@@ -41,7 +41,13 @@ from services.story_memory import (
 )
 from services.story_memory import _RELATED_STORY_ENTITY_FLOOR as _OWN_STORY_ENTITY_FLOOR
 from services.story_confidence import compute_confidence_band
+from services.story_continuity import (
+    classify_continuity,
+    evaluate_constrained_enforcement,
+    normalize_title_for_exact_match,
+)
 from services.story_delta_engine import compute_story_delta, gate_delta_by_identity
+from services.story_identity_guard import assess_continuity_identity
 from services.story_suppression import compute_would_suppress
 from services.text_normalization import (
     is_google_news_provenance,
@@ -190,13 +196,20 @@ class TriageCycleReport:
     # verification pass, not a new feature. story_memory_mode stays "off" in the real .env, so
     # this had zero live effect; it only matters once shadow mode is later enabled.
     story_related: int = 0
+    # STORY-CONTINUITY-P0-CONSTRAINED-ENFORCEMENT-1: count of events whose editorial task was
+    # ACTUALLY suppressed by the constrained enforcement predicate (0 unless the flag
+    # story_continuity_p0_constrained_enforcement_enabled is True and a near-certain
+    # DUPLICATE_NO_DELTA passed every gate). Always 0 when story_memory_mode == "off".
+    story_tasks_suppressed: int = 0
 
     @property
     def received_events(self) -> int:
         return self.events_claimed + self.events_recovered
 
 
-async def _apply_story_memory(session: AsyncSession, event: NewsEvent, report: TriageCycleReport) -> None:
+async def _apply_story_memory(
+    session: AsyncSession, event: NewsEvent, report: TriageCycleReport
+) -> bool:
     """Phase 18.10 M1/M2: match `event` against recent same-category stories
     (services/story_memory.py), persist the result as a NewsEventStoryLink row (never as columns
     on `event` itself - see database/models/news_event.py's own comment on why), and create/
@@ -235,6 +248,36 @@ async def _apply_story_memory(session: AsyncSession, event: NewsEvent, report: T
     like any other Story) can still attach to it normally via the confirmed-outcome path above,
     naturally converging the cluster's future growth without retroactively re-parenting already-
     linked events (out of scope as more than "the smallest fix")."""
+    # STORY-CONTINUITY-P0-ENFORCEMENT-WIRING-FIX-1: idempotency guard. This event may already
+    # carry a NewsEventStoryLink from an earlier pass - the constrained-enforcement suppress path
+    # (STORY-CONTINUITY-P0-CONSTRAINED-ENFORCEMENT-1) commits the link *without* a task, and a
+    # later stale-recovery pass then re-enters this function. `news_event_story_links` has a
+    # PRIMARY KEY on `news_event_id`, so re-running match_story() + session.add(
+    # NewsEventStoryLink(...)) below would raise `news_event_story_links_pkey` UniqueViolation
+    # AND double-bump `Story.event_count`. When a link already exists this event's Story Memory
+    # analysis is complete: do NOT re-match, re-link, re-create a Story, or re-bump. Re-derive
+    # the suppression decision from the persisted link so _run_phase_b()'s suppress branch can
+    # still settle the event's terminal status (`ANALYZED`). Under the atomic claim / recovery-
+    # ownership discipline no two workers process the same event concurrently, so this
+    # SELECT-then-skip has no TOCTOU window.
+    existing_link = (
+        await session.execute(
+            select(NewsEventStoryLink).where(NewsEventStoryLink.news_event_id == event.id)
+        )
+    ).scalar_one_or_none()
+    if existing_link is not None:
+        already_suppressed = "actually_suppressed=True" in (existing_link.decision_reason or "")
+        logger.info(
+            "story_continuity_link_already_exists",
+            extra={
+                "event_id": str(event.id),
+                "story_id": str(existing_link.story_id),
+                "final_decision": existing_link.final_decision,
+                "actually_suppressed": already_suppressed,
+            },
+        )
+        return already_suppressed
+
     # Phase 23 shadow calibration: Google News RSS titles append a publisher attribution
     # suffix (e.g. " - Vietnam.vn"). That suffix is source provenance, not Story identity.
     # Strip it only when real provenance proves this is a Google News wrapper; title shape
@@ -249,11 +292,17 @@ async def _apply_story_memory(session: AsyncSession, event: NewsEvent, report: T
     is_google_news = is_google_news_provenance(event.url, source.url if source is not None else None)
     story_match_title = strip_google_news_title_suffix(event.title) if is_google_news else event.title
     signature, result = await match_story(
-        session, title=story_match_title, category=event.category
+        session, title=story_match_title, category=event.category, url=event.url
     )
 
     creates_own_story = result.outcome in (NEW_STORY, RELATED_STORY) or (
         result.outcome == UNCERTAIN_MATCH and result.entity_overlap < _OWN_STORY_ENTITY_FLOOR
+    ) or (
+        # STORY-CONTINUITY-P0: an uncertain match whose only shared identity is an
+        # organization/generic token (no distinctive overlap) is not the same story - it gets
+        # its own Story, not even a provisional link.
+        result.outcome == UNCERTAIN_MATCH and result.company_only_match
+        and result.distinctive_overlap == 0.0
     )
 
     if creates_own_story:
@@ -302,12 +351,6 @@ async def _apply_story_memory(session: AsyncSession, event: NewsEvent, report: T
     elif result.outcome == RELATED_STORY:
         report.story_related += 1
 
-    session.add(
-        NewsEventStoryLink(
-            news_event_id=event.id, story_id=story_id, match_type=result.outcome, match_score=result.confidence,
-        )
-    )
-
     logger.info(
         "phase18_10_story_memory_match",
         extra={
@@ -319,46 +362,182 @@ async def _apply_story_memory(session: AsyncSession, event: NewsEvent, report: T
         },
     )
 
-    # Phase 23.1P (docs/phase23_1p_story_memory_quotes_gate_report.md): Story Memory V2 diagnostics
-    # (services/story_delta_engine.py + story_confidence.py + story_suppression.py, Phase 20 M6/M7,
-    # never wired into any real code path before this phase - their own migration, database/
-    # migrations/versions/3c22be05f4e5_add_story_memory_v2_shadow_columns.py, was never applied to
-    # any real database and is NOT applied by this phase either, per this phase's own explicit "do
-    # not run migrations against the real dev DB" instruction). LOGGED ONLY, never persisted -
-    # satisfies Part A4's "every candidate must produce observable diagnostics" requirement without
-    # a schema change. Computed only for the four outcomes story_confidence.py's own docstring
-    # documents as meaningful (`not creates_own_story` is exactly that same set here - see the
-    # branch above). `gate_delta_by_identity()` applies the same "identity before delta" protection
-    # match_story() itself already established (Phase 20 Checkpoint 6) - a MATERIAL_UPDATE claim is
-    # never trusted without a distinctive shared entity backing the match it rides on.
-    if not creates_own_story:
+    # STORY-CONTINUITY-P0 (2026-09): compute the ONE deterministic continuity decision and its
+    # delta evidence, and persist it onto the NewsEventStoryLink row via the canonical creation
+    # path below (columns already exist in the production DB - no migration). The delta engine +
+    # confidence band + would_suppress diagnostics that were LOGGED-ONLY before this phase now
+    # feed classify_continuity() and are persisted. `gate_delta_by_identity()` keeps the same
+    # "identity before delta" protection (Phase 20 Checkpoint 6). Everything here is diagnostic:
+    # create_task() below still runs unconditionally - P0 never suppresses a send.
+    delta_classification: str | None = None
+    confidence_band: str | None = None
+    would_suppress_flag: bool | None = None
+    delta_reason = ""
+    identity_assessment = None
+    # STORY-CONTINUITY-P0-CONSTRAINED-ENFORCEMENT-1: recomputed deterministically below against
+    # the matched Story's own prior events (never inferred from the match score alone - spec §2).
+    exact_normalized_title_match = False
+    if creates_own_story:
+        continuity = classify_continuity(match_result=result, delta_result=None, creates_own_story=True)
+    else:
+        delta = None
         try:
             delta = await compute_story_delta(
                 session, new_title=event.title, story_id=story_id, exclude_event_id=event.id,
             )
-            delta = gate_delta_by_identity(delta, has_distinctive_shared_entity=result.has_distinctive_shared_entity)
+            delta = gate_delta_by_identity(
+                delta, has_distinctive_shared_entity=result.has_distinctive_shared_entity
+            )
             confidence_band = compute_confidence_band(result.confidence)
-            would_suppress = compute_would_suppress(
-                match_type=result.outcome, confidence_band=confidence_band, delta_classification=delta.classification,
+            would_suppress_flag = compute_would_suppress(
+                match_type=result.outcome, confidence_band=confidence_band,
+                delta_classification=delta.classification,
             )
-            logger.info(
-                "phase23_1p_story_memory_v2_diagnostics",
-                extra={
-                    "event_id": str(event.id),
-                    "story_id": str(story_id),
-                    "match_type": result.outcome,
-                    "confidence_band": confidence_band,
-                    "delta_classification": delta.classification,
-                    "delta_reason": delta.reason,
-                    "new_material_claims": delta.new_material_claims,
-                    "would_suppress": would_suppress,
-                },
-            )
+            delta_reason = delta.reason
         except Exception:
             logger.warning(
-                "phase23_1p_story_memory_v2_diagnostics_failed",
+                "story_continuity_delta_failed",
                 extra={"event_id": str(event.id), "story_id": str(story_id)},
             )
+        # STORY-CONTINUITY-P0.1: the abstract-quality / stable-document-identity firewall. Reads
+        # the matched Story's other events' (title, url) - the same bounded, indexed set the
+        # delta query above already touches - so a confident same-Story classification cannot
+        # rest on unsafe similarity between abstract-like titles (real production evidence:
+        # unrelated arXiv papers sharing templated abstract openings). Purely diagnostic here:
+        # create_task() below still runs unconditionally.
+        prior_doc_rows = (
+            await session.execute(
+                select(NewsEvent.title, NewsEvent.url)
+                .join(NewsEventStoryLink, NewsEventStoryLink.news_event_id == NewsEvent.id)
+                .where(
+                    NewsEventStoryLink.story_id == story_id,
+                    NewsEvent.id != event.id,
+                )
+            )
+        ).all()
+        identity_assessment = assess_continuity_identity(
+            new_title=event.title,
+            new_url=event.url,
+            new_summary=event.summary,
+            prior_documents=[(row.title, row.url) for row in prior_doc_rows],
+            match_is_exact_title_identity=(
+                result.outcome == SEMANTIC_DUPLICATE and result.confidence >= 1.0 - 1e-9
+            ),
+        )
+        # STORY-CONTINUITY-P0-CONSTRAINED-ENFORCEMENT-1: an independent, deterministic
+        # exact-normalized-title equality check against the matched Story's OWN prior events
+        # (same bounded rows the identity assessment already read). Whitespace-collapse +
+        # casefold only - byte-identical to services/story_memory.py's own exact-title
+        # short-circuit. NOT the score-based `match_is_exact_title_identity` above, which a
+        # capped-at-1.0 near-verbatim scored match could also satisfy.
+        _new_norm_title = normalize_title_for_exact_match(event.title)
+        exact_normalized_title_match = any(
+            _new_norm_title == normalize_title_for_exact_match(row.title)
+            for row in prior_doc_rows
+        )
+        continuity = classify_continuity(
+            match_result=result, delta_result=delta, creates_own_story=False,
+            identity_assessment=identity_assessment,
+        )
+        delta_classification = continuity.delta_class
+        # Section 8 - the persisted shadow record must model future enforcement safety: a match
+        # the firewall demoted to AMBIGUOUS must never carry would_suppress=True (an upstream
+        # polluted Story must not be able to make an event suppression-eligible).
+        if continuity.guard_forced_fail_open:
+            would_suppress_flag = False
+
+    # STORY-CONTINUITY-P0-CONSTRAINED-ENFORCEMENT-1: the ONE narrow enforcement predicate. Pure;
+    # fails open on anything that is not a near-certain, identity-backed, delta-free
+    # DUPLICATE_NO_DELTA. `enforcement.suppress` is the only thing that changes runtime behaviour
+    # (create_task() is skipped for this event by _run_phase_b()); the NewsEventStoryLink row
+    # and its full audit evidence are still written either way.
+    enforcement = evaluate_constrained_enforcement(
+        enabled=settings.story_continuity_p0_constrained_enforcement_enabled,
+        continuity=continuity,
+        would_suppress_flag=would_suppress_flag,
+        identity_assessment=identity_assessment,
+        exact_normalized_title_match=exact_normalized_title_match,
+    )
+
+    audit_codes = list(continuity.reason_codes)
+    if enforcement.suppress:
+        audit_codes = [*audit_codes, "actually_suppressed", f"enforced:{enforcement.evidence['policy_version']}"]
+
+    link = NewsEventStoryLink(
+        news_event_id=event.id, story_id=story_id,
+        match_type=result.outcome, match_score=result.confidence,
+        delta_classification=delta_classification,
+        confidence_band=confidence_band,
+        would_suppress=would_suppress_flag,
+        final_decision=continuity.outcome,
+        decision_source="story_continuity_p0",
+        decision_confidence=continuity.match_score,
+        new_facts=list(continuity.new_signals) or None,
+        material_delta=audit_codes or None,
+        decision_reason=(
+            f"{continuity.outcome} suppression_eligible={continuity.suppression_eligible} "
+            f"guard_forced_fail_open={continuity.guard_forced_fail_open} "
+            f"title_quality={continuity.title_semantic_quality} "
+            f"identity_status={continuity.stable_identity_status} "
+            f"actually_suppressed={enforcement.suppress} enforcement={enforcement.reason} "
+            f"exact_norm_title_match={exact_normalized_title_match} "
+            f"components={continuity.match_components} delta={delta_reason}"[:2000]
+        ),
+    )
+    session.add(link)
+
+    # Observability (Section 17) - concise structured diagnostics, no article bodies, no secrets.
+    logger.info(
+        "story_continuity_decision",
+        extra={
+            "event_id": str(event.id),
+            "story_id": str(story_id),
+            "match_type": result.outcome,
+            "continuity_outcome": continuity.outcome,
+            "matched_story_id": str(continuity.matched_story_id) if continuity.matched_story_id else None,
+            "match_score": continuity.match_score,
+            "confidence_band": continuity.confidence_band,
+            "distinctive_entity_overlap": result.distinctive_overlap,
+            "supporting_entity_overlap": result.supporting_overlap,
+            "generic_entity_overlap": result.generic_overlap,
+            "company_only_match": result.company_only_match,
+            "version_incompatible": result.version_incompatible,
+            "delta_class": continuity.delta_class,
+            "would_suppress": would_suppress_flag,
+            "suppression_eligible": continuity.suppression_eligible,
+            "reason_codes": list(continuity.reason_codes),
+            # STORY-CONTINUITY-P0.1 firewall diagnostics (Section 12) - bounded scalars only.
+            "title_semantic_quality": continuity.title_semantic_quality,
+            "stable_identity_status": continuity.stable_identity_status,
+            "stable_identity_namespace": (
+                identity_assessment.identity_namespace if identity_assessment is not None else None
+            ),
+            "guard_forced_fail_open": continuity.guard_forced_fail_open,
+            # STORY-CONTINUITY-P0-CONSTRAINED-ENFORCEMENT-1 - bounded scalars only.
+            "actually_suppressed": enforcement.suppress,
+            "enforcement_reason": enforcement.reason,
+            "enforcement_policy": enforcement.evidence["policy_version"],
+            "exact_normalized_title_match": exact_normalized_title_match,
+        },
+    )
+
+    if enforcement.suppress:
+        report.story_tasks_suppressed += 1
+        # A dedicated record for every ACTUAL suppression - full structured evidence so the
+        # canary audit can reconstruct exactly why the task was not created (spec §9/§17).
+        logger.info(
+            "story_continuity_task_suppressed",
+            extra={
+                "event_id": str(event.id),
+                "story_id": str(story_id),
+                "continuity_outcome": continuity.outcome,
+                "match_score": continuity.match_score,
+                "actual_suppression_reason": enforcement.reason,
+                **{f"ev_{k}": v for k, v in enforcement.evidence.items()},
+            },
+        )
+
+    return enforcement.suppress
 
 
 async def _run_phase_b(session: AsyncSession, event_id: UUID, report: TriageCycleReport) -> None:
@@ -404,12 +583,15 @@ async def _run_phase_b(session: AsyncSession, event_id: UUID, report: TriageCycl
         # "cheap deterministic check before any paid work" seam, since this too is fully
         # deterministic (no LLM call, services/story_memory.py's own module docstring). A no-op
         # when story_memory_mode == "off" (the default) - zero extra queries, byte-identical to
-        # pre-18.10 behavior. In "shadow" (the only enabled mode this phase ships), the match
-        # result is persisted for observability but NEVER suppresses create_task() below -
-        # publication behavior is completely unchanged; "enforce"'s suppression path is not
-        # implemented in this phase.
+        # pre-18.10 behavior. In "shadow" the match result is persisted for observability only.
+        # STORY-CONTINUITY-P0-CONSTRAINED-ENFORCEMENT-1: _apply_story_memory() now RETURNS whether
+        # this event's editorial task must be suppressed (True only when the constrained
+        # enforcement flag is on AND a near-certain, identity-backed, delta-free DUPLICATE_NO_DELTA
+        # passed every gate). Default False - byte-identical to shadow behaviour when the flag is
+        # off.
+        suppress_editorial_task = False
         if settings.story_memory_mode != "off":
-            await _apply_story_memory(session, event, report)
+            suppress_editorial_task = await _apply_story_memory(session, event, report)
 
         source = await session.get(NewsSource, event.source_id)
         reliability_score = source.reliability_score if source is not None else None
@@ -427,13 +609,36 @@ async def _run_phase_b(session: AsyncSession, event_id: UUID, report: TriageCycl
             },
         )
 
-        command = EditorialTaskCreate(
-            event_id=event_id,
-            workflow_type=WorkflowType.NEWS_ANALYSIS,
-            priority=triage_result.priority,
-        )
-        await create_task(session, command)
-        report.tasks_created += 1
+        if suppress_editorial_task:
+            # STORY-CONTINUITY-P0-CONSTRAINED-ENFORCEMENT-1: the ONLY authorized side effect -
+            # do not create a new duplicate editorial task for this near-certain DUPLICATE_NO_
+            # DELTA. create_task() normally commits this transaction; since we skip it, commit
+            # explicitly so the NewsEventStoryLink + Story row (the full audit evidence written
+            # in _apply_story_memory) still persist. The NewsEvent, Story membership, history
+            # and prior tasks are untouched; no publication behaviour changes.
+            #
+            # STORY-CONTINUITY-P0-ENFORCEMENT-WIRING-FIX-1: advance the event to the terminal
+            # `ANALYZED` state - the correct end state for a successfully processed event that
+            # intentionally produces no editorial task - so it is NEVER a stale-recovery
+            # candidate (_select_recovery_candidates only ever selects status == PROCESSING).
+            # Same shape as the invalid-title path's `event.status = EventStatus.REJECTED;
+            # await session.commit()`. This runs only after the suppression decision and its
+            # audit persistence (the NewsEventStoryLink added in _apply_story_memory) succeed,
+            # and is committed atomically with them.
+            event.status = EventStatus.ANALYZED
+            await session.commit()
+            logger.info(
+                "phase9_editorial_task_suppressed_by_story_continuity",
+                extra={"event_id": str(event_id), "source_id": str(event.source_id)},
+            )
+        else:
+            command = EditorialTaskCreate(
+                event_id=event_id,
+                workflow_type=WorkflowType.NEWS_ANALYSIS,
+                priority=triage_result.priority,
+            )
+            await create_task(session, command)
+            report.tasks_created += 1
 
     except DuplicateActiveTaskError:
         # Contract §7.5 point 2: not a failure - another instance already created the
@@ -542,6 +747,7 @@ async def run_triage_cycle(
             "story_semantic_duplicates": report.story_semantic_duplicates,
             "story_uncertain_matches": report.story_uncertain_matches,
             "story_related": report.story_related,
+            "story_tasks_suppressed": report.story_tasks_suppressed,
         },
     )
     return report

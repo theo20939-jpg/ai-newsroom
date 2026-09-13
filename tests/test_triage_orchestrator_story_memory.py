@@ -143,7 +143,7 @@ async def test_apply_story_memory_wires_related_story_into_report(
     db_session.add(new_event)
     await db_session.flush()
 
-    async def _fake_match_story(_session: AsyncSession, *, title: str, category: EventCategory):  # noqa: ANN001, ARG001
+    async def _fake_match_story(_session: AsyncSession, *, title: str, category: EventCategory, url: str | None = None, now=None):  # noqa: ANN001, ARG001
         return signature, MatchResult(
             RELATED_STORY, root_story.id, 0.25, "test: entity-related, not same story", entity_overlap=0.25,
         )
@@ -213,7 +213,7 @@ async def test_google_news_publisher_suffix_is_stripped_before_story_matching(
 
     seen: dict[str, str] = {}
 
-    async def _fake_match_story(_session, *, title, category):  # noqa: ANN001
+    async def _fake_match_story(_session, *, title, category, url=None, now=None):  # noqa: ANN001
         seen["title"] = title
         signature = extract_story_signature(title, category)
         return signature, MatchResult(
@@ -264,7 +264,7 @@ async def test_non_google_title_suffix_is_preserved_before_story_matching(
 
     seen: dict[str, str] = {}
 
-    async def _fake_match_story(_session, *, title, category):  # noqa: ANN001
+    async def _fake_match_story(_session, *, title, category, url=None, now=None):  # noqa: ANN001
         seen["title"] = title
         signature = extract_story_signature(title, category)
         return signature, MatchResult(

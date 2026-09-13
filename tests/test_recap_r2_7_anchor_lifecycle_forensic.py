@@ -140,7 +140,7 @@ async def test_related_story_creation_produces_anchor_missing_from_confirmed_mem
     before = (await db_session.execute(select(Story).where(Story.first_event_id == root_event.id))).scalars().all()
     assert before == []
 
-    async def _fake_match_story(_session, *, title, category):  # noqa: ANN001
+    async def _fake_match_story(_session, *, title, category, url=None, now=None):  # noqa: ANN001
         signature = extract_story_signature(title, category)
         return signature, MatchResult(RELATED_STORY, unrelated.id, 0.25, "test: related but not same story", entity_overlap=0.25)
 
@@ -195,7 +195,7 @@ async def test_weak_uncertain_match_creation_produces_the_identical_anchor_missi
         db_session, "Российские школьники в третий раз стали чемпионами на Международной олимпиаде по ИИ",
     )
 
-    async def _fake_match_story(_session, *, title, category):  # noqa: ANN001
+    async def _fake_match_story(_session, *, title, category, url=None, now=None):  # noqa: ANN001
         signature = extract_story_signature(title, category)
         return signature, MatchResult(UNCERTAIN_MATCH, unrelated.id, 0.46, "test: coincidental uncertain match", entity_overlap=0.1)
 

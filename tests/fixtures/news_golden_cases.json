@@ -147,10 +147,12 @@
         "event_2_title": "Отчёт VK за квартал: выручка — 43,5 млрд рублей, чистая прибыль — 328 млн рублей",
         "event_2_category": "STARTUPS"
       },
+      "_p0_note": "STORY-CONTINUITY-P0: score_candidate() now returns the component-tiered EFFECTIVE entity score - VK is a globally-recurring organization (SUPPORTING tier) so entity_overlap is ~0.35, not the raw 1.0, and combined ~0.58 (still well above the pre-fix 0.37). The pair still resolves to a confident SEMANTIC_DUPLICATE in match_story() via the near-verbatim-title route (title_overlap >= 0.75), which this score_candidate-only runner does not model.",
       "expected": {
-        "entity_overlap": 1.0,
-        "combined__gte": 0.65,
-        "outcome_bucket": "confident_same_story"
+        "entity_overlap__gte": 0.3,
+        "combined__gte": 0.5,
+        "title_overlap__gte": 0.75,
+        "outcome_bucket": "uncertain_match"
       }
     },
     {

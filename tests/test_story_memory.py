@@ -283,9 +283,15 @@ def test_generic_descriptor_extraction_is_deterministic() -> None:
 )
 def test_positive_control_entities_survive(title: str, expected_entity: str) -> None:
     """Additional positive controls beyond Nvidia/OpenAI/Hugging Face/VLA (Tests F/G/I/VLA above) -
-    every real single-word brand name named in the phase's own required calibration set."""
+    every real single-word brand name named in the phase's own required calibration set.
+
+    STORY-CONTINUITY-P0: a trailing version/generation number is now captured as a run
+    continuation, so a brand can surface bare ("gta") or version-qualified ("gta 6"). Either is a
+    pass - the brand token must be present, on its own or leading a more specific entity."""
     signature = extract_story_signature(title, EventCategory.AI)
-    assert expected_entity in signature.entities
+    assert any(
+        e == expected_entity or e.startswith(expected_entity + " ") for e in signature.entities
+    ), f"expected an entity of/led-by {expected_entity!r}, got {signature.entities}"
 
 
 def test_deliberately_deferred_generic_words_not_yet_excluded() -> None:
@@ -477,11 +483,17 @@ def test_real_vk_pair_entity_overlap_and_score_reach_calibrated_counterfactual()
     )
 
     assert sig_1.entities == ["vk"]
-    assert sig_2.entities == ["vk"]  # was ["отчёт vk"] before this fix
-    assert entity_overlap == 1.0  # was 0.0 before this fix
-    assert combined > 0.9  # was 0.37 before this fix (uncertain_match) - now well past _HIGH_THRESHOLD
-    from services.story_memory import _HIGH_THRESHOLD
-    assert combined >= _HIGH_THRESHOLD  # now a confident match, not uncertain_match
+    assert sig_2.entities == ["vk"]  # was ["отчёт vk"] before the Отчёт-contamination fix
+    # STORY-CONTINUITY-P0 re-calibration: score_candidate()'s middle value is now the
+    # *component-tiered effective* entity score, not a flat Jaccard. "vk" is a globally-recurring
+    # organization -> SUPPORTING tier -> effective 0.35 (real, non-zero evidence), never the raw
+    # 1.0 - because organization overlap ALONE must not force a confident merge (Section 7). The
+    # VK pair still resolves to a confident SEMANTIC_DUPLICATE, but now via the near-verbatim
+    # title route (title_overlap >= 0.75), which is what actually makes these the same story -
+    # see test_story_memory_integration.py for the end-to-end match_story() assertion.
+    assert entity_overlap > 0.0  # "vk" IS recognised as real shared identity evidence
+    assert combined > 0.37  # materially improved from the pre-fix uncertain_match score
+    assert title_overlap >= 0.75  # the near-verbatim wording is the real same-story signal here
 
 
 def test_otchet_vk_normalizes_to_bare_vk() -> None:
@@ -518,8 +530,11 @@ def test_government_wrapper_case_from_real_calibration_set() -> None:
 
 
 def test_calibration_negative_controls_preserved() -> None:
-    """Real negative controls from the checkpoint's own calibration - none of these are members of
-    _CALIBRATED_GENERIC_PREFIX_ENTITIES, and none should be affected by this fix at all."""
+    """Real negative controls from the checkpoint's own calibration. STORY-CONTINUITY-P0: the
+    DEFAULT (non-aggressive) extract_story_signature() is byte-unchanged from d2dea2c - the
+    aggressive entity rules (drop generic vocab from within a run, capture a trailing version
+    number) apply ONLY in the match_story()/_score_components() path (aggressive_entities=True),
+    so every non-matching consumer keeps its exact pre-P0 entity set."""
     ai_sig = extract_story_signature(
         "Nebius увеличила выручку во II квартале в 5,5 раза за счет сегмента AI Cloud", EventCategory.AI,
     )
@@ -564,7 +579,7 @@ def test_distinct_same_entity_vk_stories_remain_separate() -> None:
         title_product, sig_product, EventCategory.STARTUPS, title_earnings, candidate,
     )
 
-    assert entity_overlap == 1.0  # "vk" genuinely shared - correct, not a false negative
+    assert entity_overlap > 0.0  # "vk" genuinely shared - real evidence, not a false negative
     assert title_overlap < 0.3  # genuinely different stories - low title overlap
     from services.story_memory import _HIGH_THRESHOLD
     assert combined < _HIGH_THRESHOLD  # entity overlap alone never forces a confident merge
@@ -1057,3 +1072,104 @@ def test_negative_control_same_product_different_release_stays_safe_with_realist
 # migration/session-handling path works. The remaining integration gap is real and disclosed, not
 # closed by this phase.
 # ---------------------------------------------------------------------------
+
+
+# ===========================================================================
+# STORY-CONTINUITY-P0 (2026-09): entity-evidence tiers, generic down-weighting,
+# company-only guard, version separation, threshold invariant.
+# ===========================================================================
+from services.story_memory import (  # noqa: E402
+    ENTITY_DISTINCTIVE,
+    ENTITY_GENERIC,
+    ENTITY_SUPPORTING,
+    classify_entity,
+    compute_entity_evidence,
+)
+
+
+def test_p0_confident_match_threshold_is_unchanged() -> None:
+    """Invariant asserted by the phase: STORY-CONTINUITY-P0 changes the FEATURES feeding
+    match_story(), never the 0.65 confident-match threshold (or the 0.35 low band)."""
+    assert _HIGH_THRESHOLD == 0.65
+    assert _LOW_THRESHOLD == 0.35
+
+
+@pytest.mark.parametrize(
+    "entity,expected",
+    [
+        ("muse voice transcribe", ENTITY_DISTINCTIVE),  # multi-word product name
+        ("muse spark 1 3", ENTITY_DISTINCTIVE),          # version-bearing
+        ("phone 17", ENTITY_DISTINCTIVE),                # generation-qualified
+        ("muse", ENTITY_DISTINCTIVE),                    # coined single-word product name
+        ("llama", ENTITY_DISTINCTIVE),
+        ("meta", ENTITY_SUPPORTING),                     # globally-recurring organization
+        ("google", ENTITY_SUPPORTING),
+        ("openai", ENTITY_SUPPORTING),
+        ("ai", ENTITY_GENERIC),                          # broad domain acronym
+        ("llm", ENTITY_GENERIC),
+        ("will", ENTITY_GENERIC),                        # sentence-initial modal
+        ("ии", ENTITY_GENERIC),
+        # STORY-CONTINUITY-P0: the generic set is deliberately tiny (acronyms + modals) so
+        # genuine names like "Marvell Technology" survive. Common product-category nouns
+        # ("model", "agent") stay extractable and DISTINCTIVE by shape - the
+        # _distinctive_shared_entities() document-frequency gate is what stops one carrying a
+        # confident match on its own.
+        ("model", ENTITY_DISTINCTIVE),
+        ("agent", ENTITY_DISTINCTIVE),
+    ],
+)
+def test_p0_classify_entity(entity: str, expected: str) -> None:
+    assert classify_entity(entity) == expected
+
+
+def test_p0_generic_domain_vocab_dropped_from_extraction() -> None:
+    """In the MATCHING path (aggressive_entities=True) broad AI-domain vocabulary and the
+    sentence-opener "will" must never survive as identity."""
+    sig = extract_story_signature(
+        "Meta debuts its Muse AI agent. Will consumers trust it?", EventCategory.AI,
+        aggressive_entities=True,
+    )
+    assert "muse" in sig.entities
+    assert "meta" in sig.entities
+    assert not ({"ai", "will"} & set(sig.entities))
+    assert not any("will" in e.split() for e in sig.entities)
+
+
+def test_p0_russian_legal_prefix_does_not_survive_as_identity() -> None:
+    sig = extract_story_signature(
+        "Запрещённая в России Meta представила ИИ-модель Muse Voice Transcribe", EventCategory.AI,
+        aggressive_entities=True,
+    )
+    assert "muse voice transcribe" in sig.entities
+    assert not any("запрещ" in e or "росси" in e for e in sig.entities)
+
+
+def test_p0_company_only_overlap_is_not_confident_evidence() -> None:
+    """{meta} shared and nothing distinctive -> company_only, effective capped well below a
+    confident match. This is the Meta-launch-vs-Meta-lawsuit false-merge class."""
+    ev = compute_entity_evidence(["meta", "muse"], ["meta"])
+    assert ev.distinctive_overlap == 0.0
+    assert ev.company_only is True
+    assert ev.effective <= 0.45
+
+
+def test_p0_shared_distinctive_product_is_strong_evidence() -> None:
+    ev = compute_entity_evidence(
+        ["meta", "muse voice transcribe", "mac"], ["meta", "muse voice transcribe"]
+    )
+    assert ev.distinctive_overlap > 0.0
+    assert ev.company_only is False
+    assert "muse voice transcribe" in ev.shared_distinctive
+    assert ev.effective >= 0.5
+
+
+def test_p0_version_incompatible_products_are_negative_evidence() -> None:
+    """"Muse Voice Transcribe" and "Muse Spark 1.3" share the family token "muse" but name a
+    DIFFERENT product - flagged version_incompatible so they stay separate Stories."""
+    ev = compute_entity_evidence(
+        ["meta", "muse spark 1 3"], ["meta", "muse voice transcribe", "mac"]
+    )
+    assert ev.version_incompatible is True
+    # same product at different version granularity is NOT incompatible
+    ev_ok = compute_entity_evidence(["muse spark 1 3"], ["muse spark"])
+    assert ev_ok.version_incompatible is False

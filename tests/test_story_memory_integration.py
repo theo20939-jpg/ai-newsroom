@@ -96,15 +96,19 @@ async def test_should_not_merge_example_release_vs_regulation_commentary(db_sess
     "openai_two_unrelated_announcements" cases for the same pattern). Never SAME_STORY - that
     remains the one non-negotiable assertion."""
     unique = uuid4().hex[:8]
-    await _seed_story(db_session, f"OpenAI-{unique} releases GPT-X")
+    # STORY-CONTINUITY-P0: the shared entity is the ORGANIZATION ("OpenAI", SUPPORTING tier).
+    # Each headline additionally names its own distinctive subject the other lacks, so there is
+    # zero distinctive overlap -> company-only -> never a confident same-story outcome.
+    await _seed_story(db_session, f"OpenAI releases Gadget{unique} model")
 
     signature, result = await match_story(
-        db_session, title=f"OpenAI-{unique} CEO comments on regulation", category=EventCategory.AI
+        db_session, title=f"OpenAI CEO comments on Statute{unique} regulation", category=EventCategory.AI
     )
 
     assert signature.topic_bucket == TOPIC_LEGAL_REGULATORY
-    assert result.outcome in (NEW_STORY, RELATED_STORY)  # never a same-story outcome
+    assert result.outcome in (NEW_STORY, RELATED_STORY, UNCERTAIN_MATCH)  # never a same-story merge
     assert result.outcome not in (STORY_UPDATE, SUPPORTING_SOURCE, SEMANTIC_DUPLICATE)
+    assert result.company_only_match or result.outcome in (NEW_STORY, RELATED_STORY)
 
 
 @pytest.mark.asyncio
