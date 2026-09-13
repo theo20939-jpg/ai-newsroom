@@ -28,11 +28,21 @@ _SCAN_DIRS = ("bot", "services", "worker")
 # docstring: the storage_key/RECAP-Tier-3 branch has no other path to canonical branding). Adding a
 # new name here must be a deliberate, reviewed decision - never an accidental side effect of
 # wiring a new notifier.
+#
+# UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-CUTOVER-1: `services/editorial_pipeline/
+# telegram_integration.py` is a deliberate, reviewed addition - it is the real-flag-on REPLACEMENT
+# for `worker/content_cycle.py`'s own router branding call for the events it owns (never both for
+# the same event - see that module's own docstring), not a second, independent delivery path. It
+# calls `apply_master_news_branding()` with the exact same NEWS-branding semantics the router's own
+# call already has approval for; `services/media_finalizer.py::finalize_photo_input()` is NOT a fit
+# here (its own docstring: gated on different settings, NEWS-only, explicitly "not a router
+# replacement" - `telegram_integration.py` IS a router replacement, for this scope).
 _ALLOWED_IMPORTERS = frozenset({
     "services/nnj_master_news_overlay.py",  # defines it
     "services/media_finalizer.py",
     "services/final_post_review_notifier.py",
     "worker/content_cycle.py",
+    "services/editorial_pipeline/telegram_integration.py",
 })
 
 

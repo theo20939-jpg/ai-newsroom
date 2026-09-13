@@ -221,6 +221,20 @@ async def test_source(factory: async_sessionmaker[AsyncSession]) -> AsyncIterato
                         delete(ContentDraftEditorialPlan).where(ContentDraftEditorialPlan.event_id.in_(event_ids))
                     )
 
+                # UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-CUTOVER-1: recovery_jobs.content_draft_id
+                # FK-references content_drafts.id directly (database/models/recovery_job.py) - same
+                # guarded-delete convention as every block above (table-existence check first, so
+                # this fixture still works against an unmigrated DB). Added once the real,
+                # worker-reachable unified pipeline started writing durable recovery rows during
+                # these tests, which otherwise made the ContentDraft delete below fail with a FK
+                # violation at teardown, after the test body itself had already passed.
+                if content_draft_ids and await _table_exists(session, "recovery_jobs"):
+                    from database.models.recovery_job import RecoveryJob as RecoveryJobRow
+
+                    await session.execute(
+                        delete(RecoveryJobRow).where(RecoveryJobRow.content_draft_id.in_(content_draft_ids))
+                    )
+
                 await session.execute(delete(ContentDraft).where(ContentDraft.id.in_(content_draft_ids)))
                 await session.execute(delete(EditorialTask).where(EditorialTask.event_id.in_(event_ids)))
 

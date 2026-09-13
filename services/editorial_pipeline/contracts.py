@@ -74,6 +74,7 @@ __all__ = [
     "QualityCheckName", "QualityCheckResult", "QualityGateVerdict", "QualityGateResult",
     "Platform", "DeliveryOutcome", "DeliveryPackage",
     "RecoveryReasonCode", "RecoveryState", "RecoveryJob", "RecoveryResult",
+    "OrchestratorVerdict",
 ]
 
 # `VisualIntent`/`MediaCandidate`/`MediaSelection` are the phase brief's own names (S6/S11/S12) for
@@ -400,3 +401,40 @@ class RecoveryResult:
     """Whether the best-effort editor-visible recovery notice reached its destination - the
     durable guarantee is `job`'s own persisted state, never this (this session's own prior phase's
     own proven invariant: `test_hold_survives_the_notice_send_itself_failing`)."""
+
+
+# ---------------------------------------------------------------------------
+# UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-CUTOVER-1 (S5): the one explicit orchestrator result the
+# Founder review demanded ("worker must not inspect low-level media/content fields and make new
+# editorial decisions after receiving this result"). Four, and only four, outcomes:
+#
+#   READY - `delivery_package` is set; the worker's only remaining job is dumb transport.
+#   HOLD  - a real, durable RecoveryJob (services.editorial_pipeline.recovery_service.RecoveryJob,
+#           the DB-backed model) has reached a state that needs editor review right now (either
+#           TERMINAL_HOLD - bounded retries exhausted - or a reason this phase's own policy never
+#           retries automatically at all, e.g. AMBIGUOUS_TRANSPORT_RESULT, which must never be
+#           blindly retried/resent). `recovery_job_id` names the durable row a human/future cycle
+#           can inspect; never a fabricated id.
+#   BLOCK - a quality/safety verdict that content itself must change to pass, never merely retried
+#           unchanged (`QUALITY_GATE_FAILED` - the Quality Gate's own verdict is authoritative and
+#           final here, never re-decided by the worker).
+#   RETRY - a real, durable RecoveryJob exists and is still bounded-retryable (PENDING/RETRYING) -
+#           `next_retry_at` says when a future cycle should attempt this draft again; the worker
+#           does nothing else with it this cycle (never blindly re-attempts inline).
+#
+# This verdict is carried directly on the pre-existing `PipelineResult` (S25, still returned
+# unchanged in shape by `run_editorial_production_pipeline()` for full backward compatibility with
+# the shadow-mode call site and this phase's own pre-existing test suite, both of which never pass
+# a durable session) via its new `verdict`/`persisted_recovery_job_id`/`next_retry_at` fields
+# (services/editorial_pipeline/orchestrator.py) - deliberately not a second, separate result
+# dataclass: this phase's own §9 principle ("do not keep decorative... values with no
+# implementation") applies just as much to a competing, never-actually-returned result type as to
+# an unused enum member.
+# ---------------------------------------------------------------------------
+
+
+class OrchestratorVerdict(str, enum.Enum):
+    READY = "READY"
+    HOLD = "HOLD"
+    BLOCK = "BLOCK"
+    RETRY = "RETRY"

@@ -8,6 +8,22 @@ orchestrator (S25) actually reasons about, and bridges to that same production m
 Telegram, bounded (never an infinite retry - S23's own explicit rule) and reason-coded (S4-E: every
 failure "bounded, observable, reason-coded, recoverable where appropriate, terminal after explicit
 max attempts").
+
+UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-CUTOVER-1 status update (the Founder review this cutover
+phase responds to named `create_recovery_job()`'s own in-process-only construction and
+`apply_telegram_recovery()`'s zero real callers as the exact gap to close): `services.editorial_
+pipeline.recovery_service.RecoveryService` is now the real, durable, worker-reachable
+implementation (a genuine `recovery_jobs` DB table, real state transitions, real `next_retry_at`) -
+`services.editorial_pipeline.orchestrator.run_editorial_production_pipeline()` uses it whenever a
+caller supplies a `session`/`recovery_service` (the real Telegram integration,
+`services.editorial_pipeline.telegram_integration.py`, always does). `create_recovery_job()` below
+remains the in-process-only FALLBACK path for any caller that has not been updated to pass a
+session (the pre-existing shadow-mode call site, and this module's own pre-existing test suite) -
+still real, still used, not dead code, just intentionally the less-durable of the two paths now.
+`apply_telegram_recovery()` remains unmodified, with zero callers, exactly as the review found it -
+this phase did not delete it (S3: "do not delete the legacy pipeline yet") but does not build on it
+either, since `RecoveryService`+the real Telegram transport dispatch in `telegram_integration.py`
+supersede what it was meant to bridge.
 """
 from __future__ import annotations
 

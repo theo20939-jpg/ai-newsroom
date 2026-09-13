@@ -66,6 +66,33 @@ def _is_message_not_modified_error(exc: TelegramBadRequest) -> bool:
     return _MESSAGE_NOT_MODIFIED_PHRASE in str(exc).lower()
 
 
+# UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-CUTOVER-1 (S11): a real, additive AMBIGUOUS classification.
+# Every `TelegramAPIError` this module has ever caught was previously treated as one uniform
+# "definitely failed, never sent" outcome (`sent=False, reason="telegram_api_error"`) - true for a
+# genuine rejection (bad chat id, blocked bot, malformed request) but NOT true for a timeout: the
+# request may have reached Telegram's servers and been accepted before the response itself timed
+# out, in which case the post may already exist. The prior TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-
+# REPAIR-1 phase's own real production evidence for this exact shape is
+# `TelegramAPIError(method=None, message="Request timeout error")` (tests/test_router_media_
+# integration.py::test_photo_timeout_holds_for_visual_recovery_instead_of_text_fallback, its own
+# docstring: "the real production timeout shape") - that phase treated it as a plain failure
+# (correctly HOLDing rather than a silent text fallback, but without distinguishing "definitely
+# never sent" from "Telegram may have accepted it"). This heuristic - a case-insensitive "timeout"
+# substring in the exception's own message - is a deliberately narrow, additive signal: it changes
+# nothing for a defintive rejection (no existing failure message in this codebase's own test suite
+# contains the word "timeout" - confirmed directly, see this phase's own report), and correctly
+# flags the one real shape production has actually observed as ambiguous rather than a same-as-
+# always failure. `RoutingOutcome.sent` stays `False` either way (an ambiguous outcome is still
+# "not confirmed sent") - `ambiguous=True` is the new, additive signal a caller uses to route to
+# recovery/reconciliation instead of ever blindly resending (S11's own "no duplicate Telegram
+# publication" requirement).
+_TIMEOUT_INDICATOR = "timeout"
+
+
+def _is_timeout_class_error(exc: TelegramAPIError) -> bool:
+    return _TIMEOUT_INDICATOR in str(exc).lower()
+
+
 # Maps each destination to the *name* of its `core.config.Settings` topic-id attribute - adding a
 # new destination later means adding one enum member (schemas/editorial_route.py) plus one entry
 # here plus one new settings field, never an `if destination == ...` chain in a handler.
@@ -116,6 +143,14 @@ class RoutingOutcome:
     sent: bool
     reason: str | None = None
     message_id: int | None = None
+    ambiguous: bool = False
+    """UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-CUTOVER-1 (S11), additive - default `False` leaves
+    every existing construction of this dataclass (every prior call site, every prior test)
+    completely unaffected. `True` only for a timeout-class `TelegramAPIError` on
+    `send_photo_to_editorial_destination()`/`send_to_editorial_destination()` (see
+    `_is_timeout_class_error()`'s own docstring) - Telegram may have already accepted the post; a
+    caller must route this to recovery/reconciliation, never treat it as a plain resend-safe
+    failure and never treat it as a confirmed send either."""
 
 
 async def send_to_editorial_destination(
@@ -216,14 +251,18 @@ async def send_to_editorial_destination(
             reply_markup=reply_markup, reply_to_message_id=reply_to_message_id,
             link_preview_options=_DISABLED_LINK_PREVIEW,
         )
-    except TelegramAPIError:
+    except TelegramAPIError as exc:
+        ambiguous = _is_timeout_class_error(exc)
         logger.exception(
             "telegram_routing_send_failed",
-            extra={"destination": resolved_destination.value, "chat_id": route.chat_id, "topic_id": route.topic_id},
+            extra={
+                "destination": resolved_destination.value, "chat_id": route.chat_id, "topic_id": route.topic_id,
+                "ambiguous": ambiguous,
+            },
         )
         return RoutingOutcome(
             destination=resolved_destination, chat_id=route.chat_id, topic_id=route.topic_id, sent=False,
-            reason="telegram_api_error",
+            reason="telegram_timeout_ambiguous" if ambiguous else "telegram_api_error", ambiguous=ambiguous,
         )
 
     return RoutingOutcome(
@@ -322,14 +361,18 @@ async def send_photo_to_editorial_destination(
             reply_to_message_id=reply_to_message_id,
             show_caption_above_media=caption_position_value,
         )
-    except TelegramAPIError:
+    except TelegramAPIError as exc:
+        ambiguous = _is_timeout_class_error(exc)
         logger.exception(
             "telegram_routing_photo_send_failed",
-            extra={"destination": resolved_destination.value, "chat_id": route.chat_id, "topic_id": route.topic_id},
+            extra={
+                "destination": resolved_destination.value, "chat_id": route.chat_id, "topic_id": route.topic_id,
+                "ambiguous": ambiguous,
+            },
         )
         return RoutingOutcome(
             destination=resolved_destination, chat_id=route.chat_id, topic_id=route.topic_id, sent=False,
-            reason="telegram_api_error",
+            reason="telegram_timeout_ambiguous" if ambiguous else "telegram_api_error", ambiguous=ambiguous,
         )
 
     return RoutingOutcome(

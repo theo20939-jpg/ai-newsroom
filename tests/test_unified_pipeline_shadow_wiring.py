@@ -1,16 +1,27 @@
-"""UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-1 S25/S26/S27/S35: the real worker-wiring hook.
+"""UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-1 S25/S26/S27/S35, superseded by
+UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-CUTOVER-1 (S2): the real worker-wiring hook.
 
-Two things must both be true, proven against the REAL `worker.content_cycle.run_content_cycle()`,
-not a reimplementation:
+The original phase-1 version of this file proved the OLD "shadow hook alongside the legacy send"
+wiring (`services.editorial_pipeline.shadow.run_shadow_comparison()`, called unconditionally
+whenever `unified_editorial_pipeline_enabled` was True, regardless of format/output shape, with
+its own result never affecting the real send) - exactly the architecture the Founder review of
+that phase rejected ("legacy + shadow unified call + legacy send behavior... NOT legacy or
+unified"). That shadow hook has been REMOVED outright by the cutover phase (never merely disabled)
+- `worker/content_cycle.py` now has a genuine, mutually-exclusive `if unified... else: legacy`
+branch (see `services.editorial_pipeline.telegram_integration.is_unified_router_eligible()`).
 
-1. Flag OFF (every real environment this phase touches) -> the shadow hook is never even reached;
-   behavior is 100% identical to before this phase (already proven exhaustively by this session's
-   own prior TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1 regression suite, re-run unchanged against
-   this same worktree with zero new failures - see the report's own regression section).
-2. Flag ON (this test only - never true in any real deployment) -> the shadow hook runs, logs a
-   real `shadow_comparison` event, and the ACTUAL SEND is still byte-for-byte what the legacy path
-   alone would have produced - S27's own "no duplicate Telegram sends" holds even when exercised
-   for real, not merely by inspection of the code.
+This file now proves the CURRENT, real behavior:
+
+1. Flag OFF (every real environment today) -> the legacy path runs, unaffected, exactly as before
+   this entire lineage (already proven exhaustively by the TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-
+   REPAIR-1 regression suite and tests/test_router_media_integration.py, re-run unchanged with
+   zero new failures - see the cutover report's own regression section).
+2. Flag ON but the real output is NOT V8-family (e.g. V6/V7 - `is_unified_router_eligible()`
+   returns False) -> STILL the legacy path, unaffected - the unified gate is narrow by design and
+   never partially engages for a shape it does not own.
+3. Flag ON AND a real V8-family output -> the unified path is authoritative (proven exhaustively,
+   with real replays and real durable recovery, in tests/test_unified_pipeline_cutover_authority.py -
+   not duplicated here).
 """
 from unittest.mock import AsyncMock, patch
 
@@ -31,8 +42,15 @@ from tests.test_content_worker_cycle import _isolated_freshness_window, factory,
 from worker.content_cycle import run_content_cycle
 
 
+@pytest.fixture(autouse=True)
+def _reset_unified_flag():
+    original = settings.unified_editorial_pipeline_enabled
+    yield
+    settings.unified_editorial_pipeline_enabled = original
+
+
 @pytest.mark.asyncio
-async def test_flag_off_never_reaches_the_shadow_hook(
+async def test_flag_off_never_reaches_the_unified_pipeline(
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -52,14 +70,18 @@ async def test_flag_off_never_reaches_the_shadow_hook(
 
     fake_bot.send_photo.assert_called_once()
     assert result.notified == 1
-    assert not any(r.msg in ("shadow_comparison", "shadow_comparison_failed") for r in caplog.records)
+    assert not any(r.msg == "unified_pipeline_selected" for r in caplog.records)
 
 
 @pytest.mark.asyncio
-async def test_flag_on_runs_the_shadow_hook_but_the_real_send_stays_identical(
+async def test_flag_on_but_non_v8_output_still_uses_the_legacy_path_unaffected(
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
 ) -> None:
+    """The narrow gate (`is_unified_router_eligible()`) never partially engages - a V6-shaped
+    output (no `main_body`) with the flag ON still gets the exact same, unmodified legacy send as
+    flag-off, byte-for-byte (S2: never legacy+shadow, and never a partial unified takeover of a
+    shape it does not own)."""
     _common_settings(monkeypatch)
     monkeypatch.setattr(settings, "unified_editorial_pipeline_enabled", True)
     await _seed_eligible_event(factory, test_source)
@@ -82,33 +104,4 @@ async def test_flag_on_runs_the_shadow_hook_but_the_real_send_stays_identical(
     assert kwargs["message_thread_id"] == _REAL_NEWS_TOPIC_ID
     assert result.notified == 1
     assert result.router_image_sent == 1
-
-    # And the new pipeline really did run, in shadow, alongside it.
-    assert any(r.msg == "shadow_comparison" for r in caplog.records)
-
-
-@pytest.mark.asyncio
-async def test_flag_on_shadow_hook_failure_never_breaks_the_real_send(
-    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
-) -> None:
-    """S4-E's own boundary, proven for real: even if the brand-new pipeline code raises, the
-    legacy send still completes exactly as it would have."""
-    _common_settings(monkeypatch)
-    monkeypatch.setattr(settings, "unified_editorial_pipeline_enabled", True)
-    await _seed_eligible_event(factory, test_source)
-    _gateway, registry = _v6_capability_registry()
-    fake_bot = AsyncMock()
-    fake_bot.send_photo.return_value.message_id = 111
-
-    with (
-        patch("worker.content_cycle._classify_event_for_router_treatment", new=AsyncMock(return_value=_standard_decision())),
-        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_fake_candidate()])),
-        patch("services.editorial_pipeline.shadow.run_shadow_comparison", new=AsyncMock(side_effect=RuntimeError("boom"))),
-        caplog.at_level("INFO"),
-    ):
-        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
-
-    fake_bot.send_photo.assert_called_once()
-    assert result.notified == 1
-    assert any(r.msg == "unified_pipeline_shadow_hook_failed" for r in caplog.records)
+    assert not any(r.msg == "unified_pipeline_selected" for r in caplog.records)

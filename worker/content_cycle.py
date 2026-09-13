@@ -93,6 +93,10 @@ from services.story_telegram_delivery import (
     persist_reply_routing_proposal,
     record_delivery,
 )
+from services.editorial_pipeline.telegram_integration import (
+    is_unified_router_eligible,
+    run_unified_telegram_delivery,
+)
 from services.director_editorial_gate_shadow import (
     STAGE2_BUDGET_EXHAUSTED as GATE_STAGE2_BUDGET_EXHAUSTED,
     STAGE2_FAILED_FELL_BACK as GATE_STAGE2_FAILED_FELL_BACK,
@@ -1395,13 +1399,6 @@ async def run_content_cycle(
             # only where `presentation_decision` is actually assigned, with the real value
             # captured before any later DATA/QUOTE/BREAKING-render-failure demotion to NEWS.
             original_presentation_type_for_hold: str = "NEWS"
-            # UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-1: the same safe-default-then-overwrite
-            # pattern as `original_presentation_type_for_hold` immediately above, for the exact
-            # same reason - `research_facts` is otherwise only ever assigned inside the
-            # `presentation_director_mode != "off"` branch far below, and the new pipeline's
-            # shadow-comparison hook (S25/S26/S27, gated on `unified_editorial_pipeline_enabled`,
-            # default False everywhere) must never risk a NameError reaching the legacy path.
-            research_facts_for_shadow: list[str] = []
             # Phase 23.1H: resolved below, only inside the `copywriting_output is not None` branch
             # (the disclosed V4/no-structured-output fallback below keeps attaching no image at
             # all - same scope discipline as its own pre-existing "no keyboard either" behavior).
@@ -1451,891 +1448,902 @@ async def run_content_cycle(
             # unchanged fallback for the one case they were always meant for: copywriting_output
             # genuinely absent (the `else: include_url = True` branch below).
             html: str | None = None
-            if outcome.copywriting_output is not None:
+            if (
+                settings.unified_editorial_pipeline_enabled
+                and is_unified_router_eligible(outcome.copywriting_output)
+            ):
+                # UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-CUTOVER-1: the orchestrator becomes the
+                # AUTHORITATIVE owner of format/structured-content/media/composition/quality-gate/
+                # recovery for this event - the legacy decision tree in the `else:` branch below is
+                # never also executed for the same event (S2: LEGACY or UNIFIED, never both). The
+                # worker's only remaining job here is reading back the result and updating its own
+                # cycle bookkeeping - it never re-inspects low-level content/media fields.
                 assert treatment_decision is not None  # guaranteed: router mode reaches here only past the SKIP gate
-                is_v8 = is_v8_family_output(outcome.copywriting_output)
-                if is_v8:
-                    # Phase V2.12I: V2.12G's removal of the NINJA PULSE caption footer from real
-                    # router-mode NEWS delivery is itself superseded - the current approved NEWS
-                    # contract restores Phase 23.1Q's original decision: the footer (text + link)
-                    # remains in the final caption/HTML, alongside the unchanged source-only
-                    # "🔗 Источник" keyboard (no separate subscription button).
-                    html = render_v81_news_card_html(
-                        outcome.copywriting_output, treatment=treatment_decision.treatment,
-                        quote_text=quote_text, quote_speaker=quote_speaker,
-                        include_ninja_pulse_footer=True,
+                assert outcome.copywriting_output is not None  # guaranteed by is_unified_router_eligible() above
+                async with session_factory() as unified_signals_session:
+                    unified_research_facts, unified_presentation_score = await _fetch_router_presentation_signals(
+                        unified_signals_session, event.id,
                     )
+                unified_outcome = await run_unified_telegram_delivery(
+                    session_factory=session_factory, bot=bot, event=event,
+                    content_draft_id=outcome.content_draft.id, task_id=outcome.task_id,
+                    copywriting_output=outcome.copywriting_output, treatment=treatment_decision.treatment,
+                    research_facts=unified_research_facts, presentation_score=unified_presentation_score,
+                    quote_text=quote_text, quote_speaker=quote_speaker,
+                    keyboard=keyboard, reply_to_message_id=reply_to_message_id,
+                    effective_dry_run=effective_dry_run,
+                    breaking_count_this_cycle=result.presentation_breaking_sent,
+                    breaking_max_per_cycle=settings.presentation_breaking_max_per_cycle,
+                    breaking_enabled=settings.presentation_breaking_enabled,
+                    story_id=story_link.story_id if story_link is not None else None,
+                )
+                if unified_outcome.presentation_type == PRESENTATION_BREAKING:
+                    result.presentation_breaking_sent += 1
+                if unified_outcome.held:
+                    result.visual_required_held += 1
+                elif unified_outcome.dry_run:
+                    result.dry_run_rendered += 1
+                elif unified_outcome.sent:
+                    result.notified += 1
+                    sent_message_id = unified_outcome.sent_message_id
+                    sent_chat_id = unified_outcome.sent_chat_id
+                    if unified_outcome.had_photo:
+                        result.router_image_sent += 1
                 else:
-                    compact_body = build_compact_news_body(outcome.copywriting_output, treatment=treatment_decision.treatment)
-                    card = card.model_copy(update={"draft_body": compact_body})
-                    html = render_compact_news_card_html(
-                        outcome.content_draft.title or "", compact_body, quote_text=quote_text, quote_speaker=quote_speaker,
-                    )
-                # PRESENTATION RECOVERY (2026-09-02): canonical NEWS-family editorial-send
-                # keyboard (source + meme, never a subscribe/CTA button) - covers text-only,
-                # single-photo, AND media-group sends alike, since every downstream send call
-                # reuses this SAME `keyboard` variable, and (since nothing downstream overwrites
-                # it - see the deleted enforce-branch overwrite this phase removed) also covers
-                # every non-NEWS presentation_type (BREAKING/DATA/QUOTE) reached further below.
-                # The `include_url = True` fallback branch below (copywriting_output is None) has
-                # no keyboard mechanism at all for ANY button - deferred, documented, not touched.
-                keyboard = build_editorial_send_keyboard(event.url, event.id, label=_NEWS_SOURCE_BUTTON_LABEL)
-                include_url = False
-
-                # Phase 23.1H media integration (docs/phase23_1h_text_image_canary_report.md
-                # §"media architecture"): reuses the exact same candidate retrieval/ranking/
-                # validation the legacy image-preview path already relies on
-                # (get_editorial_image_candidates() only ever returns eligible_for_editorial=True
-                # rows, ordered by rank) - no second discovery/ranking/validation pipeline. An
-                # already-expired candidate row (`is_expired`, computed by the same function) is
-                # treated exactly like "no candidate" - safe text-only fallback, never a crash.
-                async with session_factory() as preview_session:
-                    image_candidates = await get_editorial_image_candidates(
-                        preview_session, content_draft_id=outcome.content_draft.id,
-                    )
-                    # Phase 23.1N Part J: a narrow, migration-free cross-event duplicate-image
-                    # guard - services/image_deduplication.py only ever deduplicates *within* one
-                    # event's own candidates, never across different stories. Exact
-                    # normalized-URL match only (no perceptual hashing), against the rank-1
-                    # candidate actually attached to each of the last few real drafts - never
-                    # blocks the whole send, only skips a candidate whose image was already used
-                    # on a different, unrelated recent post; falls through to the next-ranked
-                    # candidate, and to text-only (never a crash) if every candidate is a repeat.
-                    recently_used_urls = await get_recently_attached_image_source_urls(
-                        preview_session, exclude_news_event_id=event.id,
-                    )
-                image_candidate_count = len(image_candidates)
-                eligible_candidates: list[EditorialImageCandidate] = []
-                for candidate in image_candidates:
-                    if candidate.is_expired:
-                        continue
-                    if candidate.source_url and sanitize_url(candidate.source_url) in recently_used_urls:
-                        logger.info(
-                            "router_image_duplicate_skipped",
-                            extra={"draft_id": str(outcome.content_draft.id), "source_url": candidate.source_url},
+                    result.notification_failed += 1
+            else:
+                if outcome.copywriting_output is not None:
+                    assert treatment_decision is not None  # guaranteed: router mode reaches here only past the SKIP gate
+                    is_v8 = is_v8_family_output(outcome.copywriting_output)
+                    if is_v8:
+                        # Phase V2.12I: V2.12G's removal of the NINJA PULSE caption footer from real
+                        # router-mode NEWS delivery is itself superseded - the current approved NEWS
+                        # contract restores Phase 23.1Q's original decision: the footer (text + link)
+                        # remains in the final caption/HTML, alongside the unchanged source-only
+                        # "🔗 Источник" keyboard (no separate subscription button).
+                        html = render_v81_news_card_html(
+                            outcome.copywriting_output, treatment=treatment_decision.treatment,
+                            quote_text=quote_text, quote_speaker=quote_speaker,
+                            include_ninja_pulse_footer=True,
                         )
-                        continue
-                    eligible_candidates.append(candidate)
+                    else:
+                        compact_body = build_compact_news_body(outcome.copywriting_output, treatment=treatment_decision.treatment)
+                        card = card.model_copy(update={"draft_body": compact_body})
+                        html = render_compact_news_card_html(
+                            outcome.content_draft.title or "", compact_body, quote_text=quote_text, quote_speaker=quote_speaker,
+                        )
+                    # PRESENTATION RECOVERY (2026-09-02): canonical NEWS-family editorial-send
+                    # keyboard (source + meme, never a subscribe/CTA button) - covers text-only,
+                    # single-photo, AND media-group sends alike, since every downstream send call
+                    # reuses this SAME `keyboard` variable, and (since nothing downstream overwrites
+                    # it - see the deleted enforce-branch overwrite this phase removed) also covers
+                    # every non-NEWS presentation_type (BREAKING/DATA/QUOTE) reached further below.
+                    # The `include_url = True` fallback branch below (copywriting_output is None) has
+                    # no keyboard mechanism at all for ANY button - deferred, documented, not touched.
+                    keyboard = build_editorial_send_keyboard(event.url, event.id, label=_NEWS_SOURCE_BUTTON_LABEL)
+                    include_url = False
 
-                # Phase V2.27 §6: the real accidental structural gap this phase closes - this
-                # block used to require `eligible_candidates` (>=1 image) as a hard precondition,
-                # so a NewsEvent with a valid video hint but zero usable images could never reach
-                # build_rich_media_plan() at all. Now also entered whenever rich_media_mode is
-                # "enforce" (a video MIGHT exist), even with zero images - `top_candidates` and
-                # `video_hint` below both correctly degrade to "nothing" if neither is real, which
-                # falls through to the exact same pre-existing text-only fallback as before.
-                if is_v8 and html is not None and (eligible_candidates or settings.rich_media_mode == "enforce"):
-                    # Phase 23.1Q (Media Roadmap Recovery step 1): rank -> cap at
-                    # _MAX_ROUTER_IMAGES -> build_rich_media_plan() (Phase 19 M11/M12, reused
-                    # verbatim, never reimplemented). build_rich_media_plan() itself already
-                    # skips any candidate whose resolve_photo_input() fails and continues to the
-                    # next ranked one - a single broken image never kills the whole media
-                    # opportunity. <2 resolved photos degrades to the existing single-photo
-                    # variable below; 0 resolved photos leaves both empty (existing text-only
-                    # fallback, unchanged).
-                    top_candidates = (
-                        _select_top_ranked_image_candidates(eligible_candidates, limit=_MAX_ROUTER_IMAGES)
-                        if eligible_candidates else []
-                    )
-                    # Phase 19 M10/M12 production wiring (docs/video_delivery_wiring_checkpoint.md):
-                    # video attachment is opt-in via rich_media_mode - "off"/"shadow" (the current
-                    # defaults) skip the lookup entirely and stay byte-identical to the pre-wiring
-                    # image-only behavior below. "No candidate" and "candidate fails to convert"
-                    # both leave video_hint as None, which build_rich_media_plan() (unmodified)
-                    # already treats as "no video" - never a crash, never a blocked image send.
-                    video_hint = None
-                    hosted_video_bytes: bytes | None = None
-                    if settings.rich_media_mode == "enforce":
-                        async with session_factory() as video_session:
-                            # Phase V2.27A: no longer limit=1 - multiple platform tiers may be
-                            # persisted for the same event (DIRECT_HOSTED, YOUTUBE/VIMEO,
-                            # EMBEDDED_PLAYER), and select_best_video_candidate() below needs to
-                            # see all of them to apply the real DIRECT_HOSTED > YOUTUBE/VIMEO >
-                            # EMBEDDED_PLAYER resolution order rather than just whichever one was
-                            # persisted first.
-                            video_candidates = await get_video_candidates_for_event(video_session, event.id)
-                        best_video_candidate = select_best_video_candidate(video_candidates)
-                        if best_video_candidate is not None:
-                            video_hint = to_native_video_hint(best_video_candidate)
-                        # Phase V2.27/V2.27A: a YOUTUBE/VIMEO/EMBEDDED_PLAYER hint previously
-                        # always became a plain caption link (YOUTUBE/VIMEO) or was discarded
-                        # entirely (EMBEDDED_PLAYER did not exist before V2.27A) - see
-                        # build_rich_media_plan()'s own hosted_platform_link docstring.
-                        # hosted_video_download_mode="enforce" attempts a real, bounded
-                        # server-side download instead - on ANY failure the hint is dropped
-                        # entirely (video_hint = None) rather than falling back to the
-                        # caption-link behavior (Phase V2.27 §4's own explicit instruction: no
-                        # raw-link fallback once native delivery is opted into).
-                        if (
-                            video_hint is not None
-                            and video_hint.platform in (
-                                VideoPlatform.YOUTUBE, VideoPlatform.VIMEO, VideoPlatform.EMBEDDED_PLAYER,
-                            )
-                            and settings.hosted_video_download_mode == "enforce"
-                        ):
-                            download_result = await download_hosted_video(
-                                video_hint.remote_url, video_hint.platform,
-                                event_id=event.id, draft_id=outcome.content_draft.id,
-                            )
+                    # Phase 23.1H media integration (docs/phase23_1h_text_image_canary_report.md
+                    # §"media architecture"): reuses the exact same candidate retrieval/ranking/
+                    # validation the legacy image-preview path already relies on
+                    # (get_editorial_image_candidates() only ever returns eligible_for_editorial=True
+                    # rows, ordered by rank) - no second discovery/ranking/validation pipeline. An
+                    # already-expired candidate row (`is_expired`, computed by the same function) is
+                    # treated exactly like "no candidate" - safe text-only fallback, never a crash.
+                    async with session_factory() as preview_session:
+                        image_candidates = await get_editorial_image_candidates(
+                            preview_session, content_draft_id=outcome.content_draft.id,
+                        )
+                        # Phase 23.1N Part J: a narrow, migration-free cross-event duplicate-image
+                        # guard - services/image_deduplication.py only ever deduplicates *within* one
+                        # event's own candidates, never across different stories. Exact
+                        # normalized-URL match only (no perceptual hashing), against the rank-1
+                        # candidate actually attached to each of the last few real drafts - never
+                        # blocks the whole send, only skips a candidate whose image was already used
+                        # on a different, unrelated recent post; falls through to the next-ranked
+                        # candidate, and to text-only (never a crash) if every candidate is a repeat.
+                        recently_used_urls = await get_recently_attached_image_source_urls(
+                            preview_session, exclude_news_event_id=event.id,
+                        )
+                    image_candidate_count = len(image_candidates)
+                    eligible_candidates: list[EditorialImageCandidate] = []
+                    for candidate in image_candidates:
+                        if candidate.is_expired:
+                            continue
+                        if candidate.source_url and sanitize_url(candidate.source_url) in recently_used_urls:
                             logger.info(
-                                "hosted_video_download_result",
-                                extra={
-                                    "draft_id": str(outcome.content_draft.id),
-                                    "outcome": download_result.outcome,
-                                    "platform": video_hint.platform.value,
-                                    "reason": download_result.reason,
-                                    "duration_seconds": download_result.duration_seconds,
-                                    "byte_size": download_result.byte_size,
-                                    "source_format": download_result.source_format,
-                                    "final_format": download_result.final_format,
-                                    "remuxed": download_result.remuxed,
-                                    "transcoded": download_result.transcoded,
-                                },
+                                "router_image_duplicate_skipped",
+                                extra={"draft_id": str(outcome.content_draft.id), "source_url": candidate.source_url},
                             )
-                            if download_result.video_bytes is not None:
-                                hosted_video_bytes = download_result.video_bytes
-                            else:
-                                video_hint = None
+                            continue
+                        eligible_candidates.append(candidate)
 
-                        # MEDIA-PROD-1: deterministic advertisement-keyword text gate - see
-                        # services/video_quality_gate.py's own module docstring for the full scope
-                        # decision (text-only; visual/frame-based detection is a disclosed future
-                        # extension, not silently skipped). Applied AFTER selection so a rejected
-                        # video degrades exactly like "no video hint resolved" for any other reason
-                        # - no new fallback path.
-                        if video_hint is not None and settings.video_quality_gate_mode != "off":
-                            video_quality_assessment = assess_video_text_signals(
-                                title=event.title, content=event.content,
-                            )
-                            logger.info(
-                                "video_quality_gate_assessed",
-                                extra={
-                                    "draft_id": str(outcome.content_draft.id),
-                                    "classification": video_quality_assessment.classification.value,
-                                    "matched_keywords": list(video_quality_assessment.matched_keywords),
-                                    "mode": settings.video_quality_gate_mode,
-                                },
-                            )
-                            if (
-                                video_quality_assessment.classification == VideoContentClassification.ADVERTISEMENT
-                                and settings.video_quality_gate_mode == "enforce"
-                            ):
-                                video_hint = None
-                    plan = build_rich_media_plan(
-                        top_candidates, video_hint, caption=html, hosted_video_bytes=hosted_video_bytes,
-                    )
-                    if len(plan.media_group_items) >= 2:
-                        # Phase 23.1Q media-quality corrective phase: the real [🔗 Источник] button
-                        # is attached to the group's first message AFTER sending (see the
-                        # send_media_group_to_editorial_destination() call below) via aiogram's own
-                        # edit_message_reply_markup() - a real Telegram Bot API mechanism for
-                        # exactly this "media groups can't carry reply_markup at send time"
-                        # limitation. The caption itself is therefore never modified - no in-
-                        # caption source link (an earlier, rejected approach), same `html` and
-                        # same CAPTION_SAFE_LIMIT budget as every other path.
-                        media_group_items = plan.media_group_items
-                        # Phase V2.25 Part B: carried forward so every photo in this real media
-                        # group (not only index 0) can later be independently re-resolved to its
-                        # own bytes and receive its own apply_master_news_branding() call.
-                        media_group_photo_candidates = plan.photo_candidates
-                        # R2.10-FINALIZATION-1: this branch never assigned `photo_input` at all -
-                        # unlike the single-item branch just below it (`photo_input = single_media
-                        # if isinstance(...)`), leaving `photo_input`/`source_bytes` at their
-                        # top-of-loop `None` default for every real >=2-item media group. Since
-                        # `source_bytes = photo_input.data if isinstance(photo_input, BufferedInputFile)
-                        # else None` (below) then always produced `None`, the PRIMARY image
-                        # (media_group_items[0], "media_group_index=-1") silently skipped
-                        # apply_master_news_branding() entirely (needs_render=False ->
-                        # brand_render_skipped) - and because the group's own items[1:] branding
-                        # loop further below is itself gated on `was_news_with_source_bytes` (only
-                        # ever True when THIS primary branding ran), every OTHER photo in the group
-                        # was skipped too, cascading from this one missing assignment. Mirrors the
-                        # single-item branch's own exact pattern: the first group item's own real
-                        # media/candidate becomes the primary `photo_input`/`resolved_photo_candidate`
-                        # this function already threads through unchanged from here on - no new
-                        # resolution path, no re-fetch, no behavior change to any other branch.
-                        primary_group_media = media_group_items[0].media
-                        photo_input = (
-                            primary_group_media if isinstance(primary_group_media, (str, BufferedInputFile)) else None
+                    # Phase V2.27 §6: the real accidental structural gap this phase closes - this
+                    # block used to require `eligible_candidates` (>=1 image) as a hard precondition,
+                    # so a NewsEvent with a valid video hint but zero usable images could never reach
+                    # build_rich_media_plan() at all. Now also entered whenever rich_media_mode is
+                    # "enforce" (a video MIGHT exist), even with zero images - `top_candidates` and
+                    # `video_hint` below both correctly degrade to "nothing" if neither is real, which
+                    # falls through to the exact same pre-existing text-only fallback as before.
+                    if is_v8 and html is not None and (eligible_candidates or settings.rich_media_mode == "enforce"):
+                        # Phase 23.1Q (Media Roadmap Recovery step 1): rank -> cap at
+                        # _MAX_ROUTER_IMAGES -> build_rich_media_plan() (Phase 19 M11/M12, reused
+                        # verbatim, never reimplemented). build_rich_media_plan() itself already
+                        # skips any candidate whose resolve_photo_input() fails and continues to the
+                        # next ranked one - a single broken image never kills the whole media
+                        # opportunity. <2 resolved photos degrades to the existing single-photo
+                        # variable below; 0 resolved photos leaves both empty (existing text-only
+                        # fallback, unchanged).
+                        top_candidates = (
+                            _select_top_ranked_image_candidates(eligible_candidates, limit=_MAX_ROUTER_IMAGES)
+                            if eligible_candidates else []
                         )
-                        if photo_input is not None and media_group_photo_candidates:
-                            resolved_photo_candidate = media_group_photo_candidates[0]
-                    elif len(plan.media_group_items) == 1 and not plan.photo_candidates:
-                        # Phase V2.27 §6: exactly one media item and it did NOT come from any
-                        # image candidate - it can only be the video. Routed as a real single-
-                        # video send (send_video_to_editorial_destination(), never send_photo) -
-                        # never assigned to photo_input, so it can never reach apply_master_news_
-                        # branding() (Phase V2.27 §5's own explicit "video must never pass through
-                        # image branding" requirement).
-                        video_only_media = plan.media_group_items[0].media
-                        video_only_input = video_only_media if isinstance(video_only_media, (str, BufferedInputFile)) else None
-                    elif plan.media_group_items:
-                        # A single resolved candidate - reuse the already-resolved photo directly
-                        # from the plan (never re-resolve) via the existing single-photo path
-                        # below. media is always str | BufferedInputFile here in practice (every
-                        # item in media_group_items was built by build_rich_media_plan() from
-                        # resolve_photo_input()'s own str | BufferedInputFile | None return type,
-                        # already filtered to non-None) - aiogram's own InputMediaPhoto.media
-                        # field is typed more broadly (str | InputFile) than this codebase's own
-                        # narrower photo_input convention, hence the isinstance narrowing.
-                        single_media = plan.media_group_items[0].media
-                        photo_input = single_media if isinstance(single_media, (str, BufferedInputFile)) else None
-                        if photo_input is not None:
-                            resolved_photo_candidate = plan.fallback_single_photo
-                elif eligible_candidates:
-                    # Legacy (V4/V6/V7) router-mode output - byte-identical to this branch's own
-                    # pre-Phase-23.1Q behavior (never used by any real canary; V8-family output is
-                    # the only shape any live send has ever produced), untouched by this phase.
-                    photo_input = resolve_photo_input(eligible_candidates[0])
-                    if photo_input is not None:
-                        resolved_photo_candidate = eligible_candidates[0]
-
-                # NINJA PULSE Visual System v1 (services/presentation_director.py,
-                # services/brand_renderer.py). Gated entirely on presentation_director_mode -
-                # "off" (the default) skips this block completely, leaving every line above/below
-                # byte-identical to pre-Visual-System behavior. "shadow" computes and logs the
-                # decision only, never changes what is sent. Only "enforce" changes the keyboard/
-                # image/caption actually delivered - and even then, every rendering step fails
-                # safe to the original keyboard/media/text (spec §29).
-                if settings.presentation_director_mode != "off":
-                    async with session_factory() as presentation_session:
-                        research_facts, presentation_score = await _fetch_router_presentation_signals(
-                            presentation_session, event.id,
-                        )
-                    research_facts_for_shadow = research_facts
-                    presentation_decision = decide_presentation(
-                        title=event.title, content=event.content,
-                        copywriting_output=outcome.copywriting_output,
-                        treatment=treatment_decision.treatment,
-                        scoring_score=presentation_score,
-                        research_facts=research_facts,
-                        quote_text=quote_text, quote_speaker=quote_speaker,
-                        fallback_category=event.category,
-                        breaking_count_this_cycle=result.presentation_breaking_sent,
-                        breaking_max_per_cycle=settings.presentation_breaking_max_per_cycle,
-                        breaking_enabled=settings.presentation_breaking_enabled,
-                    )
-                    # TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1: captured before the
-                    # pre-existing "Fail-safe (spec S29)" DATA/QUOTE/BREAKING-render-failure
-                    # branch (below) may demote presentation_decision.presentation_type to
-                    # "NEWS" - used only as a diagnostic label on the HOLD path so an audit can
-                    # still see which presentation format actually failed to render, without
-                    # changing the demotion itself (that fail-safe's own send-path behavior is
-                    # unmodified by this phase).
-                    original_presentation_type_for_hold = presentation_decision.presentation_type
-                    logger.info(
-                        "presentation_decision",
-                        extra={
-                            "draft_id": str(outcome.content_draft.id),
-                            "presentation_type": presentation_decision.presentation_type,
-                            "presentation_category": presentation_decision.category,
-                            "presentation_ai_used": outcome.copywriting_output.get("viral_potential") is not None,
-                            "branding_strength": presentation_decision.branding_strength,
-                            "caption_position": presentation_decision.caption_position,
-                            "reason": presentation_decision.reason,
-                        },
-                    )
-
-                    # NINJA Social Intelligence Foundation, Telegram Directors Phase 2 §9-11:
-                    # Channel Director shadow evaluation. Flag-gated (default False,
-                    # run_channel_director_shadow() itself no-ops when disabled) and wrapped in its
-                    # own try/except - a bug here can never affect the real presentation/publish
-                    # decision above, which is already fully computed by this point. Reuses
-                    # `presentation_score` already fetched for presentation_decision rather than
-                    # issuing a second query; skips entirely when no real score exists rather than
-                    # fabricating a news_importance value from nothing.
-                    if presentation_score is not None:
-                        try:
-                            async with session_factory() as channel_director_session:
-                                await run_channel_director_shadow(
-                                    channel_director_session,
-                                    news_importance=presentation_score / 100.0,
-                                    now=datetime.now(timezone.utc),
-                                )
-                        except Exception:
-                            logger.warning("telegram_channel_director_shadow failed (shadow only, non-fatal)", exc_info=True)
-
-                    if settings.presentation_director_mode == "enforce":
-                        # PRESENTATION RECOVERY (2026-09-02): the prior Phase V2.10N behavior here
-                        # unconditionally overwrote `keyboard` with the legacy subscribe/CTA
-                        # button for every non-NEWS presentation_type, discarding the meme button
-                        # in the same step - the confirmed root cause of both the unwanted-
-                        # subscribe-button and missing-meme-button production symptoms. Removed
-                        # outright (not merely re-gated) so the subscribe button is structurally
-                        # unreachable regardless of this flag's value. `keyboard` was already set
-                        # to the canonical source+meme build above and needs no per-type branch -
-                        # NEWS/BREAKING/DATA/QUOTE now all keep that same keyboard unchanged.
-
-                        if settings.pulse_brand_enabled:
-                            editorial_code = build_editorial_code(outcome.task_id)
-                            source_bytes = photo_input.data if isinstance(photo_input, BufferedInputFile) else None
-
-                            # Phase V2.3 (services/editorial_recomposition.py) - NEWS presentation
-                            # only, per that phase's own explicit scope (never DATA/QUOTE/
-                            # BREAKING). A thin consumer of the existing ImageGenerationGateway;
-                            # never touches media selection/ranking/Story Memory - it only ever
-                            # transforms the already-selected source_bytes in place.
-                            # editorial_recomposition_mode defaults to "off", in which case
-                            # maybe_recompose() returns source_bytes completely unchanged with
-                            # zero gateway calls - byte-identical to pre-V2.3 behavior.
-                            #
-                            # Phase V2.5 §7: `source_bytes` above is None whenever photo_input
-                            # resolved to a cached Telegram file_id (str) rather than local bytes -
-                            # a real, previously-silent gap, since resolve_photo_input() prefers
-                            # the cached file_id whenever one exists. Telegram delivery
-                            # representation and recomposition source bytes are separate concerns
-                            # (the cached file_id remains exactly as useful for sending as before -
-                            # untouched below); recomposition gets its own independently-resolved
-                            # bytes for the exact same already-selected candidate, via the existing
-                            # storage abstraction (read_candidate_bytes()), never a new one.
-                            # Phase V2.7 §8: ORIGINAL_SOURCE is a first-class successful outcome,
-                            # never merely an error fallback - a candidate whose own already-
-                            # computed warnings flag logo/banner/watermark/lower-third/branded-
-                            # screenshot risk skips the Gemini call entirely (same reused signal
-                            # services/media_ranking.py already derives from this exact field).
-                            recomposition_source_risk = assess_recomposition_source_risk(resolved_photo_candidate)
-                            if recomposition_source_risk is not None:
-                                logger.info(
-                                    "recomposition_skipped_source_risk",
-                                    extra={
-                                        "draft_id": str(outcome.content_draft.id),
-                                        "recomposition_source_risk_reason": recomposition_source_risk,
-                                    },
-                                )
-
-                            recomposition_result: RecompositionResult | None = None
-                            recomposition_source_bytes = resolve_recomposition_source_bytes(
-                                photo_input, resolved_photo_candidate,
-                            )
+                        # Phase 19 M10/M12 production wiring (docs/video_delivery_wiring_checkpoint.md):
+                        # video attachment is opt-in via rich_media_mode - "off"/"shadow" (the current
+                        # defaults) skip the lookup entirely and stay byte-identical to the pre-wiring
+                        # image-only behavior below. "No candidate" and "candidate fails to convert"
+                        # both leave video_hint as None, which build_rich_media_plan() (unmodified)
+                        # already treats as "no video" - never a crash, never a blocked image send.
+                        video_hint = None
+                        hosted_video_bytes: bytes | None = None
+                        if settings.rich_media_mode == "enforce":
+                            async with session_factory() as video_session:
+                                # Phase V2.27A: no longer limit=1 - multiple platform tiers may be
+                                # persisted for the same event (DIRECT_HOSTED, YOUTUBE/VIMEO,
+                                # EMBEDDED_PLAYER), and select_best_video_candidate() below needs to
+                                # see all of them to apply the real DIRECT_HOSTED > YOUTUBE/VIMEO >
+                                # EMBEDDED_PLAYER resolution order rather than just whichever one was
+                                # persisted first.
+                                video_candidates = await get_video_candidates_for_event(video_session, event.id)
+                            best_video_candidate = select_best_video_candidate(video_candidates)
+                            if best_video_candidate is not None:
+                                video_hint = to_native_video_hint(best_video_candidate)
+                            # Phase V2.27/V2.27A: a YOUTUBE/VIMEO/EMBEDDED_PLAYER hint previously
+                            # always became a plain caption link (YOUTUBE/VIMEO) or was discarded
+                            # entirely (EMBEDDED_PLAYER did not exist before V2.27A) - see
+                            # build_rich_media_plan()'s own hosted_platform_link docstring.
+                            # hosted_video_download_mode="enforce" attempts a real, bounded
+                            # server-side download instead - on ANY failure the hint is dropped
+                            # entirely (video_hint = None) rather than falling back to the
+                            # caption-link behavior (Phase V2.27 §4's own explicit instruction: no
+                            # raw-link fallback once native delivery is opted into).
                             if (
-                                presentation_decision.presentation_type == PRESENTATION_NEWS
-                                and recomposition_source_bytes is not None
-                                and recomposition_source_risk is None
-                            ):
-                                recomposition_result = await maybe_recompose(source_image_bytes=recomposition_source_bytes)
-                                logger.info(
-                                    "editorial_recomposition_evaluated",
-                                    extra={
-                                        "draft_id": str(outcome.content_draft.id),
-                                        "recomposition_mode": recomposition_result.mode,
-                                        "recomposition_eligible": recomposition_result.eligibility.eligible,
-                                        "recomposition_eligibility_reason": recomposition_result.eligibility.reason,
-                                        "recomposition_used": recomposition_result.used_recomposed_image,
-                                        "recomposition_provider": recomposition_result.provider,
-                                        "recomposition_model": recomposition_result.model,
-                                        "recomposition_source_sha256": recomposition_result.source_sha256,
-                                        "recomposition_result_sha256": recomposition_result.result_sha256,
-                                        "recomposition_fallback_reason": recomposition_result.fallback_reason,
-                                        "recomposition_latency_ms": (
-                                            round(recomposition_result.latency_ms, 1)
-                                            if recomposition_result.latency_ms is not None else None
-                                        ),
-                                        "recomposition_request_id": recomposition_result.request_id,
-                                        "recomposition_input_tokens": recomposition_result.input_tokens,
-                                        "recomposition_output_tokens": recomposition_result.output_tokens,
-                                        "recomposition_units": recomposition_result.units,
-                                        "recomposition_unit_type": recomposition_result.unit_type,
-                                        "recomposition_bytes_source": (
-                                            "local_buffered_input" if source_bytes is not None
-                                            else "read_candidate_bytes_independent_of_cached_file_id"
-                                        ),
-                                    },
+                                video_hint is not None
+                                and video_hint.platform in (
+                                    VideoPlatform.YOUTUBE, VideoPlatform.VIMEO, VideoPlatform.EMBEDDED_PLAYER,
                                 )
-                                # Only overwrite source_bytes when a real recomposition actually
-                                # happened - the pre-existing "no local bytes -> skip branding"
-                                # behavior for a cached-file_id NEWS candidate that recomposition
-                                # did NOT touch (mode off/ineligible/failed) stays byte-identical
-                                # to before this phase; recomposition_source_bytes is a separate,
-                                # local variable never written back into source_bytes on its own.
-                                if recomposition_result.used_recomposed_image:
-                                    source_bytes = recomposition_result.image_bytes
-
-                            # Phase V2.16: MASTER NEWS branding must still receive the already-
-                            # selected candidate's real original bytes when photo_input resolved to
-                            # a cached Telegram file_id and Gemini did not produce a new image
-                            # (skipped/ineligible/failed/off, or the source-risk gate above skipped
-                            # recomposition entirely) - recomposition_source_bytes already resolved
-                            # them above via the exact same storage read, no new fetch/call here.
-                            # ORIGINAL_SOURCE remains a first-class result (Phase V2.7 §8/V2.10H) -
-                            # it must not be silently demoted to NO_OVERLAY merely because the
-                            # cached-file_id path has no BufferedInputFile bytes of its own.
-                            if (
-                                presentation_decision.presentation_type == PRESENTATION_NEWS
-                                and source_bytes is None
-                                and recomposition_source_bytes is not None
+                                and settings.hosted_video_download_mode == "enforce"
                             ):
-                                source_bytes = recomposition_source_bytes
-
-                            needs_render = presentation_decision.presentation_type in (
-                                PRESENTATION_DATA, PRESENTATION_QUOTE, PRESENTATION_BREAKING,
-                            ) or source_bytes is not None
-                            if not needs_render:
-                                # Pre-commit correction ("cached file_id branding - measure, do
-                                # not redesign"): a NEWS presentation with no local image bytes
-                                # (photo_input is a cached Telegram file_id string, or no photo
-                                # was resolved at all) has nothing for the Pillow renderer to
-                                # composite onto - branding is skipped, never blocking the send.
-                                # Previously this path was silent; this is the one observability
-                                # gap the pre-commit review found and closed - no behavior change.
-                                skip_reason = (
-                                    "cached_file_id_no_local_bytes" if isinstance(photo_input, str)
-                                    else "no_source_media"
+                                download_result = await download_hosted_video(
+                                    video_hint.remote_url, video_hint.platform,
+                                    event_id=event.id, draft_id=outcome.content_draft.id,
                                 )
                                 logger.info(
-                                    "brand_render_skipped",
+                                    "hosted_video_download_result",
                                     extra={
                                         "draft_id": str(outcome.content_draft.id),
-                                        "presentation_type": presentation_decision.presentation_type,
-                                        "brand_applied": False,
-                                        "brand_skip_reason": skip_reason,
-                                        "news_branding_status": (
-                                            NEWS_BRANDING_NO_SOURCE_BYTES
-                                            if presentation_decision.presentation_type == PRESENTATION_NEWS
-                                            else None
-                                        ),
+                                        "outcome": download_result.outcome,
+                                        "platform": video_hint.platform.value,
+                                        "reason": download_result.reason,
+                                        "duration_seconds": download_result.duration_seconds,
+                                        "byte_size": download_result.byte_size,
+                                        "source_format": download_result.source_format,
+                                        "final_format": download_result.final_format,
+                                        "remuxed": download_result.remuxed,
+                                        "transcoded": download_result.transcoded,
                                     },
                                 )
-                            if needs_render:
-                                # Phase V2.10H: the locked MASTER NEWS visual contract
-                                # (services.nnj_master_news_overlay) is now the production
-                                # branding path for every NEWS image with real source bytes -
-                                # whether Gemini successfully recomposed it or not. Supersedes
-                                # Phase V2.9's Candidate C path (services.nnj_adaptive_overlay,
-                                # apply_adaptive_nnj_branding) - that module and its locked asset
-                                # remain in the repository as historical/fallback evidence, never
-                                # called from this branch anymore. ORIGINAL_SOURCE is a
-                                # first-class result (Phase V2.7 §8/V2.8 §6/V2.9 §4/V2.10H's own
-                                # explicit product decision) - it must never be silently demoted
-                                # merely because recomposition did not run. Every other case
-                                # (DATA/QUOTE/BREAKING) keeps using render_branded_media()
-                                # completely unchanged - never duplicated, never touched here.
-                                # Phase V2.25 Part B: set True below, before any later DATA/QUOTE/
-                                # BREAKING-render-failure demotion can reassign presentation_decision
-                                # to NEWS - the media-group branding loop further below must only
-                                # ever run for a post that was ALREADY NEWS here (media_group_items[0]
-                                # already went through apply_master_news_branding() above), never
-                                # for a demoted post whose primary image never received it at all.
-                                # (Kept as a separate flag, not re-derived from presentation_decision/
-                                # source_bytes at the loop's own site below, specifically so mypy's
-                                # narrowing of `source_bytes: bytes | None` on the `if` condition
-                                # immediately below is preserved unchanged.)
-                                was_news_with_source_bytes = False
-                                if presentation_decision.presentation_type == PRESENTATION_NEWS and source_bytes is not None:
-                                    was_news_with_source_bytes = True
-                                    started_adaptive_branding = time.monotonic()
-                                    # Phase V2.25 Part B: the one explicit status this NEWS send
-                                    # will end up recording - assigned in every branch below
-                                    # (success or exception), never left unset, so downstream
-                                    # logging always has a real value instead of an ad hoc re-
-                                    # derivation of render_result.success/template_version.
-                                    news_branding_status: str = NEWS_BRANDING_ORIGINAL_SOURCE_FAILURE
-                                    try:
-                                        # Phase V2.10I §7: `recomposition_source_risk` (assigned
-                                        # above, always set whenever this pulse_brand_enabled
-                                        # block runs) is a real, already-computed, WHOLE-IMAGE
-                                        # signal (EditorialImageCandidate.warnings via
-                                        # assess_recomposition_source_risk()) - it cannot say
-                                        # WHERE on the image the risk is, only that the image as a
-                                        # whole carries a flagged logo/banner/watermark/lower-
-                                        # third/branded-screenshot warning. Rather than pretending
-                                        # it supplies coordinates, it vetoes only the LOWER
-                                        # SIGNATURE (the larger, harder-to-earn component) - the
-                                        # UPPER MARK's own independent, spatial, pixel-based
-                                        # evaluation is unaffected.
-                                        branded_bytes, master_decision = apply_master_news_branding(
-                                            source_bytes, disable_lower_signature=recomposition_source_risk is not None,
-                                        )
-                                        news_branding_status = master_decision.news_branding_status
-                                        render_result = RenderResult(
-                                            success=True, image_bytes=branded_bytes,
-                                            template_version=f"master_news_v1:{master_decision.degradation_mode}",
-                                            fallback_reason=None,
-                                            duration_ms=(time.monotonic() - started_adaptive_branding) * 1000,
-                                        )
-                                        # Phase V2.10H telemetry - never logs raw image bytes,
-                                        # only the decision's own structured provenance fields.
-                                        # Upper mark and lower signature are logged independently
-                                        # (they are independent components - Phase V2.10H §3).
-                                        logger.info(
-                                            "master_news_branding_applied",
-                                            extra={
-                                                "draft_id": str(outcome.content_draft.id),
-                                                "visual_path": (
-                                                    "RECOMPOSE"
-                                                    if recomposition_result is not None and recomposition_result.used_recomposed_image
-                                                    else "ORIGINAL_SOURCE"
-                                                ),
-                                                "degradation_mode": master_decision.degradation_mode,
-                                                "news_branding_status": news_branding_status,
-                                                "upper_mark_placement": master_decision.upper_mark.placement.value,
-                                                "upper_mark_rejected_candidate_count": len(master_decision.upper_mark.attempts),
-                                                "lower_signature_placement": master_decision.lower_signature.placement.value,
-                                                "lower_signature_rejected_candidate_count": len(master_decision.lower_signature.attempts),
-                                                "lower_signature_disabled_reason": master_decision.lower_signature.disabled_reason,
-                                            },
-                                        )
-                                    except Exception as exc:  # noqa: BLE001 - same fail-safe boundary
-                                        # render_branded_media() itself establishes (spec §29):
-                                        # never let a rendering failure block the send.
-                                        news_branding_status = NEWS_BRANDING_ORIGINAL_SOURCE_FAILURE
-                                        render_result = RenderResult(
-                                            success=False, image_bytes=None, template_version="master_news_v1",
-                                            fallback_reason=str(exc),
-                                            duration_ms=(time.monotonic() - started_adaptive_branding) * 1000,
-                                        )
+                                if download_result.video_bytes is not None:
+                                    hosted_video_bytes = download_result.video_bytes
                                 else:
-                                    # DIRECTOR-CONTROL-PLANE-1 §23-26: classify the source before
-                                    # DATA renders - the real Kirin 9050 Pro regression fix. Never
-                                    # affects BREAKING/QUOTE/NEWS (data_presentation_mode is only
-                                    # ever read by render_data_card()'s own DATA branch); a source
-                                    # already classified EXISTING_INFOGRAPHIC gets the source-
-                                    # preserving treatment instead of a second competing stat card.
-                                    data_presentation_mode = select_data_presentation_mode(
-                                        classify_source_presentation(
-                                            resolved_photo_candidate.warnings if resolved_photo_candidate is not None else None
-                                        )
-                                    )
-                                    render_result = render_branded_media(
-                                        presentation_type=presentation_decision.presentation_type,
-                                        source_image_bytes=source_bytes,
-                                        category=presentation_decision.category,
-                                        editorial_code=editorial_code,
-                                        branding_strength=presentation_decision.branding_strength,
-                                        data_candidate=presentation_decision.data_candidate,
-                                        quote_candidate=presentation_decision.quote_candidate,
-                                        data_presentation_mode=data_presentation_mode,
-                                    )
+                                    video_hint = None
+
+                            # MEDIA-PROD-1: deterministic advertisement-keyword text gate - see
+                            # services/video_quality_gate.py's own module docstring for the full scope
+                            # decision (text-only; visual/frame-based detection is a disclosed future
+                            # extension, not silently skipped). Applied AFTER selection so a rejected
+                            # video degrades exactly like "no video hint resolved" for any other reason
+                            # - no new fallback path.
+                            if video_hint is not None and settings.video_quality_gate_mode != "off":
+                                video_quality_assessment = assess_video_text_signals(
+                                    title=event.title, content=event.content,
+                                )
                                 logger.info(
-                                    "brand_render_attempted",
+                                    "video_quality_gate_assessed",
                                     extra={
                                         "draft_id": str(outcome.content_draft.id),
-                                        "presentation_type": presentation_decision.presentation_type,
-                                        "brand_applied": render_result.success,
-                                        "brand_skip_reason": None if render_result.success else render_result.fallback_reason,
-                                        "brand_render_success": render_result.success,
-                                        "brand_render_duration_ms": round(render_result.duration_ms, 1),
-                                        "brand_render_fallback": render_result.fallback_reason,
-                                        "brand_template_version": render_result.template_version,
-                                        "news_branding_status": (
-                                            news_branding_status
-                                            if presentation_decision.presentation_type == PRESENTATION_NEWS
-                                            else None
-                                        ),
+                                        "classification": video_quality_assessment.classification.value,
+                                        "matched_keywords": list(video_quality_assessment.matched_keywords),
+                                        "mode": settings.video_quality_gate_mode,
                                     },
                                 )
-                                if render_result.success and render_result.image_bytes is not None:
-                                    branded_file = BufferedInputFile(render_result.image_bytes, filename="pulse.jpg")
-                                    photo_input = branded_file
-                                    if media_group_items:
-                                        media_group_items = [
-                                            media_group_items[0].model_copy(update={"media": branded_file}),
-                                            *media_group_items[1:],
-                                        ]
-                                elif presentation_decision.presentation_type in (
-                                    PRESENTATION_DATA, PRESENTATION_QUOTE, PRESENTATION_BREAKING,
+                                if (
+                                    video_quality_assessment.classification == VideoContentClassification.ADVERTISEMENT
+                                    and settings.video_quality_gate_mode == "enforce"
                                 ):
-                                    # Fail-safe (spec §29): a DATA/QUOTE/BREAKING card that could
-                                    # not be rendered has no other valid visual form - demote to
-                                    # ordinary NEWS delivery (whatever photo/text was already
-                                    # resolved above), never block the send itself.
-                                    presentation_decision = presentation_decision.__class__(
-                                        presentation_type="NEWS", category=presentation_decision.category,
-                                        caption_position="BELOW", branding_strength="MINIMAL",
-                                        brand_media=False, visual_priority=1, data_candidate=None,
-                                        quote_candidate=None, reason="brand_render_failed_demoted_to_news",
+                                    video_hint = None
+                        plan = build_rich_media_plan(
+                            top_candidates, video_hint, caption=html, hosted_video_bytes=hosted_video_bytes,
+                        )
+                        if len(plan.media_group_items) >= 2:
+                            # Phase 23.1Q media-quality corrective phase: the real [🔗 Источник] button
+                            # is attached to the group's first message AFTER sending (see the
+                            # send_media_group_to_editorial_destination() call below) via aiogram's own
+                            # edit_message_reply_markup() - a real Telegram Bot API mechanism for
+                            # exactly this "media groups can't carry reply_markup at send time"
+                            # limitation. The caption itself is therefore never modified - no in-
+                            # caption source link (an earlier, rejected approach), same `html` and
+                            # same CAPTION_SAFE_LIMIT budget as every other path.
+                            media_group_items = plan.media_group_items
+                            # Phase V2.25 Part B: carried forward so every photo in this real media
+                            # group (not only index 0) can later be independently re-resolved to its
+                            # own bytes and receive its own apply_master_news_branding() call.
+                            media_group_photo_candidates = plan.photo_candidates
+                            # R2.10-FINALIZATION-1: this branch never assigned `photo_input` at all -
+                            # unlike the single-item branch just below it (`photo_input = single_media
+                            # if isinstance(...)`), leaving `photo_input`/`source_bytes` at their
+                            # top-of-loop `None` default for every real >=2-item media group. Since
+                            # `source_bytes = photo_input.data if isinstance(photo_input, BufferedInputFile)
+                            # else None` (below) then always produced `None`, the PRIMARY image
+                            # (media_group_items[0], "media_group_index=-1") silently skipped
+                            # apply_master_news_branding() entirely (needs_render=False ->
+                            # brand_render_skipped) - and because the group's own items[1:] branding
+                            # loop further below is itself gated on `was_news_with_source_bytes` (only
+                            # ever True when THIS primary branding ran), every OTHER photo in the group
+                            # was skipped too, cascading from this one missing assignment. Mirrors the
+                            # single-item branch's own exact pattern: the first group item's own real
+                            # media/candidate becomes the primary `photo_input`/`resolved_photo_candidate`
+                            # this function already threads through unchanged from here on - no new
+                            # resolution path, no re-fetch, no behavior change to any other branch.
+                            primary_group_media = media_group_items[0].media
+                            photo_input = (
+                                primary_group_media if isinstance(primary_group_media, (str, BufferedInputFile)) else None
+                            )
+                            if photo_input is not None and media_group_photo_candidates:
+                                resolved_photo_candidate = media_group_photo_candidates[0]
+                        elif len(plan.media_group_items) == 1 and not plan.photo_candidates:
+                            # Phase V2.27 §6: exactly one media item and it did NOT come from any
+                            # image candidate - it can only be the video. Routed as a real single-
+                            # video send (send_video_to_editorial_destination(), never send_photo) -
+                            # never assigned to photo_input, so it can never reach apply_master_news_
+                            # branding() (Phase V2.27 §5's own explicit "video must never pass through
+                            # image branding" requirement).
+                            video_only_media = plan.media_group_items[0].media
+                            video_only_input = video_only_media if isinstance(video_only_media, (str, BufferedInputFile)) else None
+                        elif plan.media_group_items:
+                            # A single resolved candidate - reuse the already-resolved photo directly
+                            # from the plan (never re-resolve) via the existing single-photo path
+                            # below. media is always str | BufferedInputFile here in practice (every
+                            # item in media_group_items was built by build_rich_media_plan() from
+                            # resolve_photo_input()'s own str | BufferedInputFile | None return type,
+                            # already filtered to non-None) - aiogram's own InputMediaPhoto.media
+                            # field is typed more broadly (str | InputFile) than this codebase's own
+                            # narrower photo_input convention, hence the isinstance narrowing.
+                            single_media = plan.media_group_items[0].media
+                            photo_input = single_media if isinstance(single_media, (str, BufferedInputFile)) else None
+                            if photo_input is not None:
+                                resolved_photo_candidate = plan.fallback_single_photo
+                    elif eligible_candidates:
+                        # Legacy (V4/V6/V7) router-mode output - byte-identical to this branch's own
+                        # pre-Phase-23.1Q behavior (never used by any real canary; V8-family output is
+                        # the only shape any live send has ever produced), untouched by this phase.
+                        photo_input = resolve_photo_input(eligible_candidates[0])
+                        if photo_input is not None:
+                            resolved_photo_candidate = eligible_candidates[0]
+
+                    # NINJA PULSE Visual System v1 (services/presentation_director.py,
+                    # services/brand_renderer.py). Gated entirely on presentation_director_mode -
+                    # "off" (the default) skips this block completely, leaving every line above/below
+                    # byte-identical to pre-Visual-System behavior. "shadow" computes and logs the
+                    # decision only, never changes what is sent. Only "enforce" changes the keyboard/
+                    # image/caption actually delivered - and even then, every rendering step fails
+                    # safe to the original keyboard/media/text (spec §29).
+                    if settings.presentation_director_mode != "off":
+                        async with session_factory() as presentation_session:
+                            research_facts, presentation_score = await _fetch_router_presentation_signals(
+                                presentation_session, event.id,
+                            )
+                        presentation_decision = decide_presentation(
+                            title=event.title, content=event.content,
+                            copywriting_output=outcome.copywriting_output,
+                            treatment=treatment_decision.treatment,
+                            scoring_score=presentation_score,
+                            research_facts=research_facts,
+                            quote_text=quote_text, quote_speaker=quote_speaker,
+                            fallback_category=event.category,
+                            breaking_count_this_cycle=result.presentation_breaking_sent,
+                            breaking_max_per_cycle=settings.presentation_breaking_max_per_cycle,
+                            breaking_enabled=settings.presentation_breaking_enabled,
+                        )
+                        # TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1: captured before the
+                        # pre-existing "Fail-safe (spec S29)" DATA/QUOTE/BREAKING-render-failure
+                        # branch (below) may demote presentation_decision.presentation_type to
+                        # "NEWS" - used only as a diagnostic label on the HOLD path so an audit can
+                        # still see which presentation format actually failed to render, without
+                        # changing the demotion itself (that fail-safe's own send-path behavior is
+                        # unmodified by this phase).
+                        original_presentation_type_for_hold = presentation_decision.presentation_type
+                        logger.info(
+                            "presentation_decision",
+                            extra={
+                                "draft_id": str(outcome.content_draft.id),
+                                "presentation_type": presentation_decision.presentation_type,
+                                "presentation_category": presentation_decision.category,
+                                "presentation_ai_used": outcome.copywriting_output.get("viral_potential") is not None,
+                                "branding_strength": presentation_decision.branding_strength,
+                                "caption_position": presentation_decision.caption_position,
+                                "reason": presentation_decision.reason,
+                            },
+                        )
+
+                        # NINJA Social Intelligence Foundation, Telegram Directors Phase 2 §9-11:
+                        # Channel Director shadow evaluation. Flag-gated (default False,
+                        # run_channel_director_shadow() itself no-ops when disabled) and wrapped in its
+                        # own try/except - a bug here can never affect the real presentation/publish
+                        # decision above, which is already fully computed by this point. Reuses
+                        # `presentation_score` already fetched for presentation_decision rather than
+                        # issuing a second query; skips entirely when no real score exists rather than
+                        # fabricating a news_importance value from nothing.
+                        if presentation_score is not None:
+                            try:
+                                async with session_factory() as channel_director_session:
+                                    await run_channel_director_shadow(
+                                        channel_director_session,
+                                        news_importance=presentation_score / 100.0,
+                                        now=datetime.now(timezone.utc),
+                                    )
+                            except Exception:
+                                logger.warning("telegram_channel_director_shadow failed (shadow only, non-fatal)", exc_info=True)
+
+                        if settings.presentation_director_mode == "enforce":
+                            # PRESENTATION RECOVERY (2026-09-02): the prior Phase V2.10N behavior here
+                            # unconditionally overwrote `keyboard` with the legacy subscribe/CTA
+                            # button for every non-NEWS presentation_type, discarding the meme button
+                            # in the same step - the confirmed root cause of both the unwanted-
+                            # subscribe-button and missing-meme-button production symptoms. Removed
+                            # outright (not merely re-gated) so the subscribe button is structurally
+                            # unreachable regardless of this flag's value. `keyboard` was already set
+                            # to the canonical source+meme build above and needs no per-type branch -
+                            # NEWS/BREAKING/DATA/QUOTE now all keep that same keyboard unchanged.
+
+                            if settings.pulse_brand_enabled:
+                                editorial_code = build_editorial_code(outcome.task_id)
+                                source_bytes = photo_input.data if isinstance(photo_input, BufferedInputFile) else None
+
+                                # Phase V2.3 (services/editorial_recomposition.py) - NEWS presentation
+                                # only, per that phase's own explicit scope (never DATA/QUOTE/
+                                # BREAKING). A thin consumer of the existing ImageGenerationGateway;
+                                # never touches media selection/ranking/Story Memory - it only ever
+                                # transforms the already-selected source_bytes in place.
+                                # editorial_recomposition_mode defaults to "off", in which case
+                                # maybe_recompose() returns source_bytes completely unchanged with
+                                # zero gateway calls - byte-identical to pre-V2.3 behavior.
+                                #
+                                # Phase V2.5 §7: `source_bytes` above is None whenever photo_input
+                                # resolved to a cached Telegram file_id (str) rather than local bytes -
+                                # a real, previously-silent gap, since resolve_photo_input() prefers
+                                # the cached file_id whenever one exists. Telegram delivery
+                                # representation and recomposition source bytes are separate concerns
+                                # (the cached file_id remains exactly as useful for sending as before -
+                                # untouched below); recomposition gets its own independently-resolved
+                                # bytes for the exact same already-selected candidate, via the existing
+                                # storage abstraction (read_candidate_bytes()), never a new one.
+                                # Phase V2.7 §8: ORIGINAL_SOURCE is a first-class successful outcome,
+                                # never merely an error fallback - a candidate whose own already-
+                                # computed warnings flag logo/banner/watermark/lower-third/branded-
+                                # screenshot risk skips the Gemini call entirely (same reused signal
+                                # services/media_ranking.py already derives from this exact field).
+                                recomposition_source_risk = assess_recomposition_source_risk(resolved_photo_candidate)
+                                if recomposition_source_risk is not None:
+                                    logger.info(
+                                        "recomposition_skipped_source_risk",
+                                        extra={
+                                            "draft_id": str(outcome.content_draft.id),
+                                            "recomposition_source_risk_reason": recomposition_source_risk,
+                                        },
                                     )
 
-                                # Phase V2.25 Part B (real accidental bypass fix): the block above
-                                # only ever brands media_group_items[0] - a real NEWS media-group
-                                # (album) send with 2+ resolved photos previously shipped every
-                                # OTHER photo in the group completely untouched by
-                                # apply_master_news_branding(), with no exception, no safety
-                                # rejection, and no diagnostic - a silent unbranded delivery this
-                                # phase's own rule ("if branding is safe, the final image MUST be
-                                # branded") forbids. Independently re-resolves and brands every
-                                # remaining photo using the SAME deterministic function and the
-                                # SAME per-image recomposition-source-risk gate the primary image
-                                # already receives above - never re-running Gemini recomposition
-                                # (out of this phase's scope; only the primary image, already
-                                # resolved earlier, may carry a recomposed image).
+                                recomposition_result: RecompositionResult | None = None
+                                recomposition_source_bytes = resolve_recomposition_source_bytes(
+                                    photo_input, resolved_photo_candidate,
+                                )
                                 if (
-                                    was_news_with_source_bytes
-                                    and len(media_group_photo_candidates) > 1
-                                    and media_group_items
+                                    presentation_decision.presentation_type == PRESENTATION_NEWS
+                                    and recomposition_source_bytes is not None
+                                    and recomposition_source_risk is None
                                 ):
-                                    rebuilt_group_items = [media_group_items[0]]
-                                    for group_idx in range(1, len(media_group_photo_candidates)):
-                                        group_item = media_group_items[group_idx]
-                                        group_candidate = media_group_photo_candidates[group_idx]
-                                        group_media = group_item.media
-                                        group_source_bytes = resolve_recomposition_source_bytes(
-                                            group_media if isinstance(group_media, (str, BufferedInputFile)) else None,
-                                            group_candidate,
-                                        )
-                                        if group_source_bytes is None:
-                                            logger.info(
-                                                "brand_render_skipped",
-                                                extra={
-                                                    "draft_id": str(outcome.content_draft.id),
-                                                    "presentation_type": presentation_decision.presentation_type,
-                                                    "media_group_index": group_idx,
-                                                    "brand_applied": False,
-                                                    "brand_skip_reason": "no_source_media",
-                                                    "news_branding_status": NEWS_BRANDING_NO_SOURCE_BYTES,
-                                                },
-                                            )
-                                            rebuilt_group_items.append(group_item)
-                                            continue
-                                        group_risk = assess_recomposition_source_risk(group_candidate)
+                                    recomposition_result = await maybe_recompose(source_image_bytes=recomposition_source_bytes)
+                                    logger.info(
+                                        "editorial_recomposition_evaluated",
+                                        extra={
+                                            "draft_id": str(outcome.content_draft.id),
+                                            "recomposition_mode": recomposition_result.mode,
+                                            "recomposition_eligible": recomposition_result.eligibility.eligible,
+                                            "recomposition_eligibility_reason": recomposition_result.eligibility.reason,
+                                            "recomposition_used": recomposition_result.used_recomposed_image,
+                                            "recomposition_provider": recomposition_result.provider,
+                                            "recomposition_model": recomposition_result.model,
+                                            "recomposition_source_sha256": recomposition_result.source_sha256,
+                                            "recomposition_result_sha256": recomposition_result.result_sha256,
+                                            "recomposition_fallback_reason": recomposition_result.fallback_reason,
+                                            "recomposition_latency_ms": (
+                                                round(recomposition_result.latency_ms, 1)
+                                                if recomposition_result.latency_ms is not None else None
+                                            ),
+                                            "recomposition_request_id": recomposition_result.request_id,
+                                            "recomposition_input_tokens": recomposition_result.input_tokens,
+                                            "recomposition_output_tokens": recomposition_result.output_tokens,
+                                            "recomposition_units": recomposition_result.units,
+                                            "recomposition_unit_type": recomposition_result.unit_type,
+                                            "recomposition_bytes_source": (
+                                                "local_buffered_input" if source_bytes is not None
+                                                else "read_candidate_bytes_independent_of_cached_file_id"
+                                            ),
+                                        },
+                                    )
+                                    # Only overwrite source_bytes when a real recomposition actually
+                                    # happened - the pre-existing "no local bytes -> skip branding"
+                                    # behavior for a cached-file_id NEWS candidate that recomposition
+                                    # did NOT touch (mode off/ineligible/failed) stays byte-identical
+                                    # to before this phase; recomposition_source_bytes is a separate,
+                                    # local variable never written back into source_bytes on its own.
+                                    if recomposition_result.used_recomposed_image:
+                                        source_bytes = recomposition_result.image_bytes
+
+                                # Phase V2.16: MASTER NEWS branding must still receive the already-
+                                # selected candidate's real original bytes when photo_input resolved to
+                                # a cached Telegram file_id and Gemini did not produce a new image
+                                # (skipped/ineligible/failed/off, or the source-risk gate above skipped
+                                # recomposition entirely) - recomposition_source_bytes already resolved
+                                # them above via the exact same storage read, no new fetch/call here.
+                                # ORIGINAL_SOURCE remains a first-class result (Phase V2.7 §8/V2.10H) -
+                                # it must not be silently demoted to NO_OVERLAY merely because the
+                                # cached-file_id path has no BufferedInputFile bytes of its own.
+                                if (
+                                    presentation_decision.presentation_type == PRESENTATION_NEWS
+                                    and source_bytes is None
+                                    and recomposition_source_bytes is not None
+                                ):
+                                    source_bytes = recomposition_source_bytes
+
+                                needs_render = presentation_decision.presentation_type in (
+                                    PRESENTATION_DATA, PRESENTATION_QUOTE, PRESENTATION_BREAKING,
+                                ) or source_bytes is not None
+                                if not needs_render:
+                                    # Pre-commit correction ("cached file_id branding - measure, do
+                                    # not redesign"): a NEWS presentation with no local image bytes
+                                    # (photo_input is a cached Telegram file_id string, or no photo
+                                    # was resolved at all) has nothing for the Pillow renderer to
+                                    # composite onto - branding is skipped, never blocking the send.
+                                    # Previously this path was silent; this is the one observability
+                                    # gap the pre-commit review found and closed - no behavior change.
+                                    skip_reason = (
+                                        "cached_file_id_no_local_bytes" if isinstance(photo_input, str)
+                                        else "no_source_media"
+                                    )
+                                    logger.info(
+                                        "brand_render_skipped",
+                                        extra={
+                                            "draft_id": str(outcome.content_draft.id),
+                                            "presentation_type": presentation_decision.presentation_type,
+                                            "brand_applied": False,
+                                            "brand_skip_reason": skip_reason,
+                                            "news_branding_status": (
+                                                NEWS_BRANDING_NO_SOURCE_BYTES
+                                                if presentation_decision.presentation_type == PRESENTATION_NEWS
+                                                else None
+                                            ),
+                                        },
+                                    )
+                                if needs_render:
+                                    # Phase V2.10H: the locked MASTER NEWS visual contract
+                                    # (services.nnj_master_news_overlay) is now the production
+                                    # branding path for every NEWS image with real source bytes -
+                                    # whether Gemini successfully recomposed it or not. Supersedes
+                                    # Phase V2.9's Candidate C path (services.nnj_adaptive_overlay,
+                                    # apply_adaptive_nnj_branding) - that module and its locked asset
+                                    # remain in the repository as historical/fallback evidence, never
+                                    # called from this branch anymore. ORIGINAL_SOURCE is a
+                                    # first-class result (Phase V2.7 §8/V2.8 §6/V2.9 §4/V2.10H's own
+                                    # explicit product decision) - it must never be silently demoted
+                                    # merely because recomposition did not run. Every other case
+                                    # (DATA/QUOTE/BREAKING) keeps using render_branded_media()
+                                    # completely unchanged - never duplicated, never touched here.
+                                    # Phase V2.25 Part B: set True below, before any later DATA/QUOTE/
+                                    # BREAKING-render-failure demotion can reassign presentation_decision
+                                    # to NEWS - the media-group branding loop further below must only
+                                    # ever run for a post that was ALREADY NEWS here (media_group_items[0]
+                                    # already went through apply_master_news_branding() above), never
+                                    # for a demoted post whose primary image never received it at all.
+                                    # (Kept as a separate flag, not re-derived from presentation_decision/
+                                    # source_bytes at the loop's own site below, specifically so mypy's
+                                    # narrowing of `source_bytes: bytes | None` on the `if` condition
+                                    # immediately below is preserved unchanged.)
+                                    was_news_with_source_bytes = False
+                                    if presentation_decision.presentation_type == PRESENTATION_NEWS and source_bytes is not None:
+                                        was_news_with_source_bytes = True
+                                        started_adaptive_branding = time.monotonic()
+                                        # Phase V2.25 Part B: the one explicit status this NEWS send
+                                        # will end up recording - assigned in every branch below
+                                        # (success or exception), never left unset, so downstream
+                                        # logging always has a real value instead of an ad hoc re-
+                                        # derivation of render_result.success/template_version.
+                                        news_branding_status: str = NEWS_BRANDING_ORIGINAL_SOURCE_FAILURE
                                         try:
-                                            group_branded_bytes, group_decision = apply_master_news_branding(
-                                                group_source_bytes, disable_lower_signature=group_risk is not None,
+                                            # Phase V2.10I §7: `recomposition_source_risk` (assigned
+                                            # above, always set whenever this pulse_brand_enabled
+                                            # block runs) is a real, already-computed, WHOLE-IMAGE
+                                            # signal (EditorialImageCandidate.warnings via
+                                            # assess_recomposition_source_risk()) - it cannot say
+                                            # WHERE on the image the risk is, only that the image as a
+                                            # whole carries a flagged logo/banner/watermark/lower-
+                                            # third/branded-screenshot warning. Rather than pretending
+                                            # it supplies coordinates, it vetoes only the LOWER
+                                            # SIGNATURE (the larger, harder-to-earn component) - the
+                                            # UPPER MARK's own independent, spatial, pixel-based
+                                            # evaluation is unaffected.
+                                            branded_bytes, master_decision = apply_master_news_branding(
+                                                source_bytes, disable_lower_signature=recomposition_source_risk is not None,
                                             )
-                                            group_branded_file = BufferedInputFile(group_branded_bytes, filename="pulse.jpg")
-                                            rebuilt_group_items.append(group_item.model_copy(update={"media": group_branded_file}))
+                                            news_branding_status = master_decision.news_branding_status
+                                            render_result = RenderResult(
+                                                success=True, image_bytes=branded_bytes,
+                                                template_version=f"master_news_v1:{master_decision.degradation_mode}",
+                                                fallback_reason=None,
+                                                duration_ms=(time.monotonic() - started_adaptive_branding) * 1000,
+                                            )
+                                            # Phase V2.10H telemetry - never logs raw image bytes,
+                                            # only the decision's own structured provenance fields.
+                                            # Upper mark and lower signature are logged independently
+                                            # (they are independent components - Phase V2.10H §3).
                                             logger.info(
                                                 "master_news_branding_applied",
                                                 extra={
                                                     "draft_id": str(outcome.content_draft.id),
-                                                    "media_group_index": group_idx,
-                                                    "visual_path": "ORIGINAL_SOURCE",
-                                                    "degradation_mode": group_decision.degradation_mode,
-                                                    "news_branding_status": group_decision.news_branding_status,
-                                                    "upper_mark_placement": group_decision.upper_mark.placement.value,
-                                                    "lower_signature_placement": group_decision.lower_signature.placement.value,
-                                                    "lower_signature_disabled_reason": group_decision.lower_signature.disabled_reason,
+                                                    "visual_path": (
+                                                        "RECOMPOSE"
+                                                        if recomposition_result is not None and recomposition_result.used_recomposed_image
+                                                        else "ORIGINAL_SOURCE"
+                                                    ),
+                                                    "degradation_mode": master_decision.degradation_mode,
+                                                    "news_branding_status": news_branding_status,
+                                                    "upper_mark_placement": master_decision.upper_mark.placement.value,
+                                                    "upper_mark_rejected_candidate_count": len(master_decision.upper_mark.attempts),
+                                                    "lower_signature_placement": master_decision.lower_signature.placement.value,
+                                                    "lower_signature_rejected_candidate_count": len(master_decision.lower_signature.attempts),
+                                                    "lower_signature_disabled_reason": master_decision.lower_signature.disabled_reason,
                                                 },
                                             )
-                                        except Exception as exc:  # noqa: BLE001 - same fail-safe boundary as the primary image
-                                            rebuilt_group_items.append(group_item)
-                                            logger.info(
-                                                "brand_render_attempted",
-                                                extra={
-                                                    "draft_id": str(outcome.content_draft.id),
-                                                    "presentation_type": presentation_decision.presentation_type,
-                                                    "media_group_index": group_idx,
-                                                    "brand_applied": False,
-                                                    "brand_skip_reason": str(exc),
-                                                    "news_branding_status": NEWS_BRANDING_ORIGINAL_SOURCE_FAILURE,
-                                                },
+                                        except Exception as exc:  # noqa: BLE001 - same fail-safe boundary
+                                            # render_branded_media() itself establishes (spec §29):
+                                            # never let a rendering failure block the send.
+                                            news_branding_status = NEWS_BRANDING_ORIGINAL_SOURCE_FAILURE
+                                            render_result = RenderResult(
+                                                success=False, image_bytes=None, template_version="master_news_v1",
+                                                fallback_reason=str(exc),
+                                                duration_ms=(time.monotonic() - started_adaptive_branding) * 1000,
                                             )
+                                    else:
+                                        # DIRECTOR-CONTROL-PLANE-1 §23-26: classify the source before
+                                        # DATA renders - the real Kirin 9050 Pro regression fix. Never
+                                        # affects BREAKING/QUOTE/NEWS (data_presentation_mode is only
+                                        # ever read by render_data_card()'s own DATA branch); a source
+                                        # already classified EXISTING_INFOGRAPHIC gets the source-
+                                        # preserving treatment instead of a second competing stat card.
+                                        data_presentation_mode = select_data_presentation_mode(
+                                            classify_source_presentation(
+                                                resolved_photo_candidate.warnings if resolved_photo_candidate is not None else None
+                                            )
+                                        )
+                                        render_result = render_branded_media(
+                                            presentation_type=presentation_decision.presentation_type,
+                                            source_image_bytes=source_bytes,
+                                            category=presentation_decision.category,
+                                            editorial_code=editorial_code,
+                                            branding_strength=presentation_decision.branding_strength,
+                                            data_candidate=presentation_decision.data_candidate,
+                                            quote_candidate=presentation_decision.quote_candidate,
+                                            data_presentation_mode=data_presentation_mode,
+                                        )
+                                    logger.info(
+                                        "brand_render_attempted",
+                                        extra={
+                                            "draft_id": str(outcome.content_draft.id),
+                                            "presentation_type": presentation_decision.presentation_type,
+                                            "brand_applied": render_result.success,
+                                            "brand_skip_reason": None if render_result.success else render_result.fallback_reason,
+                                            "brand_render_success": render_result.success,
+                                            "brand_render_duration_ms": round(render_result.duration_ms, 1),
+                                            "brand_render_fallback": render_result.fallback_reason,
+                                            "brand_template_version": render_result.template_version,
+                                            "news_branding_status": (
+                                                news_branding_status
+                                                if presentation_decision.presentation_type == PRESENTATION_NEWS
+                                                else None
+                                            ),
+                                        },
+                                    )
+                                    if render_result.success and render_result.image_bytes is not None:
+                                        branded_file = BufferedInputFile(render_result.image_bytes, filename="pulse.jpg")
+                                        photo_input = branded_file
+                                        if media_group_items:
+                                            media_group_items = [
+                                                media_group_items[0].model_copy(update={"media": branded_file}),
+                                                *media_group_items[1:],
+                                            ]
+                                    elif presentation_decision.presentation_type in (
+                                        PRESENTATION_DATA, PRESENTATION_QUOTE, PRESENTATION_BREAKING,
+                                    ):
+                                        # Fail-safe (spec §29): a DATA/QUOTE/BREAKING card that could
+                                        # not be rendered has no other valid visual form - demote to
+                                        # ordinary NEWS delivery (whatever photo/text was already
+                                        # resolved above), never block the send itself.
+                                        presentation_decision = presentation_decision.__class__(
+                                            presentation_type="NEWS", category=presentation_decision.category,
+                                            caption_position="BELOW", branding_strength="MINIMAL",
+                                            brand_media=False, visual_priority=1, data_candidate=None,
+                                            quote_candidate=None, reason="brand_render_failed_demoted_to_news",
+                                        )
+
+                                    # Phase V2.25 Part B (real accidental bypass fix): the block above
+                                    # only ever brands media_group_items[0] - a real NEWS media-group
+                                    # (album) send with 2+ resolved photos previously shipped every
+                                    # OTHER photo in the group completely untouched by
+                                    # apply_master_news_branding(), with no exception, no safety
+                                    # rejection, and no diagnostic - a silent unbranded delivery this
+                                    # phase's own rule ("if branding is safe, the final image MUST be
+                                    # branded") forbids. Independently re-resolves and brands every
+                                    # remaining photo using the SAME deterministic function and the
+                                    # SAME per-image recomposition-source-risk gate the primary image
+                                    # already receives above - never re-running Gemini recomposition
+                                    # (out of this phase's scope; only the primary image, already
+                                    # resolved earlier, may carry a recomposed image).
+                                    if (
+                                        was_news_with_source_bytes
+                                        and len(media_group_photo_candidates) > 1
+                                        and media_group_items
+                                    ):
+                                        rebuilt_group_items = [media_group_items[0]]
+                                        for group_idx in range(1, len(media_group_photo_candidates)):
+                                            group_item = media_group_items[group_idx]
+                                            group_candidate = media_group_photo_candidates[group_idx]
+                                            group_media = group_item.media
+                                            group_source_bytes = resolve_recomposition_source_bytes(
+                                                group_media if isinstance(group_media, (str, BufferedInputFile)) else None,
+                                                group_candidate,
+                                            )
+                                            if group_source_bytes is None:
+                                                logger.info(
+                                                    "brand_render_skipped",
+                                                    extra={
+                                                        "draft_id": str(outcome.content_draft.id),
+                                                        "presentation_type": presentation_decision.presentation_type,
+                                                        "media_group_index": group_idx,
+                                                        "brand_applied": False,
+                                                        "brand_skip_reason": "no_source_media",
+                                                        "news_branding_status": NEWS_BRANDING_NO_SOURCE_BYTES,
+                                                    },
+                                                )
+                                                rebuilt_group_items.append(group_item)
+                                                continue
+                                            group_risk = assess_recomposition_source_risk(group_candidate)
+                                            try:
+                                                group_branded_bytes, group_decision = apply_master_news_branding(
+                                                    group_source_bytes, disable_lower_signature=group_risk is not None,
+                                                )
+                                                group_branded_file = BufferedInputFile(group_branded_bytes, filename="pulse.jpg")
+                                                rebuilt_group_items.append(group_item.model_copy(update={"media": group_branded_file}))
+                                                logger.info(
+                                                    "master_news_branding_applied",
+                                                    extra={
+                                                        "draft_id": str(outcome.content_draft.id),
+                                                        "media_group_index": group_idx,
+                                                        "visual_path": "ORIGINAL_SOURCE",
+                                                        "degradation_mode": group_decision.degradation_mode,
+                                                        "news_branding_status": group_decision.news_branding_status,
+                                                        "upper_mark_placement": group_decision.upper_mark.placement.value,
+                                                        "lower_signature_placement": group_decision.lower_signature.placement.value,
+                                                        "lower_signature_disabled_reason": group_decision.lower_signature.disabled_reason,
+                                                    },
+                                                )
+                                            except Exception as exc:  # noqa: BLE001 - same fail-safe boundary as the primary image
+                                                rebuilt_group_items.append(group_item)
+                                                logger.info(
+                                                    "brand_render_attempted",
+                                                    extra={
+                                                        "draft_id": str(outcome.content_draft.id),
+                                                        "presentation_type": presentation_decision.presentation_type,
+                                                        "media_group_index": group_idx,
+                                                        "brand_applied": False,
+                                                        "brand_skip_reason": str(exc),
+                                                        "news_branding_status": NEWS_BRANDING_ORIGINAL_SOURCE_FAILURE,
+                                                    },
+                                                )
+                                        media_group_items = [
+                                            *rebuilt_group_items,
+                                            *media_group_items[len(media_group_photo_candidates):],
+                                        ]
+
+                            if presentation_decision.caption_position == CAPTION_ABOVE:
+                                show_caption_above_media = True
+                                if media_group_items:
                                     media_group_items = [
-                                        *rebuilt_group_items,
-                                        *media_group_items[len(media_group_photo_candidates):],
+                                        media_group_items[0].model_copy(update={"show_caption_above_media": True}),
+                                        *media_group_items[1:],
                                     ]
 
-                        if presentation_decision.caption_position == CAPTION_ABOVE:
-                            show_caption_above_media = True
-                            if media_group_items:
-                                media_group_items = [
-                                    media_group_items[0].model_copy(update={"show_caption_above_media": True}),
-                                    *media_group_items[1:],
-                                ]
+                        if presentation_decision.presentation_type == PRESENTATION_BREAKING:
+                            result.presentation_breaking_sent += 1
+                else:
+                    include_url = True
 
-                    if presentation_decision.presentation_type == PRESENTATION_BREAKING:
-                        result.presentation_breaking_sent += 1
-            else:
-                include_url = True
+                if html is None:
+                    try:
+                        html = render_editorial_card(card, include_url=include_url)
+                    except CardTooLongError:
+                        logger.error(
+                            "content_notification_render_failed", extra={"draft_id": str(outcome.content_draft.id)},
+                        )
+                        result.notification_failed += 1
+                        html = None
 
-            if html is None:
-                try:
-                    html = render_editorial_card(card, include_url=include_url)
-                except CardTooLongError:
-                    logger.error(
-                        "content_notification_render_failed", extra={"draft_id": str(outcome.content_draft.id)},
-                    )
-                    result.notification_failed += 1
-                    html = None
-
-            if html is not None:
-                # Phase 23.1H caption-length safety: a photo is only ever sent with the exact same
-                # full, untruncated `html` this branch would otherwise send as plain text - never a
-                # separately-squeezed/truncated caption. If that full text does not fit Telegram's
-                # much smaller photo-caption limit (1024 UTF-16 code units vs. 4096 for a plain
-                # message), the safest existing-architecture fallback is used: send it as the
-                # ordinary full-text message instead (this exact same `send_to_editorial_
-                # destination()` call, already used below for the no-image case) rather than force
-                # a mid-sentence/word-boundary squeeze onto a MAJOR-tier post. This guarantees
-                # zero blind truncation of treatment-selected text, at the cost of the image being
-                # dropped for that one post - a disclosed, deliberate tradeoff (report
-                # §"known limitations"), not a bug.
-                # Phase 23.1Q: a media group is only ever sent within the exact same caption
-                # budget as a single photo (Telegram's caption limit applies identically to the
-                # first item of a media group) - the existing "drop media, fall back to plain
-                # text" precedent above governs this case too, never a new truncation mechanism.
-                fits_caption_budget = _telegram_utf16_length(html) <= CAPTION_SAFE_LIMIT
-                send_as_media_group = len(media_group_items) >= 2 and fits_caption_budget
-                # Phase V2.27 §6: a lone video (zero images) is dispatched via send_video_to_
-                # editorial_destination() - never send_photo (video_only_input is never a valid
-                # photo argument) and never the plain-text else branch below (that would silently
-                # drop a successfully-downloaded/validated video).
-                send_as_video_only = not send_as_media_group and video_only_input is not None and fits_caption_budget
-                send_as_photo = (
-                    not send_as_media_group and not send_as_video_only
-                    and photo_input is not None and fits_caption_budget
-                )
-                logger.info(
-                    "router_image_decision",
-                    extra={
-                        "draft_id": str(outcome.content_draft.id), "image_candidate_count": image_candidate_count,
-                        "has_resolvable_photo": photo_input is not None, "send_as_photo": send_as_photo,
-                        "media_group_item_count": len(media_group_items), "send_as_media_group": send_as_media_group,
-                        "send_as_video_only": send_as_video_only,
-                    },
-                )
-                if send_as_media_group:
-                    routing_outcome = await send_media_group_to_editorial_destination(
-                        bot, EditorialDestination.NEWS, media_group_items,
-                        dry_run=effective_dry_run, reply_to_message_id=reply_to_message_id,
-                        reply_markup=keyboard,
-                    )
-                elif send_as_video_only:
-                    assert video_only_input is not None  # narrows for mypy; already checked above
-                    routing_outcome = await send_video_to_editorial_destination(
-                        bot, EditorialDestination.NEWS, video_only_input, html,
-                        dry_run=effective_dry_run, reply_markup=keyboard,
-                        reply_to_message_id=reply_to_message_id,
+                if html is not None:
+                    # Phase 23.1H caption-length safety: a photo is only ever sent with the exact same
+                    # full, untruncated `html` this branch would otherwise send as plain text - never a
+                    # separately-squeezed/truncated caption. If that full text does not fit Telegram's
+                    # much smaller photo-caption limit (1024 UTF-16 code units vs. 4096 for a plain
+                    # message), the safest existing-architecture fallback is used: send it as the
+                    # ordinary full-text message instead (this exact same `send_to_editorial_
+                    # destination()` call, already used below for the no-image case) rather than force
+                    # a mid-sentence/word-boundary squeeze onto a MAJOR-tier post. This guarantees
+                    # zero blind truncation of treatment-selected text, at the cost of the image being
+                    # dropped for that one post - a disclosed, deliberate tradeoff (report
+                    # §"known limitations"), not a bug.
+                    # Phase 23.1Q: a media group is only ever sent within the exact same caption
+                    # budget as a single photo (Telegram's caption limit applies identically to the
+                    # first item of a media group) - the existing "drop media, fall back to plain
+                    # text" precedent above governs this case too, never a new truncation mechanism.
+                    fits_caption_budget = _telegram_utf16_length(html) <= CAPTION_SAFE_LIMIT
+                    send_as_media_group = len(media_group_items) >= 2 and fits_caption_budget
+                    # Phase V2.27 §6: a lone video (zero images) is dispatched via send_video_to_
+                    # editorial_destination() - never send_photo (video_only_input is never a valid
+                    # photo argument) and never the plain-text else branch below (that would silently
+                    # drop a successfully-downloaded/validated video).
+                    send_as_video_only = not send_as_media_group and video_only_input is not None and fits_caption_budget
+                    send_as_photo = (
+                        not send_as_media_group and not send_as_video_only
+                        and photo_input is not None and fits_caption_budget
                     )
                     logger.info(
-                        "HOSTED_VIDEO_TELEGRAM_SENT" if routing_outcome.sent else "HOSTED_VIDEO_TELEGRAM_FAILED",
-                        extra={"draft_id": str(outcome.content_draft.id), "reason": routing_outcome.reason},
+                        "router_image_decision",
+                        extra={
+                            "draft_id": str(outcome.content_draft.id), "image_candidate_count": image_candidate_count,
+                            "has_resolvable_photo": photo_input is not None, "send_as_photo": send_as_photo,
+                            "media_group_item_count": len(media_group_items), "send_as_media_group": send_as_media_group,
+                            "send_as_video_only": send_as_video_only,
+                        },
                     )
-                elif send_as_photo:
-                    assert photo_input is not None  # narrows for mypy; already checked above
-                    routing_outcome = await send_photo_to_editorial_destination(
-                        bot, EditorialDestination.NEWS, photo_input, html,
-                        dry_run=effective_dry_run, reply_markup=keyboard,
-                        reply_to_message_id=reply_to_message_id,
-                        show_caption_above_media=show_caption_above_media,
-                    )
-                else:
+                    if send_as_media_group:
+                        routing_outcome = await send_media_group_to_editorial_destination(
+                            bot, EditorialDestination.NEWS, media_group_items,
+                            dry_run=effective_dry_run, reply_to_message_id=reply_to_message_id,
+                            reply_markup=keyboard,
+                        )
+                    elif send_as_video_only:
+                        assert video_only_input is not None  # narrows for mypy; already checked above
+                        routing_outcome = await send_video_to_editorial_destination(
+                            bot, EditorialDestination.NEWS, video_only_input, html,
+                            dry_run=effective_dry_run, reply_markup=keyboard,
+                            reply_to_message_id=reply_to_message_id,
+                        )
+                        logger.info(
+                            "HOSTED_VIDEO_TELEGRAM_SENT" if routing_outcome.sent else "HOSTED_VIDEO_TELEGRAM_FAILED",
+                            extra={"draft_id": str(outcome.content_draft.id), "reason": routing_outcome.reason},
+                        )
+                    elif send_as_photo:
+                        assert photo_input is not None  # narrows for mypy; already checked above
+                        routing_outcome = await send_photo_to_editorial_destination(
+                            bot, EditorialDestination.NEWS, photo_input, html,
+                            dry_run=effective_dry_run, reply_markup=keyboard,
+                            reply_to_message_id=reply_to_message_id,
+                            show_caption_above_media=show_caption_above_media,
+                        )
+                    else:
+                        # TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1 (Founder product invariant):
+                        # this `else` is reached for two structurally different reasons, and only one
+                        # of them may still send plain text. (1) A real visual (photo_input/
+                        # media_group_items/video_only_input) WAS resolved, but `fits_caption_budget`
+                        # was False - the separate, pre-existing, disclosed Phase 23.1H/23.1Q caption-
+                        # length tradeoff (a text-budget decision, not a missing visual) - completely
+                        # UNCHANGED by this phase. (2) NO visual was resolved at all - previously
+                        # silently sent as an indistinguishable-from-normal finished text post; now
+                        # held for editor-visible recovery instead (spec §9-D/§12/§13).
+                        had_any_visual = (
+                            photo_input is not None or bool(media_group_items) or video_only_input is not None
+                        )
+                        # `not effective_dry_run` guard mirrors every other real side effect in this
+                        # function (dry-run must stay exactly as side-effect-free as before this
+                        # phase - no content_drafts.status write, no notice send): a dry-run cycle
+                        # keeps falling through to the pre-existing send_to_editorial_destination(...,
+                        # dry_run=True) call below, which itself already no-ops safely and is counted
+                        # via the unchanged `dry_run_rendered` path further down.
+                        if not had_any_visual and not effective_dry_run:
+                            await _hold_for_visual_recovery(
+                                session_factory, bot,
+                                draft_id=outcome.content_draft.id, event=event,
+                                presentation_type=original_presentation_type_for_hold,
+                                reason=HOLD_REASON_NO_VISUAL_RESOLVED, dry_run=effective_dry_run,
+                            )
+                            result.visual_required_held += 1
+                            routing_outcome = None
+                        else:
+                            routing_outcome = await send_to_editorial_destination(
+                                bot, EditorialDestination.NEWS, html, dry_run=effective_dry_run, reply_markup=keyboard,
+                                reply_to_message_id=reply_to_message_id,
+                            )
+
+                    # Delivery-gap fix (2026-08-16 production forensic): a real photo/media-group
+                    # send timing out (or any other live TelegramAPIError) previously dropped a fully
+                    # generated, treatment-approved post entirely - only notification_failed
+                    # incremented, no post ever reached NEWS. `not effective_dry_run` guards this so
+                    # dry-run stays exactly as side-effect-free as before (a dry-run outcome is always
+                    # sent=False by construction, but must never trigger a second fake send here).
+                    # `send_as_media_group or send_as_photo` scopes the fallback to exactly the two
+                    # media-carrying paths named in the brief - the `else` branch above already IS
+                    # the plain-text path (including the existing caption-too-long-degrades-to-text
+                    # case, upstream of this block), so it never re-enters its own fallback.
+                    #
                     # TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1 (Founder product invariant):
-                    # this `else` is reached for two structurally different reasons, and only one
-                    # of them may still send plain text. (1) A real visual (photo_input/
-                    # media_group_items/video_only_input) WAS resolved, but `fits_caption_budget`
-                    # was False - the separate, pre-existing, disclosed Phase 23.1H/23.1Q caption-
-                    # length tradeoff (a text-budget decision, not a missing visual) - completely
-                    # UNCHANGED by this phase. (2) NO visual was resolved at all - previously
-                    # silently sent as an indistinguishable-from-normal finished text post; now
-                    # held for editor-visible recovery instead (spec §9-D/§12/§13).
-                    had_any_visual = (
-                        photo_input is not None or bool(media_group_items) or video_only_input is not None
-                    )
-                    # `not effective_dry_run` guard mirrors every other real side effect in this
-                    # function (dry-run must stay exactly as side-effect-free as before this
-                    # phase - no content_drafts.status write, no notice send): a dry-run cycle
-                    # keeps falling through to the pre-existing send_to_editorial_destination(...,
-                    # dry_run=True) call below, which itself already no-ops safely and is counted
-                    # via the unchanged `dry_run_rendered` path further down.
-                    if not had_any_visual and not effective_dry_run:
+                    # `routing_outcome` may be `None` here (the `visual_required_held` branch just
+                    # above never attempted a send at all) - guarded first, so the pre-existing
+                    # fallback below can keep reading `.sent` unchanged for every other case.
+                    #
+                    # Residual, disclosed limitation (not fixed, not in scope this checkpoint): a
+                    # Telegram network timeout can occur after Telegram has already accepted the
+                    # photo/media-group but before this process received the response (exactly the
+                    # real production case that motivated this fix) - RoutingOutcome.sent=False is
+                    # this codebase's only signal and cannot distinguish "never reached Telegram"
+                    # from "Telegram accepted it, response was lost." Previously, this ambiguous case
+                    # triggered a one-shot plain-text fallback that could produce a real photo+text
+                    # duplicate for the same story. Per the Founder invariant above, a resolved-but-
+                    # undeliverable visual must now HOLD instead of silently completing as that
+                    # plain-text duplicate - still a single, bounded, one-shot outcome, never a retry
+                    # loop, never an unbounded generation attempt (MAX_VISUAL_FALLBACK_ATTEMPTS=0
+                    # extra renders - this path never re-renders, it only changes whether the
+                    # already-rendered result's failed send becomes a HOLD or a silent text send).
+                    used_text_fallback = False
+
+                    if (
+                        routing_outcome is not None and not effective_dry_run and not routing_outcome.sent
+                        and (send_as_media_group or send_as_photo or send_as_video_only)
+                    ):
                         await _hold_for_visual_recovery(
                             session_factory, bot,
                             draft_id=outcome.content_draft.id, event=event,
                             presentation_type=original_presentation_type_for_hold,
-                            reason=HOLD_REASON_NO_VISUAL_RESOLVED, dry_run=effective_dry_run,
+                            reason=HOLD_REASON_MEDIA_SEND_FAILED, dry_run=effective_dry_run,
                         )
                         result.visual_required_held += 1
                         routing_outcome = None
+
+                    if routing_outcome is None:
+                        pass  # already accounted for in result.visual_required_held above
+                    elif effective_dry_run:
+                        result.dry_run_rendered += 1  # expected outcome in dry-run mode, not a failure
+                    elif routing_outcome.sent:
+                        result.notified += 1
+                        sent_message_id = routing_outcome.message_id
+                        sent_chat_id = routing_outcome.chat_id
+                        if used_text_fallback:
+                            result.router_text_fallback_sent += 1
+                        elif send_as_media_group:
+                            result.router_media_group_sent += 1
+                        elif send_as_video_only:
+                            result.router_video_only_sent += 1
+                        elif send_as_photo:
+                            result.router_image_sent += 1
                     else:
-                        routing_outcome = await send_to_editorial_destination(
-                            bot, EditorialDestination.NEWS, html, dry_run=effective_dry_run, reply_markup=keyboard,
-                            reply_to_message_id=reply_to_message_id,
-                        )
-
-                # Delivery-gap fix (2026-08-16 production forensic): a real photo/media-group
-                # send timing out (or any other live TelegramAPIError) previously dropped a fully
-                # generated, treatment-approved post entirely - only notification_failed
-                # incremented, no post ever reached NEWS. `not effective_dry_run` guards this so
-                # dry-run stays exactly as side-effect-free as before (a dry-run outcome is always
-                # sent=False by construction, but must never trigger a second fake send here).
-                # `send_as_media_group or send_as_photo` scopes the fallback to exactly the two
-                # media-carrying paths named in the brief - the `else` branch above already IS
-                # the plain-text path (including the existing caption-too-long-degrades-to-text
-                # case, upstream of this block), so it never re-enters its own fallback.
-                #
-                # TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1 (Founder product invariant):
-                # `routing_outcome` may be `None` here (the `visual_required_held` branch just
-                # above never attempted a send at all) - guarded first, so the pre-existing
-                # fallback below can keep reading `.sent` unchanged for every other case.
-                #
-                # Residual, disclosed limitation (not fixed, not in scope this checkpoint): a
-                # Telegram network timeout can occur after Telegram has already accepted the
-                # photo/media-group but before this process received the response (exactly the
-                # real production case that motivated this fix) - RoutingOutcome.sent=False is
-                # this codebase's only signal and cannot distinguish "never reached Telegram"
-                # from "Telegram accepted it, response was lost." Previously, this ambiguous case
-                # triggered a one-shot plain-text fallback that could produce a real photo+text
-                # duplicate for the same story. Per the Founder invariant above, a resolved-but-
-                # undeliverable visual must now HOLD instead of silently completing as that
-                # plain-text duplicate - still a single, bounded, one-shot outcome, never a retry
-                # loop, never an unbounded generation attempt (MAX_VISUAL_FALLBACK_ATTEMPTS=0
-                # extra renders - this path never re-renders, it only changes whether the
-                # already-rendered result's failed send becomes a HOLD or a silent text send).
-                used_text_fallback = False
-
-                # UNIFIED-EDITORIAL-PRODUCTION-PIPELINE-1 (S25/S26/S27): the one, single, worker-
-                # reachable entry point into the new shared editorial pipeline - reached here,
-                # after every one of the four send_as_media_group/send_as_video_only/send_as_photo/
-                # else branches above has run (not only the no-visual one), so the shadow
-                # comparison sees representative data for every outcome, not just failures. Gated
-                # on `unified_editorial_pipeline_enabled` (default False in every environment this
-                # phase touches) and wrapped in its own blanket exception boundary so a bug in
-                # this brand-new, not-yet-production-proven code can never affect the legacy send
-                # path above, which remains completely unmodified and is the only path that ever
-                # actually sends anything. Shadow-only (S27): never a duplicate Telegram send,
-                # never a duplicate real render (the passthrough renderer just hands back this
-                # exact cycle's own already-computed `photo_input`/`html`) - purely a structured
-                # comparison log for future analysis, never anything else observable from outside
-                # this block.
-                if settings.unified_editorial_pipeline_enabled:
-                    try:
-                        from services.editorial_pipeline.shadow import build_passthrough_render, run_shadow_comparison
-
-                        legacy_had_visual = (
-                            photo_input is not None or bool(media_group_items) or video_only_input is not None
-                        )
-                        await run_shadow_comparison(
-                            content_draft_id=outcome.content_draft.id, news_event_id=event.id, story_id=None,
-                            source_url=event.url, title=event.title, main_body=event.content,
-                            research_facts=research_facts_for_shadow,
-                            legacy_presentation_type=original_presentation_type_for_hold,
-                            legacy_had_visual=legacy_had_visual,
-                            render=build_passthrough_render(photo_input, html),
-                        )
-                    except Exception:  # noqa: BLE001 - S4-E: never let shadow-mode affect the real send path
-                        logger.exception("unified_pipeline_shadow_hook_failed", extra={"draft_id": str(outcome.content_draft.id)})
-
-                if (
-                    routing_outcome is not None and not effective_dry_run and not routing_outcome.sent
-                    and (send_as_media_group or send_as_photo or send_as_video_only)
-                ):
-                    await _hold_for_visual_recovery(
-                        session_factory, bot,
-                        draft_id=outcome.content_draft.id, event=event,
-                        presentation_type=original_presentation_type_for_hold,
-                        reason=HOLD_REASON_MEDIA_SEND_FAILED, dry_run=effective_dry_run,
-                    )
-                    result.visual_required_held += 1
-                    routing_outcome = None
-
-                if routing_outcome is None:
-                    pass  # already accounted for in result.visual_required_held above
-                elif effective_dry_run:
-                    result.dry_run_rendered += 1  # expected outcome in dry-run mode, not a failure
-                elif routing_outcome.sent:
-                    result.notified += 1
-                    sent_message_id = routing_outcome.message_id
-                    sent_chat_id = routing_outcome.chat_id
-                    if used_text_fallback:
-                        result.router_text_fallback_sent += 1
-                    elif send_as_media_group:
-                        result.router_media_group_sent += 1
-                    elif send_as_video_only:
-                        result.router_video_only_sent += 1
-                    elif send_as_photo:
-                        result.router_image_sent += 1
-                else:
-                    result.notification_failed += 1
+                        result.notification_failed += 1
         elif settings.image_editorial_preview_enabled and settings.image_candidate_persistence_mode != "off":
             try:
                 async with session_factory() as preview_session:
