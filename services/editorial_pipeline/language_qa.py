@@ -28,8 +28,12 @@ duplication here.
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from services.presentation_director import _CHANGE_UNIT, _MAGNITUDE_UNIT
+
+if TYPE_CHECKING:
+    from services.editorial_pipeline.contracts import QualityCheckResult
 
 # Extends services.presentation_director._CURRENCY_WORD (see module docstring gap 2) - every
 # currency that module already covers, plus юань/yuan/RMB/CNY, kept local to this new module.
@@ -57,7 +61,7 @@ def _find_duplicated_sentences(text: str) -> str | None:
     return None
 
 
-def check_language_quality(text: str) -> "QualityCheckResult":  # noqa: F821 - imported lazily below to avoid a cycle
+def check_language_quality(text: str) -> QualityCheckResult:
     from services.editorial_pipeline.contracts import QualityCheckName, QualityCheckResult
 
     orphan_match = _ORPHANED_PHRASE_RE.search(text)
