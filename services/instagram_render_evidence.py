@@ -37,6 +37,12 @@ class InstagramRenderEvidence:
     slide_count: int | None = None
     caption_linkage: str = ""  # the package_id this render was produced for
     content_identity: str = ""  # a stable hash of the package's own content (never of pixels)
+    # INSTAGRAM-PRODUCTION-READINESS-CLOSURE-1 §7/§10: the SAME `media_candidate_id` the package
+    # that requested this render carried - the renderer's own honest declaration of which selected
+    # candidate its `source_image_treatment` pixels actually came from. `None` for a render that
+    # used no real source image (`source_image_treatment="none"`/"generated") - never fabricated
+    # for a render that genuinely did not consume a real, unified-verified candidate.
+    source_media_candidate_id: str | None = None
     notes: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -56,5 +62,6 @@ class InstagramRenderEvidence:
             "slide_count": self.slide_count,
             "caption_linkage": self.caption_linkage,
             "content_identity": self.content_identity,
+            "source_media_candidate_id": self.source_media_candidate_id,
             "notes": self.notes,
         }

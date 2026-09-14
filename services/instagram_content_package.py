@@ -111,6 +111,22 @@ class InstagramContentPackage:
     presentation_family: str | None = None
     source_image_ref: str | None = None
 
+    # -- INSTAGRAM-PRODUCTION-READINESS-CLOSURE-1 §7/§9: the real media-truthfulness/rights
+    # identity for `source_image_ref`, carried from the SAME unified `MediaSelectionResult`
+    # `services.instagram_media_safety.resolve_instagram_media()` produces (never re-derived or
+    # independently guessed here - `build_instagram_content_package()` is the only writer). All
+    # three additive with safe `None` defaults so every pre-existing caller/test that never passed
+    # a `media_selection` keeps behaving exactly as before. `media_candidate_id` is the SAME id
+    # `source_image_ref` already carries when a `media_selection` was supplied - kept as an
+    # explicit, separately-named field so a same-asset-identity check never has to guess which of
+    # several string fields is the authoritative one.
+    media_candidate_id: str | None = None
+    media_subject_match: str | None = None  # a real SubjectMatchClassification value, e.g.
+    # "exact_subject"/"strong_context"/"generic_context" - "mismatch"/"editorial_review_required"-
+    # equivalent candidates can never reach here, because `is_selectable()` already excluded them
+    # from ever becoming `MediaSelectionResult.selected` in the first place (§7's own point).
+    media_usage_classification: str | None = None  # a real MediaUsageClassification value.
+
     # -- publication metadata (empty at package-build time; the publish layer appends to a COPY) --
     publication_metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -144,6 +160,9 @@ class InstagramContentPackage:
             "slide_count": self.slide_count,
             "presentation_family": self.presentation_family,
             "source_image_ref": self.source_image_ref,
+            "media_candidate_id": self.media_candidate_id,
+            "media_subject_match": self.media_subject_match,
+            "media_usage_classification": self.media_usage_classification,
             "publication_metadata": self.publication_metadata,
             "created_at": self.created_at.isoformat(),
         }
@@ -223,6 +242,7 @@ def build_instagram_content_package(
     creative_outcome: CreativeGenerationOutcome | None = None, account_key: str = "default",
     external_video_asset_ref: str | None = None, hashtags: list[str] | None = None,
     presentation_family: str | None = None, source_image_ref: str | None = None,
+    media_selection: Any | None = None,
 ) -> InstagramContentPackage:
     """Assembles a package from the REAL upstream Director objects. `creative_outcome` is optional
     (mirrors `build_shadow_plan()`'s own optionality) - without it, the package carries only the
@@ -231,7 +251,25 @@ def build_instagram_content_package(
     Raises `InstagramContentPackageError` for a REEL format decision with no
     `external_video_asset_ref` AND no creative outcome to at least describe the plan - a Reel
     package must never silently claim video capability this codebase does not have (section 11).
-    """
+
+    INSTAGRAM-PRODUCTION-READINESS-CLOSURE-1 §7/§9: `media_selection` (a `schemas.media_subject_
+    match.MediaSelectionResult`, typed `Any` here to avoid this platform-neutral-by-design contract
+    module importing the media-research schema for a single optional parameter) is the SAME real
+    result `services.instagram_media_safety.resolve_instagram_media()` produces. When supplied and
+    it has a `.selected` candidate, `source_image_ref`/`media_candidate_id`/`media_subject_match`/
+    `media_usage_classification` are all populated from IT - never independently guessed, and the
+    explicit `source_image_ref`/nothing-supplied path below is used only when no media_selection is
+    given at all (back-compat with every pre-existing caller/test)."""
+    if media_selection is not None and getattr(media_selection, "selected", None) is not None:
+        selected = media_selection.selected
+        source_image_ref = selected.candidate_id
+        media_candidate_id = selected.candidate_id
+        media_subject_match = selected.subject_match.subject_match.value if selected.subject_match else None
+        media_usage_classification = selected.usage_classification.value
+    else:
+        media_candidate_id = None
+        media_subject_match = None
+        media_usage_classification = None
     fmt = format_decision.recommended_format
 
     caption: str
@@ -294,6 +332,9 @@ def build_instagram_content_package(
         },
         presentation_family=presentation_family,
         source_image_ref=source_image_ref,
+        media_candidate_id=media_candidate_id,
+        media_subject_match=media_subject_match,
+        media_usage_classification=media_usage_classification,
         render_profiles=_render_profiles_for(fmt, slide_count=slide_count),
         slide_count=slide_count,
     )

@@ -1257,6 +1257,18 @@ class Settings(BaseSettings):
     # Documented here, never silently requested/added to any live OAuth flow by this phase.
     instagram_write_scopes: tuple[str, ...] = ("instagram_business_content_publish",)
 
+    # INSTAGRAM-PRODUCTION-READINESS-CLOSURE-1 §6: the real media-hosting mechanism's own config -
+    # see services/instagram_media_hosting.py's own module docstring for the full rationale.
+    # `instagram_media_public_base_url` is `None` in every environment this phase touches (no TLS/
+    # domain/reverse-proxy exists in front of `backend` today - a genuine, disclosed infrastructure
+    # decision, not a code default this phase should invent a value for). Until an operator
+    # configures a real `https://` base url that resolves to a public address,
+    # `services.instagram_media_hosting.build_public_media_url()` always returns `None` and
+    # `MEDIA_HOSTING_READY` stays `False` - by construction, never by convention alone.
+    instagram_media_public_base_url: str | None = None
+    instagram_media_storage_root: str = "/data/instagram_media_public"
+    instagram_media_asset_ttl_seconds: int = 3600
+
     # DIRECTOR-CONTROL-PLANE-1 §8/§12: the ONE new enforcement flag this phase introduces - gates
     # only whether services/director_editorial_gate.py's decision actually withholds DROP/HOLD
     # candidates from the real Founder NEWS queue. Default False: every gate evaluation still runs

@@ -340,6 +340,14 @@ class QualityCheckName(str, enum.Enum):
     FORMAT_REQUIREMENTS = "FORMAT_REQUIREMENTS"
     PLATFORM_BUDGET = "PLATFORM_BUDGET"
     ART_VALIDATION = "ART_VALIDATION"
+    SAME_ASSET_IDENTITY = "SAME_ASSET_IDENTITY"
+    """INSTAGRAM-PRODUCTION-READINESS-CLOSURE-1 §7/§10: selected/rendered/QA/transported media
+    identity must be the same object throughout - Telegram enforces this structurally (there is no
+    code path that could diverge them, per RUNTIME-CLOSURE-1); Instagram's render chain is not
+    (yet) rebuilt the same way, so this is an explicit, checkable gate check instead, appended by
+    `services.editorial_pipeline.platforms.instagram.evaluate_instagram_package()`. Never produced
+    by `run_quality_gate()` itself - Telegram packages never carry this check at all (their
+    invariant is structural, not gate-checked)."""
 
 
 class QualityGateVerdict(str, enum.Enum):

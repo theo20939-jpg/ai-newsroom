@@ -27,7 +27,7 @@ READY here has no side effect - no network call, no credential use, nothing.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from services.editorial_pipeline.contracts import (
     EvidencePack,
@@ -48,15 +48,47 @@ if TYPE_CHECKING:
     from services.instagram_platform_renderer import InstagramRenderResult
 
 
+def _verify_same_asset_identity(
+    package: "InstagramContentPackage", render_results: list["InstagramRenderResult"],
+) -> bool:
+    """INSTAGRAM-PRODUCTION-READINESS-CLOSURE-1 §7/§10: `package.media_candidate_id ==
+    render_result.evidence.source_media_candidate_id` for every render that actually claims to
+    have used a real source image (`source_image_treatment` other than "none"/"generated" -
+    a render that never used a photo has nothing to compare and trivially passes). A package that
+    never carried a `media_candidate_id` at all (no `media_selection` was supplied - the
+    pre-existing, back-compat path) also trivially passes: this check only ever REJECTS a genuine
+    divergence, never penalizes a caller that has not been updated to supply the safety wiring yet."""
+    if package.media_candidate_id is None:
+        return True
+    for result in render_results:
+        if result.evidence.source_image_treatment in ("none", "generated"):
+            continue
+        if result.evidence.source_media_candidate_id != package.media_candidate_id:
+            return False
+    return True
+
+
 def evaluate_instagram_package(
     *, package: "InstagramContentPackage", render_results: list["InstagramRenderResult"],
-    evidence: EvidencePack, content_draft_id: "UUID",
+    evidence: EvidencePack, content_draft_id: "UUID", media_selection: Any | None = None,
 ) -> tuple[QualityGateResult, RecoveryJob | None]:
     """Runs the shared quality gate against an already-built, already-rendered Instagram package.
     Returns `(gate_result, None)` when READY, or `(gate_result, RecoveryJob)` when not - the
     orchestrator (S25) treats this exactly like a Telegram HOLD/BLOCK: no publish call is ever
-    reachable from a non-READY verdict."""
+    reachable from a non-READY verdict.
+
+    INSTAGRAM-PRODUCTION-READINESS-CLOSURE-1 §7: `media_selection` (the same real
+    `MediaSelectionResult` `services.instagram_media_safety.resolve_instagram_media()` produced for
+    this package) is now threaded through to `run_quality_gate()` instead of the previous hardcoded
+    `None` - the ONE change this phase makes here. This costs nothing new: `run_quality_gate()`'s
+    own `_check_visual_truthfulness()`/`_check_media_provenance()` checks (unmodified, already
+    real, already used by Telegram) now apply to Instagram automatically - a MISMATCH or
+    NOT_USABLE selected candidate reaching this function becomes a real `BLOCK`, exactly like
+    Telegram. `media_selection=None` (the default, for any caller not yet updated) preserves the
+    prior byte-identical behavior."""
     art_result = validate_instagram_art(package, render_results)
+
+    same_asset_ok = _verify_same_asset_identity(package, render_results)
 
     gate_result = run_quality_gate(
         # Instagram's own structured content lives in `package` itself, not yet threaded through
@@ -67,7 +99,7 @@ def evaluate_instagram_package(
         # gap as a quality failure for Instagram specifically - overridden explicitly below, never
         # silently reported as a real pass.
         content=None,
-        evidence=evidence, media_selection=None, caption_or_copy=package.caption, platform=Platform.INSTAGRAM,
+        evidence=evidence, media_selection=media_selection, caption_or_copy=package.caption, platform=Platform.INSTAGRAM,
     )
 
     from services.editorial_pipeline.contracts import QualityCheckName, QualityCheckResult
@@ -84,11 +116,25 @@ def evaluate_instagram_package(
             overridden_checks.append(QualityCheckResult(QualityCheckName.ART_VALIDATION, False, "; ".join(art_result.blocking_issues)))
         else:
             overridden_checks.append(check)
+    # INSTAGRAM-PRODUCTION-READINESS-CLOSURE-1 §7/§10: the same-asset identity check is appended
+    # as its own synthetic check (never silently folded into ART_VALIDATION or any other existing
+    # name) - a divergence here means package/render disagree about which candidate this post is
+    # about, which is exactly as severe as a MISMATCH and must BLOCK the same way.
+    overridden_checks.append(
+        QualityCheckResult(
+            QualityCheckName.SAME_ASSET_IDENTITY, same_asset_ok,
+            "selected/rendered media identity matches" if same_asset_ok
+            else "same-asset invariant violated: rendered media does not match the selected candidate",
+        )
+    )
     checks = tuple(overridden_checks)
     failed = [c for c in checks if not c.passed]
     if not failed:
         gate_result = QualityGateResult(verdict=QualityGateVerdict.READY, checks=checks)
-    elif any(c.name in (QualityCheckName.VISUAL_TRUTHFULNESS, QualityCheckName.MEDIA_PROVENANCE, QualityCheckName.ART_VALIDATION) for c in failed):
+    elif any(
+        c.name in (QualityCheckName.VISUAL_TRUTHFULNESS, QualityCheckName.MEDIA_PROVENANCE, QualityCheckName.ART_VALIDATION, QualityCheckName.SAME_ASSET_IDENTITY)
+        for c in failed
+    ):
         gate_result = QualityGateResult(verdict=QualityGateVerdict.BLOCK, checks=checks)
     else:
         gate_result = QualityGateResult(verdict=QualityGateVerdict.HOLD, checks=checks)

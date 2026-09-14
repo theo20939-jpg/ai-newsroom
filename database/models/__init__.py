@@ -29,6 +29,7 @@ from database.models.news_source import NewsSource
 from database.models.product import Product
 from database.models.product_context_version import ProductContextVersion
 from database.models.product_event import ProductEvent
+from database.models.instagram_publication_job import InstagramPublicationJob
 from database.models.recovery_job import RecoveryJob
 from database.models.social_launch_context import SocialLaunchContext
 from database.models.social_launch_proposal import SocialLaunchProposal
