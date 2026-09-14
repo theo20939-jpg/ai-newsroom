@@ -1,0 +1,21 @@
+{
+  "finding": "MAXUS_HERO_CARD_GEOMETRY_GAP",
+  "summary": "The real Maxus 9 DATA card's own correct, semantically-safe unit ('тыс юаней') does not fit the approved DATA hero card's inner column even at the renderer's own minimum font size, and is therefore correctly rejected by the pre-existing (TELEGRAM-DATA-SEMANTIC-OVERFLOW-HOTFIX-1, commit 45de6d4) fail-closed geometry guard. This is a genuine, pre-existing DATA hero-card typography/geometry limitation, NOT introduced by this phase's semantic-parser work, and NOT fixed by this phase (out of scope: 'do not redesign DATA', 'do not change typography/spacing').",
+  "root_cause": "render_data_hero_card()'s unit font is sized relative to the VALUE's own fitted font size (unit_max = round(value_size * DATA.unit_over_value), currently 0.75), not to the unit text's own length. A short value like '290' fits comfortably near the maximum value font (270px), which then forces a correspondingly large unit font floor (162px) regardless of how long the unit text itself is. A 9-character compound unit ('тыс юаней', magnitude + currency) at 162px measures ~830px against a 449px column.",
+  "measured": {
+    "inner_w_px": 449,
+    "value_text": "290",
+    "value_font_size_px": 270,
+    "value_width_px": 427.0,
+    "unit_text": "ТЫС ЮАНЕЙ",
+    "unit_font_size_px": 162,
+    "unit_font_min_px": 162,
+    "unit_font_max_px": 202,
+    "unit_width_px": 830.0,
+    "overflow": true
+  },
+  "content_layer_unaffected": "services/editorial_pipeline/content.py's own extraction is unchanged and correct in both the ASML hotfix (45de6d4) and this phase: build_structured_data_content() for the real Maxus fact still returns metric_value='290', metric_unit='тыс юаней' (semantically complete, passes _is_unit_safe), metric_label='Стартовая цена Maxus 9' - identical before and after this phase. The gap is entirely in brand_renderer.py's pre-existing font-scaling constants, not in semantic extraction.",
+  "current_production_behavior": "A real Maxus-shaped DATA card (short value + long magnitude+currency unit) reaching render_data_hero_card() today fails closed (raises ValueError) -> render_branded_media() returns success=False -> RENDER_FAILED -> HOLD/recovery, exactly the safe behavior TELEGRAM-DATA-SEMANTIC-OVERFLOW-HOTFIX-1 intended for genuinely-unfittable content. No corrupted/overflowing image can reach Telegram for this case either - it simply never sends at all today, pending a separately-authorized DATA-typography phase.",
+  "disclosed_for": "Founder review - recommend a narrowly-scoped follow-up (NOT this phase, NOT a DATA redesign) to make unit font-sizing length-aware (e.g. its own min/max bounds independent of value_size, or bounded to the same inner_w it must fit) rather than purely value-size-relative, so real magnitude+currency DATA cards can render instead of always HOLDing.",
+  "not_a_regression": "This gap pre-dates this phase and the ASML hotfix's own testing - no prior test in this codebase ever called render_data_hero_card() end-to-end with a real magnitude+currency unit like 'тыс юаней' before this phase's own investigation (the ASML hotfix's Maxus regression test only checked build_structured_data_content()'s structured fields, never rendered them)."
+}
