@@ -1476,6 +1476,15 @@ async def run_content_cycle(
                     breaking_max_per_cycle=settings.presentation_breaking_max_per_cycle,
                     breaking_enabled=settings.presentation_breaking_enabled,
                     story_id=story_link.story_id if story_link is not None else None,
+                    # VISION-GATE-CLOSURE-1: the real capability registry this cycle already holds
+                    # - passing it through is what makes ACTUAL_IMAGE_VERIFICATION_WIRED genuinely
+                    # true (the vision escalation is used only when the registry actually resolves
+                    # the capability AND the deterministic classifier's own policy decides
+                    # escalation is warranted - see services.editorial_pipeline.telegram_integration
+                    # and services.editorial_pipeline.subject_match_vision_gate). Safe regardless of
+                    # `unified_editorial_pipeline_enabled`: this whole branch is unreachable unless
+                    # that flag is already True (UNIFIED_FLAG_DEFAULT stays False).
+                    capability_registry=capability_registry,
                 )
                 if unified_outcome.presentation_type == PRESENTATION_BREAKING:
                     result.presentation_breaking_sent += 1

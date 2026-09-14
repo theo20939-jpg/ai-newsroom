@@ -50,6 +50,16 @@ selected` actually decided. Fixed here by:
 - A valid cached Telegram file_id resolves and delivers safely even when local bytes are gone
   (Case B/S16) - reusing `bot/image_preview_media.py`'s own proven "file_id first" policy via the
   resolver, never HELD merely because a local temp file expired.
+
+VISION-GATE-CLOSURE-1: closes the one remaining Founder HIGH from RUNTIME-CLOSURE-1
+(`ACTUAL_IMAGE_VERIFICATION_WIRED = false`). `capability_registry`, when supplied, resolves the
+real, existing `capabilities/media_subject_match_capability.py` and wraps the plain, deterministic
+`classify_subject_match` with `services.editorial_pipeline.subject_match_vision_gate.
+build_vision_gate_subject_match_classifier()` - a bounded, cached, fail-soft SECOND TIER escalated
+to ONLY when deterministic text evidence is ambiguous (GENERIC_CONTEXT) AND the visual intent
+genuinely requires an exact/narrow subject depiction (see that module's own docstring for the full
+policy). `capability_registry=None` (the default) preserves byte-identical prior behavior - the
+plain deterministic classifier runs alone, exactly as before this phase.
 """
 from __future__ import annotations
 
@@ -63,6 +73,8 @@ from aiogram import Bot
 from aiogram.types import BufferedInputFile, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from capabilities.media_subject_match_capability import CAPABILITY_NAME as _MEDIA_SUBJECT_MATCH_CAPABILITY_NAME
+from capabilities.registry import CapabilityRegistry
 from schemas.editorial_route import EditorialDestination
 from schemas.media_subject_match import (
     DiscoveryTier,
@@ -87,12 +99,15 @@ from services.editorial_pipeline.media_asset_resolver import resolve_selected_me
 from services.editorial_pipeline.orchestrator import run_editorial_production_pipeline
 from services.editorial_pipeline.recovery_service import RecoveryService
 from services.editorial_pipeline.subject_match import classify_subject_match
+from services.editorial_pipeline.subject_match_vision_gate import build_vision_gate_subject_match_classifier
 from services.image_persistence import (
     EditorialImageCandidate,
     get_editorial_image_candidates,
     get_recently_attached_image_source_urls,
+    read_candidate_bytes,
     sanitize_url,
 )
+from services.media_research_selection import SubjectMatchClassifier
 from services.media_web_discovery import WebDiscoveryClient
 from services.nnj_master_news_overlay import apply_master_news_branding
 from services.presentation_director import (
@@ -382,6 +397,7 @@ async def run_unified_telegram_delivery(
     breaking_enabled: bool,
     story_id: UUID | None = None,
     web_discovery_client: WebDiscoveryClient | None = None,
+    capability_registry: CapabilityRegistry | None = None,
 ) -> UnifiedTelegramDeliveryOutcome:
     """The one call site (S25 for the cutover) - `worker/content_cycle.py`'s router-mode V8-family
     branch calls this INSTEAD OF its own legacy decision tree (never alongside it - S2). Owns
@@ -393,7 +409,17 @@ async def run_unified_telegram_delivery(
     today (confirmed by direct audit; see `services/media_web_discovery.py`'s own module
     docstring), so there is nothing production-safe to default this to instead. The parameter
     exists purely as the structural wiring point: the day a real client IS built, injecting it here
-    is a one-line change at this ONE call site, never a second call site or an architecture change."""
+    is a one-line change at this ONE call site, never a second call site or an architecture change.
+
+    VISION-GATE-CLOSURE-1: `capability_registry` is the real `CapabilityRegistry`
+    `worker/content_cycle.py` already holds (passed through unchanged from `run_content_cycle()`'s
+    own parameter) - when it can resolve the `media_subject_match` capability, the subject-match
+    classifier this call site injects into `MediaResearchService.research()` becomes the real,
+    bounded, fail-soft vision-gate-wrapped classifier (see `services.editorial_pipeline.
+    subject_match_vision_gate`'s own module docstring for the full escalation policy); when it
+    cannot (registry doesn't have this capability configured, or `capability_registry=None`), the
+    plain deterministic `classify_subject_match` runs alone, byte-identical to every prior phase -
+    never a hard failure either way."""
     recovery_service = RecoveryService()
 
     # --- format selection (S1: `decide_presentation()` reused for FORMAT/category/BREAKING-rate-
@@ -432,6 +458,27 @@ async def run_unified_telegram_delivery(
         if presentation_format == PresentationFormat.QUOTE and quote_text else None
     )
 
+    # VISION-GATE-CLOSURE-1: the deterministic classifier remains the only authority UNLESS a real
+    # capability registry is supplied AND actually has the vision capability configured - a missing
+    # registry, a registry without this capability, or any resolve()-time error all fail soft back
+    # to the plain deterministic classifier (never a hard crash for a purely additive capability).
+    subject_match_classifier: "SubjectMatchClassifier" = classify_subject_match
+    if capability_registry is not None:
+        try:
+            _definition, vision_capability = capability_registry.resolve(_MEDIA_SUBJECT_MATCH_CAPABILITY_NAME)
+            subject_match_classifier = build_vision_gate_subject_match_classifier(
+                vision_capability=vision_capability,  # type: ignore[arg-type]
+                image_bytes_provider=lambda candidate: (
+                    read_candidate_bytes(legacy_candidates_by_id[candidate.image_candidate_record_id])
+                    if candidate.image_candidate_record_id in legacy_candidates_by_id else None
+                ),
+            )
+        except Exception:  # noqa: BLE001 - S: an unconfigured/misconfigured capability must never
+            # block the whole unified delivery - the deterministic classifier alone is always a
+            # safe, already-proven fallback.
+            logger.warning("vision_gate_capability_unavailable", exc_info=True, extra={"draft_id": str(content_draft_id)})
+            subject_match_classifier = classify_subject_match
+
     # RUNTIME-CLOSURE-1 (S3.1/S6): no candidate/bytes closed over here - the render callback
     # resolves EXACTLY whatever `media_selection.selected` ends up being, at render time, via
     # `legacy_candidates_by_id` (the same pool `tier1_candidates` above was built from).
@@ -448,11 +495,14 @@ async def run_unified_telegram_delivery(
             platform=Platform.TELEGRAM, render=render, quote_candidate=quote_candidate_for_orchestrator,
             tier1_candidates=tier1_candidates, session=session, recovery_service=recovery_service,
             require_media=True,
-            # FINAL-HARDENING-1 (Founder review HIGH finding): the real, central subject-match
-            # authority - see services/editorial_pipeline/subject_match.py's own module docstring.
-            # This is the ONE classifier MediaResearchService.research() ever receives from this
-            # call site; it is never duplicated or re-decided anywhere else in this pipeline.
-            subject_match_classifier=classify_subject_match,
+            # FINAL-HARDENING-1 (Founder review HIGH finding) / VISION-GATE-CLOSURE-1: the real,
+            # central subject-match authority - see services/editorial_pipeline/subject_match.py's
+            # own module docstring and, when a capability registry is available, services.
+            # editorial_pipeline.subject_match_vision_gate's own docstring for the vision-escalation
+            # policy layered on top of it. This is the ONE classifier MediaResearchService.
+            # research() ever receives from this call site; it is never duplicated or re-decided
+            # anywhere else in this pipeline.
+            subject_match_classifier=subject_match_classifier,
             # RUNTIME-CLOSURE-1 (S12): structural wiring only - see this function's own docstring;
             # `None` here (the only value any real caller passes today) is identical to every
             # previous phase's behavior.
