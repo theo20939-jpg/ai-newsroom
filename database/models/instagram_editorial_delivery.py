@@ -17,7 +17,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Index, Integer, String, func, text
+from sqlalchemy import BigInteger, DateTime, Enum, Index, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -77,7 +77,13 @@ class InstagramEditorialDelivery(Base):
     )
 
     # Telegram delivery coordinates - enough to edit/reply/dedupe without a second Telegram call.
-    telegram_chat_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # `telegram_chat_id`/`decided_by_telegram_user_id` are BigInteger, not Integer: a real
+    # supergroup chat id (e.g. -1004297182444) and a modern Telegram user id both routinely exceed
+    # int32 range - confirmed the hard way, by a real asyncpg OverflowError during the production
+    # canary (INSTAGRAM-TELEGRAM-EDITORIAL-DELIVERY-PRODUCTION-CANARY-1 §12), after the real
+    # Telegram send had already succeeded. `telegram_topic_id`/message ids stay Integer - topic and
+    # message ids are small, sequential, per-chat counters, never anywhere near int32 range.
+    telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     telegram_topic_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     media_message_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
     control_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -88,7 +94,7 @@ class InstagramEditorialDelivery(Base):
     # InstagramContentPackage.to_dict()'s own established convention).
     package_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False)
 
-    decided_by_telegram_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    decided_by_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False,

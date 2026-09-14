@@ -39,7 +39,7 @@ _SP = ShadowPlanResult(
 
 @pytest.fixture(autouse=True)
 def _topic_settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "newsroom_telegram_chat_id", -1009999)
+    monkeypatch.setattr(settings, "newsroom_telegram_chat_id", -1002345678901)
     monkeypatch.setattr(settings, "instagram_topic_id", 77)
 
 
@@ -90,7 +90,7 @@ async def _seed_delivery(session: AsyncSession, *, package_identity: str, pkg, o
     delivery = InstagramEditorialDelivery(
         package_identity=package_identity, version=1, source_story_id=opp.story_id,
         content_format=pkg.content_format.value, state=state, package_snapshot=snapshot,
-        telegram_chat_id=-1009999, telegram_topic_id=77, media_message_ids=[501], control_message_id=502,
+        telegram_chat_id=-1002345678901, telegram_topic_id=77, media_message_ids=[501], control_message_id=502,
     )
     session.add(delivery)
     await session.flush()
@@ -210,7 +210,29 @@ async def test_a_single_delivered_to_the_configured_instagram_topic(db_session: 
     assert outcome.sent is True
     bot.send_photo.assert_called_once()
     assert bot.send_photo.call_args.kwargs["message_thread_id"] == 77
-    assert bot.send_photo.call_args.args[0] == -1009999
+    assert bot.send_photo.call_args.args[0] == -1002345678901
+
+
+@pytest.mark.asyncio
+async def test_real_supergroup_chat_id_round_trips_through_the_database(db_session: AsyncSession) -> None:
+    """INSTAGRAM-TELEGRAM-EDITORIAL-DELIVERY-PRODUCTION-CANARY-1 §12/§18 regression: a real
+    production canary hit an `asyncpg.exceptions.DataError: value out of int32 range` writing
+    `telegram_chat_id` AFTER the real Telegram send had already succeeded, because the column was
+    `Integer` instead of `BigInteger` - a real supergroup chat id (like -1004297182444) and a
+    modern Telegram user id both routinely exceed int32. This test uses that exact real value
+    directly, so a regression to `Integer` fails here, in CI, not in production after a real send."""
+    opp, single, pkg, render, gate = _single_package(opp_id="opp-bigint-regression")
+    identity = compute_package_identity(source_key=opp.id, content_format="single")
+    delivery = await _seed_delivery(db_session, package_identity=identity, pkg=pkg, opp=opp,
+                                     format_decision=FormatDecision(recommended_format=ContentFormat.SINGLE), creative=single)
+    service = InstagramEditorialDeliveryService()
+    await service.mark_delivered(
+        db_session, delivery, chat_id=-1004297182444, topic_id=40, media_message_ids=[1799], control_message_id=1800,
+    )
+    reloaded = await db_session.get(InstagramEditorialDelivery, delivery.id)
+    assert reloaded.telegram_chat_id == -1004297182444
+    await service.set_approved(db_session, delivery, telegram_user_id=6234567890123)  # a realistic modern Telegram user id
+    assert delivery.decided_by_telegram_user_id == 6234567890123
 
 
 @pytest.mark.asyncio
