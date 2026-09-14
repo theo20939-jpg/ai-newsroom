@@ -7,6 +7,7 @@ from bot.handlers.director_console import router as director_console_router
 from bot.handlers.event_recap_review import router as event_recap_review_router
 from bot.handlers.final_post_review import router as final_post_review_router
 from bot.handlers.image_preview import router as image_preview_router
+from bot.handlers.instagram_editorial_review import router as instagram_editorial_review_router
 from bot.handlers.launch import router as launch_router
 from bot.handlers.meme_generate import router as meme_generate_router
 from bot.handlers.meme_preview import router as meme_preview_router
@@ -85,5 +86,11 @@ router.include_router(visual_design_router)
 # broadly, mutation FOUNDER-only, additionally off by default via
 # settings.social_launch_context_enabled (bot/handlers/launch.py's own module docstring).
 router.include_router(launch_router)
+# INSTAGRAM-TELEGRAM-EDITORIAL-DELIVERY-1: "igrev:" Instagram editorial-review callback (Принять/
+# Переделать/Текст/Визуал) - reachable once something actually delivers an Instagram package into
+# the "instagram" Telegram topic (services/instagram_telegram_delivery.py). Authorization is the
+# newsroom-chat-scope check every other review handler already uses (bot/handlers/
+# instagram_editorial_review.py's own module docstring).
+router.include_router(instagram_editorial_review_router)
 
 __all__ = ["router"]
