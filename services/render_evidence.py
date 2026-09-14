@@ -338,10 +338,29 @@ def _derive_data_hero_evidence(data_candidate: Any) -> RenderEvidence:
     # CANVAS-COMPOSITION-CORRECTION-8: replay the REAL fit on the near-square 1280x1172 canvas so
     # `primary_font_size` is truthful.
     inner_w = round(_HERO_CW * _HERO_LEFT_ZONE_FRAC) - _HERO_MARGIN
+    value_text = str(data_candidate.value)
     value_font, value_size = _fit_single_line(
-        draw, data_candidate.value, font_max=_HERO_VALUE_FONT_MAX,
+        draw, value_text, font_max=_HERO_VALUE_FONT_MAX,
         font_min=_HERO_VALUE_FONT_MIN, max_width=inner_w, data_weight="black",
     )
+    # TELEGRAM-DATA-SEMANTIC-OVERFLOW-HOTFIX-1: `text_clipped` used to be hard-coded `False` below,
+    # without ever measuring whether the fitted value/unit actually fit `inner_w` - exactly the gap
+    # that let the real ASML card ("% РЫНКА ЛИТОГР..." overflowing the canvas) report itself as
+    # safe. This replays BOTH mandatory single-line hero elements (the renderer's own
+    # `render_data_hero_card()` never measured `unit` here at all before this fix either) against
+    # the exact same left-column width the renderer itself draws into.
+    value_clipped = draw.textlength(value_text, font=value_font) > inner_w
+
+    unit_text = str(getattr(data_candidate, "unit", "") or "").strip().upper()
+    unit_clipped = False
+    if unit_text:
+        unit_max = max(28, round(value_size * _bm.DATA.unit_over_value))
+        unit_font, _unit_size = _fit_single_line(
+            draw, unit_text, font_max=unit_max, font_min=max(24, unit_max - 40),
+            max_width=inner_w, data_weight="black",
+        )
+        unit_clipped = draw.textlength(unit_text, font=unit_font) > inner_w
+
     label_lines: list[str] = []
     if str(getattr(data_candidate, "label", "")).strip():
         label_lines, _lf, _ls = _fit_wrapped_block(
@@ -374,7 +393,7 @@ def _derive_data_hero_evidence(data_candidate: Any) -> RenderEvidence:
         presentation_mode=DataPresentationMode.FULL_DATA_CARD.value,
         primary_font_size=primary_font_size,
         actual_line_count=len(label_lines),
-        text_clipped=False,
+        text_clipped=value_clipped or unit_clipped,
         not_applicable_fields=frozenset({"secondary_font_size", "source_image_treatment", "source_preserved"}),
         notes={
             "source_image_treatment": "NOT APPLICABLE: generated hero-metric card - no source photo is used",

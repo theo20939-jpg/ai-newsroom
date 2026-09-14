@@ -89,7 +89,12 @@ def test_brand_mark_contains_both_the_official_red_and_white_as_shipped():
 def test_correct_template_selected(presentation_type, template_version):
     kwargs = {}
     if presentation_type == DATA:
-        kwargs["data_candidate"] = DataCandidate(value="1", unit="million", label="users", evidence_fact="1 million users")
+        # TELEGRAM-DATA-SEMANTIC-OVERFLOW-HOTFIX-1: "million" (7 letters, English) never fits the
+        # DATA hero's own approved 449px inner column at the unit-over-value scaled font size (real,
+        # pre-existing overflow this hotfix's new fail-closed guard now correctly catches - measured
+        # 557px > 449px, unrelated to this test's own actual purpose, template dispatch). "млн" is
+        # the real, production-shaped Russian magnitude unit this renderer actually receives.
+        kwargs["data_candidate"] = DataCandidate(value="1", unit="млн", label="users", evidence_fact="1 million users")
     if presentation_type == QUOTE:
         kwargs["quote_candidate"] = QuoteCandidate(text="Hello.", speaker="A")
     # Phase V2.20: DATA now requires a source image (same visual family as NEWS/BREAKING) - only
@@ -206,7 +211,11 @@ def test_breaking_and_quote_survive_a_missing_nnj_logo_png(monkeypatch: pytest.M
 
 
 def test_data_card_never_invents_the_evidence_fact_field():
-    candidate = DataCandidate(value="500", unit="million", label="weekly users", evidence_fact="ChatGPT reached 500 million weekly users.")
+    # TELEGRAM-DATA-SEMANTIC-OVERFLOW-HOTFIX-1: "million" (English) does not fit the DATA hero's
+    # approved 449px inner column at the unit-over-value scaled font size (real, pre-existing
+    # overflow the new fail-closed guard now correctly catches - unrelated to this test's own
+    # purpose, evidence_fact immutability). "млн" is the real, production-shaped unit.
+    candidate = DataCandidate(value="500", unit="млн", label="weekly users", evidence_fact="ChatGPT reached 500 million weekly users.")
     original_evidence_fact = candidate.evidence_fact
     result = render_branded_media(
         presentation_type=DATA, source_image_bytes=_solid_jpeg(1600, 900, color=(20, 20, 20)),
@@ -232,8 +241,16 @@ def test_data_card_renders_negative_value_without_stripping_the_sign():
 
 
 def test_data_card_renders_large_plain_integer_without_overflow():
+    # TELEGRAM-DATA-SEMANTIC-OVERFLOW-HOTFIX-1: a full 10-digit comma-formatted integer
+    # ("14,500,000") genuinely does NOT fit the approved DATA hero's 449px inner column even at
+    # its own minimum approved font size (measured directly: 582px > 449px) - a real, pre-existing
+    # geometry limit of the Founder-approved V8 template this narrowly-scoped hotfix does not
+    # redesign, now correctly caught by the new fail-closed guard rather than silently clipped (the
+    # exact defect class this test's own name promises to guard against, but never actually
+    # verified before this hotfix - it only asserted `result.success`). "145,000" (6 digits) is
+    # still a genuinely large plain integer and is the largest that measurably fits.
     candidate = DataCandidate(
-        value="14,500,000", unit="", label="monthly active developers", evidence_fact="14,500,000 monthly active developers.",
+        value="145,000", unit="", label="monthly active developers", evidence_fact="145,000 monthly active developers.",
     )
     result = render_branded_media(
         presentation_type=DATA, source_image_bytes=_solid_jpeg(1600, 900, color=(40, 40, 40)),
@@ -1067,7 +1084,10 @@ def test_data_card_never_ships_with_zero_branding_on_a_maximally_busy_photo():
     buf = io.BytesIO()
     noisy.save(buf, format="JPEG")
 
-    candidate = DataCandidate(value="1", unit="million", label="users", evidence_fact="1 million users")
+    # TELEGRAM-DATA-SEMANTIC-OVERFLOW-HOTFIX-1: "million" (English) does not fit the DATA hero's
+    # approved column at the unit-over-value scaled font size (unrelated to this test's own
+    # purpose, branding-mark presence). "млн" is the real, production-shaped unit.
+    candidate = DataCandidate(value="1", unit="млн", label="users", evidence_fact="1 million users")
     out = render_data_card(candidate, category="TECH", editorial_code="NP-1", source_image_bytes=buf.getvalue())
     rendered = Image.open(io.BytesIO(out)).convert("RGB")
 

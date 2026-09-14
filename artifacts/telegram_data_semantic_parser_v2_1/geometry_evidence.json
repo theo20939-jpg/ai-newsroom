@@ -1,0 +1,20 @@
+{
+  "NASA": {
+    "metric_value": "20",
+    "metric_unit": "%",
+    "metric_label": "Точность",
+    "subject": "",
+    "comparison": "точнее",
+    "text_clipped": false,
+    "primary_font_size": 270
+  },
+  "ASML": {
+    "metric_value": "94",
+    "metric_unit": "%",
+    "metric_label": "Доля рынка ASML",
+    "subject": "ASML",
+    "comparison": null,
+    "text_clipped": false,
+    "primary_font_size": 270
+  }
+}
