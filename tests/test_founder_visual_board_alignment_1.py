@@ -98,20 +98,52 @@ def test_hero_card_chart_is_drawn_only_from_a_supplied_series() -> None:
     assert render_data_hero_card(one_point)  # renders, no crash
 
 
-def test_hero_card_fits_a_very_long_value_without_clipping() -> None:
-    cand = DataCandidate(
-        value="14,500,000,000",
-        unit="ПОЛЬЗОВАТЕЛЕЙ В МЕСЯЦ",
-        label="",
-        evidence_fact="x",
-    )
+def test_hero_card_fits_a_realistic_long_value_without_clipping() -> None:
+    """TELEGRAM-DATA-SEMANTIC-OVERFLOW-HOTFIX-1: replaces the old, false-positive version of this
+    test (see below), which fed a fixture that ALREADY overflowed both value and unit (measured
+    directly: value 817px / unit 578px against a 449px column) and merely asserted the hard-coded
+    `text_clipped=False` sentinel - it never proved the text actually fit anything. This version
+    proves real, measured geometry for a genuinely fitting case: the same inner column width the
+    renderer itself draws into, measured with the SAME font the renderer fitted."""
+    cand = DataCandidate(value="2,4", unit="МЛН", label="", evidence_fact="x")
     ev = derive_data_render_evidence(
         _jpeg(1280, 720), cand, presentation_mode=DataPresentationMode.FULL_DATA_CARD
     )
     assert ev.text_clipped is False
     assert isinstance(ev.primary_font_size, int)
     assert br._HERO_VALUE_FONT_MIN <= ev.primary_font_size <= br._HERO_VALUE_FONT_MAX
+
+    # Prove it against real measured geometry, not merely the evidence's own say-so.
+    from PIL import ImageDraw
+
+    draw = ImageDraw.Draw(Image.new("RGB", (br._HERO_CW, br._HERO_CH)))
+    inner_w = round(br._HERO_CW * br._HERO_LEFT_ZONE_FRAC) - br._HERO_MARGIN
+    value_font, _ = br._fit_single_line(
+        draw, cand.value, font_max=br._HERO_VALUE_FONT_MAX, font_min=br._HERO_VALUE_FONT_MIN,
+        max_width=inner_w, data_weight="black",
+    )
+    assert draw.textlength(cand.value, font=value_font) <= inner_w
     assert render_data_hero_card(cand)  # end to end, no exception
+
+
+def test_hero_card_fails_closed_instead_of_drawing_overflowing_text() -> None:
+    """The REAL ASML-class defect, reproduced directly at the renderer: a unit long enough that it
+    still does not fit `left_col_w` even at the minimum approved font size (the exact fixture the
+    old, false-positive `text_clipped=False` test above used to wrongly certify as safe - measured
+    directly: unit width 578px > the 449px column, even at the smallest font tried). The renderer
+    must now fail closed (raise) rather than draw it past the canvas edge, and RenderEvidence must
+    truthfully report the overflow rather than hard-coding `text_clipped=False`."""
+    cand = DataCandidate(
+        value="14,500,000,000", unit="ПОЛЬЗОВАТЕЛЕЙ В МЕСЯЦ", label="", evidence_fact="x",
+    )
+    ev = derive_data_render_evidence(
+        _jpeg(1280, 720), cand, presentation_mode=DataPresentationMode.FULL_DATA_CARD
+    )
+    assert ev.text_clipped is True  # never a false "safe" reading for this real overflow case
+    import pytest
+
+    with pytest.raises(ValueError, match="does not fit"):
+        render_data_hero_card(cand)
 
 
 def test_hero_card_label_is_bounded_to_two_lines() -> None:

@@ -704,6 +704,26 @@ def _fit_single_line(
     return font, size
 
 
+def _require_single_line_fits(
+    draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    *, max_width: float, element: str,
+) -> None:
+    """TELEGRAM-DATA-SEMANTIC-OVERFLOW-HOTFIX-1: `_fit_single_line()` above is deliberately left
+    unchanged (shared with `render_quote_card()`, out of this hotfix's scope) - it still returns
+    the smallest font it tried even when that still does not fit `max_width` (its own docstring's
+    disclosed fail-open behavior). The DATA hero renderer's own MANDATORY value/unit elements must
+    never be DRAWN past that point - this raises instead, so `render_branded_media()`'s existing
+    exception boundary converts it into `success=False` -> RENDER_FAILED -> HOLD/recovery, never a
+    widened canvas, never a shrunk-below-floor font, never a clipped/overflowing draw (the real
+    ASML-card defect: "% РЫНКА ЛИТОГР..." spilling past the canvas edge)."""
+    measured = draw.textlength(text, font=font)
+    if measured > max_width:
+        raise ValueError(
+            f"DATA hero {element} text does not fit its approved layout even at the minimum "
+            f"font size (measured {measured:.0f}px > {max_width:.0f}px allowed): {text!r}"
+        )
+
+
 def _fit_wrapped_block(
     draw: ImageDraw.ImageDraw, text: str, *, font_max: int, font_min: int, max_width: int, max_lines: int,
     bold: bool = False, data_weight: str | None = None,
@@ -1352,6 +1372,7 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
         draw, value_text, font_max=_HERO_VALUE_FONT_MAX, font_min=_HERO_VALUE_FONT_MIN,
         max_width=left_col_w, data_weight="black",
     )
+    _require_single_line_fits(draw, value_text, value_font, max_width=left_col_w, element="value")
     vb = draw.textbbox((0, 0), value_text, font=value_font)
     blocks.append(("value", value_font, vb, _OFFICIAL_NNJ_WHITE, 4))
     total_h += (vb[3] - vb[1]) + 4
@@ -1363,6 +1384,7 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
             draw, unit_text, font_max=unit_size, font_min=max(24, unit_size - 40),
             max_width=left_col_w, data_weight="black",
         )
+        _require_single_line_fits(draw, unit_text, unit_font, max_width=left_col_w, element="unit")
         ub = draw.textbbox((0, 0), unit_text, font=unit_font)
         blocks.append(("unit", unit_font, ub, _OFFICIAL_NNJ_RED, 16))
         total_h += (ub[3] - ub[1]) + 14

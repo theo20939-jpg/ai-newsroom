@@ -1,0 +1,29 @@
+=== NASA ===
+title: NASA и IBM представили открытую ИИ-модель для поиска льда на Луне
+fact: Модель способна выявлять водяной лёд более чем на 20% точнее специализированных моделей, обученных на меньшем объёме данных.
+
+metric_value: 20
+metric_unit: %
+metric_label: Точность
+subject: 
+comparison: точнее
+
+=== ASML ===
+title: Все EUV-сканеры ASML расписаны до конца 2027 года
+fact: ASML контролирует примерно 94% рынка литографических сканеров, необходимых для производства полупроводников.
+
+metric_value: 94
+metric_unit: %
+metric_label: Доля рынка ASML
+subject: ASML
+comparison: None
+
+=== MAXUS ===
+title: Представлен минивэн SAIC Maxus 9 2027 с заменой батареи за 90 секунд
+fact: Рекомендованная цена автомобиля начинается с 290 тыс. юаней (примерно 3,8 млн рублей).
+
+metric_value: 290
+metric_unit: тыс юаней
+metric_label: Стартовая цена Maxus 9
+subject: Maxus 9
+comparison: None
