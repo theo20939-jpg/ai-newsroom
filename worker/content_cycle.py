@@ -112,6 +112,7 @@ from services.telegram_routing import (
     send_to_editorial_destination,
     send_video_to_editorial_destination,
 )
+from services.instagram_automatic_trigger import InstagramTriggerCycleReport, evaluate_and_submit_instagram_candidate
 
 # Phase 23.1Q (Media Roadmap Recovery step 1): initial product cap on router-mode NEWS media-group
 # delivery - "1 strong image for ordinary stories; 2-3 images only when additional images
@@ -655,6 +656,9 @@ class ContentCycleResult:
     # (its one message was still sent, just text-only) - not counted here, and not an error.
     image_preview_sent: int = 0
     event_ids: list[UUID] = field(default_factory=list)
+    # INSTAGRAM-AUTOMATIC-EDITORIAL-TRIGGER-1: additive, default None - every pre-existing caller/
+    # test that never reads this field is completely unaffected.
+    instagram_trigger_report: InstagramTriggerCycleReport | None = None
     # Phase 18.10 M3 (Telegram reply context, story_memory_mode != "off" only - all zero
     # otherwise). `story_fail_closed_review`: an update whose story had no discoverable root
     # message - never sent as a standalone post, routed to review instead (see
@@ -1006,6 +1010,103 @@ async def _select_eligible_events(session: AsyncSession) -> list[UUID]:
     return [event_id for _rank, event_id in eligible[: settings.content_generation_batch_size]]
 
 
+# INSTAGRAM-AUTOMATIC-EDITORIAL-TRIGGER-1 §10: a pure rollout-safety throughput cap, deliberately
+# NOT an editorial policy - MAJOR-treatment stories beyond this count in one cycle are simply
+# picked up on the NEXT cycle (the same event stays eligible until _select_eligible_events()'s own
+# existing freshness cutoff excludes it), never dropped/rejected. Separate from and orthogonal to
+# `_ELIGIBLE_TREATMENTS` (services/instagram_automatic_trigger.py), which is the actual editorial
+# selection criterion. Raise this once real production volume validates it is safe to.
+_INSTAGRAM_TRIGGER_MAX_PER_CYCLE = 3
+
+
+async def _run_instagram_automatic_trigger(
+    session_factory: async_sessionmaker[AsyncSession], bot: Bot, event_ids: list[UUID], *,
+    gate_gateway: object | None, gate_prompt_repository: object | None,
+) -> InstagramTriggerCycleReport:
+    """§6: a completely separate loop from the main NEWS content-generation loop below - reuses
+    the SAME already-computed `event_ids` (bounded, fresh, already-eligible per
+    `_select_eligible_events()`), but Instagram submission never depends on and can never affect
+    NEWS content generation/delivery (§6's own "do not couple Instagram generation to Telegram
+    delivery success"). `gate_gateway`/`gate_prompt_repository` being `None` (every test that does
+    not opt in, exactly like the existing Director pre-generation gate above) makes this a
+    complete, safe no-op - no second gateway is ever constructed here.
+
+    Per-story failures are caught and logged, never propagated - one story's Creative Director
+    error, DB hiccup, or Telegram failure must never abort the scan for the remaining candidates
+    or crash the worker cycle (§8 crash safety)."""
+    report = InstagramTriggerCycleReport()
+    if gate_gateway is None or gate_prompt_repository is None:
+        return report
+
+    accepted = 0
+    rejected = 0
+    ready = 0
+    hold = 0
+    block = 0
+    delivered = 0
+    dup_submissions = 0
+    dup_deliveries = 0
+    candidates: list[Any] = []
+
+    for event_id in event_ids[:_INSTAGRAM_TRIGGER_MAX_PER_CYCLE]:
+        try:
+            async with session_factory() as session:
+                treatment = await _classify_event_for_router_treatment(session, event_id)
+                event_row = await session.get(NewsEvent, event_id)
+                if event_row is None:
+                    continue
+                na_task = await session.scalar(
+                    select(EditorialTask)
+                    .where(
+                        EditorialTask.event_id == event_id,
+                        EditorialTask.workflow["workflow_name"].as_string() == WorkflowType.NEWS_ANALYSIS.value,
+                        EditorialTask.status == TaskStatus.COMPLETED,
+                    )
+                    .order_by(EditorialTask.updated_at.desc())
+                    .limit(1)
+                )
+                facts = _extract_research_facts(na_task.workflow if na_task is not None else None)
+
+                outcome = await evaluate_and_submit_instagram_candidate(
+                    session, bot, event_id=str(event_id), event_title=event_row.title or "", treatment=treatment,
+                    research_facts=facts, gateway=gate_gateway, prompt_repository=gate_prompt_repository,
+                    source_url=event_row.url,
+                )
+                await session.commit()
+        except Exception:
+            logger.exception("instagram_automatic_trigger_candidate_failed", extra={"event_id": str(event_id)})
+            continue
+
+        candidates.append(outcome)
+        if not outcome.accepted:
+            rejected += 1
+            continue
+        accepted += 1
+        if outcome.reason == "already_submitted":
+            dup_submissions += 1
+            continue
+        if outcome.gate_decision == "ready_for_editor":
+            ready += 1
+        elif outcome.gate_decision == "hold":
+            hold += 1
+        elif outcome.gate_decision == "block":
+            block += 1
+        if outcome.delivery_sent:
+            delivered += 1
+        elif outcome.delivery_reason == "duplicate_skipped":
+            dup_deliveries += 1
+
+    report = InstagramTriggerCycleReport(
+        stories_evaluated=len(candidates), opportunities_accepted=accepted, opportunities_rejected=rejected,
+        packages_ready=ready, packages_hold=hold, packages_block=block, packages_delivered=delivered,
+        duplicate_submissions_suppressed=dup_submissions, duplicate_deliveries_suppressed=dup_deliveries,
+        candidates=candidates,
+    )
+    if report.stories_evaluated:
+        logger.info("instagram_automatic_trigger_cycle_finished", extra=report.as_log_extra())
+    return report
+
+
 async def run_content_cycle(
     capability_registry: CapabilityRegistry,
     bot: Bot,
@@ -1041,6 +1142,14 @@ async def run_content_cycle(
             event_ids = await _select_eligible_events(session)
     result.eligible_found = len(event_ids)
     result.event_ids = event_ids
+
+    # INSTAGRAM-AUTOMATIC-EDITORIAL-TRIGGER-1: independent of and never coupled to the NEWS
+    # content-generation loop below - a failure here can never affect NEWS delivery, and vice
+    # versa. A safe no-op whenever gate_gateway/gate_prompt_repository are None (see that
+    # function's own docstring).
+    result.instagram_trigger_report = await _run_instagram_automatic_trigger(
+        session_factory, bot, event_ids, gate_gateway=gate_gateway, gate_prompt_repository=gate_prompt_repository,
+    )
 
     # MEME PRODUCTION PIPELINE (overnight phase): bounded per-cycle cap on automatic meme
     # generation attempts - inert (settings.meme_auto_max_candidates_per_cycle is never even
