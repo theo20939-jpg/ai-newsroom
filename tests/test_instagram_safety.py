@@ -57,6 +57,11 @@ def test_all_new_feature_flags_default_false() -> None:
     # above, unaffected: services/instagram_publish_adapter.py is not one of _NEW_MODULES). It
     # still defaults False, same as every flag above.
     assert settings.instagram_publication_enabled is False
+    # INSTAGRAM-PRODUCTION-ROLLOUT-1 §6: a second, narrower flag - would gate a future autonomous
+    # scheduler/worker loop (none exists today; only a per-call, per-package, explicitly-approved
+    # live publish is even wired). Must default False independently of the flag above - enabling
+    # bounded, per-package publication must never imply full autonomous posting.
+    assert settings.instagram_autonomous_publication_enabled is False
     assert not hasattr(settings, "instagram_ad_spend_enabled")
 
 

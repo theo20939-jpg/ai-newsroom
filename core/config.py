@@ -1240,6 +1240,17 @@ class Settings(BaseSettings):
     # Telegram. Turning this True in production is a separate, explicitly-authorized future step
     # (this phase never sets it True anywhere, never reads a real access token for a write call).
     instagram_publication_enabled: bool = False
+    # INSTAGRAM-PRODUCTION-ROLLOUT-1 §6: a SEPARATE, narrower control from `instagram_publication_
+    # enabled` above. That flag gates whether a LIVE (non-shadow) publish call is permitted to run
+    # at all for one explicit, controlled, individually-approved package (`editor_approved=True`
+    # still required per-call - see `services/instagram_publish_adapter.py::publish_instagram_
+    # content()`). THIS flag would gate a future scheduler/worker loop autonomously selecting and
+    # publishing READY packages with no per-call human approval - no such loop exists anywhere in
+    # this codebase today (confirmed by direct audit; nothing calls `publish_instagram_content()`
+    # from any worker/scheduler path). Default False and left False for the entire duration of this
+    # phase - turning this True is a distinct, separately-authorized future decision, never implied
+    # by `instagram_publication_enabled=True` alone.
+    instagram_autonomous_publication_enabled: bool = False
     # The official write scope this flag conceptually gates, kept separate from the READ scopes
     # services/instagram_account_reader.py already uses (instagram_business_basic /
     # ..._manage_insights) - section 17's own "separate READ_SCOPES and WRITE_SCOPES" instruction.
