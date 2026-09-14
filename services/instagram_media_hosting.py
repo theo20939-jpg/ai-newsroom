@@ -26,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import logging
+import os
 import socket
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -106,10 +107,20 @@ def register_publication_asset(
     asset_id = hashlib.sha256(image_bytes).hexdigest()[:32]
     _ensure_storage_root()
     dest = _STORAGE_ROOT / f"{asset_id}.jpg"
+    now = datetime.now(timezone.utc)
     if not dest.exists():
         dest.write_bytes(image_bytes)
+    else:
+        # INSTAGRAM-MEDIA-HOSTING-CLOSURE-1 §7: a dedup hit (identical bytes already staged from an
+        # earlier registration) must still refresh this asset's exposure window - `get_publication_
+        # asset()` derives expiry from the file's own mtime, so without this a re-registration of
+        # content that happens to match a stale, already-expired file would be silently unservable
+        # the instant it's "registered" again. mtime is the single source of truth for "last
+        # registered at", never "first ever written at" - a real re-publish of the same rendered
+        # image (e.g. a retried package build) must always get a fresh TTL, not inherit history.
+        os.utime(dest, (now.timestamp(), now.timestamp()))
 
-    now = datetime.now(timezone.utc)
+
     asset = PublicationAsset(
         asset_id=asset_id, local_path=dest, mime_type=mime, byte_size=len(image_bytes),
         package_id=package_id, created_at=now, expires_at=now + timedelta(seconds=ttl_seconds),

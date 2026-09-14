@@ -89,6 +89,43 @@ async def test_live_publish_fails_closed_without_editor_approval_even_if_flag_we
 
 
 @pytest.mark.asyncio
+async def test_live_publish_fails_closed_when_media_hosting_not_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    """INSTAGRAM-MEDIA-HOSTING-CLOSURE-1 §8/§14: a real (non-shadow) single/carousel publish must
+    never reach the client with a fabricated placeholder image_ref - it fails closed the instant a
+    safe public HTTPS media URL isn't configured, exactly like the flag/approval gates above."""
+    monkeypatch.setattr(settings, "instagram_publication_enabled", True)
+    pkg, gate = _ready_package_and_gate()
+
+    class ExplodingClient(ShadowInstagramPublishClient):
+        async def create_media_container(self, **kw):
+            raise AssertionError("the client must never be called while media hosting is not ready")
+
+    result = await publish_instagram_content(
+        pkg, gate, client=ExplodingClient(), account_id="acct", shadow=False, editor_approved=True, sleep_fn=_NO_SLEEP,
+    )
+    assert result.status is PublicationStatus.BLOCKED
+    assert result.failure_class == InstagramPublishErrorCode.MEDIA_HOSTING_NOT_READY.value
+
+
+@pytest.mark.asyncio
+async def test_live_publish_proceeds_past_the_media_hosting_gate_once_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The converse of the test above - once `media_hosting_readiness()` reports ready, the new
+    gate is transparent and the existing container/publish flow runs exactly as before."""
+    import socket
+
+    monkeypatch.setattr(settings, "instagram_publication_enabled", True)
+    monkeypatch.setattr(settings, "instagram_media_public_base_url", "https://cdn.example.com")
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [(socket.AF_INET, 0, 0, "", ("93.184.216.34", 0))])
+    pkg, gate = _ready_package_and_gate()
+
+    result = await publish_instagram_content(
+        pkg, gate, client=ShadowInstagramPublishClient(), account_id="acct", shadow=False, editor_approved=True, sleep_fn=_NO_SLEEP,
+    )
+    assert result.status is PublicationStatus.LIVE_SUCCESS
+    assert result.failure_class is None
+
+
+@pytest.mark.asyncio
 async def test_block_gate_outcome_never_reaches_the_client() -> None:
     pkg, _ = _ready_package_and_gate()
     blocked = InstagramGateOutcome(decision=InstagramGateDecision.BLOCK, short_reason="test")

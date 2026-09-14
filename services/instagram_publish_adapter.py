@@ -41,6 +41,7 @@ import httpx
 from core.config import settings
 from services.instagram_content_package import InstagramContentPackage
 from services.instagram_editorial_gate import InstagramGateOutcome
+from services.instagram_media_hosting import media_hosting_readiness
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ class InstagramPublishErrorCode(str, enum.Enum):
     GATE_NOT_PERMITTED = "gate_not_permitted"          # editorial gate is not READY_FOR_EDITOR
     NOT_APPROVED = "not_approved"                      # no explicit editor_approved=True for a live publish
     NOT_CONFIGURED = "not_configured"                  # no access token / account id configured
+    MEDIA_HOSTING_NOT_READY = "media_hosting_not_ready"  # INSTAGRAM-MEDIA-HOSTING-CLOSURE-1 §8: no safe public HTTPS media URL is available yet - a live publish needing image_url/video_url must never reach the provider with a placeholder/fabricated ref
     AUTH_ERROR = "auth_error"                          # 401/403 from the provider
     INVALID_MEDIA = "invalid_media"                    # 400-class media rejection
     PROCESSING_TIMEOUT = "processing_timeout"          # container never reached FINISHED within the poll bound
@@ -318,6 +320,20 @@ async def publish_instagram_content(
                 platform="instagram", account_key=package.account_key, package_id=package.package_id,
                 content_format=package.content_format.value, status=PublicationStatus.BLOCKED, shadow=shadow,
                 failure_class=InstagramPublishErrorCode.NOT_APPROVED.value, requested_at=requested_at,
+                completed_at=datetime.now(timezone.utc),
+            )
+        # INSTAGRAM-MEDIA-HOSTING-CLOSURE-1 §8/§14: single/carousel formats need a real image_url -
+        # without a safe, configured public HTTPS base URL there is no such thing to send, and the
+        # old behavior (a fabricated "pending-media-ref:..." placeholder string) must never reach a
+        # live provider call. Fails closed here, before any image_ref is even constructed, rather
+        # than relying on Meta's own API to reject a nonsense URL. REEL is unaffected - it already
+        # has its own separate `external_video_asset_ref` presence check below; video hosting is out
+        # of this phase's scope (image/jpeg only, per `services/instagram_media_hosting.py`).
+        if package.content_format.value in ("single", "carousel") and not media_hosting_readiness()["media_hosting_ready"]:
+            return PublicationResult(
+                platform="instagram", account_key=package.account_key, package_id=package.package_id,
+                content_format=package.content_format.value, status=PublicationStatus.BLOCKED, shadow=shadow,
+                failure_class=InstagramPublishErrorCode.MEDIA_HOSTING_NOT_READY.value, requested_at=requested_at,
                 completed_at=datetime.now(timezone.utc),
             )
 

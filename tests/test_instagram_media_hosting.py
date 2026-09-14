@@ -1,14 +1,20 @@
-"""INSTAGRAM-PRODUCTION-READINESS-CLOSURE-1 §6/§15: the real media-hosting mechanism. No real
-network write anywhere in this file - `is_safe_public_base_url()` does real DNS resolution for a
-handful of well-known/synthetic hostnames, never an HTTP request."""
+"""INSTAGRAM-PRODUCTION-READINESS-CLOSURE-1 §6/§15, hardened in INSTAGRAM-MEDIA-HOSTING-CLOSURE-1
+§10: the real media-hosting mechanism. No real network write anywhere in this file -
+`is_safe_public_base_url()` does real DNS resolution for a handful of well-known/synthetic
+hostnames, never an HTTP request."""
 from __future__ import annotations
 
+import hashlib
 import io
+import os
+from datetime import datetime, timezone
 
 import pytest
 from PIL import Image
 
+import services.instagram_media_hosting as hosting_module
 from services.instagram_media_hosting import (
+    DEFAULT_TTL_SECONDS,
     MAX_ASSET_BYTES,
     MediaHostingError,
     build_public_media_url,
@@ -17,6 +23,17 @@ from services.instagram_media_hosting import (
     media_hosting_readiness,
     register_publication_asset,
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolated_storage_root(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """INSTAGRAM-MEDIA-HOSTING-CLOSURE-1 §10: every test gets its own empty directory - never the
+    real, persistent `instagram_media_storage_root`. Without this, content-hash dedup means bytes
+    staged by an EARLIER test run (possibly hours/days ago, on a real filesystem) collide with a
+    later run's asset id, and the real mtime-based TTL then correctly reports that stale file as
+    already expired - a test-isolation bug this fixture removes at the root, independent of the
+    real fix in `register_publication_asset()` below."""
+    monkeypatch.setattr(hosting_module, "_STORAGE_ROOT", tmp_path / "instagram_media_public")
 
 
 def _real_jpeg_bytes(size: tuple[int, int] = (400, 300)) -> bytes:
@@ -68,6 +85,51 @@ def test_lookup_rejects_malformed_id_never_touches_filesystem() -> None:
 
 def test_lookup_of_never_registered_id_is_none() -> None:
     assert get_publication_asset("f" * 32) is None
+
+
+def test_hosted_digest_matches_rendered_digest() -> None:
+    """INSTAGRAM-MEDIA-HOSTING-CLOSURE-1 §6/§14 HOSTED_ASSET_EQUALS_RENDERED_ASSET: the hosting
+    layer never independently chooses or substitutes media - the served bytes' own digest must
+    equal the exact bytes that were rendered, not merely "some image of the right size"."""
+    data = _real_jpeg_bytes()
+    rendered_digest = hashlib.sha256(data).hexdigest()
+    asset = register_publication_asset(data, package_id="pkg-digest")
+    fetched = get_publication_asset(asset.asset_id)
+    assert fetched is not None
+    hosted_digest = hashlib.sha256(fetched.local_path.read_bytes()).hexdigest()
+    assert hosted_digest == rendered_digest
+    assert asset.asset_id == rendered_digest[:32]  # the asset id IS a prefix of the content digest
+
+
+def test_expired_asset_is_unservable_even_though_bytes_remain_on_disk() -> None:
+    """§10.G - an expired id must behave exactly like an unknown one (404), never serve stale
+    bytes past the retention window, even though the file itself is deliberately left in place
+    (simplicity of cleanup, never a correctness issue since lookup fails closed on expiry)."""
+    asset = register_publication_asset(_real_jpeg_bytes(), package_id="pkg-expire")
+    old = 946684800.0  # 2000-01-01 - unambiguously outside any real TTL window
+    os.utime(asset.local_path, (old, old))
+    assert get_publication_asset(asset.asset_id) is None
+    assert asset.local_path.exists()  # bytes are untouched - only servability is gated
+
+
+def test_reregistering_identical_bytes_after_expiry_refreshes_the_window() -> None:
+    """The real bug this phase found and fixed: a dedup hit (same content already staged) must
+    refresh the asset's exposure window to "now", never silently inherit a stale first-write mtime
+    that could already be past the TTL - otherwise a legitimately re-registered asset would be
+    unservable the instant it's registered."""
+    data = _real_jpeg_bytes()
+    first = register_publication_asset(data, package_id="pkg-refresh-1")
+    old = 946684800.0
+    os.utime(first.local_path, (old, old))
+    assert get_publication_asset(first.asset_id) is None  # confirms it really did go stale
+
+    second = register_publication_asset(data, package_id="pkg-refresh-2")
+    assert second.asset_id == first.asset_id  # same content, same identity - no duplicate file
+    fetched = get_publication_asset(second.asset_id)
+    assert fetched is not None
+    # A freshly-refreshed asset expires close to now + DEFAULT_TTL_SECONDS, not in the past.
+    remaining = (fetched.expires_at - datetime.now(timezone.utc)).total_seconds()
+    assert DEFAULT_TTL_SECONDS - 30 <= remaining <= DEFAULT_TTL_SECONDS
 
 
 # ---------------------------------------------------------------------------
@@ -200,3 +262,33 @@ def test_route_never_serves_an_arbitrary_path() -> None:
     # itself never returns anything but 404 for a non-matching pattern.
     resp = client.get("/media/instagram/whatever-not-a-real-id.jpg")
     assert resp.status_code == 404
+
+
+def test_route_rejects_a_path_traversal_style_id() -> None:
+    """§10.H/I - a crafted id embedding traversal segments must never reach the filesystem as a
+    literal path; httpx/starlette percent-encode "/" so this exercises the route's own matching,
+    not just `get_publication_asset()`'s in-process guard already covered above."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app, base_url="http://localhost")
+    resp = client.get("/media/instagram/" + "..%2f..%2f..%2fetc%2fpasswd")
+    assert resp.status_code == 404
+
+
+def test_route_supports_head_without_body() -> None:
+    """§10.E - Instagram/Meta's own fetcher may issue a HEAD probe before a full GET; the route
+    must answer it (FastAPI/Starlette serve HEAD automatically for a declared GET route) rather
+    than 405."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    data = _real_jpeg_bytes()
+    asset = register_publication_asset(data, package_id="pkg-head")
+    client = TestClient(app, base_url="http://localhost")
+    resp = client.head(f"/media/instagram/{asset.asset_id}.jpg")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/jpeg"
+    assert resp.content == b""
