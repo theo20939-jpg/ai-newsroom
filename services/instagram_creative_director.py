@@ -50,12 +50,19 @@ from services.instagram_format_director import ClaimViolationError, validate_pac
 SINGLE_PROMPT_NAME = "instagram_creative_director_single"
 CAROUSEL_PROMPT_NAME = "instagram_creative_director_carousel"
 REEL_PROMPT_NAME = "instagram_creative_director_reel"
-_PROMPT_VERSION = "1"
-# INSTAGRAM-CONTENT-STRATEGY-V2 Phase 3: REEL's own prompt version, bumped independently of
-# SINGLE/CAROUSEL (which stay on v1, byte-identical) - adds visual_direction/asset_requirements/
-# adaptation_notes to the output_schema plus trend_mechanic/trend_spread_reason guidance in the
-# system prompt. Never edits prompts/instagram_creative_director_reel/v1.yaml in place.
-_REEL_PROMPT_VERSION = "2"
+# INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2/3 ROLLOUT CLOSURE HOTFIX: a real bounded Reel canary
+# against the live production OpenAI endpoint surfaced the exact same structured-output contract
+# bug the business_context_parser hotfix already diagnosed and fixed - OpenAI's strict
+# response_format="json_schema" mode requires every key in `properties` to also appear in
+# `required` (an "optional" field is expressed via a nullable type union, never omission). All
+# three v1 prompts here had this bug (SINGLE: missing `cta`; CAROUSEL: missing `final_cta`/
+# `slides[].source_evidence`; REEL v2: missing nearly every optional field) - confirmed live, not
+# guessed, before any of these were bumped. Each gets its own independently-versioned, schema-
+# shape-only fix; the previous version file is left untouched/unused, matching this codebase's own
+# established "never edit a shipped prompt version in place" convention.
+_SINGLE_PROMPT_VERSION = "2"
+_CAROUSEL_PROMPT_VERSION = "2"
+_REEL_PROMPT_VERSION = "3"
 
 
 class CreativeDirectorUnavailableError(Exception):
@@ -156,7 +163,7 @@ def _build_user_text(director_input: CreativeDirectorInput) -> str:
 
 async def _call_creative_director(
     gateway: LLMGateway, prompt_repository: PromptRepository, *, prompt_name: str, director_input: CreativeDirectorInput,
-    prompt_version: str = _PROMPT_VERSION,
+    prompt_version: str,
 ) -> tuple[dict, CapabilityCall]:
     try:
         prompt = prompt_repository.resolve(prompt_name, prompt_version)
@@ -203,6 +210,7 @@ async def generate_single_creative(
 ) -> CreativeGenerationOutcome:
     output, call = await _call_creative_director(
         gateway, prompt_repository, prompt_name=SINGLE_PROMPT_NAME, director_input=director_input,
+        prompt_version=_SINGLE_PROMPT_VERSION,
     )
     creative = InstagramSingleCreative.model_validate(output)
     _enforce_fact_safety(
@@ -217,6 +225,7 @@ async def generate_carousel_creative(
 ) -> CreativeGenerationOutcome:
     output, call = await _call_creative_director(
         gateway, prompt_repository, prompt_name=CAROUSEL_PROMPT_NAME, director_input=director_input,
+        prompt_version=_CAROUSEL_PROMPT_VERSION,
     )
     creative = InstagramCarouselCreative.model_validate(output)
     text_fields = [slide.slide_copy for slide in creative.slides] + [creative.final_cta or ""]

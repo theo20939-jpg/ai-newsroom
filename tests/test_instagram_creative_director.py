@@ -43,23 +43,20 @@ _REEL_SCHEMA = {"type": "object", "properties": {}, "required": []}
 
 def _prompt_repository() -> FakePromptRepository:
     repository = FakePromptRepository()
+    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2/3 ROLLOUT CLOSURE HOTFIX: SINGLE/CAROUSEL/REEL all
+    # moved to a new prompt version (services/instagram_creative_director.py::_SINGLE_PROMPT_
+    # VERSION/_CAROUSEL_PROMPT_VERSION/_REEL_PROMPT_VERSION's own docstring explains why - the
+    # OpenAI strict-schema hotfix already applied to business_context_parser).
     repository.register(RenderedPrompt(
-        name=SINGLE_PROMPT_NAME, version="1", system="you are the creative director", rules=["never invent facts"],
+        name=SINGLE_PROMPT_NAME, version="2", system="you are the creative director", rules=["never invent facts"],
         output_schema=_SINGLE_SCHEMA,
     ))
     repository.register(RenderedPrompt(
-        name=CAROUSEL_PROMPT_NAME, version="1", system="you are the creative director", rules=["never invent facts"],
+        name=CAROUSEL_PROMPT_NAME, version="2", system="you are the creative director", rules=["never invent facts"],
         output_schema=_CAROUSEL_SCHEMA,
     ))
     repository.register(RenderedPrompt(
-        name=REEL_PROMPT_NAME, version="1", system="you are the creative director", rules=["never invent facts"],
-        output_schema=_REEL_SCHEMA,
-    ))
-    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 3: generate_reel_creative() now resolves REEL's own
-    # bumped version ("2") - SINGLE/CAROUSEL stay on "1" (see services/instagram_creative_
-    # director.py::_REEL_PROMPT_VERSION's own docstring for why only REEL moved).
-    repository.register(RenderedPrompt(
-        name=REEL_PROMPT_NAME, version="2", system="you are the creative director", rules=["never invent facts"],
+        name=REEL_PROMPT_NAME, version="3", system="you are the creative director", rules=["never invent facts"],
         output_schema=_REEL_SCHEMA,
     ))
     return repository
@@ -198,3 +195,38 @@ async def test_gateway_failure_raises_unavailable_never_fabricates() -> None:
     gateway = FakeLLMGateway(generate_error=RuntimeError("provider outage"))
     with pytest.raises(CreativeDirectorUnavailableError):
         await generate_single_creative(gateway, _prompt_repository(), director_input=_base_input())
+
+
+# ---------------------------------------------------------------------------
+# INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2/3 ROLLOUT CLOSURE HOTFIX: structural proof (not a
+# spot-check) that all 3 real, currently-resolved prompt files satisfy OpenAI's strict
+# response_format="json_schema" contract - every key in `properties` must also appear in that
+# object's own `required` array. A real bounded Reel canary against the live production OpenAI
+# endpoint proved v1/v2 of all three prompts violated this (the exact same class of bug
+# tests/test_business_context_command_parser_v2.py already proved and fixed for that prompt).
+# ---------------------------------------------------------------------------
+
+
+def _strict_mode_violations(node: dict, path: str) -> list[str]:
+    violations: list[str] = []
+    if node.get("type") == "object" and "properties" in node:
+        required = set(node.get("required", []))
+        properties = node["properties"]
+        missing = set(properties.keys()) - required
+        if missing:
+            violations.append(f"{path}: missing {sorted(missing)} from required")
+        for key, subschema in properties.items():
+            violations.extend(_strict_mode_violations(subschema, f"{path}.{key}"))
+    if node.get("type") == "array" and "items" in node:
+        violations.extend(_strict_mode_violations(node["items"], f"{path}[]"))
+    return violations
+
+
+@pytest.mark.parametrize(("prompt_name", "version"), [
+    (SINGLE_PROMPT_NAME, "2"), (CAROUSEL_PROMPT_NAME, "2"), (REEL_PROMPT_NAME, "3"),
+])
+def test_real_creative_director_prompts_have_no_openai_strict_mode_violations(prompt_name: str, version: str) -> None:
+    repository = FilePromptRepository(_PROMPTS_ROOT)
+    rendered = repository.resolve(prompt_name, version)
+    violations = _strict_mode_violations(rendered.output_schema, prompt_name)
+    assert violations == [], f"OpenAI strict-mode required-field violations: {violations}"
