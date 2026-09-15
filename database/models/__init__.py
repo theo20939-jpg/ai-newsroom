@@ -44,6 +44,8 @@ from database.models.telegram_post_performance import TelegramPostPerformanceSna
 from database.models.telegram_surface import TelegramSurface
 from database.models.telegram_surface_proposal import TelegramSurfaceProposal
 from database.models.telegram_visual_failure import TelegramVisualFailure
+from database.models.trend_cluster import TrendCluster
+from database.models.trend_observation import TrendObservation
 from database.models.user import User
 from database.models.visual_design_attempt import VisualDesignAttempt
 from database.models.visual_designer_brief import VisualDesignerBriefVersion

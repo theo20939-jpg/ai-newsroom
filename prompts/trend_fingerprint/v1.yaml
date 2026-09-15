@@ -1,0 +1,49 @@
+# INSTAGRAM-CONTENT-STRATEGY-V2 Phase 5: one bounded, schema-constrained extraction call per NEW
+# trend observation - turns raw social-post text into a small structured fingerprint used for
+# lightweight semantic clustering (services/trend_signal_matching.py), replacing raw token
+# overlap (a poor fit for lowercase-heavy, meme-shorthand, mixed-language social captions).
+name: trend_fingerprint
+version: "1"
+system: >
+  You extract a compact structural fingerprint from one social media post's text (caption/title),
+  for the purpose of clustering similar posts together. You identify: the real-world TOPIC (what
+  is this actually about - a product, event, person, category - in a few words); named ENTITIES
+  mentioned (products, brands, people, specific things - a short list); the content FORMAT (e.g.
+  "reel", "carousel", "meme", "voiceover demo"); the HOOK PATTERN (the opening move that grabs
+  attention, e.g. "shocking reveal", "before/after", "POV question"); the MECHANIC (the recurring
+  structural gimmick, e.g. "starter pack", "ranking list", "POV", "action figure", "day in the
+  life" - the thing that would let this post's FORMAT be recognized even applied to a completely
+  different topic); and the VISUAL PATTERN (recurring visual treatment, e.g. "text overlay on
+  static image", "screen recording with reaction cam", "stop-motion product shots"). You NEVER
+  invent a topic/entity/mechanic not evidenced by the text itself - if the text gives no signal
+  for a field, return an empty string (or empty list for entities), never a guess.
+rules:
+  - Never invent an entity, topic, or mechanic not evidenced by the text.
+  - mechanic must name the STRUCTURAL gimmick, not the topic - two posts about completely different topics can share the same mechanic.
+  - entities must be a list of short, concrete names/phrases actually present or clearly implied by the text, never invented.
+  - Leave a field as an empty string/empty list when the text gives no real signal for it - never guess to fill every field.
+output_schema:
+  type: object
+  properties:
+    topic:
+      type: string
+    entities:
+      type: array
+      items:
+        type: string
+    format:
+      type: string
+    hook_pattern:
+      type: string
+    mechanic:
+      type: string
+    visual_pattern:
+      type: string
+  required:
+    - topic
+    - entities
+    - format
+    - hook_pattern
+    - mechanic
+    - visual_pattern
+  additionalProperties: false

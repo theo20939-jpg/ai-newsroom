@@ -1299,6 +1299,21 @@ class Settings(BaseSettings):
     # this value the gate falls back to the Stage 1 deterministic outcome. See §28's cost model.
     director_editorial_gate_max_llm_reviews_per_day: int = Field(default=100, ge=0)
 
+    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 5: Trend Radar - SHADOW ONLY this phase.
+    # TREND_AUTONOMOUS_CONTENT_GENERATION stays False regardless of the other three flags below -
+    # no code path in this phase ever reads it to gate a real ContentOpportunity(TREND) submission
+    # (none exists yet); it is declared now, defaulted safely, so a future phase that wires actual
+    # autonomous submission has one real, pre-existing flag to check rather than inventing one
+    # under time pressure later.
+    trend_collection_enabled: bool = False
+    trend_clustering_enabled: bool = False
+    trend_ranking_shadow: bool = True
+    trend_autonomous_content_generation: bool = False
+    # Monitored entities/accounts/hashtags (Founder-curated) - one of trend_source_scope.py's five
+    # discovery inputs. A plain flat list, same class of setting as `telegraph_approver_user_ids`/
+    # `business_context_role_map` elsewhere in this file - never a parallel CMS table.
+    trend_monitored_entities: list[str] = Field(default_factory=list)
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""
