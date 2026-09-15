@@ -1072,6 +1072,19 @@ class Settings(BaseSettings):
     instagram_competitor_intelligence_enabled: bool = False
     instagram_growth_strategy_shadow_enabled: bool = False
     instagram_calendar_enabled: bool = False
+
+    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2/3 CONTROLLED ROLLOUT: two narrow, independent runtime
+    # gates - neither is a new pipeline/scheduler/agent, both default False. Deploying the Phase
+    # 2/3 code is safe with both left False: `_run_instagram_product_lane()` (worker/content_
+    # cycle.py) becomes a real no-op (logs "instagram_product_lane_disabled", never falls through
+    # to another lane) instead of running automatic PRODUCT generation every cycle; a REEL format
+    # decision reaching `evaluate_and_submit_instagram_opportunity()` (services/instagram_
+    # automatic_trigger.py) is deferred (never silently downgraded to SINGLE) instead of reaching
+    # the Reel Creative Director. Neither flag affects Phase 1 (Active Director/Product Truth
+    # ingestion), existing NEWS Instagram delivery, or a manual bounded canary invocation - a
+    # canary may pass its own local override without ever touching this persistent config.
+    instagram_product_lane_enabled: bool = False
+    instagram_reel_execution_enabled: bool = False
     # INSTAGRAM-GROWTH-3 - same discipline again: real semantic-matching/Creative-Director code
     # exists (services/instagram_semantic_matching.py, services/instagram_creative_director.py),
     # both defaulting False and unread by any live/production code path. Still no publication flag

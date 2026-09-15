@@ -12,9 +12,14 @@ from unittest.mock import AsyncMock
 import pytest
 
 import worker.content_cycle as cc
+from core.config import settings
 from services.instagram_automatic_trigger import InstagramTriggerCandidateOutcome
 
 pytestmark = pytest.mark.asyncio
+
+
+def _enable_product_lane(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "instagram_product_lane_enabled", True)
 
 
 @dataclass
@@ -46,6 +51,7 @@ def _session_factory():
 
 
 async def test_gate_gateway_none_is_a_complete_safe_no_op(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_product_lane(monkeypatch)
     called = {"n": 0}
 
     async def _must_not_be_called(*args, **kwargs):
@@ -60,10 +66,52 @@ async def test_gate_gateway_none_is_a_complete_safe_no_op(monkeypatch: pytest.Mo
     assert called["n"] == 0
 
 
+# ---------------------------------------------------------------------------
+# CONTROLLED ROLLOUT (INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2/3 closure): the dedicated
+# instagram_product_lane_enabled runtime gate - default False, checked before gate_gateway/
+# gate_prompt_repository, never falls through to another lane.
+# ---------------------------------------------------------------------------
+
+
+async def test_product_lane_disabled_by_default_is_a_complete_safe_no_op(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert settings.instagram_product_lane_enabled is False  # the real, un-monkeypatched default
+    called = {"n": 0}
+
+    async def _must_not_be_called(*args, **kwargs):
+        called["n"] += 1
+        raise AssertionError("must never be reached while instagram_product_lane_enabled is False")
+
+    monkeypatch.setattr(cc, "run_instagram_growth_strategist", _must_not_be_called)
+    report = await cc._run_instagram_product_lane(
+        _session_factory(), AsyncMock(), gate_gateway=object(), gate_prompt_repository=object(),
+    )
+    assert report.stories_evaluated == 0
+    assert called["n"] == 0
+
+
+async def test_product_lane_disabled_takes_priority_over_a_real_gate_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Even with real gate_gateway/gate_prompt_repository (the NEWS lane's own, already-satisfied
+    condition in production), the dedicated flag alone must be enough to keep this lane inert."""
+    monkeypatch.setattr(settings, "instagram_product_lane_enabled", False)
+    called = {"n": 0}
+
+    async def _must_not_be_called(*args, **kwargs):
+        called["n"] += 1
+        raise AssertionError("must never be reached while instagram_product_lane_enabled is False")
+
+    monkeypatch.setattr(cc, "run_instagram_growth_strategist", _must_not_be_called)
+    report = await cc._run_instagram_product_lane(
+        _session_factory(), AsyncMock(), gate_gateway=object(), gate_prompt_repository=object(),
+    )
+    assert report.stories_evaluated == 0
+    assert called["n"] == 0
+
+
 async def test_wires_through_growth_strategist_ranking_and_general_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
     """Proves the PRODUCT lane is wired through generate_growth_strategy()'s real ranking output
     (via run_instagram_growth_strategist()), not a hand-rolled opportunity - the exact "wire
     generate_growth_strategy() into the real execution path" requirement."""
+    _enable_product_lane(monkeypatch)
     opportunity = _FakeOpportunity(id="product_context:abc")
 
     async def _fake_growth_strategist(session, *, now):
@@ -89,6 +137,7 @@ async def test_wires_through_growth_strategist_ranking_and_general_entrypoint(mo
 
 
 async def test_per_cycle_cap_bounds_evaluation(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_product_lane(monkeypatch)
     opportunities = [_FakeOpportunity(id=f"product_context:{i}") for i in range(5)]
 
     async def _fake_growth_strategist(session, *, now):
@@ -111,6 +160,8 @@ async def test_per_cycle_cap_bounds_evaluation(monkeypatch: pytest.MonkeyPatch) 
 
 
 async def test_ranking_failure_is_isolated_never_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_product_lane(monkeypatch)
+
     async def _boom(session, *, now):
         raise RuntimeError("simulated ranking failure")
 
@@ -122,6 +173,7 @@ async def test_ranking_failure_is_isolated_never_raises(monkeypatch: pytest.Monk
 
 
 async def test_per_candidate_failure_never_aborts_the_cycle(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_product_lane(monkeypatch)
     opportunity = _FakeOpportunity(id="product_context:flaky")
 
     async def _fake_growth_strategist(session, *, now):

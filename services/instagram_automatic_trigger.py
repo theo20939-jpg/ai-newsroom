@@ -12,10 +12,16 @@ today (Phase 23.1H/23.1P) - returns `MAJOR`. This is not a new threshold: it is 
 stories are never submitted - the majority of real NEWS stories are expected to fall here, exactly
 matching the phase brief's own "do NOT interpret 10 NEWS drafts as 10 Instagram packages" warning.
 
-Format is always SINGLE this phase (§15 "preserve current visual behavior") - `evaluate_format_
-shadow()` is called with `has_video_asset=False, has_multi_step_narrative=False`, which its own
-real, existing, deterministic logic always resolves to SINGLE. No new format-selection heuristic
-is introduced.
+Format is always SINGLE for the NEWS lane (`evaluate_and_submit_instagram_candidate()` below,
+§15 "preserve current visual behavior") - untouched, byte-identical, still calls `evaluate_format_
+shadow()` with `has_video_asset=False, has_multi_step_narrative=False`.
+
+CONTROLLED ROLLOUT (INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2/3 closure): the general/PRODUCT
+entrypoint (`evaluate_and_submit_instagram_opportunity()` below) now derives `evaluate_format_
+shadow()`'s real inputs from the opportunity itself instead of hardcoding SINGLE - the SAME
+existing, deterministic, no-second-selector function, just fed honest signals. A REEL decision is
+gated by `settings.instagram_reel_execution_enabled` (default False) - deferred, never silently
+downgraded to SINGLE, and never reaches the Reel Creative Director while the gate is off.
 
 Idempotency (§7) is the EXISTING `instagram_editorial_deliveries` table's own partial-unique
 `package_identity` index - `compute_package_identity(source_key=event_id, content_format="single")`
@@ -33,6 +39,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from core.config import settings
 from services.editorial_treatment import MAJOR, EditorialTreatmentDecision
 from services.instagram_art_validator import validate_instagram_art
 from services.instagram_content_opportunity import ContentOpportunity, OpportunitySourceType
@@ -50,10 +57,15 @@ from services.instagram_editorial_regeneration import build_default_regenerator
 from services.instagram_format_director import ContentFormat, evaluate_format_shadow
 from services.instagram_objective_selection import recommend_objective
 from services.instagram_objectives import ContentObjective
-from services.instagram_platform_renderer import render_instagram_feed_image
+from services.instagram_platform_renderer import (
+    render_instagram_carousel,
+    render_instagram_feed_image,
+    render_instagram_reel_cover,
+)
+from services.instagram_reel_script_readiness import compute_reel_script_readiness
 from services.instagram_shadow_pipeline import ShadowPlanResult
 from services.instagram_telegram_delivery import deliver_instagram_package
-from services.instagram_telegram_package_presenter import present_single
+from services.instagram_telegram_package_presenter import present_carousel, present_reel, present_single
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +204,19 @@ async def evaluate_and_submit_instagram_opportunity(
     are read directly, never a parallel `research_facts`-style parameter - one canonical evidence
     source per opportunity, regardless of lane. Never raises (mirrors
     `evaluate_and_submit_instagram_candidate()`'s own crash-safety contract exactly)."""
-    identity = compute_package_identity(source_key=opportunity.id, content_format="single")
+    # CONTROLLED ROLLOUT: real signals, not hardcoded ones - `evaluate_format_shadow()` (the one
+    # and only existing format selector, unchanged) now sees what the opportunity actually has.
+    # `has_multi_step_narrative`: real evidence-count signal (multiple confirmed facts genuinely
+    # read better as a multi-step narrative than has_video_asset: honestly False - no video-asset
+    # pipeline feeds this lane yet; never fabricated to make REEL reachable.
+    has_multi_step_narrative = len(opportunity.evidence) > 1
+    recommendation = recommend_objective(opportunity=opportunity, has_multi_step_narrative=has_multi_step_narrative)
+    format_decision = evaluate_format_shadow(
+        objective=recommendation.primary_objective, has_video_asset=False,
+        has_multi_step_narrative=has_multi_step_narrative,
+    )
+
+    identity = compute_package_identity(source_key=opportunity.id, content_format=format_decision.recommended_format.value)
     delivery_service = InstagramEditorialDeliveryService()
     existing = await delivery_service.find_current(session, package_identity=identity)
     if existing is not None:
@@ -200,13 +224,17 @@ async def evaluate_and_submit_instagram_opportunity(
             event_id=opportunity.id, accepted=True, reason="already_submitted", delivery_id=str(existing.id),
         )
 
-    # SINGLE only, this phase too (§15's "preserve current visual behavior" carries over to every
-    # lane until the photo-led/CAROUSEL/REEL visual work, disclosed as separate, future work) -
-    # asserted, not silently assumed, exactly like the NEWS path above.
-    format_decision = evaluate_format_shadow(objective=ContentObjective.REACH, has_video_asset=False, has_multi_step_narrative=False)
-    assert format_decision.recommended_format is ContentFormat.SINGLE
+    # CONTROLLED ROLLOUT: a REEL decision is deferred - never silently downgraded to SINGLE -
+    # while settings.instagram_reel_execution_enabled (default False) is off. A bounded canary
+    # invocation may pass a locally-true settings override for this one call only; persistent
+    # production config is never touched by this check.
+    if format_decision.recommended_format is ContentFormat.REEL and not settings.instagram_reel_execution_enabled:
+        logger.info(
+            "instagram_product_lane_reel_execution_disabled",
+            extra={"opportunity_id": opportunity.id, "source_type": opportunity.source_type.value},
+        )
+        return InstagramTriggerCandidateOutcome(event_id=opportunity.id, accepted=True, reason="reel_execution_disabled")
 
-    recommendation = recommend_objective(opportunity=opportunity)
     director_input = CreativeDirectorInput(
         objective=recommendation.primary_objective.value, format=format_decision.recommended_format.value,
         opportunity_summary=opportunity_summary, allowed_evidence=list(opportunity.evidence),
@@ -230,32 +258,58 @@ async def evaluate_and_submit_instagram_opportunity(
         )
         return InstagramTriggerCandidateOutcome(event_id=opportunity.id, accepted=True, reason="creative_director_failed:unexpected_error")
 
-    single = creative_outcome.single
+    single, carousel, reel = creative_outcome.single, creative_outcome.carousel, creative_outcome.reel
+    concept_summary = (
+        single.creative_angle if single is not None
+        else reel.hook if reel is not None
+        else carousel.hook_slide.slide_copy if carousel is not None else None
+    )
+    # CONTROLLED ROLLOUT: a REEL package's script-readiness axis (services/instagram_reel_script_
+    # readiness.py, Phase 3) - `unresolved_facts` stays empty by construction here: this lane's own
+    # opportunity sources (_product_opportunities_from_campaigns/_product_opportunities_from_context,
+    # services/director_execution_service.py) only ever build evidence from CONFIRMED Product facts
+    # in the first place, so nothing UNKNOWN/UNDECIDED reaches the Creative Director to begin with.
+    # `asset_requirements_satisfiable=False` is the honest default - no real filming-asset pipeline
+    # feeds this lane yet, so an automatic/canary REEL package is always CONCEPT_SCRIPT, never a
+    # fabricated PRODUCTION_SCRIPT claim.
+    reel_script_readiness = (
+        compute_reel_script_readiness(unresolved_facts=[], asset_requirements_satisfiable=False)
+        if format_decision.recommended_format is ContentFormat.REEL else None
+    )
     shadow_plan = ShadowPlanResult(
         campaign_name=None, campaign_phase=opportunity.campaign_phase, opportunity_description=opportunity_summary,
         primary_objective=recommendation.primary_objective.value, audience_description="",
         recommended_format=format_decision.recommended_format.value, hook_family=None,
-        creative_concept_summary=single.creative_angle if single is not None else None, alternative_format=None,
+        creative_concept_summary=concept_summary, alternative_format=None,
         alternative_objective=None, product_mention_allowed=opportunity.product_mention_allowed,
         evidence=list(opportunity.evidence), confidence=opportunity.confidence,
     )
     pkg = build_instagram_content_package(
         opportunity=opportunity, format_decision=format_decision, shadow_plan=shadow_plan,
-        creative_outcome=creative_outcome, account_key="default",
+        creative_outcome=creative_outcome, account_key="default", reel_script_readiness=reel_script_readiness,
     )
-    render = render_instagram_feed_image(pkg)
-    art = validate_instagram_art(pkg, [render])
+
+    if format_decision.recommended_format is ContentFormat.CAROUSEL:
+        renders = render_instagram_carousel(pkg)
+        presentation = present_carousel(pkg, renders, version=1)
+    elif format_decision.recommended_format is ContentFormat.REEL:
+        renders = [render_instagram_reel_cover(pkg)]
+        presentation = present_reel(pkg, renders[0], version=1)
+    else:
+        renders = [render_instagram_feed_image(pkg)]
+        presentation = present_single(pkg, renders[0], version=1)
+
+    art = validate_instagram_art(pkg, renders)
     gate = evaluate_instagram_editorial_gate(pkg, art)
-    presentation = present_single(pkg, render, version=1)
     snapshot = build_package_snapshot(
         package=pkg, opportunity=opportunity, format_decision=format_decision, shadow_plan=shadow_plan,
-        director_input=director_input, previous_creative=single, source_url=source_url,
+        director_input=director_input, previous_creative=(single or carousel or reel), source_url=source_url,
     )
 
     delivery_outcome = await deliver_instagram_package(
         bot, session, presentation=presentation, gate_decision=gate.decision, package_identity=identity,
-        source_story_id=opportunity.id, content_format="single", package_snapshot=snapshot, source_url=source_url,
-        hold_or_block_reason=gate.short_reason or None,
+        source_story_id=opportunity.id, content_format=format_decision.recommended_format.value,
+        package_snapshot=snapshot, source_url=source_url, hold_or_block_reason=gate.short_reason or None,
     )
     return InstagramTriggerCandidateOutcome(
         event_id=opportunity.id, accepted=True, reason="submitted", gate_decision=gate.decision.value,

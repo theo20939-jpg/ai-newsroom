@@ -1136,8 +1136,18 @@ async def _run_instagram_product_lane(
     independent of the NEWS lane above (§6's own "do not couple" principle applies to every lane,
     not just NEWS) - a failure here can never affect `_run_instagram_automatic_trigger()`, and
     vice versa. A safe no-op whenever `gate_gateway`/`gate_prompt_repository` are `None`, exactly
-    like that function's own contract."""
+    like that function's own contract.
+
+    CONTROLLED ROLLOUT: also a no-op whenever `settings.instagram_product_lane_enabled` is False
+    (the default) - a dedicated runtime gate, checked first, independent of the NEWS lane's own
+    `gate_gateway`/`gate_prompt_repository` gate (which is already satisfied in production) so this
+    brand-new lane can be deployed without immediately starting automatic PRODUCT generation.
+    Never falls through to another lane - just returns the same empty report the other no-op path
+    already returns."""
     report = InstagramTriggerCycleReport()
+    if not settings.instagram_product_lane_enabled:
+        logger.info("instagram_product_lane_disabled")
+        return report
     if gate_gateway is None or gate_prompt_repository is None:
         return report
 
