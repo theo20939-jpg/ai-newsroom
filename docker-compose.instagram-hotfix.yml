@@ -1,0 +1,12 @@
+# Phase 23 Instagram POST/REEL hotfix. Apply after the existing production override.
+# Keeps the two app services on one immutable image while preserving the bot's
+# currently running writable image-storage mount.
+services:
+  content_worker:
+    image: ai-newsroom-instagram-post-reel-phase23-hotfix:20260915-1
+    build: !reset null
+  telegram_bot:
+    image: ai-newsroom-instagram-post-reel-phase23-hotfix:20260915-1
+    build: !reset null
+    volumes:
+      - image_storage_data:/data/image_storage
