@@ -1314,6 +1314,15 @@ class Settings(BaseSettings):
     # `business_context_role_map` elsewhere in this file - never a parallel CMS table.
     trend_monitored_entities: list[str] = Field(default_factory=list)
 
+    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 6: YouTube + Bluesky Trend Radar source credentials.
+    # Optional by design - when unset, integrations/sources/youtube_source.py and bluesky_source.py
+    # raise TrendSourceNotConfigured rather than fabricating data; nothing in this phase requires
+    # real credentials to exist (code/tests/config readiness only, per the approved recovery scope).
+    # Mirrors github_token's own SecretStr-optional pattern.
+    youtube_api_key: SecretStr | None = None
+    bluesky_handle: str | None = None
+    bluesky_app_password: SecretStr | None = None
+
     @property
     def database_url(self) -> str:
         """Build the async PostgreSQL connection URL for SQLAlchemy."""

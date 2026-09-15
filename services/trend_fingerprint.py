@@ -14,6 +14,7 @@ when a fingerprint is absent, never blocking ingestion on an LLM outage)."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from uuid import uuid4
 
 from capabilities.gateway_call import call_generate
@@ -26,6 +27,28 @@ TREND_FINGERPRINT_PROMPT_NAME = "trend_fingerprint"
 TREND_FINGERPRINT_PROMPT_VERSION = "1"
 
 _MAX_TEXT_CHARS = 800
+
+
+class TrendSourceNotConfigured(RuntimeError):
+    """INSTAGRAM-CONTENT-STRATEGY-V2 Phase 6: raised by a source adapter
+    (integrations/sources/youtube_source.py, bluesky_source.py) when it has no real credentials
+    to call its API with - never a reason to fabricate or estimate candidates instead."""
+
+
+@dataclass(frozen=True)
+class TrendSignalCandidate:
+    """INSTAGRAM-CONTENT-STRATEGY-V2 Phase 6: the raw, pre-storage shape a source adapter
+    (integrations/sources/youtube_source.py, bluesky_source.py) hands back - exactly the fields
+    `database/models/trend_observation.py::TrendObservation` needs, before a `trend_fingerprint`
+    has been computed for it. A source adapter never fabricates any of these - `engagement_snapshot`
+    carries only metrics that source's own official API actually returned."""
+
+    source: str
+    source_item_id: str
+    raw_topic_text: str
+    engagement_snapshot: dict
+    observed_at: datetime
+    canonical_url: str | None = None
 
 
 @dataclass(frozen=True)
