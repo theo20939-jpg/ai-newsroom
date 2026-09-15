@@ -371,35 +371,19 @@ async def handle_plain_text(message: Message) -> None:
             reply_to_message_id=reply_to_id,
         )
 
-        if _is_bare_confirmation_phrase(text):
-            # "Founder Plan Review" constraint #3: "да"/"делай"/"подтверждаю" may confirm ONLY
-            # when unambiguous - never guessed among multiple candidates.
-            if resolved is None:
-                if not pending:
-                    await message.answer("🥷 Сейчас нет предложений, которые нужно подтвердить.")
-                else:
-                    lines = ["🥷 Не понятно, к какому предложению это относится. Ответьте на "
-                             "нужное сообщение реплаем, либо уточните, о чём речь:", ""]
-                    for i, p in enumerate(pending, start=1):
-                        label = p.question_text or p.raw_instruction
-                        lines.append(f"{i}. {label}")
-                    await message.answer("\n".join(lines))
-                return
-            if resolved.origin == DIRECTOR_INITIATED_ORIGIN:
-                await message.answer(
-                    "🥷 Это открытый вопрос Director'а - ответьте, пожалуйста, по существу, а не "
-                    "просто «да»."
-                )
-                return
-            confirmed = await confirm_proposal(session, resolved.id, decided_by=user_id)
-            assert confirmed is not None
-            await message.answer(render_proposal_preview(confirmed) + "\n\nПодтверждено.")
-            return
-
         if resolved is not None and resolved.origin == DIRECTOR_INITIATED_ORIGIN:
-            # This message ANSWERS a pending Director question - parse it (with that question's
-            # own context for grounding), propose the resulting change (never silently apply it -
-            # constraint #2), and close the now-answered question.
+            # This message ANSWERS a pending Director information-need question - checked BEFORE
+            # the bare-confirmation branch below, deliberately: "да replying to a QUESTION" and
+            # "да replying to a PROPOSAL" are different conversational acts (Founder correction),
+            # and Telegram reply correlation + this resolved proposal's own `origin` is exactly
+            # how they're told apart - never by inspecting the text in isolation. A short answer
+            # like "да"/"нет"/"пока нет"/"ещё не решили" is semantically sufficient here ONLY
+            # because it is combined with `resolved.question_text`/`origin_context.missing_fact`
+            # below (via `_build_context_summary()`) before it ever reaches the parser - the SAME
+            # existing parser/prompt path every other command uses, never a second one. Parse it,
+            # propose the resulting change (never silently apply it - constraint #2, the existing
+            # explicit confirmation gate still applies to the proposal this produces), and close
+            # the now-answered question.
             snapshot = await get_business_context_snapshot(session, now=now)
             context_summary = _build_context_summary(snapshot, resolved)
             ai_layer, prompt_repository = await _get_ai_layer()
@@ -444,6 +428,27 @@ async def handle_plain_text(message: Message) -> None:
             if refreshed is not None:
                 refreshed.telegram_message_id = sent.message_id
                 await session.commit()
+            return
+
+        if _is_bare_confirmation_phrase(text):
+            # "Founder Plan Review" constraint #3: "да"/"делай"/"подтверждаю" may confirm ONLY
+            # when unambiguous - never guessed among multiple candidates. `resolved`, if set here,
+            # is never a Director information-need (that case already returned above) - so this
+            # confirms an already-parsed Product Truth PROPOSAL, never a question.
+            if resolved is None:
+                if not pending:
+                    await message.answer("🥷 Сейчас нет предложений, которые нужно подтвердить.")
+                else:
+                    lines = ["🥷 Не понятно, к какому предложению это относится. Ответьте на "
+                             "нужное сообщение реплаем, либо уточните, о чём речь:", ""]
+                    for i, p in enumerate(pending, start=1):
+                        label = p.question_text or p.raw_instruction
+                        lines.append(f"{i}. {label}")
+                    await message.answer("\n".join(lines))
+                return
+            confirmed = await confirm_proposal(session, resolved.id, decided_by=user_id)
+            assert confirmed is not None
+            await message.answer(render_proposal_preview(confirmed) + "\n\nПодтверждено.")
             return
 
         # No correlated pending item - a brand-new free-text business-context statement, handled
