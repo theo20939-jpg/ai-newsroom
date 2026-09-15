@@ -70,3 +70,14 @@ class InstagramReelCreative(BaseModel):
     loop_ending_concept: str | None = Field(default=None, max_length=_MEDIUM_TEXT_MAX_LENGTH)
     caption_direction: str = Field(min_length=1, max_length=_LONG_TEXT_MAX_LENGTH)
     evidence_used: list[str] = Field(default_factory=list)
+    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 3: optional/defaulted, so every pre-existing construction
+    # call site (real and test) stays byte-identical. `visual_direction` mirrors
+    # InstagramCarouselSlideCreative.visual_direction's own field name/concept above;
+    # `asset_requirements` mirrors InstagramSingleCreative.asset_requirements's own field above -
+    # reused naming conventions, not invented ones.
+    visual_direction: str | None = Field(default=None, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    asset_requirements: list[str] = Field(default_factory=list)
+    # TREND-origin Reels only (None for PRODUCT/NEWS-origin Reels): what makes this an ORIGINAL
+    # NINJA adaptation of the detected trend mechanic, and what was deliberately NOT copied from
+    # the source creators/format.
+    adaptation_notes: str | None = Field(default=None, max_length=_MEDIUM_TEXT_MAX_LENGTH)

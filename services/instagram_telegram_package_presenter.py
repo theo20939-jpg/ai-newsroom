@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from services.instagram_content_package import InstagramContentPackage
 from services.instagram_format_director import ContentFormat
 from services.instagram_platform_renderer import InstagramRenderResult
+from services.instagram_reel_script_readiness import CONCEPT_SCRIPT, PRODUCTION_SCRIPT
 
 _TELEGRAM_TEXT_LIMIT = 4096
 _FORMAT_LABEL = {
@@ -133,22 +134,53 @@ def present_reel(package: InstagramContentPackage, cover: InstagramRenderResult,
         kind = "reel_concept"
 
     storyboard_lines: list[str] = []
+
+    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 3: additive fields only - every line below is omitted
+    # entirely when the underlying `media_plan`/`package.reel_script_readiness` value is absent, so
+    # a pre-Phase-3 REEL package (built before these fields existed) renders byte-identically to
+    # before. `reel_script_readiness` is a DIFFERENT axis from `has_real_video` above (script
+    # completeness vs "has a real video file been produced") - both may independently say
+    # "concept" for entirely different reasons, and both are rendered, never conflated into one.
+    adaptation_notes = plan.get("adaptation_notes")
+    if adaptation_notes:
+        storyboard_lines.append(f"🔥 <b>Адаптация:</b> {_esc(str(adaptation_notes))}")
+    if package.reel_script_readiness == PRODUCTION_SCRIPT:
+        storyboard_lines.append("🟢 <b>ГОТОВ К ПРОДАКШЕНУ</b>")
+    elif package.reel_script_readiness == CONCEPT_SCRIPT:
+        storyboard_lines.append("🟡 <b>КОНЦЕПТ-СКРИПТ</b>")
+
     hook = plan.get("hook")
     if hook:
         storyboard_lines.append(f"<b>Хук:</b> {_esc(str(hook))}")
     scenes = plan.get("scene_sequence") or []
     if scenes:
+        # A numbered list, never fabricated per-scene timestamps - this codebase's Creative
+        # Director does not produce a per-scene duration, and guessing an even split across
+        # target_duration_seconds would invent a precision the script does not actually have (the
+        # same "never fabricate" discipline the fact-safety gate enforces elsewhere).
         storyboard_lines.append("<b>Сценарий:</b>")
         storyboard_lines.extend(f"{i}. {_esc(str(s))}" for i, s in enumerate(scenes, start=1))
     shot_list = plan.get("shot_list") or []
     if shot_list:
         storyboard_lines.append("<b>Кадры:</b> " + "; ".join(_esc(str(s)) for s in shot_list))
+    visual_direction = plan.get("visual_direction")
+    if visual_direction:
+        storyboard_lines.append(f"<b>Визуал:</b> {_esc(str(visual_direction))}")
     voiceover = plan.get("voiceover_script")
     if voiceover:
-        storyboard_lines.append(f"<b>Закадровый текст:</b> {_esc(str(voiceover))}")
+        storyboard_lines.append(f"🎙 <b>Voiceover:</b> {_esc(str(voiceover))}")
+    on_screen_text = plan.get("on_screen_text") or []
+    if on_screen_text:
+        storyboard_lines.append("🖥 <b>Текст на экране:</b> " + "; ".join(_esc(str(s)) for s in on_screen_text))
+    audio_direction = plan.get("audio_direction")
+    if audio_direction:
+        storyboard_lines.append(f"🎵 <b>Audio:</b> {_esc(str(audio_direction))}")
     duration = plan.get("target_duration_seconds")
     if duration:
         storyboard_lines.append(f"<b>Длительность:</b> ~{duration} сек")
+    asset_requirements = plan.get("asset_requirements") or []
+    if asset_requirements:
+        storyboard_lines.append("📦 <b>Нужно:</b> " + "; ".join(_esc(str(a)) for a in asset_requirements))
 
     footer_lines = storyboard_lines + [line for line in (_truthfulness_line(package),) if line]
     control_text, overflow = _split_if_needed(header, _caption_block(package), footer_lines)
