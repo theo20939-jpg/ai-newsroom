@@ -34,7 +34,16 @@ PARSER_PROMPT_NAME = "business_context_parser"
 # services/product_fact_state.py) - v1.yaml is left byte-identical/unused going forward, mirroring
 # this codebase's own established versioned-prompt convention (e.g. prompts/copywriting/v*.yaml)
 # rather than editing a shipped prompt version in place.
-PARSER_PROMPT_VERSION = "2"
+#
+# HOTFIX (live production diagnosis): v3 fixes a structured-output contract bug present since v1 -
+# OpenAI's strict `response_format="json_schema"` mode requires every key in an object's
+# `properties` to also appear in that object's `required` array (an "optional" field is expressed
+# by unioning its type with null, never by omitting it from `required`). v1/v2 never satisfied
+# this for any nested object with an optional field, so every real provider request was rejected
+# with a 400 `invalid_json_schema` error before any output was ever generated - confirmed live via
+# the exact 400 response body, not guessed. v3 is schema-shape-only; every field's real-world
+# meaning is unchanged. See prompts/business_context_parser/v3.yaml's own header for detail.
+PARSER_PROMPT_VERSION = "3"
 
 
 @dataclass(frozen=True)
@@ -166,19 +175,25 @@ def build_change_set(extraction: BusinessContextExtraction, *, raw_text: str = "
         })
 
     for milestone in extraction.milestones:
+        visibility = milestone.get("visibility")
+        publicity_allowed = milestone.get("publicity_allowed")
+        asset_preparation_allowed = milestone.get("asset_preparation_allowed")
         change_set.append({
             "entity_type": "campaign_milestone", "product_slug": milestone["product_slug"],
             "title": milestone["title"], "milestone_at": milestone.get("milestone_at"),
-            "visibility": milestone.get("visibility", "internal_only"),
-            "publicity_allowed": milestone.get("publicity_allowed", False),
-            "asset_preparation_allowed": milestone.get("asset_preparation_allowed", False),
+            "visibility": visibility if visibility is not None else "internal_only",
+            "publicity_allowed": publicity_allowed if publicity_allowed is not None else False,
+            "asset_preparation_allowed": (
+                asset_preparation_allowed if asset_preparation_allowed is not None else False
+            ),
         })
 
     for directive in extraction.directives:
+        priority = directive.get("priority")
         change_set.append({
             "entity_type": "strategic_directive", "instruction": directive["instruction"],
             "valid_from": None, "valid_until": directive.get("valid_until"),
-            "priority": directive.get("priority", 100), "scope": directive.get("scope"),
+            "priority": priority if priority is not None else 100, "scope": directive.get("scope"),
             "products": directive.get("products"),
         })
 

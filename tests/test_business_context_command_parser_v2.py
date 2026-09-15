@@ -26,15 +26,45 @@ from tests.fakes.fake_prompt_repository import FakePromptRepository
 _PROMPTS_ROOT = Path(__file__).resolve().parent.parent / "prompts"
 
 
-def test_real_v2_prompt_file_loads_and_declares_feature_updates() -> None:
+def test_real_v3_prompt_file_loads_and_declares_feature_updates() -> None:
     repository = FilePromptRepository(_PROMPTS_ROOT)
     rendered = repository.resolve(PARSER_PROMPT_NAME, PARSER_PROMPT_VERSION)
-    assert PARSER_PROMPT_VERSION == "2"
+    assert PARSER_PROMPT_VERSION == "3"
     product_item_schema = rendered.output_schema["properties"]["products_mentioned"]["items"]
     assert "feature_updates" in product_item_schema["properties"]
     feature_update_schema = product_item_schema["properties"]["feature_updates"]["items"]
-    assert set(feature_update_schema["required"]) == {"fact_key", "feature_name", "fact_state"}
+    # HOTFIX (live production diagnosis): OpenAI's strict response_format="json_schema" mode
+    # requires every key in `properties` to also appear in `required` - "note" (truly optional)
+    # is expressed via a nullable type union, never via omission from `required`.
+    assert set(feature_update_schema["required"]) == {"fact_key", "feature_name", "fact_state", "note"}
+    assert feature_update_schema["properties"]["note"]["type"] == ["string", "null"]
     assert feature_update_schema["properties"]["fact_state"]["enum"] == ["confirmed", "planned", "undecided"]
+
+
+def test_real_v3_prompt_output_schema_has_no_openai_strict_mode_violations() -> None:
+    """Structural proof, not a spot-check: every object anywhere in the real output_schema lists
+    EVERY one of its own `properties` keys in its own `required` array - the exact OpenAI
+    structured-output contract the live production 400 (`invalid_json_schema`, missing 'note')
+    proved v1/v2 violated. Recurses into every nested `items`/`properties` object found."""
+    repository = FilePromptRepository(_PROMPTS_ROOT)
+    rendered = repository.resolve(PARSER_PROMPT_NAME, PARSER_PROMPT_VERSION)
+
+    def _check(node: dict, path: str) -> list[str]:
+        violations: list[str] = []
+        if node.get("type") == "object" and "properties" in node:
+            required = set(node.get("required", []))
+            properties = node["properties"]
+            missing = set(properties.keys()) - required
+            if missing:
+                violations.append(f"{path}: missing {sorted(missing)} from required")
+            for key, subschema in properties.items():
+                violations.extend(_check(subschema, f"{path}.{key}"))
+        if node.get("type") == "array" and "items" in node:
+            violations.extend(_check(node["items"], f"{path}[]"))
+        return violations
+
+    violations = _check(rendered.output_schema, "output_schema")
+    assert violations == [], f"OpenAI strict-mode required-field violations: {violations}"
 
 
 def _prompt_repository() -> FakePromptRepository:

@@ -1,0 +1,201 @@
+# NINJA Social Intelligence Foundation, Part II §32/§33 (v1) + INSTAGRAM-CONTENT-STRATEGY-V2
+# Phase 1 (v2, HOTFIX v3): v2 added `feature_updates` to `products_mentioned`. v3 fixes a
+# structured-output contract bug present since v1: OpenAI's strict `response_format="json_schema"`
+# mode requires EVERY key in an object's `properties` to also appear in that object's `required`
+# array - a field is made "optional" by unioning its type with `null` (and staying listed in
+# `required`), never by omitting it from `required`. v1/v2 never satisfied this for any nested
+# object with an optional field, so the OpenAI provider request itself was rejected (400
+# invalid_json_schema) before any output was ever generated - confirmed via a real production
+# 400 response naming the exact missing key, live-diagnosed and fixed here. System/rules text and
+# every field's real-world meaning are byte-identical to v2 - this is a schema-shape-only fix.
+name: business_context_parser
+version: "3"
+system: >
+  You are the internal parsing layer for NINJA's Business Context Command Center - a Telegram tool
+  founders and team members use to tell the system about product state, marketing campaigns,
+  milestones, strategic priorities, and public-claim restrictions. You read one free-text message
+  and extract every distinct, explicit fact it states into a structured proposal. You NEVER invent
+  a date, name, number, or claim the message does not state. You NEVER upgrade vague language
+  ("roughly a month", "around early October") into a precise value - when the message is vague,
+  you say so explicitly via date_confidence/notes rather than guessing a specific date. You never
+  assume something is approved for public communication merely because it is stated as true - a
+  fact being true internally and a fact being safe to say publicly are different questions, and
+  you keep them separate. Read the CURRENT BUSINESS CONTEXT provided so you can correctly
+  reference an already-known product by its existing slug rather than inventing a new one. When the
+  CURRENT BUSINESS CONTEXT names an open Director question (a specific missing_fact for a
+  specific product), and this message plausibly answers it, extract that answer as a
+  feature_updates entry using the SAME fact_key the question named - never invent a new fact_key
+  for the same real-world fact. Every JSON field below is always present in your output; set a
+  field to null when the message does not state that particular detail - never omit the key,
+  and never invent a value to fill it.
+rules:
+  - Never fabricate a launch date, product name, number, or claim not present in the message.
+  - A vague/approximate date must be reflected as date_confidence="estimated" or "rough", never silently rounded to date_confidence="exact".
+  - A fact being internally true is never the same as it being approved for public communication - do not set claim status to "approved" unless the message explicitly says it may be said publicly.
+  - Reference an existing product by its known slug (from the provided current context) whenever the message is clearly about that product; only propose a new product_slug when the message describes something genuinely new.
+  - If the message contains genuine ambiguity that materially changes meaning, list it in clarification_needed rather than silently picking one interpretation.
+  - Never mark anything as visibility="public_allowed" or claim status="approved" unless the message is unambiguous that public communication is intended/allowed.
+  - Extract fact_state="undecided" ONLY when the message explicitly says a decision has not been made yet (e.g. "экономику ещё не решили", "pricing not decided yet") - never merely because a detail was not mentioned at all.
+  - fact_key must always be ASCII, snake_case, dot-separated ("<feature_slug>.<aspect_slug>", e.g. "production_mode.billing") even when the feature/aspect was named in Russian in the message.
+  - Every object field must be present in your output; use null for any detail the message does not state, never omit the key and never invent a value.
+output_schema:
+  type: object
+  properties:
+    products_mentioned:
+      type: array
+      items:
+        type: object
+        properties:
+          slug:
+            type: string
+          name:
+            type: string
+          status:
+            type: [string, "null"]
+            enum: [idea, discovery, development, private_beta, public_beta, pre_launch, live, paused, sunset, null]
+          current_stage:
+            type: [string, "null"]
+          description:
+            type: [string, "null"]
+          feature_updates:
+            type: array
+            items:
+              type: object
+              properties:
+                fact_key:
+                  type: string
+                  description: >
+                    Stable, ASCII, machine-readable canonical key for this specific fact,
+                    formatted as "<feature_slug>.<aspect_slug>" (snake_case, dot-separated,
+                    English/Latin only) - e.g. "production_mode.billing",
+                    "web_search.public_availability". Always English/Latin even if the feature
+                    was named in Russian in the message.
+                feature_name:
+                  type: string
+                  description: Human-readable feature/fact name, in the language the message used.
+                fact_state:
+                  type: string
+                  enum: [confirmed, planned, undecided]
+                  description: >
+                    "confirmed" = the feature is live/true now. "planned" = intended but not live
+                    yet. "undecided" = the message explicitly states this specific aspect has NOT
+                    been decided yet - never inferred merely from the aspect not being mentioned.
+                note:
+                  type: [string, "null"]
+                  description: >
+                    Free-text detail the message stated for this fact that has no other field to
+                    go in - e.g. an approximate deadline the message gave in its own words
+                    ("до конца сентября"). Never a fabricated precise date; preserve the message's
+                    own wording. Null when the message adds nothing beyond fact_state itself.
+              required: [fact_key, feature_name, fact_state, note]
+              additionalProperties: false
+        required: [slug, name, status, current_stage, description, feature_updates]
+        additionalProperties: false
+    campaign_updates:
+      type: array
+      items:
+        type: object
+        properties:
+          product_slug:
+            type: string
+          campaign_name:
+            type: [string, "null"]
+          status:
+            type: [string, "null"]
+            enum: [draft, tentative, confirmed, delayed, cancelled, launched, completed, null]
+          planned_launch_date:
+            type: [string, "null"]
+            description: ISO 8601 date, only if the message states one.
+          date_confidence:
+            type: [string, "null"]
+            enum: [exact, estimated, rough, unknown, null]
+          key_messages:
+            type: array
+            items:
+              type: string
+          restricted_claims:
+            type: array
+            items:
+              type: string
+          required_cta:
+            type: [string, "null"]
+        required:
+          - product_slug
+          - campaign_name
+          - status
+          - planned_launch_date
+          - date_confidence
+          - key_messages
+          - restricted_claims
+          - required_cta
+        additionalProperties: false
+    milestones:
+      type: array
+      items:
+        type: object
+        properties:
+          product_slug:
+            type: string
+          title:
+            type: string
+          milestone_at:
+            type: [string, "null"]
+            description: ISO 8601 datetime.
+          visibility:
+            type: [string, "null"]
+            enum: [internal_only, preparation_allowed, public_allowed, null]
+          publicity_allowed:
+            type: [boolean, "null"]
+          asset_preparation_allowed:
+            type: [boolean, "null"]
+        required: [product_slug, title, milestone_at, visibility, publicity_allowed, asset_preparation_allowed]
+        additionalProperties: false
+    directives:
+      type: array
+      items:
+        type: object
+        properties:
+          instruction:
+            type: string
+          valid_until:
+            type: [string, "null"]
+            description: ISO 8601 datetime, only if the message states an end point.
+          priority:
+            type: [integer, "null"]
+          scope:
+            type: [string, "null"]
+          products:
+            type: array
+            items:
+              type: string
+        required: [instruction, valid_until, priority, scope, products]
+        additionalProperties: false
+    claims:
+      type: array
+      items:
+        type: object
+        properties:
+          product_slug:
+            type: string
+          claim_text:
+            type: string
+          status:
+            type: string
+            enum: [approved, restricted, embargoed]
+          embargoed_until:
+            type: [string, "null"]
+            description: ISO 8601 datetime, only for status="embargoed" with an explicit date.
+        required: [product_slug, claim_text, status, embargoed_until]
+        additionalProperties: false
+    clarification_needed:
+      type: array
+      items:
+        type: string
+  required:
+    - products_mentioned
+    - campaign_updates
+    - milestones
+    - directives
+    - claims
+    - clarification_needed
+  additionalProperties: false
