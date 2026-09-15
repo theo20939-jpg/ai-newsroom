@@ -112,7 +112,12 @@ from services.telegram_routing import (
     send_to_editorial_destination,
     send_video_to_editorial_destination,
 )
-from services.instagram_automatic_trigger import InstagramTriggerCycleReport, evaluate_and_submit_instagram_candidate
+from services.instagram_automatic_trigger import (
+    InstagramTriggerCycleReport,
+    evaluate_and_submit_instagram_candidate,
+    evaluate_and_submit_instagram_opportunity,
+)
+from services.director_execution_service import run_instagram_growth_strategist
 
 # Phase 23.1Q (Media Roadmap Recovery step 1): initial product cap on router-mode NEWS media-group
 # delivery - "1 strong image for ordinary stories; 2-3 images only when additional images
@@ -659,6 +664,11 @@ class ContentCycleResult:
     # INSTAGRAM-AUTOMATIC-EDITORIAL-TRIGGER-1: additive, default None - every pre-existing caller/
     # test that never reads this field is completely unaffected.
     instagram_trigger_report: InstagramTriggerCycleReport | None = None
+    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2: the PRODUCT lane's own report - a completely separate
+    # counter from `instagram_trigger_report` above (the NEWS lane), never merged into it, so each
+    # lane's real production behavior stays independently observable. Additive, default None -
+    # same "every pre-existing caller/test unaffected" convention as the field above.
+    instagram_product_lane_report: InstagramTriggerCycleReport | None = None
     # Phase 18.10 M3 (Telegram reply context, story_memory_mode != "off" only - all zero
     # otherwise). `story_fail_closed_review`: an update whose story had no discoverable root
     # message - never sent as a standalone post, routed to review instead (see
@@ -1107,6 +1117,80 @@ async def _run_instagram_automatic_trigger(
     return report
 
 
+# INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2: a brand-new, never-before-live lane - conservative,
+# deliberately smaller than _INSTAGRAM_TRIGGER_MAX_PER_CYCLE (the already-observed NEWS lane).
+# Raise once real production volume validates it is safe to, exactly like that constant's own
+# established precedent.
+_INSTAGRAM_PRODUCT_LANE_MAX_PER_CYCLE = 1
+
+
+async def _run_instagram_product_lane(
+    session_factory: async_sessionmaker[AsyncSession], bot: Bot, *,
+    gate_gateway: object | None, gate_prompt_repository: object | None,
+) -> InstagramTriggerCycleReport:
+    """INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2: the PRODUCT lane, wired through the EXISTING
+    `generate_growth_strategy()` ranking (services/director_execution_service.py::
+    run_instagram_growth_strategist(), previously only consumed by the read-only `/plan` command)
+    instead of a hand-rolled opportunity - this is the "generalize the existing automatic trigger…
+    wire generate_growth_strategy() into the real execution path" requirement. Completely
+    independent of the NEWS lane above (§6's own "do not couple" principle applies to every lane,
+    not just NEWS) - a failure here can never affect `_run_instagram_automatic_trigger()`, and
+    vice versa. A safe no-op whenever `gate_gateway`/`gate_prompt_repository` are `None`, exactly
+    like that function's own contract."""
+    report = InstagramTriggerCycleReport()
+    if gate_gateway is None or gate_prompt_repository is None:
+        return report
+
+    try:
+        async with session_factory() as session:
+            result = await run_instagram_growth_strategist(session, now=datetime.now(timezone.utc))
+            await session.commit()
+            top_opportunities = result.strategy.priority_opportunities[:_INSTAGRAM_PRODUCT_LANE_MAX_PER_CYCLE]
+    except Exception:
+        logger.exception("instagram_product_lane_ranking_failed")
+        return report
+
+    candidates: list[Any] = []
+    accepted = ready = hold = block = delivered = dup_submissions = 0
+    for opportunity in top_opportunities:
+        try:
+            async with session_factory() as session:
+                summary = f"NINJA product update (product_id={opportunity.product_id})"
+                outcome = await evaluate_and_submit_instagram_opportunity(
+                    session, bot, opportunity=opportunity, opportunity_summary=summary,
+                    gateway=gate_gateway, prompt_repository=gate_prompt_repository,
+                )
+                await session.commit()
+        except Exception:
+            logger.exception("instagram_product_lane_candidate_failed", extra={"opportunity_id": opportunity.id})
+            continue
+
+        candidates.append(outcome)
+        if not outcome.accepted:
+            continue
+        accepted += 1
+        if outcome.reason == "already_submitted":
+            dup_submissions += 1
+            continue
+        if outcome.gate_decision == "ready_for_editor":
+            ready += 1
+        elif outcome.gate_decision == "hold":
+            hold += 1
+        elif outcome.gate_decision == "block":
+            block += 1
+        if outcome.delivery_sent:
+            delivered += 1
+
+    report = InstagramTriggerCycleReport(
+        stories_evaluated=len(candidates), opportunities_accepted=accepted, opportunities_rejected=0,
+        packages_ready=ready, packages_hold=hold, packages_block=block, packages_delivered=delivered,
+        duplicate_submissions_suppressed=dup_submissions, duplicate_deliveries_suppressed=0, candidates=candidates,
+    )
+    if report.stories_evaluated:
+        logger.info("instagram_product_lane_cycle_finished", extra=report.as_log_extra())
+    return report
+
+
 async def run_content_cycle(
     capability_registry: CapabilityRegistry,
     bot: Bot,
@@ -1149,6 +1233,14 @@ async def run_content_cycle(
     # function's own docstring).
     result.instagram_trigger_report = await _run_instagram_automatic_trigger(
         session_factory, bot, event_ids, gate_gateway=gate_gateway, gate_prompt_repository=gate_prompt_repository,
+    )
+
+    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2: the PRODUCT lane - independent of and never coupled
+    # to the NEWS lane immediately above or the NEWS content-generation loop below (same "do not
+    # couple" principle, applied to a second lane). A safe no-op whenever gate_gateway/
+    # gate_prompt_repository are None, same contract as the NEWS lane.
+    result.instagram_product_lane_report = await _run_instagram_product_lane(
+        session_factory, bot, gate_gateway=gate_gateway, gate_prompt_repository=gate_prompt_repository,
     )
 
     # MEME PRODUCTION PIPELINE (overnight phase): bounded per-cycle cap on automatic meme
