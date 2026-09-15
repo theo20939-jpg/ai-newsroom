@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from database.models.director_run import DirectorRun, DirectorRunEvidenceStage, DirectorRunStatus, DirectorType
+from database.models.product import ProductStatus
 from database.models.social_launch_context import SocialLaunchPlatform
 from services.business_context_snapshot_service import BusinessContextSnapshot, get_business_context_snapshot
 from services.director_run_service import (
@@ -138,12 +139,31 @@ def _product_opportunities_from_context(snapshot: BusinessContextSnapshot) -> li
     `LaunchCampaign` rows produces ZERO opportunities today. This sibling function (never a
     replacement, never a second construction PATH - it calls the exact same
     `build_content_opportunity()` assembly function above, with `campaign_plan=None`, an
-    already-supported optional parameter) covers every OTHER product with real, CONFIRMED ground
-    truth to build content from.
+    already-supported optional parameter) covers every OTHER product with real, CONFIRMED or
+    PLANNED ground truth to build content from.
 
-    Never fabricates evidence: a product with zero `current_features` produces ZERO opportunities
-    here - "we don't know anything confirmed about this product yet" is a real, disclosed gap for
-    the Director to proactively ask about (services/business_context_proposal_service.py::
+    INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2/3 MINIMAL FIXES: originally CONFIRMED-only
+    (`current_features`), which excluded a real, legitimate class of Product Truth - a genuinely
+    PLANNED feature (`product.planned_features`, the same 5-state model services/
+    product_fact_state.py already defines: UNKNOWN/UNDECIDED/PLANNED/CONFIRMED/DEPRECATED) is still
+    real ground truth the Director may talk about, it simply must be presented as upcoming, never as
+    already live. Evidence bullets are labeled by state ("confirmed feature: X" / "planned feature:
+    Y") so the Creative Director prompts (each updated with a matching state-aware wording rule in
+    this same fix) can render each one honestly. UNKNOWN/UNDECIDED facts are still never read here -
+    only `current_features`/`planned_features` are ever consulted, exactly as before.
+
+    DEPRECATED exclusion: `services/product_fact_state.py::resolve_feature_state()` already
+    establishes that a whole-product retirement (`ProductStatus.PAUSED`/`.SUNSET`) DEPRECATES every
+    one of that product's features even though they remain listed in `current_features`/
+    `planned_features` (never retroactively removed from those lists). This function reused that
+    same status check directly rather than re-deriving it, so a paused/sunset product can never
+    surface as a PRODUCT opportunity here, matching the explicit UNKNOWN/UNDECIDED/DEPRECATED
+    exclusion this fix requires.
+
+    Never fabricates evidence: a product with zero `current_features` AND zero `planned_features`
+    (or one that is paused/sunset) still produces ZERO opportunities here - "we don't know anything
+    confirmed or planned about this product yet" is a real, disclosed gap for the Director to
+    proactively ask about (services/business_context_proposal_service.py::
     scan_for_director_information_needs()), never something this function invents content from."""
     contexts: list[OpportunityContext] = []
     campaign_backed_product_ids = {ctx.opportunity.product_id for ctx in _product_opportunities_from_campaigns(snapshot)}
@@ -151,12 +171,18 @@ def _product_opportunities_from_context(snapshot: BusinessContextSnapshot) -> li
         product = summary.product
         if str(product.id) in campaign_backed_product_ids:
             continue  # already covered above - never double-counted across both functions
-        if not product.current_features:
-            continue  # nothing CONFIRMED to build content from yet - a real gap, not invented
+        if product.status in (ProductStatus.PAUSED, ProductStatus.SUNSET):
+            continue  # whole-product retirement DEPRECATES every feature - never surfaced here
+        confirmed = product.current_features or []
+        planned = product.planned_features or []
+        if not confirmed and not planned:
+            continue  # nothing confirmed or planned to build content from yet - a real gap, not invented
+        evidence = [f"confirmed feature: {feature}" for feature in confirmed]
+        evidence += [f"planned feature: {feature}" for feature in planned]
         opportunity = build_content_opportunity(
             id=f"product_context:{product.id}", source_type=OpportunitySourceType.PRODUCT,
             product_id=str(product.id), campaign_plan=None,
-            evidence=[f"confirmed feature: {feature}" for feature in product.current_features],
+            evidence=evidence,
             confidence=0.3,
         )
         contexts.append(OpportunityContext(opportunity=opportunity, product_slug=product.slug))

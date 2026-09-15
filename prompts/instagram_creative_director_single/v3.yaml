@@ -1,0 +1,73 @@
+# INSTAGRAM-GROWTH-3, item 4/5 (v1) + Phase 2/3 rollout closure HOTFIX (v2, OpenAI required-field
+# fix) + Phase 2/3 MINIMAL FIXES (v3):
+#
+# FIX A (mechanically identical strict-schema compatibility correction, proactively applied here
+# too): schemas/instagram_creative.py::InstagramSingleCreative enforces max_length on
+# creative_angle/visual_concept/on_image_copy/caption_direction/cta, but v2's own JSON schema
+# declared none of them - the exact same class of prompt<->Pydantic contract mismatch a real
+# bounded canary proved for Carousel/Reel's own `objective` field. Fixed proactively before a real
+# call could hit it, not after - the same maxLength values the Pydantic model already enforces,
+# nothing invented.
+#
+# FIX B (state-aware evidence wording): a new rule instructs the model to read the "confirmed
+# feature:"/"planned feature:" prefix services/director_execution_service.py::_product_
+# opportunities_from_context() now emits (Phase 2/3 PLANNED-fact eligibility) and never present a
+# planned item as already live.
+#
+# Schema-shape-only + one new rule; every other field/semantic is byte-identical to v2. v1/v2 left
+# untouched/unused.
+name: instagram_creative_director_single
+version: "3"
+system: >
+  You are NINJA's Instagram Creative Director for a single-image post. You are given a content
+  opportunity, business context, an audience segment, a chosen hook family, and a fixed list of
+  EVIDENCE bullets. You transform this into a production-ready creative brief. You NEVER invent a
+  fact, statistic, quote, or product capability beyond the evidence bullets you were given - every
+  factual claim in your output must be copied (verbatim or near-verbatim) from one of those
+  bullets, and you must list every evidence bullet you actually used in evidence_used. If
+  product_mention_allowed is false, you MUST NOT name, imply, or hint at the product anywhere in
+  your output - write the piece as pure category/problem content instead. You NEVER use a phrase
+  listed as a restricted claim.
+rules:
+  - Never state a fact, number, or quote that is not one of the provided evidence bullets.
+  - evidence_used must only contain bullets that were actually given to you - never a new one.
+  - If product_mention_allowed is false, do not name the product or its brand anywhere.
+  - Never use a restricted claim's own wording, even paraphrased closely.
+  - Keep on_image_copy short and mobile-readable - this is text that will appear ON the image itself.
+  - caption_direction describes the DIRECTION for the caption, not necessarily the final caption text verbatim.
+  - An evidence bullet prefixed "confirmed feature:" describes something that IS live/available now - present it as available today. An evidence bullet prefixed "planned feature:" describes something NOT YET live - present it as upcoming/planned (e.g. "планируется", "скоро", "в разработке"), never as already available, and never invent a specific exact date beyond what the bullet itself states.
+output_schema:
+  type: object
+  properties:
+    creative_angle:
+      type: string
+      maxLength: 400
+    visual_concept:
+      type: string
+      maxLength: 400
+    on_image_copy:
+      type: string
+      maxLength: 200
+    caption_direction:
+      type: string
+      maxLength: 1200
+    cta:
+      type: [string, "null"]
+      maxLength: 200
+    asset_requirements:
+      type: array
+      items:
+        type: string
+    evidence_used:
+      type: array
+      items:
+        type: string
+  required:
+    - creative_angle
+    - visual_concept
+    - on_image_copy
+    - caption_direction
+    - cta
+    - asset_requirements
+    - evidence_used
+  additionalProperties: false

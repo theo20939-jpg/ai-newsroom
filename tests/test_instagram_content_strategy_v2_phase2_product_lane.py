@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from database.models.business_context_proposal import BusinessContextCommandType
+from database.models.product import ProductStatus
 from integrations.llm_gateway.protocol import GenerateResponse
 from integrations.prompts.protocol import RenderedPrompt
 from schemas.capability import CapabilityUsage
@@ -49,7 +50,7 @@ _GOOD_OUTPUT = {
 def _prompt_repository() -> FakePromptRepository:
     repository = FakePromptRepository()
     repository.register(RenderedPrompt(
-        name=SINGLE_PROMPT_NAME, version="2", system="you are the creative director", rules=["never invent facts"],
+        name=SINGLE_PROMPT_NAME, version="3", system="you are the creative director", rules=["never invent facts"],
         output_schema=_SINGLE_SCHEMA,
     ))
     return repository
@@ -75,6 +76,21 @@ async def _confirm_current_feature(db_session: AsyncSession, *, slug: str, featu
         proposed_change_set=[{
             "entity_type": "product_context_version", "product_slug": slug,
             "raw_instruction": f"{feature} is live", "structured_context": {"current_features_add": [feature]},
+        }],
+        created_by=1,
+    )
+    await confirm_proposal(db_session, proposal.id, decided_by=1)
+    await db_session.refresh(product)
+    return product
+
+
+async def _confirm_planned_feature(db_session: AsyncSession, *, slug: str, feature: str, status: ProductStatus = ProductStatus.IDEA):
+    product = await create_product(db_session, slug=slug, name=f"Product {slug}", status=status)
+    proposal = await create_proposal(
+        db_session, command_type=BusinessContextCommandType.PRODUCT, raw_instruction=f"{feature} is planned",
+        proposed_change_set=[{
+            "entity_type": "product_context_version", "product_slug": slug,
+            "raw_instruction": f"{feature} is planned", "structured_context": {"planned_features_add": [feature]},
         }],
         created_by=1,
     )
@@ -140,6 +156,159 @@ async def test_growth_strategist_ranks_campaign_backed_and_campaign_free_togethe
     opportunity_ids = {o.id for o in result.strategy.priority_opportunities}
     assert any(oid.startswith("product_context:") for oid in opportunity_ids)
     assert any(oid.startswith("campaign:") for oid in opportunity_ids)
+
+
+# ---------------------------------------------------------------------------
+# INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2/3 MINIMAL FIXES (FIX B): _product_opportunities_from_
+# context() eligibility - PLANNED facts now count too (were excluded before, CONFIRMED-only),
+# state-aware evidence labeling, and DEPRECATED (whole-product-retired) exclusion.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_product_with_only_planned_feature_produces_an_opportunity(db_session: AsyncSession) -> None:
+    await _confirm_planned_feature(db_session, slug="p2planned", feature="Voice Mode")
+    snapshot = await get_business_context_snapshot(db_session, now=datetime.now(timezone.utc))
+    contexts = _product_opportunities_from_context(snapshot)
+    matching = [c for c in contexts if c.product_slug == "p2planned"]
+    assert len(matching) == 1
+    assert matching[0].opportunity.source_type == OpportunitySourceType.PRODUCT
+    assert "planned feature: Voice Mode" in matching[0].opportunity.evidence
+    assert "confirmed feature: Voice Mode" not in matching[0].opportunity.evidence
+
+
+@pytest.mark.asyncio
+async def test_product_with_confirmed_and_planned_features_labels_each_correctly(db_session: AsyncSession) -> None:
+    product = await _confirm_current_feature(db_session, slug="p2mixed", feature="Production Mode")
+    proposal = await create_proposal(
+        db_session, command_type=BusinessContextCommandType.PRODUCT, raw_instruction="Voice Mode is planned",
+        proposed_change_set=[{
+            "entity_type": "product_context_version", "product_slug": "p2mixed",
+            "raw_instruction": "Voice Mode is planned", "structured_context": {"planned_features_add": ["Voice Mode"]},
+        }],
+        created_by=1,
+    )
+    await confirm_proposal(db_session, proposal.id, decided_by=1)
+    await db_session.refresh(product)
+
+    snapshot = await get_business_context_snapshot(db_session, now=datetime.now(timezone.utc))
+    matching = [c for c in _product_opportunities_from_context(snapshot) if c.product_slug == "p2mixed"]
+    assert len(matching) == 1
+    evidence = matching[0].opportunity.evidence
+    assert "confirmed feature: Production Mode" in evidence
+    assert "planned feature: Voice Mode" in evidence
+    assert len(evidence) == 2  # the real signal that drives has_multi_step_narrative=True downstream
+
+
+@pytest.mark.asyncio
+async def test_paused_product_never_produces_an_opportunity_even_with_planned_features(db_session: AsyncSession) -> None:
+    await _confirm_planned_feature(db_session, slug="p2paused", feature="Voice Mode", status=ProductStatus.PAUSED)
+    snapshot = await get_business_context_snapshot(db_session, now=datetime.now(timezone.utc))
+    contexts = _product_opportunities_from_context(snapshot)
+    assert not any(c.product_slug == "p2paused" for c in contexts)
+
+
+@pytest.mark.asyncio
+async def test_sunset_product_never_produces_an_opportunity_even_with_confirmed_features(db_session: AsyncSession) -> None:
+    product = await create_product(db_session, slug="p2sunset", name="Sunset Product", status=ProductStatus.SUNSET)
+    proposal = await create_proposal(
+        db_session, command_type=BusinessContextCommandType.PRODUCT, raw_instruction="Legacy Mode is live",
+        proposed_change_set=[{
+            "entity_type": "product_context_version", "product_slug": "p2sunset",
+            "raw_instruction": "Legacy Mode is live", "structured_context": {"current_features_add": ["Legacy Mode"]},
+        }],
+        created_by=1,
+    )
+    await confirm_proposal(db_session, proposal.id, decided_by=1)
+    await db_session.refresh(product)
+
+    snapshot = await get_business_context_snapshot(db_session, now=datetime.now(timezone.utc))
+    contexts = _product_opportunities_from_context(snapshot)
+    assert not any(c.product_slug == "p2sunset" for c in contexts)
+
+
+@pytest.mark.asyncio
+async def test_two_planned_features_selects_carousel_format(db_session: AsyncSession) -> None:
+    """Multi-step-narrative selection (>1 evidence bullet) must work identically for PLANNED
+    evidence as it already does for CONFIRMED evidence - the label changes, the pipeline does not."""
+    product = await create_product(db_session, slug="p2planmulti", name="Multi Planned Product")
+    for feature in ("Feature A", "Feature B"):
+        proposal = await create_proposal(
+            db_session, command_type=BusinessContextCommandType.PRODUCT, raw_instruction=f"{feature} is planned",
+            proposed_change_set=[{
+                "entity_type": "product_context_version", "product_slug": "p2planmulti",
+                "raw_instruction": f"{feature} is planned", "structured_context": {"planned_features_add": [feature]},
+            }],
+            created_by=1,
+        )
+        await confirm_proposal(db_session, proposal.id, decided_by=1)
+    await db_session.refresh(product)
+
+    snapshot = await get_business_context_snapshot(db_session, now=datetime.now(timezone.utc))
+    opportunity = next(c.opportunity for c in _product_opportunities_from_context(snapshot) if c.product_slug == "p2planmulti")
+    assert len(opportunity.evidence) == 2
+    assert all(item.startswith("planned feature:") for item in opportunity.evidence)
+
+
+@pytest.mark.asyncio
+async def test_product_with_only_undecided_facts_produces_nothing(db_session: AsyncSession) -> None:
+    """`undecided_facts` lives in a different identity space (canonical fact keys, not feature
+    names) and must never be read here - a product with only an undecided fact and zero
+    current/planned features is indistinguishable from a fully-unknown product for this collector."""
+    product = await create_product(db_session, slug="p2undecided", name="Undecided Product")
+    proposal = await create_proposal(
+        db_session, command_type=BusinessContextCommandType.PRODUCT, raw_instruction="billing model not decided yet",
+        proposed_change_set=[{
+            "entity_type": "product_context_version", "product_slug": "p2undecided",
+            "raw_instruction": "billing model not decided yet",
+            "structured_context": {"undecided_facts_add": ["pricing.billing_model"]},
+        }],
+        created_by=1,
+    )
+    await confirm_proposal(db_session, proposal.id, decided_by=1)
+    await db_session.refresh(product)
+
+    snapshot = await get_business_context_snapshot(db_session, now=datetime.now(timezone.utc))
+    contexts = _product_opportunities_from_context(snapshot)
+    assert not any(c.product_slug == "p2undecided" for c in contexts)
+
+
+@pytest.mark.asyncio
+async def test_campaign_backed_product_with_only_planned_features_is_never_double_counted(db_session: AsyncSession) -> None:
+    product = await _confirm_planned_feature(db_session, slug="p2dualplanned", feature="Voice Mode")
+    now = datetime.now(timezone.utc)
+    await create_campaign(
+        db_session, product_id=product.id, name="p2dualplanned launch",
+        structured_context={
+            "status": "confirmed", "planned_launch_date": (now.date() + timedelta(days=2)).isoformat(),
+            "date_confidence": "exact",
+        },
+    )
+    snapshot = await get_business_context_snapshot(db_session, now=now)
+    context_only_ids = [c.opportunity.id for c in _product_opportunities_from_context(snapshot) if c.product_slug == "p2dualplanned"]
+    assert context_only_ids == []  # covered by the campaign-backed function instead, never both
+
+
+@pytest.mark.asyncio
+async def test_planned_only_opportunity_flows_through_the_full_pipeline_to_delivery(db_session: AsyncSession) -> None:
+    """End-to-end proof that the eligibility fix actually reaches PRODUCT_OPPORTUNITY_CREATED, not
+    just the collector function in isolation."""
+    await _confirm_planned_feature(db_session, slug="p2plandeliver", feature="Voice Mode")
+    snapshot = await get_business_context_snapshot(db_session, now=datetime.now(timezone.utc))
+    opportunity = next(c.opportunity for c in _product_opportunities_from_context(snapshot) if c.product_slug == "p2plandeliver")
+
+    planned_output = dict(_GOOD_OUTPUT, evidence_used=["planned feature: Voice Mode"])
+    bot = AsyncMock()
+    bot.send_photo.return_value.message_id = 704
+    bot.send_message.return_value.message_id = 705
+    outcome = await evaluate_and_submit_instagram_opportunity(
+        db_session, bot, opportunity=opportunity, opportunity_summary="NINJA AI Voice Mode is planned",
+        gateway=_gateway(planned_output), prompt_repository=_prompt_repository(),
+    )
+    assert outcome.accepted is True
+    assert outcome.reason == "submitted"
+    assert outcome.delivery_sent is True
+    bot.send_photo.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

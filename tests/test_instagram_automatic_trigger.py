@@ -43,7 +43,7 @@ def _topic_settings(monkeypatch: pytest.MonkeyPatch) -> None:
 def _prompt_repository() -> FakePromptRepository:
     repository = FakePromptRepository()
     repository.register(RenderedPrompt(
-        name=SINGLE_PROMPT_NAME, version="2", system="you are the creative director", rules=["never invent facts"],
+        name=SINGLE_PROMPT_NAME, version="3", system="you are the creative director", rules=["never invent facts"],
         output_schema=_SINGLE_SCHEMA,
     ))
     return repository

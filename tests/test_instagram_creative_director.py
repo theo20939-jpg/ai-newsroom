@@ -43,20 +43,21 @@ _REEL_SCHEMA = {"type": "object", "properties": {}, "required": []}
 
 def _prompt_repository() -> FakePromptRepository:
     repository = FakePromptRepository()
-    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2/3 ROLLOUT CLOSURE HOTFIX: SINGLE/CAROUSEL/REEL all
-    # moved to a new prompt version (services/instagram_creative_director.py::_SINGLE_PROMPT_
+    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2/3 MINIMAL FIXES: SINGLE/CAROUSEL/REEL all moved to
+    # another new prompt version (services/instagram_creative_director.py::_SINGLE_PROMPT_
     # VERSION/_CAROUSEL_PROMPT_VERSION/_REEL_PROMPT_VERSION's own docstring explains why - the
-    # OpenAI strict-schema hotfix already applied to business_context_parser).
+    # maxLength-vs-Pydantic schema hotfix, on top of the earlier OpenAI strict-schema hotfix
+    # already applied to business_context_parser).
     repository.register(RenderedPrompt(
-        name=SINGLE_PROMPT_NAME, version="2", system="you are the creative director", rules=["never invent facts"],
+        name=SINGLE_PROMPT_NAME, version="3", system="you are the creative director", rules=["never invent facts"],
         output_schema=_SINGLE_SCHEMA,
     ))
     repository.register(RenderedPrompt(
-        name=CAROUSEL_PROMPT_NAME, version="2", system="you are the creative director", rules=["never invent facts"],
+        name=CAROUSEL_PROMPT_NAME, version="3", system="you are the creative director", rules=["never invent facts"],
         output_schema=_CAROUSEL_SCHEMA,
     ))
     repository.register(RenderedPrompt(
-        name=REEL_PROMPT_NAME, version="3", system="you are the creative director", rules=["never invent facts"],
+        name=REEL_PROMPT_NAME, version="4", system="you are the creative director", rules=["never invent facts"],
         output_schema=_REEL_SCHEMA,
     ))
     return repository
@@ -223,10 +224,122 @@ def _strict_mode_violations(node: dict, path: str) -> list[str]:
 
 
 @pytest.mark.parametrize(("prompt_name", "version"), [
-    (SINGLE_PROMPT_NAME, "2"), (CAROUSEL_PROMPT_NAME, "2"), (REEL_PROMPT_NAME, "3"),
+    (SINGLE_PROMPT_NAME, "3"), (CAROUSEL_PROMPT_NAME, "3"), (REEL_PROMPT_NAME, "4"),
 ])
 def test_real_creative_director_prompts_have_no_openai_strict_mode_violations(prompt_name: str, version: str) -> None:
     repository = FilePromptRepository(_PROMPTS_ROOT)
     rendered = repository.resolve(prompt_name, version)
     violations = _strict_mode_violations(rendered.output_schema, prompt_name)
     assert violations == [], f"OpenAI strict-mode required-field violations: {violations}"
+
+
+# ---------------------------------------------------------------------------
+# INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2/3 MINIMAL FIXES (FIX A): a real bounded Reel canary proved
+# a SECOND, different prompt<->Pydantic contract mismatch class - a field can satisfy the prompt's
+# own (undeclared) JSON schema while failing schemas/instagram_creative.py's own Pydantic
+# max_length/gt/le constraints, because the prompt schema never declared them. This structural test
+# proves every bounded field in the CURRENT (v3/v3/v4) prompt schemas declares a maxLength/minimum/
+# maximum that matches its Pydantic model field exactly - not a spot-check, the complete field set.
+# ---------------------------------------------------------------------------
+
+from schemas.instagram_creative import (  # noqa: E402
+    InstagramCarouselCreative,
+    InstagramCarouselSlideCreative,
+    InstagramReelCreative,
+    InstagramSingleCreative,
+)
+
+
+def _pydantic_max_length(model: type, field_name: str) -> int | None:
+    info = model.model_fields[field_name]
+    for meta in info.metadata:
+        value = getattr(meta, "max_length", None)
+        if value is not None:
+            return value
+    return None
+
+
+def test_single_prompt_schema_max_lengths_match_pydantic_model() -> None:
+    repository = FilePromptRepository(_PROMPTS_ROOT)
+    rendered = repository.resolve(SINGLE_PROMPT_NAME, "3")
+    properties = rendered.output_schema["properties"]
+    for field_name in ("creative_angle", "visual_concept", "on_image_copy", "caption_direction", "cta"):
+        expected = _pydantic_max_length(InstagramSingleCreative, field_name)
+        assert properties[field_name].get("maxLength") == expected, field_name
+
+
+def test_carousel_prompt_schema_max_lengths_match_pydantic_model() -> None:
+    repository = FilePromptRepository(_PROMPTS_ROOT)
+    rendered = repository.resolve(CAROUSEL_PROMPT_NAME, "3")
+    properties = rendered.output_schema["properties"]
+    for field_name in ("objective", "final_cta"):
+        expected = _pydantic_max_length(InstagramCarouselCreative, field_name)
+        assert properties[field_name].get("maxLength") == expected, field_name
+    slide_properties = properties["slides"]["items"]["properties"]
+    for field_name in ("role", "slide_copy", "visual_direction", "source_evidence"):
+        expected = _pydantic_max_length(InstagramCarouselSlideCreative, field_name)
+        assert slide_properties[field_name].get("maxLength") == expected, field_name
+
+
+def test_reel_prompt_schema_max_lengths_match_pydantic_model() -> None:
+    repository = FilePromptRepository(_PROMPTS_ROOT)
+    rendered = repository.resolve(REEL_PROMPT_NAME, "4")
+    properties = rendered.output_schema["properties"]
+    for field_name in (
+        "objective", "hook", "voiceover_script", "pacing", "audio_direction", "cta",
+        "loop_ending_concept", "caption_direction", "visual_direction", "adaptation_notes",
+    ):
+        expected = _pydantic_max_length(InstagramReelCreative, field_name)
+        assert properties[field_name].get("maxLength") == expected, field_name
+
+
+def test_reel_prompt_schema_duration_bounds_match_pydantic_model() -> None:
+    repository = FilePromptRepository(_PROMPTS_ROOT)
+    rendered = repository.resolve(REEL_PROMPT_NAME, "4")
+    duration_schema = rendered.output_schema["properties"]["target_duration_seconds"]
+    assert duration_schema.get("maximum") == 180
+    assert duration_schema.get("minimum", 0) >= 1  # Pydantic Field(gt=0) on an int is effectively >= 1
+
+
+# ---------------------------------------------------------------------------
+# INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2/3 MINIMAL FIXES (FIX A, tail end): a real end-to-end proof
+# that a value which is valid by every OTHER rule but sits right at the old, undeclared 50-char
+# `objective` boundary can still round-trip through generate_*_creative() without our own Pydantic
+# validation raising - i.e. the schema now actually constrains what the model can return, not just
+# that the JSON keys/shape line up.
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2/3 MINIMAL FIXES (FIX B): all three real prompt files must
+# carry the new state-aware evidence-wording rule, so a PLANNED product fact (now eligible per
+# services/director_execution_service.py::_product_opportunities_from_context()) is never rendered
+# as already live.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(("prompt_name", "version"), [
+    (SINGLE_PROMPT_NAME, "3"), (CAROUSEL_PROMPT_NAME, "3"), (REEL_PROMPT_NAME, "4"),
+])
+def test_real_creative_director_prompts_carry_the_state_aware_evidence_rule(prompt_name: str, version: str) -> None:
+    repository = FilePromptRepository(_PROMPTS_ROOT)
+    rendered = repository.resolve(prompt_name, version)
+    rule_text = " ".join(rendered.rules)
+    assert "confirmed feature:" in rule_text
+    assert "planned feature:" in rule_text
+
+
+@pytest.mark.asyncio
+async def test_reel_objective_at_the_declared_boundary_is_accepted() -> None:
+    gateway = FakeLLMGateway(generate_response=_response({
+        "objective": "x" * 50, "hook": "AI just wrote this entire app", "target_duration_seconds": 25,
+        "scene_sequence": ["hook", "demo", "reveal", "cta"], "shot_list": ["screen recording of the agent working"],
+        "voiceover_script": "Watch what happens when AI writes the code for you", "on_screen_text": ["No code written by hand"],
+        "b_roll_requirements": ["laptop close-up"], "pacing": "fast cuts every 2 seconds",
+        "audio_direction": "trending upbeat track", "cta": "Follow for more", "loop_ending_concept": "loops back to the hook line",
+        "caption_direction": "explain the agent's capability in plain language",
+        "evidence_used": ["OpenAI announced a new autonomous coding agent on 2026-09-04"],
+    }))
+    outcome = await generate_reel_creative(gateway, _prompt_repository(), director_input=_base_input(format="reel"))
+    assert outcome.reel is not None
+    assert len(outcome.reel.objective) == 50

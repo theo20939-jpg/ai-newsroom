@@ -57,12 +57,23 @@ REEL_PROMPT_NAME = "instagram_creative_director_reel"
 # `required` (an "optional" field is expressed via a nullable type union, never omission). All
 # three v1 prompts here had this bug (SINGLE: missing `cta`; CAROUSEL: missing `final_cta`/
 # `slides[].source_evidence`; REEL v2: missing nearly every optional field) - confirmed live, not
-# guessed, before any of these were bumped. Each gets its own independently-versioned, schema-
-# shape-only fix; the previous version file is left untouched/unused, matching this codebase's own
-# established "never edit a shipped prompt version in place" convention.
-_SINGLE_PROMPT_VERSION = "2"
-_CAROUSEL_PROMPT_VERSION = "2"
-_REEL_PROMPT_VERSION = "3"
+# guessed, before any of these were bumped.
+#
+# INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2/3 MINIMAL FIXES: a second real bounded Reel canary (after
+# the hotfix above) proved a DIFFERENT prompt<->Pydantic contract mismatch - `objective` passed the
+# (undeclared) prompt schema but failed schemas/instagram_creative.py's own `max_length=50`
+# Pydantic constraint. Every other undeclared length/numeric constraint across all three schemas
+# was proactively fixed in the same pass (see each vN.yaml's own header for the full list) rather
+# than surfacing one at a time via repeated failed live canaries. Also added a state-aware
+# "confirmed feature:"/"planned feature:" evidence-wording rule to all three (Phase 2/3 PLANNED-
+# fact eligibility, services/director_execution_service.py).
+#
+# Each version bump is its own independently-versioned, schema-shape-only fix; every previous
+# version file is left untouched/unused, matching this codebase's own established "never edit a
+# shipped prompt version in place" convention.
+_SINGLE_PROMPT_VERSION = "3"
+_CAROUSEL_PROMPT_VERSION = "3"
+_REEL_PROMPT_VERSION = "4"
 
 
 class CreativeDirectorUnavailableError(Exception):
