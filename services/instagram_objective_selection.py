@@ -36,6 +36,18 @@ def recommend_objective(
             why="high news_value favors reach/shares while the story is timely", evidence=evidence, confidence=0.3,
         )
 
+    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 4: a NEWS_DIGEST is a multi-story CAROUSEL by
+    # construction (services/instagram_news_digest.py always requests has_multi_step_narrative=
+    # True) - the same reference/saveable-content reasoning the CATEGORY_EDUCATION/multi-step-
+    # narrative branch below already gives, applied explicitly rather than falling through to the
+    # generic BRAND default.
+    if opportunity.source_type == OpportunitySourceType.NEWS_DIGEST:
+        return ObjectiveRecommendation(
+            primary_objective=ContentObjective.SAVES, secondary_objectives=[ContentObjective.SHARES],
+            why="a multi-story digest carousel is reference/saveable content by construction",
+            evidence=evidence, confidence=0.3,
+        )
+
     if opportunity.campaign_phase in _CONVERSION_PHASES and opportunity.product_mention_allowed:
         return ObjectiveRecommendation(
             primary_objective=ContentObjective.PRODUCT_CLICK, secondary_objectives=[ContentObjective.PROFILE_VISITS],

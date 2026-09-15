@@ -8,6 +8,7 @@ from database.models.competitor import CompetitorAccount, CompetitorContentObser
 from database.models.content_draft import ContentDraft
 from database.models.design_reference_asset import DesignReferenceAsset
 from database.models.design_spec_version import DesignSpecVersion
+from database.models.digest_schedule_state import DigestScheduleState
 from database.models.director_editorial_decision import DirectorEditorialDecision
 from database.models.director_editorial_task import DirectorEditorialTask
 from database.models.director_run import DirectorRun

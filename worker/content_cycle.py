@@ -118,6 +118,12 @@ from services.instagram_automatic_trigger import (
     evaluate_and_submit_instagram_opportunity,
 )
 from services.director_execution_service import run_instagram_growth_strategist
+from services.instagram_news_digest import (
+    build_digest_opportunity,
+    is_digest_due,
+    mark_digest_run,
+    select_digest_stories,
+)
 
 # Phase 23.1Q (Media Roadmap Recovery step 1): initial product cap on router-mode NEWS media-group
 # delivery - "1 strong image for ordinary stories; 2-3 images only when additional images
@@ -661,14 +667,23 @@ class ContentCycleResult:
     # (its one message was still sent, just text-only) - not counted here, and not an error.
     image_preview_sent: int = 0
     event_ids: list[UUID] = field(default_factory=list)
-    # INSTAGRAM-AUTOMATIC-EDITORIAL-TRIGGER-1: additive, default None - every pre-existing caller/
-    # test that never reads this field is completely unaffected.
+    # INSTAGRAM-AUTOMATIC-EDITORIAL-TRIGGER-1: additive, default None. INSTAGRAM-CONTENT-
+    # STRATEGY-V2 Phase 4: `_run_instagram_automatic_trigger()` (the function this field's own
+    # report comes from) is NO LONGER CALLED from run_content_cycle() below - replaced by
+    # `instagram_news_digest_report` (see that field's own comment) - this field now always stays
+    # None in real cycles, kept only so the function/its own dedicated 14+3-test suite remains a
+    # valid, independently-testable unit (never deleted, just no longer wired into the live path).
     instagram_trigger_report: InstagramTriggerCycleReport | None = None
     # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2: the PRODUCT lane's own report - a completely separate
     # counter from `instagram_trigger_report` above (the NEWS lane), never merged into it, so each
     # lane's real production behavior stays independently observable. Additive, default None -
     # same "every pre-existing caller/test unaffected" convention as the field above.
     instagram_product_lane_report: InstagramTriggerCycleReport | None = None
+    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 4: the NEWS_DIGEST lane's own report - REPLACES the old
+    # per-story MAJOR-treatment NEWS trigger in the live cycle (see run_content_cycle()'s own call
+    # site comment) - "do NOT leave both paths live" is enforced by this being the only NEWS-
+    # sourced Instagram report the live cycle produces now.
+    instagram_news_digest_report: InstagramTriggerCycleReport | None = None
     # Phase 18.10 M3 (Telegram reply context, story_memory_mode != "off" only - all zero
     # otherwise). `story_fail_closed_review`: an update whose story had no discoverable root
     # message - never sent as a standalone post, routed to review instead (see
@@ -1191,6 +1206,81 @@ async def _run_instagram_product_lane(
     return report
 
 
+async def _run_instagram_news_digest_lane(
+    session_factory: async_sessionmaker[AsyncSession], bot: Bot, *,
+    gate_gateway: object | None, gate_prompt_repository: object | None,
+) -> InstagramTriggerCycleReport:
+    """INSTAGRAM-CONTENT-STRATEGY-V2 Phase 4: ONE Instagram carousel every 72h summarizing the
+    newsroom's OWN strongest recent stories - REPLACES the old per-story MAJOR-treatment NEWS
+    trigger (`_run_instagram_automatic_trigger()` above is no longer called from
+    `run_content_cycle()` - see that call site's own comment for why both paths are never live at
+    once). A normal individual NEWS story may still reach Instagram, but only through the future
+    TREND lane's own independent evidence - never through NEWS treatment alone.
+
+    Cadence: the schedule advances (`mark_digest_run()`) on every DUE check, whether or not the
+    window actually had enough strong stories to build a digest from - a weak 72h window is a
+    real, honest "no digest this time" outcome, never retried every cycle until the SAME window
+    magically improves; the next real check is roughly another 72h later, giving genuinely fresh
+    news time to accumulate. Safe no-op whenever gate_gateway/gate_prompt_repository are None,
+    same contract as the other two lanes."""
+    report = InstagramTriggerCycleReport()
+    if gate_gateway is None or gate_prompt_repository is None:
+        return report
+
+    now = datetime.now(timezone.utc)
+    try:
+        async with session_factory() as session:
+            due = await is_digest_due(session, now=now)
+            if not due:
+                return report
+            stories = await select_digest_stories(session, now=now)
+            await mark_digest_run(session, now=now)
+    except Exception:
+        logger.exception("instagram_news_digest_scheduling_failed")
+        return report
+
+    if not stories:
+        logger.info("instagram_news_digest_window_had_no_strong_stories")
+        return report
+
+    opportunity = build_digest_opportunity(stories, now=now)
+    candidates: list[Any] = []
+    ready = hold = block = delivered = dup_submissions = 0
+    try:
+        async with session_factory() as session:
+            summary = "NINJA Newsroom digest: " + "; ".join(s.title for s in stories[:3])
+            outcome = await evaluate_and_submit_instagram_opportunity(
+                session, bot, opportunity=opportunity, opportunity_summary=summary,
+                gateway=gate_gateway, prompt_repository=gate_prompt_repository, has_multi_step_narrative=True,
+            )
+            await session.commit()
+    except Exception:
+        logger.exception("instagram_news_digest_candidate_failed", extra={"opportunity_id": opportunity.id})
+        return report
+
+    candidates.append(outcome)
+    accepted = 1 if outcome.accepted else 0
+    if outcome.accepted and outcome.reason != "already_submitted":
+        if outcome.gate_decision == "ready_for_editor":
+            ready += 1
+        elif outcome.gate_decision == "hold":
+            hold += 1
+        elif outcome.gate_decision == "block":
+            block += 1
+        if outcome.delivery_sent:
+            delivered += 1
+    elif outcome.reason == "already_submitted":
+        dup_submissions += 1
+
+    report = InstagramTriggerCycleReport(
+        stories_evaluated=len(candidates), opportunities_accepted=accepted, opportunities_rejected=0,
+        packages_ready=ready, packages_hold=hold, packages_block=block, packages_delivered=delivered,
+        duplicate_submissions_suppressed=dup_submissions, duplicate_deliveries_suppressed=0, candidates=candidates,
+    )
+    logger.info("instagram_news_digest_cycle_finished", extra=report.as_log_extra())
+    return report
+
+
 async def run_content_cycle(
     capability_registry: CapabilityRegistry,
     bot: Bot,
@@ -1227,12 +1317,18 @@ async def run_content_cycle(
     result.eligible_found = len(event_ids)
     result.event_ids = event_ids
 
-    # INSTAGRAM-AUTOMATIC-EDITORIAL-TRIGGER-1: independent of and never coupled to the NEWS
-    # content-generation loop below - a failure here can never affect NEWS delivery, and vice
-    # versa. A safe no-op whenever gate_gateway/gate_prompt_repository are None (see that
-    # function's own docstring).
-    result.instagram_trigger_report = await _run_instagram_automatic_trigger(
-        session_factory, bot, event_ids, gate_gateway=gate_gateway, gate_prompt_repository=gate_prompt_repository,
+    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 4: the old per-story MAJOR-treatment NEWS->Instagram
+    # trigger (INSTAGRAM-AUTOMATIC-EDITORIAL-TRIGGER-1, `_run_instagram_automatic_trigger()`
+    # above) is DELIBERATELY NO LONGER CALLED HERE - "do NOT leave both paths live". It is
+    # REPLACED by the NEWS_DIGEST lane below (ONE carousel every 72h, never one post per story). A
+    # normal individual NEWS story may still reach Instagram, but only through the future TREND
+    # lane's own independent evidence - never through NEWS treatment alone. The function itself
+    # (and its own 14+3-test suite) is kept, unmodified, as a documented, independently-testable
+    # unit - it is simply unreachable from this live cycle now (see
+    # tests/test_instagram_content_strategy_v2_phase4_news_digest_wiring.py's own structural
+    # regression test proving exactly that).
+    result.instagram_news_digest_report = await _run_instagram_news_digest_lane(
+        session_factory, bot, gate_gateway=gate_gateway, gate_prompt_repository=gate_prompt_repository,
     )
 
     # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2: the PRODUCT lane - independent of and never coupled

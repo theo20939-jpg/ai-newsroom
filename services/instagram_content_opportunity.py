@@ -39,6 +39,11 @@ class OpportunitySourceType(str, enum.Enum):
     PRODUCT = "product"
     TREND = "trend"
     HYBRID = "hybrid"
+    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 4: a NEWS_DIGEST opportunity represents ONE 72h-window
+    # digest carousel spanning several stories - deliberately its OWN value, never NEWS with a
+    # flag, so package_identity/logging/delivery can never confuse "one story's own post" with
+    # "the periodic digest" at any point downstream (see services/instagram_news_digest.py).
+    NEWS_DIGEST = "news_digest"
 
 
 class ContentOpportunityValidationError(ValueError):
@@ -106,6 +111,10 @@ def _validate_source_references(
             raise ContentOpportunityValidationError(
                 "a HYBRID opportunity requires both a news/trend reference and a product/campaign reference"
             )
+    # NEWS_DIGEST intentionally requires none of story_id/trend_id/product_id/campaign_id - it
+    # summarizes SEVERAL stories at once (their titles/facts live in `evidence`, not a single
+    # reference field), and its own `id` (caller-supplied, e.g. window-boundary-derived) is what
+    # `compute_package_identity()` uses for idempotency instead.
 
 
 def resolve_product_mention_permission(
