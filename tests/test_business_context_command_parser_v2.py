@@ -26,10 +26,10 @@ from tests.fakes.fake_prompt_repository import FakePromptRepository
 _PROMPTS_ROOT = Path(__file__).resolve().parent.parent / "prompts"
 
 
-def test_real_v3_prompt_file_loads_and_declares_feature_updates() -> None:
+def test_real_v4_prompt_file_loads_and_declares_feature_updates() -> None:
     repository = FilePromptRepository(_PROMPTS_ROOT)
     rendered = repository.resolve(PARSER_PROMPT_NAME, PARSER_PROMPT_VERSION)
-    assert PARSER_PROMPT_VERSION == "3"
+    assert PARSER_PROMPT_VERSION == "4"
     product_item_schema = rendered.output_schema["properties"]["products_mentioned"]["items"]
     assert "feature_updates" in product_item_schema["properties"]
     feature_update_schema = product_item_schema["properties"]["feature_updates"]["items"]
@@ -41,7 +41,7 @@ def test_real_v3_prompt_file_loads_and_declares_feature_updates() -> None:
     assert feature_update_schema["properties"]["fact_state"]["enum"] == ["confirmed", "planned", "undecided"]
 
 
-def test_real_v3_prompt_output_schema_has_no_openai_strict_mode_violations() -> None:
+def test_real_v4_prompt_output_schema_has_no_openai_strict_mode_violations() -> None:
     """Structural proof, not a spot-check: every object anywhere in the real output_schema lists
     EVERY one of its own `properties` keys in its own `required` array - the exact OpenAI
     structured-output contract the live production 400 (`invalid_json_schema`, missing 'note')

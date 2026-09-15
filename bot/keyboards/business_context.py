@@ -34,7 +34,7 @@ def build_proposal_keyboard(proposal: BusinessContextProposal) -> InlineKeyboard
     if proposal.status != BusinessContextProposalStatus.PENDING:
         return None
     return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✅ Подтвердить", callback_data=encode_callback_data("confirm", proposal.id)),
-        InlineKeyboardButton(text="✏️ Исправить", callback_data=encode_callback_data("edit", proposal.id)),
+        InlineKeyboardButton(text="✅ Да, всё верно", callback_data=encode_callback_data("confirm", proposal.id)),
+        InlineKeyboardButton(text="✏️ Поправить", callback_data=encode_callback_data("edit", proposal.id)),
         InlineKeyboardButton(text="❌ Отмена", callback_data=encode_callback_data("cancel", proposal.id)),
     ]])

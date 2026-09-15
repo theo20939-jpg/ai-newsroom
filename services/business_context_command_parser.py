@@ -43,7 +43,12 @@ PARSER_PROMPT_NAME = "business_context_parser"
 # with a 400 `invalid_json_schema` error before any output was ever generated - confirmed live via
 # the exact 400 response body, not guessed. v3 is schema-shape-only; every field's real-world
 # meaning is unchanged. See prompts/business_context_parser/v3.yaml's own header for detail.
-PARSER_PROMPT_VERSION = "3"
+#
+# UX CORRECTION (Founder live-canary review): v4 tightens the rules (same schema shape as v3,
+# byte-identical) so a plain launch-date statement no longer also fabricates a campaign_updates/
+# milestones entry for the same fact already captured in feature_updates - see
+# prompts/business_context_parser/v4.yaml's own header for detail.
+PARSER_PROMPT_VERSION = "4"
 
 
 @dataclass(frozen=True)
@@ -104,23 +109,41 @@ async def parse_business_context_command(
 
 
 def _feature_update_fields(feature_updates: list[dict[str, Any]]) -> dict[str, Any]:
-    """Converts the parser's `feature_updates` extraction (fact_key/feature_name/fact_state) into
-    services/product_context_service.py's own additive `*_add`/`*_remove` pseudo-fields - see
+    """Converts the parser's `feature_updates` extraction (fact_key/feature_name/fact_state/note)
+    into services/product_context_service.py's own additive `*_add`/`*_remove` pseudo-fields - see
     that module's `_PRODUCT_LIST_MERGE_FIELDS` for why these are deltas, never a wholesale-replace
     list. "confirmed"/"planned" name the FEATURE (current_features/planned_features, by human-
     readable name); "undecided" names the FACT (undecided_facts, by canonical fact_key) - two
-    different identity spaces, matching services/product_fact_state.py's own distinction."""
+    different identity spaces, matching services/product_fact_state.py's own distinction.
+
+    `feature_notes`/`undecided_display_names` are presenter-only additions to `structured_context`
+    (INSTAGRAM-CONTENT-STRATEGY-V2 Phase 1 UX correction) - `services/product_context_service.py`'s
+    own `_PRODUCT_UPDATABLE_FIELDS` allowlist never includes them, so they are stored on
+    `ProductContextVersion.structured_context` for provenance/display only and can NEVER mutate a
+    canonical `Product` column; `bot/business_context_conversational_presenter.py` reads them to
+    speak the message's own approximate timing/wording naturally instead of losing it."""
     current_add: list[str] = []
     planned_add: list[str] = []
     undecided_add: list[str] = []
+    feature_notes: dict[str, str] = {}
+    undecided_display_names: dict[str, str] = {}
     for update in feature_updates:
         state = update.get("fact_state")
+        note = update.get("note")
         if state == "confirmed":
             current_add.append(update["feature_name"])
+            if note:
+                feature_notes[update["feature_name"]] = note
         elif state == "planned":
             planned_add.append(update["feature_name"])
+            if note:
+                feature_notes[update["feature_name"]] = note
         elif state == "undecided":
-            undecided_add.append(normalize_fact_key(update["fact_key"]))
+            key = normalize_fact_key(update["fact_key"])
+            undecided_add.append(key)
+            undecided_display_names[key] = update["feature_name"]
+            if note:
+                feature_notes[key] = note
 
     fields: dict[str, Any] = {}
     if current_add:
@@ -129,6 +152,10 @@ def _feature_update_fields(feature_updates: list[dict[str, Any]]) -> dict[str, A
         fields["planned_features_add"] = planned_add
     if undecided_add:
         fields["undecided_facts_add"] = undecided_add
+    if feature_notes:
+        fields["feature_notes"] = feature_notes
+    if undecided_display_names:
+        fields["undecided_display_names"] = undecided_display_names
     return fields
 
 

@@ -38,6 +38,10 @@ from bot.business_context_formatting import (
     render_proposal_preview,
     render_status,
 )
+from bot.business_context_conversational_presenter import (
+    render_conversational_confirmation,
+    render_conversational_proposal_preview,
+)
 from bot.keyboards.business_context import build_proposal_keyboard, parse_callback_data
 from integrations.llm_gateway.boot import AIIntegrationLayer, assemble_ai_integration_layer
 from integrations.prompts.file_repository import FilePromptRepository
@@ -127,6 +131,26 @@ def _build_context_summary(snapshot: BusinessContextSnapshot, open_question: Bus
     return "\n".join(lines)
 
 
+def _build_correction_context_summary(
+    snapshot: BusinessContextSnapshot, superseded_proposal: BusinessContextProposal,
+) -> str:
+    """INSTAGRAM-CONTENT-STRATEGY-V2 Phase 1 UX CORRECTION: a Founder correction message
+    ("Store не до конца ноября, а...") only mentions what changed, never restating the rest - the
+    parser needs the PREVIOUS not-yet-confirmed message's own real wording (never a structured
+    dump) so it can naturally combine "what changed" with "what stays the same" in one extraction,
+    reusing the SAME parser/prompt path, never a second pipeline."""
+    lines = [
+        f"- {s.product.slug}: {s.product.name} ({s.product.status.value})" for s in snapshot.products
+    ] or ["(нет продуктов в системе)"]
+    lines.append(
+        f"\nПРЕДЫДУЩЕЕ, ЕЩЁ НЕ ПОДТВЕРЖДЁННОЕ СООБЩЕНИЕ FOUNDER'А, которое сейчас уточняется: "
+        f"{superseded_proposal.raw_instruction}\n"
+        "Следующее сообщение - это ИСПРАВЛЕНИЕ/УТОЧНЕНИЕ к нему, не новый отдельный факт. "
+        "Сохрани из предыдущего сообщения всё, что исправление не затрагивает."
+    )
+    return "\n".join(lines)
+
+
 # A small, fixed, documented set - deliberately not "any short affirmative-sounding word" (a bare
 # "ok"/"понятно" is genuinely ambiguous whether it means "confirm this" or just "acknowledged").
 # Matches the Founder's own named examples exactly plus their most direct synonyms.
@@ -138,6 +162,27 @@ _BARE_CONFIRMATION_PHRASES = frozenset({
 def _is_bare_confirmation_phrase(text: str) -> bool:
     normalized = text.strip().strip(".!?").lower()
     return normalized in _BARE_CONFIRMATION_PHRASES
+
+
+# INSTAGRAM-CONTENT-STRATEGY-V2 Phase 1 UX CORRECTION: marks a proposal as created through the
+# natural-language Director flow (plain text, including a Director-question answer) rather than a
+# slash command - `BusinessContextProposal.origin` was already nullable/free-text (Migration 1),
+# so this reuses the same column with a new value instead of a schema change. Slash-command
+# proposals keep `origin=None` and therefore keep the existing technical preview - "slash commands
+# remain unchanged" (Founder UX correction's own explicit requirement).
+_CONVERSATIONAL_ORIGIN = "conversational"
+
+
+def _preview_for(proposal: BusinessContextProposal) -> str:
+    if proposal.origin == _CONVERSATIONAL_ORIGIN:
+        return render_conversational_proposal_preview(proposal)
+    return render_proposal_preview(proposal)
+
+
+def _confirmation_text_for(proposal: BusinessContextProposal) -> str:
+    if proposal.origin == _CONVERSATIONAL_ORIGIN:
+        return render_conversational_confirmation(proposal)
+    return render_proposal_preview(proposal) + "\n\nПодтверждено."
 
 
 def _is_plain_text_candidate(message: Message) -> bool:
@@ -314,21 +359,37 @@ async def handle_proposal_callback(callback: CallbackQuery) -> None:
             await callback.answer("Уже обработано.", show_alert=True)
             return
 
+        conversational = proposal.origin == _CONVERSATIONAL_ORIGIN
+
         if action == "confirm":
             proposal = await confirm_proposal(session, proposal_id, decided_by=user_id)
+            assert proposal is not None
+            new_text = _confirmation_text_for(proposal) if conversational else (
+                render_proposal_preview(proposal) + "\n\nПодтверждено."
+            )
             ack = "Подтверждено"
         elif action == "cancel":
             proposal = await cancel_proposal(session, proposal_id, decided_by=user_id)
+            assert proposal is not None
+            new_text = (
+                "Отменил, не записываю." if conversational
+                else render_proposal_preview(proposal) + "\n\nОтменено."
+            )
             ack = "Отменено"
         else:  # "edit"
-            await callback.answer(
-                "Отправьте команду заново с исправленным текстом - это создаст новое предложение.",
-                show_alert=True,
-            )
+            if proposal.origin == _CONVERSATIONAL_ORIGIN:
+                await callback.answer(
+                    "Просто напишите, что изменить - я пойму и предложу обновлённый вариант.",
+                    show_alert=True,
+                )
+            else:
+                await callback.answer(
+                    "Отправьте команду заново с исправленным текстом - это создаст новое предложение.",
+                    show_alert=True,
+                )
             return
 
     assert proposal is not None
-    new_text = render_proposal_preview(proposal) + f"\n\n{ack}."
     try:
         await message.edit_text(new_text, reply_markup=build_proposal_keyboard(proposal))
     except Exception:  # noqa: BLE001 - best-effort re-render, the decision itself already persisted
@@ -417,14 +478,74 @@ async def handle_plain_text(message: Message) -> None:
             )
             # Copies the SAME origin_context through onto the answer proposal (traceability: this
             # proposal exists because of that opportunity/missing_fact), then closes the question.
+            # `origin` becomes "conversational" (not DIRECTOR_INITIATED_ORIGIN - that value is
+            # reserved for the QUESTION itself, already closed below) so this answer proposal
+            # gets the conversational preview/confirmation, not the technical dump.
             new_proposal.origin_context = resolved.origin_context
+            new_proposal.origin = _CONVERSATIONAL_ORIGIN
             await session.commit()
             await close_answered_question(session, resolved.id, answered_by=user_id)
 
-            preview = render_proposal_preview(new_proposal)
+            preview = _preview_for(new_proposal)
             keyboard = build_proposal_keyboard(new_proposal)
             sent = await message.answer(preview, reply_markup=keyboard)
             refreshed = await get_proposal(session, new_proposal.id)
+            if refreshed is not None:
+                refreshed.telegram_message_id = sent.message_id
+                await session.commit()
+            return
+
+        if (
+            resolved is not None and resolved.origin == _CONVERSATIONAL_ORIGIN
+            and not _is_bare_confirmation_phrase(text)
+        ):
+            # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 1 UX CORRECTION: a natural-language correction to
+            # a still-PENDING conversational proposal ("Store не до конца ноября, а...") -
+            # resolved via the SAME reply-to/exactly-one-pending rule every other conversational
+            # act uses, never guessed. The old proposal is superseded (cancelled, same mechanism
+            # close_answered_question() already reuses for "no longer open") by a freshly parsed
+            # one that has the old message's own real wording as context, so the SAME single parser
+            # call can naturally keep what the correction doesn't mention - never a second pipeline,
+            # never a partial in-place edit of already-proposed (unconfirmed) content.
+            snapshot = await get_business_context_snapshot(session, now=now)
+            context_summary = _build_correction_context_summary(snapshot, resolved)
+            ai_layer, prompt_repository = await _get_ai_layer()
+            try:
+                extraction = await parse_business_context_command(
+                    ai_layer.gateway, prompt_repository, raw_text=text,
+                    context_summary_text=context_summary, now=now,
+                )
+            except Exception:
+                logger.exception("business_context_parse_failed", extra={"origin": "correction"})
+                await message.answer("Не удалось разобрать уточнение. Попробуйте переформулировать.")
+                return
+
+            change_set = build_change_set(extraction, raw_text=text)
+            if not change_set:
+                clarification = "; ".join(extraction.clarification_needed) or (
+                    "не удалось понять, что именно меняется. Попробуйте переформулировать."
+                )
+                await message.answer(f"🥷 {clarification}")
+                return
+
+            corrected_proposal = await create_proposal(
+                session, command_type=BusinessContextCommandType.CONTEXT, raw_instruction=text,
+                proposed_change_set=change_set, created_by=user_id,
+                parsed_structure={
+                    "products_mentioned": extraction.products_mentioned,
+                    "campaign_updates": extraction.campaign_updates, "milestones": extraction.milestones,
+                    "directives": extraction.directives, "claims": extraction.claims,
+                },
+                telegram_chat_id=message.chat.id, telegram_topic_id=message.message_thread_id,
+            )
+            corrected_proposal.origin = _CONVERSATIONAL_ORIGIN
+            await session.commit()
+            await cancel_proposal(session, resolved.id, decided_by=user_id)
+
+            preview = _preview_for(corrected_proposal)
+            keyboard = build_proposal_keyboard(corrected_proposal)
+            sent = await message.answer(preview, reply_markup=keyboard)
+            refreshed = await get_proposal(session, corrected_proposal.id)
             if refreshed is not None:
                 refreshed.telegram_message_id = sent.message_id
                 await session.commit()
@@ -448,7 +569,7 @@ async def handle_plain_text(message: Message) -> None:
                 return
             confirmed = await confirm_proposal(session, resolved.id, decided_by=user_id)
             assert confirmed is not None
-            await message.answer(render_proposal_preview(confirmed) + "\n\nПодтверждено.")
+            await message.answer(_confirmation_text_for(confirmed))
             return
 
         # No correlated pending item - a brand-new free-text business-context statement, handled
@@ -487,7 +608,9 @@ async def handle_plain_text(message: Message) -> None:
             },
             telegram_chat_id=message.chat.id, telegram_topic_id=message.message_thread_id,
         )
-        preview = render_proposal_preview(proposal)
+        proposal.origin = _CONVERSATIONAL_ORIGIN
+        await session.commit()
+        preview = _preview_for(proposal)
         keyboard = build_proposal_keyboard(proposal)
         sent = await message.answer(preview, reply_markup=keyboard)
         refreshed = await get_proposal(session, proposal.id)
