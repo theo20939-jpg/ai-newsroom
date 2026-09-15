@@ -406,7 +406,7 @@ async def evaluate_and_submit_instagram_opportunity(
 
     delivery_outcome = await deliver_instagram_package(
         bot, session, presentation=presentation, gate_decision=gate.decision, package_identity=identity,
-        source_story_id=opportunity.id, content_format=format_decision.recommended_format.value,
+        source_story_id=opportunity.story_id, content_format=format_decision.recommended_format.value,
         package_snapshot=snapshot, source_url=source_url, hold_or_block_reason=gate.short_reason or None,
     )
     return InstagramTriggerCandidateOutcome(

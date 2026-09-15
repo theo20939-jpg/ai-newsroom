@@ -3,13 +3,16 @@ from __future__ import annotations
 
 from io import BytesIO
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
+from unittest.mock import AsyncMock
 
 import pytest
 from PIL import Image
 
 import services.instagram_automatic_trigger as trigger
 from services.instagram_art_validator import validate_instagram_art
+from core.config import settings
+from database.models.instagram_editorial_delivery import InstagramEditorialDelivery
 from services.instagram_content_opportunity import ContentOpportunity, OpportunitySourceType
 from services.instagram_content_package import build_instagram_content_package
 from services.instagram_creative_director import CreativeGenerationOutcome
@@ -84,3 +87,44 @@ def test_external_news_entities_are_distinct_from_protected_product_policy() -> 
     assert trigger._is_external_news(news)
     assert not trigger._is_external_news(hybrid)
     assert not trigger._is_external_news(product)
+
+@pytest.mark.asyncio
+async def test_general_news_delivery_records_real_story_id_not_opportunity_id(
+    db_session, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    story_id = str(uuid4())
+    opportunity = ContentOpportunity(
+        id="fresh-delivery-opp", source_type=OpportunitySourceType.NEWS,
+        story_id=story_id, news_value=0.9, evidence=["Company X announced Y"],
+    )
+    candidate = SimpleNamespace(id=uuid4(), candidate_id="real-image")
+
+    async def image_source(session, incoming_story_id):
+        assert incoming_story_id == story_id
+        return Image.new("RGB", (512, 512), "navy"), candidate, 1, 2048
+
+    async def creative_generation(director_input, fmt):
+        assert director_input.external_news_entities_allowed
+        return CreativeGenerationOutcome(single=InstagramSingleCreative(
+            creative_angle="angle", visual_concept="source photo", on_image_copy="Company X",
+            caption_direction="internal brief", final_caption="Company X announced Y.",
+            source_subject="Company X", evidence_used=["Company X announced Y"],
+        ))
+
+    monkeypatch.setattr(trigger, "_resolve_single_source_image", image_source)
+    monkeypatch.setattr(trigger, "build_default_regenerator", lambda gateway, prompts: creative_generation)
+    monkeypatch.setattr(settings, "newsroom_telegram_chat_id", -1002345678901)
+    monkeypatch.setattr(settings, "instagram_topic_id", 40)
+    bot = AsyncMock()
+    bot.send_photo.return_value.message_id = 701
+    bot.send_message.return_value.message_id = 702
+
+    result = await trigger.evaluate_and_submit_instagram_opportunity(
+        db_session, bot, opportunity=opportunity, opportunity_summary="Company X announced Y",
+        gateway=None, prompt_repository=None,
+    )
+    assert result.delivery_sent
+    delivery = await db_session.get(InstagramEditorialDelivery, UUID(result.delivery_id))
+    assert delivery.source_story_id == story_id
+    assert delivery.source_story_id != opportunity.id
+    assert delivery.content_format == "single"
