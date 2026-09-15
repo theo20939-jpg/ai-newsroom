@@ -1,0 +1,225 @@
+"""INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2: PRODUCT opportunities without a mandatory
+LaunchCampaign, and the new general `evaluate_and_submit_instagram_opportunity()` entrypoint -
+`services.instagram_automatic_trigger`'s NEW sibling to the NEWS-only
+`evaluate_and_submit_instagram_candidate()`, exercised the same way
+tests/test_instagram_automatic_trigger.py already does (FakeLLMGateway/FakePromptRepository,
+AsyncMock Bot, real db_session)."""
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock
+
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from core.config import settings
+from database.models.business_context_proposal import BusinessContextCommandType
+from integrations.llm_gateway.protocol import GenerateResponse
+from integrations.prompts.protocol import RenderedPrompt
+from schemas.capability import CapabilityUsage
+from services.business_context_proposal_service import confirm_proposal, create_proposal
+from services.business_context_snapshot_service import get_business_context_snapshot
+from services.campaign_service import create_campaign
+from services.director_execution_service import _product_opportunities_from_context, run_instagram_growth_strategist
+from services.instagram_automatic_trigger import evaluate_and_submit_instagram_opportunity
+from services.instagram_content_opportunity import OpportunitySourceType
+from services.instagram_creative_director import SINGLE_PROMPT_NAME
+from services.product_context_service import create_product
+from tests.fakes.fake_gateway import FakeLLMGateway
+from tests.fakes.fake_prompt_repository import FakePromptRepository
+
+_SINGLE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "creative_angle": {"type": "string"}, "visual_concept": {"type": "string"},
+        "on_image_copy": {"type": "string"}, "caption_direction": {"type": "string"},
+        "cta": {"type": ["string", "null"]}, "asset_requirements": {"type": "array"},
+        "evidence_used": {"type": "array"},
+    },
+    "required": ["creative_angle", "visual_concept", "on_image_copy", "caption_direction", "asset_requirements", "evidence_used"],
+}
+
+_GOOD_OUTPUT = {
+    "creative_angle": "a real confirmed feature", "visual_concept": "bold headline over dark gradient",
+    "on_image_copy": "New: Production Mode", "caption_direction": "explain what it does and why it matters",
+    "cta": "Learn more", "asset_requirements": [], "evidence_used": ["confirmed feature: Production Mode"],
+}
+
+
+def _prompt_repository() -> FakePromptRepository:
+    repository = FakePromptRepository()
+    repository.register(RenderedPrompt(
+        name=SINGLE_PROMPT_NAME, version="1", system="you are the creative director", rules=["never invent facts"],
+        output_schema=_SINGLE_SCHEMA,
+    ))
+    return repository
+
+
+def _gateway(output: dict = _GOOD_OUTPUT) -> FakeLLMGateway:
+    return FakeLLMGateway(generate_response=GenerateResponse(
+        text=None, structured_output=output, finish_reason="stop", model_used="fake-model-v1",
+        usage=CapabilityUsage(input_tokens=200, output_tokens=150),
+    ))
+
+
+@pytest.fixture(autouse=True)
+def _topic_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "newsroom_telegram_chat_id", -1002345678901)
+    monkeypatch.setattr(settings, "instagram_topic_id", 40)
+
+
+async def _confirm_current_feature(db_session: AsyncSession, *, slug: str, feature: str):
+    product = await create_product(db_session, slug=slug, name=f"Product {slug}")
+    proposal = await create_proposal(
+        db_session, command_type=BusinessContextCommandType.PRODUCT, raw_instruction=f"{feature} is live",
+        proposed_change_set=[{
+            "entity_type": "product_context_version", "product_slug": slug,
+            "raw_instruction": f"{feature} is live", "structured_context": {"current_features_add": [feature]},
+        }],
+        created_by=1,
+    )
+    await confirm_proposal(db_session, proposal.id, decided_by=1)
+    await db_session.refresh(product)
+    return product
+
+
+# ---------------------------------------------------------------------------
+# _product_opportunities_from_context(): campaign-free PRODUCT opportunities
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_product_with_confirmed_feature_and_no_campaign_produces_an_opportunity(db_session: AsyncSession) -> None:
+    await _confirm_current_feature(db_session, slug="p2ai", feature="Production Mode")
+    snapshot = await get_business_context_snapshot(db_session, now=datetime.now(timezone.utc))
+    contexts = _product_opportunities_from_context(snapshot)
+    matching = [c for c in contexts if c.product_slug == "p2ai"]
+    assert len(matching) == 1
+    assert matching[0].opportunity.source_type == OpportunitySourceType.PRODUCT
+    assert matching[0].opportunity.campaign_id is None
+    assert "confirmed feature: Production Mode" in matching[0].opportunity.evidence
+
+
+@pytest.mark.asyncio
+async def test_product_with_zero_confirmed_features_produces_nothing(db_session: AsyncSession) -> None:
+    await create_product(db_session, slug="p2empty", name="Empty Product")
+    snapshot = await get_business_context_snapshot(db_session, now=datetime.now(timezone.utc))
+    contexts = _product_opportunities_from_context(snapshot)
+    assert not any(c.product_slug == "p2empty" for c in contexts)
+
+
+@pytest.mark.asyncio
+async def test_campaign_backed_product_is_never_double_counted(db_session: AsyncSession) -> None:
+    product = await _confirm_current_feature(db_session, slug="p2dual", feature="Some Feature")
+    now = datetime.now(timezone.utc)
+    await create_campaign(
+        db_session, product_id=product.id, name="p2dual launch",
+        structured_context={
+            "status": "confirmed", "planned_launch_date": (now.date() + timedelta(days=2)).isoformat(),
+            "date_confidence": "exact",
+        },
+    )
+    snapshot = await get_business_context_snapshot(db_session, now=now)
+    context_only_ids = [c.opportunity.id for c in _product_opportunities_from_context(snapshot) if c.product_slug == "p2dual"]
+    assert context_only_ids == []  # covered by the campaign-backed function instead, never both
+
+
+@pytest.mark.asyncio
+async def test_growth_strategist_ranks_campaign_backed_and_campaign_free_together(db_session: AsyncSession) -> None:
+    await _confirm_current_feature(db_session, slug="p2contextonly", feature="Standalone Feature")
+    product2 = await create_product(db_session, slug="p2campaign", name="Campaign Product")
+    now = datetime.now(timezone.utc)
+    await create_campaign(
+        db_session, product_id=product2.id, name="p2campaign launch",
+        structured_context={
+            "status": "confirmed", "planned_launch_date": (now.date() + timedelta(days=2)).isoformat(),
+            "date_confidence": "exact",
+        },
+    )
+    result = await run_instagram_growth_strategist(db_session, now=now)
+    opportunity_ids = {o.id for o in result.strategy.priority_opportunities}
+    assert any(oid.startswith("product_context:") for oid in opportunity_ids)
+    assert any(oid.startswith("campaign:") for oid in opportunity_ids)
+
+
+# ---------------------------------------------------------------------------
+# evaluate_and_submit_instagram_opportunity(): the new general entrypoint
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_general_entrypoint_delivers_a_product_opportunity_to_the_configured_topic(db_session: AsyncSession) -> None:
+    await _confirm_current_feature(db_session, slug="p2deliver", feature="Production Mode")
+    snapshot = await get_business_context_snapshot(db_session, now=datetime.now(timezone.utc))
+    contexts = _product_opportunities_from_context(snapshot)
+    opportunity = next(c.opportunity for c in contexts if c.product_slug == "p2deliver")
+
+    bot = AsyncMock()
+    bot.send_photo.return_value.message_id = 701
+    bot.send_message.return_value.message_id = 702
+    outcome = await evaluate_and_submit_instagram_opportunity(
+        db_session, bot, opportunity=opportunity, opportunity_summary="NINJA AI Production Mode is live",
+        gateway=_gateway(), prompt_repository=_prompt_repository(),
+    )
+    assert outcome.accepted is True
+    assert outcome.reason == "submitted"
+    assert outcome.delivery_sent is True
+    bot.send_photo.assert_called_once()
+    assert bot.send_photo.call_args.args[0] == -1002345678901
+    assert bot.send_photo.call_args.kwargs["message_thread_id"] == 40
+
+
+@pytest.mark.asyncio
+async def test_general_entrypoint_is_idempotent_across_calls(db_session: AsyncSession) -> None:
+    await _confirm_current_feature(db_session, slug="p2dup", feature="Production Mode")
+    snapshot = await get_business_context_snapshot(db_session, now=datetime.now(timezone.utc))
+    opportunity = next(c.opportunity for c in _product_opportunities_from_context(snapshot) if c.product_slug == "p2dup")
+
+    bot1 = AsyncMock()
+    bot1.send_photo.return_value.message_id = 703
+    first = await evaluate_and_submit_instagram_opportunity(
+        db_session, bot1, opportunity=opportunity, opportunity_summary="x",
+        gateway=_gateway(), prompt_repository=_prompt_repository(),
+    )
+    assert first.delivery_sent is True
+
+    bot2 = AsyncMock()
+    second = await evaluate_and_submit_instagram_opportunity(
+        db_session, bot2, opportunity=opportunity, opportunity_summary="x",
+        gateway=_gateway(), prompt_repository=_prompt_repository(),
+    )
+    assert second.reason == "already_submitted"
+    bot2.send_photo.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_general_entrypoint_survives_creative_director_fact_safety_rejection(db_session: AsyncSession) -> None:
+    """The SAME fact-safety mechanism the NEWS path relies on applies here too - a claim outside
+    `allowed_evidence` fails closed, never crashing the caller."""
+    await _confirm_current_feature(db_session, slug="p2hold", feature="Production Mode")
+    snapshot = await get_business_context_snapshot(db_session, now=datetime.now(timezone.utc))
+    opportunity = next(c.opportunity for c in _product_opportunities_from_context(snapshot) if c.product_slug == "p2hold")
+
+    bad_output = dict(_GOOD_OUTPUT, evidence_used=["a fact never in allowed_evidence"])
+    bot = AsyncMock()
+    outcome = await evaluate_and_submit_instagram_opportunity(
+        db_session, bot, opportunity=opportunity, opportunity_summary="x",
+        gateway=_gateway(bad_output), prompt_repository=_prompt_repository(),
+    )
+    assert outcome.reason.startswith("creative_director_failed")
+    bot.send_photo.assert_not_called()
+
+
+def test_general_entrypoint_never_imports_credentials_or_media_hosting_or_publish() -> None:
+    """Same structural guarantee tests/test_instagram_automatic_trigger.py already asserts for the
+    whole module - re-affirmed explicitly here since this test file exercises the NEW function."""
+    import ast
+    import inspect
+
+    import services.instagram_automatic_trigger as trigger_module
+
+    tree = ast.parse(inspect.getsource(trigger_module))
+    imported = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module}
+    assert "services.instagram_account_reader" not in imported
+    assert "services.instagram_media_hosting" not in imported
+    assert "services.instagram_publish_adapter" not in imported

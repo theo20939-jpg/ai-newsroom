@@ -131,6 +131,38 @@ def _product_opportunities_from_campaigns(snapshot: BusinessContextSnapshot) -> 
     return contexts
 
 
+def _product_opportunities_from_context(snapshot: BusinessContextSnapshot) -> list[OpportunityContext]:
+    """INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2 ("Founder Plan Review" constraint - "Campaign must
+    NOT be mandatory" / addendum §8 point 8): `_product_opportunities_from_campaigns()` above ONLY
+    iterates `snapshot.active_campaigns` - a real, confirmed gap, a `Product` with zero active
+    `LaunchCampaign` rows produces ZERO opportunities today. This sibling function (never a
+    replacement, never a second construction PATH - it calls the exact same
+    `build_content_opportunity()` assembly function above, with `campaign_plan=None`, an
+    already-supported optional parameter) covers every OTHER product with real, CONFIRMED ground
+    truth to build content from.
+
+    Never fabricates evidence: a product with zero `current_features` produces ZERO opportunities
+    here - "we don't know anything confirmed about this product yet" is a real, disclosed gap for
+    the Director to proactively ask about (services/business_context_proposal_service.py::
+    scan_for_director_information_needs()), never something this function invents content from."""
+    contexts: list[OpportunityContext] = []
+    campaign_backed_product_ids = {ctx.opportunity.product_id for ctx in _product_opportunities_from_campaigns(snapshot)}
+    for summary in snapshot.products:
+        product = summary.product
+        if str(product.id) in campaign_backed_product_ids:
+            continue  # already covered above - never double-counted across both functions
+        if not product.current_features:
+            continue  # nothing CONFIRMED to build content from yet - a real gap, not invented
+        opportunity = build_content_opportunity(
+            id=f"product_context:{product.id}", source_type=OpportunitySourceType.PRODUCT,
+            product_id=str(product.id), campaign_plan=None,
+            evidence=[f"confirmed feature: {feature}" for feature in product.current_features],
+            confidence=0.3,
+        )
+        contexts.append(OpportunityContext(opportunity=opportunity, product_slug=product.slug))
+    return contexts
+
+
 @dataclass(frozen=True)
 class TelegramStrategyExecutionResult:
     advisory: StrategyDirectorAdvisory
@@ -241,7 +273,11 @@ async def run_instagram_growth_strategist(
 ) -> InstagramGrowthExecutionResult:
     now = now or datetime.now(timezone.utc)
     snapshot = await get_business_context_snapshot(session, now=now)
-    contexts = _product_opportunities_from_campaigns(snapshot)
+    # Phase 2: campaign-backed AND campaign-free PRODUCT opportunities are merged before ranking -
+    # an active LaunchCampaign is a real, distinguishing signal (campaign_relevance), never a
+    # prerequisite for a Product to generate content (see _product_opportunities_from_context()'s
+    # own docstring).
+    contexts = _product_opportunities_from_campaigns(snapshot) + _product_opportunities_from_context(snapshot)
     # DIRECTOR-CONTROL-PLANE-1C §10/§11: the ONE bounded official read path. When Instagram is
     # configured, `sync_instagram_feed_context()` calls the real read-only reader
     # (services/instagram_account_reader.py) and normalizes the result through
