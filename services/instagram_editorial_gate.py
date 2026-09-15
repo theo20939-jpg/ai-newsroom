@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass, field
+import re
 from typing import Any
 
 from services.instagram_art_validator import InstagramArtValidationResult
@@ -109,6 +110,16 @@ def evaluate_instagram_editorial_gate(
     )
 
 
+def _subject_is_represented(subject: str, text: str) -> bool:
+    if subject.casefold() in text.casefold():
+        return True
+    tokens = [token for token in re.findall(r"[\w\d]+", subject.casefold()) if len(token) >= 3]
+    if not tokens:
+        return False
+    present = sum(token in text.casefold() for token in set(tokens))
+    return present >= min(2, len(set(tokens)))
+
+
 def _content_finality_issues(package: InstagramContentPackage) -> list[str]:
     issues: list[str] = []
     caption = package.caption.strip()
@@ -154,7 +165,7 @@ def _content_finality_issues(package: InstagramContentPackage) -> list[str]:
             issues.append("reel_timing_does_not_cover_duration")
         spoken = " ".join(str(scene.get("spoken_line") or "") for scene in scenes if isinstance(scene, dict))
         subject = str(plan.get("source_subject") or "").strip()
-        if subject and subject.casefold() not in spoken.casefold():
+        if subject and not _subject_is_represented(subject, spoken):
             issues.append("source_subject_absent_from_spoken_script")
     if not str(plan.get("loop_ending_concept") or "").strip():
         issues.append("reel_closing_beat_missing")

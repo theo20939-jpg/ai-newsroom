@@ -188,3 +188,14 @@ def test_reel_requires_timings_and_spoken_lines() -> None:
     incomplete = replace(pkg, media_plan={**pkg.media_plan, "scenes": bad_scenes})
     reasons = evaluate_instagram_editorial_gate(incomplete, art).reason_codes
     assert "reel_scene_timing_invalid" in reasons
+
+
+def test_reel_abbreviated_spoken_script_still_represents_long_subject() -> None:
+    pkg, cover, art = _ready_reel_package()
+    plan = dict(pkg.media_plan)
+    plan["scenes"] = [dict(scene) for scene in plan["scenes"]]
+    plan["scenes"][0]["spoken_line"] = "Apple rolls out iOS 27 and watchOS 27."
+    from dataclasses import replace
+    pkg = replace(pkg, media_plan=plan)
+    outcome = evaluate_instagram_editorial_gate(pkg, art)
+    assert outcome.decision is InstagramGateDecision.READY_FOR_EDITOR
