@@ -55,6 +55,13 @@ def _prompt_repository() -> FakePromptRepository:
         name=REEL_PROMPT_NAME, version="1", system="you are the creative director", rules=["never invent facts"],
         output_schema=_REEL_SCHEMA,
     ))
+    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 3: generate_reel_creative() now resolves REEL's own
+    # bumped version ("2") - SINGLE/CAROUSEL stay on "1" (see services/instagram_creative_
+    # director.py::_REEL_PROMPT_VERSION's own docstring for why only REEL moved).
+    repository.register(RenderedPrompt(
+        name=REEL_PROMPT_NAME, version="2", system="you are the creative director", rules=["never invent facts"],
+        output_schema=_REEL_SCHEMA,
+    ))
     return repository
 
 

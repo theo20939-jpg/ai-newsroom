@@ -51,6 +51,11 @@ SINGLE_PROMPT_NAME = "instagram_creative_director_single"
 CAROUSEL_PROMPT_NAME = "instagram_creative_director_carousel"
 REEL_PROMPT_NAME = "instagram_creative_director_reel"
 _PROMPT_VERSION = "1"
+# INSTAGRAM-CONTENT-STRATEGY-V2 Phase 3: REEL's own prompt version, bumped independently of
+# SINGLE/CAROUSEL (which stay on v1, byte-identical) - adds visual_direction/asset_requirements/
+# adaptation_notes to the output_schema plus trend_mechanic/trend_spread_reason guidance in the
+# system prompt. Never edits prompts/instagram_creative_director_reel/v1.yaml in place.
+_REEL_PROMPT_VERSION = "2"
 
 
 class CreativeDirectorUnavailableError(Exception):
@@ -91,6 +96,13 @@ class CreativeDirectorInput:
     # "recent feed dominated by Reels; a Carousel may stand out." Empty by default so every
     # pre-existing call site keeps its exact prior prompt text.
     feed_context_note: str = ""
+    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 3: TREND-origin Reels only - `None` by default so every
+    # pre-existing call site (SINGLE/CAROUSEL, and every existing REEL caller) keeps its exact
+    # prior prompt text. `trend_mechanic` names the detected spreading format/mechanic (e.g. "POV
+    # starter pack"); `trend_spread_reason` is why it's spreading - both feed the REEL prompt's own
+    # instruction to produce an ORIGINAL NINJA adaptation, never a copy.
+    trend_mechanic: str | None = None
+    trend_spread_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -136,15 +148,18 @@ def _build_user_text(director_input: CreativeDirectorInput) -> str:
         f"PRODUCT_MENTION_ALLOWED: {director_input.product_mention_allowed}\n"
         f"LAUNCH CONTEXT: {director_input.launch_context_note or '(established account - no launch context)'}\n"
         f"FEED CONTEXT: {director_input.feed_context_note or '(no real feed context available)'}\n"
+        f"TREND MECHANIC: {director_input.trend_mechanic or '(not a trend-origin piece)'}\n"
+        f"WHY THIS MECHANIC IS SPREADING: {director_input.trend_spread_reason or '(n/a)'}\n"
         f"EVIDENCE BULLETS (use ONLY these for any factual claim):\n{evidence_block}"
     )
 
 
 async def _call_creative_director(
     gateway: LLMGateway, prompt_repository: PromptRepository, *, prompt_name: str, director_input: CreativeDirectorInput,
+    prompt_version: str = _PROMPT_VERSION,
 ) -> tuple[dict, CapabilityCall]:
     try:
-        prompt = prompt_repository.resolve(prompt_name, _PROMPT_VERSION)
+        prompt = prompt_repository.resolve(prompt_name, prompt_version)
     except Exception as exc:
         raise CreativeDirectorUnavailableError(f"prompt unavailable: {exc}") from exc
 
@@ -214,11 +229,13 @@ async def generate_reel_creative(
 ) -> CreativeGenerationOutcome:
     output, call = await _call_creative_director(
         gateway, prompt_repository, prompt_name=REEL_PROMPT_NAME, director_input=director_input,
+        prompt_version=_REEL_PROMPT_VERSION,
     )
     creative = InstagramReelCreative.model_validate(output)
     text_fields = [
         creative.hook, creative.caption_direction, creative.voiceover_script or "",
         *creative.on_screen_text, creative.cta or "", creative.loop_ending_concept or "",
+        creative.visual_direction or "", creative.adaptation_notes or "",
     ]
     _enforce_fact_safety(text_fields=text_fields, evidence_used=creative.evidence_used, director_input=director_input)
     return CreativeGenerationOutcome(reel=creative, call=call)

@@ -127,6 +127,17 @@ class InstagramContentPackage:
     # from ever becoming `MediaSelectionResult.selected` in the first place (§7's own point).
     media_usage_classification: str | None = None  # a real MediaUsageClassification value.
 
+    # -- INSTAGRAM-CONTENT-STRATEGY-V2 Phase 3: REEL script-readiness axis, ORTHOGONAL to the
+    # existing QA/truthfulness gate (InstagramGateDecision READY_FOR_EDITOR/HOLD/BLOCK) - this is
+    # about SCRIPT COMPLETENESS (are all required facts/assets known), not media/art quality.
+    # `None` for every non-REEL package and every REEL built before this phase (safe default, no
+    # pre-existing caller/test affected). One of "concept_script" (the premise is fact-grounded but
+    # production assets/execution details are still missing) or "production_script" (required
+    # facts confirmed AND required production inputs known/satisfiable) - computed by the CALLER
+    # (services/instagram_reel_script_readiness.py), never by the Creative Director itself and
+    # never inferred here from creative content alone.
+    reel_script_readiness: str | None = None
+
     # -- publication metadata (empty at package-build time; the publish layer appends to a COPY) --
     publication_metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -163,6 +174,7 @@ class InstagramContentPackage:
             "media_candidate_id": self.media_candidate_id,
             "media_subject_match": self.media_subject_match,
             "media_usage_classification": self.media_usage_classification,
+            "reel_script_readiness": self.reel_script_readiness,
             "publication_metadata": self.publication_metadata,
             "created_at": self.created_at.isoformat(),
         }
@@ -223,6 +235,12 @@ def _reel_media_plan(creative: Any) -> tuple[str, str | None, str | None, dict[s
         "voiceover_script": creative.voiceover_script,
         "audio_direction": creative.audio_direction,
         "loop_ending_concept": creative.loop_ending_concept,
+        # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 3: additive - `getattr(..., default)` so a
+        # pre-Phase-3 InstagramReelCreative-shaped test double (missing these attrs entirely)
+        # still builds a package exactly as before.
+        "visual_direction": getattr(creative, "visual_direction", None),
+        "asset_requirements": list(getattr(creative, "asset_requirements", []) or []),
+        "adaptation_notes": getattr(creative, "adaptation_notes", None),
     }
     return caption, None, cta, media_plan
 
@@ -242,7 +260,7 @@ def build_instagram_content_package(
     creative_outcome: CreativeGenerationOutcome | None = None, account_key: str = "default",
     external_video_asset_ref: str | None = None, hashtags: list[str] | None = None,
     presentation_family: str | None = None, source_image_ref: str | None = None,
-    media_selection: Any | None = None,
+    media_selection: Any | None = None, reel_script_readiness: str | None = None,
 ) -> InstagramContentPackage:
     """Assembles a package from the REAL upstream Director objects. `creative_outcome` is optional
     (mirrors `build_shadow_plan()`'s own optionality) - without it, the package carries only the
@@ -335,6 +353,7 @@ def build_instagram_content_package(
         media_candidate_id=media_candidate_id,
         media_subject_match=media_subject_match,
         media_usage_classification=media_usage_classification,
+        reel_script_readiness=reel_script_readiness,
         render_profiles=_render_profiles_for(fmt, slide_count=slide_count),
         slide_count=slide_count,
     )
