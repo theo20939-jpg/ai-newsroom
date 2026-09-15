@@ -8,12 +8,26 @@ proposal) rather than one fixed target row.
 `proposed_change_set` is never applied to canonical tables until `status` transitions to
 CONFIRMED (services/business_context_proposal_service.py::confirm_proposal()) - the parser
 (services/business_context_command_parser.py) NEVER writes canonical state directly (spec §32/§102:
-"Never let an LLM self-confirm its own proposed mutation")."""
+"Never let an LLM self-confirm its own proposed mutation").
+
+INSTAGRAM-CONTENT-STRATEGY-V2 Phase 1: three new nullable columns generalize a proposal beyond
+"a human typed a mutation command" to also represent a DIRECTOR-INITIATED information need (the
+Director asking the Founder something because a real PRODUCT opportunity is blocked by missing/
+stale truth) - `origin` distinguishes the two ("user_initiated"/None vs "director_initiated"),
+`question_text` carries the actual question shown to the Founder, and `origin_context` (a plain
+JSON blob, not a new model/FK - there is nothing durable to FK to, since a `ContentOpportunity` is
+an in-memory dataclass rebuilt fresh every cycle, never a persisted row) retains exactly
+`{product_slug, missing_fact, opportunity_id, opportunity_source_type}` so a later Founder answer
+can be correlated back to the specific fact it resolves. A director-initiated proposal's own
+`proposed_change_set` is empty (there is nothing to apply from the QUESTION itself) - the
+Founder's natural-language ANSWER produces a separate, normal proposal (see
+services/business_context_proposal_service.py::create_director_information_need()/
+resolve_target_proposal())."""
 import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, BigInteger, DateTime, Enum, Integer, String, func
+from sqlalchemy import JSON, BigInteger, DateTime, Enum, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -84,3 +98,12 @@ class BusinessContextProposal(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 1 (Migration 1) - see module docstring. `origin` is
+    # nullable rather than defaulted to "user_initiated": every pre-existing proposal (and every
+    # new one created via a slash command or the plain-text handler) simply leaves this NULL,
+    # which is treated as "user_initiated" everywhere it's read - only the Director's own
+    # information-need proposals ever set it explicitly.
+    question_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    origin: Mapped[str | None] = mapped_column(String(30), nullable=True, index=True)
+    origin_context: Mapped[dict | None] = mapped_column(JSON, nullable=True)

@@ -26,9 +26,15 @@ from database.models.editorial_task import TaskPriority
 from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, LLMGateway, Message
 from integrations.prompts.protocol import PromptRepository
 from schemas.capability import RuntimeContext
+from services.product_fact_state import normalize_fact_key
 
 PARSER_PROMPT_NAME = "business_context_parser"
-PARSER_PROMPT_VERSION = "1"
+# INSTAGRAM-CONTENT-STRATEGY-V2 Phase 1: v2 adds `products_mentioned[].feature_updates` (fact_key/
+# feature_name/fact_state - the 5-state Product fact model's extraction surface, see
+# services/product_fact_state.py) - v1.yaml is left byte-identical/unused going forward, mirroring
+# this codebase's own established versioned-prompt convention (e.g. prompts/copywriting/v*.yaml)
+# rather than editing a shipped prompt version in place.
+PARSER_PROMPT_VERSION = "2"
 
 
 @dataclass(frozen=True)
@@ -88,11 +94,46 @@ async def parse_business_context_command(
     )
 
 
-def build_change_set(extraction: BusinessContextExtraction) -> list[dict[str, Any]]:
+def _feature_update_fields(feature_updates: list[dict[str, Any]]) -> dict[str, Any]:
+    """Converts the parser's `feature_updates` extraction (fact_key/feature_name/fact_state) into
+    services/product_context_service.py's own additive `*_add`/`*_remove` pseudo-fields - see
+    that module's `_PRODUCT_LIST_MERGE_FIELDS` for why these are deltas, never a wholesale-replace
+    list. "confirmed"/"planned" name the FEATURE (current_features/planned_features, by human-
+    readable name); "undecided" names the FACT (undecided_facts, by canonical fact_key) - two
+    different identity spaces, matching services/product_fact_state.py's own distinction."""
+    current_add: list[str] = []
+    planned_add: list[str] = []
+    undecided_add: list[str] = []
+    for update in feature_updates:
+        state = update.get("fact_state")
+        if state == "confirmed":
+            current_add.append(update["feature_name"])
+        elif state == "planned":
+            planned_add.append(update["feature_name"])
+        elif state == "undecided":
+            undecided_add.append(normalize_fact_key(update["fact_key"]))
+
+    fields: dict[str, Any] = {}
+    if current_add:
+        fields["current_features_add"] = current_add
+    if planned_add:
+        fields["planned_features_add"] = planned_add
+    if undecided_add:
+        fields["undecided_facts_add"] = undecided_add
+    return fields
+
+
+def build_change_set(extraction: BusinessContextExtraction, *, raw_text: str = "") -> list[dict[str, Any]]:
     """Deterministic conversion from the LLM's extraction shape into
     services/business_context_proposal_service.py's own internal change-operation shape. Kept
     entirely separate from the extraction step itself so the DB-write contract never depends on
-    exactly matching whatever JSON shape a future prompt version happens to emit."""
+    exactly matching whatever JSON shape a future prompt version happens to emit.
+
+    `raw_text` (the original human message) is threaded through onto every `product_context_
+    version` operation's own `raw_instruction` field - previously hardcoded to "", losing
+    provenance despite `ProductContextVersion.raw_instruction` existing specifically to answer
+    "what did the human actually say" (fixed as part of Phase 1, since the Director conversational
+    extension's own audit trail requirement depends on this being real)."""
     change_set: list[dict[str, Any]] = []
 
     for product in extraction.products_mentioned:
@@ -103,10 +144,11 @@ def build_change_set(extraction: BusinessContextExtraction) -> list[dict[str, An
         context_fields = {
             k: v for k, v in product.items() if k in ("current_stage", "description") and v is not None
         }
+        context_fields.update(_feature_update_fields(product.get("feature_updates") or []))
         if context_fields:
             change_set.append({
                 "entity_type": "product_context_version", "product_slug": product["slug"],
-                "raw_instruction": "", "structured_context": context_fields,
+                "raw_instruction": raw_text, "structured_context": context_fields,
             })
 
     for update in extraction.campaign_updates:

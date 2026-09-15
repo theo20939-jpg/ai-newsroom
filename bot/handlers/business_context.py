@@ -25,7 +25,11 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, InaccessibleMessage, Message
 
 from core.config import settings
-from database.models.business_context_proposal import BusinessContextCommandType, BusinessContextProposalStatus
+from database.models.business_context_proposal import (
+    BusinessContextCommandType,
+    BusinessContextProposal,
+    BusinessContextProposalStatus,
+)
 from database.session import async_session_factory
 from bot.business_context_formatting import (
     render_help,
@@ -39,9 +43,17 @@ from integrations.llm_gateway.boot import AIIntegrationLayer, assemble_ai_integr
 from integrations.prompts.file_repository import FilePromptRepository
 from services.business_context_command_parser import build_change_set, parse_business_context_command
 from services.business_context_command_registry import get_command
-from services.business_context_proposal_service import cancel_proposal, confirm_proposal, create_proposal, get_proposal
+from services.business_context_proposal_service import (
+    DIRECTOR_INITIATED_ORIGIN,
+    cancel_proposal,
+    close_answered_question,
+    confirm_proposal,
+    create_proposal,
+    get_proposal,
+    resolve_target_proposal,
+)
 from services.business_context_roles import commands_for_role, get_role_for_user, is_command_allowed
-from services.business_context_snapshot_service import get_business_context_snapshot
+from services.business_context_snapshot_service import BusinessContextSnapshot, get_business_context_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +106,45 @@ async def _fail_wrong_location(message: Message) -> None:
 
 async def _fail_no_permission(message: Message, command: str) -> None:
     await message.answer(f"🥷 У вас нет доступа к команде /{command}.")
+
+
+def _build_context_summary(snapshot: BusinessContextSnapshot, open_question: BusinessContextProposal | None) -> str:
+    """The `context_summary_text` every parser call receives - the known-products list
+    (unchanged), plus, when this message is answering a specific Director-initiated question, that
+    question's own text/missing_fact so a real LLM has enough context to extract the answer under
+    the SAME canonical fact_key the question named (see prompts/business_context_parser/v2.yaml's
+    own system-prompt instruction)."""
+    lines = [
+        f"- {s.product.slug}: {s.product.name} ({s.product.status.value})" for s in snapshot.products
+    ] or ["(нет продуктов в системе)"]
+    if open_question is not None and open_question.question_text:
+        ctx = open_question.origin_context or {}
+        lines.append(
+            f"\nОТКРЫТЫЙ ВОПРОС DIRECTOR'А, на который отвечает это сообщение: "
+            f"{open_question.question_text} (product_slug={ctx.get('product_slug')}, "
+            f"missing_fact={ctx.get('missing_fact')})"
+        )
+    return "\n".join(lines)
+
+
+# A small, fixed, documented set - deliberately not "any short affirmative-sounding word" (a bare
+# "ok"/"понятно" is genuinely ambiguous whether it means "confirm this" or just "acknowledged").
+# Matches the Founder's own named examples exactly plus their most direct synonyms.
+_BARE_CONFIRMATION_PHRASES = frozenset({
+    "да", "делай", "подтверждаю", "подтвердить", "confirm", "yes",
+})
+
+
+def _is_bare_confirmation_phrase(text: str) -> bool:
+    normalized = text.strip().strip(".!?").lower()
+    return normalized in _BARE_CONFIRMATION_PHRASES
+
+
+def _is_plain_text_candidate(message: Message) -> bool:
+    """The plain-text handler's own filter - anything that isn't a recognized `/command` at all
+    (an unrecognized slash command falls through here too and is silently ignored below, never
+    mistaken for free-form business content)."""
+    return message.text is not None and not message.text.startswith("/")
 
 
 @router.message(Command("status"))
@@ -156,9 +207,7 @@ async def _handle_mutation_command(message: Message, command: CommandObject, com
     now = datetime.now(timezone.utc)
     async with async_session_factory() as session:
         snapshot = await get_business_context_snapshot(session, now=now)
-        context_summary = "\n".join(
-            f"- {s.product.slug}: {s.product.name} ({s.product.status.value})" for s in snapshot.products
-        ) or "(нет продуктов в системе)"
+        context_summary = _build_context_summary(snapshot, None)
 
         ai_layer, prompt_repository = await _get_ai_layer()
         try:
@@ -171,7 +220,7 @@ async def _handle_mutation_command(message: Message, command: CommandObject, com
             await message.answer("Не удалось разобрать сообщение. Попробуйте переформулировать.")
             return
 
-        change_set = build_change_set(extraction)
+        change_set = build_change_set(extraction, raw_text=command.args)
         if not change_set:
             clarification = "; ".join(extraction.clarification_needed) or "не удалось найти конкретные изменения."
             await message.answer(f"🥷 Ничего не изменено: {clarification}")
@@ -285,3 +334,158 @@ async def handle_proposal_callback(callback: CallbackQuery) -> None:
     except Exception:  # noqa: BLE001 - best-effort re-render, the decision itself already persisted
         logger.exception("business_context_proposal_rerender_failed", extra={"proposal_id": str(proposal_id)})
     await callback.answer(ack)
+
+
+# ---------------------------------------------------------------------------
+# INSTAGRAM-CONTENT-STRATEGY-V2 Phase 1: plain-text Business Context input. Natural language
+# becomes a first-class way to reach the SAME parse_business_context_command() ->
+# create_proposal() -> confirm_proposal() pipeline every slash command already uses - never a
+# parallel/second pipeline, never a new memory store. Registered LAST on this router: any message
+# a Command(...) filter above already matched never reaches here (aiogram stops propagation once
+# a handler runs), so /product etc. keep working byte-for-byte unchanged.
+# ---------------------------------------------------------------------------
+
+
+@router.message(_is_plain_text_candidate)
+async def handle_plain_text(message: Message) -> None:
+    if not _is_authorized_chat_and_topic(message):
+        # Deliberately silent (unlike the slash-command gate's own _fail_wrong_location) - a
+        # stray plain message outside the authorized chat+topic is not a business-context input
+        # at all; explicitly rejecting every such message elsewhere would be noise, not help.
+        return
+    user_id = message.from_user.id if message.from_user else None
+    # Plain text is treated as equivalent, in permission, to /context (the universal multi-entity
+    # command) - the closest existing analogue, reusing the SAME role matrix, no new permission.
+    if user_id is None or not is_command_allowed(user_id, "context"):
+        return
+    text = (message.text or "").strip()
+    if not text:
+        return
+
+    reply_to_id = message.reply_to_message.message_id if message.reply_to_message else None
+    now = datetime.now(timezone.utc)
+
+    async with async_session_factory() as session:
+        resolved, pending = await resolve_target_proposal(
+            session, telegram_chat_id=message.chat.id, telegram_topic_id=message.message_thread_id,
+            reply_to_message_id=reply_to_id,
+        )
+
+        if _is_bare_confirmation_phrase(text):
+            # "Founder Plan Review" constraint #3: "да"/"делай"/"подтверждаю" may confirm ONLY
+            # when unambiguous - never guessed among multiple candidates.
+            if resolved is None:
+                if not pending:
+                    await message.answer("🥷 Сейчас нет предложений, которые нужно подтвердить.")
+                else:
+                    lines = ["🥷 Не понятно, к какому предложению это относится. Ответьте на "
+                             "нужное сообщение реплаем, либо уточните, о чём речь:", ""]
+                    for i, p in enumerate(pending, start=1):
+                        label = p.question_text or p.raw_instruction
+                        lines.append(f"{i}. {label}")
+                    await message.answer("\n".join(lines))
+                return
+            if resolved.origin == DIRECTOR_INITIATED_ORIGIN:
+                await message.answer(
+                    "🥷 Это открытый вопрос Director'а - ответьте, пожалуйста, по существу, а не "
+                    "просто «да»."
+                )
+                return
+            confirmed = await confirm_proposal(session, resolved.id, decided_by=user_id)
+            assert confirmed is not None
+            await message.answer(render_proposal_preview(confirmed) + "\n\nПодтверждено.")
+            return
+
+        if resolved is not None and resolved.origin == DIRECTOR_INITIATED_ORIGIN:
+            # This message ANSWERS a pending Director question - parse it (with that question's
+            # own context for grounding), propose the resulting change (never silently apply it -
+            # constraint #2), and close the now-answered question.
+            snapshot = await get_business_context_snapshot(session, now=now)
+            context_summary = _build_context_summary(snapshot, resolved)
+            ai_layer, prompt_repository = await _get_ai_layer()
+            try:
+                extraction = await parse_business_context_command(
+                    ai_layer.gateway, prompt_repository, raw_text=text,
+                    context_summary_text=context_summary, now=now,
+                )
+            except Exception:
+                logger.exception("business_context_parse_failed", extra={"origin": "director_answer"})
+                await message.answer("Не удалось разобрать ответ. Попробуйте переформулировать.")
+                return
+
+            change_set = build_change_set(extraction, raw_text=text)
+            if not change_set:
+                clarification = "; ".join(extraction.clarification_needed) or (
+                    "не удалось выделить конкретный ответ. Попробуйте переформулировать."
+                )
+                await message.answer(f"🥷 {clarification}")
+                return
+
+            new_proposal = await create_proposal(
+                session, command_type=BusinessContextCommandType.CONTEXT, raw_instruction=text,
+                proposed_change_set=change_set, created_by=user_id,
+                parsed_structure={
+                    "products_mentioned": extraction.products_mentioned,
+                    "campaign_updates": extraction.campaign_updates, "milestones": extraction.milestones,
+                    "directives": extraction.directives, "claims": extraction.claims,
+                },
+                telegram_chat_id=message.chat.id, telegram_topic_id=message.message_thread_id,
+            )
+            # Copies the SAME origin_context through onto the answer proposal (traceability: this
+            # proposal exists because of that opportunity/missing_fact), then closes the question.
+            new_proposal.origin_context = resolved.origin_context
+            await session.commit()
+            await close_answered_question(session, resolved.id, answered_by=user_id)
+
+            preview = render_proposal_preview(new_proposal)
+            keyboard = build_proposal_keyboard(new_proposal)
+            sent = await message.answer(preview, reply_markup=keyboard)
+            refreshed = await get_proposal(session, new_proposal.id)
+            if refreshed is not None:
+                refreshed.telegram_message_id = sent.message_id
+                await session.commit()
+            return
+
+        # No correlated pending item - a brand-new free-text business-context statement, handled
+        # exactly like /context's own extraction path (command_type=CONTEXT, the universal
+        # multi-entity type), just without a leading slash.
+        snapshot = await get_business_context_snapshot(session, now=now)
+        context_summary = _build_context_summary(snapshot, None)
+        ai_layer, prompt_repository = await _get_ai_layer()
+        try:
+            extraction = await parse_business_context_command(
+                ai_layer.gateway, prompt_repository, raw_text=text,
+                context_summary_text=context_summary, now=now,
+            )
+        except Exception:
+            logger.exception("business_context_parse_failed", extra={"origin": "plain_text"})
+            await message.answer("Не удалось разобрать сообщение. Попробуйте переформулировать.")
+            return
+
+        change_set = build_change_set(extraction, raw_text=text)
+        if not change_set:
+            # Deliberately silent when there's truly nothing extractable AND nothing to clarify -
+            # General is now also read for business content, so replying to every unrelated
+            # sentence would make the topic unusable. A genuinely ambiguous business-relevant
+            # message (clarification_needed non-empty) still gets a reply.
+            if extraction.clarification_needed:
+                await message.answer("🥷 " + "; ".join(extraction.clarification_needed))
+            return
+
+        proposal = await create_proposal(
+            session, command_type=BusinessContextCommandType.CONTEXT, raw_instruction=text,
+            proposed_change_set=change_set, created_by=user_id,
+            parsed_structure={
+                "products_mentioned": extraction.products_mentioned,
+                "campaign_updates": extraction.campaign_updates, "milestones": extraction.milestones,
+                "directives": extraction.directives, "claims": extraction.claims,
+            },
+            telegram_chat_id=message.chat.id, telegram_topic_id=message.message_thread_id,
+        )
+        preview = render_proposal_preview(proposal)
+        keyboard = build_proposal_keyboard(proposal)
+        sent = await message.answer(preview, reply_markup=keyboard)
+        refreshed = await get_proposal(session, proposal.id)
+        if refreshed is not None:
+            refreshed.telegram_message_id = sent.message_id
+            await session.commit()

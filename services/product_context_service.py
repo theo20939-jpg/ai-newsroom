@@ -15,6 +15,7 @@ from database.models.product import Product, ProductStatus
 from database.models.product_context_version import ProductContextVersion
 from database.models.product_event import ProductEvent, ProductEventType
 from database.models.business_context_shared import Visibility
+from services.product_fact_state import normalize_fact_key
 
 # Fields a ProductContextVersion's `structured_context` payload may set on the canonical `Product`
 # row - an explicit allowlist (never `setattr` on an arbitrary key) so a malformed/unexpected LLM
@@ -24,6 +25,20 @@ _PRODUCT_UPDATABLE_FIELDS = frozenset({
     "core_value_propositions", "current_features", "planned_features", "pricing_status",
     "product_url", "waitlist_url", "owner", "priority",
 })
+
+# INSTAGRAM-CONTENT-STRATEGY-V2 Phase 1: `current_features`/`planned_features`/`undecided_facts`
+# are ADDITIVE lists a single natural-language message almost never restates in full (a message
+# announcing one new feature does not repeat every previously-confirmed one) - a plain
+# `setattr(product, field, value)` wholesale replace (as every OTHER field above still uses) would
+# silently drop every previously-recorded item. Each target list therefore gets its own explicit
+# "_add"/"_remove" pseudo-field pair (never raw `setattr` on an arbitrary key - still a closed,
+# explicit allowlist, just a merge instead of a replace) so a `structured_context` payload states
+# only the DELTA, and the full authoritative list is recomputed here, in one place, every time.
+_PRODUCT_LIST_MERGE_FIELDS: dict[str, tuple[str, str]] = {
+    "current_features": ("current_features_add", "current_features_remove"),
+    "planned_features": ("planned_features_add", "planned_features_remove"),
+    "undecided_facts": ("undecided_facts_add", "undecided_facts_remove"),
+}
 
 
 async def get_product(session: AsyncSession, product_id: UUID) -> Product | None:
@@ -98,8 +113,29 @@ async def create_product_context_version(
     )
     session.add(version)
 
+    merged_list_fields: set[str] = set()
+    for target_field, (add_key, remove_key) in _PRODUCT_LIST_MERGE_FIELDS.items():
+        add_items = structured_context.get(add_key)
+        remove_items = structured_context.get(remove_key)
+        if not add_items and not remove_items:
+            continue
+        current = list(getattr(product, target_field) or [])
+        if remove_items:
+            remove_set = {normalize_fact_key(i) if target_field == "undecided_facts" else i for i in remove_items}
+            current = [
+                item for item in current
+                if (normalize_fact_key(item) if target_field == "undecided_facts" else item) not in remove_set
+            ]
+        if add_items:
+            for item in add_items:
+                normalized = normalize_fact_key(item) if target_field == "undecided_facts" else item
+                if normalized not in current:
+                    current.append(normalized)
+        setattr(product, target_field, current)
+        merged_list_fields.add(target_field)
+
     for field, value in structured_context.items():
-        if field not in _PRODUCT_UPDATABLE_FIELDS:
+        if field not in _PRODUCT_UPDATABLE_FIELDS or field in merged_list_fields:
             continue
         if field == "status" and isinstance(value, str):
             value = ProductStatus(value)

@@ -1,0 +1,181 @@
+# NINJA Social Intelligence Foundation, Part II §32/§33 (v1) + INSTAGRAM-CONTENT-STRATEGY-V2
+# Phase 1 (v2): adds `feature_updates` to `products_mentioned` so a message can state a specific
+# product FEATURE's state (confirmed/planned) and/or explicitly flag one of its ASPECTS as not
+# yet decided ("undecided") - the exact 5-state model distinction (UNKNOWN is never inferred here;
+# "undecided" is extracted ONLY when the message explicitly says a decision has not been made).
+# Everything else is byte-identical to v1 - this is a superset, additive extraction schema.
+name: business_context_parser
+version: "2"
+system: >
+  You are the internal parsing layer for NINJA's Business Context Command Center - a Telegram tool
+  founders and team members use to tell the system about product state, marketing campaigns,
+  milestones, strategic priorities, and public-claim restrictions. You read one free-text message
+  and extract every distinct, explicit fact it states into a structured proposal. You NEVER invent
+  a date, name, number, or claim the message does not state. You NEVER upgrade vague language
+  ("roughly a month", "around early October") into a precise value - when the message is vague,
+  you say so explicitly via date_confidence/notes rather than guessing a specific date. You never
+  assume something is approved for public communication merely because it is stated as true - a
+  fact being true internally and a fact being safe to say publicly are different questions, and
+  you keep them separate. Read the CURRENT BUSINESS CONTEXT provided so you can correctly
+  reference an already-known product by its existing slug rather than inventing a new one. When the
+  CURRENT BUSINESS CONTEXT names an open Director question (a specific missing_fact for a
+  specific product), and this message plausibly answers it, extract that answer as a
+  feature_updates entry using the SAME fact_key the question named - never invent a new fact_key
+  for the same real-world fact.
+rules:
+  - Never fabricate a launch date, product name, number, or claim not present in the message.
+  - A vague/approximate date must be reflected as date_confidence="estimated" or "rough", never silently rounded to date_confidence="exact".
+  - A fact being internally true is never the same as it being approved for public communication - do not set claim status to "approved" unless the message explicitly says it may be said publicly.
+  - Reference an existing product by its known slug (from the provided current context) whenever the message is clearly about that product; only propose a new product_slug when the message describes something genuinely new.
+  - If the message contains genuine ambiguity that materially changes meaning, list it in clarification_needed rather than silently picking one interpretation.
+  - Never mark anything as visibility="public_allowed" or claim status="approved" unless the message is unambiguous that public communication is intended/allowed.
+  - Extract fact_state="undecided" ONLY when the message explicitly says a decision has not been made yet (e.g. "экономику ещё не решили", "pricing not decided yet") - never merely because a detail was not mentioned at all.
+  - fact_key must always be ASCII, snake_case, dot-separated ("<feature_slug>.<aspect_slug>", e.g. "production_mode.billing") even when the feature/aspect was named in Russian in the message.
+output_schema:
+  type: object
+  properties:
+    products_mentioned:
+      type: array
+      items:
+        type: object
+        properties:
+          slug:
+            type: string
+          name:
+            type: string
+          status:
+            type: string
+            enum: [idea, discovery, development, private_beta, public_beta, pre_launch, live, paused, sunset]
+          current_stage:
+            type: string
+          description:
+            type: string
+          feature_updates:
+            type: array
+            items:
+              type: object
+              properties:
+                fact_key:
+                  type: string
+                  description: >
+                    Stable, ASCII, machine-readable canonical key for this specific fact,
+                    formatted as "<feature_slug>.<aspect_slug>" (snake_case, dot-separated,
+                    English/Latin only) - e.g. "production_mode.billing",
+                    "web_search.public_availability". Always English/Latin even if the feature
+                    was named in Russian in the message.
+                feature_name:
+                  type: string
+                  description: Human-readable feature/fact name, in the language the message used.
+                fact_state:
+                  type: string
+                  enum: [confirmed, planned, undecided]
+                  description: >
+                    "confirmed" = the feature is live/true now. "planned" = intended but not live
+                    yet. "undecided" = the message explicitly states this specific aspect has NOT
+                    been decided yet - never inferred merely from the aspect not being mentioned.
+                note:
+                  type: string
+              required: [fact_key, feature_name, fact_state]
+              additionalProperties: false
+        required: [slug, name]
+        additionalProperties: false
+    campaign_updates:
+      type: array
+      items:
+        type: object
+        properties:
+          product_slug:
+            type: string
+          campaign_name:
+            type: string
+          status:
+            type: string
+            enum: [draft, tentative, confirmed, delayed, cancelled, launched, completed]
+          planned_launch_date:
+            type: string
+            description: ISO 8601 date, only if the message states one.
+          date_confidence:
+            type: string
+            enum: [exact, estimated, rough, unknown]
+          key_messages:
+            type: array
+            items:
+              type: string
+          restricted_claims:
+            type: array
+            items:
+              type: string
+          required_cta:
+            type: string
+        required: [product_slug]
+        additionalProperties: false
+    milestones:
+      type: array
+      items:
+        type: object
+        properties:
+          product_slug:
+            type: string
+          title:
+            type: string
+          milestone_at:
+            type: string
+            description: ISO 8601 datetime.
+          visibility:
+            type: string
+            enum: [internal_only, preparation_allowed, public_allowed]
+          publicity_allowed:
+            type: boolean
+          asset_preparation_allowed:
+            type: boolean
+        required: [product_slug, title]
+        additionalProperties: false
+    directives:
+      type: array
+      items:
+        type: object
+        properties:
+          instruction:
+            type: string
+          valid_until:
+            type: string
+            description: ISO 8601 datetime, only if the message states an end point.
+          priority:
+            type: integer
+          scope:
+            type: string
+          products:
+            type: array
+            items:
+              type: string
+        required: [instruction]
+        additionalProperties: false
+    claims:
+      type: array
+      items:
+        type: object
+        properties:
+          product_slug:
+            type: string
+          claim_text:
+            type: string
+          status:
+            type: string
+            enum: [approved, restricted, embargoed]
+          embargoed_until:
+            type: string
+            description: ISO 8601 datetime, only for status="embargoed" with an explicit date.
+        required: [product_slug, claim_text, status]
+        additionalProperties: false
+    clarification_needed:
+      type: array
+      items:
+        type: string
+  required:
+    - products_mentioned
+    - campaign_updates
+    - milestones
+    - directives
+    - claims
+    - clarification_needed
+  additionalProperties: false

@@ -60,6 +60,16 @@ class Product(Base):
     core_value_propositions: Mapped[list | None] = mapped_column(JSON, nullable=True)
     current_features: Mapped[list | None] = mapped_column(JSON, nullable=True)
     planned_features: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 1 (Migration 1): a canonical-fact-key string list (e.g.
+    # "production_mode.billing", "web_search.public_availability" - see
+    # services/product_fact_state.py::normalize_fact_key()), NEVER arbitrary natural-language
+    # prose - the prose itself still lives verbatim in ProductContextVersion.raw_instruction/
+    # structured_context for provenance. Represents a fact the Founder was explicitly asked about
+    # and explicitly said is NOT decided yet ("экономику ещё не решили") - this is itself a real,
+    # confirmed fact and must be distinguishable from a fact nobody has ever mentioned (UNKNOWN,
+    # pure derived absence - see services/product_fact_state.py::FactState). Same
+    # plain-JSON-string-list convention as current_features/planned_features above.
+    undecided_facts: Mapped[list | None] = mapped_column(JSON, nullable=True)
     pricing_status: Mapped[str | None] = mapped_column(String(200), nullable=True)
     product_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     waitlist_url: Mapped[str | None] = mapped_column(String(500), nullable=True)

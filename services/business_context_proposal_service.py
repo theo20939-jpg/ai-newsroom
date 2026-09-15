@@ -9,10 +9,11 @@ mutation"), only from bot/handlers/business_context.py's own confirm callback, a
 already-authorized human has pressed Confirm."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models.business_context_proposal import (
@@ -25,13 +26,16 @@ from database.models.campaign_milestone import CampaignMilestone
 from database.models.claim_policy import ClaimStatus
 from database.models.product import ProductStatus
 from database.models.product_event import ProductEventType
-from services.campaign_service import create_campaign, create_milestone, update_campaign
+from services.campaign_service import create_campaign, create_milestone, list_upcoming_milestones, update_campaign
 from services.claim_policy_service import create_claim_policy
 from services.product_context_service import (
     create_product,
     create_product_context_version,
     create_product_event,
+    get_product,
     get_product_by_slug,
+    list_product_context_versions,
+    list_products,
 )
 from services.strategic_directive_service import create_directive
 
@@ -214,3 +218,196 @@ async def cancel_proposal(session: AsyncSession, proposal_id: UUID, *, decided_b
     await session.commit()
     await session.refresh(proposal)
     return proposal
+
+
+# ---------------------------------------------------------------------------
+# INSTAGRAM-CONTENT-STRATEGY-V2 Phase 1: Director-initiated information needs + the shared
+# reply-to/exactly-one-pending resolution rule ("Founder Plan Review" constraint #3 - natural-
+# language confirmation safety must never guess which proposal a bare "да"/reply answers).
+# ---------------------------------------------------------------------------
+
+DIRECTOR_INITIATED_ORIGIN = "director_initiated"
+
+# A director-initiated proposal's own `proposed_change_set` is empty (see module docstring) - a
+# system-authored row has no real Telegram user id, so `created_by` (NOT NULL) uses this
+# documented sentinel rather than a fabricated/borrowed human id.
+_SYSTEM_CREATED_BY = 0
+
+
+async def list_pending_proposals(
+    session: AsyncSession, *, telegram_chat_id: int | None, telegram_topic_id: int | None,
+) -> list[BusinessContextProposal]:
+    """Every PENDING proposal (any origin) in one chat+topic, oldest first - the exact
+    universe `resolve_target_proposal()` disambiguates over. A plain `COUNT`/`SELECT`, no new
+    storage."""
+    stmt = (
+        select(BusinessContextProposal)
+        .where(
+            BusinessContextProposal.status == BusinessContextProposalStatus.PENDING,
+            BusinessContextProposal.telegram_chat_id == telegram_chat_id,
+            BusinessContextProposal.telegram_topic_id == telegram_topic_id,
+        )
+        .order_by(BusinessContextProposal.created_at.asc())
+    )
+    return list((await session.execute(stmt)).scalars().all())
+
+
+async def resolve_target_proposal(
+    session: AsyncSession, *, telegram_chat_id: int | None, telegram_topic_id: int | None,
+    reply_to_message_id: int | None,
+) -> tuple[BusinessContextProposal | None, list[BusinessContextProposal]]:
+    """The ONE shared resolution rule behind every natural-language reply this phase handles -
+    confirming a mutation proposal with a bare "да", or answering a Director-initiated question.
+    Returns `(resolved, pending)`: `resolved` is set ONLY when unambiguous - either
+    `reply_to_message_id` matches exactly one PENDING proposal's own `telegram_message_id`, or
+    (when it doesn't match any, or no reply was made) exactly one PENDING proposal exists in this
+    chat+topic at all. Otherwise `resolved` is None and the caller must ask for clarification -
+    this function NEVER guesses which proposal a message concerns."""
+    pending = await list_pending_proposals(
+        session, telegram_chat_id=telegram_chat_id, telegram_topic_id=telegram_topic_id,
+    )
+    if reply_to_message_id is not None:
+        matches = [p for p in pending if p.telegram_message_id == reply_to_message_id]
+        if len(matches) == 1:
+            return matches[0], pending
+    if len(pending) == 1:
+        return pending[0], pending
+    return None, pending
+
+
+async def find_open_director_question(
+    session: AsyncSession, *, product_slug: str, missing_fact: str,
+) -> BusinessContextProposal | None:
+    """Dedup lookup: an already-open (PENDING) director-initiated question for the exact same
+    `(product_slug, missing_fact)` pair - `create_director_information_need()`'s own
+    rate-limiting gate ("Deduplicate equivalent open questions")."""
+    stmt = select(BusinessContextProposal).where(
+        BusinessContextProposal.status == BusinessContextProposalStatus.PENDING,
+        BusinessContextProposal.origin == DIRECTOR_INITIATED_ORIGIN,
+    )
+    for candidate in (await session.execute(stmt)).scalars().all():
+        ctx = candidate.origin_context or {}
+        if ctx.get("product_slug") == product_slug and ctx.get("missing_fact") == missing_fact:
+            return candidate
+    return None
+
+
+async def create_director_information_need(
+    session: AsyncSession, *, product_slug: str, missing_fact: str, opportunity_id: str,
+    opportunity_source_type: str, question_text: str, telegram_chat_id: int | None = None,
+    telegram_topic_id: int | None = None,
+) -> BusinessContextProposal:
+    """Creates (or, deduplicated, returns the existing) Director-initiated information-need
+    proposal - the mechanism behind "a real PRODUCT opportunity is blocked by missing/stale truth,
+    ask the Founder instead of inventing it". `origin_context` retains exactly what's needed to
+    correlate a later Founder answer back to the opportunity that asked (spec: product_slug,
+    missing_fact, opportunity_id, opportunity_source_type) - a plain JSON blob, not a new model,
+    since there is no persisted opportunity row to FK to (ContentOpportunity is rebuilt fresh every
+    cycle)."""
+    existing = await find_open_director_question(session, product_slug=product_slug, missing_fact=missing_fact)
+    if existing is not None:
+        return existing
+
+    proposal = BusinessContextProposal(
+        command_type=BusinessContextCommandType.CONTEXT,
+        status=BusinessContextProposalStatus.PENDING,
+        raw_instruction=f"[director_initiated] {question_text}",
+        proposed_change_set=[],
+        origin=DIRECTOR_INITIATED_ORIGIN,
+        question_text=question_text,
+        origin_context={
+            "product_slug": product_slug, "missing_fact": missing_fact,
+            "opportunity_id": opportunity_id, "opportunity_source_type": opportunity_source_type,
+        },
+        created_by=_SYSTEM_CREATED_BY, telegram_chat_id=telegram_chat_id, telegram_topic_id=telegram_topic_id,
+    )
+    session.add(proposal)
+    await session.commit()
+    await session.refresh(proposal)
+    return proposal
+
+
+async def close_answered_question(session: AsyncSession, proposal_id: UUID, *, answered_by: int) -> BusinessContextProposal | None:
+    """Marks a Director-initiated question no longer open once the Founder's natural-language
+    answer has produced its own new (separate, still-PENDING-for-confirmation) proposal - reuses
+    the existing CANCELLED status verbatim (idempotent, via `cancel_proposal()`) rather than adding
+    a new status value to the enum (which would need its own migration) - "cancelled" here means
+    "no longer awaiting an answer", not "the Founder rejected it"."""
+    return await cancel_proposal(session, proposal_id, decided_by=answered_by)
+
+
+_DEFAULT_UNDECIDED_REASK_COOLDOWN = timedelta(days=14)
+_DEFAULT_MILESTONE_LOOKAHEAD = timedelta(days=14)
+
+
+async def scan_for_director_information_needs(
+    session: AsyncSession, *, now: datetime, telegram_chat_id: int | None = None,
+    telegram_topic_id: int | None = None, undecided_reask_cooldown: timedelta = _DEFAULT_UNDECIDED_REASK_COOLDOWN,
+    milestone_lookahead: timedelta = _DEFAULT_MILESTONE_LOOKAHEAD,
+) -> list[BusinessContextProposal]:
+    """Conservative, deterministic, zero-LLM proactive scan over CURRENT Business Context state
+    (no Trend Radar dependency - Phase 1 explicitly does not require it). Produces at most a small
+    number of NEW Director-initiated information-need proposals, each deduplicated via
+    `create_director_information_need()`'s own open-question check, so calling this repeatedly
+    (e.g. once per content_worker cycle, once Phase 2 wires it in) never floods the Founder with
+    repeated identical questions.
+
+    Two concrete, testable rules implemented in Phase 1 (a deliberately narrow, disclosed subset -
+    "meaningful editorial gaps"/"obvious product/content opportunities from current context" are
+    Phase 2 territory, since they need the opportunity-construction logic that phase introduces):
+
+    1. A still-UNDECIDED fact is only re-asked after `undecided_reask_cooldown` has passed since
+       it was first recorded (via the most recent ProductContextVersion that added it) - never on
+       every scan (spec: "Deduplicate equivalent open questions" / "just-in-time, not noisy").
+    2. An upcoming CampaignMilestone (within `milestone_lookahead`) with asset preparation allowed
+       but no product context update since the milestone was created - flags a real, concrete gap
+       ("we're about to need content for this and don't know enough yet") rather than inventing
+       one."""
+    created: list[BusinessContextProposal] = []
+
+    for product in await list_products(session):
+        for fact_key in product.undecided_facts or []:
+            versions = await list_product_context_versions(session, product.id)
+            recorded_at = None
+            for version in versions:
+                if fact_key in (version.structured_context or {}).get("undecided_facts_add", []):
+                    recorded_at = version.created_at
+                    break  # versions are newest-first; the first match is the most recent record
+            if recorded_at is not None and (now - recorded_at) < undecided_reask_cooldown:
+                continue
+            question = (
+                f"Прошло время с тех пор, как «{fact_key}» для {product.name} было отмечено как "
+                "нерешённое - актуально ли это ещё, или уже есть ответ?"
+            )
+            proposal = await create_director_information_need(
+                session, product_slug=product.slug, missing_fact=fact_key,
+                opportunity_id=f"stale_undecided:{product.slug}:{fact_key}",
+                opportunity_source_type="PRODUCT", question_text=question,
+                telegram_chat_id=telegram_chat_id, telegram_topic_id=telegram_topic_id,
+            )
+            created.append(proposal)
+
+    for milestone in await list_upcoming_milestones(session, now=now, days=milestone_lookahead.days):
+        if not milestone.asset_preparation_allowed:
+            continue
+        milestone_product = await get_product(session, milestone.product_id)
+        if milestone_product is None:
+            continue
+        versions = await list_product_context_versions(session, milestone_product.id)
+        has_fresh_context = any(v.created_at >= milestone.created_at for v in versions)
+        if has_fresh_context:
+            continue
+        missing_fact = f"milestone.{milestone.id}.asset_readiness"
+        question = (
+            f"Приближается milestone «{milestone.title}» для {milestone_product.name} "
+            f"({milestone.milestone_at.date().isoformat()}), для которого разрешена подготовка "
+            "материалов - что нужно знать, чтобы начать готовить контент?"
+        )
+        proposal = await create_director_information_need(
+            session, product_slug=milestone_product.slug, missing_fact=missing_fact,
+            opportunity_id=f"approaching_milestone:{milestone.id}", opportunity_source_type="PRODUCT",
+            question_text=question, telegram_chat_id=telegram_chat_id, telegram_topic_id=telegram_topic_id,
+        )
+        created.append(proposal)
+
+    return created
