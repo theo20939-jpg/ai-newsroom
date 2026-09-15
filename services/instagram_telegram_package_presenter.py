@@ -12,11 +12,9 @@ Two artifacts per package:
     CTA, and a single compact truthfulness line - never a raw QA object, never internal prompts/
     LLM traces/token counts/database ids (§8).
 
-REEL is presented truthfully (§7/§15): a video is only ever claimed to exist if
-`external_video_asset_ref` is actually set (never true anywhere in this codebase today - confirmed
-via `services/instagram_platform_renderer.py`, which has no video-rendering function at all) -
-otherwise this always renders as "REEL-КОНЦЕПТ" with the real cover image plus the real storyboard/
-shot-list/script already captured in `package.media_plan` (never fabricated placeholder content).
+REEL labels follow script readiness: a complete PRODUCTION_SCRIPT is presented as REEL
+even without an mp4; a CONCEPT_SCRIPT is presented as concept. Video-file existence remains
+an independent disclosure.
 """
 from __future__ import annotations
 
@@ -63,7 +61,9 @@ def _truthfulness_line(package: InstagramContentPackage) -> str | None:
 
 
 def _caption_block(package: InstagramContentPackage) -> str:
-    lines = [_esc(package.caption)]
+    lines = [_esc(package.caption) if package.caption else "(финальная подпись отсутствует)"]
+    if package.caption_is_draft:
+        lines.insert(0, "⚠️ ЧЕРНОВИК ПОДПИСИ")
     if package.hashtags:
         lines.append(" ".join(f"#{_esc(tag.lstrip('#'))}" for tag in package.hashtags))
     if package.cta:
@@ -119,16 +119,15 @@ def present_caption_only(package: InstagramContentPackage, *, version: int) -> I
 
 
 def present_reel(package: InstagramContentPackage, cover: InstagramRenderResult, *, version: int) -> InstagramTelegramPresentation:
-    """Truthful REEL presentation (§7/§15). `package.external_video_asset_ref` is the ONLY signal
-    this function trusts for "a real video exists" - never inferred from anything else, never
-    assumed. Today that field is always `None` in this codebase (no video-rendering capability
-    exists), so this always takes the REEL-КОНЦЕПТ branch - disclosed here, not hidden."""
+    """Present script readiness separately from video-file availability."""
     has_real_video = bool(package.external_video_asset_ref)
     plan = package.media_plan if isinstance(package.media_plan, dict) else {}
 
-    if has_real_video:
+    if package.reel_script_readiness == PRODUCTION_SCRIPT:
         header = f"🎬 <b>{_FORMAT_LABEL[ContentFormat.REEL]}</b> · v{version}"
-        kind = "reel_video"
+        if not has_real_video:
+            header += " (готовый сценарий; видео ещё не создано)"
+        kind = "reel_video" if has_real_video else "reel_script"
     else:
         header = f"🎬 <b>{_FORMAT_LABEL[ContentFormat.REEL]}-КОНЦЕПТ</b> · v{version} (видео ещё не создано)"
         kind = "reel_concept"
@@ -149,17 +148,26 @@ def present_reel(package: InstagramContentPackage, cover: InstagramRenderResult,
     elif package.reel_script_readiness == CONCEPT_SCRIPT:
         storyboard_lines.append("🟡 <b>КОНЦЕПТ-СКРИПТ</b>")
 
+    subject = plan.get("source_subject")
+    if subject:
+        storyboard_lines.append(f"<b>Тема:</b> {_esc(str(subject))}")
     hook = plan.get("hook")
     if hook:
         storyboard_lines.append(f"<b>Хук:</b> {_esc(str(hook))}")
-    scenes = plan.get("scene_sequence") or []
-    if scenes:
-        # A numbered list, never fabricated per-scene timestamps - this codebase's Creative
-        # Director does not produce a per-scene duration, and guessing an even split across
-        # target_duration_seconds would invent a precision the script does not actually have (the
-        # same "never fabricate" discipline the fact-safety gate enforces elsewhere).
-        storyboard_lines.append("<b>Сценарий:</b>")
-        storyboard_lines.extend(f"{i}. {_esc(str(s))}" for i, s in enumerate(scenes, start=1))
+    timed_scenes = plan.get("scenes") or []
+    if timed_scenes:
+        storyboard_lines.append("<b>Сценарий по сценам:</b>")
+        for i, scene in enumerate(timed_scenes, start=1):
+            line = f"{i}. {scene.get('start_seconds')}–{scene.get('end_seconds')} c · 🎙 {_esc(str(scene.get('spoken_line') or ''))}"
+            if scene.get("on_screen_text"):
+                line += f" · 🖥 {_esc(str(scene['on_screen_text']))}"
+            line += f" · 🎥 {_esc(str(scene.get('visual_direction') or ''))}"
+            storyboard_lines.append(line)
+    else:
+        scenes = plan.get("scene_sequence") or []
+        if scenes:
+            storyboard_lines.append("<b>Сценарий:</b>")
+            storyboard_lines.extend(f"{i}. {_esc(str(s))}" for i, s in enumerate(scenes, start=1))
     shot_list = plan.get("shot_list") or []
     if shot_list:
         storyboard_lines.append("<b>Кадры:</b> " + "; ".join(_esc(str(s)) for s in shot_list))

@@ -71,9 +71,9 @@ REEL_PROMPT_NAME = "instagram_creative_director_reel"
 # Each version bump is its own independently-versioned, schema-shape-only fix; every previous
 # version file is left untouched/unused, matching this codebase's own established "never edit a
 # shipped prompt version in place" convention.
-_SINGLE_PROMPT_VERSION = "3"
+_SINGLE_PROMPT_VERSION = "4"
 _CAROUSEL_PROMPT_VERSION = "3"
-_REEL_PROMPT_VERSION = "4"
+_REEL_PROMPT_VERSION = "5"
 
 
 class CreativeDirectorUnavailableError(Exception):
@@ -106,6 +106,8 @@ class CreativeDirectorInput:
     approved_claims: list[str] = field(default_factory=list)
     restricted_claims: list[str] = field(default_factory=list)
     product_mention_allowed: bool = False
+    # External NEWS names are independent of permission to reveal an internal NINJA product.
+    external_news_entities_allowed: bool = False
     product_name: str | None = None
     launch_context_note: str = ""
     # DIRECTOR-CONTROL-PLANE-1A §13: mirrors `launch_context_note`'s own established zero-to-one
@@ -164,6 +166,7 @@ def _build_user_text(director_input: CreativeDirectorInput) -> str:
         f"APPROVED CLAIMS: {director_input.approved_claims}\n"
         f"RESTRICTED CLAIMS (never use): {director_input.restricted_claims}\n"
         f"PRODUCT_MENTION_ALLOWED: {director_input.product_mention_allowed}\n"
+        f"EXTERNAL_NEWS_ENTITIES_ALLOWED: {director_input.external_news_entities_allowed}\n"
         f"LAUNCH CONTEXT: {director_input.launch_context_note or '(established account - no launch context)'}\n"
         f"FEED CONTEXT: {director_input.feed_context_note or '(no real feed context available)'}\n"
         f"TREND MECHANIC: {director_input.trend_mechanic or '(not a trend-origin piece)'}\n"
@@ -225,7 +228,8 @@ async def generate_single_creative(
     )
     creative = InstagramSingleCreative.model_validate(output)
     _enforce_fact_safety(
-        text_fields=[creative.creative_angle, creative.visual_concept, creative.on_image_copy, creative.caption_direction, creative.cta or ""],
+        text_fields=[creative.creative_angle, creative.visual_concept, creative.on_image_copy, creative.caption_direction,
+                     creative.final_caption or "", creative.source_subject or "", creative.cta or ""],
         evidence_used=creative.evidence_used, director_input=director_input,
     )
     return CreativeGenerationOutcome(single=creative, call=call)
@@ -253,9 +257,12 @@ async def generate_reel_creative(
     )
     creative = InstagramReelCreative.model_validate(output)
     text_fields = [
-        creative.hook, creative.caption_direction, creative.voiceover_script or "",
+        creative.hook, creative.caption_direction, creative.final_caption or "", creative.source_subject or "",
+        creative.voiceover_script or "",
         *creative.on_screen_text, creative.cta or "", creative.loop_ending_concept or "",
         creative.visual_direction or "", creative.adaptation_notes or "",
+        *(scene.spoken_line for scene in creative.scenes),
+        *(scene.on_screen_text or "" for scene in creative.scenes),
     ]
     _enforce_fact_safety(text_fields=text_fields, evidence_used=creative.evidence_used, director_input=director_input)
     return CreativeGenerationOutcome(reel=creative, call=call)

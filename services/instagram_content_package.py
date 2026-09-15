@@ -14,12 +14,10 @@ only their identifying references (`campaign_id`, `campaign_name`, `campaign_pha
 already uses for its own "business truth AS OF planning time" field.
 
 Honesty note (never silently invents what the Director doesn't produce):
-  * `caption` is the Creative Director's own `caption_direction` (a DIRECTIONAL BRIEF - the
-    existing schemas/instagram_creative.py explicitly does not produce final polished copy; this
-    mirrors `instagram_creative_plan_service.py`'s own "AI creative output is a PROPOSAL" doctrine)
-    for SINGLE/REEL. For CAROUSEL there is no schema-level "final caption" field at all - the
-    package-level caption is synthesized from the hook slide's own copy, and `caption_is_draft` is
-    always True so no downstream consumer mistakes a directional brief for publish-ready prose.
+  * `caption` is the Creative Director's finished `final_caption` for SINGLE/REEL. Older
+    creative rows without it assemble with an empty caption marked draft; a directional
+    `caption_direction` is never promoted to final copy. CAROUSEL still uses the hook slide's
+    copy and remains draft until a real final caption is supplied.
   * `hashtags` is always `[]` unless the caller explicitly supplies real ones - no Instagram
     creative schema in this codebase produces hashtags today (verified: `schemas/
     instagram_creative.py` has no such field), so this field would otherwise be a fabrication.
@@ -191,15 +189,21 @@ class InstagramContentPackage:
         on_screen_text = self.media_plan.get("on_screen_text")
         if isinstance(on_screen_text, list):
             fields.extend(str(t) for t in on_screen_text)
+        for key in ("hook", "voiceover_script", "source_subject"):
+            fields.append(str(self.media_plan.get(key) or ""))
+        for scene in self.media_plan.get("scenes") or []:
+            if isinstance(scene, dict):
+                fields.extend(str(scene.get(key) or "") for key in ("spoken_line", "on_screen_text"))
         return fields
 
 
 def _single_media_plan(creative: Any) -> tuple[str, str | None, str | None, dict[str, Any]]:
-    caption = creative.caption_direction
+    caption = getattr(creative, "final_caption", None) or ""
     on_image_copy = creative.on_image_copy
     cta = creative.cta
     media_plan = {
         "kind": "single",
+        "source_subject": getattr(creative, "source_subject", None),
         "visual_concept": creative.visual_concept,
         "asset_requirements": list(creative.asset_requirements),
     }
@@ -221,10 +225,12 @@ def _carousel_media_plan(creative: Any) -> tuple[str, str | None, str | None, di
 
 
 def _reel_media_plan(creative: Any) -> tuple[str, str | None, str | None, dict[str, Any]]:
-    caption = creative.caption_direction
+    caption = getattr(creative, "final_caption", None) or ""
     cta = creative.cta
     media_plan = {
         "kind": "reel",
+        "source_subject": getattr(creative, "source_subject", None),
+        "scenes": [scene.model_dump() if hasattr(scene, "model_dump") else scene for scene in (getattr(creative, "scenes", None) or [])],
         "hook": creative.hook,
         "target_duration_seconds": creative.target_duration_seconds,
         "scene_sequence": list(creative.scene_sequence),
@@ -260,7 +266,7 @@ def build_instagram_content_package(
     creative_outcome: CreativeGenerationOutcome | None = None, account_key: str = "default",
     external_video_asset_ref: str | None = None, hashtags: list[str] | None = None,
     presentation_family: str | None = None, source_image_ref: str | None = None,
-    media_selection: Any | None = None, reel_script_readiness: str | None = None,
+    media_candidate_id: str | None = None, media_selection: Any | None = None, reel_script_readiness: str | None = None,
 ) -> InstagramContentPackage:
     """Assembles a package from the REAL upstream Director objects. `creative_outcome` is optional
     (mirrors `build_shadow_plan()`'s own optionality) - without it, the package carries only the
@@ -285,7 +291,6 @@ def build_instagram_content_package(
         media_subject_match = selected.subject_match.subject_match.value if selected.subject_match else None
         media_usage_classification = selected.usage_classification.value
     else:
-        media_candidate_id = None
         media_subject_match = None
         media_usage_classification = None
     fmt = format_decision.recommended_format
@@ -295,14 +300,17 @@ def build_instagram_content_package(
     cta: str | None = None
     media_plan: dict[str, Any]
     slide_count: int | None = None
+    caption_is_draft = True
 
     if creative_outcome is not None and creative_outcome.single is not None and fmt is ContentFormat.SINGLE:
         caption, on_image_copy, cta, media_plan = _single_media_plan(creative_outcome.single)
+        caption_is_draft = not bool(caption.strip())
     elif creative_outcome is not None and creative_outcome.carousel is not None and fmt is ContentFormat.CAROUSEL:
         caption, on_image_copy, cta, media_plan = _carousel_media_plan(creative_outcome.carousel)
         slide_count = len(creative_outcome.carousel.slides)
     elif creative_outcome is not None and creative_outcome.reel is not None and fmt is ContentFormat.REEL:
         caption, on_image_copy, cta, media_plan = _reel_media_plan(creative_outcome.reel)
+        caption_is_draft = not bool(caption.strip())
     else:
         # No matching creative outcome - fall back to the structural shadow-plan summary only.
         # Never fabricates a brief; a caller that wants real creative copy must run the Creative
@@ -322,7 +330,7 @@ def build_instagram_content_package(
         account_key=account_key,
         content_format=fmt,
         caption=caption,
-        caption_is_draft=True,
+        caption_is_draft=caption_is_draft,
         on_image_copy=on_image_copy,
         cta=cta,
         hashtags=list(hashtags or []),

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from PIL import Image
 
 from services.instagram_art_validator import validate_instagram_art
 from services.instagram_content_opportunity import ContentOpportunity, OpportunitySourceType
@@ -25,12 +26,12 @@ def test_review_package_carries_reasoning_media_evidence_and_publish_readiness()
         alternative_format=None, alternative_objective=None, product_mention_allowed=True,
         evidence=["real evidence bullet"], confidence=0.6,
     )
-    single = InstagramSingleCreative(creative_angle="a", visual_concept="v", on_image_copy="500 MILLION", caption_direction="Big milestone", cta="Learn more")
+    single = InstagramSingleCreative(creative_angle="a", visual_concept="v", on_image_copy="500 MILLION", caption_direction="Big milestone", final_caption="Company X announced a big milestone.", source_subject="Company X", cta="Learn more")
     pkg = build_instagram_content_package(
         opportunity=opp, format_decision=FormatDecision(recommended_format=ContentFormat.SINGLE, why="reach signal"),
-        shadow_plan=sp, creative_outcome=CreativeGenerationOutcome(single=single),
+        shadow_plan=sp, creative_outcome=CreativeGenerationOutcome(single=single), source_image_ref="fixture-real-photo",
     )
-    result = render_instagram_feed_image(pkg)
+    result = render_instagram_feed_image(pkg, source_image=Image.new("RGB", (512, 512), "navy"))
     art = validate_instagram_art(pkg, [result])
     review = build_instagram_review_package(package=pkg, render_results=[result], art_result=art)
 
@@ -61,3 +62,28 @@ def test_review_package_reports_failed_validation_honestly() -> None:
     assert review.publish_ready is False
     assert review.validation_failures
     assert review.media_render_evidence == []
+
+
+def test_review_package_never_calls_known_draft_publish_ready() -> None:
+    opp = ContentOpportunity(id="draft", source_type=OpportunitySourceType.NEWS, story_id="story")
+    sp = ShadowPlanResult(
+        campaign_name=None, campaign_phase=None, opportunity_description="news", primary_objective="reach",
+        audience_description="", recommended_format="single", hook_family=None, creative_concept_summary="concept",
+        alternative_format=None, alternative_objective=None, product_mention_allowed=False,
+        evidence=[], confidence=0.5,
+    )
+    single = InstagramSingleCreative(
+        creative_angle="angle", visual_concept="concept", on_image_copy="Headline",
+        caption_direction="Write about the news",
+    )
+    pkg = build_instagram_content_package(
+        opportunity=opp, format_decision=FormatDecision(recommended_format=ContentFormat.SINGLE),
+        shadow_plan=sp, creative_outcome=CreativeGenerationOutcome(single=single),
+        source_image_ref="real-source",
+    )
+    render = render_instagram_feed_image(pkg, source_image=Image.new("RGB", (512, 512), "navy"))
+    art = validate_instagram_art(pkg, [render])
+    assert art.passed
+    review = build_instagram_review_package(package=pkg, render_results=[render], art_result=art)
+    assert not review.publish_ready
+    assert "final_caption_missing_or_draft" in review.validation_failures

@@ -69,6 +69,10 @@ def build_instagram_review_package(
         filter(None, [package.campaign_name, package.campaign_phase, f"campaign_id={package.campaign_id}" if package.campaign_id else None])
     ) or "no campaign context"
 
+    validation_failures = list(art_result.blocking_issues)
+    if package.caption_is_draft or not package.caption.strip():
+        validation_failures.append("final_caption_missing_or_draft")
+
     return InstagramReviewPackage(
         package_id=package.package_id, content_format=package.content_format.value, caption=package.caption,
         caption_is_draft=package.caption_is_draft, cta=package.cta, hashtags=list(package.hashtags),
@@ -80,6 +84,6 @@ def build_instagram_review_package(
         media_render_evidence=[r.evidence.to_dict() for r in render_results],
         art_validation=art_result.to_dict(),
         risk_warnings=list(art_result.warnings),
-        validation_failures=list(art_result.blocking_issues),
-        publish_ready=art_result.passed,
+        validation_failures=validation_failures,
+        publish_ready=not validation_failures,
     )

@@ -60,7 +60,15 @@ def evaluate_instagram_editorial_gate(
             short_reason="Art validation failed - " + "; ".join(art_result.blocking_issues[:3]),
         )
 
-    # 2. Restricted-claim re-check (platform-neutral, shared enforcement point) across every
+    # 2. Draft copy and incomplete Reel scripts are HOLD, never READY_FOR_EDITOR.
+    finality_issues = _content_finality_issues(package)
+    if finality_issues:
+        return InstagramGateOutcome(
+            decision=InstagramGateDecision.HOLD, reason_codes=finality_issues,
+            short_reason="Content is not final - " + "; ".join(finality_issues[:3]),
+        )
+
+    # 3. Restricted-claim re-check (platform-neutral, shared enforcement point) across every
     #    free-text field the package actually carries.
     try:
         validate_package_claims(
@@ -99,3 +107,55 @@ def evaluate_instagram_editorial_gate(
         decision=InstagramGateDecision.READY_FOR_EDITOR, reason_codes=reasons,
         short_reason="passed Art validation and claim safety" if not reasons else "passed with non-blocking warnings",
     )
+
+
+def _content_finality_issues(package: InstagramContentPackage) -> list[str]:
+    issues: list[str] = []
+    caption = package.caption.strip()
+    if package.caption_is_draft or not caption:
+        issues.append("final_caption_missing_or_draft")
+    kind = package.content_format.value
+    plan = package.media_plan if isinstance(package.media_plan, dict) else {}
+    if kind in ("single", "reel"):
+        subject = str(plan.get("source_subject") or "").strip()
+        if not subject:
+            issues.append("source_subject_missing")
+        elif caption and subject.casefold() not in caption.casefold():
+            issues.append("source_subject_absent_from_caption")
+    if kind != "reel":
+        return issues
+    if package.reel_script_readiness != "production_script":
+        issues.append("reel_not_production_script")
+    hook = str(plan.get("hook") or "").strip()
+    if not hook or hook.casefold() == "null":
+        issues.append("reel_hook_missing")
+    duration = plan.get("target_duration_seconds")
+    if not isinstance(duration, int) or duration <= 0:
+        issues.append("reel_duration_missing")
+    scenes = plan.get("scenes")
+    if not isinstance(scenes, list) or len(scenes) < 2:
+        issues.append("reel_timed_scenes_missing")
+    else:
+        previous_end = 0
+        for scene in scenes:
+            if not isinstance(scene, dict):
+                issues.append("reel_scene_invalid")
+                break
+            start, end = scene.get("start_seconds"), scene.get("end_seconds")
+            if not isinstance(start, int) or not isinstance(end, int) or start != previous_end or end <= start:
+                issues.append("reel_scene_timing_invalid")
+                break
+            if not str(scene.get("spoken_line") or "").strip():
+                issues.append("reel_spoken_line_missing")
+            if not str(scene.get("visual_direction") or "").strip():
+                issues.append("reel_scene_visual_missing")
+            previous_end = end
+        if isinstance(duration, int) and previous_end != duration:
+            issues.append("reel_timing_does_not_cover_duration")
+        spoken = " ".join(str(scene.get("spoken_line") or "") for scene in scenes if isinstance(scene, dict))
+        subject = str(plan.get("source_subject") or "").strip()
+        if subject and subject.casefold() not in spoken.casefold():
+            issues.append("source_subject_absent_from_spoken_script")
+    if not str(plan.get("loop_ending_concept") or "").strip():
+        issues.append("reel_closing_beat_missing")
+    return issues

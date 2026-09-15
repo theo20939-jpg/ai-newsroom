@@ -12,7 +12,7 @@ today (Phase 23.1H/23.1P) - returns `MAJOR`. This is not a new threshold: it is 
 stories are never submitted - the majority of real NEWS stories are expected to fall here, exactly
 matching the phase brief's own "do NOT interpret 10 NEWS drafts as 10 Instagram packages" warning.
 
-Format is always SINGLE for the NEWS lane (`evaluate_and_submit_instagram_candidate()` below,
+Format remains SINGLE for the legacy NEWS candidate lane (`evaluate_and_submit_instagram_candidate()` below,
 §15 "preserve current visual behavior") - untouched, byte-identical, still calls `evaluate_format_
 shadow()` with `has_video_asset=False, has_multi_step_narrative=False`.
 
@@ -37,10 +37,16 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from io import BytesIO
 from typing import Any
+from uuid import UUID
+
+from PIL import Image
 
 from core.config import settings
 from services.editorial_treatment import MAJOR, EditorialTreatmentDecision
+from services.image_persistence import EditorialImageCandidate, get_editorial_image_candidates, read_candidate_bytes
+from services.video_discovery_persistence import get_video_candidates_for_event, select_best_video_candidate
 from services.instagram_art_validator import validate_instagram_art
 from services.instagram_content_opportunity import ContentOpportunity, OpportunitySourceType
 from services.instagram_content_package import build_instagram_content_package
@@ -111,6 +117,45 @@ class InstagramTriggerCycleReport:
         }
 
 
+
+def _is_external_news(opportunity: ContentOpportunity) -> bool:
+    return (
+        opportunity.source_type is OpportunitySourceType.NEWS
+        and opportunity.story_id is not None
+        and opportunity.product_id is None
+        and opportunity.campaign_id is None
+    )
+
+
+async def _resolve_single_source_image(
+    session: Any, story_id: str | None,
+) -> tuple[Image.Image | None, EditorialImageCandidate | None, int, int]:
+    if not story_id:
+        return None, None, 0, 0
+    try:
+        event_id = UUID(story_id)
+    except ValueError:
+        return None, None, 0, 0
+    candidates = await get_editorial_image_candidates(session, news_event_id=event_id, limit=10)
+    for candidate in candidates:
+        if candidate.is_expired:
+            continue
+        data = read_candidate_bytes(candidate)
+        if not data:
+            continue
+        try:
+            with Image.open(BytesIO(data)) as check:
+                check.verify()
+            with Image.open(BytesIO(data)) as decoded:
+                if min(decoded.size) < 256:
+                    continue
+                source_image = decoded.convert("RGB")
+        except (OSError, ValueError):
+            logger.warning("instagram_single_image_decode_failed", extra={"media_candidate_id": str(candidate.id)})
+            continue
+        return source_image, candidate, len(candidates), len(data)
+    return None, None, len(candidates), 0
+
 async def evaluate_and_submit_instagram_candidate(
     session: Any, bot: Any, *, event_id: str, event_title: str, treatment: EditorialTreatmentDecision,
     research_facts: list[str], gateway: Any, prompt_repository: Any, source_url: str | None = None,
@@ -130,6 +175,15 @@ async def evaluate_and_submit_instagram_candidate(
             event_id=event_id, accepted=True, reason="already_submitted", delivery_id=str(existing.id),
         )
 
+    source_image, image_candidate, image_count, read_length = await _resolve_single_source_image(session, event_id)
+    if source_image is None or image_candidate is None:
+        logger.warning("instagram_single_source_image_unavailable", extra={"event_id": event_id, "image_candidate_count": image_count})
+        return InstagramTriggerCandidateOutcome(event_id=event_id, accepted=True, reason="source_image_unavailable")
+    logger.info("instagram_single_source_image_selected", extra={
+        "event_id": event_id, "image_candidate_count": image_count,
+        "media_candidate_id": str(image_candidate.id), "read_byte_length": read_length,
+    })
+
     opp = ContentOpportunity(id=event_id, source_type=OpportunitySourceType.NEWS, story_id=event_id, product_mention_allowed=False)
     format_decision = evaluate_format_shadow(objective=ContentObjective.REACH, has_video_asset=False, has_multi_step_narrative=False)
     assert format_decision.recommended_format is ContentFormat.SINGLE  # §15 - always true today, asserted rather than assumed silently
@@ -137,6 +191,7 @@ async def evaluate_and_submit_instagram_candidate(
     director_input = CreativeDirectorInput(
         objective=ContentObjective.REACH.value, format=format_decision.recommended_format.value,
         opportunity_summary=event_title, allowed_evidence=list(research_facts),
+        external_news_entities_allowed=True,
     )
 
     try:
@@ -159,8 +214,18 @@ async def evaluate_and_submit_instagram_candidate(
     pkg = build_instagram_content_package(
         opportunity=opp, format_decision=format_decision, shadow_plan=shadow_plan,
         creative_outcome=creative_outcome, account_key="default",
+        source_image_ref=image_candidate.candidate_id, media_candidate_id=str(image_candidate.id),
     )
-    render = render_instagram_feed_image(pkg)
+    try:
+        render = render_instagram_feed_image(pkg, source_image=source_image)
+    except Exception:
+        logger.exception("instagram_single_render_failed", extra={"event_id": event_id})
+        return InstagramTriggerCandidateOutcome(event_id=event_id, accepted=True, reason="render_failed")
+    logger.info("instagram_single_source_image_rendered", extra={
+        "event_id": event_id, "media_candidate_id": str(image_candidate.id),
+        "rendered_byte_length": len(render.image_bytes),
+        "source_image_treatment": render.evidence.source_image_treatment,
+    })
     art = validate_instagram_art(pkg, [render])
     gate = evaluate_instagram_editorial_gate(pkg, art)
     presentation = present_single(pkg, render, version=1)
@@ -207,12 +272,19 @@ async def evaluate_and_submit_instagram_opportunity(
     # CONTROLLED ROLLOUT: real signals, not hardcoded ones - `evaluate_format_shadow()` (the one
     # and only existing format selector, unchanged) now sees what the opportunity actually has.
     # `has_multi_step_narrative`: real evidence-count signal (multiple confirmed facts genuinely
-    # read better as a multi-step narrative than has_video_asset: honestly False - no video-asset
-    # pipeline feeds this lane yet; never fabricated to make REEL reachable.
+    # read better as a multi-step narrative. External NEWS may also carry already-persisted
+    # video candidates; no video asset is inferred for protected PRODUCT opportunities.
     has_multi_step_narrative = len(opportunity.evidence) > 1
+    has_video_asset = False
+    if _is_external_news(opportunity):
+        try:
+            video_candidates = await get_video_candidates_for_event(session, UUID(opportunity.story_id))
+            has_video_asset = select_best_video_candidate(video_candidates) is not None
+        except ValueError:
+            pass
     recommendation = recommend_objective(opportunity=opportunity, has_multi_step_narrative=has_multi_step_narrative)
     format_decision = evaluate_format_shadow(
-        objective=recommendation.primary_objective, has_video_asset=False,
+        objective=recommendation.primary_objective, has_video_asset=has_video_asset,
         has_multi_step_narrative=has_multi_step_narrative,
     )
 
@@ -235,11 +307,26 @@ async def evaluate_and_submit_instagram_opportunity(
         )
         return InstagramTriggerCandidateOutcome(event_id=opportunity.id, accepted=True, reason="reel_execution_disabled")
 
+    source_image = None
+    image_candidate = None
+    if format_decision.recommended_format is ContentFormat.SINGLE:
+        source_image, image_candidate, image_count, read_length = await _resolve_single_source_image(session, opportunity.story_id)
+        if source_image is None or image_candidate is None:
+            logger.warning("instagram_single_source_image_unavailable", extra={
+                "opportunity_id": opportunity.id, "image_candidate_count": image_count,
+            })
+            return InstagramTriggerCandidateOutcome(event_id=opportunity.id, accepted=True, reason="source_image_unavailable")
+        logger.info("instagram_single_source_image_selected", extra={
+            "opportunity_id": opportunity.id, "image_candidate_count": image_count,
+            "media_candidate_id": str(image_candidate.id), "read_byte_length": read_length,
+        })
+
     director_input = CreativeDirectorInput(
         objective=recommendation.primary_objective.value, format=format_decision.recommended_format.value,
         opportunity_summary=opportunity_summary, allowed_evidence=list(opportunity.evidence),
         approved_claims=list(opportunity.allowed_claims), restricted_claims=list(opportunity.restricted_claims),
         product_mention_allowed=opportunity.product_mention_allowed,
+        external_news_entities_allowed=_is_external_news(opportunity),
     )
 
     try:
@@ -270,10 +357,10 @@ async def evaluate_and_submit_instagram_opportunity(
     # services/director_execution_service.py) only ever build evidence from CONFIRMED Product facts
     # in the first place, so nothing UNKNOWN/UNDECIDED reaches the Creative Director to begin with.
     # `asset_requirements_satisfiable=False` is the honest default - no real filming-asset pipeline
-    # feeds this lane yet, so an automatic/canary REEL package is always CONCEPT_SCRIPT, never a
-    # fabricated PRODUCTION_SCRIPT claim.
+    # feeds the PRODUCT lane; external NEWS with an existing video candidate can satisfy this
+    # asset-readiness signal while the script itself remains separate from an mp4.
     reel_script_readiness = (
-        compute_reel_script_readiness(unresolved_facts=[], asset_requirements_satisfiable=False)
+        compute_reel_script_readiness(unresolved_facts=[], asset_requirements_satisfiable=has_video_asset and _is_external_news(opportunity))
         if format_decision.recommended_format is ContentFormat.REEL else None
     )
     shadow_plan = ShadowPlanResult(
@@ -287,18 +374,29 @@ async def evaluate_and_submit_instagram_opportunity(
     pkg = build_instagram_content_package(
         opportunity=opportunity, format_decision=format_decision, shadow_plan=shadow_plan,
         creative_outcome=creative_outcome, account_key="default", reel_script_readiness=reel_script_readiness,
+        source_image_ref=image_candidate.candidate_id if image_candidate else None,
+        media_candidate_id=str(image_candidate.id) if image_candidate else None,
     )
 
-    if format_decision.recommended_format is ContentFormat.CAROUSEL:
-        renders = render_instagram_carousel(pkg)
-        presentation = present_carousel(pkg, renders, version=1)
-    elif format_decision.recommended_format is ContentFormat.REEL:
-        renders = [render_instagram_reel_cover(pkg)]
-        presentation = present_reel(pkg, renders[0], version=1)
-    else:
-        renders = [render_instagram_feed_image(pkg)]
-        presentation = present_single(pkg, renders[0], version=1)
+    try:
+        if format_decision.recommended_format is ContentFormat.CAROUSEL:
+            renders = render_instagram_carousel(pkg)
+            presentation = present_carousel(pkg, renders, version=1)
+        elif format_decision.recommended_format is ContentFormat.REEL:
+            renders = [render_instagram_reel_cover(pkg)]
+            presentation = present_reel(pkg, renders[0], version=1)
+        else:
+            renders = [render_instagram_feed_image(pkg, source_image=source_image)]
+            logger.info("instagram_single_source_image_rendered", extra={
+                "opportunity_id": opportunity.id, "media_candidate_id": str(image_candidate.id),
+                "rendered_byte_length": len(renders[0].image_bytes),
+                "source_image_treatment": renders[0].evidence.source_image_treatment,
+            })
+            presentation = present_single(pkg, renders[0], version=1)
 
+    except Exception:
+        logger.exception("instagram_opportunity_render_failed", extra={"opportunity_id": opportunity.id})
+        return InstagramTriggerCandidateOutcome(event_id=opportunity.id, accepted=True, reason="render_failed")
     art = validate_instagram_art(pkg, renders)
     gate = evaluate_instagram_editorial_gate(pkg, art)
     snapshot = build_package_snapshot(

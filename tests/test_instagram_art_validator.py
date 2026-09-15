@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from PIL import Image
+
 from services.instagram_art_validator import (
     MAX_ART_RERENDER_ATTEMPTS,
     attempt_bounded_rerender,
@@ -17,6 +19,8 @@ from services.instagram_render_evidence import TextRegion
 from services.instagram_shadow_pipeline import ShadowPlanResult
 from schemas.instagram_creative import InstagramCarouselCreative, InstagramCarouselSlideCreative, InstagramSingleCreative
 
+_SOURCE_IMAGE = Image.new("RGB", (512, 512), "navy")
+
 _OPP = ContentOpportunity(id="opp-1", source_type=OpportunitySourceType.NEWS, story_id="s1", product_mention_allowed=True)
 _SP = ShadowPlanResult(
     campaign_name=None, campaign_phase=None, opportunity_description="NEWS opp", primary_objective="reach",
@@ -26,16 +30,16 @@ _SP = ShadowPlanResult(
 
 
 def _single_package(on_image_copy: str = "A clean short headline") -> InstagramContentPackage:
-    single = InstagramSingleCreative(creative_angle="a", visual_concept="v", on_image_copy=on_image_copy, caption_direction="draft", cta="Learn more")
+    single = InstagramSingleCreative(creative_angle="a", visual_concept="v", on_image_copy=on_image_copy, caption_direction="draft", final_caption="Company X announced a real update.", source_subject="Company X", cta="Learn more")
     return build_instagram_content_package(
         opportunity=_OPP, format_decision=FormatDecision(recommended_format=ContentFormat.SINGLE), shadow_plan=_SP,
-        creative_outcome=CreativeGenerationOutcome(single=single),
+        creative_outcome=CreativeGenerationOutcome(single=single), source_image_ref="test-source",
     )
 
 
 def test_valid_feed_render_passes() -> None:
     pkg = _single_package()
-    result = render_instagram_feed_image(pkg)
+    result = render_instagram_feed_image(pkg, source_image=_SOURCE_IMAGE)
     art = validate_instagram_art(pkg, [result])
     assert art.passed is True
     assert art.blocking_issues == []
@@ -50,7 +54,7 @@ def test_empty_render_list_blocks() -> None:
 
 def test_missing_brand_mark_blocks() -> None:
     pkg = _single_package()
-    result = render_instagram_feed_image(pkg)
+    result = render_instagram_feed_image(pkg, source_image=_SOURCE_IMAGE)
     zeroed = replace(result, evidence=replace(result.evidence, visible_brand_mark_count=0))
     art = validate_instagram_art(pkg, [zeroed])
     assert art.passed is False
@@ -59,7 +63,7 @@ def test_missing_brand_mark_blocks() -> None:
 
 def test_duplicate_brand_mark_blocks() -> None:
     pkg = _single_package()
-    result = render_instagram_feed_image(pkg)
+    result = render_instagram_feed_image(pkg, source_image=_SOURCE_IMAGE)
     doubled = replace(result, evidence=replace(result.evidence, visible_brand_mark_count=2))
     art = validate_instagram_art(pkg, [doubled])
     assert art.passed is False
@@ -68,7 +72,7 @@ def test_duplicate_brand_mark_blocks() -> None:
 
 def test_wrong_canvas_blocks() -> None:
     pkg = _single_package()
-    result = render_instagram_feed_image(pkg)
+    result = render_instagram_feed_image(pkg, source_image=_SOURCE_IMAGE)
     wrong = replace(result, evidence=replace(result.evidence, canvas_width=999, canvas_height=999))
     art = validate_instagram_art(pkg, [wrong])
     assert art.passed is False
@@ -77,7 +81,7 @@ def test_wrong_canvas_blocks() -> None:
 
 def test_clipped_headline_blocks_but_clipped_secondary_text_is_only_a_warning() -> None:
     pkg = _single_package()
-    result = render_instagram_feed_image(pkg)
+    result = render_instagram_feed_image(pkg, source_image=_SOURCE_IMAGE)
     headline_region = TextRegion(kind="headline", box=(0, 0, 10, 10), clipped=True)
     clipped_headline = replace(result, evidence=replace(result.evidence, text_regions=[headline_region], text_clipped=True))
     art_headline = validate_instagram_art(pkg, [clipped_headline])
@@ -94,7 +98,7 @@ def test_clipped_headline_blocks_but_clipped_secondary_text_is_only_a_warning() 
 
 def test_unreadable_empty_content_blocks() -> None:
     pkg = _single_package()
-    result = render_instagram_feed_image(pkg)
+    result = render_instagram_feed_image(pkg, source_image=_SOURCE_IMAGE)
     empty = replace(result, evidence=replace(result.evidence, text_regions=[]))
     art = validate_instagram_art(pkg, [empty])
     assert art.passed is False
@@ -103,7 +107,7 @@ def test_unreadable_empty_content_blocks() -> None:
 
 def test_package_linkage_mismatch_blocks() -> None:
     pkg = _single_package()
-    result = render_instagram_feed_image(pkg)
+    result = render_instagram_feed_image(pkg, source_image=_SOURCE_IMAGE)
     mismatched = replace(result, evidence=replace(result.evidence, caption_linkage="some-other-package-id"))
     art = validate_instagram_art(pkg, [mismatched])
     assert art.passed is False
@@ -137,7 +141,7 @@ def test_bounded_rerender_hook_never_loops_without_a_caller_supplied_revision_st
 
     def failing_render(p):
         calls["n"] += 1
-        result = render_instagram_feed_image(p)
+        result = render_instagram_feed_image(p, source_image=_SOURCE_IMAGE)
         return [replace(result, evidence=replace(result.evidence, visible_brand_mark_count=0))]
 
     final_pkg, renders, art = attempt_bounded_rerender(pkg, failing_render)
@@ -152,7 +156,7 @@ def test_bounded_rerender_hook_respects_explicit_max_retries_with_a_revision_str
 
     def failing_render(p):
         calls["n"] += 1
-        result = render_instagram_feed_image(p)
+        result = render_instagram_feed_image(p, source_image=_SOURCE_IMAGE)
         return [replace(result, evidence=replace(result.evidence, visible_brand_mark_count=0))]
 
     def revise(p):
@@ -163,3 +167,13 @@ def test_bounded_rerender_hook_respects_explicit_max_retries_with_a_revision_str
     assert calls["n"] == 3  # initial + 2 retries, never unbounded
     assert art.passed is False
     assert art.retries_used == 2
+
+
+def test_single_without_real_source_image_is_blocked() -> None:
+    pkg = _single_package()
+    no_source = replace(pkg, source_image_ref=None)
+    render = render_instagram_feed_image(no_source)
+    art = validate_instagram_art(no_source, [render])
+    assert art.passed is False
+    assert "single_real_source_image_required" in art.blocking_issues
+    assert "single_source_image_not_rendered" in art.blocking_issues

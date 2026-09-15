@@ -93,15 +93,16 @@ def build_default_regenerator(gateway: Any, prompt_repository: Any) -> CreativeR
     return _regenerate
 
 
-_SINGLE_TEXT_FIELDS = ("caption_direction", "cta", "evidence_used")
+_SINGLE_TEXT_FIELDS = ("caption_direction", "final_caption", "source_subject", "cta", "evidence_used")
 _SINGLE_VISUAL_FIELDS = ("creative_angle", "visual_concept", "on_image_copy", "asset_requirements")
 _SLIDE_TEXT_FIELDS = ("slide_copy",)
 _SLIDE_VISUAL_FIELDS = ("role", "visual_direction", "source_evidence")
 _CAROUSEL_TEXT_FIELDS = ("final_cta",)
-_REEL_TEXT_FIELDS = ("caption_direction", "cta", "evidence_used")
+_REEL_TEXT_FIELDS = ("caption_direction", "final_caption", "source_subject", "cta", "evidence_used", "scenes")
 _REEL_VISUAL_FIELDS = (
     "hook", "target_duration_seconds", "scene_sequence", "shot_list", "voiceover_script",
     "on_screen_text", "b_roll_requirements", "pacing", "audio_direction", "loop_ending_concept",
+    "scenes",
 )
 
 

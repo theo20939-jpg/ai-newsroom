@@ -69,7 +69,7 @@ _CAROUSEL_OUTPUT = {
 def _prompt_repository() -> FakePromptRepository:
     repository = FakePromptRepository()
     repository.register(RenderedPrompt(
-        name=SINGLE_PROMPT_NAME, version="3", system="you are the creative director", rules=["never invent facts"],
+        name=SINGLE_PROMPT_NAME, version="4", system="you are the creative director", rules=["never invent facts"],
         output_schema=_SINGLE_SCHEMA,
     ))
     repository.register(RenderedPrompt(
@@ -136,8 +136,9 @@ async def test_single_confirmed_fact_selects_single_format(db_session: AsyncSess
         db_session, bot, opportunity=opportunity, opportunity_summary="x",
         gateway=_gateway(_SINGLE_OUTPUT), prompt_repository=_prompt_repository(),
     )
-    assert outcome.reason == "submitted"
-    bot.send_photo.assert_called_once()  # SINGLE path (one render) was used
+    assert outcome.reason == "source_image_unavailable"
+    assert outcome.delivery_sent is False
+    bot.send_photo.assert_not_called()  # the selected SINGLE has no real source asset
 
 
 @pytest.mark.asyncio
@@ -167,7 +168,8 @@ async def test_two_confirmed_facts_selects_carousel_format(db_session: AsyncSess
         gateway=_gateway(_CAROUSEL_OUTPUT), prompt_repository=_prompt_repository(),
     )
     assert outcome.reason == "submitted"
-    bot.send_media_group.assert_called_once()  # CAROUSEL path (multiple renders) was used
+    assert outcome.gate_decision == "hold"  # carousel caption is still draft
+    bot.send_media_group.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -236,7 +238,7 @@ async def test_reel_decision_with_execution_enabled_reaches_the_existing_reel_pa
     from services.instagram_creative_director import REEL_PROMPT_NAME
     prompt_repository = _prompt_repository()
     prompt_repository.register(RenderedPrompt(
-        name=REEL_PROMPT_NAME, version="4", system="you are the creative director", rules=["never invent facts"],
+        name=REEL_PROMPT_NAME, version="5", system="you are the creative director", rules=["never invent facts"],
         output_schema=reel_schema,
     ))
 

@@ -6,6 +6,10 @@ editorial_routing.py`'s own convention - zero real Telegram API contact."""
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
+from types import SimpleNamespace
+from uuid import uuid4
+
+from PIL import Image
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +20,7 @@ from integrations.llm_gateway.protocol import GenerateResponse
 from integrations.prompts.protocol import RenderedPrompt
 from schemas.capability import CapabilityUsage
 from services.editorial_treatment import BRIEF, MAJOR, SKIP, STANDARD, EditorialTreatmentDecision
+import services.instagram_automatic_trigger as trigger_module
 from services.instagram_automatic_trigger import evaluate_and_submit_instagram_candidate
 from services.instagram_creative_director import SINGLE_PROMPT_NAME
 from services.instagram_editorial_delivery_state import InstagramEditorialDeliveryService, compute_package_identity
@@ -39,11 +44,16 @@ def _topic_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "newsroom_telegram_chat_id", -1002345678901)
     monkeypatch.setattr(settings, "instagram_topic_id", 40)
 
+    async def selected_source(session, story_id):
+        return Image.new("RGB", (512, 512), "navy"), SimpleNamespace(id=uuid4(), candidate_id="test-source"), 1, 2048
+
+    monkeypatch.setattr(trigger_module, "_resolve_single_source_image", selected_source)
+
 
 def _prompt_repository() -> FakePromptRepository:
     repository = FakePromptRepository()
     repository.register(RenderedPrompt(
-        name=SINGLE_PROMPT_NAME, version="3", system="you are the creative director", rules=["never invent facts"],
+        name=SINGLE_PROMPT_NAME, version="4", system="you are the creative director", rules=["never invent facts"],
         output_schema=_SINGLE_SCHEMA,
     ))
     return repository
@@ -58,7 +68,8 @@ def _gateway(output: dict) -> FakeLLMGateway:
 
 _GOOD_OUTPUT = {
     "creative_angle": "a real breakthrough", "visual_concept": "bold headline over dark gradient",
-    "on_image_copy": "Big Tech Story Breaks", "caption_direction": "explain what happened and why it matters",
+    "on_image_copy": "Company X announces Y", "caption_direction": "internal plan",
+    "final_caption": "Company X announced Y on 2026-09-14. Here is what changed.", "source_subject": "Company X",
     "cta": "Follow for more", "asset_requirements": [], "evidence_used": ["Company X announced Y on 2026-09-14"],
 }
 
@@ -100,6 +111,19 @@ async def test_b_non_major_treatment_never_forces_a_package(db_session: AsyncSes
     outcome, bot = await _submit(db_session, event_id=f"evt-{treatment.treatment.lower()}", treatment=treatment)
     assert outcome.accepted is False
     assert outcome.reason == f"treatment={treatment.treatment}"
+    bot.send_photo.assert_not_called()
+    bot.send_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_single_render_failure_fails_closed_without_telegram_send(db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail_render(*args, **kwargs):
+        raise OSError("renderer unavailable")
+
+    monkeypatch.setattr(trigger_module, "render_instagram_feed_image", fail_render)
+    outcome, bot = await _submit(db_session, event_id="evt-render-fails", treatment=_MAJOR)
+    assert outcome.reason == "render_failed"
+    assert outcome.delivery_sent is False
     bot.send_photo.assert_not_called()
     bot.send_message.assert_not_called()
 

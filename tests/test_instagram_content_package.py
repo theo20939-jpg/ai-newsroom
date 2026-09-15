@@ -45,7 +45,9 @@ def _shadow_plan(**overrides: Any) -> ShadowPlanResult:
 def test_single_package_uses_real_creative_director_fields_verbatim() -> None:
     single = InstagramSingleCreative(
         creative_angle="angle", visual_concept="concept", on_image_copy="500 MILLION USERS",
-        caption_direction="A real milestone worth sharing", cta="Learn more",
+        caption_direction="Explain the milestone to the audience",
+        final_caption="Company X reached 500 million users. Here is why that matters.",
+        source_subject="Company X", cta="Learn more",
     )
     pkg = build_instagram_content_package(
         opportunity=_opportunity(), format_decision=FormatDecision(recommended_format=ContentFormat.SINGLE, why="reach"),
@@ -53,9 +55,11 @@ def test_single_package_uses_real_creative_director_fields_verbatim() -> None:
     )
     assert pkg.content_format is ContentFormat.SINGLE
     assert pkg.on_image_copy == "500 MILLION USERS"
-    assert pkg.caption == "A real milestone worth sharing"  # verbatim caption_direction, never rewritten
+    assert pkg.caption == "Company X reached 500 million users. Here is why that matters."
+    assert pkg.caption != single.caption_direction
     assert pkg.cta == "Learn more"
-    assert pkg.caption_is_draft is True
+    assert pkg.caption_is_draft is False
+    assert pkg.media_plan["source_subject"] == "Company X"
     assert pkg.render_profiles == ["portrait_feed"]
     assert pkg.slide_count is None
     assert pkg.hashtags == []  # never fabricated - no schema field produces them
@@ -153,3 +157,16 @@ def test_claim_check_fields_cover_caption_on_image_copy_cta_and_slides() -> None
     fields = pkg.text_fields_for_claim_check
     assert any("unreleased chip" in f for f in fields)
     assert "Body copy" in fields
+
+
+def test_caption_direction_alone_is_never_a_final_single_caption() -> None:
+    single = InstagramSingleCreative(
+        creative_angle="angle", visual_concept="concept", on_image_copy="Company X",
+        caption_direction="Tell the editor to explain Company X",
+    )
+    pkg = build_instagram_content_package(
+        opportunity=_opportunity(), format_decision=FormatDecision(recommended_format=ContentFormat.SINGLE),
+        shadow_plan=_shadow_plan(), creative_outcome=CreativeGenerationOutcome(single=single),
+    )
+    assert pkg.caption == ""
+    assert pkg.caption_is_draft is True

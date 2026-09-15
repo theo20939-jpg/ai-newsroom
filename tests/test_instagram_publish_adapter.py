@@ -5,9 +5,11 @@ error, rate-limit, retryable server error) - all without any real credential or 
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 
 import httpx
 import pytest
+from PIL import Image
 
 from core.config import settings
 from services.instagram_art_validator import validate_instagram_art
@@ -40,12 +42,12 @@ _SP = ShadowPlanResult(
 
 def _ready_package_and_gate():
     opp = ContentOpportunity(id="opp-1", source_type=OpportunitySourceType.NEWS, story_id="s1", product_mention_allowed=True)
-    single = InstagramSingleCreative(creative_angle="a", visual_concept="v", on_image_copy="Headline", caption_direction="draft", cta="Learn more")
+    single = InstagramSingleCreative(creative_angle="a", visual_concept="v", on_image_copy="Headline", caption_direction="draft", final_caption="Company X announced a useful update.", source_subject="Company X", cta="Learn more")
     pkg = build_instagram_content_package(
         opportunity=opp, format_decision=FormatDecision(recommended_format=ContentFormat.SINGLE), shadow_plan=_SP,
-        creative_outcome=CreativeGenerationOutcome(single=single),
+        creative_outcome=CreativeGenerationOutcome(single=single), source_image_ref="fixture-source-image",
     )
-    result = render_instagram_feed_image(pkg)
+    result = render_instagram_feed_image(pkg, source_image=Image.new("RGB", (512, 512), "navy"))
     art = validate_instagram_art(pkg, [result])
     gate = evaluate_instagram_editorial_gate(pkg, art)
     assert gate.decision is InstagramGateDecision.READY_FOR_EDITOR
@@ -276,6 +278,7 @@ async def test_carousel_shadow_publish_creates_one_container_per_child_plus_the_
     )
     from services.instagram_platform_renderer import render_instagram_carousel
 
+    pkg = replace(pkg, caption="Company X announced a useful update.", caption_is_draft=False)
     results = render_instagram_carousel(pkg)
     art = validate_instagram_art(pkg, results)
     gate = evaluate_instagram_editorial_gate(pkg, art)
@@ -287,13 +290,13 @@ async def test_carousel_shadow_publish_creates_one_container_per_child_plus_the_
 @pytest.mark.asyncio
 async def test_reel_without_external_video_asset_fails_invalid_media() -> None:
     from services.instagram_creative_director import CreativeGenerationOutcome as CGO
-    from schemas.instagram_creative import InstagramReelCreative
+    from schemas.instagram_creative import InstagramReelCreative, InstagramReelSceneCreative
 
     opp = ContentOpportunity(id="opp-3", source_type=OpportunitySourceType.NEWS, story_id="s3", product_mention_allowed=True)
-    reel = InstagramReelCreative(objective="reach", hook="Watch", target_duration_seconds=10, scene_sequence=["s1"], pacing="fast", caption_direction="draft")
+    reel = InstagramReelCreative(objective="reach", hook="Company X changed its service", target_duration_seconds=20, scene_sequence=["Opening", "Closing"], pacing="fast", caption_direction="internal brief", final_caption="Company X announced a useful update.", source_subject="Company X", scenes=[InstagramReelSceneCreative(start_seconds=0, end_seconds=10, spoken_line="Company X announced an update.", visual_direction="Show the real announcement."), InstagramReelSceneCreative(start_seconds=10, end_seconds=20, spoken_line="Company X changed the service; here is the result.", visual_direction="Show the change and closing frame.")], loop_ending_concept="Close on the changed service.")
     pkg = build_instagram_content_package(
         opportunity=opp, format_decision=FormatDecision(recommended_format=ContentFormat.REEL), shadow_plan=_SP,
-        creative_outcome=CGO(reel=reel),
+        creative_outcome=CGO(reel=reel), reel_script_readiness="production_script",
     )
     from services.instagram_platform_renderer import render_instagram_reel_cover
 

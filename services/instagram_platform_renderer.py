@@ -94,6 +94,7 @@ def _result_from_layout(
         canvas_width=spec.width, canvas_height=spec.height, visible_brand_mark_count=layout.visible_brand_mark_count,
         text_regions=text_regions, text_clipped=layout.text_clipped,
         source_image_treatment=layout.source_image_treatment,
+        source_media_candidate_id=(package.media_candidate_id if layout.source_image_treatment not in ("none", "generated") else None),
         slide_index=slide_index, slide_count=slide_count, caption_linkage=package.package_id,
         content_identity=_content_identity(package, slide_index=slide_index),
         notes=notes,

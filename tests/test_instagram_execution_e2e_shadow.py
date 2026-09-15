@@ -16,6 +16,8 @@ PublicationResult, entirely offline (no AI Gateway call, no network call, no rea
 """
 from __future__ import annotations
 
+from PIL import Image
+
 import asyncio
 
 import pytest
@@ -55,7 +57,7 @@ async def test_end_to_end_instagram_shadow_execution() -> None:
     #    existing test suite's own convention for this exact reason).
     creative = InstagramSingleCreative(
         creative_angle="A milestone worth telling", visual_concept="Bold number on dark background",
-        on_image_copy="500 MILLION USERS", caption_direction="We just reached a huge milestone - thank you.",
+        on_image_copy="500 MILLION USERS", caption_direction="Explain milestone internally", final_caption="Company X reached 500 million users. Here is why it matters.", source_subject="Company X",
         cta="Learn more", evidence_used=[],
     )
     creative_outcome = CreativeGenerationOutcome(single=creative)
@@ -70,11 +72,12 @@ async def test_end_to_end_instagram_shadow_execution() -> None:
     # 6. InstagramContentPackage (this phase)
     package = build_instagram_content_package(
         opportunity=opportunity, format_decision=format_decision, shadow_plan=shadow_plan, creative_outcome=creative_outcome,
+        source_image_ref="fixture-source-image",
     )
     assert package.content_format.value == "single"
 
     # 7. Instagram platform renderer (this phase) - the FIRST previously-missing stage
-    render_result = render_instagram_feed_image(package)
+    render_result = render_instagram_feed_image(package, source_image=Image.new("RGB", (512, 512), "navy"))
     assert render_result.evidence.canvas_width == 1080 and render_result.evidence.canvas_height == 1350
     assert render_result.evidence.visible_brand_mark_count == 1
 

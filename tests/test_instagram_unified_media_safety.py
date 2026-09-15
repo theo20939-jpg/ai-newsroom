@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+from PIL import Image
 
 from schemas.media_intent import DesiredVisualType, MediaIntent, MediaSubjectType
 from schemas.media_subject_match import (
@@ -63,7 +64,7 @@ def _candidate(
 def _build_package(caption: str, media_selection=None):
     single = InstagramSingleCreative(
         creative_angle="angle", visual_concept="concept", on_image_copy="FOLDABLE IPHONE",
-        caption_direction=caption, cta="Learn more",
+        caption_direction="Internal direction", final_caption=caption, source_subject="foldable iPhone", cta="Learn more",
     )
     return build_instagram_content_package(
         opportunity=_OPPORTUNITY, format_decision=FormatDecision(recommended_format=ContentFormat.SINGLE, why="reach"),
@@ -204,7 +205,7 @@ def test_clean_exact_subject_package_still_reaches_ready() -> None:
         ),
     )
     package = _build_package("A real foldable iPhone announcement.", media_selection=_fake_selection(exact_candidate))
-    render_result = render_instagram_feed_image(package)
+    render_result = render_instagram_feed_image(package, source_image=Image.new("RGB", (512, 512), "navy"))
     evidence = build_evidence_pack(news_event_id=uuid4(), story_id=None, source_url=None, research_facts=[])
 
     gate_result, recovery = evaluate_instagram_package(

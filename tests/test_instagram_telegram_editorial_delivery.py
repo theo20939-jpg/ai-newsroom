@@ -5,6 +5,8 @@ regeneration is a fake `CreativeRegenerator` - zero real LLM/network calls, mirr
 codebase's own "no real network in tests" convention."""
 from __future__ import annotations
 
+from PIL import Image
+
 import uuid
 from unittest.mock import AsyncMock
 
@@ -47,14 +49,17 @@ def _director_input() -> CreativeDirectorInput:
     return CreativeDirectorInput(objective="reach", format="single", opportunity_summary="A story", allowed_evidence=["fact-1"])
 
 
+_SOURCE_IMAGE = Image.new("RGB", (512, 512), "navy")
+
+
 def _single_package(*, opp_id: str = "opp-1"):
     opp = ContentOpportunity(id=opp_id, source_type=OpportunitySourceType.NEWS, story_id="s1", product_mention_allowed=True)
-    single = InstagramSingleCreative(creative_angle="a", visual_concept="v", on_image_copy="Headline", caption_direction="Original caption", cta="Learn more")
+    single = InstagramSingleCreative(creative_angle="a", visual_concept="v", on_image_copy="Headline", caption_direction="Plan the story", final_caption="Company X announced a real update. Here is what changed.", source_subject="Company X", cta="Learn more")
     pkg = build_instagram_content_package(
         opportunity=opp, format_decision=FormatDecision(recommended_format=ContentFormat.SINGLE), shadow_plan=_SP,
-        creative_outcome=CreativeGenerationOutcome(single=single),
+        creative_outcome=CreativeGenerationOutcome(single=single), source_image_ref="test-source",
     )
-    render = render_instagram_feed_image(pkg)
+    render = render_instagram_feed_image(pkg, source_image=_SOURCE_IMAGE)
     art = validate_instagram_art(pkg, [render])
     gate = evaluate_instagram_editorial_gate(pkg, art)
     return opp, single, pkg, render, gate
@@ -108,7 +113,7 @@ def test_a_single_post_presentation_has_one_media_item_and_full_caption() -> Non
     assert presentation.kind == "single"
     assert len(presentation.media) == 1
     assert presentation.media[0] == render.image_bytes
-    assert "Original caption" in presentation.control_text  # F: caption preserved, never dropped
+    assert "Company X announced a real update" in presentation.control_text  # F: caption preserved, never dropped
 
 
 def test_b_and_c_carousel_presentation_preserves_exact_slide_order() -> None:
@@ -449,7 +454,7 @@ async def test_j_full_regeneration_produces_a_new_version_and_supersedes_the_old
 @pytest.mark.asyncio
 async def test_l_text_only_regeneration_preserves_visual_fields() -> None:
     opp, single, pkg, render, gate = _single_package(opp_id="opp-text-regen")
-    new_creative = InstagramSingleCreative(creative_angle="ignored", visual_concept="ignored", on_image_copy="IGNORED HEADLINE", caption_direction="Brand new caption text", cta="New CTA")
+    new_creative = InstagramSingleCreative(creative_angle="ignored", visual_concept="ignored", on_image_copy="IGNORED HEADLINE", caption_direction="Plan the updated text", final_caption="Company X published a brand new update.", source_subject="Company X", cta="New CTA")
     regenerator = await _fake_regenerator_factory(new_creative)
 
     result = await regenerate_text_only(
@@ -457,7 +462,7 @@ async def test_l_text_only_regeneration_preserves_visual_fields() -> None:
         director_input=_director_input(), previous_creative=single, regenerator=regenerator,
     )
     assert result.package.on_image_copy == pkg.on_image_copy  # visual UNCHANGED
-    assert "Brand new caption text" in result.package.caption  # caption changed
+    assert "Company X published a brand new update" in result.package.caption  # caption changed
     assert result.creative.on_image_copy == single.on_image_copy
 
 
@@ -470,10 +475,12 @@ async def test_m_visual_only_regeneration_preserves_caption() -> None:
     result = await regenerate_visual_only(
         opportunity=opp, format_decision=FormatDecision(recommended_format=ContentFormat.SINGLE), shadow_plan=_SP,
         director_input=_director_input(), previous_creative=single, regenerator=regenerator,
+        source_image_ref="test-source", source_image=_SOURCE_IMAGE,
     )
     assert result.package.on_image_copy == "Brand new headline"  # visual changed
     assert result.package.caption == pkg.caption  # caption UNCHANGED
     assert result.renders  # a fresh render did happen
+    assert result.gate_outcome.decision is InstagramGateDecision.READY_FOR_EDITOR
 
 
 @pytest.mark.asyncio

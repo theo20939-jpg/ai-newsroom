@@ -8,6 +8,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
+from types import SimpleNamespace
+from uuid import uuid4
+
+from PIL import Image
+
+import services.instagram_automatic_trigger as trigger_module
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,7 +56,7 @@ _GOOD_OUTPUT = {
 def _prompt_repository() -> FakePromptRepository:
     repository = FakePromptRepository()
     repository.register(RenderedPrompt(
-        name=SINGLE_PROMPT_NAME, version="3", system="you are the creative director", rules=["never invent facts"],
+        name=SINGLE_PROMPT_NAME, version="4", system="you are the creative director", rules=["never invent facts"],
         output_schema=_SINGLE_SCHEMA,
     ))
     return repository
@@ -306,9 +312,9 @@ async def test_planned_only_opportunity_flows_through_the_full_pipeline_to_deliv
         gateway=_gateway(planned_output), prompt_repository=_prompt_repository(),
     )
     assert outcome.accepted is True
-    assert outcome.reason == "submitted"
-    assert outcome.delivery_sent is True
-    bot.send_photo.assert_called_once()
+    assert outcome.reason == "source_image_unavailable"
+    assert outcome.delivery_sent is False
+    bot.send_photo.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -331,11 +337,9 @@ async def test_general_entrypoint_delivers_a_product_opportunity_to_the_configur
         gateway=_gateway(), prompt_repository=_prompt_repository(),
     )
     assert outcome.accepted is True
-    assert outcome.reason == "submitted"
-    assert outcome.delivery_sent is True
-    bot.send_photo.assert_called_once()
-    assert bot.send_photo.call_args.args[0] == -1002345678901
-    assert bot.send_photo.call_args.kwargs["message_thread_id"] == 40
+    assert outcome.reason == "source_image_unavailable"
+    assert outcome.delivery_sent is False
+    bot.send_photo.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -350,25 +354,30 @@ async def test_general_entrypoint_is_idempotent_across_calls(db_session: AsyncSe
         db_session, bot1, opportunity=opportunity, opportunity_summary="x",
         gateway=_gateway(), prompt_repository=_prompt_repository(),
     )
-    assert first.delivery_sent is True
+    assert first.reason == "source_image_unavailable"
+    assert first.delivery_sent is False
 
     bot2 = AsyncMock()
     second = await evaluate_and_submit_instagram_opportunity(
         db_session, bot2, opportunity=opportunity, opportunity_summary="x",
         gateway=_gateway(), prompt_repository=_prompt_repository(),
     )
-    assert second.reason == "already_submitted"
+    assert second.reason == "source_image_unavailable"  # no delivery persisted; retry is safe
     bot2.send_photo.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_general_entrypoint_survives_creative_director_fact_safety_rejection(db_session: AsyncSession) -> None:
+async def test_general_entrypoint_survives_creative_director_fact_safety_rejection(db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
     """The SAME fact-safety mechanism the NEWS path relies on applies here too - a claim outside
     `allowed_evidence` fails closed, never crashing the caller."""
     await _confirm_current_feature(db_session, slug="p2hold", feature="Production Mode")
     snapshot = await get_business_context_snapshot(db_session, now=datetime.now(timezone.utc))
     opportunity = next(c.opportunity for c in _product_opportunities_from_context(snapshot) if c.product_slug == "p2hold")
 
+    async def available_source(session, story_id):
+        return Image.new("RGB", (512, 512), "navy"), SimpleNamespace(id=uuid4(), candidate_id="fixture-source"), 1, 2048
+
+    monkeypatch.setattr(trigger_module, "_resolve_single_source_image", available_source)
     bad_output = dict(_GOOD_OUTPUT, evidence_used=["a fact never in allowed_evidence"])
     bot = AsyncMock()
     outcome = await evaluate_and_submit_instagram_opportunity(

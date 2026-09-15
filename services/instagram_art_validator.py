@@ -12,7 +12,10 @@ retry blindly."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from io import BytesIO
 from typing import Any, Callable
+
+from PIL import Image
 
 from services.instagram_content_package import InstagramContentPackage
 from services.instagram_platform_renderer import InstagramRenderResult
@@ -54,6 +57,8 @@ def validate_instagram_art(
         return InstagramArtValidationResult(passed=False, blocking_issues=blocking, warnings=warnings, retries_used=retries_used)
 
     expected_profile = _FORMAT_EXPECTED_PROFILE.get(package.content_format.value)
+    if package.content_format.value == "single" and not package.source_image_ref:
+        blocking.append("single_real_source_image_required")
     for result in render_results:
         ev = result.evidence
 
@@ -99,10 +104,19 @@ def validate_instagram_art(
         # actually applied usually means the caller forgot to pass the real bytes at render time -
         # a warning (not blocking: a legitimate no-image fallback render can still be intentional).
         if package.source_image_ref and ev.source_image_treatment == "none":
-            warnings.append(
+            issue = (
                 f"source_image_ref_recorded_but_not_applied: package.source_image_ref={package.source_image_ref!r} "
                 f"but this render's source_image_treatment is 'none' (slide_index={ev.slide_index})"
             )
+            (blocking if package.content_format.value == "single" else warnings).append(issue)
+        if package.content_format.value == "single":
+            if ev.source_image_treatment == "none":
+                blocking.append("single_source_image_not_rendered")
+            try:
+                with Image.open(BytesIO(result.image_bytes)) as image:
+                    image.verify()
+            except (OSError, ValueError):
+                blocking.append("single_rendered_media_unusable")
 
         # 7. caption/media package consistency
         if ev.caption_linkage != package.package_id:

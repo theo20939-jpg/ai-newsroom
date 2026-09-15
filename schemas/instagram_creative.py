@@ -24,6 +24,9 @@ class InstagramSingleCreative(BaseModel):
     visual_concept: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
     on_image_copy: str = Field(min_length=1, max_length=_SHORT_TEXT_MAX_LENGTH)
     caption_direction: str = Field(min_length=1, max_length=_LONG_TEXT_MAX_LENGTH)
+    # Optional in Python for old stored/test creative rows; required by the versioned live prompt.
+    final_caption: str | None = Field(default=None, max_length=_LONG_TEXT_MAX_LENGTH)
+    source_subject: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
     cta: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
     asset_requirements: list[str] = Field(default_factory=list)
     evidence_used: list[str] = Field(default_factory=list)
@@ -50,6 +53,16 @@ class InstagramCarouselCreative(BaseModel):
     @property
     def hook_slide(self) -> InstagramCarouselSlideCreative:
         return self.slides[0]
+
+
+class InstagramReelSceneCreative(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    start_seconds: int = Field(ge=0, le=180)
+    end_seconds: int = Field(gt=0, le=180)
+    spoken_line: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    on_screen_text: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
+    visual_direction: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
 
 
 class InstagramReelCreative(BaseModel):
@@ -81,3 +94,7 @@ class InstagramReelCreative(BaseModel):
     # NINJA adaptation of the detected trend mechanic, and what was deliberately NOT copied from
     # the source creators/format.
     adaptation_notes: str | None = Field(default=None, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    # Versioned production-script fields; defaults preserve old concept rows and test doubles.
+    source_subject: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
+    final_caption: str | None = Field(default=None, max_length=_LONG_TEXT_MAX_LENGTH)
+    scenes: list[InstagramReelSceneCreative] = Field(default_factory=list)

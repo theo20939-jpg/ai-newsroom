@@ -379,11 +379,12 @@ def test_art_validator_warns_on_low_carousel_layout_diversity() -> None:
     assert any("carousel_layout_diversity_low" in w for w in art.warnings)
 
 
-def test_art_validator_warns_when_source_image_ref_recorded_but_render_shows_none() -> None:
+def test_art_validator_blocks_single_when_source_image_ref_recorded_but_render_shows_none() -> None:
     pkg = _single_package("headline", source_image_ref="assets/real_photo.jpg")
     result = render_instagram_feed_image(pkg)  # no source_image bytes actually passed
     art = validate_instagram_art(pkg, [result])
-    assert any("source_image_ref_recorded_but_not_applied" in w for w in art.warnings)
+    assert not art.passed
+    assert any("source_image_ref_recorded_but_not_applied" in issue for issue in art.blocking_issues)
 
 
 # ---------------------------------------------------------------------------------------------
