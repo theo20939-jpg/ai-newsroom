@@ -50,17 +50,16 @@ def unresolved_required_facts(
 
 
 def compute_reel_script_readiness(
-    *, unresolved_facts: list[str], asset_requirements_satisfiable: bool = True,
+    *, unresolved_facts: list[str], script_requirements_complete: bool = True,
 ) -> str:
-    """PRODUCTION_SCRIPT only when EVERY required fact is resolved AND every required production
-    asset is known-satisfiable; CONCEPT_SCRIPT otherwise - the premise may still be valid (fact-
-    grounded), just not yet executable (missing assets/execution details), matching the addendum's
-    own "idea valid but required assets/facts may still be missing" framing. Never a third,
-    invented readiness value - exactly these two, or nothing (the caller decides not to build a
-    Reel at all when `unresolved_facts` is non-empty for a PRODUCT-origin premise, per this
-    module's own docstring)."""
+    """Classify the script itself, independently of whether a rendered video exists.
+
+    ``script_requirements_complete`` covers script-level execution detail such as hook, scenes and
+    direction. A literal mp4 or external video reference is a separate package/presentation axis
+    and must never be passed here as a proxy for script completeness.
+    """
     if unresolved_facts:
         return CONCEPT_SCRIPT
-    if not asset_requirements_satisfiable:
+    if not script_requirements_complete:
         return CONCEPT_SCRIPT
     return PRODUCTION_SCRIPT

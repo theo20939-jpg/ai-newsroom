@@ -23,8 +23,10 @@ from services.instagram_creative_director import (
     AudienceFacingCopyError,
     CreativeLanguageError,
     InstagramEditorialDecisionInput,
+    UngroundedTrendClaimError,
     assert_audience_facing_copy,
     assert_russian_final_text,
+    assert_trend_rationale_grounded,
     generate_editorial_decision,
 )
 from services.instagram_director_context import (
@@ -36,7 +38,12 @@ from services.instagram_editorial_delivery_state import (
     check_instagram_editorial_duplicate,
 )
 from services.instagram_format_director import ContentFormat
-from services.instagram_trend_radar import TrendKind
+from services.instagram_trend_radar import (
+    TrendKind,
+    TrendSignal,
+    TrendSignalProvenance,
+    TrendSignalType,
+)
 from tests.fakes.fake_gateway import FakeLLMGateway
 
 _PROMPTS_ROOT = Path(__file__).resolve().parent.parent / "prompts"
@@ -186,6 +193,69 @@ def test_director_can_select_every_executable_format(fmt: str) -> None:
 
 def test_trend_taxonomy_distinguishes_supported_signal_types() -> None:
     assert {kind.value for kind in TrendKind} == {"topic", "meme_culture", "format", "discussion"}
+
+
+def test_story_memory_is_normalized_as_discussion_momentum_not_platform_trend() -> None:
+    signal = TrendSignal(
+        signal_type=TrendSignalType.DISCUSSION_MOMENTUM,
+        provenance=TrendSignalProvenance.STORY_MEMORY,
+        topic="iPhone Duo",
+        evidence=["Publisher A discusses iPhone Duo", "Publisher B discusses iPhone Duo"],
+        freshness_hours=48,
+        confidence=0.7,
+        relevance="coherent multi-source discussion",
+        event_count=6,
+        source_count=4,
+    )
+    context = signal.to_director_context()
+    assert signal.is_platform_native is False
+    assert "signal_type=discussion_momentum" in context
+    assert "provenance=STORY_MEMORY" in context
+    assert "platform_native=false" in context
+    assert "event_count=6" in context and "source_count=4" in context
+
+
+def test_story_memory_cannot_represent_native_audio_or_meme_trend() -> None:
+    with pytest.raises(ValueError, match="Story Memory"):
+        TrendSignal(
+            signal_type=TrendSignalType.AUDIO_TREND,
+            provenance=TrendSignalProvenance.STORY_MEMORY,
+            topic="viral audio",
+            evidence=["unsupported"],
+        )
+
+
+def test_future_instagram_native_signal_uses_same_normalized_contract() -> None:
+    signal = TrendSignal(
+        signal_type=TrendSignalType.REEL_FORMAT_TREND,
+        provenance=TrendSignalProvenance.INSTAGRAM,
+        topic="split-screen reaction",
+        evidence=["future collector observation id=123"],
+        freshness_hours=6,
+        confidence=0.8,
+    )
+    assert signal.is_platform_native is True
+    assert "signal_type=reel_format_trend" in signal.to_director_context()
+    assert "provenance=INSTAGRAM" in signal.to_director_context()
+
+
+def test_story_memory_momentum_cannot_ground_instagram_viral_claim() -> None:
+    with pytest.raises(UngroundedTrendClaimError):
+        assert_trend_rationale_grounded(
+            "Это вирусный формат Instagram, поэтому используем его в Reel.",
+            signal_type="discussion_momentum",
+            provenance="STORY_MEMORY",
+            is_platform_native=False,
+        )
+
+
+def test_story_memory_momentum_allows_honest_multi_source_wording() -> None:
+    assert_trend_rationale_grounded(
+        "По данным Story Memory несколько источников одновременно обсуждают событие.",
+        signal_type="discussion_momentum",
+        provenance="STORY_MEMORY",
+        is_platform_native=False,
+    )
 
 
 def test_story_memory_trend_coherence_rejects_generic_question_word_cluster() -> None:

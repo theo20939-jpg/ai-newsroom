@@ -13,7 +13,10 @@ rules:
   - Use only supplied evidence for factual claims. Copy each used item's text verbatim into evidence_used, without the presentation-only leading "- " marker.
   - Do not invent product availability, features, tariffs, dates, links or claims.
   - External news may name third-party entities. Promotional/product opportunities may promote only a supported NINJA product.
-  - Do not force a trend. NEWS_X_TREND or PRODUCT_X_TREND requires a concrete trend_rationale; otherwise choose NEWS, PRODUCT, CULTURE or EVERGREEN.
+  - Do not force a trend. NEWS_X_TREND or PRODUCT_X_TREND requires a concrete, evidence-grounded trend_rationale; otherwise choose NEWS, PRODUCT, CULTURE or EVERGREEN.
+  - Distinguish topic/discussion momentum from an Instagram-native trend. Story Memory proves only multi-source attention or discussion, never viral Instagram audio, meme, Reel format, visual trend or creator adoption.
+  - Never say something is trending or viral on Instagram unless INSTAGRAM-NATIVE SIGNAL is true and the supplied provenance/evidence supports that exact claim.
+  - When using a signal, state its actual meaning and provenance naturally in trend_rationale, for example discussion momentum from Story Memory rather than an Instagram trend.
   - Do not force a product into external news. product_connection must be null when there is no organic, evidence-backed fit.
   - Choose carousel for multi-point explanations/comparisons/value, reel for reactions/trends/storytelling/debate/reach, and single only when one hero composition genuinely carries the idea.
   - The executable format is one of single, carousel or reel. A supplementary Story idea may be suggested separately, because Story publishing is not executable in Phase A.

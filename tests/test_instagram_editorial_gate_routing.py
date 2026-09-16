@@ -166,10 +166,34 @@ def test_finished_reel_script_passes_without_a_video_file() -> None:
     assert evaluate_instagram_editorial_gate(pkg, art).decision is InstagramGateDecision.READY_FOR_EDITOR
     presentation = present_reel(pkg, cover, version=1)
     assert presentation.kind == "reel_script"
+    assert "готовый сценарий; видео ещё не создано" in presentation.control_text
+    assert "ГОТОВ К ПРОДАКШЕНУ" in presentation.control_text
     assert "REEL-КОНЦЕПТ" not in presentation.control_text
     assert "0–10" in presentation.control_text
     assert "Company X announced" in presentation.control_text
     assert pkg.content_format is ContentFormat.REEL
+
+
+def test_finished_reel_script_with_video_file_remains_compatible() -> None:
+    pkg, cover, art = _ready_reel_package()
+    with_video = replace(pkg, external_video_asset_ref="s3://bucket/final-reel.mp4")
+    assert evaluate_instagram_editorial_gate(with_video, art).decision is InstagramGateDecision.READY_FOR_EDITOR
+    presentation = present_reel(with_video, cover, version=1)
+    assert presentation.kind == "reel_video"
+    assert "видео ещё не создано" not in presentation.control_text
+
+
+def test_presenter_discloses_normalized_trend_type_and_provenance() -> None:
+    pkg, cover, _ = _ready_reel_package()
+    decision = {
+        "trend_signal_type": "discussion_momentum",
+        "trend_signal_provenance": "STORY_MEMORY",
+        "trend_rationale": "Несколько источников одновременно обсуждают эту тему.",
+    }
+    pkg = replace(pkg, director_evidence={"editorial_decision": decision})
+    presentation = present_reel(pkg, cover, version=1)
+    assert "discussion_momentum · STORY_MEMORY" in presentation.control_text
+    assert "ОБОСНОВАНИЕ СИГНАЛА" in presentation.control_text
 
 
 def test_null_hook_and_concept_readiness_hold_reel() -> None:
@@ -188,6 +212,16 @@ def test_reel_requires_timings_and_spoken_lines() -> None:
     incomplete = replace(pkg, media_plan={**pkg.media_plan, "scenes": bad_scenes})
     reasons = evaluate_instagram_editorial_gate(incomplete, art).reason_codes
     assert "reel_scene_timing_invalid" in reasons
+
+    missing_spoken = [dict(scene) for scene in pkg.media_plan["scenes"]]
+    missing_spoken[1]["spoken_line"] = ""
+    spoken_reasons = evaluate_instagram_editorial_gate(
+        replace(pkg, media_plan={**pkg.media_plan, "scenes": missing_spoken}), art,
+    ).reason_codes
+    assert "reel_spoken_line_missing" in spoken_reasons
+
+    missing_scenes = replace(pkg, media_plan={**pkg.media_plan, "scenes": []})
+    assert "reel_timed_scenes_missing" in evaluate_instagram_editorial_gate(missing_scenes, art).reason_codes
 
 
 def test_reel_abbreviated_spoken_script_still_represents_long_subject() -> None:

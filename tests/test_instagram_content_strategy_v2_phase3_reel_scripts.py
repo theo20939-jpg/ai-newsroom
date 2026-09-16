@@ -225,12 +225,16 @@ def test_readiness_is_concept_when_any_fact_unresolved() -> None:
     assert compute_reel_script_readiness(unresolved_facts=["production_mode.billing"]) == CONCEPT_SCRIPT
 
 
-def test_readiness_is_concept_when_assets_not_satisfiable_even_with_all_facts_resolved() -> None:
-    assert compute_reel_script_readiness(unresolved_facts=[], asset_requirements_satisfiable=False) == CONCEPT_SCRIPT
+def test_readiness_is_concept_when_script_requirements_are_incomplete() -> None:
+    assert compute_reel_script_readiness(
+        unresolved_facts=[], script_requirements_complete=False,
+    ) == CONCEPT_SCRIPT
 
 
-def test_readiness_is_production_only_when_everything_resolved() -> None:
-    assert compute_reel_script_readiness(unresolved_facts=[], asset_requirements_satisfiable=True) == PRODUCTION_SCRIPT
+def test_readiness_is_production_when_script_is_complete_without_a_rendered_video() -> None:
+    assert compute_reel_script_readiness(
+        unresolved_facts=[], script_requirements_complete=True,
+    ) == PRODUCTION_SCRIPT
 
 
 # ---------------------------------------------------------------------------

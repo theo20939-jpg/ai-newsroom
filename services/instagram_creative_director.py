@@ -116,6 +116,10 @@ class AudienceFacingCopyError(ValueError):
     """Raised when final copy leaks an internal/service label into audience-facing text."""
 
 
+class UngroundedTrendClaimError(ValueError):
+    """Raised when non-platform evidence is presented as an Instagram-native trend."""
+
+
 @dataclass(frozen=True)
 class InstagramEditorialDecisionInput:
     source_type: str
@@ -125,6 +129,9 @@ class InstagramEditorialDecisionInput:
     account_context: str = ""
     product_context: str = ""
     trend_context: str = ""
+    trend_signal_type: str | None = None
+    trend_signal_provenance: str | None = None
+    trend_signal_is_platform_native: bool = False
     recent_content_context: str = ""
     executable_formats: list[str] = field(default_factory=lambda: ["single", "carousel", "reel"])
     locale: str = "ru"
@@ -245,7 +252,10 @@ def _build_decision_user_text(decision_input: InstagramEditorialDecisionInput) -
         f"BRAND/ACCOUNT POLICY:\n{decision_input.brand_context}\n"
         f"ACCOUNT STATE:\n{decision_input.account_context}\n"
         f"CURRENT PRODUCT TRUTH:\n{decision_input.product_context}\n"
-        f"TREND SIGNAL (may be absent or a bad fit):\n{decision_input.trend_context or '(none)'}\n"
+        f"TREND SIGNAL TYPE: {decision_input.trend_signal_type or '(none)'}\n"
+        f"TREND SIGNAL PROVENANCE: {decision_input.trend_signal_provenance or '(none)'}\n"
+        f"INSTAGRAM-NATIVE SIGNAL: {str(decision_input.trend_signal_is_platform_native).lower()}\n"
+        f"TREND/MOMENTUM EVIDENCE (may be absent or a bad fit):\n{decision_input.trend_context or '(none)'}\n"
         f"RECENT/IN-FLIGHT INSTAGRAM CONTENT:\n{decision_input.recent_content_context or '(none)'}\n"
         f"EVIDENCE BULLETS:\n{evidence}"
     )
@@ -254,6 +264,24 @@ def _build_decision_user_text(decision_input: InstagramEditorialDecisionInput) -
 _CYRILLIC_RE = re.compile(r"[А-Яа-яЁё]")
 _LATIN_WORD_RE = re.compile(r"[A-Za-z][A-Za-z'-]*")
 _VISIBLE_SERVICE_LABEL_RE = re.compile(r"(?im)^\s*(?:CTA|CALL\s+TO\s+ACTION)\s*:")
+_UNSUPPORTED_PLATFORM_TREND_CLAIM_RE = re.compile(
+    r"(?i)(?:(?:instagram|reels).{0,40}(?:тренд|вирус|viral|audio|аудио|формат)|"
+    r"(?:тренд|вирус|viral|audio|аудио|формат).{0,40}(?:instagram|reels))"
+)
+
+
+def assert_trend_rationale_grounded(
+    rationale: str | None, *, signal_type: str | None, provenance: str | None,
+    is_platform_native: bool,
+) -> None:
+    if not rationale or is_platform_native:
+        return
+    unsupported = _UNSUPPORTED_PLATFORM_TREND_CLAIM_RE.findall(rationale)
+    if unsupported:
+        raise UngroundedTrendClaimError(
+            "Director claimed an Instagram-native trend without platform-native evidence: "
+            f"{unsupported!r}; signal_type={signal_type!r}; provenance={provenance!r}"
+        )
 
 
 def assert_russian_final_text(text_fields: list[str], *, locale: str = "ru") -> None:
@@ -318,6 +346,12 @@ async def generate_editorial_decision(
         raise CreativeDirectorUnavailableError("no structured output returned")
     decision = InstagramEditorialDecision.model_validate(outcome.response.structured_output)
     assert_evidence_grounded(decision.evidence_used, decision_input.allowed_evidence)
+    assert_trend_rationale_grounded(
+        decision.trend_rationale,
+        signal_type=decision_input.trend_signal_type,
+        provenance=decision_input.trend_signal_provenance,
+        is_platform_native=decision_input.trend_signal_is_platform_native,
+    )
     _enforce_output_policy(
         [
             decision.why_now, decision.audience_value, decision.angle, decision.format_reason,

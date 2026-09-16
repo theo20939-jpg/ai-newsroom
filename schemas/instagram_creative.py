@@ -47,6 +47,10 @@ class InstagramEditorialDecision(BaseModel):
     creative_direction: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
     product_connection: str | None = Field(default=None, max_length=_MEDIUM_TEXT_MAX_LENGTH)
     trend_rationale: str | None = Field(default=None, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    # Deterministic Phase A.1 metadata is attached after generation from the supplied normalized
+    # signal; it is not authored by the model and therefore cannot invent provenance.
+    trend_signal_type: str | None = Field(default=None, max_length=50)
+    trend_signal_provenance: str | None = Field(default=None, max_length=50)
     supplementary_story_idea: str | None = Field(default=None, max_length=_MEDIUM_TEXT_MAX_LENGTH)
     evidence_used: list[str] = Field(default_factory=list)
 

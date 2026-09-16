@@ -84,7 +84,15 @@ def _editorial_decision_lines(package: InstagramContentPackage) -> list[str]:
         ("УГОЛ", decision.get("angle")),
         ("ФОРМАТ", decision.get("format_reason")),
         ("ПРОДУКТ", decision.get("product_connection") or "нет"),
-        ("ТРЕНД", decision.get("trend_rationale") or "нет"),
+        (
+            "СИГНАЛ",
+            " · ".join(
+                str(value) for value in (
+                    decision.get("trend_signal_type"), decision.get("trend_signal_provenance"),
+                ) if value
+            ) or "нет",
+        ),
+        ("ОБОСНОВАНИЕ СИГНАЛА", decision.get("trend_rationale") or "нет"),
         ("ДУБЛИКАТЫ", decision.get("duplication_rationale")),
     ]
     return [f"<b>{label}:</b> {_esc(str(value))}" for label, value in values if value]

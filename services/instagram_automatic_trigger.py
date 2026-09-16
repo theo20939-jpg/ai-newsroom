@@ -66,6 +66,7 @@ from services.instagram_creative_director import (
     CreativeLanguageError,
     InstagramEditorialDecisionInput,
     UngroundedEvidenceError,
+    UngroundedTrendClaimError,
     generate_editorial_decision,
 )
 from services.instagram_director_context import (
@@ -102,8 +103,17 @@ from services.instagram_telegram_package_presenter import (
     present_reel,
     present_single,
 )
+from services.instagram_trend_radar import (
+    TrendSignal,
+    TrendSignalProvenance,
+    TrendSignalType,
+)
 from services.social_launch_context_service import get_current_context
-from services.story_memory import compute_entity_evidence, extract_story_signature, score_candidate
+from services.story_memory import (
+    compute_entity_evidence,
+    extract_story_signature,
+    score_candidate,
+)
 from services.video_discovery_persistence import (
     get_video_candidates_for_event,
     select_best_video_candidate,
@@ -127,6 +137,8 @@ class InstagramTriggerCandidateOutcome:
     opportunity_id: str | None = None
     opportunity_type: str | None = None
     trend_signal: str | None = None
+    trend_signal_type: str | None = None
+    trend_signal_provenance: str | None = None
     why_now: str | None = None
     audience_value: str | None = None
     angle: str | None = None
@@ -240,10 +252,10 @@ def _story_memory_titles_are_coherent(
     )
 
 
-async def _story_memory_trend_context(
+async def _story_memory_trend_signal(
     session: Any, *, canonical_story_id: str, source_event_id: str,
-) -> str:
-    """Normalize the existing Story Memory cluster into a bounded discussion-trend signal.
+) -> TrendSignal | None:
+    """Normalize the existing Story Memory cluster into bounded discussion momentum.
 
     The evidence gate (>=3 events and >=2 sources in 48h) is the same threshold used by the
     repository's previous autonomous trend canary. No crawler, table or parallel ranking service
@@ -254,11 +266,11 @@ async def _story_memory_trend_context(
         story_uuid = UUID(canonical_story_id)
         event_uuid = UUID(source_event_id)
     except ValueError:
-        return ""
+        return None
     source_event = await session.get(NewsEvent, event_uuid)
     story = await session.get(Story, story_uuid)
     if source_event is None or story is None:
-        return ""
+        return None
     cutoff = datetime.now(UTC) - timedelta(hours=48)
     stmt = (
         select(NewsEvent.id, NewsEvent.source_id, NewsEvent.title, NewsEvent.collected_at)
@@ -276,13 +288,31 @@ async def _story_memory_trend_context(
     ]
     distinct_sources = {str(row.source_id) for row in coherent_rows}
     if len(coherent_rows) < 3 or len(distinct_sources) < 2:
-        return ""
-    titles = " | ".join(str(row.title) for row in coherent_rows[:5])
-    return (
-        "kind=discussion; source=Newsroom Story Memory; window=48h; "
-        f"coherent_events={len(coherent_rows)}; distinct_sources={len(distinct_sources)}; "
-        f"excluded_incoherent={len(rows) - len(coherent_rows)}; evidence_titles={titles}"
+        return None
+    evidence = [str(row.title) for row in coherent_rows[:5]]
+    return TrendSignal(
+        signal_type=TrendSignalType.DISCUSSION_MOMENTUM,
+        provenance=TrendSignalProvenance.STORY_MEMORY,
+        topic=story.title,
+        evidence=evidence,
+        freshness_hours=48,
+        confidence=min(0.9, 0.5 + 0.05 * len(distinct_sources)),
+        relevance=(
+            f"coherent multi-source discussion; excluded_incoherent={len(rows) - len(coherent_rows)}"
+        ),
+        event_count=len(coherent_rows),
+        source_count=len(distinct_sources),
     )
+
+
+async def _story_memory_trend_context(
+    session: Any, *, canonical_story_id: str, source_event_id: str,
+) -> str:
+    """Compatibility renderer for diagnostics; production uses the structured signal."""
+    signal = await _story_memory_trend_signal(
+        session, canonical_story_id=canonical_story_id, source_event_id=source_event_id,
+    )
+    return signal.to_director_context() if signal is not None else ""
 
 
 def _recent_history_context(history: list[Any]) -> tuple[str, list[str]]:
@@ -304,6 +334,7 @@ def _recent_history_context(history: list[Any]) -> tuple[str, list[str]]:
 
 async def _build_phase_a_editorial_plan(
     session: Any, *, opportunity: ContentOpportunity, source_summary: str, trend_context: str,
+    trend_signal: TrendSignal | None,
     gateway: Any, prompt_repository: Any, allow_duplicate_canary: bool,
 ) -> _PhaseAEditorialPlan:
     now = datetime.now(UTC)
@@ -325,6 +356,9 @@ async def _build_phase_a_editorial_plan(
             account_context=account_context,
             product_context=product_context,
             trend_context=trend_context,
+            trend_signal_type=trend_signal.signal_type.value if trend_signal else None,
+            trend_signal_provenance=trend_signal.provenance.value if trend_signal else None,
+            trend_signal_is_platform_native=trend_signal.is_platform_native if trend_signal else False,
             recent_content_context=recent_note,
         ),
     )
@@ -343,6 +377,8 @@ async def _build_phase_a_editorial_plan(
     decision_payload = decision.model_dump()
     decision_payload.update(
         {
+            "trend_signal_type": trend_signal.signal_type.value if trend_signal else None,
+            "trend_signal_provenance": trend_signal.provenance.value if trend_signal else None,
             "duplication_decision": "BLOCK" if duplicate.blocked else "ALLOW",
             "duplication_rationale": duplicate.reason,
             "recent_history_count": len(duplicate.recent_history),
@@ -389,6 +425,8 @@ def _decision_outcome(
         delivery_sent=delivery_sent, delivery_reason=delivery_reason, delivery_id=delivery_id,
         opportunity_id=opportunity.id, opportunity_type=decision.get("opportunity_type"),
         trend_signal=trend_signal or None, why_now=decision.get("why_now"),
+        trend_signal_type=decision.get("trend_signal_type"),
+        trend_signal_provenance=decision.get("trend_signal_provenance"),
         audience_value=decision.get("audience_value"), angle=decision.get("angle"),
         chosen_format=decision.get("recommended_format"), product_connection=decision.get("product_connection"),
         duplication_decision=decision.get("duplication_rationale"), recent_history_inputs=compact_history,
@@ -438,12 +476,13 @@ async def evaluate_and_submit_instagram_candidate(
         return InstagramTriggerCandidateOutcome(event_id=event_id, accepted=False, reason=f"treatment={treatment.treatment}")
 
     canonical_story_id = await _resolve_canonical_story_id(session, event_id) if phase_a_enabled else event_id
-    trend_context = (
-        await _story_memory_trend_context(
+    normalized_trend_signal = (
+        await _story_memory_trend_signal(
             session, canonical_story_id=canonical_story_id, source_event_id=event_id,
         )
-        if phase_a_enabled else ""
+        if phase_a_enabled else None
     )
+    trend_context = normalized_trend_signal.to_director_context() if normalized_trend_signal else ""
     opportunity = ContentOpportunity(
         id=event_id, source_type=OpportunitySourceType.NEWS, story_id=canonical_story_id,
         news_value=1.0, audience_relevance=0.5, product_mention_allowed=False,
@@ -452,7 +491,8 @@ async def evaluate_and_submit_instagram_candidate(
     return await evaluate_and_submit_instagram_opportunity(
         session, bot, opportunity=opportunity, opportunity_summary=event_title,
         gateway=gateway, prompt_repository=prompt_repository, source_url=source_url,
-        source_event_id=event_id, trend_context=trend_context, phase_a_enabled=phase_a_enabled,
+        source_event_id=event_id, trend_context=trend_context, trend_signal=normalized_trend_signal,
+        phase_a_enabled=phase_a_enabled,
     )
 
 # ---------------------------------------------------------------------------
@@ -470,7 +510,8 @@ async def evaluate_and_submit_instagram_candidate(
 async def evaluate_and_submit_instagram_opportunity(
     session: Any, bot: Any, *, opportunity: ContentOpportunity, opportunity_summary: str,
     gateway: Any, prompt_repository: Any, source_url: str | None = None,
-    source_event_id: str | None = None, trend_context: str = "", allow_duplicate_canary: bool = False,
+    source_event_id: str | None = None, trend_context: str = "",
+    trend_signal: TrendSignal | None = None, allow_duplicate_canary: bool = False,
     phase_a_enabled: bool = False,
 ) -> InstagramTriggerCandidateOutcome:
     """Takes an ALREADY-BUILT, ALREADY-RANKED `ContentOpportunity` (any `source_type` - selection/
@@ -496,12 +537,13 @@ async def evaluate_and_submit_instagram_opportunity(
         try:
             phase_a_plan = await _build_phase_a_editorial_plan(
                 session, opportunity=opportunity, source_summary=opportunity_summary,
-                trend_context=trend_context, gateway=gateway, prompt_repository=prompt_repository,
+                trend_context=trend_context, trend_signal=trend_signal,
+                gateway=gateway, prompt_repository=prompt_repository,
                 allow_duplicate_canary=allow_duplicate_canary,
             )
         except (
             CreativeDirectorUnavailableError, UngroundedEvidenceError, CreativeFactSafetyError,
-            CreativeLanguageError, AudienceFacingCopyError,
+            CreativeLanguageError, AudienceFacingCopyError, UngroundedTrendClaimError,
         ) as exc:
             logger.warning(
                 "instagram_editorial_decision_failed",
@@ -609,16 +651,12 @@ async def evaluate_and_submit_instagram_opportunity(
         else reel.hook if reel is not None
         else carousel.hook_slide.slide_copy if carousel is not None else None
     )
-    # CONTROLLED ROLLOUT: a REEL package's script-readiness axis (services/instagram_reel_script_
-    # readiness.py, Phase 3) - `unresolved_facts` stays empty by construction here: this lane's own
-    # opportunity sources (_product_opportunities_from_campaigns/_product_opportunities_from_context,
-    # services/director_execution_service.py) only ever build evidence from CONFIRMED Product facts
-    # in the first place, so nothing UNKNOWN/UNDECIDED reaches the Creative Director to begin with.
-    # `asset_requirements_satisfiable=False` is the honest default - no real filming-asset pipeline
-    # feeds the PRODUCT lane; external NEWS with an existing video candidate can satisfy this
-    # asset-readiness signal while the script itself remains separate from an mp4.
+    # Script readiness is independent of video-file availability. Unknown/undecided required facts
+    # would still make this a concept; this lane supplies only grounded evidence and the generated
+    # Reel has already passed the structured hook/scene/script schema. An external mp4 remains an
+    # optional, separately disclosed package field and is never fabricated here.
     reel_script_readiness = (
-        compute_reel_script_readiness(unresolved_facts=[], asset_requirements_satisfiable=has_video_asset and _is_external_news(opportunity))
+        compute_reel_script_readiness(unresolved_facts=[])
         if format_decision.recommended_format is ContentFormat.REEL else None
     )
     shadow_plan = ShadowPlanResult(
