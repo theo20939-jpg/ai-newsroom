@@ -3,10 +3,10 @@
 # currently running writable image-storage mount.
 services:
   content_worker:
-    image: ai-newsroom-instagram-phase-a-editorial-intelligence:20260916-2
+    image: ai-newsroom-instagram-phase-a-editorial-intelligence:20260916-3
     build: !reset null
   telegram_bot:
-    image: ai-newsroom-instagram-phase-a-editorial-intelligence:20260916-2
+    image: ai-newsroom-instagram-phase-a-editorial-intelligence:20260916-3
     build: !reset null
     volumes:
       - image_storage_data:/data/image_storage
