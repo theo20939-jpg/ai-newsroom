@@ -54,7 +54,7 @@ def test_preview_caption_reuses_the_real_v81_news_card_renderer():
     (include_ninja_pulse_footer=True) - the same contract worker/content_cycle.py's own NEWS send
     already uses, since this exact function is also what real RECAP publication calls."""
     caption = render_final_post_preview_caption("My Title", "My body.")
-    assert caption == '<b>My Title</b>\n\nMy body.\n\n<a href="https://t.me/nnjvpn">NINJA PULSE. Подписаться 🥷</a>'
+    assert caption == '<b>My Title</b>\n\nMy body.\n\n<a href="https://t.me/ninja_pulse">NINJA PULSE. Подписаться 🥷</a>'
 
 
 def test_control_text_pending_is_short_and_internal():

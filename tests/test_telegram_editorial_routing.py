@@ -114,7 +114,7 @@ async def test_text_only_send_disables_link_preview() -> None:
 
     await send_to_editorial_destination(
         bot, EditorialDestination.NEWS,
-        'Post text with <a href="https://t.me/nnjvpn">NINJA PULSE. Подписаться 🥷</a>', dry_run=False,
+        'Post text with <a href="https://t.me/ninja_pulse">NINJA PULSE. Подписаться 🥷</a>', dry_run=False,
     )
 
     _, kwargs = bot.send_message.call_args

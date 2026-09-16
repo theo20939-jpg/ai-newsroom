@@ -137,7 +137,7 @@ def test_ninja_pulse_footer_is_disabled_by_default_for_v81() -> None:
     output = _v81()
     html = render_v81_news_card_html(output, treatment=STANDARD)
     assert "NINJA PULSE" not in html
-    assert "t.me/nnjvpn" not in html
+    assert "t.me/ninja_pulse" not in html
 
 
 def test_ninja_pulse_footer_can_still_be_explicitly_enabled() -> None:

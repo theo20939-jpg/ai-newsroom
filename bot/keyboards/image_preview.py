@@ -105,7 +105,7 @@ def build_source_only_keyboard(
 # PRESENTATION RECOVERY (2026-09-02): canonical NEWS-family editorial-send keyboard authority -
 # the single builder every real production send (NEWS/BREAKING/DATA/QUOTE/RECAP) must use. A prior
 # implementation (build_source_and_cta_keyboard(), removed here) always attached a subscribe
-# button ("NINJA PULSE. Подписаться 🥷" -> https://t.me/nnjvpn) and was reached only for non-NEWS
+# button ("NINJA PULSE. Подписаться 🥷" -> https://t.me/ninja_pulse) and was reached only for non-NEWS
 # presentation types, silently losing the meme button in the same step - the exact root cause of
 # both the observed unwanted-subscribe-button and missing-meme-button production symptoms. This
 # function is a pure composition of the two already-correct, already-tested primitives below - no

@@ -576,7 +576,7 @@ async def test_router_mode_story_update_with_existing_root_replies_to_it(
     # html() output).
     sent_text = fake_bot.send_photo.call_args.kwargs["caption"]
     assert sent_text.count("NINJA PULSE. Подписаться 🥷") == 1
-    assert '<a href="https://t.me/nnjvpn">NINJA PULSE. Подписаться 🥷</a>' in sent_text
+    assert '<a href="https://t.me/ninja_pulse">NINJA PULSE. Подписаться 🥷</a>' in sent_text
 
     async with factory() as session:
         delivery = (

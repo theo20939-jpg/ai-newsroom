@@ -137,7 +137,7 @@ def test_source_button_never_carries_the_ninja_pulse_subscribe_cta() -> None:
     for row in keyboard.inline_keyboard:
         for button in row:
             assert "Подписаться" not in button.text
-            assert button.url != "https://t.me/nnjvpn"
+            assert button.url != "https://t.me/ninja_pulse"
 
 
 def test_exactly_one_source_button_never_duplicated() -> None:

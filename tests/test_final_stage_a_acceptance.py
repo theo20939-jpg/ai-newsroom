@@ -173,7 +173,7 @@ def test_render_final_html_includes_ninja_pulse_cta_exactly_once() -> None:
     html, plain_text = stage_a.render_final_html(outcome)
     assert html.count("NINJA PULSE. Подписаться 🥷") == 1
     assert plain_text.count("NINJA PULSE. Подписаться 🥷") == 1
-    assert '<a href="https://t.me/nnjvpn">NINJA PULSE. Подписаться 🥷</a>' in html
+    assert '<a href="https://t.me/ninja_pulse">NINJA PULSE. Подписаться 🥷</a>' in html
 
 
 # ---------------------------------------------------------------------------
@@ -288,7 +288,7 @@ def test_manifest_and_persist_package_roundtrip_hashes(tmp_path: Path) -> None:
 # NINJA PULSE CTA (Phase 23.1Q) exactly once, alongside the unchanged source-only keyboard.
 # ---------------------------------------------------------------------------
 
-_CTA_ANCHOR = '<a href="https://t.me/nnjvpn">NINJA PULSE. Подписаться 🥷</a>'
+_CTA_ANCHOR = '<a href="https://t.me/ninja_pulse">NINJA PULSE. Подписаться 🥷</a>'
 _CTA_TEXT = "NINJA PULSE. Подписаться 🥷"
 
 
@@ -351,7 +351,7 @@ def test_validate_final_package_contract_rejects_bare_ninja_pulse_url_without_pr
     url = "https://example.com/real-article"
     with pytest.raises(stage_a.StageAContractError):
         stage_a.validate_final_package_contract(
-            html=f"<b>Headline</b>\nBody.\n{_CTA_TEXT} https://t.me/nnjvpn",
+            html=f"<b>Headline</b>\nBody.\n{_CTA_TEXT} https://t.me/ninja_pulse",
             plain_text=f"Headline\nBody.\n{_CTA_TEXT}",
             keyboard=_valid_keyboard(url), source_url=url, destination=_valid_destination(),
         )
@@ -398,7 +398,7 @@ def test_validate_final_package_contract_rejects_multiple_buttons() -> None:
     html, plain_text = _valid_html_and_plain_text()
     two_button_keyboard = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="🔗 Источник", url=url),
-        InlineKeyboardButton(text="NINJA PULSE. Подписаться 🥷", url="https://t.me/nnjvpn"),
+        InlineKeyboardButton(text="NINJA PULSE. Подписаться 🥷", url="https://t.me/ninja_pulse"),
     ]])
     with pytest.raises(stage_a.StageAContractError):
         stage_a.validate_final_package_contract(

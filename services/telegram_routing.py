@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 # NEWS Output Stability Fix (Case G, docs/news_output_stability_forensic_report.md §8): Telegram's
 # own default behavior is to scan a text message for the first URL and expand it into a large
 # preview card - confirmed, real, live observation: the NINJA PULSE footer's own
-# <a href="https://t.me/nnjvpn"> link is the only link in the message body for the majority of
+# <a href="https://t.me/ninja_pulse"> link is the only link in the message body for the majority of
 # text-only NEWS sends (the source URL itself is never embedded in the text, only as the separate
 # inline button), so Telegram expanded THAT link into the NINJA VPN channel's own preview card on
 # every text-only post. Applied only to send_to_editorial_destination()'s one bot.send_message()

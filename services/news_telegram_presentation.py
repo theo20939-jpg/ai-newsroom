@@ -426,7 +426,7 @@ _V8_SOFT_CEILING_BY_TREATMENT: dict[str, int] = {BRIEF: 280, STANDARD: 450, MAJO
 # a genuinely major story") - a wider grace margin for MAJOR only, still never a hard wall.
 _V8_EXCEPTIONAL_CEILING_BY_TREATMENT: dict[str, int] = {BRIEF: 280, STANDARD: 450, MAJOR: 750}
 
-_NINJA_PULSE_URL = "https://t.me/nnjvpn"
+_NINJA_PULSE_URL = "https://t.me/ninja_pulse"
 _NINJA_PULSE_TEXT = "NINJA PULSE. Подписаться 🥷"
 
 

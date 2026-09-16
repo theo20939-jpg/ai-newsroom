@@ -875,7 +875,7 @@ async def test_ninja_pulse_cta_present_once_in_photo_caption_with_source_only_ke
     _, kwargs = fake_bot.send_photo.call_args
     caption = kwargs["caption"]
     assert caption.count("NINJA PULSE. Подписаться 🥷") == 1
-    assert '<a href="https://t.me/nnjvpn">NINJA PULSE. Подписаться 🥷</a>' in caption
+    assert '<a href="https://t.me/ninja_pulse">NINJA PULSE. Подписаться 🥷</a>' in caption
     # Source button (a completely separate mechanism - the inline keyboard) must be unaffected.
     keyboard = kwargs["reply_markup"]
     assert keyboard is not None
@@ -928,7 +928,7 @@ async def test_ninja_pulse_cta_present_once_in_the_no_image_card_text(
     assert len(captured_html) == 1
     sent_text = captured_html[0]
     assert sent_text.count("NINJA PULSE. Подписаться 🥷") == 1
-    assert '<a href="https://t.me/nnjvpn">NINJA PULSE. Подписаться 🥷</a>' in sent_text
+    assert '<a href="https://t.me/ninja_pulse">NINJA PULSE. Подписаться 🥷</a>' in sent_text
 
     # The card text above was never actually sent as a finished post - per the Founder
     # invariant, no visual resolved means HOLD, not silent text completion.

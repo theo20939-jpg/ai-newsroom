@@ -176,14 +176,14 @@ def test_case_n_useful_ending_is_included() -> None:
 
 def test_case_o_footer_exact_text_and_link() -> None:
     footer = build_ninja_pulse_footer_html()
-    assert footer == '<a href="https://t.me/nnjvpn">NINJA PULSE. Подписаться 🥷</a>'
+    assert footer == '<a href="https://t.me/ninja_pulse">NINJA PULSE. Подписаться 🥷</a>'
 
 
 def test_case_p_footer_appears_exactly_once() -> None:
     output = _v8(ending="A useful ending.", expandable_details="Some expandable detail.")
     html = render_v8_news_card_html(output, treatment=STANDARD)
     assert html.count("NINJA PULSE") == 1
-    assert html.count('href="https://t.me/nnjvpn"') == 1
+    assert html.count('href="https://t.me/ninja_pulse"') == 1
 
 
 # ---------------------------------------------------------------------------
@@ -209,13 +209,13 @@ def test_case_r_render_function_has_no_source_url_parameter_at_all() -> None:
 
 
 def test_case_s_ninja_pulse_url_is_never_shown_as_plain_visible_text() -> None:
-    """The raw https://t.me/nnjvpn string only ever appears inside the href attribute value -
+    """The raw https://t.me/ninja_pulse string only ever appears inside the href attribute value -
     never as the anchor's own visible text (which must be exactly "NINJA PULSE. Подписаться 🥷")."""
     footer = build_ninja_pulse_footer_html()
-    assert footer.startswith('<a href="https://t.me/nnjvpn">')
+    assert footer.startswith('<a href="https://t.me/ninja_pulse">')
     visible_text = footer.split(">", 1)[1].rsplit("<", 1)[0]
     assert visible_text == "NINJA PULSE. Подписаться 🥷"
-    assert "https://t.me/nnjvpn" not in visible_text
+    assert "https://t.me/ninja_pulse" not in visible_text
 
 
 # ---------------------------------------------------------------------------
@@ -233,13 +233,13 @@ def test_case_t_footer_text_never_reaches_fact_safety_or_content_draft_extractio
     output = _v8()
     _title, body = _extract_title_and_body(output)
     assert "NINJA PULSE" not in body
-    assert "t.me/nnjvpn" not in body
+    assert "t.me/ninja_pulse" not in body
 
     extracted = _extract_draft_text(output)
     assert extracted is not None
     _title2, fact_safety_text = extracted
     assert "NINJA PULSE" not in fact_safety_text
-    assert "t.me/nnjvpn" not in fact_safety_text
+    assert "t.me/ninja_pulse" not in fact_safety_text
 
 
 # ---------------------------------------------------------------------------

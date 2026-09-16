@@ -427,7 +427,7 @@ async def test_news_enforce_keyboard_is_source_only_no_cta(
     all_button_text = " ".join(b.text for row in rows for b in row)
     all_button_urls = [b.url for row in rows for b in row if b.url]
     assert "NINJA PULSE" not in all_button_text
-    assert "https://t.me/nnjvpn" not in all_button_urls
+    assert "https://t.me/ninja_pulse" not in all_button_urls
     assert "😂 Сгенерировать мем" in all_button_text  # canonical keyboard - present, never dropped
 
 
@@ -533,7 +533,7 @@ async def test_non_news_presentation_type_gets_canonical_source_and_meme_keyboar
     all_button_text = " ".join(b.text for row in rows for b in row)
     all_button_urls = [b.url for row in rows for b in row if b.url]
     assert "NINJA PULSE" not in all_button_text
-    assert "https://t.me/nnjvpn" not in all_button_urls
+    assert "https://t.me/ninja_pulse" not in all_button_urls
     assert "🔗 Источник" in all_button_text
     assert "😂 Сгенерировать мем" in all_button_text
 
