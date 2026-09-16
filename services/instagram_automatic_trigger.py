@@ -43,6 +43,7 @@ from sqlalchemy import select
 from core.config import settings
 from database.models.news_event import NewsEvent
 from database.models.social_launch_context import SocialLaunchPlatform
+from database.models.story import Story
 from database.models.story_link import NewsEventStoryLink
 from services.business_context_snapshot_service import get_business_context_snapshot
 from services.editorial_treatment import MAJOR, EditorialTreatmentDecision
@@ -102,6 +103,7 @@ from services.instagram_telegram_package_presenter import (
     present_single,
 )
 from services.social_launch_context_service import get_current_context
+from services.story_memory import compute_entity_evidence, extract_story_signature, score_candidate
 from services.video_discovery_persistence import (
     get_video_candidates_for_event,
     select_best_video_candidate,
@@ -192,7 +194,55 @@ async def _resolve_canonical_story_id(session: Any, event_id: str) -> str:
     return str(link.story_id) if link is not None else event_id
 
 
-async def _story_memory_trend_context(session: Any, *, canonical_story_id: str) -> str:
+_STORY_TREND_COHERENCE_FLOOR = 0.35
+_STORY_TREND_CORROBORATING_TITLE_FLOOR = 0.55
+_STORY_TREND_NON_IDENTITY_ENTITIES = {
+    "what", "why", "how", "who", "where", "when",
+    "что", "почему", "как", "кто", "где", "когда",
+}
+
+
+def _story_memory_titles_are_coherent(
+    *, source_event: NewsEvent, story: Story, candidate_title: str,
+) -> bool:
+    """Reuse Story Memory's current identity score before treating a stored cluster as a trend.
+
+    Historical Story links can outlive matcher calibration improvements. Re-scoring each row
+    prevents a cluster joined only by generic headline grammar (for example, unrelated headlines
+    beginning with "What" or "Why") from becoming Instagram trend evidence. The 0.35 floor is
+    Story Memory's existing low-evidence boundary: appropriate for topic-level discussion
+    coherence, while the stricter 0.65 boundary remains reserved for same-event identity. It must
+    also carry a distinctive shared entity (excluding the closed question-word class that caused
+    the observed false clusters) or Story Memory's existing 0.55 corroborating-title overlap, so
+    category/topic bonuses and generic grammar can never carry the decision alone.
+    """
+    signature = extract_story_signature(
+        source_event.title, source_event.category, aggressive_entities=True,
+    )
+    candidate_signature = extract_story_signature(
+        candidate_title, source_event.category, aggressive_entities=True,
+    )
+    entity_evidence = compute_entity_evidence(
+        signature.entities, candidate_signature.entities,
+    )
+    combined, _entity_overlap, title_overlap = score_candidate(
+        source_event.title,
+        signature,
+        source_event.category,
+        candidate_title,
+        story,
+    )
+    shared_specific_entities = set(entity_evidence.shared_distinctive) - _STORY_TREND_NON_IDENTITY_ENTITIES
+    has_specific_identity = bool(shared_specific_entities)
+    has_corroborating_wording = title_overlap >= _STORY_TREND_CORROBORATING_TITLE_FLOOR
+    return combined >= _STORY_TREND_COHERENCE_FLOOR and (
+        has_specific_identity or has_corroborating_wording
+    )
+
+
+async def _story_memory_trend_context(
+    session: Any, *, canonical_story_id: str, source_event_id: str,
+) -> str:
     """Normalize the existing Story Memory cluster into a bounded discussion-trend signal.
 
     The evidence gate (>=3 events and >=2 sources in 48h) is the same threshold used by the
@@ -202,7 +252,12 @@ async def _story_memory_trend_context(session: Any, *, canonical_story_id: str) 
     """
     try:
         story_uuid = UUID(canonical_story_id)
+        event_uuid = UUID(source_event_id)
     except ValueError:
+        return ""
+    source_event = await session.get(NewsEvent, event_uuid)
+    story = await session.get(Story, story_uuid)
+    if source_event is None or story is None:
         return ""
     cutoff = datetime.now(UTC) - timedelta(hours=48)
     stmt = (
@@ -213,13 +268,20 @@ async def _story_memory_trend_context(session: Any, *, canonical_story_id: str) 
         .limit(20)
     )
     rows = (await session.execute(stmt)).all()
-    distinct_sources = {str(row.source_id) for row in rows}
-    if len(rows) < 3 or len(distinct_sources) < 2:
+    coherent_rows = [
+        row for row in rows
+        if row.id == event_uuid or _story_memory_titles_are_coherent(
+            source_event=source_event, story=story, candidate_title=str(row.title),
+        )
+    ]
+    distinct_sources = {str(row.source_id) for row in coherent_rows}
+    if len(coherent_rows) < 3 or len(distinct_sources) < 2:
         return ""
-    titles = " | ".join(str(row.title) for row in rows[:5])
+    titles = " | ".join(str(row.title) for row in coherent_rows[:5])
     return (
         "kind=discussion; source=Newsroom Story Memory; window=48h; "
-        f"events={len(rows)}; distinct_sources={len(distinct_sources)}; evidence_titles={titles}"
+        f"coherent_events={len(coherent_rows)}; distinct_sources={len(distinct_sources)}; "
+        f"excluded_incoherent={len(rows) - len(coherent_rows)}; evidence_titles={titles}"
     )
 
 
@@ -377,7 +439,9 @@ async def evaluate_and_submit_instagram_candidate(
 
     canonical_story_id = await _resolve_canonical_story_id(session, event_id) if phase_a_enabled else event_id
     trend_context = (
-        await _story_memory_trend_context(session, canonical_story_id=canonical_story_id)
+        await _story_memory_trend_context(
+            session, canonical_story_id=canonical_story_id, source_event_id=event_id,
+        )
         if phase_a_enabled else ""
     )
     opportunity = ContentOpportunity(

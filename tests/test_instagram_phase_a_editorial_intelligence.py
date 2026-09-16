@@ -12,10 +12,13 @@ from database.models.instagram_editorial_delivery import (
     InstagramEditorialDelivery,
     InstagramEditorialDeliveryState,
 )
+from database.models.news_event import EventCategory, NewsEvent
+from database.models.story import Story
 from integrations.llm_gateway.protocol import GenerateResponse
 from integrations.prompts.file_repository import FilePromptRepository
 from schemas.capability import CapabilityUsage
 from schemas.instagram_creative import InstagramEditorialDecision
+from services.instagram_automatic_trigger import _story_memory_titles_are_coherent
 from services.instagram_creative_director import (
     AudienceFacingCopyError,
     CreativeLanguageError,
@@ -183,6 +186,26 @@ def test_director_can_select_every_executable_format(fmt: str) -> None:
 
 def test_trend_taxonomy_distinguishes_supported_signal_types() -> None:
     assert {kind.value for kind in TrendKind} == {"topic", "meme_culture", "format", "discussion"}
+
+
+def test_story_memory_trend_coherence_rejects_generic_question_word_cluster() -> None:
+    source = NewsEvent(
+        id=uuid4(), source_id=uuid4(), title="What is a VPN kill switch and how does it work?",
+        category=EventCategory.GADGETS, hash=uuid4().hex,
+    )
+    story = Story(
+        id=uuid4(), title=source.title, category=EventCategory.GADGETS,
+        entities=["vpn"], keywords=["vpn", "kill", "switch"], topic_bucket="other",
+        first_event_id=source.id, event_count=2,
+    )
+    assert _story_memory_titles_are_coherent(
+        source_event=source, story=story,
+        candidate_title="What we learned applying formal methods to control AI agents",
+    ) is False
+    assert _story_memory_titles_are_coherent(
+        source_event=source, story=story,
+        candidate_title="What is a VPN kill switch and how does a VPN kill switch work?",
+    ) is True
 
 
 class _ScalarRows:
