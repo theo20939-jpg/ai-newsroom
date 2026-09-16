@@ -192,6 +192,30 @@ async def test_unsupported_story_fact_rejected() -> None:
 
 
 @pytest.mark.asyncio
+async def test_prompt_bullet_marker_does_not_make_exact_evidence_ungrounded() -> None:
+    """The model may retain the visual marker added by our prompt around an unchanged fact."""
+    gateway = FakeLLMGateway(generate_response=_response({
+        "creative_angle": "a", "visual_concept": "v", "on_image_copy": "c", "caption_direction": "c",
+        "cta": None, "asset_requirements": [],
+        "evidence_used": ["- OpenAI announced a new autonomous coding agent on 2026-09-04"],
+    }))
+    outcome = await generate_single_creative(gateway, _prompt_repository(), director_input=_base_input())
+    assert outcome.single is not None
+
+
+@pytest.mark.asyncio
+async def test_prompt_bullet_marker_does_not_hide_changed_evidence() -> None:
+    """Removing the presentation marker must not weaken exact factual grounding."""
+    gateway = FakeLLMGateway(generate_response=_response({
+        "creative_angle": "a", "visual_concept": "v", "on_image_copy": "c", "caption_direction": "c",
+        "cta": None, "asset_requirements": [],
+        "evidence_used": ["- OpenAI announced two autonomous coding agents on 2026-09-04"],
+    }))
+    with pytest.raises(UngroundedEvidenceError):
+        await generate_single_creative(gateway, _prompt_repository(), director_input=_base_input())
+
+
+@pytest.mark.asyncio
 async def test_gateway_failure_raises_unavailable_never_fabricates() -> None:
     gateway = FakeLLMGateway(generate_error=RuntimeError("provider outage"))
     with pytest.raises(CreativeDirectorUnavailableError):

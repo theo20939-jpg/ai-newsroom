@@ -184,8 +184,16 @@ class CreativeGenerationOutcome:
     generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+def _without_prompt_bullet(value: str) -> str:
+    """Remove only the presentation marker added by our own evidence prompt."""
+    return value.removeprefix("- ")
+
+
 def assert_evidence_grounded(claimed_evidence: list[str], allowed_evidence: list[str]) -> None:
-    ungrounded = [claim for claim in claimed_evidence if claim not in allowed_evidence]
+    ungrounded = [
+        claim for claim in claimed_evidence
+        if _without_prompt_bullet(claim) not in allowed_evidence
+    ]
     if ungrounded:
         raise UngroundedEvidenceError(
             f"Creative Director cited evidence not in the allowed set (possible invented fact): {ungrounded!r}"

@@ -10,7 +10,7 @@ system: >
   only when current product truth supports it. Use recent/in-flight history as a diversity and
   duplication signal, never as a rigid quota. Return concise editor-visible reasoning in Russian.
 rules:
-  - Use only supplied evidence for factual claims and list every used bullet verbatim in evidence_used.
+  - Use only supplied evidence for factual claims. Copy each used item's text verbatim into evidence_used, without the presentation-only leading "- " marker.
   - Do not invent product availability, features, tariffs, dates, links or claims.
   - External news may name third-party entities. Promotional/product opportunities may promote only a supported NINJA product.
   - Do not force a trend. NEWS_X_TREND or PRODUCT_X_TREND requires a concrete trend_rationale; otherwise choose NEWS, PRODUCT, CULTURE or EVERGREEN.
