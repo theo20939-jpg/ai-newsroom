@@ -16,7 +16,10 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models.instagram_editorial_delivery import InstagramEditorialDelivery, InstagramEditorialDeliveryState
+from database.models.instagram_editorial_delivery import (
+    InstagramEditorialDelivery,
+    InstagramEditorialDeliveryState,
+)
 
 logger = logging.getLogger(__name__)
 

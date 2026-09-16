@@ -46,17 +46,23 @@ from database.models.social_launch_context import SocialLaunchPlatform
 from database.models.story_link import NewsEventStoryLink
 from services.business_context_snapshot_service import get_business_context_snapshot
 from services.editorial_treatment import MAJOR, EditorialTreatmentDecision
-from services.image_persistence import EditorialImageCandidate, get_editorial_image_candidates, read_candidate_bytes
-from services.video_discovery_persistence import get_video_candidates_for_event, select_best_video_candidate
+from services.image_persistence import (
+    EditorialImageCandidate,
+    get_editorial_image_candidates,
+    read_candidate_bytes,
+)
 from services.instagram_art_validator import validate_instagram_art
-from services.instagram_content_opportunity import ContentOpportunity, OpportunitySourceType
+from services.instagram_content_opportunity import (
+    ContentOpportunity,
+    OpportunitySourceType,
+)
 from services.instagram_content_package import build_instagram_content_package
 from services.instagram_creative_director import (
     AudienceFacingCopyError,
     CreativeDirectorInput,
-    CreativeLanguageError,
     CreativeDirectorUnavailableError,
     CreativeFactSafetyError,
+    CreativeLanguageError,
     InstagramEditorialDecisionInput,
     UngroundedEvidenceError,
     generate_editorial_decision,
@@ -76,7 +82,11 @@ from services.instagram_editorial_delivery_state import (
 from services.instagram_editorial_gate import evaluate_instagram_editorial_gate
 from services.instagram_editorial_package_snapshot import build_package_snapshot
 from services.instagram_editorial_regeneration import build_default_regenerator
-from services.instagram_format_director import ContentFormat, FormatDecision, evaluate_format_shadow
+from services.instagram_format_director import (
+    ContentFormat,
+    FormatDecision,
+    evaluate_format_shadow,
+)
 from services.instagram_objective_selection import recommend_objective
 from services.instagram_platform_renderer import (
     render_instagram_carousel,
@@ -86,8 +96,16 @@ from services.instagram_platform_renderer import (
 from services.instagram_reel_script_readiness import compute_reel_script_readiness
 from services.instagram_shadow_pipeline import ShadowPlanResult
 from services.instagram_telegram_delivery import deliver_instagram_package
-from services.instagram_telegram_package_presenter import present_carousel, present_reel, present_single
+from services.instagram_telegram_package_presenter import (
+    present_carousel,
+    present_reel,
+    present_single,
+)
 from services.social_launch_context_service import get_current_context
+from services.video_discovery_persistence import (
+    get_video_candidates_for_event,
+    select_best_video_candidate,
+)
 
 logger = logging.getLogger(__name__)
 

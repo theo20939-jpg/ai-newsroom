@@ -24,7 +24,10 @@ from services.instagram_creative_director import (
     assert_russian_final_text,
     generate_editorial_decision,
 )
-from services.instagram_director_context import load_instagram_director_context, render_product_truth
+from services.instagram_director_context import (
+    load_instagram_director_context,
+    render_product_truth,
+)
 from services.instagram_editorial_delivery_state import (
     angle_similarity,
     check_instagram_editorial_duplicate,

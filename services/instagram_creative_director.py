@@ -42,7 +42,12 @@ from uuid import uuid4
 
 from capabilities.gateway_call import call_generate
 from database.models.editorial_task import TaskPriority
-from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, LLMGateway, Message
+from integrations.llm_gateway.protocol import (
+    ContentPart,
+    GenerateRequest,
+    LLMGateway,
+    Message,
+)
 from integrations.prompts.protocol import PromptRepository
 from schemas.capability import CapabilityCall, RuntimeContext
 from schemas.instagram_creative import (
@@ -51,7 +56,10 @@ from schemas.instagram_creative import (
     InstagramReelCreative,
     InstagramSingleCreative,
 )
-from services.instagram_format_director import ClaimViolationError, validate_package_claims
+from services.instagram_format_director import (
+    ClaimViolationError,
+    validate_package_claims,
+)
 
 SINGLE_PROMPT_NAME = "instagram_creative_director_single"
 CAROUSEL_PROMPT_NAME = "instagram_creative_director_carousel"
