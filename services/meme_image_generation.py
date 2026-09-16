@@ -186,9 +186,9 @@ async def generate_meme_image(
             height=height,
             byte_size=stored.byte_size,
             sha256=stored.sha256,
-            # Mock provider only as of M5 - always $0. A real provider's own PricingCatalog
-            # entry/cost formula is added alongside whichever future milestone wires one in.
-            cost_usd="0",
+            # Mock remains genuinely zero-cost. Live paid gateways are wrapped by the shared
+            # budgeted boundary, which supplies a non-zero configured/usage estimate here.
+            cost_usd=response.cost_usd or "0",
             attempt_count=attempt,
         )
 

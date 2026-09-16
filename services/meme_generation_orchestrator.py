@@ -458,6 +458,25 @@ async def trigger_meme_generation(
     candidate = updated_candidate
 
     logger.info("meme_image_generation_started", extra={"candidate_id": str(candidate.id)})
+    if settings.meme_image_generation_mode == "enforce":
+        from integrations.llm_gateway.image_protocol import ImageGenerationOperation
+        from services.budgeted_image_execution import BudgetedImageGateway, build_budgeted_image_executor
+        from services.image_pricing import ImageExecutionProfile
+
+        image_gateway = BudgetedImageGateway(
+            gateway=image_gateway,
+            executor=build_budgeted_image_executor(),
+            profile=ImageExecutionProfile(
+                provider="openai", model="gpt-image-2", quality="medium", size="1024x1024",
+                operation=ImageGenerationOperation.TEXT_TO_IMAGE,
+            ),
+            mode="live",
+            purpose="meme",
+            execution_id=f"meme:{candidate.id}",
+            creative_id=f"meme:{candidate.id}",
+            package_id=str(candidate.id),
+            max_attempts=1,
+        )
     image_mode: Literal["off", "dry_run"] = "off" if settings.meme_image_generation_mode == "off" else "dry_run"
     image_result = await generate_meme_image(concept, gateway=image_gateway, storage=storage, mode=image_mode)
     updated_candidate = await candidate_service.attach_image_result(candidate.id, image_result)

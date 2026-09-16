@@ -331,6 +331,7 @@ async def maybe_recompose(
     _width, _height, mime_type = info
 
     adapter = gateway
+    production_paid_adapter = adapter is None
     if adapter is None:
         api_key = settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else None
         if not api_key:
@@ -346,6 +347,25 @@ async def maybe_recompose(
         reference_images=(ReferenceImage(data=source_image_bytes, mime_type=mime_type),),
         target_aspect_ratio="16:9",
     )
+
+    if production_paid_adapter:
+        from services.budgeted_image_execution import BudgetedImageGateway, build_budgeted_image_executor
+        from services.image_pricing import ImageExecutionProfile
+
+        adapter = BudgetedImageGateway(
+            gateway=adapter,
+            executor=build_budgeted_image_executor(),
+            profile=ImageExecutionProfile(
+                provider="gemini", model=GEMINI_3_1_FLASH_IMAGE, quality="standard", size="1K",
+                operation=ImageGenerationOperation.IMAGE_EDIT,
+            ),
+            mode="live",
+            purpose="news_recomposition",
+            execution_id=f"news-recomposition:{source_sha256}",
+            creative_id=f"news-recomposition:{source_sha256}",
+            package_id=source_sha256,
+            max_attempts=1,
+        )
 
     started = time.monotonic()
     try:

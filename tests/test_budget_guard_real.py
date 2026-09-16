@@ -2,6 +2,7 @@
 §15.2, Amendment C §25; docs/api_cost_optimization_report.md §10's off/shadow/enforce mode).
 Integration tests against real local Redis - every test injects a fresh uuid-based
 `ledger_namespace`, and the ledger key is deleted in each test's own teardown."""
+import asyncio
 import uuid
 from decimal import Decimal
 from typing import Literal
@@ -13,8 +14,8 @@ from capabilities.errors import BudgetExceededError
 from core.config import Settings
 from database.models.editorial_task import TaskPriority
 from integrations.llm_gateway.errors import MissingRedisFailurePolicyError
-from services.budget_guard import RedisBudgetGuard
-from services.cost_tracker import global_ledger_key
+from services.budget_guard import RedisBudgetGuard, image_attempt_key, image_execution_key
+from services.cost_tracker import capability_ledger_key, global_ledger_key
 
 
 def _settings(
@@ -190,3 +191,70 @@ async def test_fail_closed_policy_in_shadow_mode_never_raises_on_ledger_read_fai
 class _RaisingRedis:
     async def get(self, *args: object, **kwargs: object) -> None:
         raise ConnectionError("simulated Redis outage")
+
+
+async def _cleanup_image_reservation(redis_client: Redis, namespace: str, capability: str, *ids: str) -> None:
+    keys = [global_ledger_key(namespace), capability_ledger_key(namespace, capability)]
+    keys.extend(image_execution_key(namespace, value) for value in ids)
+    keys.extend(image_attempt_key(namespace, value) for value in ids)
+    await redis_client.delete(*keys)
+
+
+@pytest.mark.asyncio
+async def test_image_reservation_is_idempotent_under_concurrency(redis_client: Redis) -> None:
+    namespace = _unique_namespace()
+    capability = "image_generation:instagram"
+    guard = RedisBudgetGuard(redis_client, _settings(llm_daily_budget_usd=1), ledger_namespace=namespace)
+    kwargs = dict(
+        capability_name=capability, priority=TaskPriority.B, worst_case=Decimal("0.093"),
+        execution_id="package:v1", creative_id="package", max_attempts=1,
+    )
+    try:
+        first, second = await asyncio.gather(
+            guard.reserve_image_cost(**kwargs), guard.reserve_image_cost(**kwargs)
+        )
+        assert {first.status, second.status} == {"reserved", "duplicate"}
+        assert Decimal(str(await redis_client.get(global_ledger_key(namespace)))) == Decimal("0.093")
+    finally:
+        await _cleanup_image_reservation(redis_client, namespace, capability, "package:v1", "package")
+
+
+@pytest.mark.asyncio
+async def test_image_reservation_atomically_prevents_concurrent_overspend(redis_client: Redis) -> None:
+    namespace = _unique_namespace()
+    capability = "image_generation:instagram"
+    guard = RedisBudgetGuard(redis_client, _settings(llm_daily_budget_usd=1), ledger_namespace=namespace)
+    async def reserve(execution_id: str):
+        return await guard.reserve_image_cost(
+            capability_name=capability, priority=TaskPriority.B, worst_case=Decimal("0.60"),
+            execution_id=execution_id, creative_id=execution_id, max_attempts=1,
+        )
+    try:
+        first, second = await asyncio.gather(reserve("one"), reserve("two"))
+        assert {first.status, second.status} == {"reserved", "budget_exceeded"}
+        assert Decimal(str(await redis_client.get(global_ledger_key(namespace)))) == Decimal("0.6")
+    finally:
+        await _cleanup_image_reservation(redis_client, namespace, capability, "one", "two")
+
+
+@pytest.mark.asyncio
+async def test_successful_image_settlement_replaces_reservation_with_usage_estimate(redis_client: Redis) -> None:
+    namespace = _unique_namespace()
+    capability = "image_generation:instagram"
+    guard = RedisBudgetGuard(redis_client, _settings(llm_daily_budget_usd=1), ledger_namespace=namespace)
+    try:
+        reserved = await guard.reserve_image_cost(
+            capability_name=capability, priority=TaskPriority.B, worst_case=Decimal("0.093"),
+            execution_id="settle:v1", creative_id="settle", max_attempts=1,
+        )
+        assert reserved.status == "reserved"
+        await guard.complete_image_reservation(
+            execution_id="settle:v1", capability_name=capability, status="success",
+            accounted_cost=Decimal("0.05325"), audit_fields={"provider": "openai"},
+        )
+        assert Decimal(str(await redis_client.get(global_ledger_key(namespace)))) == Decimal("0.05325")
+        audit = await redis_client.hgetall(image_execution_key(namespace, "settle:v1"))
+        assert audit["status"] == "success"
+        assert Decimal(audit["accounted_cost_usd"]) == Decimal("0.05325")
+    finally:
+        await _cleanup_image_reservation(redis_client, namespace, capability, "settle:v1", "settle")
