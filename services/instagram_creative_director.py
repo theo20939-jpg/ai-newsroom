@@ -35,6 +35,7 @@ and generates NO new video beyond the existing Reel/Carousel/Single contract - i
 honest extra sentence of context for the very first pieces of content."""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -44,12 +45,18 @@ from database.models.editorial_task import TaskPriority
 from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, LLMGateway, Message
 from integrations.prompts.protocol import PromptRepository
 from schemas.capability import CapabilityCall, RuntimeContext
-from schemas.instagram_creative import InstagramCarouselCreative, InstagramReelCreative, InstagramSingleCreative
+from schemas.instagram_creative import (
+    InstagramCarouselCreative,
+    InstagramEditorialDecision,
+    InstagramReelCreative,
+    InstagramSingleCreative,
+)
 from services.instagram_format_director import ClaimViolationError, validate_package_claims
 
 SINGLE_PROMPT_NAME = "instagram_creative_director_single"
 CAROUSEL_PROMPT_NAME = "instagram_creative_director_carousel"
 REEL_PROMPT_NAME = "instagram_creative_director_reel"
+EDITORIAL_DECISION_PROMPT_NAME = "instagram_editorial_decision"
 # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2/3 ROLLOUT CLOSURE HOTFIX: a real bounded Reel canary
 # against the live production OpenAI endpoint surfaced the exact same structured-output contract
 # bug the business_context_parser hotfix already diagnosed and fixed - OpenAI's strict
@@ -71,9 +78,10 @@ REEL_PROMPT_NAME = "instagram_creative_director_reel"
 # Each version bump is its own independently-versioned, schema-shape-only fix; every previous
 # version file is left untouched/unused, matching this codebase's own established "never edit a
 # shipped prompt version in place" convention.
-_SINGLE_PROMPT_VERSION = "4"
-_CAROUSEL_PROMPT_VERSION = "3"
-_REEL_PROMPT_VERSION = "5"
+_SINGLE_PROMPT_VERSION = "5"
+_CAROUSEL_PROMPT_VERSION = "4"
+_REEL_PROMPT_VERSION = "6"
+_EDITORIAL_DECISION_PROMPT_VERSION = "1"
 
 
 class CreativeDirectorUnavailableError(Exception):
@@ -90,6 +98,28 @@ class UngroundedEvidenceError(ValueError):
 class CreativeFactSafetyError(Exception):
     """Wraps a ClaimViolationError or product-mention violation raised while validating generated
     creative text - the draft is REJECTED, never silently sanitized."""
+
+
+class CreativeLanguageError(ValueError):
+    """Raised when final audience/editor-facing output is clearly not Russian for a RU account."""
+
+
+class AudienceFacingCopyError(ValueError):
+    """Raised when final copy leaks an internal/service label into audience-facing text."""
+
+
+@dataclass(frozen=True)
+class InstagramEditorialDecisionInput:
+    source_type: str
+    source_summary: str
+    allowed_evidence: list[str] = field(default_factory=list)
+    brand_context: str = ""
+    account_context: str = ""
+    product_context: str = ""
+    trend_context: str = ""
+    recent_content_context: str = ""
+    executable_formats: list[str] = field(default_factory=lambda: ["single", "carousel", "reel"])
+    locale: str = "ru"
 
 
 @dataclass(frozen=True)
@@ -123,6 +153,14 @@ class CreativeDirectorInput:
     # instruction to produce an ORIGINAL NINJA adaptation, never a copy.
     trend_mechanic: str | None = None
     trend_spread_reason: str | None = None
+    # INSTAGRAM PHASE A: explicit locale and the Director decision/context that preceded format-
+    # specific generation. Defaults preserve every stored/pre-existing call site.
+    locale: str = ""
+    brand_context: str = ""
+    account_context: str = ""
+    product_context: str = ""
+    recent_content_context: str = ""
+    editorial_decision: str = ""
 
 
 @dataclass(frozen=True)
@@ -171,8 +209,108 @@ def _build_user_text(director_input: CreativeDirectorInput) -> str:
         f"FEED CONTEXT: {director_input.feed_context_note or '(no real feed context available)'}\n"
         f"TREND MECHANIC: {director_input.trend_mechanic or '(not a trend-origin piece)'}\n"
         f"WHY THIS MECHANIC IS SPREADING: {director_input.trend_spread_reason or '(n/a)'}\n"
+        f"OUTPUT LOCALE: {director_input.locale}\n"
+        f"BRAND/ACCOUNT POLICY:\n{director_input.brand_context or '(not supplied)'}\n"
+        f"ACCOUNT STATE:\n{director_input.account_context or '(not supplied)'}\n"
+        f"CURRENT PRODUCT TRUTH:\n{director_input.product_context or '(not supplied)'}\n"
+        f"RECENT/IN-FLIGHT CONTENT:\n{director_input.recent_content_context or '(none)'}\n"
+        f"APPROVED EDITORIAL DECISION:\n{director_input.editorial_decision or '(legacy call: not supplied)'}\n"
         f"EVIDENCE BULLETS (use ONLY these for any factual claim):\n{evidence_block}"
     )
+
+
+def _build_decision_user_text(decision_input: InstagramEditorialDecisionInput) -> str:
+    evidence = "\n".join(f"- {item}" for item in decision_input.allowed_evidence) or "(none)"
+    return (
+        f"SOURCE TYPE: {decision_input.source_type}\n"
+        f"SOURCE SUMMARY: {decision_input.source_summary}\n"
+        f"OUTPUT LOCALE: {decision_input.locale}\n"
+        f"EXECUTABLE FORMATS: {decision_input.executable_formats}\n"
+        f"BRAND/ACCOUNT POLICY:\n{decision_input.brand_context}\n"
+        f"ACCOUNT STATE:\n{decision_input.account_context}\n"
+        f"CURRENT PRODUCT TRUTH:\n{decision_input.product_context}\n"
+        f"TREND SIGNAL (may be absent or a bad fit):\n{decision_input.trend_context or '(none)'}\n"
+        f"RECENT/IN-FLIGHT INSTAGRAM CONTENT:\n{decision_input.recent_content_context or '(none)'}\n"
+        f"EVIDENCE BULLETS:\n{evidence}"
+    )
+
+
+_CYRILLIC_RE = re.compile(r"[А-Яа-яЁё]")
+_LATIN_WORD_RE = re.compile(r"[A-Za-z][A-Za-z'-]*")
+_VISIBLE_SERVICE_LABEL_RE = re.compile(r"(?im)^\s*(?:CTA|CALL\s+TO\s+ACTION)\s*:")
+
+
+def assert_russian_final_text(text_fields: list[str], *, locale: str = "ru") -> None:
+    """Reject clearly English final output without penalizing normal Russian with Latin names.
+
+    The check is intentionally asymmetric and conservative: it catches an English paragraph or
+    complete English script, but a short official name such as ``NINJA AI``/``OpenAI`` is allowed.
+    """
+    if locale.lower() not in ("ru", "ru-ru"):
+        return
+    meaningful = [text.strip() for text in text_fields if text and text.strip()]
+    for text in meaningful:
+        latin_words = _LATIN_WORD_RE.findall(text)
+        cyrillic_letters = len(_CYRILLIC_RE.findall(text))
+        if len(latin_words) >= 6 and cyrillic_letters < 3:
+            raise CreativeLanguageError("clearly English audience-facing field for locale=ru")
+    combined = " ".join(meaningful)
+    if len(_LATIN_WORD_RE.findall(combined)) >= 8 and len(_CYRILLIC_RE.findall(combined)) < 10:
+        raise CreativeLanguageError("clearly English final output for locale=ru")
+
+
+def assert_audience_facing_copy(text_fields: list[str]) -> None:
+    for text in text_fields:
+        if text and _VISIBLE_SERVICE_LABEL_RE.search(text):
+            raise AudienceFacingCopyError("visible service label in audience-facing copy")
+
+
+def _enforce_output_policy(text_fields: list[str], *, locale: str) -> None:
+    assert_russian_final_text(text_fields, locale=locale)
+    assert_audience_facing_copy(text_fields)
+
+
+async def generate_editorial_decision(
+    gateway: LLMGateway, prompt_repository: PromptRepository, *, decision_input: InstagramEditorialDecisionInput,
+) -> tuple[InstagramEditorialDecision, CapabilityCall]:
+    try:
+        prompt = prompt_repository.resolve(EDITORIAL_DECISION_PROMPT_NAME, _EDITORIAL_DECISION_PROMPT_VERSION)
+    except Exception as exc:
+        raise CreativeDirectorUnavailableError(f"prompt unavailable: {exc}") from exc
+    request = GenerateRequest(
+        messages=[
+            Message(
+                role="system",
+                content=[ContentPart(type="text", text=prompt.system + "\n\nRULES:\n" + "\n".join(f"- {r}" for r in prompt.rules))],
+            ),
+            Message(role="user", content=[ContentPart(type="text", text=_build_decision_user_text(decision_input))]),
+        ],
+        response_mode="json_schema",
+        response_schema=prompt.output_schema,
+    )
+    runtime = RuntimeContext(
+        task_id=uuid4(), event_id=uuid4(), capability_name=EDITORIAL_DECISION_PROMPT_NAME,
+        priority=TaskPriority.S, attempt=1, iteration_count=0,
+    )
+    try:
+        outcome = await call_generate(gateway, request, runtime=runtime, sequence=0)
+    except Exception as exc:
+        raise CreativeDirectorUnavailableError(f"gateway call failed: {exc}") from exc
+    if outcome.error is not None:
+        raise CreativeDirectorUnavailableError(str(outcome.error))
+    if outcome.response is None or outcome.response.structured_output is None:
+        raise CreativeDirectorUnavailableError("no structured output returned")
+    decision = InstagramEditorialDecision.model_validate(outcome.response.structured_output)
+    assert_evidence_grounded(decision.evidence_used, decision_input.allowed_evidence)
+    _enforce_output_policy(
+        [
+            decision.why_now, decision.audience_value, decision.angle, decision.format_reason,
+            decision.creative_direction, decision.product_connection or "", decision.trend_rationale or "",
+            decision.supplementary_story_idea or "",
+        ],
+        locale=decision_input.locale,
+    )
+    return decision, outcome.call
 
 
 async def _call_creative_director(
@@ -232,6 +370,10 @@ async def generate_single_creative(
                      creative.final_caption or "", creative.source_subject or "", creative.cta or ""],
         evidence_used=creative.evidence_used, director_input=director_input,
     )
+    _enforce_output_policy(
+        [creative.on_image_copy, creative.final_caption or "", creative.cta or ""],
+        locale=director_input.locale,
+    )
     return CreativeGenerationOutcome(single=creative, call=call)
 
 
@@ -245,6 +387,10 @@ async def generate_carousel_creative(
     creative = InstagramCarouselCreative.model_validate(output)
     text_fields = [slide.slide_copy for slide in creative.slides] + [creative.final_cta or ""]
     _enforce_fact_safety(text_fields=text_fields, evidence_used=creative.evidence_used, director_input=director_input)
+    _enforce_output_policy(
+        [*(slide.slide_copy for slide in creative.slides), creative.final_cta or ""],
+        locale=director_input.locale,
+    )
     return CreativeGenerationOutcome(carousel=creative, call=call)
 
 
@@ -265,4 +411,13 @@ async def generate_reel_creative(
         *(scene.on_screen_text or "" for scene in creative.scenes),
     ]
     _enforce_fact_safety(text_fields=text_fields, evidence_used=creative.evidence_used, director_input=director_input)
+    _enforce_output_policy(
+        [
+            creative.hook, creative.voiceover_script or "", *creative.on_screen_text,
+            creative.cta or "", creative.final_caption or "",
+            *(scene.spoken_line for scene in creative.scenes),
+            *(scene.on_screen_text or "" for scene in creative.scenes),
+        ],
+        locale=director_input.locale,
+    )
     return CreativeGenerationOutcome(reel=creative, call=call)

@@ -7,13 +7,58 @@ not explicitly supply as allowed evidence - the Creative Director may transform 
 may never invent a fact."""
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 INSTAGRAM_CREATIVE_SCHEMA_VERSION = "v1"
 
 _SHORT_TEXT_MAX_LENGTH = 200
 _MEDIUM_TEXT_MAX_LENGTH = 400
 _LONG_TEXT_MAX_LENGTH = 1200
+
+
+class InstagramEditorialDecision(BaseModel):
+    """The pre-generation decision made by the existing Instagram Director.
+
+    This is deliberately a decision contract, not another content pipeline or persisted business-
+    truth model.  It is snapshotted with the existing ``ContentOpportunity``/Telegram delivery and
+    gives the editor the reasoning that was previously missing before format-specific generation.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    source_summary: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    opportunity_type: Literal[
+        "NEWS", "NEWS_X_TREND", "PRODUCT_X_TREND", "CULTURE", "PRODUCT", "EVERGREEN"
+    ]
+    why_now: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    audience_value: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    angle: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    angle_intent: Literal[
+        "BREAKING", "EXPLAINER", "IMPACT", "REACTION", "DEBATE", "COMPARISON",
+        "HOW_TO", "MEME", "PRODUCT_USE_CASE", "EVERGREEN_VALUE",
+    ]
+    topic: str = Field(min_length=1, max_length=_SHORT_TEXT_MAX_LENGTH)
+    purpose: Literal["REACH", "ENGAGEMENT", "VALUE", "BRAND", "PRODUCT"]
+    origin: Literal["NEWS", "TREND", "PRODUCT", "CULTURE", "EVERGREEN"]
+    recommended_format: Literal["single", "carousel", "reel"]
+    format_reason: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    creative_direction: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    product_connection: str | None = Field(default=None, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    trend_rationale: str | None = Field(default=None, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    supplementary_story_idea: str | None = Field(default=None, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    evidence_used: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_intersections(self) -> "InstagramEditorialDecision":
+        if self.opportunity_type in ("NEWS_X_TREND", "PRODUCT_X_TREND") and not self.trend_rationale:
+            raise ValueError("a trend intersection requires an explicit trend_rationale")
+        if self.opportunity_type not in ("NEWS_X_TREND", "PRODUCT_X_TREND") and self.trend_rationale:
+            raise ValueError("trend_rationale is only valid for a real trend intersection")
+        if self.opportunity_type in ("PRODUCT", "PRODUCT_X_TREND") and not self.product_connection:
+            raise ValueError("a product opportunity requires a concrete product_connection")
+        return self
 
 
 class InstagramSingleCreative(BaseModel):

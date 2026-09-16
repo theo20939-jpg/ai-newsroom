@@ -119,7 +119,7 @@ async def test_wires_through_growth_strategist_ranking_and_general_entrypoint(mo
 
     calls: list[str] = []
 
-    async def _fake_submit(session, bot, *, opportunity, opportunity_summary, gateway, prompt_repository, source_url=None):
+    async def _fake_submit(session, bot, *, opportunity, opportunity_summary, gateway, prompt_repository, source_url=None, phase_a_enabled=False):
         calls.append(opportunity.id)
         return InstagramTriggerCandidateOutcome(
             event_id=opportunity.id, accepted=True, reason="submitted", gate_decision="ready_for_editor", delivery_sent=True,
@@ -145,7 +145,7 @@ async def test_per_cycle_cap_bounds_evaluation(monkeypatch: pytest.MonkeyPatch) 
 
     calls: list[str] = []
 
-    async def _fake_submit(session, bot, *, opportunity, opportunity_summary, gateway, prompt_repository, source_url=None):
+    async def _fake_submit(session, bot, *, opportunity, opportunity_summary, gateway, prompt_repository, source_url=None, phase_a_enabled=False):
         calls.append(opportunity.id)
         return InstagramTriggerCandidateOutcome(event_id=opportunity.id, accepted=True, reason="submitted", gate_decision="ready_for_editor", delivery_sent=True)
 
@@ -179,7 +179,7 @@ async def test_per_candidate_failure_never_aborts_the_cycle(monkeypatch: pytest.
     async def _fake_growth_strategist(session, *, now):
         return _FakeResult(strategy=_FakeStrategy(priority_opportunities=[opportunity]))
 
-    async def _flaky_submit(session, bot, *, opportunity, opportunity_summary, gateway, prompt_repository, source_url=None):
+    async def _flaky_submit(session, bot, *, opportunity, opportunity_summary, gateway, prompt_repository, source_url=None, phase_a_enabled=False):
         raise RuntimeError("simulated Telegram/DB failure")
 
     monkeypatch.setattr(cc, "run_instagram_growth_strategist", _fake_growth_strategist)

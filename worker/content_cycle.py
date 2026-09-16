@@ -1080,7 +1080,7 @@ async def _run_instagram_automatic_trigger(
                 outcome = await evaluate_and_submit_instagram_candidate(
                     session, bot, event_id=str(event_id), event_title=event_row.title or "", treatment=treatment,
                     research_facts=facts, gateway=gate_gateway, prompt_repository=gate_prompt_repository,
-                    source_url=event_row.url,
+                    source_url=event_row.url, phase_a_enabled=True,
                 )
                 await session.commit()
         except Exception:
@@ -1169,6 +1169,7 @@ async def _run_instagram_product_lane(
                 outcome = await evaluate_and_submit_instagram_opportunity(
                     session, bot, opportunity=opportunity, opportunity_summary=summary,
                     gateway=gate_gateway, prompt_repository=gate_prompt_repository,
+                    phase_a_enabled=True,
                 )
                 await session.commit()
         except Exception:

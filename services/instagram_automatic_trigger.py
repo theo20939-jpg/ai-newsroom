@@ -12,22 +12,16 @@ today (Phase 23.1H/23.1P) - returns `MAJOR`. This is not a new threshold: it is 
 stories are never submitted - the majority of real NEWS stories are expected to fall here, exactly
 matching the phase brief's own "do NOT interpret 10 NEWS drafts as 10 Instagram packages" warning.
 
-Format remains SINGLE for the legacy NEWS candidate lane (`evaluate_and_submit_instagram_candidate()` below,
-§15 "preserve current visual behavior") - untouched, byte-identical, still calls `evaluate_format_
-shadow()` with `has_video_asset=False, has_multi_step_narrative=False`.
+INSTAGRAM PHASE A: the NEWS and PRODUCT worker call sites opt into one pre-generation editorial
+decision on the existing general opportunity path. The decision sees brand/account/product truth,
+Story Memory discussion signals and recent/in-flight Instagram history, chooses the angle and then
+one already-executable format. Direct service callers retain the pre-Phase-A compatibility path
+unless they explicitly opt in. A REEL remains gated by `settings.instagram_reel_execution_enabled`
+and is never silently downgraded.
 
-CONTROLLED ROLLOUT (INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2/3 closure): the general/PRODUCT
-entrypoint (`evaluate_and_submit_instagram_opportunity()` below) now derives `evaluate_format_
-shadow()`'s real inputs from the opportunity itself instead of hardcoding SINGLE - the SAME
-existing, deterministic, no-second-selector function, just fed honest signals. A REEL decision is
-gated by `settings.instagram_reel_execution_enabled` (default False) - deferred, never silently
-downgraded to SINGLE, and never reaches the Reel Creative Director while the gate is off.
-
-Idempotency (§7) is the EXISTING `instagram_editorial_deliveries` table's own partial-unique
-`package_identity` index - `compute_package_identity(source_key=event_id, content_format="single")`
-is checked BEFORE any generation work begins (so a re-submitted, already-delivered story never
-even triggers a wasted LLM call), and the delivery itself is still protected by the same DB-level
-guarantee under a race.
+Idempotency (§7) remains the EXISTING `instagram_editorial_deliveries` partial-unique identity.
+Phase A adds a pre-generation canonical-Story + structured-angle guard across formats; explicit
+regeneration versions and explicit canary overrides remain separate and auditable.
 
 The real Creative Director call reuses `gate_gateway`/`gate_prompt_repository` - the SAME real
 `LLMGateway`/`PromptRepository` instances `worker/content_main.py` already constructs once at
@@ -35,15 +29,22 @@ startup and threads into `run_content_cycle()` for every other real capability c
 gateway is constructed anywhere in this module."""
 from __future__ import annotations
 
+import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from typing import Any
 from uuid import UUID
 
 from PIL import Image
+from sqlalchemy import select
 
 from core.config import settings
+from database.models.news_event import NewsEvent
+from database.models.social_launch_context import SocialLaunchPlatform
+from database.models.story_link import NewsEventStoryLink
+from services.business_context_snapshot_service import get_business_context_snapshot
 from services.editorial_treatment import MAJOR, EditorialTreatmentDecision
 from services.image_persistence import EditorialImageCandidate, get_editorial_image_candidates, read_candidate_bytes
 from services.video_discovery_persistence import get_video_candidates_for_event, select_best_video_candidate
@@ -52,15 +53,30 @@ from services.instagram_content_opportunity import ContentOpportunity, Opportuni
 from services.instagram_content_package import build_instagram_content_package
 from services.instagram_creative_director import (
     CreativeDirectorInput,
+    CreativeLanguageError,
+    AudienceFacingCopyError,
     CreativeDirectorUnavailableError,
     CreativeFactSafetyError,
+    InstagramEditorialDecisionInput,
     UngroundedEvidenceError,
+    generate_editorial_decision,
 )
-from services.instagram_editorial_delivery_state import InstagramEditorialDeliveryService, compute_package_identity
+from services.instagram_director_context import (
+    load_instagram_director_context,
+    render_account_context,
+    render_product_truth,
+)
+from services.instagram_editorial_delivery_state import (
+    InstagramEditorialDeliveryService,
+    InstagramEditorialDuplicateDecision,
+    check_instagram_editorial_duplicate,
+    compute_package_identity,
+    load_recent_instagram_editorial_history,
+)
 from services.instagram_editorial_gate import evaluate_instagram_editorial_gate
 from services.instagram_editorial_package_snapshot import build_package_snapshot
 from services.instagram_editorial_regeneration import build_default_regenerator
-from services.instagram_format_director import ContentFormat, evaluate_format_shadow
+from services.instagram_format_director import ContentFormat, FormatDecision, evaluate_format_shadow
 from services.instagram_objective_selection import recommend_objective
 from services.instagram_objectives import ContentObjective
 from services.instagram_platform_renderer import (
@@ -72,6 +88,7 @@ from services.instagram_reel_script_readiness import compute_reel_script_readine
 from services.instagram_shadow_pipeline import ShadowPlanResult
 from services.instagram_telegram_delivery import deliver_instagram_package
 from services.instagram_telegram_package_presenter import present_carousel, present_reel, present_single
+from services.social_launch_context_service import get_current_context
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +105,17 @@ class InstagramTriggerCandidateOutcome:
     delivery_sent: bool = False
     delivery_reason: str | None = None
     delivery_id: str | None = None
+    opportunity_id: str | None = None
+    opportunity_type: str | None = None
+    trend_signal: str | None = None
+    why_now: str | None = None
+    audience_value: str | None = None
+    angle: str | None = None
+    chosen_format: str | None = None
+    product_connection: str | None = None
+    duplication_decision: str | None = None
+    recent_history_inputs: list[str] = field(default_factory=list)
+    output_language: str = "ru"
 
 
 @dataclass(frozen=True)
@@ -127,6 +155,168 @@ def _is_external_news(opportunity: ContentOpportunity) -> bool:
     )
 
 
+@dataclass(frozen=True)
+class _PhaseAEditorialPlan:
+    opportunity: ContentOpportunity
+    format_decision: FormatDecision
+    duplicate: InstagramEditorialDuplicateDecision
+    brand_context: str
+    account_context: str
+    product_context: str
+    recent_content_context: str
+
+
+async def _resolve_canonical_story_id(session: Any, event_id: str) -> str:
+    try:
+        event_uuid = UUID(event_id)
+    except ValueError:
+        return event_id
+    link = await session.get(NewsEventStoryLink, event_uuid)
+    return str(link.story_id) if link is not None else event_id
+
+
+async def _story_memory_trend_context(session: Any, *, canonical_story_id: str) -> str:
+    """Normalize the existing Story Memory cluster into a bounded discussion-trend signal.
+
+    The evidence gate (>=3 events and >=2 sources in 48h) is the same threshold used by the
+    repository's previous autonomous trend canary. No crawler, table or parallel ranking service
+    is introduced. Story Memory can currently prove a discussion/topic trend only; it cannot
+    honestly claim a meme, audio or format trend.
+    """
+    try:
+        story_uuid = UUID(canonical_story_id)
+    except ValueError:
+        return ""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+    stmt = (
+        select(NewsEvent.id, NewsEvent.source_id, NewsEvent.title, NewsEvent.collected_at)
+        .join(NewsEventStoryLink, NewsEventStoryLink.news_event_id == NewsEvent.id)
+        .where(NewsEventStoryLink.story_id == story_uuid, NewsEvent.collected_at >= cutoff)
+        .order_by(NewsEvent.collected_at.desc())
+        .limit(20)
+    )
+    rows = (await session.execute(stmt)).all()
+    distinct_sources = {str(row.source_id) for row in rows}
+    if len(rows) < 3 or len(distinct_sources) < 2:
+        return ""
+    titles = " | ".join(str(row.title) for row in rows[:5])
+    return (
+        "kind=discussion; source=Newsroom Story Memory; window=48h; "
+        f"events={len(rows)}; distinct_sources={len(distinct_sources)}; evidence_titles={titles}"
+    )
+
+
+def _recent_history_context(history: list[Any]) -> tuple[str, list[str]]:
+    if not history:
+        return "No recent or in-flight Instagram content.", []
+    lines: list[str] = []
+    compact: list[str] = []
+    for item in history[:12]:
+        angle = item.angle or item.caption[:180]
+        line = (
+            f"{item.created_at.date()} | {item.state} | {item.content_format} | "
+            f"topic={item.topic or '(legacy unknown)'} | purpose={item.purpose or '(legacy unknown)'} | "
+            f"origin={item.origin or '(legacy unknown)'} | angle={angle or '(unknown)'}"
+        )
+        lines.append(line)
+        compact.append(f"{item.content_format}:{item.topic or angle[:60]}")
+    return "\n".join(lines), compact
+
+
+async def _build_phase_a_editorial_plan(
+    session: Any, *, opportunity: ContentOpportunity, source_summary: str, trend_context: str,
+    gateway: Any, prompt_repository: Any, allow_duplicate_canary: bool,
+) -> _PhaseAEditorialPlan:
+    now = datetime.now(timezone.utc)
+    snapshot = await get_business_context_snapshot(session, now=now)
+    launch_context = await get_current_context(session, SocialLaunchPlatform.INSTAGRAM)
+    history = await load_recent_instagram_editorial_history(session, now=now)
+    recent_note, _compact = _recent_history_context(history)
+    brand_context = load_instagram_director_context()
+    account_context = render_account_context(launch_context)
+    product_context = render_product_truth(snapshot)
+    decision, _call = await generate_editorial_decision(
+        gateway,
+        prompt_repository,
+        decision_input=InstagramEditorialDecisionInput(
+            source_type=opportunity.source_type.value,
+            source_summary=source_summary,
+            allowed_evidence=list(opportunity.evidence),
+            brand_context=brand_context,
+            account_context=account_context,
+            product_context=product_context,
+            trend_context=trend_context,
+            recent_content_context=recent_note,
+        ),
+    )
+    if not opportunity.product_mention_allowed and decision.product_connection:
+        raise CreativeFactSafetyError(
+            "Director proposed a NINJA product connection where product_mention_allowed=False"
+        )
+    duplicate = await check_instagram_editorial_duplicate(
+        session,
+        source_story_id=opportunity.story_id,
+        angle=decision.angle,
+        angle_intent=decision.angle_intent,
+        allow_duplicate_canary=allow_duplicate_canary,
+        now=now,
+    )
+    decision_payload = decision.model_dump()
+    decision_payload.update(
+        {
+            "duplication_decision": "BLOCK" if duplicate.blocked else "ALLOW",
+            "duplication_rationale": duplicate.reason,
+            "recent_history_count": len(duplicate.recent_history),
+            "canary_override_used": duplicate.canary_override_used,
+            "output_language": "ru",
+        }
+    )
+    planned_opportunity = replace(opportunity, editorial_decision=decision_payload)
+    chosen_format = ContentFormat(decision.recommended_format)
+    alternatives = [fmt for fmt in ContentFormat if fmt is not chosen_format]
+    format_decision = FormatDecision(
+        recommended_format=chosen_format,
+        alternatives=alternatives,
+        why=decision.format_reason,
+        expected_role={
+            ContentFormat.CAROUSEL: "education/reference",
+            ContentFormat.REEL: "reach/reaction/storytelling",
+            ContentFormat.SINGLE: "hero/breaking/statement",
+        }[chosen_format],
+        risk="medium" if chosen_format is ContentFormat.REEL else "low",
+        confidence=max(0.5, opportunity.confidence),
+        warnings=[],
+    )
+    return _PhaseAEditorialPlan(
+        opportunity=planned_opportunity,
+        format_decision=format_decision,
+        duplicate=duplicate,
+        brand_context=brand_context,
+        account_context=account_context,
+        product_context=product_context,
+        recent_content_context=recent_note,
+    )
+
+
+def _decision_outcome(
+    *, opportunity: ContentOpportunity, reason: str, trend_signal: str, duplicate: InstagramEditorialDuplicateDecision,
+    accepted: bool, gate_decision: str | None = None, delivery_sent: bool = False,
+    delivery_reason: str | None = None, delivery_id: str | None = None,
+) -> InstagramTriggerCandidateOutcome:
+    decision = opportunity.editorial_decision
+    _note, compact_history = _recent_history_context(duplicate.recent_history)
+    return InstagramTriggerCandidateOutcome(
+        event_id=opportunity.id, accepted=accepted, reason=reason, gate_decision=gate_decision,
+        delivery_sent=delivery_sent, delivery_reason=delivery_reason, delivery_id=delivery_id,
+        opportunity_id=opportunity.id, opportunity_type=decision.get("opportunity_type"),
+        trend_signal=trend_signal or None, why_now=decision.get("why_now"),
+        audience_value=decision.get("audience_value"), angle=decision.get("angle"),
+        chosen_format=decision.get("recommended_format"), product_connection=decision.get("product_connection"),
+        duplication_decision=decision.get("duplication_rationale"), recent_history_inputs=compact_history,
+        output_language="ru",
+    )
+
+
 async def _resolve_single_source_image(
     session: Any, story_id: str | None,
 ) -> tuple[Image.Image | None, EditorialImageCandidate | None, int, int]:
@@ -159,6 +349,7 @@ async def _resolve_single_source_image(
 async def evaluate_and_submit_instagram_candidate(
     session: Any, bot: Any, *, event_id: str, event_title: str, treatment: EditorialTreatmentDecision,
     research_facts: list[str], gateway: Any, prompt_repository: Any, source_url: str | None = None,
+    phase_a_enabled: bool = False,
 ) -> InstagramTriggerCandidateOutcome:
     """The one entry point per story. Never raises - a Creative Director failure (rate limit,
     ungrounded evidence, provider error) degrades to a rejected/failed outcome for THIS story only,
@@ -167,83 +358,21 @@ async def evaluate_and_submit_instagram_candidate(
     if treatment.treatment not in _ELIGIBLE_TREATMENTS:
         return InstagramTriggerCandidateOutcome(event_id=event_id, accepted=False, reason=f"treatment={treatment.treatment}")
 
-    identity = compute_package_identity(source_key=event_id, content_format="single")
-    delivery_service = InstagramEditorialDeliveryService()
-    existing = await delivery_service.find_current(session, package_identity=identity)
-    if existing is not None:
-        return InstagramTriggerCandidateOutcome(
-            event_id=event_id, accepted=True, reason="already_submitted", delivery_id=str(existing.id),
-        )
-
-    source_image, image_candidate, image_count, read_length = await _resolve_single_source_image(session, event_id)
-    if source_image is None or image_candidate is None:
-        logger.warning("instagram_single_source_image_unavailable", extra={"event_id": event_id, "image_candidate_count": image_count})
-        return InstagramTriggerCandidateOutcome(event_id=event_id, accepted=True, reason="source_image_unavailable")
-    logger.info("instagram_single_source_image_selected", extra={
-        "event_id": event_id, "image_candidate_count": image_count,
-        "media_candidate_id": str(image_candidate.id), "read_byte_length": read_length,
-    })
-
-    opp = ContentOpportunity(id=event_id, source_type=OpportunitySourceType.NEWS, story_id=event_id, product_mention_allowed=False)
-    format_decision = evaluate_format_shadow(objective=ContentObjective.REACH, has_video_asset=False, has_multi_step_narrative=False)
-    assert format_decision.recommended_format is ContentFormat.SINGLE  # §15 - always true today, asserted rather than assumed silently
-
-    director_input = CreativeDirectorInput(
-        objective=ContentObjective.REACH.value, format=format_decision.recommended_format.value,
-        opportunity_summary=event_title, allowed_evidence=list(research_facts),
-        external_news_entities_allowed=True,
+    canonical_story_id = await _resolve_canonical_story_id(session, event_id) if phase_a_enabled else event_id
+    trend_context = (
+        await _story_memory_trend_context(session, canonical_story_id=canonical_story_id)
+        if phase_a_enabled else ""
     )
-
-    try:
-        regenerator = build_default_regenerator(gateway, prompt_repository)
-        creative_outcome = await regenerator(director_input, format_decision.recommended_format)
-    except (CreativeDirectorUnavailableError, UngroundedEvidenceError, CreativeFactSafetyError) as exc:
-        logger.warning("instagram_automatic_trigger_creative_director_failed", extra={"event_id": event_id, "error": type(exc).__name__})
-        return InstagramTriggerCandidateOutcome(event_id=event_id, accepted=True, reason=f"creative_director_failed:{type(exc).__name__}")
-    except Exception:
-        logger.exception("instagram_automatic_trigger_unexpected_creative_director_error", extra={"event_id": event_id})
-        return InstagramTriggerCandidateOutcome(event_id=event_id, accepted=True, reason="creative_director_failed:unexpected_error")
-
-    single = creative_outcome.single
-    shadow_plan = ShadowPlanResult(
-        campaign_name=None, campaign_phase=None, opportunity_description=event_title, primary_objective=ContentObjective.REACH.value,
-        audience_description="", recommended_format=format_decision.recommended_format.value, hook_family=None,
-        creative_concept_summary=single.creative_angle if single is not None else None, alternative_format=None,
-        alternative_objective=None, product_mention_allowed=False, evidence=list(research_facts), confidence=0.5,
+    opportunity = ContentOpportunity(
+        id=event_id, source_type=OpportunitySourceType.NEWS, story_id=canonical_story_id,
+        news_value=1.0, audience_relevance=0.5, product_mention_allowed=False,
+        evidence=list(research_facts), confidence=0.5,
     )
-    pkg = build_instagram_content_package(
-        opportunity=opp, format_decision=format_decision, shadow_plan=shadow_plan,
-        creative_outcome=creative_outcome, account_key="default",
-        source_image_ref=image_candidate.candidate_id, media_candidate_id=str(image_candidate.id),
+    return await evaluate_and_submit_instagram_opportunity(
+        session, bot, opportunity=opportunity, opportunity_summary=event_title,
+        gateway=gateway, prompt_repository=prompt_repository, source_url=source_url,
+        source_event_id=event_id, trend_context=trend_context, phase_a_enabled=phase_a_enabled,
     )
-    try:
-        render = render_instagram_feed_image(pkg, source_image=source_image)
-    except Exception:
-        logger.exception("instagram_single_render_failed", extra={"event_id": event_id})
-        return InstagramTriggerCandidateOutcome(event_id=event_id, accepted=True, reason="render_failed")
-    logger.info("instagram_single_source_image_rendered", extra={
-        "event_id": event_id, "media_candidate_id": str(image_candidate.id),
-        "rendered_byte_length": len(render.image_bytes),
-        "source_image_treatment": render.evidence.source_image_treatment,
-    })
-    art = validate_instagram_art(pkg, [render])
-    gate = evaluate_instagram_editorial_gate(pkg, art)
-    presentation = present_single(pkg, render, version=1)
-    snapshot = build_package_snapshot(
-        package=pkg, opportunity=opp, format_decision=format_decision, shadow_plan=shadow_plan,
-        director_input=director_input, previous_creative=single, source_url=source_url,
-    )
-
-    delivery_outcome = await deliver_instagram_package(
-        bot, session, presentation=presentation, gate_decision=gate.decision, package_identity=identity,
-        source_story_id=event_id, content_format="single", package_snapshot=snapshot, source_url=source_url,
-        hold_or_block_reason=gate.short_reason or None,
-    )
-    return InstagramTriggerCandidateOutcome(
-        event_id=event_id, accepted=True, reason="submitted", gate_decision=gate.decision.value,
-        delivery_sent=delivery_outcome.sent, delivery_reason=delivery_outcome.reason, delivery_id=delivery_outcome.delivery_id,
-    )
-
 
 # ---------------------------------------------------------------------------
 # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2: the general entrypoint - PRODUCT (this phase) and, in
@@ -260,6 +389,8 @@ async def evaluate_and_submit_instagram_candidate(
 async def evaluate_and_submit_instagram_opportunity(
     session: Any, bot: Any, *, opportunity: ContentOpportunity, opportunity_summary: str,
     gateway: Any, prompt_repository: Any, source_url: str | None = None,
+    source_event_id: str | None = None, trend_context: str = "", allow_duplicate_canary: bool = False,
+    phase_a_enabled: bool = False,
 ) -> InstagramTriggerCandidateOutcome:
     """Takes an ALREADY-BUILT, ALREADY-RANKED `ContentOpportunity` (any `source_type` - selection/
     ranking is `generate_growth_strategy()`'s job, called by whichever lane constructs the
@@ -269,31 +400,65 @@ async def evaluate_and_submit_instagram_opportunity(
     are read directly, never a parallel `research_facts`-style parameter - one canonical evidence
     source per opportunity, regardless of lane. Never raises (mirrors
     `evaluate_and_submit_instagram_candidate()`'s own crash-safety contract exactly)."""
-    # CONTROLLED ROLLOUT: real signals, not hardcoded ones - `evaluate_format_shadow()` (the one
-    # and only existing format selector, unchanged) now sees what the opportunity actually has.
-    # `has_multi_step_narrative`: real evidence-count signal (multiple confirmed facts genuinely
-    # read better as a multi-step narrative. External NEWS may also carry already-persisted
-    # video candidates; no video asset is inferred for protected PRODUCT opportunities.
     has_multi_step_narrative = len(opportunity.evidence) > 1
     has_video_asset = False
-    if _is_external_news(opportunity):
+    if _is_external_news(opportunity) and (source_event_id or opportunity.story_id):
         try:
-            video_candidates = await get_video_candidates_for_event(session, UUID(opportunity.story_id))
+            video_candidates = await get_video_candidates_for_event(
+                session, UUID(source_event_id or opportunity.story_id or "")
+            )
             has_video_asset = select_best_video_candidate(video_candidates) is not None
         except ValueError:
             pass
     recommendation = recommend_objective(opportunity=opportunity, has_multi_step_narrative=has_multi_step_narrative)
-    format_decision = evaluate_format_shadow(
-        objective=recommendation.primary_objective, has_video_asset=has_video_asset,
-        has_multi_step_narrative=has_multi_step_narrative,
-    )
+    if phase_a_enabled:
+        try:
+            phase_a_plan = await _build_phase_a_editorial_plan(
+                session, opportunity=opportunity, source_summary=opportunity_summary,
+                trend_context=trend_context, gateway=gateway, prompt_repository=prompt_repository,
+                allow_duplicate_canary=allow_duplicate_canary,
+            )
+        except (
+            CreativeDirectorUnavailableError, UngroundedEvidenceError, CreativeFactSafetyError,
+            CreativeLanguageError, AudienceFacingCopyError,
+        ) as exc:
+            logger.warning(
+                "instagram_editorial_decision_failed",
+                extra={"opportunity_id": opportunity.id, "error": type(exc).__name__},
+            )
+            return InstagramTriggerCandidateOutcome(
+                event_id=opportunity.id, accepted=False, reason=f"editorial_decision_failed:{type(exc).__name__}",
+            )
+    else:
+        legacy_format = evaluate_format_shadow(
+            objective=recommendation.primary_objective, has_video_asset=has_video_asset,
+            has_multi_step_narrative=has_multi_step_narrative,
+        )
+        phase_a_plan = _PhaseAEditorialPlan(
+            opportunity=opportunity,
+            format_decision=legacy_format,
+            duplicate=InstagramEditorialDuplicateDecision(False, "legacy compatibility path"),
+            brand_context="",
+            account_context="",
+            product_context="",
+            recent_content_context="",
+        )
+
+    opportunity = phase_a_plan.opportunity
+    format_decision = phase_a_plan.format_decision
+    if phase_a_plan.duplicate.blocked:
+        return _decision_outcome(
+            opportunity=opportunity, reason="duplicate_angle_blocked", trend_signal=trend_context,
+            duplicate=phase_a_plan.duplicate, accepted=False,
+        )
 
     identity = compute_package_identity(source_key=opportunity.id, content_format=format_decision.recommended_format.value)
     delivery_service = InstagramEditorialDeliveryService()
     existing = await delivery_service.find_current(session, package_identity=identity)
     if existing is not None:
-        return InstagramTriggerCandidateOutcome(
-            event_id=opportunity.id, accepted=True, reason="already_submitted", delivery_id=str(existing.id),
+        return _decision_outcome(
+            opportunity=opportunity, reason="already_submitted", trend_signal=trend_context,
+            duplicate=phase_a_plan.duplicate, accepted=True, delivery_id=str(existing.id),
         )
 
     # CONTROLLED ROLLOUT: a REEL decision is deferred - never silently downgraded to SINGLE -
@@ -305,12 +470,17 @@ async def evaluate_and_submit_instagram_opportunity(
             "instagram_product_lane_reel_execution_disabled",
             extra={"opportunity_id": opportunity.id, "source_type": opportunity.source_type.value},
         )
-        return InstagramTriggerCandidateOutcome(event_id=opportunity.id, accepted=True, reason="reel_execution_disabled")
+        return _decision_outcome(
+            opportunity=opportunity, reason="reel_execution_disabled", trend_signal=trend_context,
+            duplicate=phase_a_plan.duplicate, accepted=True,
+        )
 
     source_image = None
     image_candidate = None
     if format_decision.recommended_format is ContentFormat.SINGLE:
-        source_image, image_candidate, image_count, read_length = await _resolve_single_source_image(session, opportunity.story_id)
+        source_image, image_candidate, image_count, read_length = await _resolve_single_source_image(
+            session, source_event_id or opportunity.story_id
+        )
         if source_image is None or image_candidate is None:
             logger.warning("instagram_single_source_image_unavailable", extra={
                 "opportunity_id": opportunity.id, "image_candidate_count": image_count,
@@ -327,12 +497,19 @@ async def evaluate_and_submit_instagram_opportunity(
         approved_claims=list(opportunity.allowed_claims), restricted_claims=list(opportunity.restricted_claims),
         product_mention_allowed=opportunity.product_mention_allowed,
         external_news_entities_allowed=_is_external_news(opportunity),
+        locale="ru" if phase_a_enabled else "", brand_context=phase_a_plan.brand_context,
+        account_context=phase_a_plan.account_context, product_context=phase_a_plan.product_context,
+        recent_content_context=phase_a_plan.recent_content_context,
+        editorial_decision=json.dumps(opportunity.editorial_decision, ensure_ascii=False, sort_keys=True),
     )
 
     try:
         regenerator = build_default_regenerator(gateway, prompt_repository)
         creative_outcome = await regenerator(director_input, format_decision.recommended_format)
-    except (CreativeDirectorUnavailableError, UngroundedEvidenceError, CreativeFactSafetyError) as exc:
+    except (
+        CreativeDirectorUnavailableError, UngroundedEvidenceError, CreativeFactSafetyError,
+        CreativeLanguageError, AudienceFacingCopyError,
+    ) as exc:
         logger.warning(
             "instagram_automatic_trigger_creative_director_failed",
             extra={"opportunity_id": opportunity.id, "source_type": opportunity.source_type.value, "error": type(exc).__name__},
@@ -409,7 +586,9 @@ async def evaluate_and_submit_instagram_opportunity(
         source_story_id=opportunity.story_id, content_format=format_decision.recommended_format.value,
         package_snapshot=snapshot, source_url=source_url, hold_or_block_reason=gate.short_reason or None,
     )
-    return InstagramTriggerCandidateOutcome(
-        event_id=opportunity.id, accepted=True, reason="submitted", gate_decision=gate.decision.value,
-        delivery_sent=delivery_outcome.sent, delivery_reason=delivery_outcome.reason, delivery_id=delivery_outcome.delivery_id,
+    return _decision_outcome(
+        opportunity=opportunity, reason="submitted", trend_signal=trend_context,
+        duplicate=phase_a_plan.duplicate, accepted=True, gate_decision=gate.decision.value,
+        delivery_sent=delivery_outcome.sent, delivery_reason=delivery_outcome.reason,
+        delivery_id=delivery_outcome.delivery_id,
     )

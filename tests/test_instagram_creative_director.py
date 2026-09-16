@@ -49,15 +49,15 @@ def _prompt_repository() -> FakePromptRepository:
     # maxLength-vs-Pydantic schema hotfix, on top of the earlier OpenAI strict-schema hotfix
     # already applied to business_context_parser).
     repository.register(RenderedPrompt(
-        name=SINGLE_PROMPT_NAME, version="4", system="you are the creative director", rules=["never invent facts"],
+        name=SINGLE_PROMPT_NAME, version="5", system="you are the creative director", rules=["never invent facts"],
         output_schema=_SINGLE_SCHEMA,
     ))
     repository.register(RenderedPrompt(
-        name=CAROUSEL_PROMPT_NAME, version="3", system="you are the creative director", rules=["never invent facts"],
+        name=CAROUSEL_PROMPT_NAME, version="4", system="you are the creative director", rules=["never invent facts"],
         output_schema=_CAROUSEL_SCHEMA,
     ))
     repository.register(RenderedPrompt(
-        name=REEL_PROMPT_NAME, version="5", system="you are the creative director", rules=["never invent facts"],
+        name=REEL_PROMPT_NAME, version="6", system="you are the creative director", rules=["never invent facts"],
         output_schema=_REEL_SCHEMA,
     ))
     return repository

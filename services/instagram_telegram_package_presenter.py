@@ -66,9 +66,28 @@ def _caption_block(package: InstagramContentPackage) -> str:
         lines.insert(0, "⚠️ ЧЕРНОВИК ПОДПИСИ")
     if package.hashtags:
         lines.append(" ".join(f"#{_esc(tag.lstrip('#'))}" for tag in package.hashtags))
-    if package.cta:
-        lines.append(f"CTA: {_esc(package.cta)}")
+    if package.cta and package.cta.strip().lower() not in package.caption.lower():
+        # Audience-facing copy must never expose an internal/service label such as ``CTA:``.
+        lines.append(_esc(package.cta))
     return "\n\n".join(lines)
+
+
+def _editorial_decision_lines(package: InstagramContentPackage) -> list[str]:
+    evidence = package.director_evidence if isinstance(package.director_evidence, dict) else {}
+    decision = evidence.get("editorial_decision")
+    if not isinstance(decision, dict) or not decision:
+        return []
+    values = [
+        ("ТИП", decision.get("opportunity_type")),
+        ("ПОЧЕМУ СЕЙЧАС", decision.get("why_now")),
+        ("ЦЕННОСТЬ", decision.get("audience_value")),
+        ("УГОЛ", decision.get("angle")),
+        ("ФОРМАТ", decision.get("format_reason")),
+        ("ПРОДУКТ", decision.get("product_connection") or "нет"),
+        ("ТРЕНД", decision.get("trend_rationale") or "нет"),
+        ("ДУБЛИКАТЫ", decision.get("duplication_rationale")),
+    ]
+    return [f"<b>{label}:</b> {_esc(str(value))}" for label, value in values if value]
 
 
 def _split_if_needed(header: str, caption_block: str, footer_lines: list[str]) -> tuple[str, str | None]:
@@ -86,7 +105,7 @@ def _split_if_needed(header: str, caption_block: str, footer_lines: list[str]) -
 
 def present_single(package: InstagramContentPackage, render: InstagramRenderResult, *, version: int) -> InstagramTelegramPresentation:
     header = f"🖼 <b>{_FORMAT_LABEL[ContentFormat.SINGLE]}</b> · v{version}"
-    footer = [line for line in (_truthfulness_line(package),) if line]
+    footer = _editorial_decision_lines(package) + [line for line in (_truthfulness_line(package),) if line]
     control_text, overflow = _split_if_needed(header, _caption_block(package), footer)
     return InstagramTelegramPresentation(
         kind="single", media=[render.image_bytes], control_text=control_text, overflow_text=overflow,
@@ -99,7 +118,7 @@ def present_carousel(package: InstagramContentPackage, renders: list[InstagramRe
     `services.instagram_platform_renderer.render_instagram_carousel()` returns) - this function
     never sorts, reverses, or re-selects them."""
     header = f"🖼 <b>{_FORMAT_LABEL[ContentFormat.CAROUSEL]}</b> · v{version} ({len(renders)} слайдов)"
-    footer = [line for line in (_truthfulness_line(package),) if line]
+    footer = _editorial_decision_lines(package) + [line for line in (_truthfulness_line(package),) if line]
     control_text, overflow = _split_if_needed(header, _caption_block(package), footer)
     return InstagramTelegramPresentation(
         kind="carousel", media=[r.image_bytes for r in renders], control_text=control_text, overflow_text=overflow,
@@ -113,7 +132,7 @@ def present_caption_only(package: InstagramContentPackage, *, version: int) -> I
     fresh media for this presentation; it only sends `control_text`/`overflow_text` as a reply to
     the ALREADY-delivered image(s) from the previous version."""
     header = f"📝 <b>ОБНОВЛЁН ТЕКСТ</b> · v{version}"
-    footer = [line for line in (_truthfulness_line(package),) if line]
+    footer = _editorial_decision_lines(package) + [line for line in (_truthfulness_line(package),) if line]
     control_text, overflow = _split_if_needed(header, _caption_block(package), footer)
     return InstagramTelegramPresentation(kind="text_update", media=[], control_text=control_text, overflow_text=overflow, version_label=f"v{version}")
 
@@ -190,7 +209,7 @@ def present_reel(package: InstagramContentPackage, cover: InstagramRenderResult,
     if asset_requirements:
         storyboard_lines.append("📦 <b>Нужно:</b> " + "; ".join(_esc(str(a)) for a in asset_requirements))
 
-    footer_lines = storyboard_lines + [line for line in (_truthfulness_line(package),) if line]
+    footer_lines = _editorial_decision_lines(package) + storyboard_lines + [line for line in (_truthfulness_line(package),) if line]
     control_text, overflow = _split_if_needed(header, _caption_block(package), footer_lines)
     return InstagramTelegramPresentation(
         kind=kind, media=[cover.image_bytes], control_text=control_text, overflow_text=overflow,

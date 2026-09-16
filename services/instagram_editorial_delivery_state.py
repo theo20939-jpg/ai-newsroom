@@ -7,9 +7,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,6 +35,143 @@ _ACTIONABLE_STATES = (InstagramEditorialDeliveryState.DELIVERED,)
 sitting in this exact state - not yet approved, not already mid-regeneration (double-tap guard),
 not superseded by a newer version, not HOLD/BLOCK (never presented with action buttons at all -
 see the presenter)."""
+
+_RECENT_EDITORIAL_WINDOW_DAYS = 14
+_IN_FLIGHT_STATES = (
+    InstagramEditorialDeliveryState.PENDING,
+    InstagramEditorialDeliveryState.REGENERATING_FULL,
+    InstagramEditorialDeliveryState.REGENERATING_TEXT,
+    InstagramEditorialDeliveryState.REGENERATING_VISUAL,
+)
+_ANGLE_STOP_WORDS = {
+    "the", "and", "for", "with", "this", "that", "как", "что", "это", "для", "или", "при",
+    "про", "его", "она", "они", "уже", "еще", "после", "почему", "когда", "который",
+}
+
+
+@dataclass(frozen=True)
+class InstagramEditorialHistoryItem:
+    delivery_id: str
+    source_story_id: str | None
+    content_format: str
+    state: str
+    created_at: datetime
+    opportunity_id: str | None = None
+    angle: str = ""
+    angle_intent: str = ""
+    topic: str = ""
+    purpose: str = ""
+    origin: str = ""
+    caption: str = ""
+
+
+@dataclass(frozen=True)
+class InstagramEditorialDuplicateDecision:
+    blocked: bool
+    reason: str
+    matched_delivery_id: str | None = None
+    angle_similarity: float = 0.0
+    canary_override_used: bool = False
+    recent_history: list[InstagramEditorialHistoryItem] = field(default_factory=list)
+
+
+def _history_item(row: InstagramEditorialDelivery) -> InstagramEditorialHistoryItem:
+    snapshot = row.package_snapshot if isinstance(row.package_snapshot, dict) else {}
+    opportunity = snapshot.get("opportunity") if isinstance(snapshot.get("opportunity"), dict) else {}
+    package = snapshot.get("package") if isinstance(snapshot.get("package"), dict) else {}
+    decision = opportunity.get("editorial_decision") if isinstance(opportunity.get("editorial_decision"), dict) else {}
+    return InstagramEditorialHistoryItem(
+        delivery_id=str(row.id), source_story_id=row.source_story_id, content_format=row.content_format,
+        state=row.state.value, created_at=row.created_at,
+        opportunity_id=package.get("opportunity_id") or opportunity.get("id"),
+        angle=str(decision.get("angle") or ""), angle_intent=str(decision.get("angle_intent") or ""),
+        topic=str(decision.get("topic") or ""), purpose=str(decision.get("purpose") or ""),
+        origin=str(decision.get("origin") or ""), caption=str(package.get("caption") or ""),
+    )
+
+
+async def load_recent_instagram_editorial_history(
+    session: AsyncSession, *, now: datetime | None = None, limit: int = 20,
+) -> list[InstagramEditorialHistoryItem]:
+    """Load recent delivered/review content plus all genuinely in-flight generation states.
+
+    Fourteen days reuses the existing Instagram trend-matching freshness horizon. It is long
+    enough to prevent a short feed from repeating itself without creating a permanent topic ban.
+    """
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=_RECENT_EDITORIAL_WINDOW_DAYS)
+    stmt = (
+        select(InstagramEditorialDelivery)
+        .where(
+            or_(
+                InstagramEditorialDelivery.created_at >= cutoff,
+                InstagramEditorialDelivery.state.in_(_IN_FLIGHT_STATES),
+            )
+        )
+        .where(InstagramEditorialDelivery.state != InstagramEditorialDeliveryState.SUPERSEDED)
+        .order_by(InstagramEditorialDelivery.created_at.desc())
+        .limit(limit)
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+    return [_history_item(row) for row in rows]
+
+
+def _angle_tokens(text: str) -> set[str]:
+    return {
+        token for token in re.findall(r"[a-zа-яё0-9]+", text.lower())
+        if len(token) > 2 and token not in _ANGLE_STOP_WORDS
+    }
+
+
+def angle_similarity(left: str, right: str) -> float:
+    a, b = _angle_tokens(left), _angle_tokens(right)
+    if not a or not b:
+        return 0.0
+    return round(len(a & b) / len(a | b), 3)
+
+
+async def check_instagram_editorial_duplicate(
+    session: AsyncSession, *, source_story_id: str | None, angle: str, angle_intent: str,
+    allow_duplicate_canary: bool = False, now: datetime | None = None,
+) -> InstagramEditorialDuplicateDecision:
+    """Enforce ONE STORY + ONE ANGLE -> ONE primary item across every format.
+
+    Canonical Story identity is resolved by the caller through the existing Story Memory link.
+    Angle identity combines the Director's structured intent with normalized angle text; headline
+    equality is never used. Different intents remain eligible even on the same Story.
+    """
+    history = await load_recent_instagram_editorial_history(session, now=now)
+    if not source_story_id:
+        return InstagramEditorialDuplicateDecision(
+            False, "no canonical story identity; no story-angle block", recent_history=history,
+        )
+
+    for item in history:
+        if item.source_story_id != source_story_id:
+            continue
+        previous_angle = item.angle or item.caption
+        similarity = angle_similarity(angle, previous_angle)
+        same_intent = bool(angle_intent and item.angle_intent and angle_intent == item.angle_intent)
+        legacy_same_angle = not item.angle_intent and similarity >= 0.7
+        if not ((same_intent and similarity >= 0.25) or legacy_same_angle):
+            continue
+        reason = (
+            f"same canonical story + same editorial angle already {item.state.lower()} "
+            f"as {item.content_format}; angle_similarity={similarity:.3f}"
+        )
+        if allow_duplicate_canary:
+            return InstagramEditorialDuplicateDecision(
+                False, f"explicit canary override: {reason}", matched_delivery_id=item.delivery_id,
+                angle_similarity=similarity, canary_override_used=True, recent_history=history,
+            )
+        return InstagramEditorialDuplicateDecision(
+            True, reason, matched_delivery_id=item.delivery_id, angle_similarity=similarity,
+            recent_history=history,
+        )
+    return InstagramEditorialDuplicateDecision(
+        False, "no recent or in-flight item has the same canonical story and material angle",
+        recent_history=history,
+    )
 
 
 def compute_package_identity(*, source_key: str, content_format: str) -> str:

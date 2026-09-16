@@ -82,6 +82,11 @@ class ContentOpportunity:
     evidence: list[str] = field(default_factory=list)
     confidence: float = 0.3
 
+    # INSTAGRAM PHASE A: the Director's pre-generation decision is carried on the existing
+    # opportunity and therefore follows the existing snapshot/package path.  Plain JSON only;
+    # no parallel ORM model or migration is needed.  Empty for pre-Phase-A callers/snapshots.
+    editorial_decision: dict = field(default_factory=dict)
+
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
@@ -130,7 +135,7 @@ def build_content_opportunity(
     news_value: float = 0.0, trend_relevance: float = 0.0, audience_relevance: float = 0.0,
     campaign_plan: CampaignPlan | None = None, embargo_active: bool = False,
     recommended_objectives: list[str] | None = None, recommended_platforms: list[str] | None = None,
-    evidence: list[str] | None = None, confidence: float = 0.3,
+    evidence: list[str] | None = None, confidence: float = 0.3, editorial_decision: dict | None = None,
 ) -> ContentOpportunity:
     """Deterministic assembly (spec §60: no LLM call needed to combine already-resolved dimensions
     and a CampaignPlan into one opportunity record)."""
@@ -161,5 +166,5 @@ def build_content_opportunity(
         campaign_phase=phase, allowed_claims=approved, restricted_claims=restricted,
         embargo_constraints=embargo_constraints, product_mention_allowed=product_mention_allowed,
         recommended_objectives=recommended_objectives or [], recommended_platforms=recommended_platforms or ["instagram"],
-        evidence=evidence or [], confidence=confidence,
+        evidence=evidence or [], confidence=confidence, editorial_decision=editorial_decision or {},
     )

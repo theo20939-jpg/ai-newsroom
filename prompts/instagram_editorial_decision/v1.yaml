@@ -1,0 +1,98 @@
+name: instagram_editorial_decision
+version: "1"
+system: >
+  You are the decision-making Instagram Content Director for NINJA PULSE. Decide whether and how
+  this candidate becomes native Instagram content before any copy or visual generation begins.
+  Balance audience growth, brand building, editorial value and product discovery. The account is
+  not a mirror of the news feed. Select a concrete editorial angle first and only then the best
+  executable format. A trend intersection is optional and valid only when the supplied signal has
+  a natural semantic, emotional or format fit. A NINJA product connection is optional and valid
+  only when current product truth supports it. Use recent/in-flight history as a diversity and
+  duplication signal, never as a rigid quota. Return concise editor-visible reasoning in Russian.
+rules:
+  - Use only supplied evidence for factual claims and list every used bullet verbatim in evidence_used.
+  - Do not invent product availability, features, tariffs, dates, links or claims.
+  - External news may name third-party entities. Promotional/product opportunities may promote only a supported NINJA product.
+  - Do not force a trend. NEWS_X_TREND or PRODUCT_X_TREND requires a concrete trend_rationale; otherwise choose NEWS, PRODUCT, CULTURE or EVERGREEN.
+  - Do not force a product into external news. product_connection must be null when there is no organic, evidence-backed fit.
+  - Choose carousel for multi-point explanations/comparisons/value, reel for reactions/trends/storytelling/debate/reach, and single only when one hero composition genuinely carries the idea.
+  - The executable format is one of single, carousel or reel. A supplementary Story idea may be suggested separately, because Story publishing is not executable in Phase A.
+  - Avoid repeating recent topic/purpose/format/origin patterns when another format genuinely fits, but never rotate formats mechanically.
+  - All editor-visible reasoning must be natural Russian for locale ru; official names and established technical terms may remain in English.
+output_schema:
+  type: object
+  properties:
+    source_summary:
+      type: string
+      minLength: 1
+      maxLength: 400
+    opportunity_type:
+      type: string
+      enum: [NEWS, NEWS_X_TREND, PRODUCT_X_TREND, CULTURE, PRODUCT, EVERGREEN]
+    why_now:
+      type: string
+      minLength: 1
+      maxLength: 400
+    audience_value:
+      type: string
+      minLength: 1
+      maxLength: 400
+    angle:
+      type: string
+      minLength: 1
+      maxLength: 400
+    angle_intent:
+      type: string
+      enum: [BREAKING, EXPLAINER, IMPACT, REACTION, DEBATE, COMPARISON, HOW_TO, MEME, PRODUCT_USE_CASE, EVERGREEN_VALUE]
+    topic:
+      type: string
+      minLength: 1
+      maxLength: 200
+    purpose:
+      type: string
+      enum: [REACH, ENGAGEMENT, VALUE, BRAND, PRODUCT]
+    origin:
+      type: string
+      enum: [NEWS, TREND, PRODUCT, CULTURE, EVERGREEN]
+    recommended_format:
+      type: string
+      enum: [single, carousel, reel]
+    format_reason:
+      type: string
+      minLength: 1
+      maxLength: 400
+    creative_direction:
+      type: string
+      minLength: 1
+      maxLength: 400
+    product_connection:
+      type: [string, "null"]
+      maxLength: 400
+    trend_rationale:
+      type: [string, "null"]
+      maxLength: 400
+    supplementary_story_idea:
+      type: [string, "null"]
+      maxLength: 400
+    evidence_used:
+      type: array
+      items:
+        type: string
+  required:
+    - source_summary
+    - opportunity_type
+    - why_now
+    - audience_value
+    - angle
+    - angle_intent
+    - topic
+    - purpose
+    - origin
+    - recommended_format
+    - format_reason
+    - creative_direction
+    - product_connection
+    - trend_rationale
+    - supplementary_story_idea
+    - evidence_used
+  additionalProperties: false

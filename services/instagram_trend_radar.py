@@ -17,6 +17,13 @@ class TrendLifecycleStage(str, enum.Enum):
     EVERGREEN_TRANSITION = "evergreen_transition"
 
 
+class TrendKind(str, enum.Enum):
+    TOPIC = "topic"
+    MEME_CULTURE = "meme_culture"
+    FORMAT = "format"
+    DISCUSSION = "discussion"
+
+
 @dataclass(frozen=True)
 class Trend:
     topic: str
@@ -26,6 +33,7 @@ class Trend:
     velocity: float
     age_days: float
     fit_with_nnj: float  # 0.0-1.0, advisory only
+    kind: TrendKind = TrendKind.TOPIC
     fit_with_current_campaign: float = 0.0
     confidence: float = 0.3
 

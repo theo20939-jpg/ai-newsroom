@@ -347,6 +347,7 @@ def build_instagram_content_package(
         product_mention_allowed=opportunity.product_mention_allowed,
         director_evidence={
             "evidence": list(shadow_plan.evidence),
+            "editorial_decision": dict(opportunity.editorial_decision),
             "confidence": shadow_plan.confidence,
             "primary_objective": shadow_plan.primary_objective,
             "recommended_format": shadow_plan.recommended_format,

@@ -74,7 +74,7 @@ async def test_n_per_cycle_cap_bounds_evaluation_even_with_more_eligible_events(
     async def _fake_classify(session, event_id):
         return EditorialTreatmentDecision(treatment=MAJOR, human_review_required=False, reason="test")
 
-    async def _fake_submit(session, bot, *, event_id, event_title, treatment, research_facts, gateway, prompt_repository, source_url=None):
+    async def _fake_submit(session, bot, *, event_id, event_title, treatment, research_facts, gateway, prompt_repository, source_url=None, phase_a_enabled=False):
         seen.append(event_id)
         return InstagramTriggerCandidateOutcome(event_id=event_id, accepted=True, reason="submitted", gate_decision="ready_for_editor", delivery_sent=True)
 
@@ -99,7 +99,7 @@ async def test_i_a_per_story_failure_never_aborts_the_remaining_candidates(monke
     async def _fake_classify(session, event_id):
         return EditorialTreatmentDecision(treatment=MAJOR, human_review_required=False, reason="test")
 
-    async def _flaky_submit(session, bot, *, event_id, event_title, treatment, research_facts, gateway, prompt_repository, source_url=None):
+    async def _flaky_submit(session, bot, *, event_id, event_title, treatment, research_facts, gateway, prompt_repository, source_url=None, phase_a_enabled=False):
         calls.append(event_id)
         if len(calls) == 1:
             raise RuntimeError("simulated Telegram/DB failure for the first candidate")
