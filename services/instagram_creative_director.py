@@ -276,7 +276,16 @@ def assert_trend_rationale_grounded(
 ) -> None:
     if not rationale or is_platform_native:
         return
-    unsupported = _UNSUPPORTED_PLATFORM_TREND_CLAIM_RE.findall(rationale)
+    unsupported: list[str] = []
+    for match in _UNSUPPORTED_PLATFORM_TREND_CLAIM_RE.finditer(rationale):
+        prefix = rationale[max(0, match.start() - 60):match.start()].casefold()
+        explicitly_disclaimed = re.search(
+            r"(?:нет\s+доказательств|без\s+доказательств|"
+            r"не\s+(?:подтверждает|доказывает|является|означает))[^.!?]{0,40}$",
+            prefix,
+        )
+        if explicitly_disclaimed is None:
+            unsupported.append(match.group(0))
     if unsupported:
         raise UngroundedTrendClaimError(
             "Director claimed an Instagram-native trend without platform-native evidence: "

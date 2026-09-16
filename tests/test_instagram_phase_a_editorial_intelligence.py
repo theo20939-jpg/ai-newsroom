@@ -258,6 +258,15 @@ def test_story_memory_momentum_allows_honest_multi_source_wording() -> None:
     )
 
 
+def test_story_memory_momentum_allows_explicit_platform_trend_disclaimer() -> None:
+    assert_trend_rationale_grounded(
+        "Story Memory показывает рост обсуждения, но не подтверждает вирусный тренд в Instagram.",
+        signal_type="discussion_momentum",
+        provenance="STORY_MEMORY",
+        is_platform_native=False,
+    )
+
+
 def test_story_memory_trend_coherence_rejects_generic_question_word_cluster() -> None:
     source = NewsEvent(
         id=uuid4(), source_id=uuid4(), title="What is a VPN kill switch and how does it work?",
