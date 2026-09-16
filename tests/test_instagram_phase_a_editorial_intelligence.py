@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
@@ -113,7 +113,7 @@ def test_runtime_product_truth_keeps_planned_feature_and_launch_state_explicit()
         product_url=None, waitlist_url=None,
     )
     snapshot = SimpleNamespace(
-        as_of=datetime(2026, 9, 16, tzinfo=timezone.utc),
+        as_of=datetime(2026, 9, 16, tzinfo=UTC),
         products=[SimpleNamespace(product=product, active_campaign=None)],
         approved_claims=[], restricted_claims=[], active_directives=[],
     )
@@ -186,7 +186,7 @@ class _ScalarRows:
     def __init__(self, rows: list[InstagramEditorialDelivery]) -> None:
         self.rows = rows
 
-    def scalars(self) -> "_ScalarRows":
+    def scalars(self) -> _ScalarRows:
         return self
 
     def all(self) -> list[InstagramEditorialDelivery]:
@@ -207,7 +207,7 @@ def _delivery(
 ) -> InstagramEditorialDelivery:
     return InstagramEditorialDelivery(
         id=uuid4(), package_identity=uuid4().hex, version=1, source_story_id=story_id,
-        content_format=fmt, state=state, created_at=datetime.now(timezone.utc),
+        content_format=fmt, state=state, created_at=datetime.now(UTC),
         package_snapshot={
             "opportunity": {
                 "id": uuid4().hex,

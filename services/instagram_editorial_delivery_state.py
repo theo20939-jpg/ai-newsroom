@@ -9,7 +9,7 @@ import hashlib
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import or_, select
@@ -98,7 +98,7 @@ async def load_recent_instagram_editorial_history(
     Fourteen days reuses the existing Instagram trend-matching freshness horizon. It is long
     enough to prevent a short feed from repeating itself without creating a permanent topic ban.
     """
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     cutoff = now - timedelta(days=_RECENT_EDITORIAL_WINDOW_DAYS)
     stmt = (
         select(InstagramEditorialDelivery)

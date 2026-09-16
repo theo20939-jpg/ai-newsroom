@@ -51,7 +51,7 @@ class InstagramEditorialDecision(BaseModel):
     evidence_used: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_intersections(self) -> "InstagramEditorialDecision":
+    def validate_intersections(self) -> InstagramEditorialDecision:
         if self.opportunity_type in ("NEWS_X_TREND", "PRODUCT_X_TREND") and not self.trend_rationale:
             raise ValueError("a trend intersection requires an explicit trend_rationale")
         if self.opportunity_type not in ("NEWS_X_TREND", "PRODUCT_X_TREND") and self.trend_rationale:

@@ -49,4 +49,3 @@ story or trend deserves content.
 3. This file contains the Founder-approved Phase A brand/account brief and editorial boundary.
 4. `design/account_presentation_spec.md` and the active NINJA visual assets are presentation
    sources only; they do not authorize product claims.
-

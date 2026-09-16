@@ -32,7 +32,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from typing import Any
 from uuid import UUID
@@ -52,9 +52,9 @@ from services.instagram_art_validator import validate_instagram_art
 from services.instagram_content_opportunity import ContentOpportunity, OpportunitySourceType
 from services.instagram_content_package import build_instagram_content_package
 from services.instagram_creative_director import (
+    AudienceFacingCopyError,
     CreativeDirectorInput,
     CreativeLanguageError,
-    AudienceFacingCopyError,
     CreativeDirectorUnavailableError,
     CreativeFactSafetyError,
     InstagramEditorialDecisionInput,
@@ -78,7 +78,6 @@ from services.instagram_editorial_package_snapshot import build_package_snapshot
 from services.instagram_editorial_regeneration import build_default_regenerator
 from services.instagram_format_director import ContentFormat, FormatDecision, evaluate_format_shadow
 from services.instagram_objective_selection import recommend_objective
-from services.instagram_objectives import ContentObjective
 from services.instagram_platform_renderer import (
     render_instagram_carousel,
     render_instagram_feed_image,
@@ -187,7 +186,7 @@ async def _story_memory_trend_context(session: Any, *, canonical_story_id: str) 
         story_uuid = UUID(canonical_story_id)
     except ValueError:
         return ""
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+    cutoff = datetime.now(UTC) - timedelta(hours=48)
     stmt = (
         select(NewsEvent.id, NewsEvent.source_id, NewsEvent.title, NewsEvent.collected_at)
         .join(NewsEventStoryLink, NewsEventStoryLink.news_event_id == NewsEvent.id)
@@ -227,7 +226,7 @@ async def _build_phase_a_editorial_plan(
     session: Any, *, opportunity: ContentOpportunity, source_summary: str, trend_context: str,
     gateway: Any, prompt_repository: Any, allow_duplicate_canary: bool,
 ) -> _PhaseAEditorialPlan:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     snapshot = await get_business_context_snapshot(session, now=now)
     launch_context = await get_current_context(session, SocialLaunchPlatform.INSTAGRAM)
     history = await load_recent_instagram_editorial_history(session, now=now)
