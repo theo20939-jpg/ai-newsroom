@@ -166,7 +166,7 @@ def test_carousel_slide_layout_selection_is_role_driven() -> None:
     assert carousel_mod.select_slide_layout(role="cta", index=3, slide_copy="x") == carousel_mod.SLIDE_LAYOUT_CLOSING
     assert carousel_mod.select_slide_layout(role="takeaway", index=3, slide_copy="x") == carousel_mod.SLIDE_LAYOUT_CLOSING
     assert carousel_mod.select_slide_layout(role="data", index=2, slide_copy="x") == carousel_mod.SLIDE_LAYOUT_FACT
-    assert carousel_mod.select_slide_layout(role="context", index=1, slide_copy="x") == carousel_mod.SLIDE_LAYOUT_DETAIL
+    assert carousel_mod.select_slide_layout(role="context", index=1, slide_copy="x") == carousel_mod.SLIDE_LAYOUT_CONTEXT
     assert carousel_mod.select_slide_layout(role="unknown_free_text_role", index=1, slide_copy="x") == carousel_mod.SLIDE_LAYOUT_DETAIL
 
 
@@ -316,7 +316,7 @@ def test_carousel_renders_a_varied_grammar_not_identical_cards() -> None:
     assert variants[-1] == carousel_mod.SLIDE_LAYOUT_CLOSING
 
 
-def test_carousel_hero_image_applies_only_to_the_hook_slide() -> None:
+def test_carousel_source_image_is_recomposed_for_hook_and_context() -> None:
     slides = [
         InstagramCarouselSlideCreative(role="hook", slide_copy="Hook slide", visual_direction="v"),
         InstagramCarouselSlideCreative(role="context", slide_copy="Context slide", visual_direction="v"),
@@ -328,7 +328,7 @@ def test_carousel_hero_image_applies_only_to_the_hook_slide() -> None:
     )
     results = render_instagram_carousel(pkg, hero_image=_rgb(1600, 900))
     assert results[0].evidence.source_image_treatment == "cover_cropped"
-    assert results[1].evidence.source_image_treatment == "none"
+    assert results[1].evidence.source_image_treatment == "cover_cropped"
 
 
 def test_reel_cover_render_honors_grid_safe_placement_end_to_end() -> None:
@@ -363,7 +363,7 @@ def test_art_validator_blocks_a_graph_claim_without_real_series_points() -> None
     assert any("data_graph_without_real_series" in b for b in art.blocking_issues)
 
 
-def test_art_validator_warns_on_low_carousel_layout_diversity() -> None:
+def test_art_validator_accepts_distinct_role_compositions() -> None:
     slides = [
         InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v"),
         InstagramCarouselSlideCreative(role="context", slide_copy="Context A", visual_direction="v"),
@@ -376,7 +376,8 @@ def test_art_validator_warns_on_low_carousel_layout_diversity() -> None:
     )
     results = render_instagram_carousel(pkg)
     art = validate_instagram_art(pkg, results)
-    assert any("carousel_layout_diversity_low" in w for w in art.warnings)
+    assert art.passed
+    assert len({r.evidence.notes["layout_variant"] for r in results}) == 3
 
 
 def test_art_validator_blocks_single_when_source_image_ref_recorded_but_render_shows_none() -> None:

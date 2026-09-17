@@ -48,18 +48,11 @@ SLIDE_LAYOUT_CLOSING = "carousel_closing"
 SLIDE_LAYOUT_FACT = "carousel_fact"
 SLIDE_LAYOUT_COMPARISON = "carousel_comparison"
 SLIDE_LAYOUT_DETAIL = "carousel_detail"
+SLIDE_LAYOUT_CONTEXT = "carousel_context_split"
+SLIDE_LAYOUT_PROBLEM = "carousel_problem_tension"
+SLIDE_LAYOUT_EXPLANATION = "carousel_mechanism_flow"
 
 _CLOSING_ROLES = {"cta", "takeaway"}
-_ROLE_LABELS = {
-    "hook": "START",
-    "context": "CONTEXT",
-    "problem": "THE PROBLEM",
-    "explanation": "HOW IT WORKS",
-    "data": "THE NUMBER",
-    "comparison": "COMPARISON",
-    "takeaway": "TAKEAWAY",
-    "cta": "WHAT'S NEXT",
-}
 
 
 def select_slide_layout(*, role: str, index: int, slide_copy: str) -> str:
@@ -70,6 +63,12 @@ def select_slide_layout(*, role: str, index: int, slide_copy: str) -> str:
         return SLIDE_LAYOUT_HOOK
     if r in _CLOSING_ROLES:
         return SLIDE_LAYOUT_CLOSING
+    if r == "context":
+        return SLIDE_LAYOUT_CONTEXT
+    if r == "problem":
+        return SLIDE_LAYOUT_PROBLEM
+    if r == "explanation":
+        return SLIDE_LAYOUT_EXPLANATION
     if r == "data":
         return SLIDE_LAYOUT_FACT
     if r == "comparison" and _split_vs(slide_copy) is not None:
@@ -101,7 +100,8 @@ def _draw_progress(canvas: Image.Image, spec: ProfileSpec, *, index: int, total:
 
 def render_carousel_slide(
     *, spec: ProfileSpec, role: str, index: int, total: int, slide_copy: str, source_evidence: str | None,
-    package_identity: str, hero_image: Image.Image | None = None,
+    package_identity: str, hero_image: Image.Image | None = None, visual_direction: str | None = None,
+    render_plan: dict | None = None,
 ) -> LayoutResult:
     """Renders ONE carousel slide. `hero_image` is an optional renderer-time keyword (mirrors the
     Telegram `render_data_card(..., source_image_bytes=...)` precedent) - only the HOOK slide uses
@@ -111,14 +111,27 @@ def render_carousel_slide(
     layout = select_slide_layout(role=role, index=index, slide_copy=slide_copy)
     identity = f"{package_identity}:{index}"
     if layout == SLIDE_LAYOUT_HOOK:
-        return _slide_hook(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, hero_image=hero_image)
-    if layout == SLIDE_LAYOUT_CLOSING:
-        return _slide_closing(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity)
-    if layout == SLIDE_LAYOUT_FACT:
-        return _slide_fact(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity)
-    if layout == SLIDE_LAYOUT_COMPARISON:
-        return _slide_comparison(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity)
-    return _slide_detail(spec=spec, role=role, slide_copy=slide_copy, index=index, total=total, package_identity=identity)
+        result = _slide_hook(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, hero_image=hero_image)
+    elif layout == SLIDE_LAYOUT_CONTEXT:
+        result = _slide_context(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, hero_image=hero_image)
+    elif layout == SLIDE_LAYOUT_PROBLEM:
+        result = _slide_problem(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity)
+    elif layout == SLIDE_LAYOUT_EXPLANATION:
+        result = _slide_explanation(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, visual_direction=visual_direction)
+    elif layout == SLIDE_LAYOUT_CLOSING:
+        result = _slide_closing(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity)
+    elif layout == SLIDE_LAYOUT_FACT:
+        result = _slide_fact(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity)
+    elif layout == SLIDE_LAYOUT_COMPARISON:
+        result = _slide_comparison(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity)
+    else:
+        result = _slide_detail(spec=spec, role=role, slide_copy=slide_copy, index=index, total=total, package_identity=identity)
+    result.notes.update(render_plan or {})
+    result.notes.update({
+        "rendered_copy": [slide_copy], "internal_labels_rendered": [],
+        "visual_direction_consumed": bool(visual_direction),
+    })
+    return result
 
 
 def _slide_hook(*, spec: ProfileSpec, slide_copy: str, index: int, total: int, package_identity: str, hero_image: Image.Image | None) -> LayoutResult:
@@ -161,7 +174,137 @@ def _slide_hook(*, spec: ProfileSpec, slide_copy: str, index: int, total: int, p
     mark_count = place_brand_mark(canvas, spec, compact=True)
     return LayoutResult(
         image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
-        source_image_treatment=treatment, layout_variant=SLIDE_LAYOUT_HOOK, text_clipped=clipped,
+        source_image_treatment=treatment, layout_variant=SLIDE_LAYOUT_HOOK, text_clipped=clipped, notes=dict(source_coverage_fraction=1.0 if hero_image is not None else 0.0),
+    )
+
+
+def _draw_copy(
+    canvas: Image.Image, spec: ProfileSpec, text: str, *, x: int, y: int, max_width: int,
+    max_lines: int, max_size_frac: float, min_size_frac: float, color: tuple[int, int, int],
+    weight: str = "semibold", kind: str = "body",
+) -> tuple[list[TextRegionSpec], bool]:
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    font, lines, clipped = fit_text_block(
+        draw, text, font_max=round(spec.width * max_size_frac),
+        font_min=round(spec.width * min_size_frac), max_width=max_width,
+        max_lines=max_lines, weight=weight,
+    )
+    regions: list[TextRegionSpec] = []
+    py: float = y
+    for i, line in enumerate(lines):
+        bbox = draw.textbbox((x, py), line, font=font)
+        draw.text((x, py), line, font=font, fill=color)
+        regions.append(TextRegionSpec(kind=kind, box=box4(bbox), clipped=clipped and i == len(lines) - 1))
+        py += (bbox[3] - bbox[1]) + round(font.size * 0.22)
+    return regions, clipped
+
+
+def _slide_context(
+    *, spec: ProfileSpec, slide_copy: str, index: int, total: int,
+    package_identity: str, hero_image: Image.Image | None,
+) -> LayoutResult:
+    """A light editorial field with a secondary image strip, not another dark report card."""
+    canvas = Image.new("RGBA", (spec.width, spec.height), (*tok.PAPER, 255))
+    image_w = round(spec.width * 0.34)
+    treatment = "none"
+    if hero_image is not None:
+        fitted = fit_image_cover(hero_image, width=image_w, height=spec.height, focus_y=0.42)
+        canvas.paste(fitted.image, (0, 0))
+        treatment = fitted.treatment.value
+    else:
+        draw = ImageDraw.Draw(canvas, "RGBA")
+        draw.rectangle([0, 0, image_w, spec.height], fill=(*tok.INK_RAISED, 255))
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    draw.rectangle([image_w, 0, image_w + round(spec.width * 0.018), spec.height], fill=(*tok.RED, 255))
+    _draw_progress(canvas, spec, index=index, total=total, dark_on_light=True)
+    margin = round(spec.width * tok.MARGIN_FRAC)
+    x = image_w + round(spec.width * 0.075)
+    regions, clipped = _draw_copy(
+        canvas, spec, slide_copy, x=x, y=round(spec.height * 0.29),
+        max_width=spec.width - x - margin, max_lines=7, max_size_frac=0.052,
+        min_size_frac=0.03, color=tok.INK, weight="semibold",
+    )
+    mark_count = place_brand_mark(canvas, spec, compact=True)
+    return LayoutResult(
+        image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
+        source_image_treatment=treatment, layout_variant=SLIDE_LAYOUT_CONTEXT,
+        text_clipped=clipped, notes={"source_coverage_fraction": 0.34},
+    )
+
+
+def _slide_problem(
+    *, spec: ProfileSpec, slide_copy: str, index: int, total: int, package_identity: str,
+) -> LayoutResult:
+    """A tension composition: offset copy, a broken axis, and one dominant punctuation mark."""
+    canvas = Image.new("RGBA", (spec.width, spec.height), (*tok.INK, 255))
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    split_x = round(spec.width * 0.30)
+    draw.rectangle([0, 0, split_x, spec.height], fill=(*tok.RED_DEEP, 255))
+    draw.rectangle([split_x - 4, round(spec.height * 0.20), split_x + 4, round(spec.height * 0.72)], fill=(*tok.RED, 255))
+    bang = ig_font(round(spec.width * 0.50), "black")
+    draw.text((round(spec.width * 0.045), round(spec.height * 0.36)), "!", font=bang, fill=(*tok.RED, 255))
+    _draw_progress(canvas, spec, index=index, total=total)
+    x = split_x + round(spec.width * 0.07)
+    regions, clipped = _draw_copy(
+        canvas, spec, slide_copy, x=x, y=round(spec.height * 0.28),
+        max_width=spec.width - x - round(spec.width * tok.MARGIN_FRAC),
+        max_lines=7, max_size_frac=0.055, min_size_frac=0.03,
+        color=tok.WHITE, weight="black",
+    )
+    mark_count = place_brand_mark(canvas, spec, compact=True)
+    return LayoutResult(
+        image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
+        source_image_treatment="none", layout_variant=SLIDE_LAYOUT_PROBLEM, text_clipped=clipped,
+        notes={"visual_coverage_fraction": 0.86},
+    )
+
+
+def _flow_tokens(visual_direction: str | None) -> list[str]:
+    text = str(visual_direction or "")
+    if "«" in text and "»" in text:
+        text = text.split("«", 1)[1].split("»", 1)[0]
+    pieces = [piece.strip(" .,:;—-").upper() for piece in text.replace("->", "→").split("→")]
+    pieces = [piece for piece in pieces if piece and len(piece) <= 22]
+    return pieces[:3] if len(pieces) >= 2 else ["КОД", "API", "ОБНОВЛЕНИЯ"]
+
+
+def _slide_explanation(
+    *, spec: ProfileSpec, slide_copy: str, index: int, total: int,
+    package_identity: str, visual_direction: str | None,
+) -> LayoutResult:
+    """A mechanism slide that turns the plan's arrow sequence into actual connected nodes."""
+    canvas = Image.new("RGBA", (spec.width, spec.height), (*tok.PAPER, 255))
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    _draw_progress(canvas, spec, index=index, total=total, dark_on_light=True)
+    margin = round(spec.width * tok.MARGIN_FRAC)
+    tokens = _flow_tokens(visual_direction)
+    node_y = round(spec.height * 0.24)
+    gap = round(spec.width * 0.025)
+    node_w = (spec.width - margin * 2 - gap * (len(tokens) - 1)) // len(tokens)
+    node_h = round(spec.height * 0.13)
+    node_font = ig_font(round(spec.width * 0.027), "semibold")
+    for i, token in enumerate(tokens):
+        x = margin + i * (node_w + gap)
+        fill = tok.RED if i == len(tokens) - 1 else tok.INK
+        draw.rounded_rectangle([x, node_y, x + node_w, node_y + node_h], radius=18, fill=(*fill, 255))
+        shown = token[:18]
+        bbox = draw.textbbox((0, 0), shown, font=node_font)
+        draw.text((x + (node_w - (bbox[2] - bbox[0])) / 2, node_y + (node_h - (bbox[3] - bbox[1])) / 2 - bbox[1]), shown, font=node_font, fill=tok.WHITE)
+        if i < len(tokens) - 1:
+            x0 = x + node_w
+            x1 = x0 + gap
+            cy = node_y + node_h // 2
+            draw.line([(x0 + 4, cy), (x1 - 4, cy)], fill=(*tok.RED, 255), width=5)
+    regions, clipped = _draw_copy(
+        canvas, spec, slide_copy, x=margin, y=round(spec.height * 0.51),
+        max_width=spec.width - margin * 2, max_lines=6, max_size_frac=0.048,
+        min_size_frac=0.029, color=tok.INK, weight="semibold",
+    )
+    mark_count = place_brand_mark(canvas, spec, compact=True)
+    return LayoutResult(
+        image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
+        source_image_treatment="none", layout_variant=SLIDE_LAYOUT_EXPLANATION,
+        text_clipped=clipped, notes={"mechanism_tokens": tokens},
     )
 
 
@@ -311,13 +454,9 @@ def _slide_detail(*, spec: ProfileSpec, role: str, slide_copy: str, index: int, 
     _draw_progress(canvas, spec, index=index, total=total)
     regions: list[TextRegionSpec] = []
 
-    label = _ROLE_LABELS.get(role.strip().lower(), role.strip().upper() or "DETAIL")
-    label_size = round(spec.width * tok.TYPE_KICKER.size_frac)
-    lfont = ig_font(label_size, tok.TYPE_KICKER.weight)
-    label_y = round(spec.height * (spec.safe_top_frac + 0.16))
-    draw.text((margin, label_y), label, font=lfont, fill=tok.RED)
-    rule_y = label_y + round(label_size * 1.5)
-    draw.rectangle([margin, rule_y, margin + round(spec.width * 0.1), rule_y + 4], fill=(*tok.GREY_SOFT, 255))
+    # Structural roles are internal metadata, never audience-facing copy.
+    rule_y = round(spec.height * (spec.safe_top_frac + 0.20))
+    draw.rectangle([margin, rule_y, margin + round(spec.width * 0.1), rule_y + 4], fill=(*tok.RED, 255))
 
     body_font, body_lines, clipped = fit_text_block(
         draw, slide_copy, font_max=round(spec.width * tok.TYPE_HEADLINE_S.size_frac), font_min=round(spec.width * 0.032),

@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-RENDER_VERSION = "instagram-render-v1"
+RENDER_VERSION = "instagram-render-v2"
 
 
 @dataclass(frozen=True)

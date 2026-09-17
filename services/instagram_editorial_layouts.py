@@ -28,7 +28,7 @@ from services.instagram_image_handling import (
     place_brand_mark,
 )
 from services.instagram_text_fit import box4, fit_text_block, measure_block_height
-from services.instagram_visual_profiles import ProfileSpec
+from services.instagram_visual_profiles import ProfileSpec, ig_font
 
 
 @dataclass(frozen=True)
@@ -66,17 +66,29 @@ def select_news_variant(orientation: ImageOrientation | None) -> str:
 
 
 def render_news_layout(
-    *, spec: ProfileSpec, source_image: Image.Image | None, kicker: str, headline: str, dek: str | None,
-    package_identity: str,
+    *, spec: ProfileSpec, source_image: Image.Image | None, kicker: str | None, headline: str,
+    dek: str | None, package_identity: str, render_plan: dict[str, Any] | None = None,
 ) -> LayoutResult:
+    plan = render_plan or {}
+    family = str(plan.get("render_interpretation") or "")
     orientation = classify_orientation(*source_image.size) if source_image is not None else None
-    variant = select_news_variant(orientation)
-
-    if variant == NEWS_VARIANT_SPLIT_PANEL:
-        return _news_split_panel(spec=spec, source_image=source_image, kicker=kicker, headline=headline, dek=dek, package_identity=package_identity)
-    if variant == NEWS_VARIANT_FRAMED:
-        return _news_framed(spec=spec, source_image=source_image, kicker=kicker, headline=headline, dek=dek, package_identity=package_identity)
-    return _news_full_bleed(spec=spec, source_image=source_image, kicker=kicker, headline=headline, dek=dek, package_identity=package_identity)
+    if family == "typographic_focal":
+        result = _news_typographic(spec=spec, headline=headline, package_identity=package_identity)
+    else:
+        variant = NEWS_VARIANT_FULL_BLEED if family == "editorial_hero" else select_news_variant(orientation)
+        if variant == NEWS_VARIANT_SPLIT_PANEL:
+            result = _news_split_panel(spec=spec, source_image=source_image, kicker=kicker, headline=headline, dek=dek, package_identity=package_identity)
+        elif variant == NEWS_VARIANT_FRAMED:
+            result = _news_framed(spec=spec, source_image=source_image, kicker=kicker, headline=headline, dek=dek, package_identity=package_identity)
+        else:
+            result = _news_full_bleed(spec=spec, source_image=source_image, kicker=kicker, headline=headline, dek=dek, package_identity=package_identity)
+    result.notes.update(plan)
+    result.notes.update({
+        "rendered_copy": [headline] + ([dek] if dek else []),
+        "internal_labels_rendered": [],
+        "source_coverage_fraction": 1.0 if result.layout_variant == NEWS_VARIANT_FULL_BLEED and source_image is not None else result.notes.get("source_coverage_fraction", 0.0),
+    })
+    return result
 
 
 def _news_full_bleed(*, spec: ProfileSpec, source_image, kicker, headline, dek, package_identity) -> LayoutResult:
@@ -112,14 +124,15 @@ def _news_full_bleed(*, spec: ProfileSpec, source_image, kicker, headline, dek, 
         )
         dek_h = measure_block_height(draw, dek_lines, dek_font) + round(spec.height * 0.015)
 
-    kicker_h = round(spec.width * tok.TYPE_KICKER.size_frac * 2.1)
+    kicker_h = round(spec.width * tok.TYPE_KICKER.size_frac * 2.1) if kicker else 0
     bottom_safe_px = round(spec.height * spec.safe_bottom_frac)
     stack_h = kicker_h + round(spec.height * 0.02) + headline_h + dek_h
     y: float = spec.height - bottom_safe_px - margin - stack_h
 
     regions: list[TextRegionSpec] = []
-    cw, ch = draw_kicker_chip(canvas, x=side_safe, y=y, text=kicker)
-    y += kicker_h + round(spec.height * 0.02)
+    if kicker:
+        draw_kicker_chip(canvas, x=side_safe, y=y, text=kicker)
+        y += kicker_h + round(spec.height * 0.02)
 
     for i, line in enumerate(headline_lines):
         draw.text((side_safe, y), line, font=headline_font, fill=tok.TYPE_HEADLINE_L.color)
@@ -252,6 +265,46 @@ def _news_framed(*, spec: ProfileSpec, source_image, kicker, headline, dek, pack
         image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
         source_image_treatment=treatment, layout_variant=NEWS_VARIANT_FRAMED,
         text_clipped=headline_clipped or dek_clipped,
+    )
+
+
+def _news_typographic(
+    *, spec: ProfileSpec, headline: str, package_identity: str,
+) -> LayoutResult:
+    """A source-free editorial composition whose focal symbol and copy occupy the canvas."""
+    canvas = Image.new("RGBA", (spec.width, spec.height), (*tok.PAPER, 255))
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    margin = round(spec.width * tok.MARGIN_FRAC)
+    symbol = "≠" if "≠" in headline or "не равно" in headline.lower() else "•"
+    symbol_font = ig_font(round(spec.width * 0.72), "black")
+    symbol_box = draw.textbbox((0, 0), symbol, font=symbol_font)
+    draw.text(
+        (spec.width - (symbol_box[2] - symbol_box[0]) - margin, round(spec.height * 0.04)),
+        symbol, font=symbol_font, fill=(*tok.RED, 255),
+    )
+    draw.rectangle(
+        [margin, round(spec.height * 0.18), margin + round(spec.width * 0.045), round(spec.height * 0.64)],
+        fill=(*tok.INK, 255),
+    )
+    content_x = margin + round(spec.width * 0.085)
+    content_w = spec.width - content_x - margin
+    font, lines, clipped = fit_text_block(
+        draw, headline, font_max=round(spec.width * 0.082), font_min=round(spec.width * 0.042),
+        max_width=content_w, max_lines=6, weight="black",
+    )
+    text_h = measure_block_height(draw, lines, font)
+    y: float = max(round(spec.height * 0.31), (spec.height - text_h) // 2)
+    regions: list[TextRegionSpec] = []
+    for i, line in enumerate(lines):
+        bbox = draw.textbbox((content_x, y), line, font=font)
+        draw.text((content_x, y), line, font=font, fill=tok.INK)
+        regions.append(TextRegionSpec(kind="headline", box=box4(bbox), clipped=clipped and i == len(lines) - 1))
+        y += (bbox[3] - bbox[1]) + round(font.size * 0.18)
+    mark_count = place_brand_mark(canvas, spec)
+    return LayoutResult(
+        image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
+        source_image_treatment="none", layout_variant="news_typographic_focal",
+        text_clipped=clipped, notes={"visual_coverage_fraction": 0.82},
     )
 
 

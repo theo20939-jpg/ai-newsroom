@@ -39,6 +39,7 @@ from services.instagram_editorial_layouts import LayoutResult, render_breaking_l
 from services.instagram_quote_layouts import render_quote_layout
 from services.instagram_reel_layouts import render_reel_cover as _render_reel_cover_layout
 from services.instagram_render_evidence import RENDER_VERSION, InstagramRenderEvidence, TextRegion
+from services.instagram_render_plan import interpret_render_plan
 from services.instagram_visual_profiles import InstagramRenderProfile, profile_spec
 
 
@@ -66,12 +67,31 @@ def _content_identity(package: InstagramContentPackage, *, slide_index: int | No
 
 
 def _kicker_for(package: InstagramContentPackage) -> str:
-    """A truthful, non-fabricated category label: the real Director-produced
-    `director_evidence["primary_objective"]` (e.g. "reach", "saves", "engagement" - see
-    `ShadowPlanResult.primary_objective`, carried verbatim by `build_instagram_content_package()`),
-    never an invented topic/section name no upstream layer actually produced."""
-    objective = package.director_evidence.get("primary_objective")
-    return str(objective).upper() if objective else "NINJA PULSE"
+    """Only an audience-facing brand label; internal objectives must never become pixels."""
+    return "NINJA PULSE"
+
+
+def _persist_render_trace(
+    package: InstagramContentPackage, render_plan: dict, *, slide_index: int | None = None,
+) -> None:
+    """Persist the plan-to-pixels interpretation in existing package JSON; no DB migration."""
+    trace = package.media_plan.setdefault("render_trace", {"assets": []})
+    asset = {
+        "slide_index": slide_index,
+        "creative_plan": render_plan.get("creative_plan"),
+        "render_interpretation": render_plan.get("render_interpretation"),
+        "used_primitives": list(render_plan.get("used_primitives") or []),
+        "source_media_treatment": render_plan.get("source_media_treatment"),
+        "typography_treatment": render_plan.get("typography_treatment"),
+    }
+    assets = trace.setdefault("assets", [])
+    key = slide_index if slide_index is not None else "primary"
+    existing = next((item for item in assets if item.get("asset_key") == key), None)
+    asset["asset_key"] = key
+    if existing is None:
+        assets.append(asset)
+    else:
+        existing.update(asset)
 
 
 def _result_from_layout(
@@ -113,13 +133,16 @@ def render_instagram_feed_image(package: InstagramContentPackage, *, source_imag
         raise InstagramRenderError(f"render_instagram_feed_image requires SINGLE, got {package.content_format!r}")
     headline = package.on_image_copy or package.caption
     spec = profile_spec(InstagramRenderProfile.PORTRAIT_FEED)
+    render_plan = interpret_render_plan(package)
+    _persist_render_trace(package, render_plan)
 
     if (package.presentation_family or "").strip().lower() == "breaking":
         layout = render_breaking_layout(spec=spec, source_image=source_image, headline=headline, dek=package.cta, package_identity=package.package_id)
     else:
+        audience_kicker = None if render_plan.get("render_plan_applied") else _kicker_for(package)
         layout = render_news_layout(
-            spec=spec, source_image=source_image, kicker=_kicker_for(package), headline=headline, dek=package.cta,
-            package_identity=package.package_id,
+            spec=spec, source_image=source_image, kicker=audience_kicker, headline=headline, dek=package.cta,
+            package_identity=package.package_id, render_plan=render_plan,
         )
     return _result_from_layout(layout, package, profile=InstagramRenderProfile.PORTRAIT_FEED)
 
@@ -182,10 +205,12 @@ def render_instagram_carousel(package: InstagramContentPackage, *, hero_image: I
         index = int(slide["index"])
         role = str(slide.get("role", ""))
         slide_copy = str(slide.get("text", ""))
+        render_plan = interpret_render_plan(package, slide=slide)
+        _persist_render_trace(package, render_plan, slide_index=index)
         layout = render_carousel_slide(
             spec=profile_spec(InstagramRenderProfile.CAROUSEL_SLIDE), role=role, index=index, total=total,
             slide_copy=slide_copy, source_evidence=slide.get("source_evidence"), package_identity=package.package_id,
-            hero_image=hero_image if index == 0 else None,
+            hero_image=hero_image, visual_direction=slide.get("visual_direction"), render_plan=render_plan,
         )
         results.append(_result_from_layout(layout, package, profile=InstagramRenderProfile.CAROUSEL_SLIDE, slide_index=index, slide_count=total))
     return results
@@ -200,7 +225,12 @@ def render_instagram_reel_cover(package: InstagramContentPackage, *, source_imag
         raise InstagramRenderError(f"render_instagram_reel_cover requires REEL, got {package.content_format!r}")
     hook = str(package.media_plan.get("hook") or package.caption)
     spec = profile_spec(InstagramRenderProfile.REEL_COVER)
-    layout = _render_reel_cover_layout(spec=spec, kicker=_kicker_for(package), hook=hook, source_image=source_image, package_identity=package.package_id)
+    render_plan = interpret_render_plan(package)
+    _persist_render_trace(package, render_plan)
+    layout = _render_reel_cover_layout(
+        spec=spec, kicker=None, hook=hook, source_image=source_image,
+        package_identity=package.package_id, render_plan=render_plan,
+    )
     result = _result_from_layout(layout, package, profile=InstagramRenderProfile.REEL_COVER)
     result.evidence.notes["video_asset"] = (
         package.external_video_asset_ref if package.external_video_asset_ref else "NONE - cover image only, no video generated"

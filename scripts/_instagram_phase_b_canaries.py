@@ -2,6 +2,7 @@
 from __future__ import annotations
 import asyncio
 import json
+import os
 from dataclasses import replace
 from io import BytesIO
 from uuid import UUID
@@ -9,7 +10,7 @@ from PIL import Image
 from sqlalchemy import select
 from bot.loader import create_bot
 from core.config import settings
-from database.models.instagram_editorial_delivery import InstagramEditorialDelivery
+from database.models.instagram_editorial_delivery import InstagramEditorialDelivery, InstagramEditorialDeliveryState
 from database.session import async_session_factory
 from integrations.storage.image_storage import LocalImageStorage
 from schemas.instagram_creative import (
@@ -21,7 +22,7 @@ from services.instagram_art_validator import validate_instagram_art
 from services.instagram_content_opportunity import ContentOpportunity, OpportunitySourceType
 from services.instagram_content_package import build_instagram_content_package
 from services.instagram_creative_director import CreativeDirectorInput, CreativeGenerationOutcome
-from services.instagram_editorial_delivery_state import compute_package_identity
+from services.instagram_editorial_delivery_state import InstagramEditorialDeliveryService, compute_package_identity
 from services.instagram_editorial_gate import InstagramGateDecision, evaluate_instagram_editorial_gate
 from services.instagram_editorial_package_snapshot import build_package_snapshot
 from services.instagram_format_director import ContentFormat, FormatDecision
@@ -29,7 +30,7 @@ from services.instagram_platform_renderer import (
     render_instagram_carousel, render_instagram_feed_image, render_instagram_reel_cover,
 )
 from services.instagram_shadow_pipeline import ShadowPlanResult
-from services.instagram_telegram_delivery import deliver_instagram_package, instagram_topic_configured
+from services.instagram_telegram_delivery import deliver_instagram_package, deliver_new_version, instagram_topic_configured
 from services.instagram_telegram_package_presenter import present_carousel, present_reel, present_single
 
 _STORAGE = LocalImageStorage(settings.image_storage_root)
@@ -105,15 +106,17 @@ async def deliver(bot, spec):
         },
     })
     image = source_image(spec["storage_key"])
+    remediation = os.getenv("INSTAGRAM_PHASE_B1_REMEDIATION") == "1"
+    presentation_version = 2 if remediation else 1
     if fmt is ContentFormat.CAROUSEL:
         renders = render_instagram_carousel(package, hero_image=image)
-        presentation = present_carousel(package, renders, version=1)
+        presentation = present_carousel(package, renders, version=presentation_version)
     elif fmt is ContentFormat.REEL:
         renders = [render_instagram_reel_cover(package, source_image=image)]
-        presentation = present_reel(package, renders[0], version=1)
+        presentation = present_reel(package, renders[0], version=presentation_version)
     else:
         renders = [render_instagram_feed_image(package, source_image=image)]
-        presentation = present_single(package, renders[0], version=1)
+        presentation = present_single(package, renders[0], version=presentation_version)
     art = validate_instagram_art(package, renders)
     gate = evaluate_instagram_editorial_gate(package, art)
     if gate.decision is not InstagramGateDecision.READY_FOR_EDITOR:
@@ -133,11 +136,35 @@ async def deliver(bot, spec):
         content_format=fmt.value,
     )
     async with async_session_factory() as session:
-        result = await deliver_instagram_package(
-            bot, session, presentation=presentation, gate_decision=gate.decision,
-            package_identity=identity, source_story_id=spec["story_id"],
-            content_format=fmt.value, package_snapshot=snapshot, source_url=spec["url"],
-        )
+        if remediation:
+            current = (await session.execute(
+                select(InstagramEditorialDelivery).where(
+                    InstagramEditorialDelivery.package_identity == identity,
+                    InstagramEditorialDelivery.state != InstagramEditorialDeliveryState.SUPERSEDED,
+                ).order_by(InstagramEditorialDelivery.version.desc())
+            )).scalars().first()
+            if current is None or current.version != 1:
+                raise RuntimeError(
+                    f"{spec['key']} remediation requires exactly current version 1; "
+                    f"found {None if current is None else current.version}"
+                )
+            snapshot["phase_b1_remediation"] = {
+                "renderer_revision": "instagram-render-v2",
+                "replaces_media_message_ids": list(current.media_message_ids or []),
+                "replaces_control_message_id": current.control_message_id,
+            }
+            new_delivery = await InstagramEditorialDeliveryService().create_new_version(
+                session, previous=current, package_snapshot=snapshot,
+            )
+            result = await deliver_new_version(
+                bot, session, delivery=new_delivery, presentation=presentation, source_url=spec["url"],
+            )
+        else:
+            result = await deliver_instagram_package(
+                bot, session, presentation=presentation, gate_decision=gate.decision,
+                package_identity=identity, source_story_id=spec["story_id"],
+                content_format=fmt.value, package_snapshot=snapshot, source_url=spec["url"],
+            )
         await session.commit()
         row = (await session.execute(select(InstagramEditorialDelivery).where(
             InstagramEditorialDelivery.id == UUID(result.delivery_id)
@@ -365,6 +392,8 @@ async def main():
         raise RuntimeError("Instagram Telegram topic is not configured")
     if settings.instagram_image_generation_mode != "off":
         raise RuntimeError("Canary requires paid image generation OFF")
+    if os.getenv("INSTAGRAM_PHASE_B1_REMEDIATION") == "1":
+        print(json.dumps({"mode": "PHASE_B1_REMEDIATION", "target_version": 2}))
     bot = create_bot()
     try:
         results = []

@@ -59,6 +59,11 @@ def validate_instagram_art(
     expected_profile = _FORMAT_EXPECTED_PROFILE.get(package.content_format.value)
     media_execution = package.media_plan.get("media_execution") or {}
     media_strategy = media_execution.get("strategy")
+    creative_plan = package.media_plan.get("creative_execution_plan") or {}
+    if not media_strategy and isinstance(creative_plan, dict):
+        planned_strategy = creative_plan.get("media_strategy")
+        if planned_strategy == "typographic":
+            media_strategy = "typographic"
     if (
         package.content_format.value == "single" and not package.source_image_ref
         and media_strategy != "typographic"
@@ -132,6 +137,25 @@ def validate_instagram_art(
             if ev.source_image_treatment == "none" and media_strategy != "typographic":
                 blocking.append("single_source_image_not_rendered")
 
+        # Phase B.1 objective creative-execution integrity. These checks do not pretend to judge
+        # taste; they prove that the plan reached pixels and reject the exact mechanical failures
+        # observed in founder review.
+        leaked = {str(value).strip().upper() for value in ev.notes.get("internal_labels_rendered", [])}
+        forbidden = {"CONTEXT", "THE PROBLEM", "HOW IT WORKS", "VALUE", "TAKEAWAY", "WHAT'S NEXT"}
+        if leaked & forbidden:
+            blocking.append(f"internal_render_label_leaked: {sorted(leaked & forbidden)} slide_index={ev.slide_index}")
+        if package.media_plan.get("creative_execution_plan"):
+            required_trace = {"creative_plan", "render_interpretation", "used_primitives", "source_media_treatment", "typography_treatment"}
+            missing_trace = sorted(required_trace - set(ev.notes))
+            if missing_trace or not ev.notes.get("render_plan_applied"):
+                blocking.append(f"creative_plan_not_applied: missing={missing_trace} slide_index={ev.slide_index}")
+        if ev.notes.get("source_media_treatment") == "full_bleed_hero":
+            coverage = float(ev.notes.get("source_coverage_fraction", 0.0))
+            if coverage < 0.70:
+                blocking.append(f"hero_media_geometry_too_weak: coverage={coverage} slide_index={ev.slide_index}")
+        if ev.notes.get("embedded_text_conflict_risk") and not ev.notes.get("embedded_text_strategy"):
+            blocking.append(f"embedded_source_typography_untreated: slide_index={ev.slide_index}")
+
         # 7. caption/media package consistency
         if ev.caption_linkage != package.package_id:
             blocking.append(f"package_linkage_mismatch: render carries caption_linkage={ev.caption_linkage!r}, expected {package.package_id!r}")
@@ -168,7 +192,9 @@ def validate_instagram_art(
         # identical layout on every slide after the hook - a warning (not blocking: a short, all-
         # detail-role deck can legitimately share one layout), so an editor can still see it.
         non_hook_variants = {r.evidence.notes.get("layout_variant") for r in render_results if r.evidence.slide_index != 0}
-        if len(render_results) >= 3 and len(non_hook_variants) <= 1:
+        if len(render_results) >= 4 and len(non_hook_variants) < 3:
+            blocking.append(f"carousel_layout_diversity_insufficient: non-hook variants={non_hook_variants}")
+        elif len(render_results) >= 3 and len(non_hook_variants) <= 1:
             warnings.append(f"carousel_layout_diversity_low: non-hook slides all use layout_variant={non_hook_variants}")
         if package.media_plan.get("creative_execution_plan"):
             slides = package.media_plan.get("slides") or []
