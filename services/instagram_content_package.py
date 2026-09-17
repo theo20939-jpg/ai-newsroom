@@ -206,21 +206,30 @@ def _single_media_plan(creative: Any) -> tuple[str, str | None, str | None, dict
         "source_subject": getattr(creative, "source_subject", None),
         "visual_concept": creative.visual_concept,
         "asset_requirements": list(creative.asset_requirements),
+        "creative_execution_plan": (
+            creative.creative_execution_plan.model_dump()
+            if getattr(creative, "creative_execution_plan", None) is not None else None
+        ),
     }
     return caption, on_image_copy, cta, media_plan
 
 
 def _carousel_media_plan(creative: Any) -> tuple[str, str | None, str | None, dict[str, Any]]:
-    # No schema-level "final caption" exists for a carousel (schemas/instagram_creative.py has
-    # none) - the hook slide's own copy anchors the package-level caption, clearly marked draft.
-    caption = creative.hook_slide.slide_copy
+    caption = getattr(creative, "final_caption", None) or creative.hook_slide.slide_copy
     cta = creative.final_cta
     slides = [
         {"index": i, "role": slide.role, "text": slide.slide_copy, "visual_direction": slide.visual_direction,
-         "source_evidence": slide.source_evidence}
+         "source_evidence": slide.source_evidence, "slide_purpose": getattr(slide, "slide_purpose", None),
+         "media_need": getattr(slide, "media_need", None)}
         for i, slide in enumerate(creative.slides)
     ]
-    media_plan = {"kind": "carousel", "objective": creative.objective, "slides": slides}
+    media_plan = {
+        "kind": "carousel", "objective": creative.objective, "slides": slides,
+        "creative_execution_plan": (
+            creative.creative_execution_plan.model_dump()
+            if getattr(creative, "creative_execution_plan", None) is not None else None
+        ),
+    }
     return caption, None, cta, media_plan
 
 
@@ -247,6 +256,10 @@ def _reel_media_plan(creative: Any) -> tuple[str, str | None, str | None, dict[s
         "visual_direction": getattr(creative, "visual_direction", None),
         "asset_requirements": list(getattr(creative, "asset_requirements", []) or []),
         "adaptation_notes": getattr(creative, "adaptation_notes", None),
+        "creative_execution_plan": (
+            creative.creative_execution_plan.model_dump()
+            if getattr(creative, "creative_execution_plan", None) is not None else None
+        ),
     }
     return caption, None, cta, media_plan
 
@@ -308,6 +321,7 @@ def build_instagram_content_package(
     elif creative_outcome is not None and creative_outcome.carousel is not None and fmt is ContentFormat.CAROUSEL:
         caption, on_image_copy, cta, media_plan = _carousel_media_plan(creative_outcome.carousel)
         slide_count = len(creative_outcome.carousel.slides)
+        caption_is_draft = not bool(getattr(creative_outcome.carousel, "final_caption", None))
     elif creative_outcome is not None and creative_outcome.reel is not None and fmt is ContentFormat.REEL:
         caption, on_image_copy, cta, media_plan = _reel_media_plan(creative_outcome.reel)
         caption_is_draft = not bool(caption.strip())

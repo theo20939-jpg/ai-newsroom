@@ -65,6 +65,21 @@ class InstagramEditorialDecision(BaseModel):
         return self
 
 
+class InstagramCreativeExecutionPlan(BaseModel):
+    """Format-independent production decision authored by the existing Creative Director."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    main_idea: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    focal_point: str = Field(min_length=1, max_length=_SHORT_TEXT_MAX_LENGTH)
+    media_strategy: Literal["source_media", "generated_media", "typographic"]
+    media_rationale: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    composition_direction: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    branding_treatment: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    visual_treatment: str = Field(min_length=1, max_length=_SHORT_TEXT_MAX_LENGTH)
+    avoid_recent_treatment: str | None = Field(default=None, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+
+
 class InstagramSingleCreative(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -79,6 +94,7 @@ class InstagramSingleCreative(BaseModel):
     cta: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
     asset_requirements: list[str] = Field(default_factory=list)
     evidence_used: list[str] = Field(default_factory=list)
+    creative_execution_plan: InstagramCreativeExecutionPlan | None = None
 
 
 class InstagramCarouselSlideCreative(BaseModel):
@@ -88,6 +104,8 @@ class InstagramCarouselSlideCreative(BaseModel):
     slide_copy: str = Field(min_length=1, max_length=_SHORT_TEXT_MAX_LENGTH)
     visual_direction: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
     source_evidence: str | None = Field(default=None, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    slide_purpose: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
+    media_need: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
 
 
 class InstagramCarouselCreative(BaseModel):
@@ -98,10 +116,30 @@ class InstagramCarouselCreative(BaseModel):
     slides: list[InstagramCarouselSlideCreative] = Field(min_length=2)
     final_cta: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
     evidence_used: list[str] = Field(default_factory=list)
+    final_caption: str | None = Field(default=None, max_length=_LONG_TEXT_MAX_LENGTH)
+    creative_execution_plan: InstagramCreativeExecutionPlan | None = None
 
     @property
     def hook_slide(self) -> InstagramCarouselSlideCreative:
         return self.slides[0]
+
+    @model_validator(mode="after")
+    def validate_production_narrative(self) -> "InstagramCarouselCreative":
+        if self.creative_execution_plan is None and self.final_caption is None:
+            return self
+        normalized = [" ".join(slide.slide_copy.lower().split()) for slide in self.slides]
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("carousel slides must not duplicate or mechanically repeat copy")
+        if self.slides[0].role.strip().lower() != "hook":
+            raise ValueError("carousel production sequence must begin with a hook slide")
+        roles = [slide.role.strip().lower() for slide in self.slides]
+        if len(set(roles)) < 2:
+            raise ValueError("carousel slides must have distinct narrative functions")
+        if roles[-1] not in {"takeaway", "cta"}:
+            raise ValueError("carousel production sequence must end with takeaway or cta")
+        if any(not slide.slide_purpose for slide in self.slides):
+            raise ValueError("every production carousel slide requires slide_purpose")
+        return self
 
 
 class InstagramReelSceneCreative(BaseModel):
@@ -147,3 +185,4 @@ class InstagramReelCreative(BaseModel):
     source_subject: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
     final_caption: str | None = Field(default=None, max_length=_LONG_TEXT_MAX_LENGTH)
     scenes: list[InstagramReelSceneCreative] = Field(default_factory=list)
+    creative_execution_plan: InstagramCreativeExecutionPlan | None = None

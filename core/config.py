@@ -775,6 +775,12 @@ class Settings(BaseSettings):
     # activation decision, not made by this phase.
     meme_image_generation_mode: Literal["off", "dry_run", "enforce"] = "off"
     meme_image_max_bytes: int = Field(default=10_000_000, gt=0)
+    # Phase B paid Instagram visuals use the shared BudgetedImageExecutor. Default OFF is
+    # deliberate; a bounded production canary must opt into LIVE explicitly.
+    instagram_image_generation_mode: Literal["off", "dry_run", "live"] = "off"
+    instagram_image_generation_max_attempts: int = Field(default=1, ge=1, le=2)
+    instagram_generated_image_max_bytes: int = Field(default=10_000_000, gt=0)
+
 
     # Phase 18 M8: Telegram Meme Editorial Preview (docs/
     # phase18_m8_telegram_editorial_preview_report.md). "off" (default): the preview is never

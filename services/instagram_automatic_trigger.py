@@ -69,6 +69,7 @@ from services.instagram_creative_director import (
     UngroundedTrendClaimError,
     generate_editorial_decision,
 )
+from services.instagram_creative_media import execute_instagram_creative_media
 from services.instagram_director_context import (
     load_instagram_director_context,
     render_account_context,
@@ -458,7 +459,7 @@ async def _resolve_single_source_image(
                     continue
                 source_image = decoded.convert("RGB")
         except (OSError, ValueError):
-            logger.warning("instagram_single_image_decode_failed", extra={"media_candidate_id": str(candidate.id)})
+            logger.warning("instagram_source_image_decode_failed", extra={"media_candidate_id": str(candidate.id)})
             continue
         return source_image, candidate, len(candidates), len(data)
     return None, None, len(candidates), 0
@@ -598,18 +599,11 @@ async def evaluate_and_submit_instagram_opportunity(
             duplicate=phase_a_plan.duplicate, accepted=True,
         )
 
-    source_image = None
-    image_candidate = None
-    if format_decision.recommended_format is ContentFormat.SINGLE:
-        source_image, image_candidate, image_count, read_length = await _resolve_single_source_image(
-            session, source_event_id or opportunity.story_id
-        )
-        if source_image is None or image_candidate is None:
-            logger.warning("instagram_single_source_image_unavailable", extra={
-                "opportunity_id": opportunity.id, "image_candidate_count": image_count,
-            })
-            return InstagramTriggerCandidateOutcome(event_id=opportunity.id, accepted=True, reason="source_image_unavailable")
-        logger.info("instagram_single_source_image_selected", extra={
+    source_image, image_candidate, image_count, read_length = await _resolve_single_source_image(
+        session, source_event_id or opportunity.story_id
+    )
+    if source_image is not None and image_candidate is not None:
+        logger.info("instagram_source_image_selected", extra={
             "opportunity_id": opportunity.id, "image_candidate_count": image_count,
             "media_candidate_id": str(image_candidate.id), "read_byte_length": read_length,
         })
@@ -646,6 +640,33 @@ async def evaluate_and_submit_instagram_opportunity(
         return InstagramTriggerCandidateOutcome(event_id=opportunity.id, accepted=True, reason="creative_director_failed:unexpected_error")
 
     single, carousel, reel = creative_outcome.single, creative_outcome.carousel, creative_outcome.reel
+    creative = single or carousel or reel
+    if creative is None:
+        return InstagramTriggerCandidateOutcome(
+            event_id=opportunity.id, accepted=True, reason="creative_director_returned_no_creative",
+        )
+    try:
+        creative_media = await execute_instagram_creative_media(
+            creative=creative,
+            source_image=source_image,
+            source_ref=image_candidate.candidate_id if image_candidate else None,
+            opportunity_summary=opportunity_summary,
+            evidence=list(opportunity.evidence),
+            content_format=format_decision.recommended_format.value,
+            creative_id=identity,
+            opportunity_id=opportunity.id,
+        )
+    except Exception as exc:
+        logger.exception("instagram_creative_media_failed", extra={
+            "opportunity_id": opportunity.id, "error": type(exc).__name__,
+        })
+        return InstagramTriggerCandidateOutcome(
+            event_id=opportunity.id, accepted=True, reason=f"creative_media_failed:{type(exc).__name__}",
+        )
+    if creative_media.status not in {"source_media", "generated_media", "typographic"}:
+        return InstagramTriggerCandidateOutcome(
+            event_id=opportunity.id, accepted=True, reason=creative_media.status,
+        )
     concept_summary = (
         single.creative_angle if single is not None
         else reel.hook if reel is not None
@@ -670,23 +691,35 @@ async def evaluate_and_submit_instagram_opportunity(
     pkg = build_instagram_content_package(
         opportunity=opportunity, format_decision=format_decision, shadow_plan=shadow_plan,
         creative_outcome=creative_outcome, account_key="default", reel_script_readiness=reel_script_readiness,
-        source_image_ref=image_candidate.candidate_id if image_candidate else None,
-        media_candidate_id=str(image_candidate.id) if image_candidate else None,
+        source_image_ref=creative_media.media_ref,
+        media_candidate_id=(
+            str(image_candidate.id)
+            if image_candidate and creative_media.media_strategy == "source_media" else None
+        ),
     )
+    pkg = replace(pkg, media_plan={**pkg.media_plan, "media_execution": {
+        "strategy": creative_media.media_strategy,
+        "status": creative_media.status,
+        "generation_cost_usd": creative_media.generation_cost_usd,
+        "generation_request_id": creative_media.generation_request_id,
+    }})
+    creative_image = creative_media.image
 
     try:
         if format_decision.recommended_format is ContentFormat.CAROUSEL:
-            renders = render_instagram_carousel(pkg)
+            renders = render_instagram_carousel(pkg, hero_image=creative_image)
             presentation = present_carousel(pkg, renders, version=1)
         elif format_decision.recommended_format is ContentFormat.REEL:
-            renders = [render_instagram_reel_cover(pkg)]
+            renders = [render_instagram_reel_cover(pkg, source_image=creative_image)]
             presentation = present_reel(pkg, renders[0], version=1)
         else:
-            renders = [render_instagram_feed_image(pkg, source_image=source_image)]
-            logger.info("instagram_single_source_image_rendered", extra={
-                "opportunity_id": opportunity.id, "media_candidate_id": str(image_candidate.id),
+            renders = [render_instagram_feed_image(pkg, source_image=creative_image)]
+            logger.info("instagram_single_creative_media_rendered", extra={
+                "opportunity_id": opportunity.id,
+                "media_candidate_id": str(image_candidate.id) if image_candidate else None,
                 "rendered_byte_length": len(renders[0].image_bytes),
                 "source_image_treatment": renders[0].evidence.source_image_treatment,
+                "media_strategy": creative_media.media_strategy,
             })
             presentation = present_single(pkg, renders[0], version=1)
 

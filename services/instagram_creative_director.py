@@ -86,9 +86,9 @@ EDITORIAL_DECISION_PROMPT_NAME = "instagram_editorial_decision"
 # Each version bump is its own independently-versioned, schema-shape-only fix; every previous
 # version file is left untouched/unused, matching this codebase's own established "never edit a
 # shipped prompt version in place" convention.
-_SINGLE_PROMPT_VERSION = "5"
-_CAROUSEL_PROMPT_VERSION = "4"
-_REEL_PROMPT_VERSION = "6"
+_SINGLE_PROMPT_VERSION = "6"
+_CAROUSEL_PROMPT_VERSION = "5"
+_REEL_PROMPT_VERSION = "7"
 _EDITORIAL_DECISION_PROMPT_VERSION = "1"
 
 
@@ -263,7 +263,7 @@ def _build_decision_user_text(decision_input: InstagramEditorialDecisionInput) -
 
 _CYRILLIC_RE = re.compile(r"[А-Яа-яЁё]")
 _LATIN_WORD_RE = re.compile(r"[A-Za-z][A-Za-z'-]*")
-_VISIBLE_SERVICE_LABEL_RE = re.compile(r"(?im)^\s*(?:CTA|CALL\s+TO\s+ACTION)\s*:")
+_VISIBLE_SERVICE_LABEL_RE = re.compile(r"(?im)^\s*(?:CTA|CALL\s+TO\s+ACTION|HOOK|CAPTION|EDITOR\s+NOTE|ANGLE)\s*:")
 _UNSUPPORTED_PLATFORM_TREND_CLAIM_RE = re.compile(
     r"(?i)(?:(?:instagram|reels).{0,40}(?:тренд|вирус|viral|audio|аудио|формат)|"
     r"(?:тренд|вирус|viral|audio|аудио|формат).{0,40}(?:instagram|reels))"
@@ -424,9 +424,11 @@ async def generate_single_creative(
         prompt_version=_SINGLE_PROMPT_VERSION,
     )
     creative = InstagramSingleCreative.model_validate(output)
+    plan = creative.creative_execution_plan
     _enforce_fact_safety(
         text_fields=[creative.creative_angle, creative.visual_concept, creative.on_image_copy, creative.caption_direction,
-                     creative.final_caption or "", creative.source_subject or "", creative.cta or ""],
+                     creative.final_caption or "", creative.source_subject or "", creative.cta or "",
+                     *(str(value or "") for value in (plan.model_dump().values() if plan is not None else []))],
         evidence_used=creative.evidence_used, director_input=director_input,
     )
     _enforce_output_policy(
@@ -444,10 +446,14 @@ async def generate_carousel_creative(
         prompt_version=_CAROUSEL_PROMPT_VERSION,
     )
     creative = InstagramCarouselCreative.model_validate(output)
-    text_fields = [slide.slide_copy for slide in creative.slides] + [creative.final_cta or ""]
+    plan = creative.creative_execution_plan
+    text_fields = [slide.slide_copy for slide in creative.slides] + [
+        creative.final_cta or "", creative.final_caption or "",
+        *(str(value or "") for value in (plan.model_dump().values() if plan is not None else [])),
+    ]
     _enforce_fact_safety(text_fields=text_fields, evidence_used=creative.evidence_used, director_input=director_input)
     _enforce_output_policy(
-        [*(slide.slide_copy for slide in creative.slides), creative.final_cta or ""],
+        [*(slide.slide_copy for slide in creative.slides), creative.final_cta or "", creative.final_caption or ""],
         locale=director_input.locale,
     )
     return CreativeGenerationOutcome(carousel=creative, call=call)
@@ -461,6 +467,7 @@ async def generate_reel_creative(
         prompt_version=_REEL_PROMPT_VERSION,
     )
     creative = InstagramReelCreative.model_validate(output)
+    plan = creative.creative_execution_plan
     text_fields = [
         creative.hook, creative.caption_direction, creative.final_caption or "", creative.source_subject or "",
         creative.voiceover_script or "",
@@ -468,6 +475,7 @@ async def generate_reel_creative(
         creative.visual_direction or "", creative.adaptation_notes or "",
         *(scene.spoken_line for scene in creative.scenes),
         *(scene.on_screen_text or "" for scene in creative.scenes),
+        *(str(value or "") for value in (plan.model_dump().values() if plan is not None else [])),
     ]
     _enforce_fact_safety(text_fields=text_fields, evidence_used=creative.evidence_used, director_input=director_input)
     _enforce_output_policy(

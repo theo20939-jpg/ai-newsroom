@@ -35,21 +35,21 @@ class ImagePriceQuote:
     worst_case_cost_usd: Decimal
     cost_semantics: str
     input_price_per_million: Decimal
-    output_price_per_million: Decimal | None
+    output_price_per_million: Decimal
+    fixed_output_cost_usd: Decimal = Decimal("0")
 
     def cost_from_usage(self, *, input_tokens: int | None, output_tokens: int | None) -> Decimal:
         """Return the best deterministic estimate supported by the provider response.
 
         OpenAI reports separately-priced input/output token counts, so those can be priced
         directly. Gemini's Interactions response does not separate image output tokens from
-        text/thinking output tokens; its configured expected charge therefore remains the honest
-        accounting value rather than fabricating a precise provider invoice.
+        text/thinking output tokens; the fixed 1K image charge plus all reported output at the
+        text/thinking rate is therefore a conservative configured estimate, not an exact invoice.
         """
-        if self.output_price_per_million is None:
-            return self.expected_cost_usd
         million = Decimal(1_000_000)
         return (
-            Decimal(input_tokens or 0) / million * self.input_price_per_million
+            self.fixed_output_cost_usd
+            + Decimal(input_tokens or 0) / million * self.input_price_per_million
             + Decimal(output_tokens or 0) / million * self.output_price_per_million
         )
 
@@ -119,9 +119,10 @@ class ImagePricingCatalog:
                 pricing_version=IMAGE_PRICING_VERSION,
                 expected_cost_usd=Decimal("0.067") + expected_input,
                 worst_case_cost_usd=Decimal("0.067") + worst_input + worst_text_output,
-                cost_semantics="configured_provider_estimate",
+                cost_semantics="configured_conservative_usage_estimate",
                 input_price_per_million=input_rate,
-                output_price_per_million=None,
+                output_price_per_million=Decimal("3.00"),
+                fixed_output_cost_usd=Decimal("0.067"),
             )
 
         raise UnknownImagePricingError(

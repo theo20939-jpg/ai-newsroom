@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from io import BytesIO
 from typing import Any, Callable
 
-from PIL import Image
+from PIL import Image, ImageStat
 
 from services.instagram_content_package import InstagramContentPackage
 from services.instagram_platform_renderer import InstagramRenderResult
@@ -57,8 +57,17 @@ def validate_instagram_art(
         return InstagramArtValidationResult(passed=False, blocking_issues=blocking, warnings=warnings, retries_used=retries_used)
 
     expected_profile = _FORMAT_EXPECTED_PROFILE.get(package.content_format.value)
-    if package.content_format.value == "single" and not package.source_image_ref:
-        blocking.append("single_real_source_image_required")
+    media_execution = package.media_plan.get("media_execution") or {}
+    media_strategy = media_execution.get("strategy")
+    if (
+        package.content_format.value == "single" and not package.source_image_ref
+        and media_strategy != "typographic"
+    ):
+        blocking.append(
+            "single_media_reference_required"
+            if media_strategy
+            else "single_real_source_image_required"
+        )
     for result in render_results:
         ev = result.evidence
 
@@ -94,6 +103,16 @@ def validate_instagram_art(
         if not ev.text_regions:
             blocking.append(f"unreadable_or_empty_content: no text regions rendered, slide_index={ev.slide_index}")
 
+        try:
+            with Image.open(BytesIO(result.image_bytes)) as image:
+                image.verify()
+            with Image.open(BytesIO(result.image_bytes)) as image:
+                grayscale = image.convert("L").resize((64, 64))
+                if ImageStat.Stat(grayscale).stddev[0] < 2.0:
+                    blocking.append(f"blank_or_near_blank_render: slide_index={ev.slide_index}")
+        except (OSError, ValueError):
+            blocking.append(f"rendered_media_unusable: slide_index={ev.slide_index}")
+
         # 6. source/media consistency (INSTAGRAM-VISUAL-SYSTEM-V1-1: this renderer now genuinely
         #    composites real source imagery - section 13). Any value outside the image-handling
         #    module's own truthful vocabulary would mean the evidence lied about what happened to
@@ -110,13 +129,8 @@ def validate_instagram_art(
             )
             (blocking if package.content_format.value == "single" else warnings).append(issue)
         if package.content_format.value == "single":
-            if ev.source_image_treatment == "none":
+            if ev.source_image_treatment == "none" and media_strategy != "typographic":
                 blocking.append("single_source_image_not_rendered")
-            try:
-                with Image.open(BytesIO(result.image_bytes)) as image:
-                    image.verify()
-            except (OSError, ValueError):
-                blocking.append("single_rendered_media_unusable")
 
         # 7. caption/media package consistency
         if ev.caption_linkage != package.package_id:
@@ -156,6 +170,21 @@ def validate_instagram_art(
         non_hook_variants = {r.evidence.notes.get("layout_variant") for r in render_results if r.evidence.slide_index != 0}
         if len(render_results) >= 3 and len(non_hook_variants) <= 1:
             warnings.append(f"carousel_layout_diversity_low: non-hook slides all use layout_variant={non_hook_variants}")
+        if package.media_plan.get("creative_execution_plan"):
+            slides = package.media_plan.get("slides") or []
+            normalized_copy = [
+                " ".join(str(slide.get("text") or "").lower().split())
+                for slide in slides if isinstance(slide, dict)
+            ]
+            if len(normalized_copy) != len(set(normalized_copy)):
+                blocking.append("carousel_duplicate_slide_copy")
+            roles = [str(slide.get("role") or "").lower() for slide in slides if isinstance(slide, dict)]
+            if slides and (not roles or roles[0] != "hook"):
+                blocking.append("carousel_missing_hook_first")
+            if slides and roles[-1] not in {"takeaway", "cta"}:
+                blocking.append("carousel_missing_closing_function")
+            if slides and any(not slide.get("slide_purpose") for slide in slides if isinstance(slide, dict)):
+                blocking.append("carousel_missing_slide_purpose")
 
     passed = not blocking
     return InstagramArtValidationResult(

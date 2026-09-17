@@ -186,8 +186,12 @@ async def test_gemini_profile_is_representable_and_distinct():
         reference_images=(ReferenceImage(data=b"x", mime_type="image/png"),),
     )
     quote = ImagePricingCatalog().quote(profile, request)
+    accounted = quote.cost_from_usage(input_tokens=2500, output_tokens=1300)
     assert quote.expected_cost_usd > Decimal("0.067")
     assert quote.worst_case_cost_usd > quote.expected_cost_usd
+    assert accounted > quote.expected_cost_usd
+    assert accounted <= quote.worst_case_cost_usd
+    assert quote.cost_semantics == "configured_conservative_usage_estimate"
 
 
 def test_real_paid_profile_can_never_resolve_to_zero_cost():
