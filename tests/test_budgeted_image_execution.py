@@ -69,7 +69,10 @@ def _profile(**updates):
 
 
 def _request():
-    return ImageGenerationRequest(prompt="A precise editorial illustration")
+    return ImageGenerationRequest(
+        prompt="A precise editorial illustration",
+        metadata={"prompt_sha256": "abc123", "asset_key": "primary"},
+    )
 
 
 async def _execute(guard, gateway, *, mode="live", profile=None):
@@ -91,6 +94,10 @@ async def test_live_paid_request_with_budget_calls_provider_and_records_nonzero_
     assert result.accounted_cost_usd > 0
     assert guard.completed[0]["status"] == "success"
     assert guard.completed[0]["accounted_cost"] == result.accounted_cost_usd
+    audit = guard.completed[0]["audit_fields"]
+    assert audit["generation_execution_id"] == "package-1:v1"
+    assert audit["prompt_sha256"] == "abc123"
+    assert audit["asset_key"] == "primary"
 
 
 @pytest.mark.asyncio

@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from enum import Enum
 from io import BytesIO
-from typing import Any
+from typing import Any, Iterable
 
 from PIL import Image, ImageStat
 
@@ -22,6 +23,63 @@ from services.budgeted_image_execution import build_budgeted_image_executor
 from services.image_pricing import ImageExecutionProfile
 
 
+class InstagramMediaMode(str, Enum):
+    SOURCE = "SOURCE"
+    GENERATED = "GENERATED"
+    GRAPHIC = "GRAPHIC"
+    TYPOGRAPHIC = "TYPOGRAPHIC"
+
+
+@dataclass(frozen=True)
+class InstagramMediaExecutionAsset:
+    asset_key: str
+    media_mode: InstagramMediaMode
+    status: str
+    image: Image.Image | None
+    asset_ref: str | None = None
+    source_asset_ref: str | None = None
+    generated_asset_ref: str | None = None
+    generation_execution_id: str | None = None
+    provider_request_id: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    prompt: str | None = None
+    prompt_sha256: str | None = None
+    size: str | None = None
+    quality: str | None = None
+    reserved_cost_usd: str | None = None
+    accounted_cost_usd: str | None = None
+    raw_image_bytes: bytes | None = None
+    composition_intent: str | None = None
+    focal_subject: str | None = None
+    source_treatment: str | None = None
+    final_compositor_treatment: str | None = None
+
+    def metadata(self) -> dict[str, Any]:
+        return {
+            "asset_key": self.asset_key,
+            "media_mode": self.media_mode.value,
+            "status": self.status,
+            "asset_ref": self.asset_ref,
+            "source_asset_ref": self.source_asset_ref,
+            "generated_asset_ref": self.generated_asset_ref,
+            "generation_execution_id": self.generation_execution_id,
+            "provider_request_id": self.provider_request_id,
+            "provider": self.provider,
+            "model": self.model,
+            "generation_prompt": self.prompt,
+            "generation_prompt_sha256": self.prompt_sha256,
+            "size": self.size,
+            "quality": self.quality,
+            "reserved_cost_usd": self.reserved_cost_usd,
+            "accounted_cost_usd": self.accounted_cost_usd,
+            "composition_intent": self.composition_intent,
+            "focal_subject": self.focal_subject,
+            "source_treatment": self.source_treatment,
+            "final_compositor_treatment": self.final_compositor_treatment,
+        }
+
+
 @dataclass(frozen=True)
 class InstagramCreativeMediaResult:
     status: str
@@ -30,33 +88,28 @@ class InstagramCreativeMediaResult:
     media_strategy: str
     generation_cost_usd: str | None = None
     generation_request_id: str | None = None
+    assets: tuple[InstagramMediaExecutionAsset, ...] = ()
+
+    def execution_metadata(self) -> dict[str, Any]:
+        return {
+            "strategy": self.media_strategy,
+            "status": self.status,
+            "generation_cost_usd": self.generation_cost_usd,
+            "generation_request_id": self.generation_request_id,
+            "assets": [asset.metadata() for asset in self.assets],
+        }
+
+    def slide_images(self) -> dict[int, Image.Image]:
+        return {
+            int(asset.asset_key): asset.image
+            for asset in self.assets
+            if asset.asset_key.isdigit() and asset.image is not None
+        }
 
 
 def _execution_plan(creative: Any) -> dict[str, Any]:
     plan = getattr(creative, "creative_execution_plan", None)
     return plan.model_dump() if plan is not None else {}
-
-
-def _generation_prompt(
-    *, plan: dict[str, Any], opportunity_summary: str, evidence: list[str], content_format: str,
-) -> str:
-    evidence_block = "\n".join(f"- {item}" for item in evidence)
-    return (
-        "Create a professional Instagram editorial base visual for NINJA.\n"
-        f"FORMAT: {content_format} portrait composition.\n"
-        f"STORY: {opportunity_summary}\n"
-        f"MAIN IDEA: {plan.get('main_idea')}\n"
-        f"FOCAL POINT: {plan.get('focal_point')}\n"
-        f"COMPOSITION: {plan.get('composition_direction')}\n"
-        f"VISUAL TREATMENT: {plan.get('visual_treatment')}\n"
-        f"FACTUAL EVIDENCE:\n{evidence_block}\n"
-        "Quality direction: stop-scroll, Instagram-native, editorially specific, strong focal "
-        "point, deliberate negative space, professional photography/collage/product treatment. "
-        "Do not default to a generic dark futuristic AI background. Do not invent products, "
-        "interfaces, facts, numbers or third-party marks not supported above. CRITICAL: create "
-        "base art only. No logo, no wordmark, no watermark, no readable text, no typography. "
-        "The application will add current canonical NINJA branding and copy after generation."
-    )
 
 
 def _decode_publishable_image(data: bytes) -> Image.Image:
@@ -74,6 +127,213 @@ def _decode_publishable_image(data: bytes) -> Image.Image:
     return image
 
 
+_VISUAL_PROFILE_VERSION = "instagram-reference-board-text-profile-v1"
+
+
+def compile_instagram_generation_prompt(
+    *,
+    plan: dict[str, Any],
+    opportunity_summary: str,
+    evidence: list[str],
+    content_format: str,
+    slide: Any | None = None,
+) -> str:
+    """Compile approved intent into base-art instructions; exact copy and branding stay outside."""
+
+    def value(name: str) -> str:
+        if slide is None:
+            return ""
+        raw = slide.get(name) if isinstance(slide, dict) else getattr(slide, name, "")
+        return str(raw or "")
+
+    evidence_block = "\n".join(f"- {item}" for item in evidence)
+    return (
+        f"VISUAL PROFILE VERSION\n{_VISUAL_PROFILE_VERSION}\n\n"
+        f"SUBJECT\n{opportunity_summary}\nSupported facts only:\n{evidence_block}\n\n"
+        f"CREATIVE IDEA\n{plan.get('main_idea') or opportunity_summary}\n"
+        f"Slide purpose: {value('slide_purpose') or 'primary visual'}\n\n"
+        f"VISUAL GENRE\n{plan.get('visual_treatment') or 'editorial conceptual visual'}\n\n"
+        f"COMPOSITION\n{plan.get('composition_direction') or 'portrait composition with deliberate negative space'}\n"
+        f"Per-asset direction: {value('visual_direction') or 'follow the primary composition'}\n"
+        "Create foreground/background depth, one decisive focal point, and intentional negative "
+        "space for typography. Do not make a presentation slide or UI card.\n\n"
+        f"FOCAL SUBJECT\n{plan.get('focal_point') or opportunity_summary}\n\n"
+        "CAMERA / PERSPECTIVE\nChoose a perspective that makes the focal subject dominant and "
+        "stop-scroll at phone size.\n\n"
+        "LIGHTING / MATERIAL / TEXTURE\nUse purposeful editorial lighting, believable depth, "
+        "tactile surfaces, and controlled detail.\n\n"
+        "COLOR DIRECTION\nDerive color relationships from the creative idea. Do not default to "
+        "black, white and red.\n\n"
+        "MOOD\nConfident, contemporary, specific, visually ambitious, never generic corporate AI art.\n\n"
+        f"INSTAGRAM FORMAT\n{content_format} portrait base artwork, optimized for a 4:5 editorial "
+        "composition. Keep the focal subject clear and reserve safe negative space for an exact "
+        "Russian headline.\n\n"
+        "REFERENCE-BOARD PRINCIPLES\nStrong focal hierarchy, cinematic/editorial/culture-led range, "
+        "thoughtful density, depth, layering, image-text balance, and Instagram-native stop-scroll "
+        "quality. The board's old branding is explicitly excluded.\n\n"
+        "NEGATIVE CONSTRAINTS\nNO LOGOS. NO WORDMARKS. NO WATERMARKS. NO LARGE TEXT. NO READABLE "
+        "TEXT. NO OUTDATED NNJ/NINJA BRANDING. NO FAKE UI. NO RANDOM INTERFACES. NO UNSUPPORTED "
+        "PRODUCTS, FACTS, NUMBERS OR THIRD-PARTY MARKS. Do not bake the final headline into the "
+        "image; the application adds exact Russian text and the current canonical logo after generation."
+    )
+
+
+def _slide_value(slide: Any, name: str) -> str:
+    raw = slide.get(name) if isinstance(slide, dict) else getattr(slide, name, "")
+    return str(raw or "")
+
+
+def _mode_for_item(*, strategy: str, slide: Any | None, index: int) -> InstagramMediaMode:
+    if slide is None:
+        return {
+            "source_media": InstagramMediaMode.SOURCE,
+            "generated_media": InstagramMediaMode.GENERATED,
+            "typographic": InstagramMediaMode.TYPOGRAPHIC,
+            "graphic": InstagramMediaMode.GRAPHIC,
+        }.get(strategy, InstagramMediaMode.TYPOGRAPHIC)
+    need = _slide_value(slide, "media_need").lower()
+    if any(token in need for token in ("исход", "source", "фото", "photo")):
+        return InstagramMediaMode.SOURCE
+    if any(token in need for token in ("граф", "diagram", "схем")):
+        return InstagramMediaMode.GRAPHIC
+    if any(token in need for token in ("типограф", "typograph", "минималь", "text")):
+        return InstagramMediaMode.TYPOGRAPHIC
+    if any(token in need for token in ("генер", "generated", "original visual", "ai visual")):
+        return InstagramMediaMode.GENERATED
+    if strategy == "generated_media":
+        return InstagramMediaMode.GENERATED
+    if strategy == "source_media" and index == 0:
+        return InstagramMediaMode.SOURCE
+    return InstagramMediaMode.TYPOGRAPHIC
+
+
+def _execution_items(
+    creative: Any, *, strategy: str, content_format: str,
+) -> list[tuple[str, InstagramMediaMode, Any | None]]:
+    if content_format != "carousel":
+        return [("primary", _mode_for_item(strategy=strategy, slide=None, index=0), None)]
+    slides: Iterable[Any] = getattr(creative, "slides", ()) or ()
+    items = [
+        (str(index), _mode_for_item(strategy=strategy, slide=slide, index=index), slide)
+        for index, slide in enumerate(slides)
+    ]
+    return items or [("0", _mode_for_item(strategy=strategy, slide=None, index=0), None)]
+
+
+async def _execute_generated_asset(
+    *,
+    asset_key: str,
+    slide: Any | None,
+    plan: dict[str, Any],
+    opportunity_summary: str,
+    evidence: list[str],
+    content_format: str,
+    creative_id: str,
+    opportunity_id: str,
+    effective_mode: str,
+) -> InstagramMediaExecutionAsset:
+    prompt = compile_instagram_generation_prompt(
+        plan=plan,
+        opportunity_summary=opportunity_summary,
+        evidence=evidence,
+        content_format=content_format,
+        slide=slide,
+    )
+    prompt_hash = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+    execution_id = f"instagram:{creative_id}:visual:{asset_key}:v2"
+    profile = ImageExecutionProfile(
+        provider="openai",
+        model=GPT_IMAGE_2,
+        quality="medium",
+        size="1024x1536",
+        operation=ImageGenerationOperation.TEXT_TO_IMAGE,
+    )
+    base = dict(
+        asset_key=asset_key,
+        media_mode=InstagramMediaMode.GENERATED,
+        generation_execution_id=execution_id,
+        provider="openai",
+        model=GPT_IMAGE_2,
+        prompt=prompt,
+        prompt_sha256=prompt_hash,
+        size="1024x1536",
+        quality="medium",
+        composition_intent=str(plan.get("composition_direction") or ""),
+        focal_subject=str(plan.get("focal_point") or ""),
+        source_treatment="generated_base_art",
+        final_compositor_treatment="exact_russian_typography_canonical_logo_safe_zones",
+    )
+    if effective_mode == "off":
+        return InstagramMediaExecutionAsset(status="generation_off", image=None, **base)
+    if settings.openai_api_key is None:
+        return InstagramMediaExecutionAsset(status="provider_not_configured", image=None, **base)
+
+    request = ImageGenerationRequest(
+        prompt=prompt,
+        operation=ImageGenerationOperation.TEXT_TO_IMAGE,
+        preferred_provider="openai",
+        preferred_model=GPT_IMAGE_2,
+        target_aspect_ratio="2:3",
+        target_width=1024,
+        target_height=1536,
+        metadata={
+            "purpose": "instagram_phase_b2",
+            "opportunity_id": opportunity_id,
+            "asset_key": asset_key,
+            "prompt_sha256": prompt_hash,
+        },
+    )
+    adapter = OpenAIImageAdapter(
+        api_key=settings.openai_api_key.get_secret_value(),
+        quality="medium",
+        text_to_image_size="1024x1536",  # type: ignore[arg-type]
+    )
+    result = await build_budgeted_image_executor().execute(
+        gateway=adapter,
+        request=request,
+        profile=profile,
+        mode=effective_mode,  # type: ignore[arg-type]
+        purpose="instagram_phase_b2",
+        execution_id=execution_id,
+        creative_id=f"instagram:{creative_id}",
+        package_id=creative_id,
+        opportunity_id=opportunity_id,
+        max_attempts=1,
+    )
+    reserved = str(result.quote.worst_case_cost_usd) if result.quote is not None else None
+    accounted = str(result.accounted_cost_usd) if result.accounted_cost_usd is not None else None
+    if result.status != "generated" or result.response is None:
+        return InstagramMediaExecutionAsset(
+            status=f"generation_{result.status}",
+            image=None,
+            reserved_cost_usd=reserved,
+            accounted_cost_usd=accounted,
+            **base,
+        )
+
+    raw_bytes = result.response.image_bytes
+    image = _decode_publishable_image(raw_bytes)
+    digest = hashlib.sha256(raw_bytes).hexdigest()
+    stored = LocalImageStorage(settings.image_storage_root).store_validated_image(
+        raw_bytes,
+        sha256=digest,
+        image_format="PNG",
+        max_bytes=settings.instagram_generated_image_max_bytes,
+    )
+    generated_ref = f"generated:{stored.storage_key}"
+    return InstagramMediaExecutionAsset(
+        status="generated_media",
+        image=image,
+        asset_ref=generated_ref,
+        generated_asset_ref=generated_ref,
+        provider_request_id=result.response.request_id,
+        reserved_cost_usd=reserved,
+        accounted_cost_usd=accounted,
+        raw_image_bytes=raw_bytes,
+        **base,
+    )
+
+
 async def execute_instagram_creative_media(
     *,
     creative: Any,
@@ -86,101 +346,101 @@ async def execute_instagram_creative_media(
     opportunity_id: str,
     mode: str | None = None,
 ) -> InstagramCreativeMediaResult:
+    """Execute explicit SOURCE/GENERATED/GRAPHIC/TYPOGRAPHIC assets, per slide when applicable."""
     plan = _execution_plan(creative)
     strategy = str(
         plan.get("media_strategy")
         or ("source_media" if content_format == "single" else "typographic")
     )
-
-    if strategy == "source_media":
-        if source_image is None or source_ref is None:
-            missing_status = (
-                "source_media_unavailable" if plan else "source_image_unavailable"
-            )
-            return InstagramCreativeMediaResult(
-                status=missing_status, image=None, media_ref=None,
-                media_strategy=strategy,
-            )
+    if strategy not in {"source_media", "generated_media", "typographic", "graphic"}:
         return InstagramCreativeMediaResult(
-            status="source_media", image=source_image, media_ref=source_ref,
-            media_strategy=strategy,
-        )
-
-    if strategy == "typographic":
-        return InstagramCreativeMediaResult(
-            status="typographic", image=None, media_ref=None, media_strategy=strategy,
-        )
-
-    if strategy != "generated_media":
-        return InstagramCreativeMediaResult(
-            status="unknown_media_strategy", image=None, media_ref=None,
+            status="unknown_media_strategy",
+            image=None,
+            media_ref=None,
             media_strategy=strategy,
         )
 
     effective_mode = mode or settings.instagram_image_generation_mode
-    if effective_mode == "off":
-        return InstagramCreativeMediaResult(
-            status="generation_off", image=None, media_ref=None, media_strategy=strategy,
+    assets: list[InstagramMediaExecutionAsset] = []
+    for asset_key, media_mode, slide in _execution_items(
+        creative, strategy=strategy, content_format=content_format,
+    ):
+        common = dict(
+            asset_key=asset_key,
+            media_mode=media_mode,
+            composition_intent=(
+                _slide_value(slide, "visual_direction")
+                if slide is not None
+                else str(plan.get("composition_direction") or "")
+            ),
+            focal_subject=str(plan.get("focal_point") or ""),
         )
-    if settings.openai_api_key is None:
-        return InstagramCreativeMediaResult(
-            status="provider_not_configured", image=None, media_ref=None,
-            media_strategy=strategy,
-        )
+        if media_mode is InstagramMediaMode.SOURCE:
+            if source_image is None or source_ref is None:
+                missing_status = "source_media_unavailable" if plan else "source_image_unavailable"
+                assets.append(InstagramMediaExecutionAsset(
+                    status=missing_status, image=None, **common,
+                ))
+            else:
+                assets.append(InstagramMediaExecutionAsset(
+                    status="source_media",
+                    image=source_image,
+                    asset_ref=source_ref,
+                    source_asset_ref=source_ref,
+                    source_treatment="creative_plan_selected_source",
+                    final_compositor_treatment="exact_russian_typography_canonical_logo_safe_zones",
+                    **common,
+                ))
+        elif media_mode is InstagramMediaMode.GENERATED:
+            assets.append(await _execute_generated_asset(
+                asset_key=asset_key,
+                slide=slide,
+                plan=plan,
+                opportunity_summary=opportunity_summary,
+                evidence=evidence,
+                content_format=content_format,
+                creative_id=creative_id,
+                opportunity_id=opportunity_id,
+                effective_mode=effective_mode,
+            ))
+        else:
+            assets.append(InstagramMediaExecutionAsset(
+                status=media_mode.value.lower(),
+                image=None,
+                final_compositor_treatment=(
+                    "deterministic_graphic_primitives"
+                    if media_mode is InstagramMediaMode.GRAPHIC
+                    else "deterministic_typography_canonical_logo_safe_zones"
+                ),
+                **common,
+            ))
 
-    request = ImageGenerationRequest(
-        prompt=_generation_prompt(
-            plan=plan, opportunity_summary=opportunity_summary, evidence=evidence,
-            content_format=content_format,
-        ),
-        operation=ImageGenerationOperation.TEXT_TO_IMAGE,
-        preferred_provider="openai",
-        preferred_model=GPT_IMAGE_2,
-        target_aspect_ratio="2:3",
-        target_width=1024,
-        target_height=1536,
-        metadata={"purpose": "instagram_phase_b", "opportunity_id": opportunity_id},
-    )
-    adapter = OpenAIImageAdapter(
-        api_key=settings.openai_api_key.get_secret_value(),
-        quality="medium",
-        text_to_image_size="1024x1536",  # type: ignore[arg-type]
-    )
-    profile = ImageExecutionProfile(
-        provider="openai", model=GPT_IMAGE_2, quality="medium", size="1024x1536",
-        operation=ImageGenerationOperation.TEXT_TO_IMAGE,
-    )
-    result = await build_budgeted_image_executor().execute(
-        gateway=adapter,
-        request=request,
-        profile=profile,
-        mode=effective_mode,  # type: ignore[arg-type]
-        purpose="instagram_phase_b",
-        execution_id=f"instagram:{creative_id}:visual:v1",
-        creative_id=f"instagram:{creative_id}",
-        opportunity_id=opportunity_id,
-        max_attempts=settings.instagram_image_generation_max_attempts,
-    )
-    if result.status != "generated" or result.response is None:
-        return InstagramCreativeMediaResult(
-            status=f"generation_{result.status}", image=None, media_ref=None,
-            media_strategy=strategy,
-            generation_cost_usd=str(result.accounted_cost_usd) if result.accounted_cost_usd is not None else None,
-        )
-
-    image = _decode_publishable_image(result.response.image_bytes)
-    digest = hashlib.sha256(result.response.image_bytes).hexdigest()
-    stored = LocalImageStorage(settings.image_storage_root).store_validated_image(
-        result.response.image_bytes,
-        sha256=digest,
-        image_format="PNG",
-        max_bytes=settings.instagram_generated_image_max_bytes,
-    )
+    blocking_statuses = {
+        "source_image_unavailable",
+        "source_media_unavailable",
+        "generation_off",
+        "provider_not_configured",
+        "generation_dry_run",
+        "generation_duplicate",
+        "generation_attempt_limit",
+    }
+    failure = next((asset for asset in assets if asset.status in blocking_statuses), None)
+    first_image = next((asset for asset in assets if asset.image is not None), None)
+    first_generated = next((
+        asset for asset in assets if asset.media_mode is InstagramMediaMode.GENERATED
+    ), None)
+    if failure is not None:
+        status = failure.status
+    elif len(assets) == 1:
+        status = assets[0].status
+    else:
+        status = "media_plan_ready"
     return InstagramCreativeMediaResult(
-        status="generated_media",
-        image=image,
-        media_ref=f"generated:{stored.storage_key}",
+        status=status,
+        image=first_image.image if first_image else None,
+        media_ref=first_image.asset_ref if first_image else None,
         media_strategy=strategy,
-        generation_cost_usd=str(result.accounted_cost_usd),
-        generation_request_id=result.response.request_id,
+        generation_cost_usd=first_generated.accounted_cost_usd if first_generated else None,
+        generation_request_id=first_generated.provider_request_id if first_generated else None,
+        assets=tuple(assets),
     )

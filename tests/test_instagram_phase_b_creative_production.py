@@ -94,9 +94,10 @@ async def test_live_instagram_generation_uses_shared_budget_boundary(monkeypatch
     assert result.generation_cost_usd == "0.04130"
     assert len(calls) == 1
     call = calls[0]
-    assert call["purpose"] == "instagram_phase_b"
-    assert call["execution_id"] == "instagram:creative-4:visual:v1"
+    assert call["purpose"] == "instagram_phase_b2"
+    assert call["execution_id"] == "instagram:creative-4:visual:primary:v2"
     assert call["opportunity_id"] == "opp-4"
+    assert call["max_attempts"] == 1
     assert call["profile"].model == "gpt-image-2"
     assert call["profile"].size == "1024x1536"
 

@@ -101,7 +101,8 @@ def _draw_progress(canvas: Image.Image, spec: ProfileSpec, *, index: int, total:
 def render_carousel_slide(
     *, spec: ProfileSpec, role: str, index: int, total: int, slide_copy: str, source_evidence: str | None,
     package_identity: str, hero_image: Image.Image | None = None, visual_direction: str | None = None,
-    render_plan: dict | None = None,
+    render_plan: dict | None = None, media_image: Image.Image | None = None,
+    media_mode: str | None = None,
 ) -> LayoutResult:
     """Renders ONE carousel slide. `hero_image` is an optional renderer-time keyword (mirrors the
     Telegram `render_data_card(..., source_image_bytes=...)` precedent) - only the HOOK slide uses
@@ -110,10 +111,20 @@ def render_carousel_slide(
     (InstagramCarouselSlideCreative.visual_direction is descriptive text, not a real asset)."""
     layout = select_slide_layout(role=role, index=index, slide_copy=slide_copy)
     identity = f"{package_identity}:{index}"
-    if layout == SLIDE_LAYOUT_HOOK:
-        result = _slide_hook(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, hero_image=hero_image)
+    selected_image = media_image if media_image is not None else hero_image
+    if media_image is not None and (
+        str(media_mode or "").upper() == "GENERATED"
+        or layout not in {SLIDE_LAYOUT_HOOK, SLIDE_LAYOUT_CONTEXT}
+    ):
+        result = _slide_media_base(
+            spec=spec, slide_copy=slide_copy, index=index, total=total,
+            package_identity=identity, media_image=media_image,
+            generated=str(media_mode or "").upper() == "GENERATED",
+        )
+    elif layout == SLIDE_LAYOUT_HOOK:
+        result = _slide_hook(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, hero_image=selected_image)
     elif layout == SLIDE_LAYOUT_CONTEXT:
-        result = _slide_context(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, hero_image=hero_image)
+        result = _slide_context(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, hero_image=selected_image)
     elif layout == SLIDE_LAYOUT_PROBLEM:
         result = _slide_problem(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity)
     elif layout == SLIDE_LAYOUT_EXPLANATION:
@@ -130,8 +141,51 @@ def render_carousel_slide(
     result.notes.update({
         "rendered_copy": [slide_copy], "internal_labels_rendered": [],
         "visual_direction_consumed": bool(visual_direction),
+        "media_mode_consumed": media_mode,
+        "per_slide_media_consumed": media_image is not None,
     })
     return result
+
+
+def _slide_media_base(
+    *, spec: ProfileSpec, slide_copy: str, index: int, total: int,
+    package_identity: str, media_image: Image.Image, generated: bool,
+) -> LayoutResult:
+    """Compose exact copy/brand over one explicitly assigned source or generated base asset."""
+    fitted = fit_image_cover(media_image, width=spec.width, height=spec.height)
+    canvas = fitted.image
+    apply_bottom_readability_gradient(canvas, height_frac=0.66, max_alpha=235)
+    apply_top_readability_gradient(canvas, height_frac=0.20, max_alpha=115)
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    margin = round(spec.width * tok.MARGIN_FRAC)
+    content_w = spec.width - margin - max(margin, mark_reserve_width(spec, compact=True))
+    _draw_progress(canvas, spec, index=index, total=total)
+    headline_font, headline_lines, clipped = fit_text_block(
+        draw, slide_copy,
+        font_max=round(spec.width * tok.TYPE_HEADLINE_L.size_frac),
+        font_min=round(spec.width * 0.046),
+        max_width=content_w, max_lines=5, weight=tok.TYPE_HEADLINE_L.weight,
+    )
+    headline_h = measure_block_height(draw, headline_lines, headline_font)
+    y: float = spec.height - round(spec.height * spec.safe_bottom_frac) - margin - headline_h
+    regions: list[TextRegionSpec] = []
+    for line_index, line in enumerate(headline_lines):
+        bbox = draw.textbbox((margin, y), line, font=headline_font)
+        draw.text((margin, y), line, font=headline_font, fill=tok.WHITE)
+        regions.append(TextRegionSpec(
+            kind="headline", box=box4(bbox),
+            clipped=clipped and line_index == len(headline_lines) - 1,
+        ))
+        y += (bbox[3] - bbox[1]) + round(headline_font.size * 0.18)
+    mark_count = place_brand_mark(canvas, spec, compact=True)
+    return LayoutResult(
+        image=canvas.convert("RGB"), text_regions=regions,
+        visible_brand_mark_count=mark_count,
+        source_image_treatment="generated" if generated else fitted.treatment.value,
+        layout_variant="carousel_generated_base" if generated else "carousel_source_base",
+        text_clipped=clipped,
+        notes={"source_coverage_fraction": 1.0, "generated_base_consumed": generated},
+    )
 
 
 def _slide_hook(*, spec: ProfileSpec, slide_copy: str, index: int, total: int, package_identity: str, hero_image: Image.Image | None) -> LayoutResult:

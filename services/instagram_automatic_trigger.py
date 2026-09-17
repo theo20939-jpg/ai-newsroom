@@ -663,7 +663,9 @@ async def evaluate_and_submit_instagram_opportunity(
         return InstagramTriggerCandidateOutcome(
             event_id=opportunity.id, accepted=True, reason=f"creative_media_failed:{type(exc).__name__}",
         )
-    if creative_media.status not in {"source_media", "generated_media", "typographic"}:
+    if creative_media.status not in {
+        "source_media", "generated_media", "typographic", "graphic", "media_plan_ready",
+    }:
         return InstagramTriggerCandidateOutcome(
             event_id=opportunity.id, accepted=True, reason=creative_media.status,
         )
@@ -694,20 +696,22 @@ async def evaluate_and_submit_instagram_opportunity(
         source_image_ref=creative_media.media_ref,
         media_candidate_id=(
             str(image_candidate.id)
-            if image_candidate and creative_media.media_strategy == "source_media" else None
+            if image_candidate and any(
+                asset.source_asset_ref is not None for asset in creative_media.assets
+            ) else None
         ),
     )
-    pkg = replace(pkg, media_plan={**pkg.media_plan, "media_execution": {
-        "strategy": creative_media.media_strategy,
-        "status": creative_media.status,
-        "generation_cost_usd": creative_media.generation_cost_usd,
-        "generation_request_id": creative_media.generation_request_id,
-    }})
+    pkg = replace(pkg, media_plan={
+        **pkg.media_plan,
+        "media_execution": creative_media.execution_metadata(),
+    })
     creative_image = creative_media.image
 
     try:
         if format_decision.recommended_format is ContentFormat.CAROUSEL:
-            renders = render_instagram_carousel(pkg, hero_image=creative_image)
+            renders = render_instagram_carousel(
+                pkg, slide_images=creative_media.slide_images(),
+            )
             presentation = present_carousel(pkg, renders, version=1)
         elif format_decision.recommended_format is ContentFormat.REEL:
             renders = [render_instagram_reel_cover(pkg, source_image=creative_image)]

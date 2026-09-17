@@ -185,12 +185,18 @@ def render_instagram_single_quote(
 _MAX_CAROUSEL_SLIDES = 10  # Instagram's own platform ceiling (section 10's own "max slide bound")
 
 
-def render_instagram_carousel(package: InstagramContentPackage, *, hero_image: Image.Image | None = None) -> list[InstagramRenderResult]:
+def render_instagram_carousel(
+    package: InstagramContentPackage,
+    *,
+    hero_image: Image.Image | None = None,
+    slide_images: dict[int, Image.Image] | None = None,
+) -> list[InstagramRenderResult]:
     """CAROUSEL format -> one CAROUSEL_SLIDE image per planned slide, a real visual GRAMMAR across
     the deck (section 11) - slide layout is chosen from each slide's own real `role`
     (services/instagram_carousel_layouts.py::select_slide_layout), never identical title cards.
-    Bounded to `_MAX_CAROUSEL_SLIDES` - never an uncontrolled count. `hero_image`, if supplied, is
-    used ONLY for the hook/opening slide (section 11's "slide 1 = the strongest visual moment")."""
+    Bounded to `_MAX_CAROUSEL_SLIDES`. `slide_images` is the explicit Phase B.2 per-slide asset
+    map; when supplied, a slide can only consume its own entry and never inherits Slide 1 media.
+    `hero_image` remains the legacy compatibility input when no explicit map is supplied."""
     if package.content_format.value != "carousel":
         raise InstagramRenderError(f"render_instagram_carousel requires CAROUSEL, got {package.content_format!r}")
     slides = package.media_plan.get("slides")
@@ -201,16 +207,30 @@ def render_instagram_carousel(package: InstagramContentPackage, *, hero_image: I
 
     total = len(slides)
     results = []
+    execution_assets = (
+        package.media_plan.get("media_execution", {}).get("assets", [])
+        if isinstance(package.media_plan.get("media_execution"), dict)
+        else []
+    )
     for slide in slides:
         index = int(slide["index"])
         role = str(slide.get("role", ""))
         slide_copy = str(slide.get("text", ""))
         render_plan = interpret_render_plan(package, slide=slide)
+        execution = next((
+            item for item in execution_assets
+            if str(item.get("asset_key")) == str(index)
+        ), {})
+        render_plan["media_mode"] = execution.get("media_mode")
+        render_plan["media_execution_status"] = execution.get("status")
         _persist_render_trace(package, render_plan, slide_index=index)
+        explicit_image = slide_images.get(index) if slide_images is not None else None
         layout = render_carousel_slide(
             spec=profile_spec(InstagramRenderProfile.CAROUSEL_SLIDE), role=role, index=index, total=total,
             slide_copy=slide_copy, source_evidence=slide.get("source_evidence"), package_identity=package.package_id,
-            hero_image=hero_image, visual_direction=slide.get("visual_direction"), render_plan=render_plan,
+            hero_image=(hero_image if slide_images is None else None),
+            media_image=explicit_image, media_mode=execution.get("media_mode"),
+            visual_direction=slide.get("visual_direction"), render_plan=render_plan,
         )
         results.append(_result_from_layout(layout, package, profile=InstagramRenderProfile.CAROUSEL_SLIDE, slide_index=index, slide_count=total))
     return results
