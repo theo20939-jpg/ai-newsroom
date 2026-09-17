@@ -259,7 +259,7 @@ SCENES = [
     ),
     InstagramReelSceneCreative(
         start_seconds=4, end_seconds=9,
-        spoken_line="Разработчик coye2 делает Uncanny на основе нейронного рендеринга.",
+        spoken_line="В основе Uncanny — нейронный рендеринг. Проект делает разработчик coye2.",
         on_screen_text="Uncanny + нейронный рендеринг",
         visual_direction="Показать исходный кадр и преобразование как процесс.",
     ),
