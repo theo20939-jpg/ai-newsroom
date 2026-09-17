@@ -173,7 +173,7 @@ E1 = [
     "GrapheneOS заявила об ограничении части API и задержке обновлений безопасности для AOSP.",
 ]
 B1 = InstagramCarouselCreative(
-    objective="Объяснить, почему спор Google и GrapheneOS важен не только разработчикам.",
+    objective="Объяснить конфликт Google и GrapheneOS.",
     slides=[
         InstagramCarouselSlideCreative(
             role="hook", slide_copy="Android становится разным",
