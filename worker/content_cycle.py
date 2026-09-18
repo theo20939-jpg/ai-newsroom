@@ -43,7 +43,7 @@ from services.editorial_treatment import SKIP, EditorialTreatmentDecision, treat
 from services.image_quality import aspect_ratio_band, hamming_distance, resolution_band
 from services.image_relevance import PROVENANCE_TABLE
 from services.media_ranking import _NEAR_DUPLICATE_MAX_HAMMING_DISTANCE, rank_media_candidates
-from services.news_editorial_relevance import OUT_OF_SCOPE, classify_editorial_relevance
+from services.news_editorial_relevance import evaluate_pre_generation_candidate
 from services.brand_renderer import RenderResult, render_branded_media
 from services.data_source_classification import classify_source_presentation, select_data_presentation_mode
 from services.nnj_master_news_overlay import (
@@ -956,8 +956,22 @@ async def _select_eligible_events(session: AsyncSession) -> list[UUID]:
     anchor = func.coalesce(NewsEvent.published_at, NewsEvent.collected_at)
 
     stmt = (
-        select(EditorialTask.id, EditorialTask.event_id, EditorialTask.workflow, NewsEvent.title, NewsEvent.content)
+        select(
+            EditorialTask.id,
+            EditorialTask.event_id,
+            EditorialTask.workflow,
+            NewsEvent.title,
+            NewsEvent.content,
+            NewsEvent.published_at,
+            NewsEvent.collected_at,
+            NewsEvent.views_count,
+            NewsEvent.forwards_count,
+            NewsEvent.reactions_count,
+            NewsSource.name,
+            NewsSource.reliability_score,
+        )
         .join(NewsEvent, EditorialTask.event_id == NewsEvent.id)
+        .join(NewsSource, NewsEvent.source_id == NewsSource.id)
         .where(
             EditorialTask.status == TaskStatus.COMPLETED,
             EditorialTask.workflow["workflow_name"].as_string() == WorkflowType.NEWS_ANALYSIS.value,
@@ -997,21 +1011,56 @@ async def _select_eligible_events(session: AsyncSession) -> list[UUID]:
     # exactly the ranking this checkpoint asks for, with no second query and no new tie-break rule
     # to keep in sync with the SQL ORDER BY.
     #
-    # Topic-skew fix: `Scoring.score` alone has no topical awareness (a well-evidenced funding
-    # story and a well-evidenced product launch score identically). `classify_editorial_relevance()`
-    # (services/news_editorial_relevance.py) is a pure, deterministic, LLM-free function of the
-    # same title/content already loaded above - it never touches `Scoring.score` itself, only
-    # contributes a small `rank_adjustment` used purely for this in-Python ranking. OUT_OF_SCOPE
-    # candidates (unambiguous non-tech noise) are hard-excluded here, same as a failed score check.
+    # NINJA PULSE Phase 1: normal Scoring and deterministic editorial relevance now form the
+    # STANDARD path, while the independent typed VIRAL_TECH calculation can retain a verified,
+    # genuinely technological small story without lowering the global score threshold. Both are
+    # evaluated here, before Research/Copywriting, using only fields already persisted on the
+    # NewsEvent/NewsSource. Missing visual/spread/origin evidence earns zero; nothing is guessed.
     eligible: list[tuple[int, UUID]] = []
-    for _task_id, event_id, workflow, title, content in rows:
+    for (
+        _task_id, event_id, workflow, title, content, published_at, collected_at,
+        views_count, forwards_count, reactions_count, source_name, source_reliability,
+    ) in rows:
         score = _extract_scoring_result(workflow)
-        if score is None or score < settings.content_generation_min_score:
+        primary_evidence = (
+            any(marker in source_name.lower() for marker in ("github", "arxiv"))
+        )
+        decision = evaluate_pre_generation_candidate(
+            title=title,
+            content=content,
+            standard_score=score,
+            standard_threshold=settings.content_generation_min_score,
+            source_reliability=source_reliability,
+            published_at=published_at or collected_at,
+            views_count=views_count,
+            forwards_count=forwards_count,
+            reactions_count=reactions_count,
+            primary_evidence=primary_evidence,
+        )
+        logger.info(
+            "pre_generation_editorial_decision",
+            extra={
+                "event_id": str(event_id),
+                "standard_score": decision.standard_score,
+                "editorial_relevance": decision.editorial_relevance.tier,
+                "effective_standard_score": decision.effective_standard_score,
+                "standard_eligible": decision.standard_eligible,
+                "viral_score": decision.viral.total,
+                "viral_tech": decision.viral.breakdown.tech_relevance,
+                "viral_surprise": decision.viral.breakdown.surprise_weirdness,
+                "viral_humor": decision.viral.breakdown.humor_meme_potential,
+                "viral_shareability": decision.viral.breakdown.shareability,
+                "viral_visual": decision.viral.breakdown.visual_proof,
+                "viral_velocity": decision.viral.breakdown.velocity_spread,
+                "viral_verifiability": decision.viral.breakdown.verifiability,
+                "viral_eligible": decision.viral.eligible,
+                "final_pre_generation_decision": decision.selection_path,
+                "reason": decision.reason,
+            },
+        )
+        if not decision.final_eligible:
             continue
-        relevance = classify_editorial_relevance(title, content)
-        if relevance.tier == OUT_OF_SCOPE:
-            continue
-        eligible.append((score + relevance.rank_adjustment, event_id))
+        eligible.append((decision.rank_score, event_id))
 
     eligible.sort(key=lambda candidate: candidate[0], reverse=True)
 
@@ -1045,6 +1094,9 @@ async def _run_instagram_automatic_trigger(
     error, DB hiccup, or Telegram failure must never abort the scan for the remaining candidates
     or crash the worker cycle (§8 crash safety)."""
     report = InstagramTriggerCycleReport()
+    if not settings.instagram_automatic_generation_enabled:
+        logger.info("instagram_automatic_generation_disabled", extra={"lane": "news"})
+        return report
     if gate_gateway is None or gate_prompt_repository is None:
         return report
 
@@ -1145,6 +1197,9 @@ async def _run_instagram_product_lane(
     Never falls through to another lane - just returns the same empty report the other no-op path
     already returns."""
     report = InstagramTriggerCycleReport()
+    if not settings.instagram_automatic_generation_enabled:
+        logger.info("instagram_automatic_generation_disabled", extra={"lane": "product"})
+        return report
     if not settings.instagram_product_lane_enabled:
         logger.info("instagram_product_lane_disabled")
         return report

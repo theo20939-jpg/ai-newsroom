@@ -19,6 +19,7 @@ pytestmark = pytest.mark.asyncio
 
 
 def _enable_product_lane(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "instagram_automatic_generation_enabled", True)
     monkeypatch.setattr(settings, "instagram_product_lane_enabled", True)
 
 

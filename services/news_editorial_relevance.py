@@ -38,6 +38,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 CORE = "CORE"
 ADJACENT = "ADJACENT"
@@ -47,7 +48,7 @@ OUT_OF_SCOPE = "OUT_OF_SCOPE"
 _CORE_RANK_ADJUSTMENT = 10
 _ADJACENT_RANK_ADJUSTMENT = 3
 _NEUTRAL_RANK_ADJUSTMENT = 0
-_PERIPHERAL_RANK_ADJUSTMENT = -12
+_PERIPHERAL_RANK_ADJUSTMENT = -25
 _MAJOR_IMPACT_OVERRIDE_RANK_ADJUSTMENT = 5
 _OUT_OF_SCOPE_RANK_ADJUSTMENT = -1000
 
@@ -59,6 +60,68 @@ class EditorialRelevanceDecision:
     tier: str
     rank_adjustment: int
     major_impact_override: bool
+    reason: str
+
+
+@dataclass(frozen=True)
+class ViralTechBreakdown:
+    tech_relevance: int
+    surprise_weirdness: int
+    humor_meme_potential: int
+    shareability: int
+    visual_proof: int
+    velocity_spread: int
+    verifiability: int
+    freshness_penalty: int = 0
+
+    def __post_init__(self) -> None:
+        bounds = {
+            "tech_relevance": (self.tech_relevance, 20),
+            "surprise_weirdness": (self.surprise_weirdness, 20),
+            "humor_meme_potential": (self.humor_meme_potential, 15),
+            "shareability": (self.shareability, 15),
+            "visual_proof": (self.visual_proof, 10),
+            "velocity_spread": (self.velocity_spread, 10),
+            "verifiability": (self.verifiability, 10),
+        }
+        for name, (value, maximum) in bounds.items():
+            if not 0 <= value <= maximum:
+                raise ValueError(f"{name} must be between 0 and {maximum}")
+        if self.freshness_penalty not in (0, -25):
+            raise ValueError("freshness_penalty must be 0 or -25")
+
+    @property
+    def total(self) -> int:
+        return max(0, min(100, (
+            self.tech_relevance + self.surprise_weirdness + self.humor_meme_potential
+            + self.shareability + self.visual_proof + self.velocity_spread
+            + self.verifiability + self.freshness_penalty
+        )))
+
+
+@dataclass(frozen=True)
+class ViralTechDecision:
+    breakdown: ViralTechBreakdown
+    eligible: bool
+    fast_lane: bool
+    stale: bool
+    reason: str
+
+    @property
+    def total(self) -> int:
+        return self.breakdown.total
+
+
+@dataclass(frozen=True)
+class PreGenerationEditorialDecision:
+    standard_score: int | None
+    editorial_relevance: EditorialRelevanceDecision
+    effective_standard_score: int | None
+    standard_eligible: bool
+    viral: ViralTechDecision
+    final_eligible: bool
+    selection_path: str
+    rank_score: int
     reason: str
 
 
@@ -135,7 +198,8 @@ _PERIPHERAL_PHRASES: tuple[str, ...] = (
     "revenue", "quarterly earnings", "earnings report", "profit",
     "выручка", "прибыль", "квартальная отчетность", "квартальные результаты",
     # employment
-    "layoffs", "hiring freeze", "job cuts", "jobs report",
+    "layoffs", "hiring freeze", "job cuts", "jobs report", "workers to strike",
+    "collective bargaining", "labour dispute", "labor dispute",
     "увольнения", "заморозка найма", "сокращения",
     # financing
     "financing", "лендер", "lenders", "loan", "финансирование", "кредиторы",
@@ -143,6 +207,7 @@ _PERIPHERAL_PHRASES: tuple[str, ...] = (
     "acquires", "acquired", "acquisition", "to acquire", "приобрела", "поглощение", "купит",
     # regulation / legal
     "regulation", "regulatory", "lawsuit", "sues", "sued", "court ruling", "antitrust",
+    "criminal probe", "criminal investigation",
     "legal battle", "регулирование", "регулирования", "регулированию", "иск",
     "антимонопольное", "антимонопольный", "антимонопольного", "антимонопольным",
     "судебное разбирательство",
@@ -288,4 +353,209 @@ def classify_editorial_relevance(title: str, content: str | None = None) -> Edit
     return EditorialRelevanceDecision(
         tier=ADJACENT, rank_adjustment=_NEUTRAL_RANK_ADJUSTMENT, major_impact_override=False,
         reason="no editorial-relevance keyword evidence - neutral default",
+    )
+
+
+_VIRAL_TECH_STRONG: tuple[str, ...] = (
+    "smartphone", "iphone", "galaxy", "pixel", "laptop", "wearable", "headset", "robot",
+    "robotics", "prototype", "gadget", "device", "hardware", "chip", "gpu", "game physics",
+    "modding", "developer project", "github project", "ai model", "ai feature",
+    "artificial intelligence", "llm", "смартфон", "ноутбук", "гаджет", "устройство",
+    "прототип", "робот", "робототехника", "модель ии", "ии-модель", "ии-модели",
+    "функция ии", "игровая физика",
+    "модификация", "проект разработчика", "сбой сети", "network outage", "outage",
+)
+_VIRAL_TECH_GENERAL: tuple[str, ...] = (
+    "software", "app", "api", "browser", "internet", "technology", "технолог", "приложение",
+    "браузер", "интернет", "алгоритм", "нейросет", "искусственный интеллект", "gaming",
+    "valheim", "minecraft",
+)
+_STRONG_SURPRISE: tuple[str, ...] = (
+    "year was 2006", "year is 2006", "decided the year", "without downloading a single mod",
+    "without a mod", "unexpected", "accidentally", "by mistake", "bizarre", "weird",
+    "strange", "absurd", "uncanny", "record-breaking bug", "believed it was", "believes it is",
+    "оказался в 2006", "решила, что сейчас", "без единого мода", "без модов", "случайно",
+    "неожидан", "странн", "абсурд", "необычн", "перепутал", "считала, что",
+)
+_MODERATE_SURPRISE: tuple[str, ...] = (
+    "prototype", "experiment", "demo", "bug", "glitch", "failure", "outage", "trick",
+    "hack", "customize", "color-coded", "creeper", "прототип", "эксперимент", "демо",
+    "ошибка", "баг", "сбой", "трюк", "лайфхак", "самодельн",
+)
+_HUMOR_SIGNALS: tuple[str, ...] = (
+    "decided the year", "year was 2006", "without downloading a single mod", "creeper",
+    "bizarre", "absurd", "ridiculous", "решила, что сейчас", "без единого мода", "абсурд",
+    "нелеп", "смешн",
+)
+_CREATOR_SHARE_SIGNALS: tuple[str, ...] = (
+    "developer project", "github project", "built", "created", "customize", "modding",
+    "experiment", "demo", "prototype", "проект разработчика", "создал", "собрал", "мод",
+    "эксперимент", "демо", "прототип",
+)
+
+
+def _has_any(text: str, phrases: tuple[str, ...]) -> bool:
+    return any(phrase in text for phrase in phrases)
+
+
+def _bounded_reliability_score(source_reliability: float | None, *, primary_evidence: bool,
+                               credible_confirmations: int) -> int:
+    score = round(max(0.0, min(1.0, source_reliability or 0.0)) * 10)
+    if primary_evidence:
+        score = max(score, 9)
+    elif credible_confirmations >= 2:
+        score = max(score, 8)
+    return min(10, score)
+
+
+def score_viral_tech(
+    title: str,
+    content: str | None = None,
+    *,
+    source_reliability: float | None = None,
+    published_at: datetime | None = None,
+    now: datetime | None = None,
+    has_visual_proof: bool = False,
+    views_count: int | None = None,
+    forwards_count: int | None = None,
+    reactions_count: int | None = None,
+    primary_evidence: bool = False,
+    credible_confirmations: int = 0,
+) -> ViralTechDecision:
+    """Deterministic VIRAL_TECH signal evaluated before final generation.
+
+    This deliberately uses only evidence already present on NewsEvent/NewsSource. Missing visual,
+    spread or provenance evidence earns zero rather than being guessed. It is an additional
+    selector signal, never a replacement for normal Scoring, Research or Quality.
+    """
+    normalized_title = _normalize(title)
+    # Technical subject evidence may come from the short lead when a headline is terse, but the
+    # social-value dimensions must be visible in the headline itself. Real Habr backtesting showed
+    # that scanning a long article body for words such as "unexpected" falsely promoted ordinary
+    # enterprise case studies as viral stories. A body-level incidental adjective is not a
+    # stop-scroll premise and must not manufacture surprise/humor/shareability.
+    tech_context = _normalize(f"{title} {(content or '')[:_CONTENT_SCAN_CHARS]}")
+    strong_tech = _has_any(tech_context, _VIRAL_TECH_STRONG)
+    general_tech = _has_any(tech_context, _VIRAL_TECH_GENERAL)
+    gaming_creator = any(
+        phrase in normalized_title
+        for phrase in ("valheim", "minecraft", "modding", "color-coded", "игров")
+    )
+    tech = 20 if strong_tech else (16 if gaming_creator else (10 if general_tech else 0))
+
+    strong_surprise = _has_any(normalized_title, _STRONG_SURPRISE)
+    moderate_surprise = _has_any(normalized_title, _MODERATE_SURPRISE)
+    surprise = 20 if strong_surprise else (10 if moderate_surprise else 0)
+    humor = 10 if _has_any(normalized_title, _HUMOR_SIGNALS) else (5 if strong_surprise else 0)
+    creator_signal = _has_any(normalized_title, _CREATOR_SHARE_SIGNALS)
+    shareability = 15 if tech >= 10 and surprise >= 15 else (10 if tech >= 10 and creator_signal else 0)
+    visual = 10 if has_visual_proof else 0
+
+    observed_engagement = sum(v or 0 for v in (views_count, forwards_count, reactions_count))
+    current = now or datetime.now(UTC)
+    if observed_engagement >= 1000:
+        velocity = 10
+    elif observed_engagement >= 100:
+        velocity = 7
+    else:
+        # Freshness is a separate stale-content safety gate, not evidence of velocity/spread.
+        # Sources that expose no engagement metrics earn zero here rather than a fabricated boost.
+        velocity = 0
+
+    verifiability = _bounded_reliability_score(
+        source_reliability, primary_evidence=primary_evidence,
+        credible_confirmations=credible_confirmations,
+    )
+    stale = published_at is not None and current - published_at > timedelta(hours=24)
+    breakdown = ViralTechBreakdown(
+        tech_relevance=tech,
+        surprise_weirdness=surprise,
+        humor_meme_potential=humor,
+        shareability=shareability,
+        visual_proof=visual,
+        velocity_spread=velocity,
+        verifiability=verifiability,
+        freshness_penalty=-25 if stale else 0,
+    )
+    eligible = (
+        not stale and breakdown.total >= 68 and tech >= 10 and verifiability >= 6
+    )
+    evidence_gate = primary_evidence or credible_confirmations >= 2
+    fast_lane = eligible and breakdown.total >= 80 and evidence_gate
+    if stale:
+        reason = "stale viral candidate blocked"
+    elif tech < 10:
+        reason = "viral gate failed: tech relevance below 10"
+    elif verifiability < 6:
+        reason = "viral gate failed: verifiability below 6"
+    elif breakdown.total < 68:
+        reason = "viral gate failed: total below 68"
+    elif fast_lane:
+        reason = "viral eligible and fast-lane evidence condition met"
+    else:
+        reason = "viral eligible; normal Research/Quality still required"
+    return ViralTechDecision(
+        breakdown=breakdown, eligible=eligible, fast_lane=fast_lane, stale=stale, reason=reason,
+    )
+
+
+def evaluate_pre_generation_candidate(
+    *,
+    title: str,
+    content: str | None,
+    standard_score: int | None,
+    standard_threshold: int,
+    source_reliability: float | None = None,
+    published_at: datetime | None = None,
+    now: datetime | None = None,
+    has_visual_proof: bool = False,
+    views_count: int | None = None,
+    forwards_count: int | None = None,
+    reactions_count: int | None = None,
+    primary_evidence: bool = False,
+    credible_confirmations: int = 0,
+) -> PreGenerationEditorialDecision:
+    relevance = classify_editorial_relevance(title, content)
+    effective = (
+        standard_score + relevance.rank_adjustment if standard_score is not None else None
+    )
+    standard_eligible = (
+        standard_score is not None
+        and standard_score >= standard_threshold
+        and relevance.tier != OUT_OF_SCOPE
+        and effective is not None
+        and effective >= standard_threshold
+    )
+    viral = score_viral_tech(
+        title, content, source_reliability=source_reliability, published_at=published_at, now=now,
+        has_visual_proof=has_visual_proof, views_count=views_count,
+        forwards_count=forwards_count, reactions_count=reactions_count,
+        primary_evidence=primary_evidence, credible_confirmations=credible_confirmations,
+    )
+    viral_eligible = relevance.tier != OUT_OF_SCOPE and viral.eligible
+    final_eligible = standard_eligible or viral_eligible
+    if standard_eligible and viral_eligible:
+        path = "BOTH"
+    elif standard_eligible:
+        path = "STANDARD"
+    elif viral_eligible:
+        path = "VIRAL_TECH"
+    else:
+        path = "REJECT"
+    standard_rank = effective if standard_eligible and effective is not None else -1000
+    viral_rank = viral.total + (5 if viral.fast_lane else 0) if viral_eligible else -1000
+    rank_score = max(standard_rank, viral_rank)
+    return PreGenerationEditorialDecision(
+        standard_score=standard_score,
+        editorial_relevance=relevance,
+        effective_standard_score=effective,
+        standard_eligible=standard_eligible,
+        viral=viral,
+        final_eligible=final_eligible,
+        selection_path=path,
+        rank_score=rank_score,
+        reason=(
+            f"{path}: standard={standard_score}, effective={effective}, relevance={relevance.tier}; "
+            f"viral={viral.total} ({viral.reason})"
+        ),
     )

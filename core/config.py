@@ -568,7 +568,9 @@ class Settings(BaseSettings):
     # real Craft Ventures post), replacing them with an explicit materiality standard. Output
     # SCHEMA is identical to v8.5 (still title/main_body/ending/quote/story_led/viral_potential/
     # meme_potential) - v6 through v8.5 stay frozen. Still never the settings default.
-    copywriting_prompt_version: Literal["4", "5", "6", "7", "8", "8.1", "8.2", "8.3", "8.4", "8.5", "8.6"] = "4"
+    # "8.7" (prompts/copywriting/v8.7.yaml, NINJA PULSE Phase 1): v8.6 plus narrow
+    # first-use jargon clarity and optional earned social-beat rules. Same output schema.
+    copywriting_prompt_version: Literal["4", "5", "6", "7", "8", "8.1", "8.2", "8.3", "8.4", "8.5", "8.6", "8.7"] = "4"
 
     # Phase I.1.2 (Final Post Authoring editorial calibration): mirrors copywriting_prompt_version's
     # own established pattern exactly - v1 (prompts/final_post_authoring/v1.yaml) is Phase I.1's
@@ -1067,6 +1069,9 @@ class Settings(BaseSettings):
     # exists at all in this phase (spec §92/§96's own "no ad spend, no Meta Ads API" instruction) -
     # there is nothing here that could ever be flipped to make this codebase publish to Instagram.
     instagram_growth_engine_enabled: bool = False
+    # Founder cost-control master switch: gates AUTOMATIC Instagram orchestration only. Manual
+    # diagnostics/canaries and read-only account/Director tooling remain available. Safe default OFF.
+    instagram_automatic_generation_enabled: bool = False
     instagram_story_opportunity_shadow_enabled: bool = False
     instagram_trend_intelligence_enabled: bool = False
     instagram_performance_memory_enabled: bool = False

@@ -13,6 +13,7 @@ from uuid import uuid4
 import pytest
 
 import worker.content_cycle as cc
+from core.config import settings
 from services.editorial_treatment import MAJOR, EditorialTreatmentDecision
 from services.instagram_automatic_trigger import InstagramTriggerCandidateOutcome
 
@@ -69,6 +70,7 @@ async def test_n_per_cycle_cap_bounds_evaluation_even_with_more_eligible_events(
     """§9/§10/§16.N: even if `_select_eligible_events()` (or an override) returns many eligible
     ids, the automatic trigger only evaluates up to `_INSTAGRAM_TRIGGER_MAX_PER_CYCLE` per cycle -
     never a first-deploy flood."""
+    monkeypatch.setattr(settings, "instagram_automatic_generation_enabled", True)
     seen: list[str] = []
 
     async def _fake_classify(session, event_id):
@@ -94,6 +96,7 @@ async def test_i_a_per_story_failure_never_aborts_the_remaining_candidates(monke
     """§8/§16.I crash safety: one story's unexpected exception (simulating a Telegram send
     failure, a DB hiccup, or a Creative Director crash) must not stop the remaining candidates in
     the same cycle from being evaluated."""
+    monkeypatch.setattr(settings, "instagram_automatic_generation_enabled", True)
     calls: list[str] = []
 
     async def _fake_classify(session, event_id):
