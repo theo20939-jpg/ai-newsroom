@@ -2,8 +2,21 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# PYTHONPATH=/app: the `pip install .` below (non-editable, by deliberate choice - see its own
+# comment) copies services/schemas/etc. into site-packages as a SECOND, physical copy of this
+# project's own first-party code, missing every non-Python resource dir (assets/, prompts/) since
+# [tool.hatch.build.targets.wheel] only lists Python packages. Any invocation whose own script
+# lives outside /app (e.g. `python scripts/foo.py` - Python puts the SCRIPT's own directory on
+# sys.path[0], never the cwd) resolves first-party imports against that installed copy instead of
+# the live /app source, so services/instagram_visual_profiles.py's own `__file__`-relative
+# `_FONT_DIR` silently pointed at a site-packages path with no assets/ underneath at all - the
+# confirmed root cause of Phase B.2's "cannot open resource" font crash (reproduced by direct
+# `__file__`/sys.path inspection, not assumed). Explicitly forcing /app first on sys.path via
+# PYTHONPATH makes every invocation style resolve the SAME live source tree deterministically,
+# without touching the non-editable install decision or needing per-script sys.path hacks.
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
 
 # NINJA PULSE Visual System v1 - Cyrillic font packaging fix (services/brand_renderer.py's own
 # _resolve_font_path() already searches /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf; this
