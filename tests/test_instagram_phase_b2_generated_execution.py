@@ -255,8 +255,12 @@ async def test_carousel_executes_media_per_slide_and_generated_pixels_reach_comp
         "media_execution": result.execution_metadata(),
     })
     renders = render_instagram_carousel(package, slide_images=result.slide_images())
-    assert renders[0].evidence.source_image_treatment == "generated"
-    assert renders[0].evidence.notes["generated_base_consumed"] is True
+    # Phase B.3.1: the old "generated" literal (a value the art validator's own allow-list never
+    # actually recognised - a real pre-existing gap found in the Phase B.3 forensic trace) is gone;
+    # a GENERATED hook slide now goes through its own dedicated, validator-safe FULL_BLEED
+    # treatment like any other real image, not a separate "generated" special case.
+    assert renders[0].evidence.source_image_treatment in ("cover_cropped", "contain_preserved")
+    assert renders[0].evidence.notes["media_primitive_selected"] == "source_full_bleed"
     assert renders[1].evidence.notes["per_slide_media_consumed"] is True
     assert renders[2].evidence.notes["per_slide_media_consumed"] is False
     assert renders[3].evidence.notes["per_slide_media_consumed"] is False

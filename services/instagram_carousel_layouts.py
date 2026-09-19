@@ -27,6 +27,8 @@ roles as every other family) - only the per-slide composition varies, and only b
 itself actually is (never uncontrolled randomness, section 17)."""
 from __future__ import annotations
 
+import enum
+
 from PIL import Image, ImageDraw
 
 from services import instagram_design_tokens as tok
@@ -34,6 +36,7 @@ from services.instagram_editorial_layouts import LayoutResult, TextRegionSpec
 from services.instagram_image_handling import (
     apply_bottom_readability_gradient,
     apply_top_readability_gradient,
+    build_detail_crop_field,
     build_dimmed_source_field,
     build_structured_fallback,
     draw_corner_brackets,
@@ -55,16 +58,110 @@ SLIDE_LAYOUT_EXPLANATION = "carousel_mechanism_flow"
 
 _CLOSING_ROLES = {"cta", "takeaway"}
 
-# Phase B.3 forensic fix: these three families previously had NO way to consume a real supplied
-# image at all - `render_carousel_slide` unconditionally forced ANY non-HOOK/CONTEXT layout with a
-# media_image through the generic `_slide_media_base` override, which REPLACES a family's own
-# distinctive composition (VS badge, red closing wash, index echo) with the same full-bleed-photo-
-# plus-headline card used everywhere - visually collapsing every non-hook/context slide into one
-# repeated treatment. Excluding them here lets each keep its own foreground grammar while using a
-# real dimmed/blurred crop of the same asset as its background instead of a synthetic pattern.
-_OWN_TREATMENT_FAMILIES = {
-    SLIDE_LAYOUT_HOOK, SLIDE_LAYOUT_CONTEXT, SLIDE_LAYOUT_COMPARISON, SLIDE_LAYOUT_CLOSING, SLIDE_LAYOUT_DETAIL,
+
+class SourceMediaPrimitive(str, enum.Enum):
+    """Phase B.3.1: the small, CLOSED, actually-implemented vocabulary of real pixel treatments a
+    slide's media can receive. Deliberately does not include a primitive this module cannot really
+    execute (e.g. a true alpha-mask silhouette cutout) - `select_media_primitive` never returns a
+    value `_resolve_slide_background` cannot draw."""
+
+    NONE = "none"                        # no source image consumed - pure typography/graphic slide
+    FULL_BLEED = "source_full_bleed"     # cover-fit across the whole canvas (the hook's own look)
+    STRIP = "source_strip"               # confined to a partial-width panel (context's own look)
+    DETAIL_CROP = "source_detail_crop"   # a zoomed sub-region of the source, not the wide framing
+    DIMMED_FIELD = "source_dimmed_field"  # full-bleed, blurred + heavily dimmed background texture
+
+
+# Each family's own established visual identity supplies a DEFAULT only - real signal in a
+# slide's own `media_need` text always overrides this (see `select_media_primitive`). This is the
+# "role may still provide structure, but role alone must not decide" contract: a default bias, not
+# a hard rule. EXPLANATION is deliberately absent (mapped to NONE via .get()'s fallback): its own
+# foreground assumes a LIGHT paper canvas (dark node boxes + dark body copy) - `build_dimmed_
+# source_field`'s dark scrim would make that body copy illegible. A light-variant field is real
+# future work, not something to fake here. COMPARISON and CLOSING default to NONE per the explicit
+# design principle that a comparison/takeaway may be "primarily typographic... or no source image
+# at all" - not every family should show a photo just because one exists.
+_DEFAULT_MEDIA_PRIMITIVE_BY_LAYOUT: dict[str, "SourceMediaPrimitive"] = {
+    SLIDE_LAYOUT_HOOK: SourceMediaPrimitive.FULL_BLEED,
+    SLIDE_LAYOUT_CONTEXT: SourceMediaPrimitive.STRIP,
+    SLIDE_LAYOUT_FACT: SourceMediaPrimitive.DIMMED_FIELD,
+    SLIDE_LAYOUT_DETAIL: SourceMediaPrimitive.DETAIL_CROP,
+    SLIDE_LAYOUT_PROBLEM: SourceMediaPrimitive.NONE,
 }
+
+
+def select_media_primitive(*, layout: str, media_need: str | None, has_media: bool) -> "SourceMediaPrimitive":
+    """THE real per-slide media decision. Previously nothing occupied this role at all - a slide's
+    image, if any, was chosen by `render_carousel_slide`'s own blunt "layout in {HOOK,CONTEXT}"
+    check, never by what the creative plan actually asked for. `media_need` (InstagramCarousel
+    SlideCreative's own existing field, already carried into `media_plan['slides']` by
+    `instagram_content_package.py::_carousel_media_plan`) is real per-slide creative-plan text -
+    an explicit signal in it always wins over the family's own default bias."""
+    if not has_media:
+        return SourceMediaPrimitive.NONE
+    signal = str(media_need or "").lower()
+    if any(t in signal for t in (
+        "без фото", "без изображен", "чист", "типограф", "no image", "text only", "минимал", "график",
+    )):
+        return SourceMediaPrimitive.NONE
+    if any(t in signal for t in ("деталь", "крупный план", "zoom", "close-up", "detail crop", "фрагмент")):
+        return SourceMediaPrimitive.DETAIL_CROP
+    if any(t in signal for t in ("полос", "strip", "врез", "inset", "боков")):
+        return SourceMediaPrimitive.STRIP
+    if any(t in signal for t in ("фон", "приглуш", "затемн", "dim", "background field", "текстур")):
+        return SourceMediaPrimitive.DIMMED_FIELD
+    if any(t in signal for t in ("полный кадр", "full bleed", "hero", "герой")):
+        return SourceMediaPrimitive.FULL_BLEED
+    return _DEFAULT_MEDIA_PRIMITIVE_BY_LAYOUT.get(layout, SourceMediaPrimitive.NONE)
+
+
+def _focus_y_from_focal_point(focal_point: str | None) -> float:
+    """The carousel-wide `InstagramCreativeExecutionPlan.focal_point` text biasing WHERE a crop is
+    centered - a real, if modest, causal link from the shared creative plan to actual crop
+    geometry, not just evidence metadata."""
+    text = str(focal_point or "").lower()
+    if any(t in text for t in ("низ", "bottom", "внизу")):
+        return 0.65
+    if any(t in text for t in ("верх", "top", "сверху")):
+        return 0.25
+    return 0.42  # this system's own existing default bias (fit_image_cover's own default)
+
+
+def _focus_x_from_focal_point(focal_point: str | None) -> float:
+    """Horizontal counterpart to `_focus_y_from_focal_point` - without it, a zoomed DETAIL_CROP
+    stays horizontally centered on the SOURCE image regardless of where the described subject
+    actually sits, which lands on empty background just as often as on the subject once the
+    target aspect is narrow (a strip)."""
+    text = str(focal_point or "").lower()
+    if any(t in text for t in ("справа", "right", "правой")):
+        return 0.65
+    if any(t in text for t in ("слева", "left", "левой")):
+        return 0.35
+    return 0.5
+
+
+def _resolve_slide_background(
+    primitive: "SourceMediaPrimitive", media_image: Image.Image | None, *,
+    width: int, height: int, focus_y: float, focus_x: float = 0.5, identity: str, block_count: int = 0,
+) -> tuple[Image.Image, str]:
+    """The ONE place a slide's base canvas is chosen from from the REAL decided primitive. Every
+    `_slide_*` function below calls this once instead of unconditionally hardcoding
+    `build_structured_fallback()` regardless of what the creative plan asked for - the fix for
+    "fields exist in metadata but never reach pixels". Returns the ACTUAL treatment that occurred,
+    for the caller to record as truthful evidence (never the plan's prediction)."""
+    if media_image is None or primitive is SourceMediaPrimitive.NONE:
+        canvas = build_structured_fallback(width=width, height=height, identity=identity, block_count=block_count)
+        return canvas, SourceMediaPrimitive.NONE.value
+    if primitive is SourceMediaPrimitive.FULL_BLEED:
+        fitted = fit_image_cover(media_image, width=width, height=height, focus_y=focus_y, focus_x=focus_x)
+        return fitted.image, fitted.treatment.value
+    if primitive is SourceMediaPrimitive.DETAIL_CROP:
+        return build_detail_crop_field(media_image, width=width, height=height, focus_y=focus_y, focus_x=focus_x)
+    # DIMMED_FIELD, and STRIP requested on a family with no sub-rectangle of its own (only CONTEXT
+    # has one, and it never calls this helper for its strip - see `_slide_context`) - both use the
+    # same real dimmed/blurred treatment.
+    canvas, treatment_enum = build_dimmed_source_field(media_image, width=width, height=height, focus_y=focus_y, focus_x=focus_x)
+    return canvas, treatment_enum.value
 
 
 def select_slide_layout(*, role: str, index: int, slide_copy: str) -> str:
@@ -114,100 +211,68 @@ def render_carousel_slide(
     *, spec: ProfileSpec, role: str, index: int, total: int, slide_copy: str, source_evidence: str | None,
     package_identity: str, hero_image: Image.Image | None = None, visual_direction: str | None = None,
     render_plan: dict | None = None, media_image: Image.Image | None = None,
-    media_mode: str | None = None,
+    media_mode: str | None = None, media_need: str | None = None, focal_point: str | None = None,
 ) -> LayoutResult:
-    """Renders ONE carousel slide. `hero_image` is an optional renderer-time keyword (mirrors the
-    Telegram `render_data_card(..., source_image_bytes=...)` precedent) - only the HOOK slide uses
-    it (section 11's "slide 1 = the strongest visual moment"); other slides use this system's own
-    typographic/graphic treatments since no per-slide image exists in the schema
-    (InstagramCarouselSlideCreative.visual_direction is descriptive text, not a real asset)."""
+    """Renders ONE carousel slide. `role` (via `select_slide_layout`) decides the FOREGROUND
+    typographic/graphic grammar - which is a legitimate, disclosed default bias, not the bug. The
+    bug this function fixes (Phase B.3.1) was that role ALSO silently decided whether/how a real
+    image appeared, via a blunt override that replaced a family's whole composition. Media
+    treatment is now `select_media_primitive`'s own decision, driven by this slide's real
+    `media_need` (InstagramCarouselSlideCreative's own existing field) - role only supplies that
+    function's fallback default when the plan gives no explicit signal."""
     layout = select_slide_layout(role=role, index=index, slide_copy=slide_copy)
     identity = f"{package_identity}:{index}"
     selected_image = media_image if media_image is not None else hero_image
-    if media_image is not None and (
-        str(media_mode or "").upper() == "GENERATED"
-        or layout not in _OWN_TREATMENT_FAMILIES
-    ):
-        result = _slide_media_base(
-            spec=spec, slide_copy=slide_copy, index=index, total=total,
-            package_identity=identity, media_image=media_image,
-            generated=str(media_mode or "").upper() == "GENERATED",
-        )
-    elif layout == SLIDE_LAYOUT_HOOK:
-        result = _slide_hook(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, hero_image=selected_image)
+    primitive = select_media_primitive(layout=layout, media_need=media_need, has_media=selected_image is not None)
+    focus_y = _focus_y_from_focal_point(focal_point)
+    focus_x = _focus_x_from_focal_point(focal_point)
+
+    if layout == SLIDE_LAYOUT_HOOK:
+        result = _slide_hook(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, media_image=selected_image, media_primitive=primitive, focus_y=focus_y, focus_x=focus_x)
     elif layout == SLIDE_LAYOUT_CONTEXT:
-        result = _slide_context(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, hero_image=selected_image)
+        result = _slide_context(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, media_image=selected_image, media_primitive=primitive, focus_y=focus_y, focus_x=focus_x)
     elif layout == SLIDE_LAYOUT_PROBLEM:
-        result = _slide_problem(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity)
+        result = _slide_problem(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, media_image=selected_image, media_primitive=primitive, focus_y=focus_y, focus_x=focus_x)
     elif layout == SLIDE_LAYOUT_EXPLANATION:
+        # Deliberately NOT wired to a real image (see _DEFAULT_MEDIA_PRIMITIVE_BY_LAYOUT's own
+        # comment): its foreground assumes a LIGHT paper canvas, incompatible with the dark
+        # dimmed-field treatment without a light-variant field this pass does not build.
         result = _slide_explanation(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, visual_direction=visual_direction)
     elif layout == SLIDE_LAYOUT_CLOSING:
-        result = _slide_closing(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, media_image=selected_image)
+        result = _slide_closing(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, media_image=selected_image, media_primitive=primitive, focus_y=focus_y, focus_x=focus_x)
     elif layout == SLIDE_LAYOUT_FACT:
-        result = _slide_fact(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity)
+        result = _slide_fact(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, media_image=selected_image, media_primitive=primitive, focus_y=focus_y, focus_x=focus_x)
     elif layout == SLIDE_LAYOUT_COMPARISON:
-        result = _slide_comparison(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, media_image=selected_image)
+        result = _slide_comparison(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, media_image=selected_image, media_primitive=primitive, focus_y=focus_y, focus_x=focus_x)
     else:
-        result = _slide_detail(spec=spec, role=role, slide_copy=slide_copy, index=index, total=total, package_identity=identity, media_image=selected_image)
+        result = _slide_detail(spec=spec, role=role, slide_copy=slide_copy, index=index, total=total, package_identity=identity, media_image=selected_image, media_primitive=primitive, focus_y=focus_y, focus_x=focus_x)
     result.notes.update(render_plan or {})
     result.notes.update({
         "rendered_copy": [slide_copy], "internal_labels_rendered": [],
         "visual_direction_consumed": bool(visual_direction),
         "media_mode_consumed": media_mode,
         "per_slide_media_consumed": media_image is not None,
+        # The REAL decision and the REAL pixel-level outcome, kept as two distinct, honest facts:
+        # `media_primitive_selected` is what select_media_primitive() decided BEFORE rendering;
+        # `source_image_treatment` (already on the LayoutResult) is what actually happened to the
+        # pixels. The art validator checks these agree - see instagram_art_validator.py.
+        "media_primitive_selected": primitive.value,
+        "media_need_consumed": media_need,
     })
     return result
 
 
-def _slide_media_base(
-    *, spec: ProfileSpec, slide_copy: str, index: int, total: int,
-    package_identity: str, media_image: Image.Image, generated: bool,
+def _slide_hook(
+    *, spec: ProfileSpec, slide_copy: str, index: int, total: int, package_identity: str,
+    media_image: Image.Image | None, media_primitive: "SourceMediaPrimitive", focus_y: float,
+    focus_x: float = 0.5,
 ) -> LayoutResult:
-    """Compose exact copy/brand over one explicitly assigned source or generated base asset."""
-    fitted = fit_image_cover(media_image, width=spec.width, height=spec.height)
-    canvas = fitted.image
-    apply_bottom_readability_gradient(canvas, height_frac=0.66, max_alpha=235)
-    apply_top_readability_gradient(canvas, height_frac=0.20, max_alpha=115)
-    draw = ImageDraw.Draw(canvas, "RGBA")
-    margin = round(spec.width * tok.MARGIN_FRAC)
-    content_w = spec.width - margin - max(margin, mark_reserve_width(spec, compact=True))
-    _draw_progress(canvas, spec, index=index, total=total)
-    headline_font, headline_lines, clipped = fit_text_block(
-        draw, slide_copy,
-        font_max=round(spec.width * tok.TYPE_HEADLINE_L.size_frac),
-        font_min=round(spec.width * 0.046),
-        max_width=content_w, max_lines=5, weight=tok.TYPE_HEADLINE_L.weight,
+    canvas, treatment = _resolve_slide_background(
+        media_primitive, media_image, width=spec.width, height=spec.height, focus_y=focus_y, focus_x=focus_x,
+        identity=package_identity, block_count=0,
     )
-    headline_h = measure_block_height(draw, headline_lines, headline_font)
-    y: float = spec.height - round(spec.height * spec.safe_bottom_frac) - margin - headline_h
-    regions: list[TextRegionSpec] = []
-    for line_index, line in enumerate(headline_lines):
-        bbox = draw.textbbox((margin, y), line, font=headline_font)
-        draw.text((margin, y), line, font=headline_font, fill=tok.WHITE)
-        regions.append(TextRegionSpec(
-            kind="headline", box=box4(bbox),
-            clipped=clipped and line_index == len(headline_lines) - 1,
-        ))
-        y += (bbox[3] - bbox[1]) + round(headline_font.size * 0.18)
-    mark_count = place_brand_mark(canvas, spec, compact=True)
-    return LayoutResult(
-        image=canvas.convert("RGB"), text_regions=regions,
-        visible_brand_mark_count=mark_count,
-        source_image_treatment="generated" if generated else fitted.treatment.value,
-        layout_variant="carousel_generated_base" if generated else "carousel_source_base",
-        text_clipped=clipped,
-        notes={"source_coverage_fraction": 1.0, "generated_base_consumed": generated},
-    )
-
-
-def _slide_hook(*, spec: ProfileSpec, slide_copy: str, index: int, total: int, package_identity: str, hero_image: Image.Image | None) -> LayoutResult:
-    if hero_image is not None:
-        fitted = fit_image_cover(hero_image, width=spec.width, height=spec.height)
-        canvas = fitted.image
-        treatment = fitted.treatment.value
-    else:
-        canvas = build_structured_fallback(width=spec.width, height=spec.height, identity=package_identity, block_count=0)
-        # an oversized "1" watermark - the hook's own visual anchor when no real hero image exists.
+    if treatment == SourceMediaPrimitive.NONE.value:
+        # an oversized "1" watermark - the hook's own visual anchor when no real image exists.
         big = round(spec.width * 0.75)
         font = ig_font(big, "black")
         layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
@@ -215,7 +280,6 @@ def _slide_hook(*, spec: ProfileSpec, slide_copy: str, index: int, total: int, p
         ldraw.text((round(spec.width * 0.12), round(spec.height * 0.32)), "1", font=font, fill=(*tok.RED, 40))
         canvas.alpha_composite(layer)
         draw_corner_brackets(canvas, spec, top=False)
-        treatment = "none"
 
     apply_bottom_readability_gradient(canvas, height_frac=0.62, max_alpha=240)
     draw = ImageDraw.Draw(canvas, "RGBA")
@@ -240,7 +304,8 @@ def _slide_hook(*, spec: ProfileSpec, slide_copy: str, index: int, total: int, p
     mark_count = place_brand_mark(canvas, spec, compact=True)
     return LayoutResult(
         image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
-        source_image_treatment=treatment, layout_variant=SLIDE_LAYOUT_HOOK, text_clipped=clipped, notes=dict(source_coverage_fraction=1.0 if hero_image is not None else 0.0),
+        source_image_treatment=treatment, layout_variant=SLIDE_LAYOUT_HOOK, text_clipped=clipped,
+        notes=dict(source_coverage_fraction=1.0 if media_image is not None else 0.0),
     )
 
 
@@ -267,16 +332,26 @@ def _draw_copy(
 
 def _slide_context(
     *, spec: ProfileSpec, slide_copy: str, index: int, total: int,
-    package_identity: str, hero_image: Image.Image | None,
+    package_identity: str, media_image: Image.Image | None,
+    media_primitive: "SourceMediaPrimitive" = SourceMediaPrimitive.STRIP, focus_y: float = 0.42, focus_x: float = 0.5,
 ) -> LayoutResult:
-    """A light editorial field with a secondary image strip, not another dark report card."""
+    """A light editorial field with a secondary image strip, not another dark report card. STRIP
+    is a sub-rectangle, not a full canvas, so this stays its own bespoke geometry rather than
+    calling `_resolve_slide_background` - but WHETHER it shows an image at all, and whether that
+    crop is the standard strip framing or a tighter DETAIL_CROP zoom, is now the real decided
+    primitive, not an unconditional "hero_image is not None" check."""
     canvas = Image.new("RGBA", (spec.width, spec.height), (*tok.PAPER, 255))
     image_w = round(spec.width * 0.34)
     treatment = "none"
-    if hero_image is not None:
-        fitted = fit_image_cover(hero_image, width=image_w, height=spec.height, focus_y=0.42)
-        canvas.paste(fitted.image, (0, 0))
-        treatment = fitted.treatment.value
+    show_image = media_image is not None and media_primitive is not SourceMediaPrimitive.NONE
+    if show_image:
+        if media_primitive is SourceMediaPrimitive.DETAIL_CROP:
+            cropped, treatment = build_detail_crop_field(media_image, width=image_w, height=spec.height, focus_y=focus_y, focus_x=focus_x, zoom=2.4)
+            canvas.paste(cropped, (0, 0))
+        else:
+            fitted = fit_image_cover(media_image, width=image_w, height=spec.height, focus_y=focus_y, focus_x=focus_x)
+            canvas.paste(fitted.image, (0, 0))
+            treatment = fitted.treatment.value
     else:
         draw = ImageDraw.Draw(canvas, "RGBA")
         draw.rectangle([0, 0, image_w, spec.height], fill=(*tok.INK_RAISED, 255))
@@ -300,9 +375,17 @@ def _slide_context(
 
 def _slide_problem(
     *, spec: ProfileSpec, slide_copy: str, index: int, total: int, package_identity: str,
+    media_image: Image.Image | None = None, media_primitive: "SourceMediaPrimitive" = SourceMediaPrimitive.NONE,
+    focus_y: float = 0.42, focus_x: float = 0.5,
 ) -> LayoutResult:
-    """A tension composition: offset copy, a broken axis, and one dominant punctuation mark."""
-    canvas = Image.new("RGBA", (spec.width, spec.height), (*tok.INK, 255))
+    """A tension composition: offset copy, a broken axis, and one dominant punctuation mark. The
+    left `RED_DEEP` block (this family's own bold identity) always stays solid on top; a real
+    image, when the plan asks for one, only ever shows as texture on the copy side - the same
+    "foreground grammar unchanged, background source real" pattern as COMPARISON/DETAIL/CLOSING."""
+    canvas, treatment = _resolve_slide_background(
+        media_primitive, media_image, width=spec.width, height=spec.height, focus_y=focus_y, focus_x=focus_x,
+        identity=package_identity, block_count=0,
+    )
     draw = ImageDraw.Draw(canvas, "RGBA")
     split_x = round(spec.width * 0.30)
     draw.rectangle([0, 0, split_x, spec.height], fill=(*tok.RED_DEEP, 255))
@@ -320,7 +403,7 @@ def _slide_problem(
     mark_count = place_brand_mark(canvas, spec, compact=True)
     return LayoutResult(
         image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
-        source_image_treatment="none", layout_variant=SLIDE_LAYOUT_PROBLEM, text_clipped=clipped,
+        source_image_treatment=treatment, layout_variant=SLIDE_LAYOUT_PROBLEM, text_clipped=clipped,
         notes={"visual_coverage_fraction": 0.86},
     )
 
@@ -376,14 +459,13 @@ def _slide_explanation(
 
 def _slide_closing(
     *, spec: ProfileSpec, slide_copy: str, index: int, total: int, package_identity: str,
-    media_image: Image.Image | None = None,
+    media_image: Image.Image | None = None, media_primitive: "SourceMediaPrimitive" = SourceMediaPrimitive.NONE,
+    focus_y: float = 0.42, focus_x: float = 0.5,
 ) -> LayoutResult:
-    if media_image is not None:
-        canvas, treatment = build_dimmed_source_field(media_image, width=spec.width, height=spec.height)
-        source_treatment = treatment.value
-    else:
-        canvas = build_structured_fallback(width=spec.width, height=spec.height, identity=package_identity, block_count=0)
-        source_treatment = "none"
+    canvas, source_treatment = _resolve_slide_background(
+        media_primitive, media_image, width=spec.width, height=spec.height, focus_y=focus_y, focus_x=focus_x,
+        identity=package_identity, block_count=0,
+    )
     apply_top_readability_gradient(canvas, height_frac=0.5, max_alpha=150, tint=tok.RED_DEEP)
     draw_corner_brackets(canvas, spec, top=False)
     draw = ImageDraw.Draw(canvas, "RGBA")
@@ -417,8 +499,15 @@ def _slide_closing(
     )
 
 
-def _slide_fact(*, spec: ProfileSpec, slide_copy: str, index: int, total: int, package_identity: str) -> LayoutResult:
-    canvas = build_structured_fallback(width=spec.width, height=spec.height, identity=package_identity, block_count=0)
+def _slide_fact(
+    *, spec: ProfileSpec, slide_copy: str, index: int, total: int, package_identity: str,
+    media_image: Image.Image | None = None, media_primitive: "SourceMediaPrimitive" = SourceMediaPrimitive.NONE,
+    focus_y: float = 0.42, focus_x: float = 0.5,
+) -> LayoutResult:
+    canvas, fact_treatment = _resolve_slide_background(
+        media_primitive, media_image, width=spec.width, height=spec.height, focus_y=focus_y, focus_x=focus_x,
+        identity=package_identity, block_count=0,
+    )
     draw_corner_brackets(canvas, spec, top=False)
     draw = ImageDraw.Draw(canvas, "RGBA")
     margin = round(spec.width * tok.MARGIN_FRAC)
@@ -450,13 +539,14 @@ def _slide_fact(*, spec: ProfileSpec, slide_copy: str, index: int, total: int, p
     mark_count = place_brand_mark(canvas, spec, compact=True)
     return LayoutResult(
         image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
-        source_image_treatment="none", layout_variant=SLIDE_LAYOUT_FACT, text_clipped=clipped,
+        source_image_treatment=fact_treatment, layout_variant=SLIDE_LAYOUT_FACT, text_clipped=clipped,
     )
 
 
 def _slide_comparison(
     *, spec: ProfileSpec, slide_copy: str, index: int, total: int, package_identity: str,
-    media_image: Image.Image | None = None,
+    media_image: Image.Image | None = None, media_primitive: "SourceMediaPrimitive" = SourceMediaPrimitive.NONE,
+    focus_y: float = 0.42, focus_x: float = 0.5,
 ) -> LayoutResult:
     split = _split_vs(slide_copy)
     assert split is not None  # select_slide_layout only routes here when a real split exists
@@ -465,13 +555,13 @@ def _slide_comparison(
     # The left panel is always covered by its own solid `INK_RAISED` rectangle below (unchanged),
     # so a real image only ever shows through as the RIGHT panel's texture - the existing "left
     # solid / right whatever's-behind-it" asymmetry was already the design; only the background
-    # source changes here, none of the panel/VS-badge drawing logic below does.
-    if media_image is not None:
-        canvas, source_treatment_enum = build_dimmed_source_field(media_image, width=spec.width, height=spec.height)
-        source_treatment = source_treatment_enum.value
-    else:
-        canvas = build_structured_fallback(width=spec.width, height=spec.height, identity=package_identity, block_count=0)
-        source_treatment = "none"
+    # source changes here, none of the panel/VS-badge drawing logic below does. Default primitive
+    # is NONE (a comparison may be "primarily graphic, no photo" - the plan decides otherwise via
+    # media_need, not this function).
+    canvas, source_treatment = _resolve_slide_background(
+        media_primitive, media_image, width=spec.width, height=spec.height, focus_y=focus_y, focus_x=focus_x,
+        identity=package_identity, block_count=0,
+    )
     draw = ImageDraw.Draw(canvas, "RGBA")
     margin = round(spec.width * tok.MARGIN_FRAC)
     _draw_progress(canvas, spec, index=index, total=total)
@@ -522,14 +612,13 @@ def _slide_comparison(
 
 def _slide_detail(
     *, spec: ProfileSpec, role: str, slide_copy: str, index: int, total: int, package_identity: str,
-    media_image: Image.Image | None = None,
+    media_image: Image.Image | None = None, media_primitive: "SourceMediaPrimitive" = SourceMediaPrimitive.DETAIL_CROP,
+    focus_y: float = 0.42, focus_x: float = 0.5,
 ) -> LayoutResult:
-    if media_image is not None:
-        canvas, _detail_treatment = build_dimmed_source_field(media_image, width=spec.width, height=spec.height)
-        detail_source_treatment = _detail_treatment.value
-    else:
-        canvas = build_structured_fallback(width=spec.width, height=spec.height, identity=package_identity, block_count=0)
-        detail_source_treatment = "none"
+    canvas, detail_source_treatment = _resolve_slide_background(
+        media_primitive, media_image, width=spec.width, height=spec.height, focus_y=focus_y, focus_x=focus_x,
+        identity=package_identity, block_count=0,
+    )
     draw_corner_brackets(canvas, spec, top=False)
 
     # a large, low-alpha echo of this slide's own index number - real content (this IS slide N),
