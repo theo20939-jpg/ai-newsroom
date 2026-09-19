@@ -185,7 +185,10 @@ def main() -> None:
         },
     })
 
-    results = render_instagram_carousel(package, slide_images={0: raw_image})
+    # Phase B.3 forensic fix: reuse the SAME real RAW asset across every slide (not just the hook)
+    # now that COMPARISON/DETAIL/CLOSING can consume it as a dimmed/blurred background instead of
+    # a synthetic fallback - real cross-slide visual continuity, still zero provider calls.
+    results = render_instagram_carousel(package, slide_images={i: raw_image for i in range(5)})
     art = validate_instagram_art(package, results)
     gate = evaluate_instagram_editorial_gate(package, art)
 

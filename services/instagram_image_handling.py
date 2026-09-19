@@ -10,7 +10,7 @@ import enum
 import hashlib
 from dataclasses import dataclass
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 from services import instagram_design_tokens as tok
 from services.instagram_visual_profiles import ProfileSpec, ig_brand_mark, ig_font
@@ -142,6 +142,26 @@ def draw_with_alpha(canvas: Image.Image, painter) -> None:
     layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     painter(ImageDraw.Draw(layer, "RGBA"))
     canvas.alpha_composite(layer)
+
+
+def build_dimmed_source_field(
+    media_image: Image.Image, *, width: int, height: int, focus_y: float = 0.42,
+    dim_alpha: int = 205, blur_radius: float = 6.0,
+) -> tuple[Image.Image, SourceImageTreatment]:
+    """A REAL photographic background for the typography-led carousel families (COMPARISON/
+    DETAIL/CLOSING) that previously only ever drew `build_structured_fallback`'s synthetic grid
+    regardless of whether a real asset existed - the actual root cause of those slides reading as
+    a generic template even when a real generated hero image was available for the whole deck
+    (docs: Phase B.3 visual-divergence forensic trace). A heavy, uniform dark scrim (not just the
+    bottom/top readability bands those families never needed before) keeps foreground text legible
+    from anywhere on the card, and a gentle blur keeps the photograph as recognisable texture/mood
+    rather than competing detail. Reuses `fit_image_cover`'s own truthful treatment vocabulary -
+    never invents a new `source_image_treatment` value the art validator would reject."""
+    fitted = fit_image_cover(media_image, width=width, height=height, focus_y=focus_y)
+    canvas = fitted.image.convert("RGB").filter(ImageFilter.GaussianBlur(blur_radius)).convert("RGBA")
+    scrim = Image.new("RGBA", canvas.size, (*tok.INK, dim_alpha))
+    canvas.alpha_composite(scrim)
+    return canvas, fitted.treatment
 
 
 def build_structured_fallback(*, width: int, height: int, identity: str, block_count: int | None = None) -> Image.Image:

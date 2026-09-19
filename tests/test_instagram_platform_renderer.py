@@ -6,7 +6,7 @@ from __future__ import annotations
 import io
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from services.instagram_content_opportunity import ContentOpportunity, OpportunitySourceType
 from services.instagram_content_package import InstagramContentPackage, build_instagram_content_package
@@ -143,6 +143,55 @@ def test_carousel_slide_count_bound_is_enforced() -> None:
     )
     with pytest.raises(InstagramRenderError):
         render_instagram_carousel(pkg)
+
+
+def _small_real_image() -> Image.Image:
+    img = Image.new("RGB", (600, 900), (60, 90, 140))
+    ImageDraw.Draw(img).rectangle([100, 100, 500, 800], fill=(200, 30, 20))
+    return img
+
+
+def test_comparison_detail_closing_use_a_real_supplied_image_when_given_one() -> None:
+    """Phase B.3 forensic fix: these three families previously had no way to show a real image at
+    all - `source_image_treatment` stayed "none" no matter what was supplied. Reusing the SAME
+    asset across the whole deck must now actually change the rendered background, not just carry
+    inert metadata."""
+    slides = [
+        InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v"),
+        InstagramCarouselSlideCreative(role="comparison", slide_copy="A vs B", visual_direction="v"),
+        InstagramCarouselSlideCreative(role="unrecognised_role_falls_to_detail", slide_copy="Detail text", visual_direction="v"),
+        InstagramCarouselSlideCreative(role="takeaway", slide_copy="Takeaway", visual_direction="v"),
+    ]
+    carousel = InstagramCarouselCreative(objective="saves", slides=slides)
+    pkg = build_instagram_content_package(
+        opportunity=_OPP, format_decision=FormatDecision(recommended_format=ContentFormat.CAROUSEL), shadow_plan=_SP,
+        creative_outcome=CreativeGenerationOutcome(carousel=carousel),
+    )
+    same_image = _small_real_image()
+    results = render_instagram_carousel(pkg, slide_images={0: same_image, 1: same_image, 2: same_image, 3: same_image})
+    treatments = [r.evidence.source_image_treatment for r in results]
+    assert treatments[1] in ("cover_cropped", "contain_preserved")  # comparison
+    assert treatments[2] in ("cover_cropped", "contain_preserved")  # detail
+    assert treatments[3] in ("cover_cropped", "contain_preserved")  # closing (takeaway role)
+    variants = {r.evidence.notes.get("layout_variant") for r in results}
+    assert len(variants) >= 3  # still visually distinct families, not collapsed into one
+
+
+def test_comparison_detail_closing_unchanged_when_no_image_is_supplied() -> None:
+    """Backward compatibility: a caller with no real asset at all must render byte-identically to
+    before this fix - "none" treatment, the synthetic structured fallback, nothing new required."""
+    slides = [
+        InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v"),
+        InstagramCarouselSlideCreative(role="comparison", slide_copy="A vs B", visual_direction="v"),
+        InstagramCarouselSlideCreative(role="takeaway", slide_copy="Takeaway", visual_direction="v"),
+    ]
+    carousel = InstagramCarouselCreative(objective="saves", slides=slides)
+    pkg = build_instagram_content_package(
+        opportunity=_OPP, format_decision=FormatDecision(recommended_format=ContentFormat.CAROUSEL), shadow_plan=_SP,
+        creative_outcome=CreativeGenerationOutcome(carousel=carousel),
+    )
+    results = render_instagram_carousel(pkg)
+    assert [r.evidence.source_image_treatment for r in results] == ["none", "none", "none"]
 
 
 def test_reel_cover_render_produces_only_the_cover_image_never_claims_video() -> None:

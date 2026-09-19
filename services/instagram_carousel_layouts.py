@@ -34,6 +34,7 @@ from services.instagram_editorial_layouts import LayoutResult, TextRegionSpec
 from services.instagram_image_handling import (
     apply_bottom_readability_gradient,
     apply_top_readability_gradient,
+    build_dimmed_source_field,
     build_structured_fallback,
     draw_corner_brackets,
     fit_image_cover,
@@ -53,6 +54,17 @@ SLIDE_LAYOUT_PROBLEM = "carousel_problem_tension"
 SLIDE_LAYOUT_EXPLANATION = "carousel_mechanism_flow"
 
 _CLOSING_ROLES = {"cta", "takeaway"}
+
+# Phase B.3 forensic fix: these three families previously had NO way to consume a real supplied
+# image at all - `render_carousel_slide` unconditionally forced ANY non-HOOK/CONTEXT layout with a
+# media_image through the generic `_slide_media_base` override, which REPLACES a family's own
+# distinctive composition (VS badge, red closing wash, index echo) with the same full-bleed-photo-
+# plus-headline card used everywhere - visually collapsing every non-hook/context slide into one
+# repeated treatment. Excluding them here lets each keep its own foreground grammar while using a
+# real dimmed/blurred crop of the same asset as its background instead of a synthetic pattern.
+_OWN_TREATMENT_FAMILIES = {
+    SLIDE_LAYOUT_HOOK, SLIDE_LAYOUT_CONTEXT, SLIDE_LAYOUT_COMPARISON, SLIDE_LAYOUT_CLOSING, SLIDE_LAYOUT_DETAIL,
+}
 
 
 def select_slide_layout(*, role: str, index: int, slide_copy: str) -> str:
@@ -114,7 +126,7 @@ def render_carousel_slide(
     selected_image = media_image if media_image is not None else hero_image
     if media_image is not None and (
         str(media_mode or "").upper() == "GENERATED"
-        or layout not in {SLIDE_LAYOUT_HOOK, SLIDE_LAYOUT_CONTEXT}
+        or layout not in _OWN_TREATMENT_FAMILIES
     ):
         result = _slide_media_base(
             spec=spec, slide_copy=slide_copy, index=index, total=total,
@@ -130,13 +142,13 @@ def render_carousel_slide(
     elif layout == SLIDE_LAYOUT_EXPLANATION:
         result = _slide_explanation(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, visual_direction=visual_direction)
     elif layout == SLIDE_LAYOUT_CLOSING:
-        result = _slide_closing(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity)
+        result = _slide_closing(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, media_image=selected_image)
     elif layout == SLIDE_LAYOUT_FACT:
         result = _slide_fact(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity)
     elif layout == SLIDE_LAYOUT_COMPARISON:
-        result = _slide_comparison(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity)
+        result = _slide_comparison(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, media_image=selected_image)
     else:
-        result = _slide_detail(spec=spec, role=role, slide_copy=slide_copy, index=index, total=total, package_identity=identity)
+        result = _slide_detail(spec=spec, role=role, slide_copy=slide_copy, index=index, total=total, package_identity=identity, media_image=selected_image)
     result.notes.update(render_plan or {})
     result.notes.update({
         "rendered_copy": [slide_copy], "internal_labels_rendered": [],
@@ -362,8 +374,16 @@ def _slide_explanation(
     )
 
 
-def _slide_closing(*, spec: ProfileSpec, slide_copy: str, index: int, total: int, package_identity: str) -> LayoutResult:
-    canvas = build_structured_fallback(width=spec.width, height=spec.height, identity=package_identity, block_count=0)
+def _slide_closing(
+    *, spec: ProfileSpec, slide_copy: str, index: int, total: int, package_identity: str,
+    media_image: Image.Image | None = None,
+) -> LayoutResult:
+    if media_image is not None:
+        canvas, treatment = build_dimmed_source_field(media_image, width=spec.width, height=spec.height)
+        source_treatment = treatment.value
+    else:
+        canvas = build_structured_fallback(width=spec.width, height=spec.height, identity=package_identity, block_count=0)
+        source_treatment = "none"
     apply_top_readability_gradient(canvas, height_frac=0.5, max_alpha=150, tint=tok.RED_DEEP)
     draw_corner_brackets(canvas, spec, top=False)
     draw = ImageDraw.Draw(canvas, "RGBA")
@@ -393,7 +413,7 @@ def _slide_closing(*, spec: ProfileSpec, slide_copy: str, index: int, total: int
     mark_count = place_brand_mark(canvas, spec, compact=True)
     return LayoutResult(
         image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
-        source_image_treatment="none", layout_variant=SLIDE_LAYOUT_CLOSING, text_clipped=clipped,
+        source_image_treatment=source_treatment, layout_variant=SLIDE_LAYOUT_CLOSING, text_clipped=clipped,
     )
 
 
@@ -434,12 +454,24 @@ def _slide_fact(*, spec: ProfileSpec, slide_copy: str, index: int, total: int, p
     )
 
 
-def _slide_comparison(*, spec: ProfileSpec, slide_copy: str, index: int, total: int, package_identity: str) -> LayoutResult:
+def _slide_comparison(
+    *, spec: ProfileSpec, slide_copy: str, index: int, total: int, package_identity: str,
+    media_image: Image.Image | None = None,
+) -> LayoutResult:
     split = _split_vs(slide_copy)
     assert split is not None  # select_slide_layout only routes here when a real split exists
     left_text, right_text = split
 
-    canvas = build_structured_fallback(width=spec.width, height=spec.height, identity=package_identity, block_count=0)
+    # The left panel is always covered by its own solid `INK_RAISED` rectangle below (unchanged),
+    # so a real image only ever shows through as the RIGHT panel's texture - the existing "left
+    # solid / right whatever's-behind-it" asymmetry was already the design; only the background
+    # source changes here, none of the panel/VS-badge drawing logic below does.
+    if media_image is not None:
+        canvas, source_treatment_enum = build_dimmed_source_field(media_image, width=spec.width, height=spec.height)
+        source_treatment = source_treatment_enum.value
+    else:
+        canvas = build_structured_fallback(width=spec.width, height=spec.height, identity=package_identity, block_count=0)
+        source_treatment = "none"
     draw = ImageDraw.Draw(canvas, "RGBA")
     margin = round(spec.width * tok.MARGIN_FRAC)
     _draw_progress(canvas, spec, index=index, total=total)
@@ -484,12 +516,20 @@ def _slide_comparison(*, spec: ProfileSpec, slide_copy: str, index: int, total: 
     mark_count = place_brand_mark(canvas, spec, compact=True)
     return LayoutResult(
         image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
-        source_image_treatment="none", layout_variant=SLIDE_LAYOUT_COMPARISON, text_clipped=False,
+        source_image_treatment=source_treatment, layout_variant=SLIDE_LAYOUT_COMPARISON, text_clipped=False,
     )
 
 
-def _slide_detail(*, spec: ProfileSpec, role: str, slide_copy: str, index: int, total: int, package_identity: str) -> LayoutResult:
-    canvas = build_structured_fallback(width=spec.width, height=spec.height, identity=package_identity, block_count=0)
+def _slide_detail(
+    *, spec: ProfileSpec, role: str, slide_copy: str, index: int, total: int, package_identity: str,
+    media_image: Image.Image | None = None,
+) -> LayoutResult:
+    if media_image is not None:
+        canvas, _detail_treatment = build_dimmed_source_field(media_image, width=spec.width, height=spec.height)
+        detail_source_treatment = _detail_treatment.value
+    else:
+        canvas = build_structured_fallback(width=spec.width, height=spec.height, identity=package_identity, block_count=0)
+        detail_source_treatment = "none"
     draw_corner_brackets(canvas, spec, top=False)
 
     # a large, low-alpha echo of this slide's own index number - real content (this IS slide N),
@@ -529,5 +569,5 @@ def _slide_detail(*, spec: ProfileSpec, role: str, slide_copy: str, index: int, 
     mark_count = place_brand_mark(canvas, spec, compact=True)
     return LayoutResult(
         image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
-        source_image_treatment="none", layout_variant=SLIDE_LAYOUT_DETAIL, text_clipped=clipped,
+        source_image_treatment=detail_source_treatment, layout_variant=SLIDE_LAYOUT_DETAIL, text_clipped=clipped,
     )
