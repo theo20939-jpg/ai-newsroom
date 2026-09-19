@@ -149,6 +149,20 @@ def validate_instagram_art(
             missing_trace = sorted(required_trace - set(ev.notes))
             if missing_trace or not ev.notes.get("render_plan_applied"):
                 blocking.append(f"creative_plan_not_applied: missing={missing_trace} slide_index={ev.slide_index}")
+            # Phase B.3.1: a field existing in notes is NOT the same claim as the corresponding
+            # pixel-level operation having actually occurred (the exact "fake implementation
+            # evidence" the Founder flagged). `source_media_treatment` is the plan's own PREDICTION
+            # (computed pre-render, package-level media availability); `media_primitive_selected`
+            # is the REAL per-slide decision `render_carousel_slide` actually acted on. They must
+            # agree - a mismatch means the plan's own recorded intent never reached these pixels
+            # (e.g. a package-level asset existed but this specific slide was never given one).
+            predicted = ev.notes.get("source_media_treatment")
+            executed = ev.notes.get("media_primitive_selected")
+            if predicted not in (None, "legacy_selection") and executed is not None and predicted != executed:
+                blocking.append(
+                    f"creative_plan_media_treatment_mismatch: plan predicted {predicted!r}, "
+                    f"actual executed primitive was {executed!r} slide_index={ev.slide_index}"
+                )
         if ev.notes.get("source_media_treatment") == "full_bleed_hero":
             coverage = float(ev.notes.get("source_coverage_fraction", 0.0))
             if coverage < 0.70:

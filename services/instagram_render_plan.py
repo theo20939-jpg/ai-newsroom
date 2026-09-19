@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.instagram_carousel_layouts import select_media_primitive, select_slide_layout
 from services.instagram_content_package import InstagramContentPackage
 
 
@@ -61,23 +62,23 @@ def interpret_render_plan(
             source_treatment = "none"
             typography = "display_symbol_plus_supporting_copy"
     elif fmt == "carousel":
-        role = str((slide or {}).get("role") or "detail").strip().lower()
-        families = {
-            "hook": ("carousel_hero", ["full_bleed_image", "readability_gradient", "display_copy"]),
-            "context": ("carousel_context_split", ["image_strip", "split_composition", "supporting_copy"]),
-            "problem": ("carousel_problem_tension", ["accent_field", "oversized_background_typography", "display_copy"]),
-            "explanation": ("carousel_mechanism_flow", ["process_nodes", "connector_lines", "supporting_copy"]),
-            "data": ("carousel_data", ["numeric_emphasis", "data_block", "supporting_copy"]),
-            "comparison": ("carousel_comparison", ["split_composition", "contrast_rule", "supporting_copy"]),
-            "takeaway": ("carousel_takeaway", ["light_field", "display_copy", "brand_anchor"]),
-            "cta": ("carousel_takeaway", ["light_field", "display_copy", "brand_anchor"]),
-        }
-        family, primitives = families.get(role, ("carousel_editorial", ["layered_panel", "supporting_copy", "accent_shape"]))
-        primitives = list(primitives) + ["progress_marker", "brand_anchor"]
-        source_treatment = "full_bleed_hero" if role == "hook" and has_source else (
-            "secondary_image_strip" if role == "context" and has_source else "none"
-        )
-        typography = "display" if role in {"hook", "problem", "takeaway", "cta"} else "supporting_editorial"
+        # Phase B.3.1: `source_media_treatment`/`used_primitives` are no longer this function's OWN
+        # independent, role-keyed guess - they are the exact SAME decision
+        # `render_carousel_slide()` will make, computed here BEFORE rendering so the art validator
+        # can later confirm the two agree (instagram_art_validator.py's own new check). Two parallel
+        # classifiers that only coincidentally shared some family names was the root cause found in
+        # the Phase B.3 forensic trace; this makes it one real decision, read from two places.
+        s = slide or {}
+        role = str(s.get("role") or "detail")
+        index = int(s.get("index") or 0)
+        slide_copy = str(s.get("text") or "")
+        media_need = s.get("media_need")
+        layout = select_slide_layout(role=role, index=index, slide_copy=slide_copy)
+        primitive = select_media_primitive(layout=layout, media_need=media_need, has_media=has_source)
+        family = layout
+        primitives = ["progress_marker", "brand_anchor", primitive.value]
+        source_treatment = primitive.value
+        typography = "display" if role.strip().lower() in {"hook", "problem", "takeaway", "cta"} else "supporting_editorial"
     elif fmt == "reel":
         if has_source:
             family = "reel_recomposed_source"

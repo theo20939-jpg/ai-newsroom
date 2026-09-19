@@ -48,11 +48,15 @@ class FittedImage:
     source_orientation: ImageOrientation | None
 
 
-def fit_image_cover(source: Image.Image, *, width: int, height: int, focus_y: float = 0.42) -> FittedImage:
+def fit_image_cover(
+    source: Image.Image, *, width: int, height: int, focus_y: float = 0.42, focus_x: float = 0.5,
+) -> FittedImage:
     """Cover-crop: scales the source so it fills (width, height) exactly, cropping the excess.
     `focus_y` (0=top, 1=bottom, default a bit above center - most editorial subjects/faces sit
     slightly above frame-center, never exactly centered which tends to crop chins/foreheads)
-    biases which part of the taller/wider axis survives the crop - deterministic, not random."""
+    biases which part of the taller/wider axis survives the crop - deterministic, not random.
+    `focus_x` (0=left, 1=right, default centered) is the same bias for the OTHER axis - previously
+    always dead-centered regardless of where a described subject actually sat."""
     src = source.convert("RGB")
     sw, sh = src.size
     orientation = classify_orientation(sw, sh)
@@ -62,7 +66,7 @@ def fit_image_cover(source: Image.Image, *, width: int, height: int, focus_y: fl
     if src_ratio > target_ratio:
         # source is relatively wider - crop the sides, keep full height
         new_w = round(sh * target_ratio)
-        x0 = max(0, min(sw - new_w, round((sw - new_w) * 0.5)))
+        x0 = max(0, min(sw - new_w, round((sw - new_w) * focus_x)))
         box = (x0, 0, x0 + new_w, sh)
     else:
         # source is relatively taller - crop top/bottom, keep full width
@@ -145,7 +149,7 @@ def draw_with_alpha(canvas: Image.Image, painter) -> None:
 
 
 def build_dimmed_source_field(
-    media_image: Image.Image, *, width: int, height: int, focus_y: float = 0.42,
+    media_image: Image.Image, *, width: int, height: int, focus_y: float = 0.42, focus_x: float = 0.5,
     dim_alpha: int = 205, blur_radius: float = 6.0,
 ) -> tuple[Image.Image, SourceImageTreatment]:
     """A REAL photographic background for the typography-led carousel families (COMPARISON/
@@ -157,11 +161,43 @@ def build_dimmed_source_field(
     from anywhere on the card, and a gentle blur keeps the photograph as recognisable texture/mood
     rather than competing detail. Reuses `fit_image_cover`'s own truthful treatment vocabulary -
     never invents a new `source_image_treatment` value the art validator would reject."""
-    fitted = fit_image_cover(media_image, width=width, height=height, focus_y=focus_y)
+    fitted = fit_image_cover(media_image, width=width, height=height, focus_y=focus_y, focus_x=focus_x)
     canvas = fitted.image.convert("RGB").filter(ImageFilter.GaussianBlur(blur_radius)).convert("RGBA")
     scrim = Image.new("RGBA", canvas.size, (*tok.INK, dim_alpha))
     canvas.alpha_composite(scrim)
     return canvas, fitted.treatment
+
+
+def build_detail_crop_field(
+    media_image: Image.Image, *, width: int, height: int, focus_y: float = 0.42, focus_x: float = 0.5,
+    zoom: float = 1.8,
+) -> tuple[Image.Image, str]:
+    """A genuinely DIFFERENT framing from `fit_image_cover`'s standard cover-crop: crops a smaller
+    (1/zoom) sub-rectangle of the source before scaling to fill the frame, so the same photograph
+    reads as one specific detail rather than the same wide framing repeated at a different blur/
+    dim level. `focus_x`/`focus_y` (0-1, source-relative) bias WHERE that sub-rectangle sits - a
+    zoomed crop that stays centered regardless of subject position just as often lands on empty
+    background as on the actual subject, especially once the target aspect is narrow (a strip).
+    Reuses `cover_cropped` - this genuinely IS a real crop that fills the frame, never a new value
+    the art validator would reject."""
+    src = media_image.convert("RGB")
+    sw, sh = src.size
+    target_ratio = width / height
+    if sw / sh > target_ratio:
+        crop_h = sh / zoom
+        crop_w = crop_h * target_ratio
+    else:
+        crop_w = sw / zoom
+        crop_h = crop_w / target_ratio
+    crop_w = min(crop_w, sw)
+    crop_h = min(crop_h, sh)
+    cx = sw * focus_x
+    cy = sh * focus_y
+    left = max(0.0, min(sw - crop_w, cx - crop_w / 2))
+    top = max(0.0, min(sh - crop_h, cy - crop_h / 2))
+    box = (round(left), round(top), round(left + crop_w), round(top + crop_h))
+    cropped = src.crop(box).resize((width, height), Image.LANCZOS)
+    return cropped.convert("RGBA"), SourceImageTreatment.COVER_CROPPED.value
 
 
 def build_structured_fallback(*, width: int, height: int, identity: str, block_count: int | None = None) -> Image.Image:

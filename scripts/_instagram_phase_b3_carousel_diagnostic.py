@@ -25,6 +25,7 @@ from integrations.storage.image_storage import LocalImageStorage
 from schemas.instagram_creative import (
     InstagramCarouselCreative,
     InstagramCarouselSlideCreative,
+    InstagramCreativeExecutionPlan,
 )
 from services.instagram_art_validator import validate_instagram_art
 from services.instagram_content_opportunity import ContentOpportunity, OpportunitySourceType
@@ -69,7 +70,14 @@ _SP = ShadowPlanResult(
 
 
 def _carousel_creative() -> InstagramCarouselCreative:
-    """Five slides, grounded only in `_EVIDENCE`/`_SUMMARY` - no invented facts, no fake stats."""
+    """Five slides, grounded only in `_EVIDENCE`/`_SUMMARY` - no invented facts, no fake stats.
+
+    Phase B.3.1: `media_need` on each slide is the REAL per-slide creative-plan signal that now
+    causally decides whether/how the RAW asset appears (services/instagram_carousel_layouts.py::
+    select_media_primitive) - not role alone. Deliberately NOT uniform: two slides explicitly
+    request no photo at all (comparison, takeaway), one requests the plain full-bleed cover
+    (hook), and two request a genuinely different DETAIL_CROP zoom (context's strip, impact's full
+    frame) - proving the plan, not the role, drives the outcome."""
     slides = [
         InstagramCarouselSlideCreative(
             role="hook",
@@ -77,15 +85,15 @@ def _carousel_creative() -> InstagramCarouselCreative:
             visual_direction="Полнокадровое использование одобренного B.2 сгенерированного изображения, без изменений композиции.",
             source_evidence=None,
             slide_purpose="Визуальный крючок обложки",
-            media_need="источник/generated",
+            media_need="полный кадр, герой обложки",
         ),
         InstagramCarouselSlideCreative(
             role="context",
             slide_copy="Разработчик на Хабре перестал всегда брать самую «умную» и дорогую модель для каждой задачи.",
-            visual_direction="Светлое редакционное поле с вертикальной полосой изображения слева, как в остальной carousel-системе.",
+            visual_direction="Боковая полоса с крупным планом инструмента и куба, не общий план всей сцены.",
             source_evidence=_EVIDENCE[0],
             slide_purpose="Минимальный факт для понимания истории",
-            media_need=None,
+            media_need="боковая полоса, крупный план деталь",
         ),
         InstagramCarouselSlideCreative(
             role="comparison",
@@ -93,23 +101,23 @@ def _carousel_creative() -> InstagramCarouselCreative:
             visual_direction="Двухпанельное сравнение критериев без изображения, только типографика.",
             source_evidence=_EVIDENCE[1],
             slide_purpose="Центральный контраст статьи",
-            media_need=None,
+            media_need="без фото, только графика - сильное графическое сравнение не нуждается в изображении",
         ),
         InstagramCarouselSlideCreative(
             role="impact",
             slide_copy="Практический вывод: не переплачивать за максимальный интеллект там, где хватает более дешёвой и быстрой модели.",
-            visual_direction="Тёмная карточка с приглушённым фоновым индексом слайда, без нового изображения.",
+            visual_direction="Крупный план инструмента и куба - сфокусированная деталь, а не общий приглушённый фон.",
             source_evidence=_EVIDENCE[1],
             slide_purpose="Практическое значение для читателя",
-            media_need=None,
+            media_need="крупный план, деталь инструмента",
         ),
         InstagramCarouselSlideCreative(
             role="takeaway",
             slide_copy="Разумный выбор модели - не самый мощный вариант, а тот, что решает задачу с наименьшими издержками.",
-            visual_direction="Закрывающий красный фон системы, без нового изображения.",
+            visual_direction="Закрывающий красный фон системы, чистая типографика без изображения.",
             source_evidence=None,
             slide_purpose="Вывод, закрывающий тезис обложки",
-            media_need=None,
+            media_need="без изображения, чистая типографика для вывода",
         ),
     ]
     return InstagramCarouselCreative(
@@ -121,7 +129,16 @@ def _carousel_creative() -> InstagramCarouselCreative:
             "Автор на Хабре пишет, что перестал выбирать самые умные ИИ-модели для каждой задачи. "
             "Вместо рейтинга интеллекта он смотрит на стоимость готового результата."
         ),
-        creative_execution_plan=None,
+        creative_execution_plan=InstagramCreativeExecutionPlan(
+            main_idea="Показать разницу между максимальной вычислительной мощью и практической полезностью через один визуальный конфликт, развёрнутый в карусель.",
+            focal_point="Рука с инструментом и деревянный куб в нижней правой части кадра",
+            media_strategy="generated_media",
+            media_rationale="Один реальный сгенерированный кадр из B.2 переиспользуется по всей карусели через разные производные обработки вместо повторной генерации.",
+            composition_direction="Обложка - полный кадр; контекст и практический вывод - крупный план детали инструмента и куба; сравнение и вывод - чистая типографика без изображения.",
+            branding_treatment="Логотип не генерировать; текущий знак добавляет compositor.",
+            visual_treatment="Premium editorial still life, tactile industrial materials, warm natural light.",
+            avoid_recent_treatment="Без роботов, неона, чёрной карточки, интерфейсов, мозгов из микросхем и sci-fi клише.",
+        ),
     )
 
 
@@ -172,12 +189,10 @@ def main() -> None:
         "media_execution": {
             "strategy": "generated_media",
             "assets": [{
-                # media_mode is deliberately omitted (not "GENERATED"): render_instagram_carousel
-                # reads this same field to pick the per-slide render path, and forcing "GENERATED"
-                # routes the hook slide through the generic _slide_media_base treatment, whose
-                # `source_image_treatment="generated"` value the art validator's own allow-list does
-                # not recognise (a narrow pre-existing gap, not something this diagnostic works
-                # around by lying - the fields below already record the asset's true provenance).
+                # media_mode is deliberately omitted: since Phase B.3.1, dispatch no longer reads
+                # this field at all - which real pixel treatment a slide gets is now
+                # select_media_primitive()'s own decision, driven by this slide's `media_need`
+                # text (see _carousel_creative() above), not a media_mode="GENERATED" special case.
                 "asset_key": "0", "status": "generated_media",
                 "asset_ref": raw_ref, "generation_execution_id": "instagram:phase-b2-diagnostic-b4-20260918-retry1:visual:primary:v2",
                 "provider": "openai", "model": "gpt-image-2", "reused_from": "phase_b2_diagnostic",
@@ -185,9 +200,10 @@ def main() -> None:
         },
     })
 
-    # Phase B.3 forensic fix: reuse the SAME real RAW asset across every slide (not just the hook)
-    # now that COMPARISON/DETAIL/CLOSING can consume it as a dimmed/blurred background instead of
-    # a synthetic fallback - real cross-slide visual continuity, still zero provider calls.
+    # Phase B.3.1: the SAME real RAW asset is made AVAILABLE to every slide (still zero provider
+    # calls) - but whether/how each one actually uses it is select_media_primitive()'s own
+    # decision, driven by that slide's real `media_need` text, not "an image exists so show it".
+    # Two of these five slides (comparison, takeaway) deliberately render with NO photo at all.
     results = render_instagram_carousel(package, slide_images={i: raw_image for i in range(5)})
     art = validate_instagram_art(package, results)
     gate = evaluate_instagram_editorial_gate(package, art)
@@ -214,6 +230,12 @@ def main() -> None:
             "text_clipped": result.evidence.text_clipped,
             "visible_brand_mark_count": result.evidence.visible_brand_mark_count,
             "source_image_treatment": result.evidence.source_image_treatment,
+            # The real causal chain, Phase B.3.1: what the plan ASKED for, what was DECIDED, and
+            # what ACTUALLY happened to the pixels - three distinct, honestly-recorded facts.
+            "media_need_requested": carousel.slides[i].media_need,
+            "media_primitive_selected": result.evidence.notes.get("media_primitive_selected"),
+            "creative_plan_predicted_treatment": result.evidence.notes.get("source_media_treatment"),
+            "focal_point_applied": (result.evidence.notes.get("creative_plan") or {}).get("focal_point"),
         })
 
     contact_sheet = _build_contact_sheet(slide_images_decoded)

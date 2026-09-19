@@ -23,6 +23,7 @@ from services.instagram_visual_profiles import INSTAGRAM_RENDER_PROFILES, Instag
 from schemas.instagram_creative import (
     InstagramCarouselCreative,
     InstagramCarouselSlideCreative,
+    InstagramCreativeExecutionPlan,
     InstagramReelCreative,
     InstagramSingleCreative,
 )
@@ -151,11 +152,40 @@ def _small_real_image() -> Image.Image:
     return img
 
 
-def test_comparison_detail_closing_use_a_real_supplied_image_when_given_one() -> None:
-    """Phase B.3 forensic fix: these three families previously had no way to show a real image at
-    all - `source_image_treatment` stayed "none" no matter what was supplied. Reusing the SAME
-    asset across the whole deck must now actually change the rendered background, not just carry
-    inert metadata."""
+def test_media_need_causally_controls_whether_and_how_a_slide_shows_the_image() -> None:
+    """Phase B.3.1: the creative plan, not role alone, decides whether/how a slide's real image
+    appears. Same RAW asset on every slide; only `media_need` differs per slide - and that
+    difference must reach real, different pixel-level primitives, not just notes."""
+    slides = [
+        InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v", media_need="полный кадр"),
+        InstagramCarouselSlideCreative(role="comparison", slide_copy="A vs B", visual_direction="v", media_need="без фото, только графика"),
+        InstagramCarouselSlideCreative(role="unrecognised_role_falls_to_detail", slide_copy="Detail text", visual_direction="v", media_need="крупный план, деталь"),
+        InstagramCarouselSlideCreative(role="takeaway", slide_copy="Takeaway", visual_direction="v", media_need="приглушённый фон"),
+    ]
+    carousel = InstagramCarouselCreative(objective="saves", slides=slides)
+    pkg = build_instagram_content_package(
+        opportunity=_OPP, format_decision=FormatDecision(recommended_format=ContentFormat.CAROUSEL), shadow_plan=_SP,
+        creative_outcome=CreativeGenerationOutcome(carousel=carousel),
+    )
+    same_image = _small_real_image()
+    results = render_instagram_carousel(pkg, slide_images={0: same_image, 1: same_image, 2: same_image, 3: same_image})
+    primitives = [r.evidence.notes.get("media_primitive_selected") for r in results]
+    assert primitives == ["source_full_bleed", "none", "source_detail_crop", "source_dimmed_field"]
+    # comparison's explicit "no photo" request must actually produce no-image evidence, not a
+    # photo the plan asked NOT to show:
+    assert results[1].evidence.source_image_treatment == "none"
+    # detail's and closing's requests must both actually differ in outcome from each other and
+    # from a plain full-bleed cover-crop - a real, different pixel-level operation each time:
+    assert results[2].evidence.source_image_treatment == "cover_cropped"  # a real crop, not "none"
+    assert results[3].evidence.source_image_treatment in ("cover_cropped", "contain_preserved")
+    variants = {r.evidence.notes.get("layout_variant") for r in results}
+    assert len(variants) >= 3  # still visually distinct families, not collapsed into one
+
+
+def test_role_default_bias_still_applies_with_no_explicit_media_need() -> None:
+    """Role may still provide a sensible DEFAULT (this is not the bug) - detail's own default is a
+    focused crop, not the same blurred full-frame backdrop as everything else, and comparison's own
+    default is no photo at all unless the plan asks for one."""
     slides = [
         InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v"),
         InstagramCarouselSlideCreative(role="comparison", slide_copy="A vs B", visual_direction="v"),
@@ -169,12 +199,8 @@ def test_comparison_detail_closing_use_a_real_supplied_image_when_given_one() ->
     )
     same_image = _small_real_image()
     results = render_instagram_carousel(pkg, slide_images={0: same_image, 1: same_image, 2: same_image, 3: same_image})
-    treatments = [r.evidence.source_image_treatment for r in results]
-    assert treatments[1] in ("cover_cropped", "contain_preserved")  # comparison
-    assert treatments[2] in ("cover_cropped", "contain_preserved")  # detail
-    assert treatments[3] in ("cover_cropped", "contain_preserved")  # closing (takeaway role)
-    variants = {r.evidence.notes.get("layout_variant") for r in results}
-    assert len(variants) >= 3  # still visually distinct families, not collapsed into one
+    primitives = [r.evidence.notes.get("media_primitive_selected") for r in results]
+    assert primitives == ["source_full_bleed", "none", "source_detail_crop", "none"]
 
 
 def test_comparison_detail_closing_unchanged_when_no_image_is_supplied() -> None:
@@ -192,6 +218,114 @@ def test_comparison_detail_closing_unchanged_when_no_image_is_supplied() -> None
     )
     results = render_instagram_carousel(pkg)
     assert [r.evidence.source_image_treatment for r in results] == ["none", "none", "none"]
+
+
+def _quadrant_marker_image() -> tuple[Image.Image, tuple[int, int, int]]:
+    """A real, non-uniform image with a bright, unmistakable marker ONLY in the bottom-right
+    quadrant - the rest is uniform dark. A crop that actually reaches that corner will contain a
+    lot of that exact color; a crop that does not will contain almost none of it."""
+    img = Image.new("RGB", (1200, 1500), (20, 20, 20))
+    marker = (255, 60, 10)
+    ImageDraw.Draw(img).rectangle([800, 1000, 1200, 1500], fill=marker)
+    return img, marker
+
+
+def _marker_fraction(image: Image.Image, marker: tuple[int, int, int]) -> float:
+    pixels = list(image.getdata())
+    hits = sum(1 for p in pixels if abs(p[0] - marker[0]) < 20 and abs(p[1] - marker[1]) < 20 and abs(p[2] - marker[2]) < 20)
+    return hits / len(pixels)
+
+
+def _detail_package(focal_point: str) -> InstagramContentPackage:
+    slides = [
+        InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v", slide_purpose="hook"),
+        InstagramCarouselSlideCreative(
+            role="unrecognised_role_falls_to_detail", slide_copy="Detail text", visual_direction="v",
+            media_need="крупный план, деталь", slide_purpose="detail",
+        ),
+        InstagramCarouselSlideCreative(role="takeaway", slide_copy="Takeaway text", visual_direction="v", slide_purpose="takeaway"),
+    ]
+    carousel = InstagramCarouselCreative(
+        objective="saves", slides=slides,
+        creative_execution_plan=InstagramCreativeExecutionPlan(
+            main_idea="m", focal_point=focal_point, media_strategy="generated_media", media_rationale="r",
+            composition_direction="c", branding_treatment="b", visual_treatment="v",
+        ),
+    )
+    return build_instagram_content_package(
+        opportunity=_OPP, format_decision=FormatDecision(recommended_format=ContentFormat.CAROUSEL), shadow_plan=_SP,
+        creative_outcome=CreativeGenerationOutcome(carousel=carousel), source_image_ref="asset-1",
+    )
+
+
+def test_focal_point_causally_changes_the_actual_crop_not_just_notes() -> None:
+    """Phase B.3.1 requirement: composition_direction/focal_point must change real composition,
+    not only ride along as notes. Same source image, same DETAIL_CROP primitive, only the plan's
+    own `focal_point` text differs - the RENDERED PIXELS must differ measurably as a result."""
+    image, marker = _quadrant_marker_image()
+
+    pkg_targeted = _detail_package("Рука с инструментом в нижней правой части кадра")
+    pkg_neutral = _detail_package("Нейтральная композиция без выраженного фокуса")
+
+    targeted = render_instagram_carousel(pkg_targeted, slide_images={0: image, 1: image})[1]
+    neutral = render_instagram_carousel(pkg_neutral, slide_images={0: image, 1: image})[1]
+
+    targeted_img = Image.open(io.BytesIO(targeted.image_bytes))
+    neutral_img = Image.open(io.BytesIO(neutral.image_bytes))
+    targeted_fraction = _marker_fraction(targeted_img, marker)
+    neutral_fraction = _marker_fraction(neutral_img, marker)
+    # a real difference in actual pixel content (not just a rounding difference, and not just a
+    # difference in the recorded notes): the targeted crop must contain meaningfully more of the
+    # marker color than the neutral crop, and the raw bytes must differ.
+    assert targeted.image_bytes != neutral.image_bytes
+    assert targeted_fraction > neutral_fraction * 1.5
+    assert targeted_fraction > 0.02
+    assert targeted.evidence.notes.get("creative_plan", {}).get("focal_point") != neutral.evidence.notes.get("creative_plan", {}).get("focal_point")
+
+
+@pytest.mark.parametrize("role,media_need", [
+    ("hook", "полный кадр"),
+    ("context", "боковая полоса"),
+    ("problem", "приглушённый фон"),
+    ("data", "приглушённый фон"),
+    ("comparison", "приглушённый фон"),
+    ("unrecognised_falls_to_detail", "крупный план деталь"),
+    ("takeaway", "приглушённый фон"),
+])
+def test_every_wired_role_family_can_consume_a_real_supplied_image(role: str, media_need: str) -> None:
+    """Audits all role families this phase wired (explanation is the one documented exception -
+    see _DEFAULT_MEDIA_PRIMITIVE_BY_LAYOUT's own comment - its light-paper foreground is
+    incompatible with the dark dimmed-field treatment without a light-variant field this pass does
+    not build). Every one of these must be able to actually apply a real image when the plan asks,
+    not just the three the first bounded fix touched."""
+    slides = [
+        InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v"),
+        InstagramCarouselSlideCreative(role=role, slide_copy="Body copy vs alt" if role == "comparison" else "Body copy", visual_direction="v", media_need=media_need),
+    ]
+    carousel = InstagramCarouselCreative(objective="saves", slides=slides)
+    pkg = build_instagram_content_package(
+        opportunity=_OPP, format_decision=FormatDecision(recommended_format=ContentFormat.CAROUSEL), shadow_plan=_SP,
+        creative_outcome=CreativeGenerationOutcome(carousel=carousel),
+    )
+    image = _small_real_image()
+    results = render_instagram_carousel(pkg, slide_images={0: image, 1: image})
+    assert results[1].evidence.source_image_treatment in ("cover_cropped", "contain_preserved")
+
+
+def test_explanation_is_the_one_documented_family_still_excluded() -> None:
+    """Not silently skipped - explicitly excluded and explained (light-paper incompatibility)."""
+    slides = [
+        InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v"),
+        InstagramCarouselSlideCreative(role="explanation", slide_copy="KEY → UNLOCK", visual_direction="v", media_need="приглушённый фон"),
+    ]
+    carousel = InstagramCarouselCreative(objective="saves", slides=slides)
+    pkg = build_instagram_content_package(
+        opportunity=_OPP, format_decision=FormatDecision(recommended_format=ContentFormat.CAROUSEL), shadow_plan=_SP,
+        creative_outcome=CreativeGenerationOutcome(carousel=carousel),
+    )
+    image = _small_real_image()
+    results = render_instagram_carousel(pkg, slide_images={0: image, 1: image})
+    assert results[1].evidence.source_image_treatment == "none"
 
 
 def test_reel_cover_render_produces_only_the_cover_image_never_claims_video() -> None:

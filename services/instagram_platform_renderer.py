@@ -230,6 +230,8 @@ def render_instagram_carousel(
             slide_copy=slide_copy, source_evidence=slide.get("source_evidence"), package_identity=package.package_id,
             hero_image=(hero_image if slide_images is None else None),
             media_image=explicit_image, media_mode=execution.get("media_mode"),
+            media_need=slide.get("media_need"),
+            focal_point=(render_plan.get("creative_plan") or {}).get("focal_point"),
             visual_direction=slide.get("visual_direction"), render_plan=render_plan,
         )
         results.append(_result_from_layout(layout, package, profile=InstagramRenderProfile.CAROUSEL_SLIDE, slide_index=index, slide_count=total))
