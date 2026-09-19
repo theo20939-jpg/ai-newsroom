@@ -29,6 +29,18 @@ _FORMAT_EXPECTED_PROFILE = {
     "reel": InstagramRenderProfile.REEL_COVER,
 }
 
+# Phase B.4: the ONLY layout_variant values a given `composition` request may legitimately
+# produce (services/instagram_carousel_layouts.py::_render_generic_composition /
+# select_slide_layout's own SPLIT_COMPARE reuse) - anything else means the claim was not honoured.
+_COMPOSITION_EXECUTION_EQUIVALENTS: dict[str, set[str]] = {
+    "full_bleed_media": {"generic_full_bleed_media"},
+    "contained_media": {f"generic_contained_media_{p}" for p in ("top", "left", "right", "full", "none")},
+    "screenshot_ui": {f"generic_screenshot_ui_{p}" for p in ("top", "left", "right", "full", "none")},
+    "split_compare": {"generic_split_compare", "carousel_comparison"},
+    "typographic": {"generic_typographic"},
+    "collage": {"generic_collage"},
+}
+
 
 @dataclass(frozen=True)
 class InstagramArtValidationResult:
@@ -202,13 +214,64 @@ def validate_instagram_art(
         if indices != list(range(len(render_results))):
             blocking.append(f"slide_index_sequence_invalid: {indices}")
 
+        # Phase B.4 §17/§23: NEWS_RECAP's hard requirement - a slide marked must_match_story=True
+        # must have its OWN asset identity, and no two must_match_story slides may share one (the
+        # exact "silent generic-source-reuse across unrelated stories" failure spec §10 forbids).
+        story_slides = [
+            (r.evidence.slide_index, r.evidence.notes.get("media_asset_identity"))
+            for r in render_results if r.evidence.notes.get("must_match_story")
+        ]
+        seen_identities: dict[str, int] = {}
+        for slide_index, asset_identity in story_slides:
+            if not asset_identity:
+                blocking.append(f"must_match_story_missing_asset: slide_index={slide_index}")
+                continue
+            if asset_identity in seen_identities:
+                blocking.append(
+                    f"news_recap_asset_reuse_violation: slide_index={slide_index} reuses the same "
+                    f"asset_identity={asset_identity!r} already claimed by slide_index={seen_identities[asset_identity]}"
+                )
+            else:
+                seen_identities[asset_identity] = slide_index
+
+        # Phase B.4 §9/§23: a slide that explicitly requested an overlay treatment (including
+        # "none") only has that request actually honoured by the NEW composition-driven render
+        # path (_render_generic_composition) - the OLD role-keyed dispatch never reads
+        # overlay_mode at all, so an overlay request with no explicit `composition` is silently
+        # unenforceable, not a real "no overlay" guarantee. Fail closed rather than let that claim
+        # pass unverified.
+        for r in render_results:
+            overlay_requested = r.evidence.notes.get("overlay_mode_requested")
+            composition_requested = r.evidence.notes.get("composition_requested")
+            if overlay_requested is not None and composition_requested is None:
+                blocking.append(
+                    f"overlay_mode_requires_composition: slide_index={r.evidence.slide_index} requested "
+                    f"overlay_mode={overlay_requested!r} without an explicit composition to enforce it"
+                )
+            # Phase B.4 §8/§23: the claimed composition family must be the one that actually
+            # rendered - never metadata that merely echoes the request.
+            if composition_requested is not None:
+                executed = r.evidence.notes.get("layout_variant")
+                equivalents = _COMPOSITION_EXECUTION_EQUIVALENTS.get(composition_requested, set())
+                if executed not in equivalents:
+                    blocking.append(
+                        f"claimed_composition_not_executed: slide_index={r.evidence.slide_index} requested "
+                        f"composition={composition_requested!r}, actual layout_variant={executed!r}"
+                    )
+
         # carousel visual GRAMMAR (section 11/21): a real carousel should not present as the
         # identical layout on every slide after the hook - a warning (not blocking: a short, all-
         # detail-role deck can legitimately share one layout), so an editor can still see it.
+        # Phase B.4 exception: NEWS_RECAP's own correct design is uniform per-story card treatment
+        # (spec section 10) - its real distinctiveness is enforced separately, by asset identity
+        # (news_recap_asset_reuse_violation above), not layout family. Applying a narrative-
+        # progression diversity rule to a recap would be exactly the "aesthetic scoring model" the
+        # validator must not become.
+        is_news_recap = package.media_plan.get("content_archetype") == "news_recap"
         non_hook_variants = {r.evidence.notes.get("layout_variant") for r in render_results if r.evidence.slide_index != 0}
-        if len(render_results) >= 4 and len(non_hook_variants) < 3:
+        if not is_news_recap and len(render_results) >= 4 and len(non_hook_variants) < 3:
             blocking.append(f"carousel_layout_diversity_insufficient: non-hook variants={non_hook_variants}")
-        elif len(render_results) >= 3 and len(non_hook_variants) <= 1:
+        elif not is_news_recap and len(render_results) >= 3 and len(non_hook_variants) <= 1:
             warnings.append(f"carousel_layout_diversity_low: non-hook slides all use layout_variant={non_hook_variants}")
         if package.media_plan.get("creative_execution_plan"):
             slides = package.media_plan.get("slides") or []

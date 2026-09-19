@@ -215,6 +215,9 @@ def render_carousel_slide(
     package_identity: str, hero_image: Image.Image | None = None, visual_direction: str | None = None,
     render_plan: dict | None = None, media_image: Image.Image | None = None,
     media_mode: str | None = None, media_need: str | None = None, focal_point: str | None = None,
+    composition: str | None = None, media_position: str | None = None, media_scale: float | None = None,
+    overlay_mode: str | None = None, media_subject: str | None = None, must_match_story: bool = False,
+    media_asset_identity: str | None = None,
 ) -> LayoutResult:
     """Renders ONE carousel slide. `role` (via `select_slide_layout`) decides the FOREGROUND
     typographic/graphic grammar - which is a legitimate, disclosed default bias, not the bug. The
@@ -222,7 +225,13 @@ def render_carousel_slide(
     image appeared, via a blunt override that replaced a family's whole composition. Media
     treatment is now `select_media_primitive`'s own decision, driven by this slide's real
     `media_need` (InstagramCarouselSlideCreative's own existing field) - role only supplies that
-    function's fallback default when the plan gives no explicit signal."""
+    function's fallback default when the plan gives no explicit signal.
+
+    Phase B.4: an EXPLICIT `composition` (the slide's own bounded, executable art-direction field)
+    routes to `_render_generic_composition` instead of the role-keyed dispatch below - this is the
+    real fix for "role must not uniquely select composition" (spec B.4 §8). When `composition` is
+    None (every pre-B.4 slide, every existing persisted draft, the founder-approved B.3 regression
+    fixture), the dispatch below is completely unchanged code, not just unchanged behavior."""
     layout = select_slide_layout(role=role, index=index, slide_copy=slide_copy)
     identity = f"{package_identity}:{index}"
     selected_image = media_image if media_image is not None else hero_image
@@ -230,7 +239,13 @@ def render_carousel_slide(
     focus_y = _focus_y_from_focal_point(focal_point)
     focus_x = _focus_x_from_focal_point(focal_point)
 
-    if layout == SLIDE_LAYOUT_HOOK:
+    if composition is not None:
+        result = _render_generic_composition(
+            spec=spec, composition=composition, media_position=media_position, media_scale=media_scale,
+            overlay_mode=overlay_mode, slide_copy=slide_copy, index=index, total=total,
+            package_identity=identity, media_image=selected_image, focus_y=focus_y, focus_x=focus_x,
+        )
+    elif layout == SLIDE_LAYOUT_HOOK:
         result = _slide_hook(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, media_image=selected_image, media_primitive=primitive, focus_y=focus_y, focus_x=focus_x)
     elif layout == SLIDE_LAYOUT_CONTEXT:
         result = _slide_context(spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=identity, media_image=selected_image, media_primitive=primitive, focus_y=focus_y, focus_x=focus_x)
@@ -261,6 +276,14 @@ def render_carousel_slide(
         # pixels. The art validator checks these agree - see instagram_art_validator.py.
         "media_primitive_selected": primitive.value,
         "media_need_consumed": media_need,
+        # Phase B.4: what the slide's own structured plan asked for vs what actually rendered -
+        # the art validator's own new checks compare these, never trusting the request alone.
+        "composition_requested": composition,
+        "media_position_requested": media_position,
+        "overlay_mode_requested": overlay_mode,
+        "media_subject": media_subject,
+        "must_match_story": must_match_story,
+        "media_asset_identity": media_asset_identity,
     })
     return result
 
@@ -683,4 +706,273 @@ def _slide_detail(
     return LayoutResult(
         image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
         source_image_treatment=detail_source_treatment, layout_variant=SLIDE_LAYOUT_DETAIL, text_clipped=clipped,
+    )
+
+
+# ======================================================================================
+# Phase B.4: generic, role-independent composition rendering.
+#
+# Everything above this line is the B.3 role-keyed dispatch, UNCHANGED - it still runs, byte-for-
+# byte as before, whenever a slide supplies no explicit `composition`. Everything below is the
+# real fix for "role must not uniquely select composition" (spec B.4 §8): ONE parameterized
+# function per composition family, chosen by the slide's own structured plan, never by role.
+# `_render_contained_media` in particular directly generalizes the exact duplication the Phase
+# B.3.2 forensic pass found (CONTEXT's own left-strip vs DETAIL's own top-band were two copies of
+# the same idea) into one function - the same function, called with a different `position`,
+# produces genuinely different geometry from the SAME composition family.
+# ======================================================================================
+
+
+def _apply_overlay(canvas: Image.Image, mode: str | None) -> None:
+    """The REAL optional overlay control (spec B.4 §9). `mode in (None, "none")` performs ZERO
+    pixel operations - provably: nothing here even touches `canvas` in that branch, so a caller
+    that asks for no overlay gets back exactly the image `fit_image_cover`/`_render_contained_
+    media` produced, unmodified. The other three modes are real, increasingly strong, genuinely
+    different operations - never a silent substitution of one for another."""
+    m = (mode or "none").lower()
+    if m == "none":
+        return
+    if m == "subtle":
+        apply_bottom_readability_gradient(canvas, height_frac=0.32, max_alpha=100)
+    elif m == "gradient":
+        apply_bottom_readability_gradient(canvas, height_frac=0.55, max_alpha=190)
+    elif m == "editorial_scrim":
+        scrim = Image.new("RGBA", canvas.size, (*tok.INK, 150))
+        canvas.alpha_composite(scrim)
+
+
+def _media_box(width: int, height: int, position: str | None, scale: float) -> tuple[int, int, int, int]:
+    """The one place a `media_position` + `media_scale` pair becomes an actual pixel rectangle.
+    `left`/`right` reserve a fraction of the WIDTH (full height); `top` reserves a fraction of the
+    HEIGHT (full width); `full` is the whole canvas. Never randomized, never role-dependent."""
+    p = (position or "top").lower()
+    if p in ("full", "none"):
+        return (0, 0, width, height)
+    if p == "left":
+        return (0, 0, round(width * scale), height)
+    if p == "right":
+        return (round(width * (1 - scale)), 0, width, height)
+    return (0, 0, width, round(height * scale))  # "top" - the default for a contained composition
+
+
+def _render_contained_media(
+    *, spec: ProfileSpec, media_image: Image.Image | None, position: str | None, scale: float,
+    focus_x: float, focus_y: float, framed: bool, identity: str,
+) -> tuple[Image.Image, str, tuple[int, int, int, int]]:
+    """Generalizes B.3.2's own ad-hoc "context = left strip" / "detail = top band" duplication
+    into ONE parameterized function. `framed=True` (SCREENSHOT_UI) adds a thin red border around
+    the media rectangle - a real, distinct treatment for AI_HACK's own step/result screenshots,
+    not a copy of CONTAINED_MEDIA's own plain look."""
+    box = _media_box(spec.width, spec.height, position, scale)
+    canvas = Image.new("RGBA", (spec.width, spec.height), (*tok.PAPER, 255))
+    bx0, by0, bx1, by1 = box
+    box_w, box_h = max(1, bx1 - bx0), max(1, by1 - by0)
+    if media_image is None:
+        draw = ImageDraw.Draw(canvas, "RGBA")
+        draw.rectangle(box, fill=(*tok.INK_RAISED, 255))
+        return canvas, "none", box
+    fitted = fit_image_cover(media_image, width=box_w, height=box_h, focus_x=focus_x, focus_y=focus_y)
+    canvas.paste(fitted.image, (bx0, by0))
+    if framed:
+        draw = ImageDraw.Draw(canvas, "RGBA")
+        draw.rectangle([bx0, by0, bx1 - 1, by1 - 1], outline=(*tok.RED, 255), width=max(3, round(spec.width * 0.006)))
+    return canvas, fitted.treatment.value, box
+
+
+def _text_region_for_box(spec: ProfileSpec, box: tuple[int, int, int, int], margin: int) -> tuple[int, float, int]:
+    """Where body copy goes given the media rectangle actually chosen - below a top band, beside a
+    left/right strip, or (a full-canvas media box used with CONTAINED_MEDIA, a rare but valid
+    combination) near the bottom, matching the existing bottom-anchored convention elsewhere in
+    this module."""
+    bx0, by0, bx1, by1 = box
+    full_width = (bx1 - bx0) >= spec.width
+    full_height = (by1 - by0) >= spec.height
+    if full_width and not full_height:
+        return margin, by1 + round(spec.height * 0.06), spec.width - margin * 2
+    if full_height and bx0 == 0 and bx1 < spec.width:
+        x = bx1 + round(spec.width * 0.06)
+        return x, round(spec.height * 0.32), max(1, spec.width - x - margin)
+    if full_height and bx0 > 0 and bx1 >= spec.width:
+        return margin, round(spec.height * 0.32), max(1, bx0 - margin - round(spec.width * 0.04))
+    return margin, spec.height - round(spec.height * 0.32), spec.width - margin * 2
+
+
+def _render_collage(
+    *, spec: ProfileSpec, slide_copy: str, index: int, total: int, package_identity: str,
+    media_image: Image.Image | None, focus_x: float, focus_y: float, overlay_mode: str | None,
+) -> LayoutResult:
+    """A minimal, real 2-up collage: the SAME real asset shown twice via two independently-derived
+    crops (a wide establishing frame, a zoomed detail) - proving the primitive exists for TREND_
+    GENERATIVE's own meme-adjacent, media-dominant needs, not a complex N-up grid this phase does
+    not require."""
+    canvas = Image.new("RGBA", (spec.width, spec.height), (*tok.INK, 255))
+    half = spec.height // 2
+    if media_image is not None:
+        top_img = fit_image_cover(media_image, width=spec.width, height=half, focus_x=focus_x, focus_y=0.3).image
+        bottom_img, _treatment = build_detail_crop_field(
+            media_image, width=spec.width, height=spec.height - half, focus_x=focus_x, focus_y=0.7, zoom=2.2,
+        )
+        canvas.paste(top_img, (0, 0))
+        canvas.paste(bottom_img, (0, half))
+        treatment = "cover_cropped"
+    else:
+        treatment = "none"
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    draw.line([(0, half), (spec.width, half)], fill=(*tok.RED, 255), width=4)
+    _apply_overlay(canvas, overlay_mode)
+    margin = round(spec.width * tok.MARGIN_FRAC)
+    _draw_progress(canvas, spec, index=index, total=total)
+    regions: list[TextRegionSpec] = []
+    body_font, body_lines, clipped = fit_text_block(
+        draw, slide_copy, font_max=round(spec.width * tok.TYPE_HEADLINE_M.size_frac), font_min=round(spec.width * 0.04),
+        max_width=spec.width - margin * 2, max_lines=3, weight=tok.TYPE_HEADLINE_M.weight,
+    )
+    y: float = spec.height - round(spec.height * spec.safe_bottom_frac) - margin - measure_block_height(draw, body_lines, body_font)
+    for i, line in enumerate(body_lines):
+        bbox = draw.textbbox((margin, y), line, font=body_font)
+        draw.text((margin, y), line, font=body_font, fill=tok.WHITE)
+        regions.append(TextRegionSpec(kind="headline", box=box4(bbox), clipped=clipped and i == len(body_lines) - 1))
+        y += (bbox[3] - bbox[1]) + round(body_font.size * 0.18)
+    mark_count = place_brand_mark(canvas, spec, compact=True)
+    return LayoutResult(
+        image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
+        source_image_treatment=treatment, layout_variant="generic_collage", text_clipped=clipped,
+    )
+
+
+def _render_generic_composition(
+    *, spec: ProfileSpec, composition: str, media_position: str | None, media_scale: float | None,
+    overlay_mode: str | None, slide_copy: str, index: int, total: int, package_identity: str,
+    media_image: Image.Image | None, focus_y: float, focus_x: float,
+) -> LayoutResult:
+    """The bounded, closed vocabulary dispatch for an EXPLICIT `composition` request - never
+    role-keyed. Only the families this phase's four archetypes actually need are implemented
+    (spec B.4 §8's own "do not implement options that are not needed" instruction)."""
+    comp = composition.lower()
+    margin = round(spec.width * tok.MARGIN_FRAC)
+    content_w_default = spec.width - margin - max(margin, mark_reserve_width(spec, compact=True))
+    regions: list[TextRegionSpec] = []
+
+    if comp == "typographic":
+        canvas = Image.new("RGBA", (spec.width, spec.height), (*tok.PAPER, 255))
+        draw = ImageDraw.Draw(canvas, "RGBA")
+        _draw_progress(canvas, spec, index=index, total=total, dark_on_light=True)
+        body_font, body_lines, clipped = fit_text_block(
+            draw, slide_copy, font_max=round(spec.width * tok.TYPE_HEADLINE_M.size_frac), font_min=round(spec.width * 0.04),
+            max_width=content_w_default, max_lines=6, weight=tok.TYPE_HEADLINE_M.weight,
+        )
+        body_h = measure_block_height(draw, body_lines, body_font)
+        top_safe = round(spec.height * spec.safe_top_frac) + margin
+        bottom_safe = round(spec.height * spec.safe_bottom_frac) + margin
+        y: float = top_safe + max(0, (spec.height - bottom_safe - top_safe - body_h) // 2)
+        for i, line in enumerate(body_lines):
+            bbox = draw.textbbox((margin, y), line, font=body_font)
+            draw.text((margin, y), line, font=body_font, fill=tok.INK)
+            regions.append(TextRegionSpec(kind="body", box=box4(bbox), clipped=clipped and i == len(body_lines) - 1))
+            y += (bbox[3] - bbox[1]) + round(body_font.size * 0.2)
+        mark_count = place_brand_mark(canvas, spec, compact=True)
+        return LayoutResult(
+            image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
+            source_image_treatment="none", layout_variant="generic_typographic", text_clipped=clipped,
+        )
+
+    if comp == "full_bleed_media":
+        if media_image is not None:
+            fitted = fit_image_cover(media_image, width=spec.width, height=spec.height, focus_x=focus_x, focus_y=focus_y)
+            canvas, treatment = fitted.image, fitted.treatment.value
+        else:
+            canvas = build_structured_fallback(width=spec.width, height=spec.height, identity=package_identity, block_count=0)
+            treatment = "none"
+        _apply_overlay(canvas, overlay_mode)
+        draw = ImageDraw.Draw(canvas, "RGBA")
+        _draw_progress(canvas, spec, index=index, total=total)
+        headline_font, headline_lines, clipped = fit_text_block(
+            draw, slide_copy, font_max=round(spec.width * tok.TYPE_HEADLINE_L.size_frac), font_min=round(spec.width * 0.046),
+            max_width=content_w_default, max_lines=5, weight=tok.TYPE_HEADLINE_L.weight,
+        )
+        headline_h = measure_block_height(draw, headline_lines, headline_font)
+        y = spec.height - round(spec.height * spec.safe_bottom_frac) - margin - headline_h
+        for i, line in enumerate(headline_lines):
+            bbox = draw.textbbox((margin, y), line, font=headline_font)
+            draw.text((margin, y), line, font=headline_font, fill=tok.WHITE)
+            regions.append(TextRegionSpec(kind="headline", box=box4(bbox), clipped=clipped and i == len(headline_lines) - 1))
+            y += (bbox[3] - bbox[1]) + round(headline_font.size * 0.18)
+        mark_count = place_brand_mark(canvas, spec, compact=True)
+        return LayoutResult(
+            image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
+            source_image_treatment=treatment, layout_variant="generic_full_bleed_media", text_clipped=clipped,
+        )
+
+    if comp in ("contained_media", "screenshot_ui"):
+        position = media_position or "top"
+        scale = media_scale if media_scale is not None else 0.44
+        canvas, treatment, box = _render_contained_media(
+            spec=spec, media_image=media_image, position=position, scale=scale, focus_x=focus_x, focus_y=focus_y,
+            framed=(comp == "screenshot_ui"), identity=package_identity,
+        )
+        _apply_overlay(canvas, overlay_mode)
+        draw = ImageDraw.Draw(canvas, "RGBA")
+        _draw_progress(canvas, spec, index=index, total=total, dark_on_light=(position != "full"))
+        text_x, text_y, text_w = _text_region_for_box(spec, box, margin)
+        body_font, body_lines, clipped = fit_text_block(
+            draw, slide_copy, font_max=round(spec.width * tok.TYPE_HEADLINE_S.size_frac), font_min=round(spec.width * 0.032),
+            max_width=text_w, max_lines=7, weight=tok.TYPE_HEADLINE_S.weight,
+        )
+        py: float = text_y
+        for i, line in enumerate(body_lines):
+            bbox = draw.textbbox((text_x, py), line, font=body_font)
+            draw.text((text_x, py), line, font=body_font, fill=tok.INK)
+            regions.append(TextRegionSpec(kind="body", box=box4(bbox), clipped=clipped and i == len(body_lines) - 1))
+            py += (bbox[3] - bbox[1]) + round(body_font.size * 0.2)
+        mark_count = place_brand_mark(canvas, spec, compact=True)
+        return LayoutResult(
+            image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
+            source_image_treatment=treatment, layout_variant=f"generic_{comp}_{position}", text_clipped=clipped,
+        )
+
+    if comp == "split_compare":
+        split = _split_vs(slide_copy)
+        if split is not None:
+            primitive = SourceMediaPrimitive.DIMMED_FIELD if media_image is not None else SourceMediaPrimitive.NONE
+            return _slide_comparison(
+                spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=package_identity,
+                media_image=media_image, media_primitive=primitive, focus_y=focus_y, focus_x=focus_x,
+            )
+        # No real " vs " copy - still a genuine two-independent-panel compare shape, never a
+        # fabricated split structure the content doesn't actually have.
+        canvas = Image.new("RGBA", (spec.width, spec.height), (*tok.PAPER, 255))
+        draw = ImageDraw.Draw(canvas, "RGBA")
+        mid = spec.width // 2
+        draw.rectangle([0, 0, mid, spec.height], fill=(*tok.INK, 255))
+        draw.line([(mid, 0), (mid, spec.height)], fill=(*tok.RED, 255), width=3)
+        _draw_progress(canvas, spec, index=index, total=total)
+        body_font, body_lines, clipped = fit_text_block(
+            draw, slide_copy, font_max=round(spec.width * tok.TYPE_HEADLINE_S.size_frac), font_min=round(spec.width * 0.03),
+            max_width=mid - margin * 2, max_lines=6, weight=tok.TYPE_HEADLINE_S.weight,
+        )
+        py: float = round(spec.height * 0.4)
+        for i, line in enumerate(body_lines):
+            bbox = draw.textbbox((margin, py), line, font=body_font)
+            draw.text((margin, py), line, font=body_font, fill=tok.WHITE)
+            regions.append(TextRegionSpec(kind="body", box=box4(bbox), clipped=clipped and i == len(body_lines) - 1))
+            py += (bbox[3] - bbox[1]) + round(body_font.size * 0.2)
+        mark_count = place_brand_mark(canvas, spec, compact=True)
+        return LayoutResult(
+            image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
+            source_image_treatment="none", layout_variant="generic_split_compare", text_clipped=clipped,
+        )
+
+    if comp == "collage":
+        return _render_collage(
+            spec=spec, slide_copy=slide_copy, index=index, total=total, package_identity=package_identity,
+            media_image=media_image, focus_x=focus_x, focus_y=focus_y, overlay_mode=overlay_mode,
+        )
+
+    # Defensive only (pydantic's own Literal validation should make this unreachable) - fail
+    # closed to the safest generic card rather than raise mid-carousel.
+    canvas = Image.new("RGBA", (spec.width, spec.height), (*tok.PAPER, 255))
+    mark_count = place_brand_mark(canvas, spec, compact=True)
+    return LayoutResult(
+        image=canvas.convert("RGB"), text_regions=[], visible_brand_mark_count=mark_count,
+        source_image_treatment="none", layout_variant="generic_unknown_fallback", text_clipped=False,
     )

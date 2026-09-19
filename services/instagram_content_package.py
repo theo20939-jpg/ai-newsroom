@@ -220,11 +220,22 @@ def _carousel_media_plan(creative: Any) -> tuple[str, str | None, str | None, di
     slides = [
         {"index": i, "role": slide.role, "text": slide.slide_copy, "visual_direction": slide.visual_direction,
          "source_evidence": slide.source_evidence, "slide_purpose": getattr(slide, "slide_purpose", None),
-         "media_need": getattr(slide, "media_need", None)}
+         "media_need": getattr(slide, "media_need", None),
+         # Phase B.4: bounded structured art direction, passed through verbatim - never
+         # re-derived or re-parsed here. None on every field for any pre-B.4 slide/persisted
+         # draft, so the B.3 default path is exercised exactly as before.
+         "composition": getattr(slide, "composition", None),
+         "media_position": getattr(slide, "media_position", None),
+         "media_scale": getattr(slide, "media_scale", None),
+         "overlay_mode": getattr(slide, "overlay_mode", None),
+         "media_subject": getattr(slide, "media_subject", None),
+         "must_match_story": getattr(slide, "must_match_story", False),
+         "media_asset_identity": getattr(slide, "media_asset_identity", None)}
         for i, slide in enumerate(creative.slides)
     ]
     media_plan = {
         "kind": "carousel", "objective": creative.objective, "slides": slides,
+        "content_archetype": getattr(creative, "content_archetype", None),
         "creative_execution_plan": (
             creative.creative_execution_plan.model_dump()
             if getattr(creative, "creative_execution_plan", None) is not None else None
