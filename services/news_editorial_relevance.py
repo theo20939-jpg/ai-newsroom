@@ -52,6 +52,13 @@ _PERIPHERAL_RANK_ADJUSTMENT = -25
 _MAJOR_IMPACT_OVERRIDE_RANK_ADJUSTMENT = 5
 _OUT_OF_SCOPE_RANK_ADJUSTMENT = -1000
 
+# STANDARD remains anchored to the configured global threshold. A narrowly positive Pulse-fit
+# classification may rescue a candidate by at most the existing ADJACENT +3 adjustment. This is
+# enough for the observed 68 -> 78 CORE gadget/AI case, lets a genuinely positive ADJACENT signal
+# affect eligibility, and prevents CORE's larger +10 bonus from pulling weak raw scores into
+# STANDARD. PERIPHERAL major-impact overrides deliberately do not use this rescue path.
+_STANDARD_EDITORIAL_RESCUE_MAX_DEFICIT = _ADJACENT_RANK_ADJUSTMENT
+
 _CONTENT_SCAN_CHARS = 800
 
 
@@ -519,12 +526,19 @@ def evaluate_pre_generation_candidate(
     effective = (
         standard_score + relevance.rank_adjustment if standard_score is not None else None
     )
+    rescue_floor = max(0, standard_threshold - _STANDARD_EDITORIAL_RESCUE_MAX_DEFICIT)
+    positive_editorial_rescue = (
+        standard_score is not None
+        and standard_score >= rescue_floor
+        and relevance.tier in (CORE, ADJACENT)
+        and relevance.rank_adjustment > 0
+    )
     standard_eligible = (
         standard_score is not None
-        and standard_score >= standard_threshold
         and relevance.tier != OUT_OF_SCOPE
         and effective is not None
         and effective >= standard_threshold
+        and (standard_score >= standard_threshold or positive_editorial_rescue)
     )
     viral = score_viral_tech(
         title, content, source_reliability=source_reliability, published_at=published_at, now=now,

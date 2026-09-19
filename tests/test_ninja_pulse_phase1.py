@@ -62,6 +62,42 @@ def test_positive_pulse_fit_preserves_standard_news(title: str) -> None:
     assert result.final_eligible is True
 
 
+def test_core_pulse_fit_can_rescue_slightly_subthreshold_candidate() -> None:
+    result = decide(
+        "What to expect at Meta Connect 2026: New AI glasses, a mixed reality headset and more",
+        score=68,
+    )
+    assert result.editorial_relevance.tier == "CORE"
+    assert result.effective_standard_score == 78
+    assert result.standard_eligible is True
+    assert result.selection_path == "STANDARD"
+
+
+def test_positive_editorial_rescue_keeps_three_point_raw_score_floor() -> None:
+    result = decide("Apple launches a new AI model for iPhone", score=66)
+    assert result.editorial_relevance.tier == "CORE"
+    assert result.effective_standard_score == 76
+    assert result.standard_eligible is False
+
+
+def test_positive_adjacent_fit_can_rescue_candidate_at_effective_threshold() -> None:
+    result = decide("Humanoid robot learns a safer warehouse task", score=67)
+    assert result.editorial_relevance.tier == "ADJACENT"
+    assert result.effective_standard_score == 70
+    assert result.standard_eligible is True
+
+
+def test_major_impact_override_does_not_gain_standard_rescue() -> None:
+    result = decide(
+        "Landmark antitrust ruling could force Apple to divest a major product",
+        score=65,
+    )
+    assert result.editorial_relevance.tier == "PERIPHERAL"
+    assert result.editorial_relevance.major_impact_override is True
+    assert result.effective_standard_score == 70
+    assert result.standard_eligible is False
+
+
 def test_valheim_creator_trick_can_survive_via_viral_tech() -> None:
     result = decide(
         "You can customize Valheim sign text for color-coded storage without downloading a single mod",
