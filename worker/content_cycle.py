@@ -642,6 +642,8 @@ async def _hold_for_visual_recovery(
 @dataclass
 class ContentCycleResult:
     eligible_found: int = 0
+    generation_attempts: int = 0
+    refill_used: bool = False
     completed: int = 0
     failed: int = 0
     notified: int = 0
@@ -924,7 +926,9 @@ def _telegram_utf16_length(text: str) -> int:
     return len(text.encode("utf-16-le")) // 2
 
 
-async def _select_eligible_events(session: AsyncSession) -> list[UUID]:
+async def _select_eligible_events(
+    session: AsyncSession, *, max_results: int | None = None
+) -> list[UUID]:
     """SQL-side: status, workflow-name match, duplicate exclusion (§3 of the Plan - the entire
     duplicate-prevention mechanism), freshness bound (a technical safety boundary only - see the
     Plan's own §0/§3, never an editorial-freshness control - unchanged by Phase 15 M5.2, still
@@ -1064,9 +1068,16 @@ async def _select_eligible_events(session: AsyncSession) -> list[UUID]:
 
     eligible.sort(key=lambda candidate: candidate[0], reverse=True)
 
-    # Fewer than batch_size eligible candidates is a valid, product-intended outcome (a weak news
-    # period must be allowed to produce fewer stories) - never padded with sub-threshold rows.
-    return [event_id for _rank, event_id in eligible[: settings.content_generation_batch_size]]
+    # Most callers retain the historical batch-sized result. The production content cycle asks
+    # explicitly for the wider refill pool, which is still bounded by the SQL scan limit above;
+    # this lets pre-generation skips advance to the next ranked candidate without widening the
+    # scan or increasing the paid generation-attempt cap.
+    result_limit = (
+        settings.content_generation_batch_size
+        if max_results is None
+        else min(max_results, settings.content_generation_scan_limit)
+    )
+    return [event_id for _rank, event_id in eligible[:result_limit]]
 
 
 # INSTAGRAM-AUTOMATIC-EDITORIAL-TRIGGER-1 §10: a pure rollout-safety throughput cap, deliberately
@@ -1289,7 +1300,12 @@ async def run_content_cycle(
         event_ids = event_ids_override
     else:
         async with session_factory() as session:
-            event_ids = await _select_eligible_events(session)
+            event_ids = await _select_eligible_events(
+                session, max_results=settings.content_generation_scan_limit
+            )
+    # Defensive stable de-duplication: multiple completed NEWS_ANALYSIS rows or an explicit test/
+    # canary override must never cause the same event to be processed twice in one cycle.
+    event_ids = list(dict.fromkeys(event_ids))[: settings.content_generation_scan_limit]
     result.eligible_found = len(event_ids)
     result.event_ids = event_ids
 
@@ -1298,7 +1314,8 @@ async def run_content_cycle(
     # versa. A safe no-op whenever gate_gateway/gate_prompt_repository are None (see that
     # function's own docstring).
     result.instagram_trigger_report = await _run_instagram_automatic_trigger(
-        session_factory, bot, event_ids, gate_gateway=gate_gateway, gate_prompt_repository=gate_prompt_repository,
+        session_factory, bot, event_ids[: settings.content_generation_batch_size],
+        gate_gateway=gate_gateway, gate_prompt_repository=gate_prompt_repository,
     )
 
     # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2: the PRODUCT lane - independent of and never coupled
@@ -1314,10 +1331,13 @@ async def run_content_cycle(
     # read) unless settings.meme_opportunity_mode == "enforce" (default "off").
     meme_auto_triggered_count = 0
 
-    # Attempted one at a time, in selection order - identical convention to
-    # worker/analysis_cycle.py, and for the same reason: bounded, predictable work per cycle;
-    # no refill if one is skipped/fails.
-    for event_id in event_ids:
+    # Attempted one at a time, in selection order. Pre-generation skips may advance into the
+    # bounded refill pool, but the expensive generation-attempt cap remains exactly the configured
+    # batch size. A failed generation still consumes its slot because the counter increments
+    # immediately before the real call.
+    for candidate_index, event_id in enumerate(event_ids):
+        if result.generation_attempts >= settings.content_generation_batch_size:
+            break
         # Phase 23.1H: Editorial Treatment is applied BEFORE the (paid) Copywriting call whenever
         # router mode is active - matching the phase's own pipeline diagram (Scoring/Intelligence
         # -> Editorial Treatment -> V6 Copywriting) and saving the Copywriting cost entirely for a
@@ -1447,6 +1467,9 @@ async def run_content_cycle(
         if precomputed_outcomes is not None and event_id in precomputed_outcomes:
             outcome = precomputed_outcomes[event_id]
         else:
+            if candidate_index >= settings.content_generation_batch_size:
+                result.refill_used = True
+            result.generation_attempts += 1
             outcome = await run_content_generation_for_event(
                 event_id, capability_registry=capability_registry, session_factory=session_factory,
                 cost_tracker=cost_tracker, pricing_catalog=pricing_catalog,
@@ -2700,6 +2723,8 @@ async def run_content_cycle(
         "content_cycle_finished",
         extra={
             "eligible_found": result.eligible_found,
+            "generation_attempts": result.generation_attempts,
+            "refill_used": result.refill_used,
             "completed": result.completed,
             "failed": result.failed,
             "notified": result.notified,

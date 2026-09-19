@@ -1008,5 +1008,6 @@ async def test_run_content_cycle_dry_run_never_calls_bot_send_message(
     result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     fake_bot.send_message.assert_not_called()
+    assert result.generation_attempts == 1
     assert result.dry_run_rendered == 1
     assert result.notified == 0
