@@ -106,6 +106,24 @@ class InstagramCarouselSlideCreative(BaseModel):
     source_evidence: str | None = Field(default=None, max_length=_MEDIUM_TEXT_MAX_LENGTH)
     slide_purpose: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
     media_need: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
+    # Phase B.4: bounded, EXECUTABLE art direction - the renderer reads these directly (see
+    # services/instagram_carousel_layouts.py::select_composition_family/_render_generic_
+    # composition), never re-parses prose to infer them. All optional/defaulted so every existing
+    # B.3 caller/test/persisted draft is completely unaffected - role alone still decides the
+    # composition family whenever a slide does not explicitly set one (the B.3-approved default
+    # path is untouched code, not just untouched behavior).
+    composition: Literal[
+        "full_bleed_media", "contained_media", "split_compare", "typographic", "screenshot_ui", "collage",
+    ] | None = None
+    media_position: Literal["full", "top", "left", "right", "none"] | None = None
+    media_scale: float | None = Field(default=None, ge=0.2, le=1.0)
+    overlay_mode: Literal["none", "subtle", "gradient", "editorial_scrim"] | None = None
+    # NEWS_RECAP's own hard requirement (spec B.4 §10/§17): which real-world subject this
+    # slide's asset must show, and whether the renderer/validator must refuse a fallback/shared
+    # asset for it - never a free-text instruction the renderer has to interpret.
+    media_subject: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
+    must_match_story: bool = False
+    media_asset_identity: str | None = Field(default=None, max_length=200)
 
 
 class InstagramCarouselCreative(BaseModel):
@@ -117,6 +135,12 @@ class InstagramCarouselCreative(BaseModel):
     final_cta: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
     evidence_used: list[str] = Field(default_factory=list)
     final_caption: str | None = Field(default=None, max_length=_LONG_TEXT_MAX_LENGTH)
+    # Phase B.4: WHAT kind of post this is (content strategy), never a rendering instruction and
+    # never read by services/instagram_format_director_v2.py (ContentFormat stays the platform
+    # SINGLE/CAROUSEL/REEL decision - a separate axis, per spec B.4 §3). Optional/defaulted: an
+    # absent archetype is simply "unclassified", not an error, so every existing persisted
+    # InstagramCreativeDraft.payload row remains a valid InstagramCarouselCreative.
+    content_archetype: Literal["ai_hack", "news_insight", "news_recap", "trend_generative"] | None = None
     creative_execution_plan: InstagramCreativeExecutionPlan | None = None
 
     @property

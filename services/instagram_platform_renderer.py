@@ -233,6 +233,13 @@ def render_instagram_carousel(
             media_need=slide.get("media_need"),
             focal_point=(render_plan.get("creative_plan") or {}).get("focal_point"),
             visual_direction=slide.get("visual_direction"), render_plan=render_plan,
+            # Phase B.4: explicit structured art direction, when a slide supplies it. None on
+            # every field for a pre-B.4 slide, so render_carousel_slide's existing B.3 dispatch
+            # fires exactly as before.
+            composition=slide.get("composition"), media_position=slide.get("media_position"),
+            media_scale=slide.get("media_scale"), overlay_mode=slide.get("overlay_mode"),
+            media_subject=slide.get("media_subject"), must_match_story=bool(slide.get("must_match_story") or False),
+            media_asset_identity=slide.get("media_asset_identity"),
         )
         results.append(_result_from_layout(layout, package, profile=InstagramRenderProfile.CAROUSEL_SLIDE, slide_index=index, slide_count=total))
     return results
