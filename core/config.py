@@ -570,7 +570,9 @@ class Settings(BaseSettings):
     # meme_potential) - v6 through v8.5 stay frozen. Still never the settings default.
     # "8.7" (prompts/copywriting/v8.7.yaml, NINJA PULSE Phase 1): v8.6 plus narrow
     # first-use jargon clarity and optional earned social-beat rules. Same output schema.
-    copywriting_prompt_version: Literal["4", "5", "6", "7", "8", "8.1", "8.2", "8.3", "8.4", "8.5", "8.6", "8.7"] = "4"
+    # "8.8" (prompts/copywriting/v8.8.yaml): v8.7 plus one narrow optional human-ending
+    # refinement. Same output schema and evidence contract.
+    copywriting_prompt_version: Literal["4", "5", "6", "7", "8", "8.1", "8.2", "8.3", "8.4", "8.5", "8.6", "8.7", "8.8"] = "4"
 
     # Phase I.1.2 (Final Post Authoring editorial calibration): mirrors copywriting_prompt_version's
     # own established pattern exactly - v1 (prompts/final_post_authoring/v1.yaml) is Phase I.1's

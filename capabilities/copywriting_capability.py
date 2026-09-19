@@ -192,9 +192,9 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
     # was missing from this tuple entirely, which would have silently dropped the EDITORIAL PLAN/
     # PRIOR COVERAGE context blocks the moment v8.6 actually went live, a real regression this
     # activation would otherwise have introduced. v8.3/v8.4 were already listed even though not
-    # individually mentioned by name in this comment - v8.6 follows the same "every v8-family
+    # individually mentioned by name in this comment - v8.6+ follow the same "every v8-family
     # version accepts these blocks" pattern.
-    if prompt.version in ("6", "7", "8", "8.1", "8.2", "8.3", "8.4", "8.5", "8.6", "8.7"):
+    if prompt.version in ("6", "7", "8", "8.1", "8.2", "8.3", "8.4", "8.5", "8.6", "8.7", "8.8"):
         if context.business.editorial_plan_context is not None:
             context_text += f"\n\nEDITORIAL PLAN:\n{context.business.editorial_plan_context}"
         if context.business.prior_coverage_context is not None:
