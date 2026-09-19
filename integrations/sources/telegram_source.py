@@ -28,20 +28,30 @@ own per-source `try/except`, unmodified - this was already correct, the previous
 hung call never raised anything for it to catch).
 """
 import logging
+import uuid
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.custom.message import Message
 
 from core.config import settings
+from core.redis import get_redis_client
 from database.models.news_source import NewsSource
 from integrations.sources.base import SourceAdapter, SourceFetchContext
 from schemas.raw_news_item import RawNewsItem
 from services.image_intelligence import extract_telegram_native_media
+from services.telegram_ingestion_checkpoint import TelegramCheckpointStore
 
 logger = logging.getLogger(__name__)
 
 MESSAGE_FETCH_LIMIT = 50
+# Defense-in-depth only; message id remains the primary cursor. Six hours spans twelve normal
+# 30-minute collection intervals, leaving ample transient-outage recovery while remaining far
+# tighter than a historical channel backlog (and still upstream of production's stricter analysis
+# freshness policy).
+TELEGRAM_FRESHNESS_FAILSAFE_HOURS = 6
 
 
 class TelegramAuthenticationError(RuntimeError):
@@ -66,6 +76,21 @@ def _reactions_count(message: Message) -> int | None:
 class TelegramSourceAdapter(SourceAdapter):
     """Fetches recent messages from a Telegram channel via Telethon."""
 
+    def __init__(
+        self,
+        *,
+        checkpoint_store: TelegramCheckpointStore | None = None,
+        now_factory: Callable[[], datetime] | None = None,
+    ) -> None:
+        self._checkpoint_store = checkpoint_store
+        self._now_factory = now_factory or (lambda: datetime.now(UTC))
+        self._pending_high_watermarks: dict[uuid.UUID, int] = {}
+
+    def _get_checkpoint_store(self) -> TelegramCheckpointStore:
+        if self._checkpoint_store is None:
+            self._checkpoint_store = TelegramCheckpointStore(get_redis_client())
+        return self._checkpoint_store
+
     async def fetch(self, source: NewsSource, context: SourceFetchContext) -> list[RawNewsItem]:
         """Fetch up to MESSAGE_FETCH_LIMIT recent messages from source.url.
 
@@ -84,15 +109,63 @@ class TelegramSourceAdapter(SourceAdapter):
                     f"Telegram session is not authorized for source {source.name!r} - "
                     "TELEGRAM_SESSION_STRING is missing, expired, or invalid."
                 )
-            async for message in client.iter_messages(channel, limit=MESSAGE_FETCH_LIMIT):
+            checkpoint_store = self._get_checkpoint_store()
+            checkpoint = await checkpoint_store.get(source.id)
+
+            if checkpoint is None:
+                head_message_id = 0
+                async for message in client.iter_messages(channel, limit=1):
+                    head_message_id = int(message.id)
+                    break
+                persisted = await checkpoint_store.initialize(source.id, head_message_id)
+                logger.info(
+                    "Initialized Telegram checkpoint for %s at message_id=%d; historical events created=0",
+                    source.name,
+                    persisted,
+                )
+                return []
+
+            freshness_cutoff = self._now_factory() - timedelta(hours=TELEGRAM_FRESHNESS_FAILSAFE_HOURS)
+            high_watermark = checkpoint
+            async for message in client.iter_messages(
+                channel,
+                min_id=checkpoint,
+                limit=MESSAGE_FETCH_LIMIT,
+                reverse=True,
+            ):
+                message_id = int(message.id)
+                high_watermark = max(high_watermark, message_id)
+                if message_id <= checkpoint:
+                    continue
+                message_date = message.date
+                if message_date is None or message_date.astimezone(UTC) < freshness_cutoff:
+                    logger.warning(
+                        "Telegram freshness failsafe skipped source=%s message_id=%d",
+                        source.name,
+                        message_id,
+                    )
+                    continue
                 item = self._to_raw_item(message, channel)
                 if item is not None:
                     items.append(item)
+            self._pending_high_watermarks[source.id] = high_watermark
         finally:
             await client.disconnect()
 
         logger.info("Fetched %d messages from %s", len(items), source.url)
         return items
+
+    async def acknowledge(self, source: NewsSource) -> None:
+        """Advance only after the collector's NewsEvent transaction committed successfully.
+
+        If processing or commit fails this method is never called, so the entire fetched range is
+        offered again. If commit succeeds but this Redis write fails, the next cycle re-fetches;
+        existing NewsEvent hash uniqueness makes that at-least-once retry idempotent.
+        """
+        high_watermark = self._pending_high_watermarks.pop(source.id, None)
+        if high_watermark is None:
+            return
+        await self._get_checkpoint_store().advance(source.id, high_watermark)
 
     @staticmethod
     def _build_client() -> TelegramClient:

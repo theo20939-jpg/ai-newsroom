@@ -253,7 +253,7 @@ class _FakeTelegramClient:
         self.start_called = True
         raise AssertionError("client.start() must never be called by fetch() - see module docstring")
 
-    def iter_messages(self, channel: str, limit: int):
+    def iter_messages(self, channel: str, limit: int, **kwargs: object):
         self.iter_messages_called = True
 
         async def _gen():
@@ -295,12 +295,26 @@ async def test_unauthorized_session_raises_without_calling_start(monkeypatch: py
 
 
 # Part I - authorized path preserved exactly, no interactive call.
+class _ExistingCheckpoint:
+    async def get(self, source_id) -> int:
+        return 99
+
+    async def initialize(self, source_id, head_message_id: int) -> int:  # pragma: no cover
+        raise AssertionError("existing checkpoint must not initialize again")
+
+    async def advance(self, source_id, candidate_message_id: int) -> int:
+        return candidate_message_id
+
+
 @pytest.mark.asyncio
 async def test_authorized_session_fetches_messages_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
     message = _FakeMessage(id=100, text="A real news post")
     client = _FakeTelegramClient(authorized=True, messages=[message])
     _patch_client(monkeypatch, client)
-    adapter = TelegramSourceAdapter()
+    adapter = TelegramSourceAdapter(
+        checkpoint_store=_ExistingCheckpoint(),  # type: ignore[arg-type]
+        now_factory=lambda: message.date,
+    )
 
     items = await adapter.fetch(_fake_source(), SourceFetchContext(definition=None))
 

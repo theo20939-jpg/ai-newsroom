@@ -157,6 +157,13 @@ async def _process_source(
 
     await session.commit()
 
+    # Telegram's durable checkpoint advances only after every fetched item has been processed and
+    # the NewsEvent transaction has committed. Other adapters do not implement acknowledge and
+    # remain byte-for-byte on their existing path.
+    acknowledge = getattr(resolution.adapter, "acknowledge", None)
+    if acknowledge is not None:
+        await acknowledge(source)
+
 
 async def _fetch_with_retry(
     adapter: SourceAdapter, source: NewsSource, context: SourceFetchContext
