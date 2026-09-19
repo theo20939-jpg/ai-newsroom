@@ -119,8 +119,11 @@ def _focus_y_from_focal_point(focal_point: str | None) -> float:
     """The carousel-wide `InstagramCreativeExecutionPlan.focal_point` text biasing WHERE a crop is
     centered - a real, if modest, causal link from the shared creative plan to actual crop
     geometry, not just evidence metadata."""
+    # Stems, not whole words: "низ" alone misses "нижней"/"нижняя"/"нижний" (a real bug found
+    # while testing this exact function - "нижней правой части кадра" silently fell through to
+    # the default because "низ" is not a substring of "нижней").
     text = str(focal_point or "").lower()
-    if any(t in text for t in ("низ", "bottom", "внизу")):
+    if any(t in text for t in ("низ", "нижн", "bottom", "внизу")):
         return 0.65
     if any(t in text for t in ("верх", "top", "сверху")):
         return 0.25
@@ -552,16 +555,19 @@ def _slide_comparison(
     assert split is not None  # select_slide_layout only routes here when a real split exists
     left_text, right_text = split
 
-    # The left panel is always covered by its own solid `INK_RAISED` rectangle below (unchanged),
-    # so a real image only ever shows through as the RIGHT panel's texture - the existing "left
-    # solid / right whatever's-behind-it" asymmetry was already the design; only the background
-    # source changes here, none of the panel/VS-badge drawing logic below does. Default primitive
-    # is NONE (a comparison may be "primarily graphic, no photo" - the plan decides otherwise via
-    # media_need, not this function).
+    # Phase B.3.2 (founder visual review): a comparison built from the SAME dark canvas as
+    # DETAIL/CLOSING was the actual reason 3/4/5 kept reading as one repeated "dark card" no
+    # matter which primitive fired. Without a real image, this is now a genuine LIGHT-vs-DARK
+    # split - the contrast itself IS the comparison, a diagrammatic device, not decoration - not
+    # another dim/blurred photo card. With a real image, the existing subordinate dark-photo-on-
+    # the-right treatment is unchanged (the image stays clearly secondary to the VS structure).
     canvas, source_treatment = _resolve_slide_background(
         media_primitive, media_image, width=spec.width, height=spec.height, focus_y=focus_y, focus_x=focus_x,
         identity=package_identity, block_count=0,
     )
+    graphic_only = source_treatment == SourceMediaPrimitive.NONE.value
+    if graphic_only:
+        canvas = Image.new("RGBA", (spec.width, spec.height), (*tok.PAPER, 255))
     draw = ImageDraw.Draw(canvas, "RGBA")
     margin = round(spec.width * tok.MARGIN_FRAC)
     _draw_progress(canvas, spec, index=index, total=total)
@@ -581,11 +587,13 @@ def _slide_comparison(
     vbbox = draw.textbbox((0, 0), "VS", font=vfont)
     vw, vh = vbbox[2] - vbbox[0], vbbox[3] - vbbox[1]
     vy = (panel_top + panel_bottom) // 2 - vh
-    draw.ellipse([mid_x - vh, vy - round(vh * 0.4), mid_x + vh, vy + vh + round(vh * 0.4)], fill=(*tok.INK, 255), outline=(*tok.RED, 255), width=2)
+    vs_fill = tok.PAPER if graphic_only else tok.INK
+    draw.ellipse([mid_x - vh, vy - round(vh * 0.4), mid_x + vh, vy + vh + round(vh * 0.4)], fill=(*vs_fill, 255), outline=(*tok.RED, 255), width=2)
     draw.text((mid_x - vw / 2, vy - vbbox[1]), "VS", font=vfont, fill=tok.RED)
 
     col_w = mid_x - margin - round(spec.width * 0.04)
     regions: list[TextRegionSpec] = []
+    right_color = tok.INK if graphic_only else tok.WHITE
 
     def _panel(text: str, x0: int, align_color) -> None:
         pfont, plines, pclip = fit_text_block(
@@ -601,7 +609,7 @@ def _slide_comparison(
             py += (bbox[3] - bbox[1]) + round(pfont.size * 0.2)
 
     _panel(left_text, margin, tok.WHITE)
-    _panel(right_text, mid_x + round(spec.width * 0.04), tok.WHITE)
+    _panel(right_text, mid_x + round(spec.width * 0.04), right_color)
 
     mark_count = place_brand_mark(canvas, spec, compact=True)
     return LayoutResult(
@@ -615,21 +623,29 @@ def _slide_detail(
     media_image: Image.Image | None = None, media_primitive: "SourceMediaPrimitive" = SourceMediaPrimitive.DETAIL_CROP,
     focus_y: float = 0.42, focus_x: float = 0.5,
 ) -> LayoutResult:
-    canvas, detail_source_treatment = _resolve_slide_background(
-        media_primitive, media_image, width=spec.width, height=spec.height, focus_y=focus_y, focus_x=focus_x,
-        identity=package_identity, block_count=0,
-    )
-    draw_corner_brackets(canvas, spec, top=False)
-
-    # a large, low-alpha echo of this slide's own index number - real content (this IS slide N),
-    # not decoration - filling what would otherwise be the plainest, most text-only layout in the
-    # deck with genuine visual weight instead of reading as an empty black card.
-    big_size = round(spec.width * 0.62)
-    big_font = ig_font(big_size, "black")
-    layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    ldraw = ImageDraw.Draw(layer, "RGBA")
-    ldraw.text((round(spec.width * 0.42), round(spec.height * 0.58)), f"{index + 1:02d}", font=big_font, fill=(*tok.WHITE, 14))
-    canvas.alpha_composite(layer)
+    """Phase B.3.2 (founder visual review): previously a full-bleed dark photo/fallback behind
+    text - visually indistinguishable in MOOD from FACT/CLOSING even though the primitive differed.
+    Now a genuine "practical/explanatory" card: a contained TOP band (photo when the plan asks for
+    one, a solid accent panel otherwise) over a LIGHT editorial field for the body copy - the same
+    light-paper system CONTEXT already uses, oriented as a band instead of a strip so the two don't
+    read as the same composition."""
+    band_h = round(spec.height * 0.46)
+    canvas = Image.new("RGBA", (spec.width, spec.height), (*tok.PAPER, 255))
+    if media_image is not None and media_primitive is not SourceMediaPrimitive.NONE:
+        if media_primitive is SourceMediaPrimitive.DETAIL_CROP:
+            band_img, detail_source_treatment = build_detail_crop_field(
+                media_image, width=spec.width, height=band_h, focus_y=focus_y, focus_x=focus_x,
+            )
+        else:
+            fitted = fit_image_cover(media_image, width=spec.width, height=band_h, focus_y=focus_y, focus_x=focus_x)
+            band_img, detail_source_treatment = fitted.image, fitted.treatment.value
+        canvas.paste(band_img, (0, 0))
+        apply_top_readability_gradient(canvas, height_frac=0.22, max_alpha=130)
+    else:
+        detail_source_treatment = "none"
+        draw0 = ImageDraw.Draw(canvas, "RGBA")
+        draw0.rectangle([0, 0, spec.width, band_h], fill=(*tok.INK_RAISED, 255))
+        draw_corner_brackets(canvas, spec, bottom=False)
 
     draw = ImageDraw.Draw(canvas, "RGBA")
     margin = round(spec.width * tok.MARGIN_FRAC)
@@ -637,21 +653,29 @@ def _slide_detail(
     _draw_progress(canvas, spec, index=index, total=total)
     regions: list[TextRegionSpec] = []
 
-    # Structural roles are internal metadata, never audience-facing copy.
-    rule_y = round(spec.height * (spec.safe_top_frac + 0.20))
-    draw.rectangle([margin, rule_y, margin + round(spec.width * 0.1), rule_y + 4], fill=(*tok.RED, 255))
+    # A small, legible "NN" tag chip anchored to the band's bottom-left edge - real content (this
+    # IS slide N), replacing the previous giant low-alpha watermark that mainly read as texture.
+    tag_font = ig_font(round(spec.width * 0.045), "black")
+    tag_text = f"{index + 1:02d}"
+    tbbox = draw.textbbox((0, 0), tag_text, font=tag_font)
+    tw, th = tbbox[2] - tbbox[0], tbbox[3] - tbbox[1]
+    tag_pad = round(spec.width * 0.02)
+    chip_h = th + tag_pad * 2
+    chip_top = band_h - chip_h
+    draw.rectangle([margin, chip_top, margin + tw + tag_pad * 2, band_h], fill=(*tok.RED, 255))
+    draw.text((margin + tag_pad - tbbox[0], chip_top + tag_pad - tbbox[1]), tag_text, font=tag_font, fill=tok.WHITE)
 
+    body_top = band_h + round(spec.height * 0.07)
     body_font, body_lines, clipped = fit_text_block(
         draw, slide_copy, font_max=round(spec.width * tok.TYPE_HEADLINE_S.size_frac), font_min=round(spec.width * 0.032),
         max_width=content_w, max_lines=6, weight=tok.TYPE_HEADLINE_S.weight,
     )
     body_h = measure_block_height(draw, body_lines, body_font)
-    body_top = rule_y + round(spec.height * 0.05)
     bottom_safe_px = round(spec.height * spec.safe_bottom_frac) + margin
     y: float = body_top + max(0, (spec.height - bottom_safe_px - body_top - body_h) // 2)
     for i, line in enumerate(body_lines):
         bbox = draw.textbbox((margin, y), line, font=body_font)
-        draw.text((margin, y), line, font=body_font, fill=tok.WHITE)
+        draw.text((margin, y), line, font=body_font, fill=tok.INK)
         regions.append(TextRegionSpec(kind="body", box=box4(bbox), clipped=clipped and i == len(body_lines) - 1))
         y += (bbox[3] - bbox[1]) + round(body_font.size * 0.2)
 
