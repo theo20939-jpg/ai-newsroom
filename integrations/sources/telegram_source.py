@@ -28,9 +28,11 @@ own per-source `try/except`, unmodified - this was already correct, the previous
 hung call never raised anything for it to catch).
 """
 import logging
+import re
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlsplit
 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
@@ -52,6 +54,49 @@ MESSAGE_FETCH_LIMIT = 50
 # tighter than a historical channel backlog (and still upstream of production's stricter analysis
 # freshness policy).
 TELEGRAM_FRESHNESS_FAILSAFE_HOURS = 6
+_HTTP_URL_RE = re.compile(r"https?://[^\s<>\]\[(){}\"']+", re.IGNORECASE)
+
+
+def _message_urls(message: Message) -> list[str]:
+    """Extract explicit HTTP(S) entity targets and visible URLs without resolving them."""
+    values: list[str] = []
+    entity_reader = getattr(message, "get_entities_text", None)
+    if callable(entity_reader):
+        try:
+            for entity, visible_text in entity_reader():
+                target = getattr(entity, "url", None)
+                candidate = target if isinstance(target, str) else visible_text
+                if isinstance(candidate, str) and candidate.lower().startswith(("http://", "https://")):
+                    values.append(candidate.strip())
+        except Exception:
+            logger.warning("telegram_entity_url_extraction_failed", exc_info=True)
+    text = getattr(message, "raw_text", None) or message.text or ""
+    values.extend(_HTTP_URL_RE.findall(text))
+    return list(dict.fromkeys(values))
+
+
+def _is_telegram_url(url: str) -> bool:
+    try:
+        return (urlsplit(url).hostname or "").lower().removeprefix("www.") in {
+            "t.me", "telegram.me", "telegram.dog",
+        }
+    except ValueError:
+        return False
+
+
+def _forward_evidence(message: Message) -> dict[str, object] | None:
+    forward = getattr(message, "forward", None)
+    if forward is None:
+        return None
+    evidence: dict[str, object] = {}
+    for name in ("chat_id", "sender_id", "channel_post", "from_name"):
+        value = getattr(forward, name, None)
+        if isinstance(value, (str, int)):
+            evidence[name] = value
+    date = getattr(forward, "date", None)
+    if isinstance(date, datetime):
+        evidence["date"] = date.isoformat()
+    return evidence or {"present": True}
 
 
 class TelegramAuthenticationError(RuntimeError):
@@ -194,10 +239,34 @@ class TelegramSourceAdapter(SourceAdapter):
         if message.action is not None:
             return None  # service message (join/leave/pin/...), not news content
 
+        telegram_permalink = f"https://t.me/{channel}/{message.id}"
+        explicit_urls = _message_urls(message)
+        outbound_urls = [url for url in explicit_urls if not _is_telegram_url(url)]
+        media = getattr(message, "media", None)
+        evidence = {
+            "schema_version": 1,
+            "source_identity": channel,
+            "telegram_message_id": int(message.id),
+            "telegram_message_date": message.date.isoformat() if message.date is not None else None,
+            "telegram_permalink": telegram_permalink,
+            "raw_text": message.text or None,
+            "caption": (message.text or None) if media is not None else None,
+            "explicit_urls": explicit_urls,
+            "outbound_urls": outbound_urls,
+            "media_present": media is not None,
+            "media_type": type(media).__name__ if media is not None else None,
+            "forward": _forward_evidence(message),
+            "reply_to_message_id": getattr(message, "reply_to_msg_id", None),
+            "origin_class": (
+                "OUTBOUND_LINK_PRESENT_BUT_NOT_RESOLVED"
+                if outbound_urls else "RADAR_ONLY_NO_ORIGIN"
+            ),
+            "resolved_origin_url": None,
+        }
         return RawNewsItem(
             external_id=str(message.id),
             text=message.text or None,
-            url=f"https://t.me/{channel}/{message.id}",
+            url=outbound_urls[0] if outbound_urls else telegram_permalink,
             published_at=message.date,
             views_count=message.views,
             forwards_count=message.forwards,
@@ -207,4 +276,5 @@ class TelegramSourceAdapter(SourceAdapter):
             # phase16_m1_native_media_ingestion_report.md). Extraction failure must never break
             # collection of the message's text, so this is never allowed to raise past this point.
             native_media_hints=extract_telegram_native_media(message),
+            source_evidence=evidence,
         )

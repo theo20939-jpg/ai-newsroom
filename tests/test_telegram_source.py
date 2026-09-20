@@ -202,6 +202,25 @@ def test_to_raw_item_produces_no_hints_for_a_text_only_post() -> None:
     assert item.native_media_hints == []
 
 
+def test_outbound_url_becomes_acquisition_url_and_preserves_telegram_evidence() -> None:
+    message = _FakeMessage(id=23, text="Демо проекта https://example.org/demo")
+    item = TelegramSourceAdapter._to_raw_item(message, "cybers")
+    assert item is not None
+    assert item.url == "https://example.org/demo"
+    assert item.source_evidence["telegram_permalink"] == "https://t.me/cybers/23"
+    assert item.source_evidence["outbound_urls"] == ["https://example.org/demo"]
+    assert item.source_evidence["origin_class"] == "OUTBOUND_LINK_PRESENT_BUT_NOT_RESOLVED"
+
+
+def test_telegram_links_are_not_treated_as_original_artifacts() -> None:
+    message = _FakeMessage(id=24, text="Репост https://t.me/another/99")
+    item = TelegramSourceAdapter._to_raw_item(message, "cybers")
+    assert item is not None
+    assert item.url == "https://t.me/cybers/24"
+    assert item.source_evidence["outbound_urls"] == []
+    assert item.source_evidence["origin_class"] == "RADAR_ONLY_NO_ORIGIN"
+
+
 def test_to_raw_item_extraction_failure_never_breaks_text_collection() -> None:
     class _BrokenPhoto:
         @property

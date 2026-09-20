@@ -21,6 +21,7 @@ import html
 import logging
 import re
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -48,6 +49,7 @@ class CleanedItem(BaseModel):
     replies_count: int | None
     reactions_count: int | None
     native_media_hints: list[NativeMediaHint] = Field(default_factory=list)
+    source_evidence: dict[str, Any] = Field(default_factory=dict)
 
 
 def clean_item(raw: RawNewsItem) -> CleanedItem | None:
@@ -79,6 +81,7 @@ def clean_item(raw: RawNewsItem) -> CleanedItem | None:
         replies_count=raw.replies_count,
         reactions_count=raw.reactions_count,
         native_media_hints=raw.native_media_hints,
+        source_evidence=raw.source_evidence,
     )
 
 

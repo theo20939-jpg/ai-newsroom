@@ -36,6 +36,7 @@ from services.adapter_registry import AdapterResolution, build_registry
 from services.event_category import categorize_from_tags
 from services.image_intelligence import consolidate_candidates
 from services.source_registry import SourceRegistryReport, load_source_pack
+from services.telegram_radar_evidence import RADAR_SOURCE_CATEGORY, TelegramRadarEvidenceStore
 
 logger = logging.getLogger(__name__)
 
@@ -258,6 +259,10 @@ async def _process_item(
         return
 
     report.events_created += 1
+    if source.type == SourceType.TELEGRAM and source.category == RADAR_SOURCE_CATEGORY:
+        # A failed evidence write aborts this source transaction. The Telegram checkpoint is not
+        # acknowledged, so the item is retried rather than becoming an untraceable radar event.
+        await TelegramRadarEvidenceStore().put(event.id, cleaned.source_evidence)
     _log_image_intelligence(event.id, source.type, cleaned.native_media_hints)
 
 

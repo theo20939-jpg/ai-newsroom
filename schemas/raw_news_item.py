@@ -1,5 +1,6 @@
 """Validated contract returned by every source adapter."""
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -36,3 +37,4 @@ class RawNewsItem(BaseModel):
     replies_count: int | None = None
     reactions_count: int | None = None
     native_media_hints: list[NativeMediaHint] = Field(default_factory=list)
+    source_evidence: dict[str, Any] = Field(default_factory=dict)

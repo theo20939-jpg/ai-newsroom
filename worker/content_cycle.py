@@ -106,6 +106,7 @@ from services.director_editorial_gate_shadow import (
 )
 from services.telegram_channel_director_shadow import run_channel_director_shadow
 from services.telegram_notifier import send_editorial_card, to_editorial_card
+from services.telegram_radar_evidence import evaluate_origin_before_generation
 from services.telegram_routing import (
     send_media_group_to_editorial_destination,
     send_photo_to_editorial_destination,
@@ -1338,6 +1339,22 @@ async def run_content_cycle(
     for candidate_index, event_id in enumerate(event_ids):
         if result.generation_attempts >= settings.content_generation_batch_size:
             break
+        # Phase 2B provenance guard, separate from selector/VIRAL_TECH scoring. Only sources
+        # explicitly classified as viral_radar are affected. Radar-only or unresolved items stop
+        # before Research/Copywriting; explicit outbound artifacts use existing acquisition.
+        async with session_factory() as radar_session:
+            radar_origin = await evaluate_origin_before_generation(radar_session, event_id)
+            await radar_session.commit()
+        if radar_origin.applies and not radar_origin.allowed:
+            logger.info(
+                "telegram_radar_origin_blocked_before_generation",
+                extra={
+                    "event_id": str(event_id),
+                    "origin_class": radar_origin.origin_class,
+                    "reason": radar_origin.reason,
+                },
+            )
+            continue
         # Phase 23.1H: Editorial Treatment is applied BEFORE the (paid) Copywriting call whenever
         # router mode is active - matching the phase's own pipeline diagram (Scoring/Intelligence
         # -> Editorial Treatment -> V6 Copywriting) and saving the Copywriting cost entirely for a
