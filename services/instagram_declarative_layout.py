@@ -130,7 +130,7 @@ def _place_adaptive_mark(canvas: Image.Image, spec: ProfileSpec) -> int:
     total = sum(hist) or 1
     mean = sum(i * c for i, c in enumerate(hist)) / total
     mark = probe if mean >= 118 else ig_brand_mark(target_width=round(spec.width * frac), red=False)
-    canvas.alpha_composite(mark, (x, y))
+    canvas.paste(mark, (x, y), mark)  # brand asset placement (paste-with-mask), not an image treatment
     return 1
 
 
