@@ -272,7 +272,7 @@ def render_instagram_carousel(
             # every field for a pre-B.4 slide, so render_carousel_slide's existing B.3 dispatch
             # fires exactly as before.
             composition=slide.get("composition"), media_position=slide.get("media_position"),
-            media_scale=slide.get("media_scale"), overlay_mode=slide.get("overlay_mode"),
+            media_scale=slide.get("media_scale"),
             media_subject=slide.get("media_subject"), must_match_story=bool(slide.get("must_match_story") or False),
             # Phase B.4.1: resolver-supplied, never plan-supplied - see this function's own
             # docstring.

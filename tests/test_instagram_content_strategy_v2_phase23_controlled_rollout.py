@@ -73,7 +73,7 @@ def _prompt_repository() -> FakePromptRepository:
         output_schema=_SINGLE_SCHEMA,
     ))
     repository.register(RenderedPrompt(
-        name=CAROUSEL_PROMPT_NAME, version="6", system="you are the creative director", rules=["never invent facts"],
+        name=CAROUSEL_PROMPT_NAME, version="7", system="you are the creative director", rules=["never invent facts"],
         output_schema=_CAROUSEL_SCHEMA,
     ))
     return repository

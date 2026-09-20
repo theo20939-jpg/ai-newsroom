@@ -100,6 +100,17 @@ class InstagramSingleCreative(BaseModel):
 class InstagramCarouselSlideCreative(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_removed_overlay_mode(cls, data):
+        """Phase B.4.4 legacy-payload boundary: overlays were removed from the Instagram visual
+        system. Persisted B.4/B.4.3 draft payloads (and any legacy model output) may still carry
+        `overlay_mode`; it is discarded HERE, at parse time, so it can never reach the renderer.
+        No DB migration - stored JSON keeps the old key, this boundary just ignores it."""
+        if isinstance(data, dict) and "overlay_mode" in data:
+            return {key: value for key, value in data.items() if key != "overlay_mode"}
+        return data
+
     role: str = Field(min_length=1, max_length=50)
     slide_copy: str = Field(min_length=1, max_length=_SHORT_TEXT_MAX_LENGTH)
     visual_direction: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
@@ -117,7 +128,6 @@ class InstagramCarouselSlideCreative(BaseModel):
     ] | None = None
     media_position: Literal["full", "top", "left", "right", "none"] | None = None
     media_scale: float | None = Field(default=None, ge=0.2, le=1.0)
-    overlay_mode: Literal["none", "subtle", "gradient", "editorial_scrim"] | None = None
     # NEWS_RECAP's own hard requirement (spec B.4 §10/§17): which real-world subject this
     # slide's asset must show, and whether the renderer/validator must refuse a fallback/shared
     # asset for it - never a free-text instruction the renderer has to interpret.

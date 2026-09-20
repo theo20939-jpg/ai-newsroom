@@ -106,8 +106,7 @@ class RecentCarouselFingerprint:
     draft_id: UUID
     generated_at: datetime
     content_archetype: str | None
-    compositions: tuple[str, ...]
-    overlay_modes: tuple[str, ...]
+    compositions: tuple[str, ...]  # DISTINCT composition families this ONE post used (post-level, not per slide)
 
 
 def _fingerprint_from_draft(draft: InstagramCreativeDraft) -> RecentCarouselFingerprint | None:
@@ -122,19 +121,18 @@ def _fingerprint_from_draft(draft: InstagramCreativeDraft) -> RecentCarouselFing
     # infer/guess a value for it.
     if not any(isinstance(slide, dict) and "composition" in slide for slide in slides):
         return None
-    compositions = tuple(
+    # Fatigue unit is the POST: one post contributes at most one hit per composition family, no
+    # matter how many of its slides used it. (Legacy `overlay_mode` keys in old payloads are
+    # ignored - overlays no longer exist in the visual system.)
+    compositions = tuple(sorted({
         slide["composition"] for slide in slides
         if isinstance(slide, dict) and slide.get("composition")
-    )
-    overlay_modes = tuple(
-        slide["overlay_mode"] for slide in slides
-        if isinstance(slide, dict) and slide.get("overlay_mode")
-    )
+    }))
     archetype = payload.get("content_archetype")
     return RecentCarouselFingerprint(
         draft_id=draft.id, generated_at=draft.generated_at,
         content_archetype=archetype if isinstance(archetype, str) else None,
-        compositions=compositions, overlay_modes=overlay_modes,
+        compositions=compositions,
     )
 
 
@@ -183,11 +181,11 @@ def build_carousel_fatigue_note(fingerprints: list[RecentCarouselFingerprint], *
     for comp, count in sorted(composition_counts.items(), key=lambda kv: (-kv[1], kv[0])):
         state = evaluate_fatigue_state(dimension="composition", repetition_count=count, window_days=window_days)
         if state in _FATIGUE_NOTEWORTHY_STATES:
-            lines.append(f"composition '{comp}' used {count}x in the last {window_days}d ({state.value}) - avoid unless this content genuinely calls for it")
+            lines.append(f"composition '{comp}' appeared in {count} of the last {window_days}d posts ({state.value}) - avoid unless this content genuinely calls for it")
     for archetype, count in sorted(archetype_counts.items(), key=lambda kv: (-kv[1], kv[0])):
         state = evaluate_fatigue_state(dimension="content_archetype", repetition_count=count, window_days=window_days)
         if state in _FATIGUE_NOTEWORTHY_STATES:
-            lines.append(f"content_archetype '{archetype}' used {count}x in the last {window_days}d ({state.value})")
+            lines.append(f"content_archetype '{archetype}' appeared in {count} of the last {window_days}d posts ({state.value})")
     return "\n".join(lines)
 
 

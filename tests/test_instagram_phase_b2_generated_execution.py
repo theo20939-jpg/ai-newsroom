@@ -260,7 +260,7 @@ async def test_carousel_executes_media_per_slide_and_generated_pixels_reach_comp
     # a GENERATED hook slide now goes through its own dedicated, validator-safe FULL_BLEED
     # treatment like any other real image, not a separate "generated" special case.
     assert renders[0].evidence.source_image_treatment in ("cover_cropped", "contain_preserved")
-    assert renders[0].evidence.notes["media_primitive_selected"] == "source_full_bleed"
+    assert renders[0].evidence.notes["composition_executed"] == "generic_contained_media_top"
     assert renders[1].evidence.notes["per_slide_media_consumed"] is True
     assert renders[2].evidence.notes["per_slide_media_consumed"] is False
     assert renders[3].evidence.notes["per_slide_media_consumed"] is False

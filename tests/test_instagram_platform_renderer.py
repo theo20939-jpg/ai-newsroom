@@ -152,15 +152,15 @@ def _small_real_image() -> Image.Image:
     return img
 
 
-def test_media_need_causally_controls_whether_and_how_a_slide_shows_the_image() -> None:
-    """Phase B.3.1: the creative plan, not role alone, decides whether/how a slide's real image
-    appears. Same RAW asset on every slide; only `media_need` differs per slide - and that
-    difference must reach real, different pixel-level primitives, not just notes."""
+def test_explicit_composition_causally_controls_whether_and_how_a_slide_shows_the_image() -> None:
+    """Phase B.4.4: the creative plan's own `composition` decides whether/how a slide's real image
+    appears (role no longer does). Same real asset on every slide; only the composition differs -
+    and that difference must reach real, different pixel-level outcomes, not just notes."""
     slides = [
-        InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v", media_need="полный кадр"),
-        InstagramCarouselSlideCreative(role="comparison", slide_copy="A vs B", visual_direction="v", media_need="без фото, только графика"),
-        InstagramCarouselSlideCreative(role="unrecognised_role_falls_to_detail", slide_copy="Detail text", visual_direction="v", media_need="крупный план, деталь"),
-        InstagramCarouselSlideCreative(role="takeaway", slide_copy="Takeaway", visual_direction="v", media_need="приглушённый фон"),
+        InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v", composition="contained_media", media_position="top", media_scale=0.55),
+        InstagramCarouselSlideCreative(role="context", slide_copy="Typographic slide text", visual_direction="v", composition="typographic"),
+        InstagramCarouselSlideCreative(role="detail", slide_copy="Detail text", visual_direction="v", composition="collage"),
+        InstagramCarouselSlideCreative(role="takeaway", slide_copy="Takeaway", visual_direction="v", composition="contained_media", media_position="left", media_scale=0.45),
     ]
     carousel = InstagramCarouselCreative(objective="saves", slides=slides)
     pkg = build_instagram_content_package(
@@ -169,27 +169,22 @@ def test_media_need_causally_controls_whether_and_how_a_slide_shows_the_image() 
     )
     same_image = _small_real_image()
     results = render_instagram_carousel(pkg, slide_images={0: same_image, 1: same_image, 2: same_image, 3: same_image})
-    primitives = [r.evidence.notes.get("media_primitive_selected") for r in results]
-    assert primitives == ["source_full_bleed", "none", "source_detail_crop", "source_dimmed_field"]
-    # comparison's explicit "no photo" request must actually produce no-image evidence, not a
-    # photo the plan asked NOT to show:
-    assert results[1].evidence.source_image_treatment == "none"
-    # detail's and closing's requests must both actually differ in outcome from each other and
-    # from a plain full-bleed cover-crop - a real, different pixel-level operation each time:
-    assert results[2].evidence.source_image_treatment == "cover_cropped"  # a real crop, not "none"
-    assert results[3].evidence.source_image_treatment in ("cover_cropped", "contain_preserved")
-    variants = {r.evidence.notes.get("layout_variant") for r in results}
-    assert len(variants) >= 3  # still visually distinct families, not collapsed into one
+    treatments = [r.evidence.source_image_treatment for r in results]
+    assert treatments == ["cover_cropped", "none", "cover_cropped", "cover_cropped"]
+    variants = [r.evidence.notes.get("layout_variant") for r in results]
+    assert variants[0] == "generic_contained_media_top" and variants[3] == "generic_contained_media_left"
+    assert variants[1].startswith("generic_typographic") and variants[2] == "generic_collage"
+    assert all(r.evidence.notes.get("source_media_pixels_unaltered") in (True, None) for r in results)
 
 
-def test_role_default_bias_still_applies_with_no_explicit_media_need() -> None:
-    """Role may still provide a sensible DEFAULT (this is not the bug) - detail's own default is a
-    focused crop, not the same blurred full-frame backdrop as everything else, and comparison's own
-    default is no photo at all unless the plan asks for one."""
+def test_role_default_applies_only_as_a_light_fallback_when_no_composition_is_planned() -> None:
+    """Role may still supply a deterministic FALLBACK (recorded as a role fallback): media goes into
+    its own region for non-closing roles, closing roles are type-led, comparison with a real ' vs '
+    is a split - and nothing is dark or overlaid."""
     slides = [
         InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v"),
         InstagramCarouselSlideCreative(role="comparison", slide_copy="A vs B", visual_direction="v"),
-        InstagramCarouselSlideCreative(role="unrecognised_role_falls_to_detail", slide_copy="Detail text", visual_direction="v"),
+        InstagramCarouselSlideCreative(role="unrecognised_role", slide_copy="Detail text", visual_direction="v"),
         InstagramCarouselSlideCreative(role="takeaway", slide_copy="Takeaway", visual_direction="v"),
     ]
     carousel = InstagramCarouselCreative(objective="saves", slides=slides)
@@ -199,8 +194,9 @@ def test_role_default_bias_still_applies_with_no_explicit_media_need() -> None:
     )
     same_image = _small_real_image()
     results = render_instagram_carousel(pkg, slide_images={0: same_image, 1: same_image, 2: same_image, 3: same_image})
-    primitives = [r.evidence.notes.get("media_primitive_selected") for r in results]
-    assert primitives == ["source_full_bleed", "none", "source_detail_crop", "none"]
+    assert [r.evidence.source_image_treatment for r in results] == ["cover_cropped", "none", "cover_cropped", "none"]
+    assert all(r.evidence.notes.get("fallback_role_layout_used") is True for r in results)
+    assert all(r.evidence.notes.get("overlay_operations_executed") == 0 for r in results)
 
 
 def test_comparison_detail_closing_unchanged_when_no_image_is_supplied() -> None:
@@ -283,24 +279,19 @@ def test_focal_point_causally_changes_the_actual_crop_not_just_notes() -> None:
     assert targeted.evidence.notes.get("creative_plan", {}).get("focal_point") != neutral.evidence.notes.get("creative_plan", {}).get("focal_point")
 
 
-@pytest.mark.parametrize("role,media_need", [
-    ("hook", "полный кадр"),
-    ("context", "боковая полоса"),
-    ("problem", "приглушённый фон"),
-    ("data", "приглушённый фон"),
-    ("comparison", "приглушённый фон"),
-    ("unrecognised_falls_to_detail", "крупный план деталь"),
-    ("takeaway", "приглушённый фон"),
+@pytest.mark.parametrize("role,expected", [
+    ("hook", "cover_cropped"),
+    ("context", "cover_cropped"),
+    ("problem", "cover_cropped"),
+    ("data", "cover_cropped"),
+    ("unrecognised_falls_to_detail", "cover_cropped"),
+    ("takeaway", "none"),
+    ("cta", "none"),
 ])
-def test_every_wired_role_family_can_consume_a_real_supplied_image(role: str, media_need: str) -> None:
-    """Audits all role families this phase wired (explanation is the one documented exception -
-    see _DEFAULT_MEDIA_PRIMITIVE_BY_LAYOUT's own comment - its light-paper foreground is
-    incompatible with the dark dimmed-field treatment without a light-variant field this pass does
-    not build). Every one of these must be able to actually apply a real image when the plan asks,
-    not just the three the first bounded fix touched."""
+def test_every_role_fallback_can_consume_a_real_supplied_image_in_its_own_region(role: str, expected: str) -> None:
     slides = [
         InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v"),
-        InstagramCarouselSlideCreative(role=role, slide_copy="Body copy vs alt" if role == "comparison" else "Body copy", visual_direction="v", media_need=media_need),
+        InstagramCarouselSlideCreative(role=role, slide_copy="Body copy", visual_direction="v"),
     ]
     carousel = InstagramCarouselCreative(objective="saves", slides=slides)
     pkg = build_instagram_content_package(
@@ -309,23 +300,7 @@ def test_every_wired_role_family_can_consume_a_real_supplied_image(role: str, me
     )
     image = _small_real_image()
     results = render_instagram_carousel(pkg, slide_images={0: image, 1: image})
-    assert results[1].evidence.source_image_treatment in ("cover_cropped", "contain_preserved")
-
-
-def test_explanation_is_the_one_documented_family_still_excluded() -> None:
-    """Not silently skipped - explicitly excluded and explained (light-paper incompatibility)."""
-    slides = [
-        InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v"),
-        InstagramCarouselSlideCreative(role="explanation", slide_copy="KEY → UNLOCK", visual_direction="v", media_need="приглушённый фон"),
-    ]
-    carousel = InstagramCarouselCreative(objective="saves", slides=slides)
-    pkg = build_instagram_content_package(
-        opportunity=_OPP, format_decision=FormatDecision(recommended_format=ContentFormat.CAROUSEL), shadow_plan=_SP,
-        creative_outcome=CreativeGenerationOutcome(carousel=carousel),
-    )
-    image = _small_real_image()
-    results = render_instagram_carousel(pkg, slide_images={0: image, 1: image})
-    assert results[1].evidence.source_image_treatment == "none"
+    assert results[1].evidence.source_image_treatment == expected
 
 
 def test_reel_cover_render_produces_only_the_cover_image_never_claims_video() -> None:

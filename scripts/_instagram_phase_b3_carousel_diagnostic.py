@@ -74,7 +74,7 @@ def _carousel_creative() -> InstagramCarouselCreative:
 
     Phase B.3.1: `media_need` on each slide is the REAL per-slide creative-plan signal that now
     causally decides whether/how the RAW asset appears (services/instagram_carousel_layouts.py::
-    select_media_primitive) - not role alone. Deliberately NOT uniform: two slides explicitly
+    the per-slide composition dispatch) - not role alone. Deliberately NOT uniform: two slides explicitly
     request no photo at all (comparison, takeaway), one requests the plain full-bleed cover
     (hook), and two request a genuinely different DETAIL_CROP zoom (context's strip, impact's full
     frame) - proving the plan, not the role, drives the outcome."""
@@ -191,7 +191,7 @@ def main() -> None:
             "assets": [{
                 # media_mode is deliberately omitted: since Phase B.3.1, dispatch no longer reads
                 # this field at all - which real pixel treatment a slide gets is now
-                # select_media_primitive()'s own decision, driven by this slide's `media_need`
+                # the composition dispatch's own decision
                 # text (see _carousel_creative() above), not a media_mode="GENERATED" special case.
                 "asset_key": "0", "status": "generated_media",
                 "asset_ref": raw_ref, "generation_execution_id": "instagram:phase-b2-diagnostic-b4-20260918-retry1:visual:primary:v2",
@@ -201,7 +201,7 @@ def main() -> None:
     })
 
     # Phase B.3.1: the SAME real RAW asset is made AVAILABLE to every slide (still zero provider
-    # calls) - but whether/how each one actually uses it is select_media_primitive()'s own
+    # calls) - but whether/how each one actually uses it is the composition dispatch's own
     # decision, driven by that slide's real `media_need` text, not "an image exists so show it".
     # Two of these five slides (comparison, takeaway) deliberately render with NO photo at all.
     results = render_instagram_carousel(package, slide_images={i: raw_image for i in range(5)})
@@ -233,7 +233,7 @@ def main() -> None:
             # The real causal chain, Phase B.3.1: what the plan ASKED for, what was DECIDED, and
             # what ACTUALLY happened to the pixels - three distinct, honestly-recorded facts.
             "media_need_requested": carousel.slides[i].media_need,
-            "media_primitive_selected": result.evidence.notes.get("media_primitive_selected"),
+            "composition_executed": result.evidence.notes.get("layout_variant"),
             "creative_plan_predicted_treatment": result.evidence.notes.get("source_media_treatment"),
             "focal_point_applied": (result.evidence.notes.get("creative_plan") or {}).get("focal_point"),
         })

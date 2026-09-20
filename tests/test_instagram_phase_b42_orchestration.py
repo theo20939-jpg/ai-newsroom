@@ -71,7 +71,7 @@ def _slide(role: str, copy: str, purpose: str, **b4) -> dict:
     base = {
         "role": role, "slide_copy": copy, "visual_direction": "v", "source_evidence": None, "slide_purpose": purpose,
         "media_need": None, "composition": None, "media_position": None, "media_scale": None,
-        "overlay_mode": None, "media_subject": None, "must_match_story": False,
+        "media_subject": None, "must_match_story": False,
     }
     base.update(b4)
     return base
@@ -117,7 +117,7 @@ def _news_output() -> dict:
             _slide("hook", "Ты это видел?", "stop the scroll", media_need="hero photo"),
             _slide(
                 "context", "Вот что теперь умеет NINJA", "explain", source_evidence=_EVIDENCE, media_need="photo",
-                composition="contained_media", media_position="left", media_scale=0.5, overlay_mode="subtle",
+                composition="contained_media", media_position="left", media_scale=0.5,
             ),
             _slide("takeaway", "Смотри сам в профиле", "close"),
         ],
@@ -199,6 +199,23 @@ async def test_recap_bundle_bridge_gives_each_story_its_own_media_or_none(monkey
     assert len({derive_asset_identity(b) for b in bundle.available_assets.values()}) == 3
     assert bundle.evidence[0] == "[story_1] Story 1"
     assert await build_instagram_recap_bundle(_FakeBundleSession(titles), selected=candidates[:3]) is None
+
+
+@pytest.mark.asyncio
+async def test_recap_bundle_preserves_editorial_order_even_when_only_the_last_story_has_media(monkeypatch: pytest.MonkeyPatch) -> None:
+    candidates = [SimpleNamespace(story_id=uuid4(), representative_event_id=uuid4()) for _ in range(5)]
+    titles = {c.representative_event_id: f"Story {i}" for i, c in enumerate(candidates, 1)}
+    last = candidates[-1].representative_event_id
+
+    async def fake_candidates(session, *, news_event_id, limit):
+        return [SimpleNamespace(id=uuid4(), candidate_id="c", is_expired=False)] if news_event_id == last else []
+
+    monkeypatch.setattr(bundle_module, "get_editorial_image_candidates", fake_candidates)
+    monkeypatch.setattr(bundle_module, "read_candidate_bytes", lambda c: _png((1, 2, 3)))
+    bundle = await build_instagram_recap_bundle(_FakeBundleSession(titles), selected=candidates)
+    assert bundle is not None
+    assert [s.title for s in bundle.stories] == [f"Story {i}" for i in range(1, 6)]  # selection order untouched
+    assert set(bundle.available_assets) == {"story_5"}  # media adapts afterward; it never re-ranks
 
 
 @pytest.mark.asyncio
@@ -286,7 +303,7 @@ async def test_F_draft_history_is_repetition_only_never_performance(db_session: 
     await _draft(db_session, _payload("contained_media"))
     fp = (await fetch_recent_carousel_fingerprints(db_session))[0]
     assert set(RecentCarouselFingerprint.__dataclass_fields__) == {
-        "draft_id", "generated_at", "content_archetype", "compositions", "overlay_modes",
+        "draft_id", "generated_at", "content_archetype", "compositions",
     }
     note = build_carousel_fatigue_note([fp] * 6).lower()
     assert not any(word in note for word in ("perform", "winner", "success", "engagement", "best"))
@@ -345,16 +362,19 @@ async def test_E_live_trigger_uses_v6_archetype_structured_composition_fatigue_a
 
     request = gateway.carousel_request()
     assert "content_archetype" in request.response_schema["properties"]  # real v6 contract was sent
-    assert "CREATIVE FATIGUE NOTE: composition 'contained_media' used 6x" in _user_text(request)
+    assert "CREATIVE FATIGUE NOTE: composition 'contained_media' appeared in 6 of the last 14d posts" in _user_text(request)
+    assert "CONTENT ARCHETYPE (derived, plan for it): news_insight" in _user_text(request)
+    assert "MEDIA AVAILABLE FOR THIS POST" in _user_text(request) and "subject key 'source'" in _user_text(request)
     assert "fatigued" in captured["director_input"].fatigue_note
 
     observability = captured["package"].media_plan["b4_observability"]
-    assert observability["prompt_version"] == CAROUSEL_PROMPT_VERSION == "6"
+    assert observability["prompt_version"] == CAROUSEL_PROMPT_VERSION == "7"
     assert observability["content_archetype"] == "news_insight"  # derived, not the model's stale "ai_hack"
     assert observability["structured_composition_present"] is True
     assert observability["structured_composition_executed"] is True
     assert observability["slide_count"] == 3
-    assert observability["slides"][1]["overlay_mode"] == "subtle"
+    assert observability["overlay_operations_executed_total"] == 0
+    assert all("overlay_mode" not in slide for slide in captured["package"].media_plan["slides"])
     assert observability["slides"][1]["role_fallback_used"] is False and observability["slides"][0]["role_fallback_used"] is True
     assert observability["art_validation_passed"] is True, observability["art_blocking_issues"]
     assert captured["package"].media_plan["slides"][1]["composition"] == "contained_media"  # fatigue advisory: fit still wins
@@ -381,7 +401,7 @@ async def test_live_trigger_news_recap_gives_each_story_its_own_asset_and_a_deli
     for i in range(1, 5):
         slides.append(_slide(
             "story", f"Новость номер {i}", f"story {i}", source_evidence=f"[story_{i}] Story {i}", media_need="photo",
-            composition="contained_media", media_position="top", media_scale=0.5, overlay_mode="none",
+            composition="contained_media", media_position="top", media_scale=0.5,
             media_subject=f"story_{i}", must_match_story=True,
         ))
     slides.append(_slide("takeaway", "Это главное за неделю", "close"))

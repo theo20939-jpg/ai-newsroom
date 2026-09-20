@@ -406,7 +406,7 @@ async def execute_instagram_creative_media(
             ),
             focal_subject=str(plan.get("focal_point") or ""),
         )
-        if slide_assets is not None and media_mode is InstagramMediaMode.SOURCE:
+        if slide_assets is not None:
             # NEWS_RECAP: each slide may only consume ITS OWN resolved story asset; a slide with
             # none gets a deliberate graphic fallback - never another story's (or a shared) image.
             resolved = slide_assets.get(int(asset_key)) if asset_key.isdigit() else None

@@ -34,10 +34,13 @@ _FORMAT_EXPECTED_PROFILE = {
 # select_slide_layout's own SPLIT_COMPARE reuse) - anything else means the claim was not honoured.
 _COMPOSITION_EXECUTION_EQUIVALENTS: dict[str, set[str]] = {
     "full_bleed_media": {"generic_full_bleed_media"},
-    "contained_media": {f"generic_contained_media_{p}" for p in ("top", "left", "right", "full", "none")},
-    "screenshot_ui": {f"generic_screenshot_ui_{p}" for p in ("top", "left", "right", "full", "none")},
-    "split_compare": {"generic_split_compare", "carousel_comparison"},
-    "typographic": {"generic_typographic"},
+    "contained_media": {f"generic_contained_media_{p}" for p in ("top", "left", "right")},
+    "screenshot_ui": {f"generic_screenshot_ui_{p}" for p in ("top", "left", "right")} | {"generic_ui_frame"},
+    "split_compare": {"generic_split_compare", "generic_split_compare_stacked"},
+    "typographic": {
+        "generic_typographic_editorial", "generic_typographic_step",
+        "generic_typographic_statement", "generic_typographic_story_number",
+    },
     "collage": {"generic_collage"},
 }
 
@@ -161,20 +164,6 @@ def validate_instagram_art(
             missing_trace = sorted(required_trace - set(ev.notes))
             if missing_trace or not ev.notes.get("render_plan_applied"):
                 blocking.append(f"creative_plan_not_applied: missing={missing_trace} slide_index={ev.slide_index}")
-            # Phase B.3.1: a field existing in notes is NOT the same claim as the corresponding
-            # pixel-level operation having actually occurred (the exact "fake implementation
-            # evidence" the Founder flagged). `source_media_treatment` is the plan's own PREDICTION
-            # (computed pre-render, package-level media availability); `media_primitive_selected`
-            # is the REAL per-slide decision `render_carousel_slide` actually acted on. They must
-            # agree - a mismatch means the plan's own recorded intent never reached these pixels
-            # (e.g. a package-level asset existed but this specific slide was never given one).
-            predicted = ev.notes.get("source_media_treatment")
-            executed = ev.notes.get("media_primitive_selected")
-            if predicted not in (None, "legacy_selection") and executed is not None and predicted != executed:
-                blocking.append(
-                    f"creative_plan_media_treatment_mismatch: plan predicted {predicted!r}, "
-                    f"actual executed primitive was {executed!r} slide_index={ev.slide_index}"
-                )
         if ev.notes.get("source_media_treatment") == "full_bleed_hero":
             coverage = float(ev.notes.get("source_coverage_fraction", 0.0))
             if coverage < 0.70:
@@ -214,50 +203,61 @@ def validate_instagram_art(
         if indices != list(range(len(render_results))):
             blocking.append(f"slide_index_sequence_invalid: {indices}")
 
-        # Phase B.4 §17/§23: NEWS_RECAP's hard requirement - a slide marked must_match_story=True
-        # must have its OWN asset identity, and no two must_match_story slides may share one (the
-        # exact "silent generic-source-reuse across unrelated stories" failure spec §10 forbids).
-        story_slides = [
-            (r.evidence.slide_index, r.evidence.notes.get("media_asset_identity"))
-            for r in render_results if r.evidence.notes.get("must_match_story")
-        ]
-        seen_identities: dict[str, int] = {}
-        for slide_index, asset_identity in story_slides:
-            if not asset_identity:
-                blocking.append(f"must_match_story_missing_asset: slide_index={slide_index}")
+        is_news_recap = package.media_plan.get("content_archetype") == "news_recap"
+
+        # Phase B.4.4 NO_OVERLAY_EXECUTED: every carousel render must prove it performed no overlay
+        # operation and left its source-media pixels untouched. Structural evidence only - no vision
+        # scoring. (A render that omits the evidence is treated as unproven, not as clean.)
+        for r in render_results:
+            notes = r.evidence.notes
+            if "overlay_operations_executed" not in notes:
+                blocking.append(f"overlay_evidence_missing: slide_index={r.evidence.slide_index}")
+            elif notes.get("overlay_operations_executed"):
+                blocking.append(f"overlay_executed_on_source_media: slide_index={r.evidence.slide_index}")
+            if notes.get("source_media_pixels_unaltered") is False:
+                blocking.append(f"source_media_pixels_altered: slide_index={r.evidence.slide_index}")
+
+        # NEWS_RECAP's hard requirement (spec B.4 section 10/17): cross-slide asset uniqueness applies
+        # to news_recap ONLY. must_match_story on any other archetype carries no uniqueness meaning.
+        if is_news_recap:
+            story_slides = [
+                (r.evidence.slide_index, r.evidence.notes.get("media_asset_identity"))
+                for r in render_results if r.evidence.notes.get("must_match_story")
+            ]
+            seen_identities: dict[str, int] = {}
+            for slide_index, asset_identity in story_slides:
+                if not asset_identity:
+                    blocking.append(f"must_match_story_missing_asset: slide_index={slide_index}")
+                    continue
+                if asset_identity in seen_identities:
+                    blocking.append(
+                        f"news_recap_asset_reuse_violation: slide_index={slide_index} reuses the same "
+                        f"asset_identity={asset_identity!r} already claimed by slide_index={seen_identities[asset_identity]}"
+                    )
+                else:
+                    seen_identities[asset_identity] = slide_index
+
+        # The claimed composition family must be the one that actually rendered - unless the renderer
+        # RECORDED an honest adaptation (text-fit reflow or a deliberate graphic fallback), which is
+        # surfaced as a warning rather than silently passing or blocking.
+        for r in render_results:
+            composition_requested = r.evidence.notes.get("composition_requested")
+            if composition_requested is None:
                 continue
-            if asset_identity in seen_identities:
-                blocking.append(
-                    f"news_recap_asset_reuse_violation: slide_index={slide_index} reuses the same "
-                    f"asset_identity={asset_identity!r} already claimed by slide_index={seen_identities[asset_identity]}"
+            executed = r.evidence.notes.get("layout_variant")
+            equivalents = _COMPOSITION_EXECUTION_EQUIVALENTS.get(composition_requested, set())
+            if executed in equivalents:
+                continue
+            if r.evidence.notes.get("composition_adapted_for_text_fit") or r.evidence.notes.get("graphic_fallback_used"):
+                warnings.append(
+                    f"composition_adapted: slide_index={r.evidence.slide_index} requested "
+                    f"{composition_requested!r}, rendered {executed!r}"
                 )
             else:
-                seen_identities[asset_identity] = slide_index
-
-        # Phase B.4 §9/§23: a slide that explicitly requested an overlay treatment (including
-        # "none") only has that request actually honoured by the NEW composition-driven render
-        # path (_render_generic_composition) - the OLD role-keyed dispatch never reads
-        # overlay_mode at all, so an overlay request with no explicit `composition` is silently
-        # unenforceable, not a real "no overlay" guarantee. Fail closed rather than let that claim
-        # pass unverified.
-        for r in render_results:
-            overlay_requested = r.evidence.notes.get("overlay_mode_requested")
-            composition_requested = r.evidence.notes.get("composition_requested")
-            if overlay_requested is not None and composition_requested is None:
                 blocking.append(
-                    f"overlay_mode_requires_composition: slide_index={r.evidence.slide_index} requested "
-                    f"overlay_mode={overlay_requested!r} without an explicit composition to enforce it"
+                    f"claimed_composition_not_executed: slide_index={r.evidence.slide_index} requested "
+                    f"composition={composition_requested!r}, actual layout_variant={executed!r}"
                 )
-            # Phase B.4 §8/§23: the claimed composition family must be the one that actually
-            # rendered - never metadata that merely echoes the request.
-            if composition_requested is not None:
-                executed = r.evidence.notes.get("layout_variant")
-                equivalents = _COMPOSITION_EXECUTION_EQUIVALENTS.get(composition_requested, set())
-                if executed not in equivalents:
-                    blocking.append(
-                        f"claimed_composition_not_executed: slide_index={r.evidence.slide_index} requested "
-                        f"composition={composition_requested!r}, actual layout_variant={executed!r}"
-                    )
 
         # carousel visual GRAMMAR (section 11/21): a real carousel should not present as the
         # identical layout on every slide after the hook - a warning (not blocking: a short, all-
@@ -267,7 +267,6 @@ def validate_instagram_art(
         # (news_recap_asset_reuse_violation above), not layout family. Applying a narrative-
         # progression diversity rule to a recap would be exactly the "aesthetic scoring model" the
         # validator must not become.
-        is_news_recap = package.media_plan.get("content_archetype") == "news_recap"
         non_hook_variants = {r.evidence.notes.get("layout_variant") for r in render_results if r.evidence.slide_index != 0}
         if not is_news_recap and len(render_results) >= 4 and len(non_hook_variants) < 3:
             blocking.append(f"carousel_layout_diversity_insufficient: non-hook variants={non_hook_variants}")

@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw
 
 from schemas.instagram_creative import InstagramCarouselCreative, InstagramCarouselSlideCreative
 from services.instagram_art_validator import validate_instagram_art
+from services.instagram_image_handling import fit_image_cover
 from services.instagram_content_brain import evaluate_creative_fatigue, evaluate_fatigue_state
 from services.instagram_content_opportunity import ContentOpportunity, OpportunitySourceType
 from services.instagram_content_package import build_instagram_content_package
@@ -73,18 +74,146 @@ def test_same_role_same_composition_different_scale_produces_different_geometry(
     assert small.image_bytes != big.image_bytes
 
 
-def test_overlay_none_performs_zero_pixel_operations() -> None:
-    img = Image.new("RGB", (1200, 1500), (90, 90, 90))
-    none_pkg = _package(_slides_with({"composition": "full_bleed_media", "overlay_mode": "none"}))
-    scrim_pkg = _package(_slides_with({"composition": "full_bleed_media", "overlay_mode": "editorial_scrim"}))
-    none_r = render_instagram_carousel(none_pkg, slide_images={0: img, 1: img})[1]
-    scrim_r = render_instagram_carousel(scrim_pkg, slide_images={0: img, 1: img})[1]
-    none_img = Image.open(io.BytesIO(none_r.image_bytes))
-    scrim_img = Image.open(io.BytesIO(scrim_r.image_bytes))
-    # sample a point far from any drawn text/mark - must be untouched by overlay=none, must be
-    # measurably darker under editorial_scrim.
-    assert none_img.getpixel((20, 20))[0] > 80
-    assert scrim_img.getpixel((20, 20))[0] < 70
+def _region_mean_rgb(image: Image.Image, box: tuple[int, int, int, int]) -> tuple[float, float, float]:
+    region = image.convert("RGB").crop(box)
+    total = region.width * region.height
+    return tuple(  # type: ignore[return-value]
+        sum(v * c for v, c in enumerate(region.getchannel(i).histogram())) / total for i in range(3)
+    )
+
+
+@pytest.mark.parametrize("composition,extra", [
+    ("full_bleed_media", {}),
+    ("contained_media", {"media_position": "top", "media_scale": 0.4}),
+    ("contained_media", {"media_position": "left", "media_scale": 0.4}),
+    ("contained_media", {"media_position": "right", "media_scale": 0.4}),
+    ("screenshot_ui", {"media_position": "top", "media_scale": 0.4}),
+    ("collage", {}),
+    ("split_compare", {}),
+    ("typographic", {}),
+])
+def test_no_overlay_on_any_executable_composition(composition: str, extra: dict) -> None:
+    """Phase B.4.4: for EVERY executable composition, rendering with a real source image performs
+    ZERO overlay operations and leaves the source media's pixels untouched."""
+    img = _image()
+    pkg = _package(_slides_with({"composition": composition, **extra}))
+    result = render_instagram_carousel(pkg, slide_images={0: img, 1: img})[1]
+    notes = result.evidence.notes
+    assert notes["overlay_operations_executed"] == 0
+    assert notes["source_media_pixels_unaltered"] in (True, None)
+
+
+@pytest.mark.parametrize("position,box", [
+    ("top", (60, 20, 300, 120)),
+    ("left", (20, 40, 150, 400)),
+    ("right", (930, 40, 1060, 400)),
+])
+def test_contained_media_region_keeps_the_source_pixels(position: str, box: tuple[int, int, int, int]) -> None:
+    """Independent pixel proof (not the renderer's own flag): the mean colour of a region INSIDE the
+    media rectangle equals the untouched source crop - no dark, red or gradient wash."""
+    from services.instagram_carousel_layouts import _media_box
+
+    class _Spec:
+        width, height = 1080, 1350
+
+    img = _image()
+    pkg = _package(_slides_with({"composition": "contained_media", "media_position": position, "media_scale": 0.45}))
+    rendered = Image.open(io.BytesIO(render_instagram_carousel(pkg, slide_images={0: img, 1: img})[1].image_bytes)).convert("RGB")
+    bx0, by0, bx1, by1 = _media_box(_Spec, position, 0.45)  # type: ignore[arg-type]
+    fitted = fit_image_cover(img, width=bx1 - bx0, height=by1 - by0).image
+    observed = _region_mean_rgb(rendered, (bx0 + box[0] % max(1, bx1 - bx0 - 40), by0 + 20, bx0 + box[0] % max(1, bx1 - bx0 - 40) + 30, by0 + 60))
+    expected = _region_mean_rgb(fitted, (box[0] % max(1, bx1 - bx0 - 40), 20, box[0] % max(1, bx1 - bx0 - 40) + 30, 60))
+    assert all(abs(o - e) < 8 for o, e in zip(observed, expected)), (observed, expected)
+
+
+def test_renderer_module_contains_no_overlay_scrim_dim_or_blur_execution() -> None:
+    """Static audit (AST, not text): the active carousel renderer imports/calls no readability
+    gradient, dimmed-field, scrim, blur or alpha-composite helper."""
+    import ast
+
+    with open("services/instagram_carousel_layouts.py", encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    forbidden_names = {
+        "apply_bottom_readability_gradient", "apply_top_readability_gradient", "build_dimmed_source_field",
+        "_apply_overlay", "GaussianBlur", "ImageFilter", "SourceMediaPrimitive", "DIMMED_FIELD",
+    }
+    seen = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id in forbidden_names:
+            seen.add(node.id)
+        if isinstance(node, ast.ImportFrom):
+            seen |= {alias.name for alias in node.names if alias.name in forbidden_names}
+        if isinstance(node, ast.Attribute) and node.attr in ("alpha_composite", "filter"):
+            seen.add(node.attr)
+    assert not seen, f"active carousel renderer references removed overlay machinery: {seen}"
+
+
+def test_overlay_is_absent_from_every_active_contract() -> None:
+    """Prompt (LLM schema + rules), Python creative schema, and the package media plan."""
+    import yaml
+
+    from services.instagram_creative_director import CAROUSEL_PROMPT_VERSION
+
+    assert CAROUSEL_PROMPT_VERSION == "7"
+    text = open("prompts/instagram_creative_director_carousel/v7.yaml", encoding="utf-8").read().lower()
+    for term in ("overlay", "scrim", "darken", "dimm", "gradient", "tint"):
+        assert term not in text, term
+    slide_props = yaml.safe_load(text)["output_schema"]["properties"]["slides"]["items"]["properties"]
+    assert not any(t in name for name in slide_props for t in ("overlay", "dim", "scrim", "tint", "darken"))
+    fields = InstagramCarouselSlideCreative.model_fields
+    assert not any(k for k in fields if any(t in k for t in ("overlay", "scrim", "dim", "tint", "darken", "readability")))
+    pkg = _package(_slides_with({"composition": "typographic"}))
+    assert all("overlay_mode" not in slide for slide in pkg.media_plan["slides"])
+
+
+def test_legacy_overlay_mode_in_a_persisted_payload_is_ignored_at_the_schema_boundary() -> None:
+    """B.4/B.4.3 drafts stored `overlay_mode`. The parse boundary
+    (schemas/instagram_creative.py::InstagramCarouselSlideCreative._drop_removed_overlay_mode)
+    discards it, so it can never reach the package or renderer. No DB migration."""
+    legacy = {
+        "role": "hook", "slide_copy": "Hook", "visual_direction": "v", "composition": "contained_media",
+        "media_position": "top", "media_scale": 0.5, "overlay_mode": "editorial_scrim",
+    }
+    slide = InstagramCarouselSlideCreative.model_validate(legacy)
+    assert "overlay_mode" not in slide.model_dump()
+    carousel = InstagramCarouselCreative.model_validate({
+        "objective": "saves", "slides": [legacy, {**legacy, "role": "takeaway", "slide_copy": "End", "overlay_mode": "gradient"}],
+    })
+    pkg = build_instagram_content_package(
+        opportunity=_OPP, format_decision=FormatDecision(recommended_format=ContentFormat.CAROUSEL), shadow_plan=_SP,
+        creative_outcome=CreativeGenerationOutcome(carousel=carousel),
+    )
+    assert all("overlay_mode" not in s for s in pkg.media_plan["slides"])
+
+
+def test_long_copy_adapts_the_composition_instead_of_clipping_and_is_recorded() -> None:
+    long_copy = "Очень длинная, но законченная мысль, которая рассказывает о том, как именно новая функция меняет ежедневную работу команды и зачем это нужно"
+    pkg = _package([
+        InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v", composition="typographic"),
+        InstagramCarouselSlideCreative(role="context", slide_copy=long_copy, visual_direction="v", composition="full_bleed_media"),
+    ])
+    results = render_instagram_carousel(pkg, slide_images={0: _image(), 1: _image()})
+    notes = results[1].evidence.notes
+    assert results[1].evidence.text_clipped is False
+    assert notes["composition_adapted_for_text_fit"] is True
+    assert notes["overlay_operations_executed"] == 0
+    art = validate_instagram_art(pkg, results)
+    assert not any("headline_text_overflow" in b for b in art.blocking_issues)
+
+
+def test_asset_uniqueness_is_enforced_for_news_recap_only() -> None:
+    """A trend/insight post may show derivative crops of ONE real asset on several slides even if a
+    slide sets must_match_story - the cross-slide uniqueness rule is a NEWS_RECAP-only rule."""
+    slides = [
+        InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v", composition="typographic"),
+        InstagramCarouselSlideCreative(role="beat", slide_copy="One", visual_direction="v", composition="contained_media", media_position="top", must_match_story=True),
+        InstagramCarouselSlideCreative(role="beat", slide_copy="Two", visual_direction="v", composition="contained_media", media_position="left", must_match_story=True),
+    ]
+    for archetype, expect_block in (("trend_generative", False), ("news_recap", True)):
+        pkg = _package(slides, archetype=archetype)
+        results = render_instagram_carousel(pkg, slide_images={1: _image(), 2: _image()}, asset_identities={1: "same", 2: "same"})
+        art = validate_instagram_art(pkg, results)
+        assert any("news_recap_asset_reuse_violation" in b for b in art.blocking_issues) is expect_block, (archetype, art.blocking_issues)
 
 
 def test_archetype_field_does_not_hardcode_one_layout() -> None:
@@ -202,20 +331,6 @@ def test_claimed_composition_must_match_executed_composition() -> None:
     assert any("claimed_composition_not_executed" in issue for issue in art.blocking_issues)
 
 
-def test_overlay_request_without_composition_is_blocked() -> None:
-    """overlay_mode is only honoured by the NEW composition-driven path - requesting it without an
-    explicit composition is an unenforceable claim, not a silent no-op."""
-    slides = [
-        InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v"),
-        InstagramCarouselSlideCreative(role="context", slide_copy="Body", visual_direction="v", overlay_mode="none"),
-    ]
-    pkg = _package(slides)
-    results = render_instagram_carousel(pkg, slide_images={0: _image(), 1: _image()})
-    art = validate_instagram_art(pkg, results)
-    assert art.passed is False
-    assert any("overlay_mode_requires_composition" in issue for issue in art.blocking_issues)
-
-
 def test_absent_media_has_a_safe_deliberate_fallback_not_a_crash() -> None:
     pkg = _package(_slides_with({"composition": "contained_media", "media_position": "left"}))
     results = render_instagram_carousel(pkg)  # no slide_images at all
@@ -247,10 +362,9 @@ def test_cyrillic_renders_correctly_through_generic_composition() -> None:
     assert result.evidence.visible_brand_mark_count == 1
 
 
-def test_no_composition_field_exercises_the_unchanged_b3_default_path() -> None:
-    """The founder-approved regression guarantee: a slide with NO structured fields at all must
-    produce `composition_requested=None` in evidence, proving the OLD role-keyed dispatch ran,
-    not the new generic one."""
+def test_no_composition_field_uses_the_recorded_light_role_fallback() -> None:
+    """A slide with NO structured fields records composition_requested=None and a role fallback -
+    the fallback is light, media-in-its-own-region, never an overlay."""
     img = _image()
     slides = [
         InstagramCarouselSlideCreative(role="hook", slide_copy="Самая умная модель ≠ самая полезная", visual_direction="v"),
@@ -259,7 +373,27 @@ def test_no_composition_field_exercises_the_unchanged_b3_default_path() -> None:
     pkg = _package(slides)
     results = render_instagram_carousel(pkg, slide_images={0: img, 1: img})
     assert results[0].evidence.notes["composition_requested"] is None
-    assert results[0].evidence.notes["layout_variant"] == "carousel_hook"
+    assert results[0].evidence.notes["fallback_role_layout_used"] is True
+    assert results[0].evidence.notes["layout_variant"] == "generic_contained_media_top"
+    assert results[1].evidence.notes["layout_variant"].startswith("generic_typographic")
+
+
+def test_fatigue_counts_posts_not_slides() -> None:
+    from datetime import datetime, timezone
+    from uuid import uuid4
+
+    from services.instagram_creative_plan_service import RecentCarouselFingerprint, build_carousel_fatigue_note
+
+    def post(*comps: str) -> RecentCarouselFingerprint:
+        return RecentCarouselFingerprint(
+            draft_id=uuid4(), generated_at=datetime.now(timezone.utc), content_archetype=None,
+            compositions=tuple(sorted(set(comps))),
+        )
+
+    # two posts, each using typographic on three slides -> 2 posts, never "6x"
+    assert build_carousel_fatigue_note([post("typographic", "typographic", "typographic")] * 2) == ""
+    note = build_carousel_fatigue_note([post("typographic")] * 6)
+    assert "6 of the last 14d posts" in note
 
 
 def test_visual_fatigue_is_advisory_only_when_multiple_valid_directions_exist() -> None:

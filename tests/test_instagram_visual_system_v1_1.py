@@ -160,21 +160,23 @@ def test_quote_variant_selection_is_image_presence_driven() -> None:
     assert quote_mod.select_quote_variant(_rgb(100, 100)) == quote_mod.QUOTE_VARIANT_PORTRAIT
 
 
-def test_carousel_slide_layout_selection_is_role_driven() -> None:
-    assert carousel_mod.select_slide_layout(role="hook", index=0, slide_copy="x") == carousel_mod.SLIDE_LAYOUT_HOOK
-    assert carousel_mod.select_slide_layout(role="anything", index=0, slide_copy="x") == carousel_mod.SLIDE_LAYOUT_HOOK  # index 0 always hooks
-    assert carousel_mod.select_slide_layout(role="cta", index=3, slide_copy="x") == carousel_mod.SLIDE_LAYOUT_CLOSING
-    assert carousel_mod.select_slide_layout(role="takeaway", index=3, slide_copy="x") == carousel_mod.SLIDE_LAYOUT_CLOSING
-    assert carousel_mod.select_slide_layout(role="data", index=2, slide_copy="x") == carousel_mod.SLIDE_LAYOUT_FACT
-    assert carousel_mod.select_slide_layout(role="context", index=1, slide_copy="x") == carousel_mod.SLIDE_LAYOUT_CONTEXT
-    assert carousel_mod.select_slide_layout(role="unknown_free_text_role", index=1, slide_copy="x") == carousel_mod.SLIDE_LAYOUT_DETAIL
+def test_carousel_default_composition_is_a_light_role_fallback() -> None:
+    d = carousel_mod._default_composition
+    assert d(role="hook", index=0, has_media=False, slide_copy="x").composition == "typographic"
+    hook_media = d(role="hook", index=0, has_media=True, slide_copy="x")
+    assert (hook_media.composition, hook_media.position) == ("contained_media", "top")
+    assert d(role="anything", index=0, has_media=True, slide_copy="x").composition == "contained_media"  # index 0 hooks
+    assert d(role="cta", index=3, has_media=True, slide_copy="x").composition == "typographic"
+    assert d(role="takeaway", index=3, has_media=True, slide_copy="x").composition == "typographic"
+    assert d(role="context", index=1, has_media=True, slide_copy="x").position == "left"
+    assert d(role="unknown_free_text_role", index=2, has_media=True, slide_copy="x").position == "top"
 
 
 def test_carousel_comparison_requires_a_real_vs_split_never_fabricated() -> None:
-    with_split = carousel_mod.select_slide_layout(role="comparison", index=2, slide_copy="Cloud vs On-device")
-    assert with_split == carousel_mod.SLIDE_LAYOUT_COMPARISON
-    without_split = carousel_mod.select_slide_layout(role="comparison", index=2, slide_copy="No real split here")
-    assert without_split == carousel_mod.SLIDE_LAYOUT_DETAIL  # falls back honestly, never invents two sides
+    d = carousel_mod._default_composition
+    assert d(role="comparison", index=2, has_media=True, slide_copy="Cloud vs On-device").composition == "split_compare"
+    # no real split in the copy -> never invents two sides
+    assert d(role="comparison", index=2, has_media=False, slide_copy="No real split here").composition == "typographic"
 
 
 def test_reel_variant_selection_is_image_presence_driven() -> None:
@@ -309,11 +311,12 @@ def test_carousel_renders_a_varied_grammar_not_identical_cards() -> None:
         opportunity=_OPP, format_decision=FormatDecision(recommended_format=ContentFormat.CAROUSEL), shadow_plan=_SP,
         creative_outcome=CreativeGenerationOutcome(carousel=carousel),
     )
-    results = render_instagram_carousel(pkg)
+    image = _rgb(1122, 1402)
+    results = render_instagram_carousel(pkg, slide_images={0: image, 1: image, 2: image, 3: image})
     variants = [r.evidence.notes["layout_variant"] for r in results]
     assert len(set(variants)) >= 3, f"expected genuinely varied slide layouts, got {variants}"
-    assert variants[0] == carousel_mod.SLIDE_LAYOUT_HOOK
-    assert variants[-1] == carousel_mod.SLIDE_LAYOUT_CLOSING
+    assert variants[0] == "generic_contained_media_top"
+    assert variants[-1].startswith("generic_typographic")
 
 
 def test_carousel_source_image_is_recomposed_for_hook_and_context() -> None:
@@ -363,20 +366,21 @@ def test_art_validator_blocks_a_graph_claim_without_real_series_points() -> None
     assert any("data_graph_without_real_series" in b for b in art.blocking_issues)
 
 
-def test_art_validator_accepts_distinct_role_compositions() -> None:
+def test_art_validator_accepts_distinct_planned_compositions() -> None:
     slides = [
-        InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v"),
-        InstagramCarouselSlideCreative(role="context", slide_copy="Context A", visual_direction="v"),
-        InstagramCarouselSlideCreative(role="problem", slide_copy="Context B", visual_direction="v"),
+        InstagramCarouselSlideCreative(role="hook", slide_copy="Hook", visual_direction="v", composition="typographic"),
+        InstagramCarouselSlideCreative(role="context", slide_copy="Context A", visual_direction="v", composition="contained_media", media_position="top", media_scale=0.5),
+        InstagramCarouselSlideCreative(role="problem", slide_copy="Context B", visual_direction="v", composition="collage"),
     ]
     carousel = InstagramCarouselCreative(objective="saves", slides=slides)
     pkg = build_instagram_content_package(
         opportunity=_OPP, format_decision=FormatDecision(recommended_format=ContentFormat.CAROUSEL), shadow_plan=_SP,
         creative_outcome=CreativeGenerationOutcome(carousel=carousel),
     )
-    results = render_instagram_carousel(pkg)
+    image = _rgb(1122, 1402)
+    results = render_instagram_carousel(pkg, slide_images={0: image, 1: image, 2: image})
     art = validate_instagram_art(pkg, results)
-    assert art.passed
+    assert art.passed, art.blocking_issues
     assert len({r.evidence.notes["layout_variant"] for r in results}) == 3
 
 

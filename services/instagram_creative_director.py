@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -88,9 +88,8 @@ EDITORIAL_DECISION_PROMPT_NAME = "instagram_editorial_decision"
 # version file is left untouched/unused, matching this codebase's own established "never edit a
 # shipped prompt version in place" convention.
 _SINGLE_PROMPT_VERSION = "6"
-_CAROUSEL_PROMPT_VERSION = "6"  # Phase B.4.1: v6 adds the bounded structured art-direction fields
+_CAROUSEL_PROMPT_VERSION = "7"  # Phase B.4.4: v7 removes overlay_mode and adds media/archetype/text-capacity guidance
 CAROUSEL_PROMPT_VERSION = _CAROUSEL_PROMPT_VERSION
-# to the REAL output_schema - v5 stays published/unused, never silently edited in place.
 _REEL_PROMPT_VERSION = "7"
 _EDITORIAL_DECISION_PROMPT_VERSION = "1"
 
@@ -184,6 +183,10 @@ class CreativeDirectorInput:
     # every pre-existing prompt text stays byte-identical.
     is_recap_bundle: bool = False
     recap_subjects: list[str] = field(default_factory=list)
+    # Phase B.4.4: the DERIVED content archetype and the REAL media availability for this post, so
+    # the model plans against what exists (never invents assets). Empty for every non-carousel call.
+    content_archetype: str = ""
+    media_note: str = ""
 
 
 @dataclass(frozen=True)
@@ -247,6 +250,8 @@ def _build_user_text(director_input: CreativeDirectorInput) -> str:
         f"RECENT/IN-FLIGHT CONTENT:\n{director_input.recent_content_context or '(none)'}\n"
         f"APPROVED EDITORIAL DECISION:\n{director_input.editorial_decision or '(legacy call: not supplied)'}\n"
         f"EVIDENCE BULLETS (use ONLY these for any factual claim):\n{evidence_block}"
+        + (f"\nCONTENT ARCHETYPE (derived, plan for it): {director_input.content_archetype}" if director_input.content_archetype else "")
+        + (f"\nMEDIA AVAILABLE FOR THIS POST:\n{director_input.media_note}" if director_input.media_note else "")
         + (
             "\nRECAP STORY KEYS (a slide about one story must set media_subject to exactly that key and "
             "must_match_story=true; never reuse one story's key for another): "
@@ -498,15 +503,19 @@ async def generate_carousel_creative(
     gateway: LLMGateway, prompt_repository: PromptRepository, *, director_input: CreativeDirectorInput,
     is_recap_bundle: bool = False,
 ) -> CreativeGenerationOutcome:
+    # The archetype is derived from the real upstream decision BEFORE generation so the model plans
+    # for it; the derived value still overrides whatever the model echoes back afterwards.
+    decision = _parse_editorial_decision(director_input.editorial_decision)
+    archetype = derive_content_archetype(
+        decision, is_recap_bundle=is_recap_bundle or director_input.is_recap_bundle,
+    )
+    if archetype is not None and not director_input.content_archetype:
+        director_input = replace(director_input, content_archetype=archetype)
     output, call = await _call_creative_director(
         gateway, prompt_repository, prompt_name=CAROUSEL_PROMPT_NAME, director_input=director_input,
         prompt_version=_CAROUSEL_PROMPT_VERSION,
     )
     creative = InstagramCarouselCreative.model_validate(output)
-    decision = _parse_editorial_decision(director_input.editorial_decision)
-    archetype = derive_content_archetype(
-        decision, is_recap_bundle=is_recap_bundle or director_input.is_recap_bundle,
-    )
     if archetype is not None:
         creative = creative.model_copy(update={"content_archetype": archetype})
     plan = creative.creative_execution_plan

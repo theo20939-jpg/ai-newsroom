@@ -109,7 +109,7 @@ async def test_fatigue_history_wiring_flags_repeated_composition(db_session: Asy
 
     note = build_carousel_fatigue_note(fingerprints, window_days=14)
     assert "contained_media" in note
-    assert "6x" in note
+    assert "6 of the last 14d posts" in note
     assert "fatigued" in note.lower()
 
 

@@ -23,7 +23,6 @@ from services.weekly_recap_selection import WeeklyRecapCandidate
 
 MIN_RECAP_STORIES = 4
 MAX_RECAP_STORIES = 6
-MAX_RECAP_POOL = 8
 _MIN_IMAGE_SIDE = 256
 
 
@@ -94,7 +93,7 @@ async def build_instagram_recap_bundle(
     session: Any, *, selected: Sequence[WeeklyRecapCandidate],
 ) -> InstagramRecapBundle | None:
     """`None` when fewer than MIN_RECAP_STORIES stories are supplied (a recap needs a real set)."""
-    pool = list(selected)[:MAX_RECAP_POOL]
+    pool = list(selected)[:MAX_RECAP_STORIES]
     if len(pool) < MIN_RECAP_STORIES:
         return None
     resolved: list[tuple[WeeklyRecapCandidate, Any, bytes | None, str | None]] = []
@@ -104,11 +103,10 @@ async def build_instagram_recap_bundle(
             continue
         data, ref = await _story_media(session, event.id)
         resolved.append((candidate, event, data, ref))
-    # The selection layer decides WHICH stories are recap-worthy; media presence only orders them
-    # (stable partition) so the recap's own slots prefer stories that have a real stored image.
-    resolved.sort(key=lambda item: item[2] is None)
+    # Editorial order is the selection layer's alone. Media availability never re-ranks: a story with
+    # no stored image simply gets its own graphic fallback later.
     stories: list[RecapStory] = []
-    for index, (candidate, event, data, ref) in enumerate(resolved[:MAX_RECAP_STORIES], start=1):
+    for index, (candidate, event, data, ref) in enumerate(resolved, start=1):
         key = f"story_{index}"
         task = await session.scalar(
             select(EditorialTask)

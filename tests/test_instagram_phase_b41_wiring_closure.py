@@ -60,7 +60,6 @@ _FAKE_STRUCTURED_OUTPUT = {
             "composition": None,
             "media_position": None,
             "media_scale": None,
-            "overlay_mode": None,
             "media_subject": None,
             "must_match_story": False,
         },
@@ -74,7 +73,6 @@ _FAKE_STRUCTURED_OUTPUT = {
             "composition": "contained_media",
             "media_position": "left",
             "media_scale": 0.5,
-            "overlay_mode": "subtle",
             "media_subject": "product_screenshot",
             "must_match_story": False,
         },
@@ -88,7 +86,6 @@ _FAKE_STRUCTURED_OUTPUT = {
             "composition": None,
             "media_position": None,
             "media_scale": None,
-            "overlay_mode": None,
             "media_subject": None,
             "must_match_story": False,
         },
@@ -176,9 +173,9 @@ async def test_real_prompt_schema_accepts_b4_fields_without_rejection() -> None:
     is what gets sent to the Gateway - and it must not reject the B.4 fields via
     `additionalProperties: false` (the exact root cause B.4.1 found and fixed in v5 -> v6)."""
     repo = FilePromptRepository(_PROMPTS_ROOT)
-    prompt = repo.resolve(CAROUSEL_PROMPT_NAME, "6")
+    prompt = repo.resolve(CAROUSEL_PROMPT_NAME, "7")
     slide_schema = prompt.output_schema["properties"]["slides"]["items"]
-    for field_name in ("composition", "media_position", "media_scale", "overlay_mode", "media_subject", "must_match_story"):
+    for field_name in ("composition", "media_position", "media_scale", "media_subject", "must_match_story"):
         assert field_name in slide_schema["properties"], f"v6 schema missing {field_name}"
         assert field_name in slide_schema["required"], f"v6 schema does not require {field_name}"
     assert "content_archetype" in prompt.output_schema["properties"]
@@ -207,6 +204,7 @@ async def test_fake_gateway_through_real_pipeline_produces_pixels_with_b4_fields
     sent = gateway.received_requests[0]
     assert sent.response_schema is not None
     assert "content_archetype" in sent.response_schema["properties"]
+    assert "overlay_mode" not in sent.response_schema["properties"]["slides"]["items"]["properties"]
 
     # B.4 fields survived InstagramCarouselCreative.model_validate() (real Pydantic parsing, not
     # a hand-built object).
@@ -214,7 +212,6 @@ async def test_fake_gateway_through_real_pipeline_produces_pixels_with_b4_fields
     assert context_slide.composition == "contained_media"
     assert context_slide.media_position == "left"
     assert context_slide.media_scale == 0.5
-    assert context_slide.overlay_mode == "subtle"
 
     # derive_content_archetype() (the real, deterministic owner) overrode the model's own stale
     # "ai_hack" - EXPLAINER/NEWS with no trend/product signal derives to "news_insight".
@@ -229,7 +226,9 @@ async def test_fake_gateway_through_real_pipeline_produces_pixels_with_b4_fields
     assert slide_plan["composition"] == "contained_media"
     assert slide_plan["media_position"] == "left"
 
-    results = render_instagram_carousel(package)
+    from PIL import Image
+    image = Image.new("RGB", (1200, 1500), (60, 90, 140))
+    results = render_instagram_carousel(package, slide_images={0: image, 1: image, 2: image})
     assert len(results) == 3
     context_result = results[1]
     assert context_result.evidence.notes.get("structured_composition_present") is True
@@ -278,5 +277,7 @@ async def test_ai_hack_and_trend_archetypes_reach_pixels_via_real_path(decision,
         shadow_plan=_SP, creative_outcome=outcome,
     )
     assert package.media_plan["content_archetype"] == expected
-    results = render_instagram_carousel(package)
+    from PIL import Image
+    image = Image.new("RGB", (1200, 1500), (60, 90, 140))
+    results = render_instagram_carousel(package, slide_images={0: image, 1: image, 2: image})
     assert results[1].evidence.notes["structured_composition_executed"] is True

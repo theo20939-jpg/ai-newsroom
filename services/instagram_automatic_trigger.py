@@ -71,7 +71,11 @@ from services.instagram_creative_director import (
     generate_editorial_decision,
 )
 from services.instagram_b4_observability import build_b4_observability
-from services.instagram_creative_media import ResolvedSlideAsset, execute_instagram_creative_media
+from services.instagram_creative_media import (
+    ResolvedSlideAsset,
+    derive_image_identity,
+    execute_instagram_creative_media,
+)
 from services.instagram_creative_plan_service import (
     build_carousel_fatigue_note,
     fetch_recent_carousel_fingerprints,
@@ -473,6 +477,57 @@ async def _resolve_single_source_image(
         return source_image, candidate, len(candidates), len(data)
     return None, None, len(candidates), 0
 
+_MEDIA_COMPOSITIONS = (None, "contained_media", "full_bleed_media", "collage", "screenshot_ui")
+
+
+def _carousel_media_note(*, source_image: Any, recap_bundle: InstagramRecapBundle | None) -> str:
+    """Real media availability, told to the Creative Director so it plans against what exists."""
+    if recap_bundle is not None:
+        lines = [
+            f"{story.key}: real image available" if story.image_bytes else f"{story.key}: no image (a graphic story card is used)"
+            for story in recap_bundle.stories
+        ]
+        return "\n".join(lines)
+    if source_image is not None:
+        return (
+            "subject key 'source': one real image for this post is available (a single shared asset; it may "
+            "appear on several slides as different crops). Use media_subject 'source' or null."
+        )
+    return "no real image is available for this post: plan typographic, screenshot_ui (graphic frame) or split_compare slides with media_subject null."
+
+
+def _resolve_carousel_slide_assets(
+    carousel: Any, *, recap_bundle: InstagramRecapBundle | None, source_image: Any, source_ref: str | None,
+) -> tuple[dict[int, ResolvedSlideAsset], list[str], Any]:
+    """Resolver-owned per-slide media: a slide gets an asset ONLY when a real resolved asset matches
+    the subject it asked for. NEWS_RECAP: its own story key. Other archetypes: the post's single real
+    source asset (subject 'source' or none). Anything else is a deliberate graphic fallback - never a
+    shared unrelated image, never a fabricated identity."""
+    slides = carousel.slides
+    assets: dict[int, ResolvedSlideAsset] = {}
+    if recap_bundle is not None:
+        subjects = {i: sl.media_subject for i, sl in enumerate(slides) if sl.media_subject}
+        images, identities = resolve_recap_story_assets(subjects, recap_bundle.available_assets)
+        assets = {
+            i: ResolvedSlideAsset(images[i], recap_bundle.refs.get(subjects[i], subjects[i]), identities[i])
+            for i in images
+        }
+    elif source_image is not None:
+        shared = ResolvedSlideAsset(source_image, source_ref or "source", derive_image_identity(source_image))
+        for i, sl in enumerate(slides):
+            if sl.composition in _MEDIA_COMPOSITIONS and (sl.media_subject or "source") == "source":
+                assets[i] = shared
+    unmatched = [i for i, sl in enumerate(slides) if sl.must_match_story and i not in assets]
+    fallback: list[str] = []
+    if unmatched:
+        fallback = sorted({slides[i].media_subject or f"slide_{i}" for i in unmatched})
+        carousel = carousel.model_copy(update={"slides": [
+            sl.model_copy(update={"must_match_story": False}) if i in unmatched else sl
+            for i, sl in enumerate(slides)
+        ]})
+    return assets, fallback, carousel
+
+
 async def evaluate_and_submit_instagram_candidate(
     session: Any, bot: Any, *, event_id: str, event_title: str, treatment: EditorialTreatmentDecision,
     research_facts: list[str], gateway: Any, prompt_repository: Any, source_url: str | None = None,
@@ -646,6 +701,10 @@ async def evaluate_and_submit_instagram_opportunity(
         account_context=phase_a_plan.account_context, product_context=phase_a_plan.product_context,
         recent_content_context=phase_a_plan.recent_content_context,
         editorial_decision=json.dumps(opportunity.editorial_decision, ensure_ascii=False, sort_keys=True),
+        media_note=(
+            _carousel_media_note(source_image=source_image, recap_bundle=recap_bundle)
+            if format_decision.recommended_format is ContentFormat.CAROUSEL else ""
+        ),
     )
 
     try:
@@ -675,24 +734,13 @@ async def evaluate_and_submit_instagram_opportunity(
         )
     slide_assets: dict[int, ResolvedSlideAsset] | None = None
     deliberate_fallback: list[str] = []
-    if recap_bundle is not None and carousel is not None:
-        subjects = {i: sl.media_subject for i, sl in enumerate(carousel.slides) if sl.media_subject}
-        images, identities = resolve_recap_story_assets(subjects, recap_bundle.available_assets)
-        slide_assets = {
-            i: ResolvedSlideAsset(images[i], recap_bundle.refs.get(subjects[i], subjects[i]), identities[i])
-            for i in images
-        }
-        # A story with no stored media gets a deliberate graphic fallback: the resolver lifts that
-        # slide's must_match_story demand (recorded), never satisfying it with another story's image.
-        unmatched = [i for i, sl in enumerate(carousel.slides) if sl.must_match_story and i not in slide_assets]
-        if unmatched:
-            deliberate_fallback = sorted({carousel.slides[i].media_subject or f"slide_{i}" for i in unmatched})
-            carousel = carousel.model_copy(update={"slides": [
-                sl.model_copy(update={"must_match_story": False}) if i in unmatched else sl
-                for i, sl in enumerate(carousel.slides)
-            ]})
-            creative = carousel
-            creative_outcome = replace(creative_outcome, carousel=carousel)
+    if carousel is not None:
+        slide_assets, deliberate_fallback, carousel = _resolve_carousel_slide_assets(
+            carousel, recap_bundle=recap_bundle, source_image=source_image,
+            source_ref=image_candidate.candidate_id if image_candidate else None,
+        )
+        creative = carousel
+        creative_outcome = replace(creative_outcome, carousel=carousel)
     try:
         creative_media = await execute_instagram_creative_media(
             slide_assets=slide_assets,
