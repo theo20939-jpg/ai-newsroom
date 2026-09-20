@@ -17,7 +17,7 @@ import hashlib
 import io
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -25,6 +25,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 from PIL import Image
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 import scripts._instagram_phase_b4_archetype_diagnostic as diag
@@ -35,13 +36,19 @@ from core.redis import get_redis_client
 from integrations.llm_gateway.boot import assemble_ai_integration_layer
 from integrations.llm_gateway.models.catalog import build_model_registry
 from integrations.prompts.file_repository import FilePromptRepository
+from database.models.image_candidate_record import ImageCandidateRecord, ImageStorageStatus
+from database.models.story import Story
 from schemas.instagram_creative import InstagramEditorialDecision
 from services.cost_tracker import compute_call_cost
 from services.instagram_content_opportunity import ContentOpportunity, OpportunitySourceType
 from services.instagram_recap_bundle import build_instagram_recap_bundle
 from services.instagram_trend_radar import TrendSignal, TrendSignalProvenance, TrendSignalType
 from services.pricing_catalog import ModelRegistryPricingCatalog
-from services.weekly_recap_selection import select_weekly_recap_stories
+from services.weekly_recap_selection import (
+    _build_candidate,
+    select_weekly_recap_stories,
+    select_weekly_recap_stories_from_candidates,
+)
 
 _PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
 _MAX_REAL_CALLS = 4
@@ -153,8 +160,24 @@ async def main() -> None:
     recap_note = ""
     async with AsyncSession(prod_engine, expire_on_commit=False) as prod_session:
         selected, _rest = await select_weekly_recap_stories(prod_session)
-        recap_note = f"weekly_selection_returned={len(selected)}"
-        recap_bundle = await build_instagram_recap_bundle(prod_session, selected=selected)
+        plain_bundle = await build_instagram_recap_bundle(prod_session, selected=selected)
+        plain_with_media = sum(1 for st in (plain_bundle.stories if plain_bundle else []) if st.image_bytes)
+        # The plain weekly selection is not media-aware. Feed the SAME existing selection pipeline
+        # (quality floor -> rank -> diversity cap) only stories that have unexpired stored media.
+        cutoff = datetime.now(timezone.utc) - timedelta(days=settings.weekly_recap_window_days)
+        media_events = select(ImageCandidateRecord.news_event_id).where(
+            ImageCandidateRecord.eligible_for_editorial.is_(True),
+            ImageCandidateRecord.storage_status == ImageStorageStatus.STORED,
+            ImageCandidateRecord.storage_key.is_not(None),
+        )
+        stories = list((await prod_session.execute(
+            select(Story).where(Story.updated_at >= cutoff, Story.first_event_id.in_(media_events))
+        )).scalars().all())
+        built = [c for c in [await _build_candidate(prod_session, st) for st in stories] if c is not None]
+        media_selected, _ = select_weekly_recap_stories_from_candidates(built)
+        recap_bundle = await build_instagram_recap_bundle(prod_session, selected=media_selected)
+        recap_note = (f"plain_weekly_selection={len(selected)} stories, with_stored_media_in_bundle={plain_with_media}; "
+                      f"media_aware_pool={len(built)} selected={len(media_selected)}")
     await prod_engine.dispose()
     import os
     if os.environ.get("B43_PREP"):
