@@ -415,6 +415,47 @@ def _render_split(spec, text, index, total, *, stacked: bool) -> LayoutResult | 
     })
 
 
+def _flow_tokens(visual_direction: str | None) -> list[str] | None:
+    """A real arrow sequence in the plan's visual direction (e.g. «КОД → API → ОБНОВЛЕНИЯ») - never
+    invented: returns None when the plan states no sequence."""
+    text = str(visual_direction or "")
+    if "«" in text and "»" in text:
+        text = text.split("«", 1)[1].split("»", 1)[0]
+    pieces = [piece.strip(" .,:;—-").upper() for piece in text.replace("->", "→").split("→")]
+    pieces = [piece for piece in pieces if piece and len(piece) <= 22]
+    return pieces[:3] if len(pieces) >= 2 else None
+
+
+def _render_flow(spec, text, index, total, tokens: list[str]) -> LayoutResult:
+    """Graphic mechanism diagram (light surface): the plan's own arrow sequence as connected nodes."""
+    canvas = _new_paper(spec)
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    margin = round(spec.width * tok.MARGIN_FRAC)
+    top = round(spec.height * spec.safe_top_frac) + margin
+    _draw_progress(canvas, spec, index=index, total=total, x=margin, y=top)
+    node_y = top + round(spec.height * 0.08)
+    gap = round(spec.width * 0.03)
+    node_w = (spec.width - margin * 2 - gap * (len(tokens) - 1)) // len(tokens)
+    node_h = round(spec.height * 0.13)
+    font = ig_font(round(spec.width * 0.027), "semibold")
+    for i, token in enumerate(tokens):
+        x = margin + i * (node_w + gap)
+        last = i == len(tokens) - 1
+        draw.rounded_rectangle([x, node_y, x + node_w, node_y + node_h], radius=18,
+                               fill=(*(tok.RED if last else SURFACE_TINT), 255), outline=(*tok.RED, 255), width=3)
+        bbox = draw.textbbox((0, 0), token, font=font)
+        draw.text((x + (node_w - (bbox[2] - bbox[0])) / 2, node_y + (node_h - (bbox[3] - bbox[1])) / 2 - bbox[1]), token, font=font, fill=tok.WHITE if last else tok.INK)
+        if not last:
+            cy = node_y + node_h // 2
+            draw.line([(x + node_w + 4, cy), (x + node_w + gap - 4, cy)], fill=(*tok.RED, 255), width=5)
+    text_top = node_y + node_h + round(spec.height * 0.06)
+    avail = spec.height - round(spec.height * spec.safe_bottom_frac) - margin - text_top
+    regions, clipped, _ = _draw_copy(canvas, spec, text, x=margin, y=text_top, width=_content_width(spec, margin), colour=tok.INK, max_frac=0.06, min_frac=0.03, max_height=avail)
+    return _result(canvas, spec, regions, clipped, variant="generic_flow_diagram", treatment="none", notes={
+        "mechanism_tokens": tokens, "graphic_fallback_used": False, "source_media_pixels_unaltered": None,
+    })
+
+
 def _render_ui_frame(spec, text, index, total) -> LayoutResult:
     """Graphic stand-in for a screenshot when none exists: a light window frame holding the copy."""
     canvas = _new_paper(spec)
@@ -468,11 +509,14 @@ def _chain_for(comp: str, position: str | None, scale: float | None, has_media: 
     return head + [_Attempt("contained_media", "top", 0.42), _Attempt("contained_media", "top", 0.32), _Attempt("typographic")]
 
 
-def _run_attempt(a: _Attempt, *, spec, text, index, total, media, fx, fy, subject, graphic_reason) -> LayoutResult | None:
+def _run_attempt(a: _Attempt, *, spec, text, index, total, media, fx, fy, subject, graphic_reason, visual_direction=None) -> LayoutResult | None:
     if a.composition == "typographic":
         return _render_typographic(spec, text, index, total, media_subject=subject, graphic_reason=graphic_reason)
     if a.composition == "ui_frame":
         return _render_ui_frame(spec, text, index, total)
+    if a.composition == "flow_diagram":
+        tokens = _flow_tokens(visual_direction)
+        return _render_flow(spec, text, index, total, tokens) if tokens else None
     if a.composition == "split_compare":
         return _render_split(spec, text, index, total, stacked=a.variant == "stacked")
     if media is None:
@@ -501,6 +545,8 @@ def render_carousel_slide(
     else:
         d = _default_composition(role=role, index=index, has_media=selected is not None, slide_copy=slide_copy)
         chain = _chain_for(d.composition, d.position, d.scale, selected is not None, slide_copy)
+        if role.strip().lower() == "explanation" and _flow_tokens(visual_direction):
+            chain = [_Attempt("flow_diagram")] + chain
     graphic_reason = None
     if selected is None and structured_present and composition.lower() in ("contained_media", "full_bleed_media", "collage", "screenshot_ui"):
         graphic_reason = "no_media_for_requested_composition"
@@ -510,7 +556,7 @@ def render_carousel_slide(
     for attempt_no, attempt in enumerate(chain):
         candidate = _run_attempt(
             attempt, spec=spec, text=slide_copy, index=index, total=total, media=selected, fx=fx, fy=fy,
-            subject=media_subject, graphic_reason=graphic_reason,
+            subject=media_subject, graphic_reason=graphic_reason, visual_direction=visual_direction,
         )
         if candidate is None:
             continue

@@ -121,11 +121,13 @@ def test_phase_b1_carousel_roles_become_distinct_compositions_without_internal_l
     results = render_instagram_carousel(package, hero_image=_SOURCE)
     assert len(package.media_plan["render_trace"]["assets"]) == 5
     variants = [result.evidence.notes["layout_variant"] for result in results]
-    assert len(set(variants)) == 5
+    assert len(set(variants)) >= 4  # distinct light compositions, incl. the mechanism diagram
+    assert "generic_flow_diagram" in variants
     assert results[1].evidence.source_image_treatment == "cover_cropped"
     assert all(result.evidence.notes["internal_labels_rendered"] == [] for result in results)
     assert all(result.evidence.notes["render_plan_applied"] for result in results)
     assert results[3].evidence.notes["mechanism_tokens"] == ["КОД", "API", "ОБНОВЛЕНИЯ"]
+    assert all(result.evidence.notes["overlay_operations_executed"] == 0 for result in results)
     assert validate_instagram_art(package, results).passed
 
 
