@@ -33,6 +33,12 @@ def _image(color=(60, 90, 140)) -> Image.Image:
     return img
 
 
+def _png_bytes(color) -> bytes:
+    buf = io.BytesIO()
+    _image(color).save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def _package(slides: list[InstagramCarouselSlideCreative], archetype: str | None = None) -> InstagramCarouselCreative:
     carousel = InstagramCarouselCreative(objective="saves", slides=slides, content_archetype=archetype)
     return build_instagram_content_package(
@@ -99,25 +105,37 @@ def test_archetype_field_does_not_hardcode_one_layout() -> None:
     assert len(variants) == 3
 
 
-def test_news_recap_distinct_story_assets_pass_validation() -> None:
-    slides = [
+def _recap_slides() -> list[InstagramCarouselSlideCreative]:
+    return [
         InstagramCarouselSlideCreative(role="hook", slide_copy="Recap", visual_direction="v", composition="typographic"),
         InstagramCarouselSlideCreative(
             role="story", slide_copy="Story A", visual_direction="v", composition="contained_media",
-            media_position="top", must_match_story=True, media_asset_identity="story-a",
+            media_position="top", media_subject="story-a", must_match_story=True,
         ),
         InstagramCarouselSlideCreative(
             role="story", slide_copy="Story B", visual_direction="v", composition="contained_media",
-            media_position="top", must_match_story=True, media_asset_identity="story-b",
+            media_position="top", media_subject="story-b", must_match_story=True,
         ),
         InstagramCarouselSlideCreative(
             role="story", slide_copy="Story C", visual_direction="v", composition="contained_media",
-            media_position="top", must_match_story=True, media_asset_identity="story-c",
+            media_position="top", media_subject="story-c", must_match_story=True,
         ),
     ]
+
+
+def test_news_recap_distinct_story_assets_pass_validation() -> None:
+    """Phase B.4.1: the resolver (not the LLM) supplies both the images and their identities -
+    resolve_recap_story_assets() derives a real content-hash identity from each subject's actual
+    resolved bytes."""
+    from services.instagram_platform_renderer import resolve_recap_story_assets
+
+    slides = _recap_slides()
     pkg = _package(slides, archetype="news_recap")
-    img_a, img_b, img_c = _image((60, 90, 140)), _image((140, 60, 90)), _image((90, 140, 60))
-    results = render_instagram_carousel(pkg, slide_images={1: img_a, 2: img_b, 3: img_c})
+    raw_a, raw_b, raw_c = _png_bytes((60, 90, 140)), _png_bytes((140, 60, 90)), _png_bytes((90, 140, 60))
+    subjects = {1: "story-a", 2: "story-b", 3: "story-c"}
+    images, identities = resolve_recap_story_assets(subjects, {"story-a": raw_a, "story-b": raw_b, "story-c": raw_c})
+    assert len(set(identities.values())) == 3  # three genuinely distinct, content-derived identities
+    results = render_instagram_carousel(pkg, slide_images=images, asset_identities=identities)
     art = validate_instagram_art(pkg, results)
     assert art.passed is True
     assert art.blocking_issues == []
@@ -125,21 +143,17 @@ def test_news_recap_distinct_story_assets_pass_validation() -> None:
 
 def test_news_recap_asset_reuse_is_blocked() -> None:
     """The exact failure spec B.4 section 10 forbids: two independent story slides silently
-    sharing one generic asset must be a BLOCKING validation failure, not a passed carousel."""
-    slides = [
-        InstagramCarouselSlideCreative(role="hook", slide_copy="Recap", visual_direction="v", composition="typographic"),
-        InstagramCarouselSlideCreative(
-            role="story", slide_copy="Story A", visual_direction="v", composition="contained_media",
-            media_position="top", must_match_story=True, media_asset_identity="shared-asset",
-        ),
-        InstagramCarouselSlideCreative(
-            role="story", slide_copy="Story B", visual_direction="v", composition="contained_media",
-            media_position="top", must_match_story=True, media_asset_identity="shared-asset",
-        ),
-    ]
+    sharing one generic asset must be a BLOCKING validation failure, not a passed carousel. Here
+    the SAME bytes are (mis)resolved for two different stories - the resolver's own honest content
+    hash naturally collides, and the validator catches it."""
+    from services.instagram_platform_renderer import resolve_recap_story_assets
+
+    slides = _recap_slides()[:3]  # hook + 2 stories
     pkg = _package(slides, archetype="news_recap")
-    img = _image()
-    results = render_instagram_carousel(pkg, slide_images={1: img, 2: img})
+    shared_raw = _png_bytes((90, 90, 90))
+    subjects = {1: "story-a", 2: "story-a"}  # a resolver bug: both slides given the same subject
+    images, identities = resolve_recap_story_assets(subjects, {"story-a": shared_raw})
+    results = render_instagram_carousel(pkg, slide_images=images, asset_identities=identities)
     art = validate_instagram_art(pkg, results)
     assert art.passed is False
     assert any("news_recap_asset_reuse_violation" in issue for issue in art.blocking_issues)
@@ -150,15 +164,25 @@ def test_must_match_story_missing_asset_is_blocked() -> None:
         InstagramCarouselSlideCreative(role="hook", slide_copy="Recap", visual_direction="v", composition="typographic"),
         InstagramCarouselSlideCreative(
             role="story", slide_copy="Story A", visual_direction="v", composition="contained_media",
-            media_position="top", must_match_story=True, media_asset_identity=None,
+            media_position="top", media_subject="story-a", must_match_story=True,
         ),
         InstagramCarouselSlideCreative(role="takeaway", slide_copy="Close", visual_direction="v", composition="typographic"),
     ]
     pkg = _package(slides, archetype="news_recap")
-    results = render_instagram_carousel(pkg)
+    results = render_instagram_carousel(pkg)  # resolver found nothing - no asset_identities at all
     art = validate_instagram_art(pkg, results)
     assert art.passed is False
     assert any("must_match_story_missing_asset" in issue for issue in art.blocking_issues)
+
+
+def test_llm_cannot_declare_its_own_asset_identity() -> None:
+    """Phase B.4.1 section 7: structurally impossible, not just discouraged - the schema has no
+    field an LLM could populate to claim an asset identity at all."""
+    assert "media_asset_identity" not in InstagramCarouselSlideCreative.model_fields
+    with pytest.raises(Exception):
+        InstagramCarouselSlideCreative(
+            role="story", slide_copy="x", visual_direction="v", media_asset_identity="fabricated",
+        )
 
 
 def test_claimed_composition_must_match_executed_composition() -> None:

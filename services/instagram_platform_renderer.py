@@ -182,6 +182,35 @@ def render_instagram_single_quote(
     return _result_from_layout(layout, package, profile=InstagramRenderProfile.PORTRAIT_FEED)
 
 
+def derive_asset_identity(image_bytes: bytes) -> str:
+    """Phase B.4.1 section 7: the ONE non-LLM way a slide's `media_asset_identity` is produced -
+    a content hash of the REAL resolved bytes, mirroring the same content-addressing convention
+    `integrations/storage/image_storage.py::build_storage_key` already uses for stored assets.
+    Deterministic, never model-declared, never decorative."""
+    return hashlib.sha256(image_bytes).hexdigest()[:16]
+
+
+def resolve_recap_story_assets(
+    slide_media_subjects: dict[int, str], available_assets: dict[str, bytes],
+) -> tuple[dict[int, "Image.Image"], dict[int, str]]:
+    """Phase B.4.1 section 6: the smallest real bridge from NEWS_RECAP's own creative-plan intent
+    (`media_subject` per slide) to actual per-slide assets + their REAL derived identities - never
+    a universal crawler, just a lookup over whatever assets the caller has already actually
+    resolved (real stored media, local fixtures, etc: section 17's own explicit allowance).
+    `available_assets` maps a subject key to its real bytes; a slide whose `media_subject` has no
+    entry gets no asset at all (fails closed - see `select_media_primitive`'s own NONE-when-no-
+    media behaviour - never silently substitutes a different story's asset)."""
+    images: dict[int, Image.Image] = {}
+    identities: dict[int, str] = {}
+    for index, subject in slide_media_subjects.items():
+        raw = available_assets.get(subject)
+        if raw is None:
+            continue
+        images[index] = Image.open(io.BytesIO(raw)).convert("RGB")
+        identities[index] = derive_asset_identity(raw)
+    return images, identities
+
+
 _MAX_CAROUSEL_SLIDES = 10  # Instagram's own platform ceiling (section 10's own "max slide bound")
 
 
@@ -190,13 +219,19 @@ def render_instagram_carousel(
     *,
     hero_image: Image.Image | None = None,
     slide_images: dict[int, Image.Image] | None = None,
+    asset_identities: dict[int, str] | None = None,
 ) -> list[InstagramRenderResult]:
     """CAROUSEL format -> one CAROUSEL_SLIDE image per planned slide, a real visual GRAMMAR across
     the deck (section 11) - slide layout is chosen from each slide's own real `role`
     (services/instagram_carousel_layouts.py::select_slide_layout), never identical title cards.
     Bounded to `_MAX_CAROUSEL_SLIDES`. `slide_images` is the explicit Phase B.2 per-slide asset
     map; when supplied, a slide can only consume its own entry and never inherits Slide 1 media.
-    `hero_image` remains the legacy compatibility input when no explicit map is supplied."""
+    `hero_image` remains the legacy compatibility input when no explicit map is supplied.
+
+    `asset_identities` (Phase B.4.1 section 7) is the ONLY source of a slide's recorded
+    `media_asset_identity` - supplied by whatever REAL code actually resolved that slide's media
+    (e.g. `derive_asset_identity()` below, hashing the real resolved bytes), never read from the
+    creative plan itself. An LLM cannot declare the identity of bytes it never touched."""
     if package.content_format.value != "carousel":
         raise InstagramRenderError(f"render_instagram_carousel requires CAROUSEL, got {package.content_format!r}")
     slides = package.media_plan.get("slides")
@@ -239,7 +274,9 @@ def render_instagram_carousel(
             composition=slide.get("composition"), media_position=slide.get("media_position"),
             media_scale=slide.get("media_scale"), overlay_mode=slide.get("overlay_mode"),
             media_subject=slide.get("media_subject"), must_match_story=bool(slide.get("must_match_story") or False),
-            media_asset_identity=slide.get("media_asset_identity"),
+            # Phase B.4.1: resolver-supplied, never plan-supplied - see this function's own
+            # docstring.
+            media_asset_identity=(asset_identities.get(index) if asset_identities is not None else None),
         )
         results.append(_result_from_layout(layout, package, profile=InstagramRenderProfile.CAROUSEL_SLIDE, slide_index=index, slide_count=total))
     return results
