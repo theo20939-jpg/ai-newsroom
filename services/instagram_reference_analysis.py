@@ -142,7 +142,7 @@ def build_reference_image_request(prompt: RenderedPrompt, *, data_uri: str) -> G
 
 async def analyze_reference_image(
     gateway: LLMGateway, prompt_repository: PromptRepository, *, reference_path: Path | str,
-    repo_relative_path: str | None = None, call_sink: list | None = None,
+    repo_relative_path: str | None = None, call_sink: list | None = None, raw_sink: list | None = None,
 ):
     """ONE controlled vision call -> (ReferenceDeconstruction, InstagramVisualDNA). Run once per
     reference (scripts/_instagram_phase_b5_analyze_reference.py), never per Instagram post."""
@@ -170,6 +170,8 @@ async def analyze_reference_image(
     output = outcome.response.structured_output
     if output is None:
         raise ReferenceAnalysisUnavailableError("no structured output returned")
+    if raw_sink is not None:
+        raw_sink.append(output)  # keep the paid output even if validation below rejects it
 
     try:
         deconstruction = ReferenceDeconstruction(

@@ -90,10 +90,17 @@ async def main() -> None:
 
     layer = assemble_ai_integration_layer(settings, FilePromptRepository(_PROMPTS))
     sink: list = []
-    _decon, dna = await analyze_reference_image(
-        layer.gateway, FilePromptRepository(_PROMPTS), reference_path=REFERENCE_BOARD_PATH,
-        repo_relative_path="docs/references/instagram/instagram_visual_reference_board_v1.png", call_sink=sink,
-    )
+    raw: list = []
+    try:
+        _decon, dna = await analyze_reference_image(
+            layer.gateway, FilePromptRepository(_PROMPTS), reference_path=REFERENCE_BOARD_PATH,
+            repo_relative_path="docs/references/instagram/instagram_visual_reference_board_v1.png", call_sink=sink, raw_sink=raw,
+        )
+    except Exception as exc:  # noqa: BLE001 - never lose a paid output
+        if raw:
+            (out_dir / "reference_analysis_raw_output_REJECTED.json").write_text(json.dumps(raw[0], ensure_ascii=False, indent=2), encoding="utf-8")
+        print("ANALYSIS_FAILED", type(exc).__name__, str(exc)[:300])
+        return
     call = sink[0]
     cost = compute_call_cost(call, ModelRegistryPricingCatalog(build_model_registry()))
     DNA_DIR.mkdir(parents=True, exist_ok=True)
