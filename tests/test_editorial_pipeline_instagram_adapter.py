@@ -9,6 +9,8 @@ adapter never performs a network write (S30 - zero network writes, matching the 
 class verbatim)."""
 from uuid import uuid4
 
+from PIL import Image
+
 from services.editorial_pipeline.evidence import build_evidence_pack
 from services.editorial_pipeline.platforms.instagram import evaluate_instagram_package
 from services.instagram_content_opportunity import ContentOpportunity, OpportunitySourceType
@@ -31,7 +33,7 @@ _SHADOW_PLAN = ShadowPlanResult(
 )
 
 
-def _real_package(caption: str) -> "object":
+def _real_package(caption: str, *, source_image_ref: str | None = None) -> "object":
     single = InstagramSingleCreative(
         creative_angle="angle", visual_concept="concept", on_image_copy="290 ТЫС. ЮАНЕЙ",
         caption_direction=caption, cta="Learn more",
@@ -40,12 +42,17 @@ def _real_package(caption: str) -> "object":
         opportunity=_OPPORTUNITY,
         format_decision=FormatDecision(recommended_format=ContentFormat.SINGLE, why="reach"),
         shadow_plan=_SHADOW_PLAN, creative_outcome=CreativeGenerationOutcome(single=single),
+        source_image_ref=source_image_ref,
     )
 
 
 def test_a_clean_real_package_passes_the_shared_gate_and_needs_no_recovery() -> None:
-    package = _real_package("Стартовая цена Maxus 9 составляет 290 тыс. юаней.")
-    render_result = render_instagram_feed_image(package)
+    # Since the Phase 23 hotfix (329ba2c) a SINGLE post requires a real source image (or an explicit
+    # typographic strategy) - a source-less single is correctly BLOCKED by the art validator, so a
+    # genuinely "clean" package must carry and render one.
+    package = _real_package("Стартовая цена Maxus 9 составляет 290 тыс. юаней.", source_image_ref="story-1-image")
+    source = Image.new("RGB", (1200, 1500), (40, 70, 120))
+    render_result = render_instagram_feed_image(package, source_image=source)
     evidence = build_evidence_pack(news_event_id=uuid4(), story_id=None, source_url=None, research_facts=[])
 
     gate_result, recovery = evaluate_instagram_package(

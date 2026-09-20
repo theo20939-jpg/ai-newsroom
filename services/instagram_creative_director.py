@@ -247,6 +247,12 @@ def _build_user_text(director_input: CreativeDirectorInput) -> str:
         f"RECENT/IN-FLIGHT CONTENT:\n{director_input.recent_content_context or '(none)'}\n"
         f"APPROVED EDITORIAL DECISION:\n{director_input.editorial_decision or '(legacy call: not supplied)'}\n"
         f"EVIDENCE BULLETS (use ONLY these for any factual claim):\n{evidence_block}"
+        + (
+            "\nRECAP STORY KEYS (a slide about one story must set media_subject to exactly that key and "
+            "must_match_story=true; never reuse one story's key for another): "
+            + ", ".join(director_input.recap_subjects)
+            if director_input.recap_subjects else ""
+        )
     )
 
 

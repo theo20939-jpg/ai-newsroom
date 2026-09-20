@@ -219,6 +219,8 @@ def _mode_for_item(*, strategy: str, slide: Any | None, index: int) -> Instagram
             "typographic": InstagramMediaMode.TYPOGRAPHIC,
             "graphic": InstagramMediaMode.GRAPHIC,
         }.get(strategy, InstagramMediaMode.TYPOGRAPHIC)
+    if getattr(slide, "must_match_story", False) and getattr(slide, "media_subject", None):
+        return InstagramMediaMode.SOURCE  # the plan demands this story's own real asset
     need = _slide_value(slide, "media_need").lower()
     if any(token in need for token in ("исход", "source", "фото", "photo")):
         return InstagramMediaMode.SOURCE
