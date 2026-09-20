@@ -341,7 +341,7 @@ async def test_E_live_trigger_uses_v6_archetype_structured_composition_fatigue_a
         db_session, AsyncMock(), opportunity=_news_opportunity(), opportunity_summary="NINJA drafts carousels",
         gateway=gateway, prompt_repository=FilePromptRepository(_PROMPTS_ROOT), phase_a_enabled=True,
     )
-    assert outcome.accepted is True and outcome.reason == "submitted"
+    assert outcome.accepted is True and outcome.reason == "submitted", outcome.reason
 
     request = gateway.carousel_request()
     assert "content_archetype" in request.response_schema["properties"]  # real v6 contract was sent
@@ -392,7 +392,7 @@ async def test_live_trigger_news_recap_gives_each_story_its_own_asset_and_a_deli
         db_session, AsyncMock(), opportunity=_news_opportunity(), opportunity_summary="Итоги недели",
         gateway=gateway, prompt_repository=FilePromptRepository(_PROMPTS_ROOT), phase_a_enabled=True, recap_bundle=bundle,
     )
-    assert outcome.accepted is True and outcome.reason == "submitted"
+    assert outcome.accepted is True and outcome.reason == "submitted", outcome.reason
     assert "story_1, story_2, story_3, story_4" in _user_text(gateway.carousel_request())
 
     observability = captured["package"].media_plan["b4_observability"]
