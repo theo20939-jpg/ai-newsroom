@@ -109,8 +109,8 @@ def _worst_case_call_cost() -> Decimal:
         tier = next((t for t in model.pricing_tiers if t.condition == "standard"), None)
         if tier is None:
             continue
-        worst = max(worst, Decimal(14000) / 1_000_000 * tier.input_price_per_million
-                    + Decimal(8000) / 1_000_000 * tier.output_price_per_million)
+        worst = max(worst, Decimal(8000) / 1_000_000 * tier.input_price_per_million
+                    + Decimal(6000) / 1_000_000 * tier.output_price_per_million)
     return worst
 
 
@@ -165,17 +165,28 @@ async def main() -> None:
         return
 
     shadow_engine = create_async_engine("postgresql+asyncpg://postgres:postgres@b43pg:5432/ai_newsroom_test")
-    calls = {"count": 0}
+    calls = {"count": 0, "actual": Decimal(0)}
+    ledger_spent = Decimal(preflight["spent_today_usd"])
+    worst_each = Decimal(preflight["worst_case_per_call_usd"])
+    daily_budget = Decimal(preflight["daily_budget_usd"])
     captured: dict = {}
     real_call = cd_module._call_creative_director
 
     async def counting_call(gw, repo, *, prompt_name, director_input, prompt_version):
         if calls["count"] >= _MAX_REAL_CALLS:
             raise RuntimeError("hard cap: no more than four real Creative Director calls")
+        # Instagram calls never write the shared ledger, so BudgetGuard cannot see this run's own
+        # cumulative spend - enforce it here as well.
+        if ledger_spent + calls["actual"] + worst_each > daily_budget:
+            raise RuntimeError("SAFE_STOP: projected spend would exceed the daily budget")
         calls["count"] += 1
         captured["director_input"] = director_input
         output, call = await real_call(gw, repo, prompt_name=prompt_name, director_input=director_input, prompt_version=prompt_version)
         captured["model_output"], captured["call"] = output, call
+        try:
+            calls["actual"] += compute_call_cost(call, pricing)
+        except Exception:  # noqa: BLE001
+            calls["actual"] += worst_each
         (out_dir / f"raw_cd_call_{calls['count']}.json").write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
         return output, call
 
@@ -196,7 +207,7 @@ async def main() -> None:
         await shadow_engine.dispose()
 
     post = await get_redis_client().get(f"phase7:cost_ledger:{preflight['ledger_namespace']}")
-    result = {"real_calls": calls["count"], "recap_selection": recap_note, "ledger_after_usd": str(post), "runs": summary}
+    result = {"real_calls": calls["count"], "actual_cost_usd": str(calls["actual"]), "recap_selection": recap_note, "ledger_after_usd": str(post), "runs": summary}
     (out_dir / "run_summary.json").write_text(json.dumps(result, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     print("DONE", json.dumps({"real_calls": calls["count"], "ledger_before": preflight["spent_today_usd"], "ledger_after": str(post)}))
 
