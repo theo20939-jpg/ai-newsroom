@@ -30,7 +30,7 @@ from services.instagram_text_fit import box4, fit_text_block, measure_block_heig
 from services.instagram_visual_profiles import ProfileSpec, ig_font
 
 # A second LIGHT surface (soft cool grey) - structural separation without a dark panel.
-SURFACE_TINT = (233, 236, 241)
+SURFACE_SOFT = (233, 236, 241)
 MUTED_INK = (96, 101, 110)
 HAIRLINE = (208, 212, 219)
 
@@ -388,7 +388,7 @@ def _render_split(spec, text, index, total, *, stacked: bool) -> LayoutResult | 
     clipped_any = False
     if stacked:
         mid_y = (panel_top + panel_bottom) // 2
-        draw.rectangle([0, mid_y, spec.width, panel_bottom + margin], fill=(*SURFACE_TINT, 255))
+        draw.rectangle([0, mid_y, spec.width, panel_bottom + margin], fill=(*SURFACE_SOFT, 255))
         draw.rectangle([margin, mid_y - 2, margin + round(spec.width * 0.3), mid_y + 2], fill=(*tok.RED, 255))
         for text_part, y0, y1 in ((left, panel_top, mid_y), (right, mid_y + round(spec.height * 0.03), panel_bottom)):
             r, c, _ = _draw_copy(canvas, spec, text_part, x=margin, y=y0, width=_content_width(spec, margin), colour=tok.INK, max_frac=0.075, min_frac=0.032, max_height=(y1 - y0) - round(spec.height * 0.03), valign=(y0, y1, 0.5))
@@ -397,7 +397,7 @@ def _render_split(spec, text, index, total, *, stacked: bool) -> LayoutResult | 
         variant = "generic_split_compare_stacked"
     else:
         mid_x = spec.width // 2
-        draw.rectangle([mid_x, panel_top - margin // 2, spec.width, panel_bottom + margin], fill=(*SURFACE_TINT, 255))
+        draw.rectangle([mid_x, panel_top - margin // 2, spec.width, panel_bottom + margin], fill=(*SURFACE_SOFT, 255))
         draw.rectangle([mid_x - 3, panel_top - margin // 2, mid_x + 3, panel_bottom + margin], fill=(*tok.RED, 255))
         col_w = mid_x - margin - round(spec.width * 0.04)
         for text_part, x0 in ((left, margin), (right, mid_x + round(spec.width * 0.04))):
@@ -442,7 +442,7 @@ def _render_flow(spec, text, index, total, tokens: list[str]) -> LayoutResult:
         x = margin + i * (node_w + gap)
         last = i == len(tokens) - 1
         draw.rounded_rectangle([x, node_y, x + node_w, node_y + node_h], radius=18,
-                               fill=(*(tok.RED if last else SURFACE_TINT), 255), outline=(*tok.RED, 255), width=3)
+                               fill=(*(tok.RED if last else SURFACE_SOFT), 255), outline=(*tok.RED, 255), width=3)
         bbox = draw.textbbox((0, 0), token, font=font)
         draw.text((x + (node_w - (bbox[2] - bbox[0])) / 2, node_y + (node_h - (bbox[3] - bbox[1])) / 2 - bbox[1]), token, font=font, fill=tok.WHITE if last else tok.INK)
         if not last:
@@ -465,7 +465,7 @@ def _render_ui_frame(spec, text, index, total) -> LayoutResult:
     _draw_progress(canvas, spec, index=index, total=total, x=margin, y=top)
     fx0, fy0 = margin, top + round(spec.height * 0.06)
     fx1, fy1 = spec.width - margin, spec.height - round(spec.height * spec.safe_bottom_frac) - margin - round(spec.height * 0.05)
-    draw.rounded_rectangle([fx0, fy0, fx1, fy1], radius=28, fill=(*SURFACE_TINT, 255), outline=(*tok.RED, 255), width=4)
+    draw.rounded_rectangle([fx0, fy0, fx1, fy1], radius=28, fill=(*SURFACE_SOFT, 255), outline=(*tok.RED, 255), width=4)
     bar_h = round(spec.height * 0.05)
     draw.line([(fx0 + 4, fy0 + bar_h), (fx1 - 4, fy0 + bar_h)], fill=(*HAIRLINE, 255), width=3)
     for i in range(3):
