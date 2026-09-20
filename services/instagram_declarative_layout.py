@@ -114,6 +114,26 @@ def _flow_tokens(visual_direction: str | None) -> list[str] | None:
     return pieces[:4] if len(pieces) >= 2 else None
 
 
+def _place_adaptive_mark(canvas: Image.Image, spec: ProfileSpec) -> int:
+    """The canonical brand mark, same geometry as `place_brand_mark`, but the LIGHT variant of the
+    brand mark is used when the pixels beneath it are dark (e.g. a red panel or a dark photo), so the
+    logo stays visible. This chooses between two approved brand assets; it never alters the image."""
+    from services.instagram_visual_profiles import ig_brand_mark
+
+    frac = tok.LOGO_WIDTH_FRAC_COMPACT
+    margin = round(spec.width * tok.LOGO_MARGIN_FRAC)
+    probe = ig_brand_mark(target_width=round(spec.width * frac), red=True)
+    x = spec.width - margin - probe.width
+    y = spec.height - round(spec.height * spec.safe_bottom_frac) - margin - probe.height
+    region = canvas.crop((x - 8, y - 8, x + probe.width + 8, y + probe.height + 8)).convert("L")
+    hist = region.histogram()
+    total = sum(hist) or 1
+    mean = sum(i * c for i, c in enumerate(hist)) / total
+    mark = probe if mean >= 118 else ig_brand_mark(target_width=round(spec.width * frac), red=False)
+    canvas.alpha_composite(mark, (x, y))
+    return 1
+
+
 def render_declared_slide(
     *, spec: ProfileSpec, layout: InstagramSlideLayout, slide_copy: str, index: int, total: int,
     subject_assets: dict[str, tuple[Image.Image, str]] | None = None, visual_direction: str | None = None,
@@ -211,7 +231,7 @@ def render_declared_slide(
         draw.text((round(PROGRESS_ZONE[0] * spec.width) + round(spec.width * 0.03), round(spec.height * (PROGRESS_ZONE[1] + 0.005))),
                   f"{index + 1:02d} / {total:02d}", font=ig_font(size, tok.TYPE_SLIDE_INDEX.weight), fill=MUTED_INK)
 
-    mark_count = place_brand_mark(canvas, spec, compact=True)
+    mark_count = _place_adaptive_mark(canvas, spec)
     raw = layout.model_dump()
     chars = layout_characteristics(raw)
     signature = layout_signature(raw)

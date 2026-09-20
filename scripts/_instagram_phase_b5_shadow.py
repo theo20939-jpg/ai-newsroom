@@ -1,10 +1,10 @@
-"""Manual-only Phase B.4.4 shadow canary through the REAL live trigger
+"""Manual-only Phase B.5 shadow canary through the REAL live trigger
 (`services.instagram_automatic_trigger.evaluate_and_submit_instagram_opportunity`).
 
 Modes (argv[2]):
-  fake  - ZERO cost: an offline fake transport returns deterministic v7-shaped plans
-          (scripts/_instagram_phase_b44_common.py::fake_plan). No provider call of any kind.
-  real  - at most FOUR real carousel Creative Director calls (prompt v7, real gateway, BudgetGuard in
+  fake  - ZERO cost: an offline fake transport returns hand-authored declarative v8-shaped plans (RENDERER FIXTURES, not model quality)
+          (scripts/_instagram_phase_b5_common.py::fake_plan). No provider call of any kind.
+  real  - at most FOUR real carousel Creative Director calls (prompt v8, real gateway, BudgetGuard in
           enforce mode, own cumulative budget cap). One call per archetype, no retries. Text planning
           only: zero image-provider calls.
 
@@ -12,7 +12,7 @@ Both modes: the editorial-DECISION step is a deterministic fixture (no extra LLM
 delivery is a recorder (zero publication), and persistence goes to a throwaway Postgres session that
 is rolled back. The automatic-generation flag is never touched.
 
-Usage: python scripts/_instagram_phase_b44_shadow.py <out_dir> <fake|real>"""
+Usage: python scripts/_instagram_phase_b5_shadow.py <out_dir> <fake|real>"""
 from __future__ import annotations
 
 import asyncio
@@ -32,7 +32,7 @@ from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-import scripts._instagram_phase_b44_common as common
+import scripts._instagram_phase_b5_common as common
 import services.instagram_automatic_trigger as trigger
 import services.instagram_creative_director as cd_module
 from core.config import settings
@@ -135,7 +135,7 @@ async def main() -> None:
         gateway_factory = lambda archetype, plan: layer.gateway  # noqa: E731
 
     plain_bundle, pool_bundle, recap_note = await _recap_bundles()
-    if os.environ.get("B44_PREP"):
+    if os.environ.get("B5_PREP"):
         print("PREP", recap_note, json.dumps([
             {"key": s.key, "title": s.title[:60], "has_image": s.image_bytes is not None}
             for s in (pool_bundle.stories if pool_bundle else [])], ensure_ascii=False))
@@ -172,7 +172,7 @@ async def main() -> None:
     cd_module._call_creative_director = counting_call
     prompt_repo = FilePromptRepository(_PROMPTS)
     summary = []
-    shadow_engine = create_async_engine(f"postgresql+asyncpg://postgres:postgres@{os.environ.get('B44_SHADOW_DB_HOST', 'b44pg')}:5432/ai_newsroom_test")
+    shadow_engine = create_async_engine(f"postgresql+asyncpg://postgres:postgres@{os.environ.get('B5_SHADOW_DB_HOST', 'b5pg')}:5432/ai_newsroom_test")
     try:
         async with shadow_engine.connect() as connection:
             await connection.begin()
@@ -218,7 +218,7 @@ async def _run_one(name, archetype, session, gateway_factory, prompt_repo, prici
             topic=spec["decision"]["topic"], evidence=list(common.TREND_EVIDENCE),
         )
     opportunity = ContentOpportunity(
-        id=f"b44-{name}-{uuid4()}", source_type=OpportunitySourceType.NEWS, story_id=str(uuid4()),
+        id=f"b5-{name}-{uuid4()}", source_type=OpportunitySourceType.NEWS, story_id=str(uuid4()),
         news_value=1.0, audience_relevance=0.5, product_mention_allowed=False, evidence=evidence, confidence=0.5,
     )
     decision = common.editorial_decision(archetype)
@@ -231,11 +231,11 @@ async def _run_one(name, archetype, session, gateway_factory, prompt_repo, prici
     async def fake_source(_s, _story):
         if source_image is None:
             return None, None, 0, 0
-        return source_image, SimpleNamespace(id=uuid4(), candidate_id=f"b44-{name}"), 1, 1
+        return source_image, SimpleNamespace(id=uuid4(), candidate_id=f"b5-{name}"), 1, 1
 
     seen: dict = {}
     real_render, real_snapshot = trigger.render_instagram_carousel, trigger.build_package_snapshot
-    delivery = AsyncMock(return_value=SimpleNamespace(sent=False, reason="b44_shadow_no_publication", delivery_id=None))
+    delivery = AsyncMock(return_value=SimpleNamespace(sent=False, reason="b5_shadow_no_publication", delivery_id=None))
 
     def spy_render(pkg, **kw):
         seen["renders"] = real_render(pkg, **kw)
@@ -291,8 +291,24 @@ async def _run_one(name, archetype, session, gateway_factory, prompt_repo, prici
         "media_note_passed_to_model": getattr(di, "media_note", None),
         "plan_media_strategy": (model_output.get("creative_execution_plan") or {}).get("media_strategy"),
         "slides_raw": [
-            {k: sl.get(k) for k in ("role", "composition", "media_position", "media_scale", "media_subject", "must_match_story", "slide_copy")}
+            {**{k: sl.get(k) for k in ("role", "slide_copy", "media_subject", "media_function", "must_match_story")},
+             "layout_signature": (__import__("services.instagram_layout_signature", fromlist=["x"]).layout_signature(sl["layout"]) if isinstance(sl.get("layout"), dict) else None),
+             "density": (sl.get("layout") or {}).get("density"), "media_dominance": (sl.get("layout") or {}).get("media_dominance"),
+             "visual_weight": (sl.get("layout") or {}).get("visual_weight")}
             for sl in model_output.get("slides", [])
+        ],
+        "visual_rhythm": model_output.get("visual_rhythm"),
+        "visual_dna_present_in_input": bool(getattr(di, "visual_dna_context", "")),
+        "visual_dna_version": getattr(di, "visual_dna_version", None),
+        "declarative_slides": sum(1 for s in (obs or {}).get("slides", []) if s.get("layout_plan_applied")),
+        "legacy_template_fallback_slides": sum(1 for s in (obs or {}).get("slides", []) if s.get("role_fallback_used")),
+        "layout_plans_rejected": [s.get("layout_plan_rejected") for s in (obs or {}).get("slides", []) if s.get("layout_plan_rejected")],
+        "anti_template_diagnostic": _anti_template_diagnostic(package, obs),
+        "per_slide_media": [
+            {"index": s["index"], "media_subject": s.get("media_subject"), "media_function": s.get("media_function"),
+             "actual_assets": [{"subject": m["subject"], "identity": m["identity"]} for m in (s.get("media_regions") or [])],
+             "unresolved": s.get("unresolved_media_regions")}
+            for s in (obs or {}).get("slides", [])
         ],
         "overlay_requests_in_plan": sum(1 for sl in model_output.get("slides", []) if "overlay_mode" in sl and sl["overlay_mode"]),
         "overlay_executions": (obs or {}).get("overlay_operations_executed_total"),
@@ -305,6 +321,32 @@ async def _run_one(name, archetype, session, gateway_factory, prompt_repo, prici
     (target / "cd_structured_output.json").write_text(json.dumps(model_output or plan or {}, ensure_ascii=False, indent=2), encoding="utf-8")
     (target / "manifest.json").write_text(json.dumps(record, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     return record
+
+
+def _anti_template_diagnostic(package, obs: dict | None) -> dict:
+    """Diagnostic only (no score, nothing is blocked by it): how template-like is this carousel?"""
+    from collections import Counter
+
+    from services.instagram_layout_signature import layout_characteristics, layout_signature
+
+    slides = (package.media_plan.get("slides") if package else None) or []
+    layouts = [s["layout"] for s in slides if isinstance(s.get("layout"), dict)]
+    signatures = [layout_signature(l) for l in layouts]
+    chars = [layout_characteristics(l) for l in layouts]
+    identities = [m["identity"] for s in (obs or {}).get("slides", []) for m in (s.get("media_regions") or [])]
+    zone_counts = Counter(c["headline_zone"] for c in chars)
+    media_counts = Counter(c["media_zone"] for c in chars if c["media_zone"] != "none")
+    return {
+        "declarative_slides": len(layouts),
+        "materially_distinct_geometries": len(set(signatures)),
+        "repeated_normalized_layouts": {k: n for k, n in Counter(signatures).items() if n > 1},
+        "media_region_count": len(identities),
+        "same_media_reuse_count": len(identities) - len(set(identities)),
+        "dominant_text_position": (zone_counts.most_common(1)[0] if zone_counts else None),
+        "dominant_image_position": (media_counts.most_common(1)[0] if media_counts else None),
+        "density_progression": [c["density"] for c in chars],
+        "media_dominance_progression": [c["media_dominance"] for c in chars],
+    }
 
 
 def _load_stored(key: str) -> Image.Image:

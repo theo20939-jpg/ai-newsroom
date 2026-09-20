@@ -629,3 +629,26 @@ def test_declared_layout_evidence_and_observability_are_recorded() -> None:
 
 def derive_asset_identity_like(identity: str) -> str:
     return identity
+
+
+def test_step_labels_never_leave_a_dangling_word_when_the_numeral_is_shown_separately() -> None:
+    from services.instagram_layout_validation import copy_parts
+
+    parts = copy_parts("Шаг 2. Попросите модель переформулировать вывод в чек-лист")
+    assert parts["number"] == "2" and parts["copy_no_number"].startswith("Попросите") and "Шаг" not in parts["copy_no_number"]
+    assert copy_parts("Вместо 20 минут — 30 секунд")["number"] == "20"
+
+
+def test_brand_mark_uses_the_light_approved_variant_on_a_red_panel_and_the_red_one_on_paper() -> None:
+    red_panel = InstagramSlideLayout.model_validate(_layout([
+        _r("surface", 0.0, 0.70, 1.0, 0.30, surface="red"),
+        _r("text", 0.08, 0.16, 0.84, 0.44, content_ref="copy", scale_token="DISPLAY", max_lines=4),
+    ]))
+    paper = InstagramSlideLayout.model_validate(_layout([_r("text", 0.08, 0.16, 0.84, 0.44, content_ref="copy", scale_token="DISPLAY", max_lines=4)]))
+    on_red = render_declared_slide(spec=_SPEC, layout=red_panel, slide_copy="Проверка знака", index=0, total=2)
+    on_paper = render_declared_slide(spec=_SPEC, layout=paper, slide_copy="Проверка знака", index=0, total=2)
+    box = (860, 1180, 1000, 1290)
+    def brightest(im: Image.Image) -> int:
+        return max(sum(p) // 3 for p in im.convert("RGB").crop(box).getdata())
+    assert on_red.visible_brand_mark_count == 1 and on_paper.visible_brand_mark_count == 1
+    assert brightest(on_red.image) > 200  # a light mark is visible against the red panel

@@ -73,7 +73,12 @@ def copy_parts(slide_copy: str) -> dict[str, str]:
     text = slide_copy.strip()
     number_match = re.search(r"\d[\d\s.,]*\d%?|\d%?", text)
     number = number_match.group(0).strip() if number_match else ""
-    no_number = (text[:number_match.start()] + text[number_match.end():]).strip(" :—-.,") if number_match else text
+    step = re.match(r"^\s*(?:шаг|step)\s*\d{1,2}\s*[.:—\-]?\s*", text, re.IGNORECASE)
+    if step:  # "Шаг 2. ..." -> the numeral is shown separately; drop the whole label, never leave "Шаг ."
+        number = re.search(r"\d{1,2}", step.group(0)).group(0)
+        no_number = text[step.end():].strip()
+    else:
+        no_number = (text[:number_match.start()] + text[number_match.end():]).strip(" :—-.,") if number_match else text
     lead, rest = text, ""
     vs = re.search(r"\s+(?:vs\.?|VS|Vs)\s+", text)
     m = re.search(r"[:.!?—]\s+", text)
