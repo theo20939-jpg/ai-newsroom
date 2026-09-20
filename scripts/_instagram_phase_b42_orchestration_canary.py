@@ -14,6 +14,7 @@ AI_HACK / TREND_GENERATIVE use clearly-labelled local fixture images. Usage:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
 import json
 import sys
@@ -102,9 +103,10 @@ async def _run(archetype: str, session: AsyncSession, out_dir: Path, manifest: l
         stories, seen = [], set()
         for item in manifest:
             data = (storage_root / item["storage_key"]).read_bytes()
-            if len(data) in seen:
+            digest = hashlib.sha256(data).hexdigest()
+            if digest in seen:
                 continue
-            seen.add(len(data))
+            seen.add(digest)
             i = len(stories) + 1
             stories.append(RecapStory(
                 key=f"story_{i}", story_id=item["story_id"], event_id=item["event_id"], title=item["title"],
