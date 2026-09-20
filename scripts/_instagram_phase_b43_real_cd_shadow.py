@@ -156,6 +156,13 @@ async def main() -> None:
         recap_note = f"weekly_selection_returned={len(selected)}"
         recap_bundle = await build_instagram_recap_bundle(prod_session, selected=selected)
     await prod_engine.dispose()
+    import os
+    if os.environ.get("B43_PREP"):
+        print("PREP", recap_note, json.dumps([
+            {"key": st.key, "title": st.title[:70], "has_image": st.image_bytes is not None,
+             "identity": hashlib.sha256(st.image_bytes).hexdigest()[:16] if st.image_bytes else None}
+            for st in (recap_bundle.stories if recap_bundle else [])], ensure_ascii=False))
+        return
 
     shadow_engine = create_async_engine("postgresql+asyncpg://postgres:postgres@b43pg:5432/ai_newsroom_test")
     calls = {"count": 0}
@@ -169,6 +176,7 @@ async def main() -> None:
         captured["director_input"] = director_input
         output, call = await real_call(gw, repo, prompt_name=prompt_name, director_input=director_input, prompt_version=prompt_version)
         captured["model_output"], captured["call"] = output, call
+        (out_dir / f"raw_cd_call_{calls['count']}.json").write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
         return output, call
 
     cd_module._call_creative_director = counting_call
@@ -178,7 +186,10 @@ async def main() -> None:
             await connection.begin()
             async with AsyncSession(bind=connection, join_transaction_mode="create_savepoint", expire_on_commit=False) as session:
                 for archetype in ("ai_hack", "news_insight", "news_recap", "trend_generative"):
-                    summary.append(await _run_one(archetype, session, gateway, prompt_repo, pricing, out_dir, recap_bundle, captured))
+                    try:
+                        summary.append(await _run_one(archetype, session, gateway, prompt_repo, pricing, out_dir, recap_bundle, captured))
+                    except Exception as exc:  # noqa: BLE001 - record and continue; never retry a paid call
+                        summary.append({"archetype": archetype, "status": "EXCEPTION", "error": f"{type(exc).__name__}: {str(exc)[:300]}"})
             await connection.rollback()  # shadow drafts never persist
     finally:
         cd_module._call_creative_director = real_call
