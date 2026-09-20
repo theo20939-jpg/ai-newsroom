@@ -35,6 +35,7 @@ and generates NO new video beyond the existing Reel/Carousel/Single contract - i
 honest extra sentence of context for the very first pieces of content."""
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -88,6 +89,7 @@ EDITORIAL_DECISION_PROMPT_NAME = "instagram_editorial_decision"
 # shipped prompt version in place" convention.
 _SINGLE_PROMPT_VERSION = "6"
 _CAROUSEL_PROMPT_VERSION = "6"  # Phase B.4.1: v6 adds the bounded structured art-direction fields
+CAROUSEL_PROMPT_VERSION = _CAROUSEL_PROMPT_VERSION
 # to the REAL output_schema - v5 stays published/unused, never silently edited in place.
 _REEL_PROMPT_VERSION = "7"
 _EDITORIAL_DECISION_PROMPT_VERSION = "1"
@@ -177,6 +179,11 @@ class CreativeDirectorInput:
     product_context: str = ""
     recent_content_context: str = ""
     editorial_decision: str = ""
+    # Phase B.4.2: NEWS_RECAP bundle. `recap_subjects` are the resolver-known story keys the model
+    # must use verbatim as a slide's `media_subject`; empty (default) for every non-recap call, so
+    # every pre-existing prompt text stays byte-identical.
+    is_recap_bundle: bool = False
+    recap_subjects: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -470,7 +477,13 @@ def _parse_editorial_decision(raw: str) -> InstagramEditorialDecision | None:
     if not raw:
         return None
     try:
-        return InstagramEditorialDecision.model_validate_json(raw)
+        # The live trigger stores the decision plus extra bookkeeping keys (duplication_decision,
+        # recent_history_count, ...); the strict model forbids extras, so keep only its own fields.
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            return None
+        known = InstagramEditorialDecision.model_fields
+        return InstagramEditorialDecision.model_validate({k: v for k, v in data.items() if k in known})
     except Exception:
         return None  # best-effort context only - never blocks generation over a parse failure
 
@@ -485,7 +498,9 @@ async def generate_carousel_creative(
     )
     creative = InstagramCarouselCreative.model_validate(output)
     decision = _parse_editorial_decision(director_input.editorial_decision)
-    archetype = derive_content_archetype(decision, is_recap_bundle=is_recap_bundle)
+    archetype = derive_content_archetype(
+        decision, is_recap_bundle=is_recap_bundle or director_input.is_recap_bundle,
+    )
     if archetype is not None:
         creative = creative.model_copy(update={"content_archetype": archetype})
     plan = creative.creative_execution_plan

@@ -8,7 +8,7 @@ copy remain the deterministic renderer's responsibility.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from io import BytesIO
 from typing import Any, Iterable
@@ -54,6 +54,9 @@ class InstagramMediaExecutionAsset:
     focal_subject: str | None = None
     source_treatment: str | None = None
     final_compositor_treatment: str | None = None
+    # Phase B.4.2: resolver-owned, content-addressed identity of the actual pixels attached to
+    # this asset (never LLM-authored) - see derive_image_identity().
+    asset_identity: str | None = None
 
     def metadata(self) -> dict[str, Any]:
         return {
@@ -77,6 +80,7 @@ class InstagramMediaExecutionAsset:
             "focal_subject": self.focal_subject,
             "source_treatment": self.source_treatment,
             "final_compositor_treatment": self.final_compositor_treatment,
+            "asset_identity": self.asset_identity,
         }
 
 
@@ -99,12 +103,36 @@ class InstagramCreativeMediaResult:
             "assets": [asset.metadata() for asset in self.assets],
         }
 
+    def slide_asset_identities(self) -> dict[int, str]:
+        return {
+            int(asset.asset_key): asset.asset_identity
+            for asset in self.assets
+            if asset.asset_key.isdigit() and asset.image is not None and asset.asset_identity
+        }
+
     def slide_images(self) -> dict[int, Image.Image]:
         return {
             int(asset.asset_key): asset.image
             for asset in self.assets
             if asset.asset_key.isdigit() and asset.image is not None
         }
+
+
+def derive_image_identity(image: Image.Image) -> str:
+    """Content-addressed identity of the decoded pixels (resolver-owned, deterministic)."""
+    digest = hashlib.sha256(f"{image.size[0]}x{image.size[1]}:{image.mode}".encode("ascii"))
+    digest.update(image.tobytes())
+    return digest.hexdigest()[:16]
+
+
+@dataclass(frozen=True)
+class ResolvedSlideAsset:
+    """A per-slide asset a real resolver already obtained (e.g. a NEWS_RECAP story's own stored
+    image). `identity` is derived from the resolved bytes by that resolver, never by the model."""
+
+    image: Image.Image
+    ref: str
+    identity: str
 
 
 def _execution_plan(creative: Any) -> dict[str, Any]:
@@ -345,6 +373,7 @@ async def execute_instagram_creative_media(
     creative_id: str,
     opportunity_id: str,
     mode: str | None = None,
+    slide_assets: dict[int, ResolvedSlideAsset] | None = None,
 ) -> InstagramCreativeMediaResult:
     """Execute explicit SOURCE/GENERATED/GRAPHIC/TYPOGRAPHIC assets, per slide when applicable."""
     plan = _execution_plan(creative)
@@ -375,7 +404,24 @@ async def execute_instagram_creative_media(
             ),
             focal_subject=str(plan.get("focal_point") or ""),
         )
-        if media_mode is InstagramMediaMode.SOURCE:
+        if slide_assets is not None and media_mode is InstagramMediaMode.SOURCE:
+            # NEWS_RECAP: each slide may only consume ITS OWN resolved story asset; a slide with
+            # none gets a deliberate graphic fallback - never another story's (or a shared) image.
+            resolved = slide_assets.get(int(asset_key)) if asset_key.isdigit() else None
+            if resolved is None:
+                assets.append(InstagramMediaExecutionAsset(
+                    status="graphic", image=None,
+                    final_compositor_treatment="deliberate_no_media_graphic_fallback",
+                    **{**common, "media_mode": InstagramMediaMode.GRAPHIC},
+                ))
+            else:
+                assets.append(InstagramMediaExecutionAsset(
+                    status="source_media", image=resolved.image, asset_ref=resolved.ref,
+                    source_asset_ref=resolved.ref, source_treatment="recap_story_own_asset",
+                    final_compositor_treatment="exact_russian_typography_canonical_logo_safe_zones",
+                    asset_identity=resolved.identity, **common,
+                ))
+        elif media_mode is InstagramMediaMode.SOURCE:
             if source_image is None or source_ref is None:
                 missing_status = "source_media_unavailable" if plan else "source_image_unavailable"
                 assets.append(InstagramMediaExecutionAsset(
@@ -389,6 +435,7 @@ async def execute_instagram_creative_media(
                     source_asset_ref=source_ref,
                     source_treatment="creative_plan_selected_source",
                     final_compositor_treatment="exact_russian_typography_canonical_logo_safe_zones",
+                    asset_identity=derive_image_identity(source_image),
                     **common,
                 ))
         elif media_mode is InstagramMediaMode.GENERATED:
@@ -415,6 +462,10 @@ async def execute_instagram_creative_media(
                 **common,
             ))
 
+    assets = [
+        replace(a, asset_identity=derive_image_identity(a.image)) if a.image is not None and not a.asset_identity else a
+        for a in assets
+    ]
     blocking_statuses = {
         "source_image_unavailable",
         "source_media_unavailable",

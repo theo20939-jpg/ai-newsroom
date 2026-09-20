@@ -60,6 +60,7 @@ from services.instagram_content_opportunity import (
 from services.instagram_content_package import build_instagram_content_package
 from services.instagram_creative_director import (
     AudienceFacingCopyError,
+    CAROUSEL_PROMPT_VERSION,
     CreativeDirectorInput,
     CreativeDirectorUnavailableError,
     CreativeFactSafetyError,
@@ -69,7 +70,14 @@ from services.instagram_creative_director import (
     UngroundedTrendClaimError,
     generate_editorial_decision,
 )
-from services.instagram_creative_media import execute_instagram_creative_media
+from services.instagram_b4_observability import build_b4_observability
+from services.instagram_creative_media import ResolvedSlideAsset, execute_instagram_creative_media
+from services.instagram_creative_plan_service import (
+    build_carousel_fatigue_note,
+    fetch_recent_carousel_fingerprints,
+    record_creative_draft,
+)
+from services.instagram_recap_bundle import InstagramRecapBundle
 from services.instagram_director_context import (
     load_instagram_director_context,
     render_account_context,
@@ -95,6 +103,7 @@ from services.instagram_platform_renderer import (
     render_instagram_carousel,
     render_instagram_feed_image,
     render_instagram_reel_cover,
+    resolve_recap_story_assets,
 )
 from services.instagram_reel_script_readiness import compute_reel_script_readiness
 from services.instagram_shadow_pipeline import ShadowPlanResult
@@ -513,7 +522,7 @@ async def evaluate_and_submit_instagram_opportunity(
     gateway: Any, prompt_repository: Any, source_url: str | None = None,
     source_event_id: str | None = None, trend_context: str = "",
     trend_signal: TrendSignal | None = None, allow_duplicate_canary: bool = False,
-    phase_a_enabled: bool = False,
+    phase_a_enabled: bool = False, recap_bundle: InstagramRecapBundle | None = None,
 ) -> InstagramTriggerCandidateOutcome:
     """Takes an ALREADY-BUILT, ALREADY-RANKED `ContentOpportunity` (any `source_type` - selection/
     ranking is `generate_growth_strategy()`'s job, called by whichever lane constructs the
@@ -523,6 +532,9 @@ async def evaluate_and_submit_instagram_opportunity(
     are read directly, never a parallel `research_facts`-style parameter - one canonical evidence
     source per opportunity, regardless of lane. Never raises (mirrors
     `evaluate_and_submit_instagram_candidate()`'s own crash-safety contract exactly)."""
+    if recap_bundle is not None:
+        # Phase B.4.2: NEWS_RECAP - evidence is the bundle's own per-story evidence.
+        opportunity = replace(opportunity, evidence=recap_bundle.evidence)
     has_multi_step_narrative = len(opportunity.evidence) > 1
     has_video_asset = False
     if _is_external_news(opportunity) and (source_event_id or opportunity.story_id):
@@ -570,6 +582,8 @@ async def evaluate_and_submit_instagram_opportunity(
 
     opportunity = phase_a_plan.opportunity
     format_decision = phase_a_plan.format_decision
+    if recap_bundle is not None and format_decision.recommended_format is not ContentFormat.CAROUSEL:
+        format_decision = replace(format_decision, recommended_format=ContentFormat.CAROUSEL)
     if phase_a_plan.duplicate.blocked:
         return _decision_outcome(
             opportunity=opportunity, reason="duplicate_angle_blocked", trend_signal=trend_context,
@@ -599,16 +613,30 @@ async def evaluate_and_submit_instagram_opportunity(
             duplicate=phase_a_plan.duplicate, accepted=True,
         )
 
-    source_image, image_candidate, image_count, read_length = await _resolve_single_source_image(
-        session, source_event_id or opportunity.story_id
-    )
+    if recap_bundle is not None:
+        # Each recap slide consumes only its own story's asset; there is no shared source image.
+        source_image, image_candidate, image_count, read_length = None, None, 0, 0
+    else:
+        source_image, image_candidate, image_count, read_length = await _resolve_single_source_image(
+            session, source_event_id or opportunity.story_id
+        )
     if source_image is not None and image_candidate is not None:
         logger.info("instagram_source_image_selected", extra={
             "opportunity_id": opportunity.id, "image_candidate_count": image_count,
             "media_candidate_id": str(image_candidate.id), "read_byte_length": read_length,
         })
 
+    fatigue_note = ""
+    if format_decision.recommended_format is ContentFormat.CAROUSEL:
+        try:
+            fatigue_note = build_carousel_fatigue_note(await fetch_recent_carousel_fingerprints(session))
+        except Exception:
+            logger.warning("instagram_fatigue_history_unavailable", extra={"opportunity_id": opportunity.id})
+
     director_input = CreativeDirectorInput(
+        fatigue_note=fatigue_note,
+        is_recap_bundle=recap_bundle is not None,
+        recap_subjects=recap_bundle.subjects if recap_bundle is not None else [],
         objective=recommendation.primary_objective.value, format=format_decision.recommended_format.value,
         opportunity_summary=opportunity_summary, allowed_evidence=list(opportunity.evidence),
         approved_claims=list(opportunity.allowed_claims), restricted_claims=list(opportunity.restricted_claims),
@@ -645,8 +673,29 @@ async def evaluate_and_submit_instagram_opportunity(
         return InstagramTriggerCandidateOutcome(
             event_id=opportunity.id, accepted=True, reason="creative_director_returned_no_creative",
         )
+    slide_assets: dict[int, ResolvedSlideAsset] | None = None
+    deliberate_fallback: list[str] = []
+    if recap_bundle is not None and carousel is not None:
+        subjects = {i: sl.media_subject for i, sl in enumerate(carousel.slides) if sl.media_subject}
+        images, identities = resolve_recap_story_assets(subjects, recap_bundle.available_assets)
+        slide_assets = {
+            i: ResolvedSlideAsset(images[i], recap_bundle.refs.get(subjects[i], subjects[i]), identities[i])
+            for i in images
+        }
+        # A story with no stored media gets a deliberate graphic fallback: the resolver lifts that
+        # slide's must_match_story demand (recorded), never satisfying it with another story's image.
+        unmatched = [i for i, sl in enumerate(carousel.slides) if sl.must_match_story and i not in slide_assets]
+        if unmatched:
+            deliberate_fallback = sorted({carousel.slides[i].media_subject or f"slide_{i}" for i in unmatched})
+            carousel = carousel.model_copy(update={"slides": [
+                sl.model_copy(update={"must_match_story": False}) if i in unmatched else sl
+                for i, sl in enumerate(carousel.slides)
+            ]})
+            creative = carousel
+            creative_outcome = replace(creative_outcome, carousel=carousel)
     try:
         creative_media = await execute_instagram_creative_media(
+            slide_assets=slide_assets,
             creative=creative,
             source_image=source_image,
             source_ref=image_candidate.candidate_id if image_candidate else None,
@@ -711,6 +760,7 @@ async def evaluate_and_submit_instagram_opportunity(
         if format_decision.recommended_format is ContentFormat.CAROUSEL:
             renders = render_instagram_carousel(
                 pkg, slide_images=creative_media.slide_images(),
+                asset_identities=creative_media.slide_asset_identities(),
             )
             presentation = present_carousel(pkg, renders, version=1)
         elif format_decision.recommended_format is ContentFormat.REEL:
@@ -731,6 +781,30 @@ async def evaluate_and_submit_instagram_opportunity(
         logger.exception("instagram_opportunity_render_failed", extra={"opportunity_id": opportunity.id})
         return InstagramTriggerCandidateOutcome(event_id=opportunity.id, accepted=True, reason="render_failed")
     art = validate_instagram_art(pkg, renders)
+    if carousel is not None:
+        observability = build_b4_observability(
+            carousel=carousel, prompt_version=CAROUSEL_PROMPT_VERSION, renders=renders, art=art,
+            slide_identities=creative_media.slide_asset_identities(),
+            deliberate_fallback_subjects=deliberate_fallback,
+        )
+        pkg = replace(pkg, media_plan={**pkg.media_plan, "b4_observability": observability})
+        logger.info("instagram_b4_carousel_observability", extra={
+            "opportunity_id": opportunity.id, "content_archetype": observability["content_archetype"],
+            "prompt_version": observability["prompt_version"], "slide_count": observability["slide_count"],
+            "structured_composition_present": observability["structured_composition_present"],
+            "structured_composition_executed": observability["structured_composition_executed"],
+            "role_fallback_used": observability["role_fallback_used"],
+            "art_validation_passed": observability["art_validation_passed"],
+        })
+        try:
+            await record_creative_draft(
+                session, content_opportunity_id=opportunity.id, objective=recommendation.primary_objective.value,
+                format="carousel", payload=carousel.model_dump(mode="json"),
+                evidence_used=list(carousel.evidence_used),
+                ai_capability="instagram_creative_director_carousel",
+            )
+        except Exception:
+            logger.warning("instagram_creative_draft_record_failed", extra={"opportunity_id": opportunity.id})
     gate = evaluate_instagram_editorial_gate(pkg, art)
     snapshot = build_package_snapshot(
         package=pkg, opportunity=opportunity, format_decision=format_decision, shadow_plan=shadow_plan,
