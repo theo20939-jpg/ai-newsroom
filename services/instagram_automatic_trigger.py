@@ -480,43 +480,93 @@ async def _resolve_single_source_image(
 _MEDIA_COMPOSITIONS = (None, "contained_media", "full_bleed_media", "collage", "screenshot_ui")
 
 
+def _visual_dna_context() -> str:
+    """The stored, versioned Visual DNA rendered as structured text for the Creative Director (loaded
+    from docs/references/instagram/visual_dna - analysed ONCE, never re-analysed per post)."""
+    from services.instagram_visual_dna import load_visual_dna, render_visual_dna_context
+
+    dna = load_visual_dna()
+    return render_visual_dna_context(dna) if dna is not None else ""
+
+
+def _visual_dna_version() -> str:
+    from services.instagram_visual_dna import load_visual_dna
+
+    dna = load_visual_dna()
+    return dna.version if dna is not None else ""
+
+
+_PHOTO_FUNCTIONS = ("hero", "detail", "evidence_photo", None, "none")
+_NON_PHOTO_FUNCTIONS = ("ui_screenshot", "result", "before_after", "concept")
+
+
 def _carousel_media_note(*, source_image: Any, recap_bundle: InstagramRecapBundle | None) -> str:
     """Real media availability, told to the Creative Director so it plans against what exists."""
     if recap_bundle is not None:
         lines = [
-            f"{story.key}: real image available" if story.image_bytes else f"{story.key}: no image (a graphic story card is used)"
+            (f"{story.key}: real image of this story (valid media_function: hero, detail, evidence_photo)"
+             if story.image_bytes else f"{story.key}: NO image for this story (a graphic story card is used)")
             for story in recap_bundle.stories
         ]
         return "\n".join(lines)
     if source_image is not None:
         return (
-            "subject key 'source': one real image for this post is available (a single shared asset; it may "
-            "appear on several slides as different crops). Use media_subject 'source' or null."
+            "subject key 'source': ONE real image of this post's own subject (valid media_function: hero, detail, "
+            "evidence_photo). It may be used on several slides or twice on one slide with different crops. It is NOT a "
+            "screenshot, a result image, a before/after or a concept visual: plan graphics for those."
         )
-    return "no real image is available for this post: plan typographic, screenshot_ui (graphic frame) or split_compare slides with media_subject null."
+    return ("no real image is available for this post: plan typographic, graphic (ui_frame, flow_diagram, number, panel) "
+            "and split layouts; media regions cannot be used.")
+
+
+def _layout_media_refs(slide: Any) -> list[str]:
+    layout = getattr(slide, "layout", None)
+    return [r.content_ref for r in layout.regions if r.kind == "media" and r.content_ref] if layout is not None else []
 
 
 def _resolve_carousel_slide_assets(
     carousel: Any, *, recap_bundle: InstagramRecapBundle | None, source_image: Any, source_ref: str | None,
-) -> tuple[dict[int, ResolvedSlideAsset], list[str], Any]:
-    """Resolver-owned per-slide media: a slide gets an asset ONLY when a real resolved asset matches
-    the subject it asked for. NEWS_RECAP: its own story key. Other archetypes: the post's single real
-    source asset (subject 'source' or none). Anything else is a deliberate graphic fallback - never a
-    shared unrelated image, never a fabricated identity."""
+) -> tuple[dict[int, ResolvedSlideAsset], list[str], Any, dict[str, tuple[Any, str]]]:
+    """Resolver-owned media. Returns (per-slide primary assets, deliberate-fallback subjects, carousel,
+    subject_assets). `subject_assets` maps each LISTED subject key to (image, content identity): NEWS_RECAP
+    story keys, or the post's single real 'source' asset. A declarative media region can only consume a
+    listed key; a slide whose function is a screenshot/result/before-after/concept never receives the
+    'source' photo (graphic instead). Nothing is ever a shared unrelated image or a fabricated identity."""
     slides = carousel.slides
     assets: dict[int, ResolvedSlideAsset] = {}
+    subject_assets: dict[str, tuple[Any, str]] = {}
+    story_images: dict[str, Any] = {}
+    story_refs: dict[str, str] = {}
     if recap_bundle is not None:
-        subjects = {i: sl.media_subject for i, sl in enumerate(slides) if sl.media_subject}
-        images, identities = resolve_recap_story_assets(subjects, recap_bundle.available_assets)
-        assets = {
-            i: ResolvedSlideAsset(images[i], recap_bundle.refs.get(subjects[i], subjects[i]), identities[i])
-            for i in images
-        }
+        story_images, identities = resolve_recap_story_assets(
+            {i: story.key for i, story in enumerate(recap_bundle.stories)}, recap_bundle.available_assets,
+        )
+        for i, story in enumerate(recap_bundle.stories):
+            if i in story_images:
+                subject_assets[story.key] = (story_images[i], identities[i])
+                story_refs[story.key] = recap_bundle.refs.get(story.key, story.key)
     elif source_image is not None:
-        shared = ResolvedSlideAsset(source_image, source_ref or "source", derive_image_identity(source_image))
-        for i, sl in enumerate(slides):
-            if sl.composition in _MEDIA_COMPOSITIONS and (sl.media_subject or "source") == "source":
-                assets[i] = shared
+        subject_assets["source"] = (source_image, derive_image_identity(source_image))
+        story_refs["source"] = source_ref or "source"
+
+    for i, sl in enumerate(slides):
+        if getattr(sl, "layout", None) is not None:
+            usable = [
+                ref for ref in _layout_media_refs(sl)
+                if ref in subject_assets and not (ref == "source" and sl.media_function in _NON_PHOTO_FUNCTIONS)
+            ]
+            if usable:
+                image, identity = subject_assets[usable[0]]
+                assets[i] = ResolvedSlideAsset(image, story_refs.get(usable[0], usable[0]), identity)
+        elif recap_bundle is not None:
+            key = sl.media_subject
+            if key in subject_assets:
+                image, identity = subject_assets[key]
+                assets[i] = ResolvedSlideAsset(image, story_refs.get(key, key), identity)
+        elif source_image is not None and sl.composition in _MEDIA_COMPOSITIONS and (sl.media_subject or "source") == "source":
+            image, identity = subject_assets["source"]
+            assets[i] = ResolvedSlideAsset(image, story_refs["source"], identity)
+
     unmatched = [i for i, sl in enumerate(slides) if sl.must_match_story and i not in assets]
     fallback: list[str] = []
     if unmatched:
@@ -525,7 +575,7 @@ def _resolve_carousel_slide_assets(
             sl.model_copy(update={"must_match_story": False}) if i in unmatched else sl
             for i, sl in enumerate(slides)
         ]})
-    return assets, fallback, carousel
+    return assets, fallback, carousel, subject_assets
 
 
 async def evaluate_and_submit_instagram_candidate(
@@ -701,6 +751,8 @@ async def evaluate_and_submit_instagram_opportunity(
         account_context=phase_a_plan.account_context, product_context=phase_a_plan.product_context,
         recent_content_context=phase_a_plan.recent_content_context,
         editorial_decision=json.dumps(opportunity.editorial_decision, ensure_ascii=False, sort_keys=True),
+        visual_dna_context=_visual_dna_context() if format_decision.recommended_format is ContentFormat.CAROUSEL else "",
+        visual_dna_version=_visual_dna_version() if format_decision.recommended_format is ContentFormat.CAROUSEL else "",
         media_note=(
             _carousel_media_note(source_image=source_image, recap_bundle=recap_bundle)
             if format_decision.recommended_format is ContentFormat.CAROUSEL else ""
@@ -733,9 +785,10 @@ async def evaluate_and_submit_instagram_opportunity(
             event_id=opportunity.id, accepted=True, reason="creative_director_returned_no_creative",
         )
     slide_assets: dict[int, ResolvedSlideAsset] | None = None
+    subject_assets: dict[str, Any] = {}
     deliberate_fallback: list[str] = []
     if carousel is not None:
-        slide_assets, deliberate_fallback, carousel = _resolve_carousel_slide_assets(
+        slide_assets, deliberate_fallback, carousel, subject_assets = _resolve_carousel_slide_assets(
             carousel, recap_bundle=recap_bundle, source_image=source_image,
             source_ref=image_candidate.candidate_id if image_candidate else None,
         )
@@ -809,6 +862,7 @@ async def evaluate_and_submit_instagram_opportunity(
             renders = render_instagram_carousel(
                 pkg, slide_images=creative_media.slide_images(),
                 asset_identities=creative_media.slide_asset_identities(),
+                subject_assets=subject_assets,
             )
             presentation = present_carousel(pkg, renders, version=1)
         elif format_decision.recommended_format is ContentFormat.REEL:

@@ -528,6 +528,39 @@ def _run_attempt(a: _Attempt, *, spec, text, index, total, media, fx, fy, subjec
     return _render_contained(spec, text, index, total, media, a.position or "top", a.scale or 0.46, fx, fy, framed=a.composition == "screenshot_ui")
 
 
+def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets, visual_direction):
+    """Phase B.5: render a DECLARATIVE layout when the slide carries one. Returns None when the slide
+    has no layout; (result, adaptations) when it rendered; (None, rejection_codes) when the plan was
+    unsafe or its text could not fit - the caller then runs the deterministic role fallback."""
+    if layout_plan is None:
+        return None
+    from pydantic import ValidationError
+
+    from schemas.instagram_creative import InstagramSlideLayout
+    from services.instagram_declarative_layout import render_declared_slide
+    from services.instagram_layout_validation import validate_layout
+
+    try:
+        layout = InstagramSlideLayout.model_validate(layout_plan)
+    except ValidationError:
+        return None, ["layout_schema_invalid"]
+    validated = validate_layout(layout, slide_copy=slide_copy, resolvable_subjects=set(subject_assets))
+    if not validated.accepted or validated.layout is None:
+        return None, validated.rejection_codes
+    result = render_declared_slide(
+        spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
+        subject_assets=subject_assets, visual_direction=visual_direction, progress_hidden=validated.progress_hidden,
+    )
+    if result.text_clipped:
+        return None, ["text_does_not_fit_declared_regions"]
+    adaptations = [f"{i.code}" for i in validated.issues if i.severity in ("adapted", "note")]
+    if validated.unresolved_media:
+        # a media region whose subject no resolver listed was dropped - never filled with a hero image
+        result.notes["unresolved_media_regions"] = list(result.notes.get("unresolved_media_regions") or []) + list(validated.unresolved_media)
+        result.notes["graphic_fallback_used"] = True
+    return result, adaptations
+
+
 def render_carousel_slide(
     *, spec: ProfileSpec, role: str, index: int, total: int, slide_copy: str, source_evidence: str | None,
     package_identity: str, hero_image: Image.Image | None = None, visual_direction: str | None = None,
@@ -536,7 +569,32 @@ def render_carousel_slide(
     composition: str | None = None, media_position: str | None = None, media_scale: float | None = None,
     media_subject: str | None = None, must_match_story: bool = False,
     media_asset_identity: str | None = None,
+    layout_plan: dict | None = None, subject_assets: dict | None = None,
 ) -> LayoutResult:
+    declared = _try_declared(
+        spec=spec, layout_plan=layout_plan, slide_copy=slide_copy, index=index, total=total,
+        subject_assets=subject_assets or {}, visual_direction=visual_direction,
+    )
+    if declared is not None and declared[0] is not None:
+        result, adaptations = declared
+        result.notes.update(render_plan or {})
+        media_regions = result.notes.get("media_regions") or []
+        identity = media_asset_identity or (media_regions[0]["identity"] if media_regions else None)
+        result.notes.update({
+            "rendered_copy": [slide_copy], "internal_labels_rendered": [],
+            "visual_direction_consumed": bool(visual_direction), "media_mode_consumed": media_mode,
+            "per_slide_media_consumed": bool(media_regions), "media_need_consumed": media_need,
+            "composition_requested": None, "media_position_requested": None,
+            "media_subject": media_subject, "must_match_story": must_match_story,
+            "media_asset_identity": identity,
+            "structured_composition_present": True, "structured_composition_executed": True,
+            "fallback_role_layout_used": False, "composition_adapted_for_text_fit": False,
+            "composition_executed": result.layout_variant,
+            "layout_adaptations": adaptations, "layout_plan_rejected": None,
+            "overlay_operations_executed": 0,
+        })
+        return result
+    rejected_codes = declared[1] if declared is not None else None
     selected = media_image if media_image is not None else hero_image
     fx, fy = _focus_x_from_focal_point(focal_point), _focus_y_from_focal_point(focal_point)
     structured_present = composition is not None
@@ -588,5 +646,11 @@ def render_carousel_slide(
         # Evidence that NO overlay/scrim/dim/tint/blur of source imagery exists in this renderer.
         "overlay_operations_executed": 0,
         "source_media_pixels_unaltered": fidelity,
+        # a declared layout was supplied but rejected: the deterministic role fallback ran instead
+        "layout_plan_applied": False, "layout_plan_rejected": rejected_codes,
     })
+    if rejected_codes:
+        result.notes["structured_composition_present"] = True
+        result.notes["structured_composition_executed"] = False
+        result.notes["fallback_role_layout_used"] = True
     return result

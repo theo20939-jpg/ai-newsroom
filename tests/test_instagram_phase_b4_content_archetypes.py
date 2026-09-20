@@ -154,12 +154,13 @@ def test_overlay_is_absent_from_every_active_contract() -> None:
 
     from services.instagram_creative_director import CAROUSEL_PROMPT_VERSION
 
-    assert CAROUSEL_PROMPT_VERSION == "7"
-    text = open("prompts/instagram_creative_director_carousel/v7.yaml", encoding="utf-8").read().lower()
-    for term in ("overlay", "scrim", "darken", "dimm", "gradient", "tint"):
-        assert term not in text, term
-    slide_props = yaml.safe_load(text)["output_schema"]["properties"]["slides"]["items"]["properties"]
-    assert not any(t in name for name in slide_props for t in ("overlay", "dim", "scrim", "tint", "darken"))
+    assert CAROUSEL_PROMPT_VERSION == "8"
+    for version in ("7", "8"):  # the previous and the active contract are both free of the removed concept
+        text = open(f"prompts/instagram_creative_director_carousel/v{version}.yaml", encoding="utf-8").read().lower()
+        for term in ("overlay", "scrim", "darken", "dimm", "gradient", "tint"):
+            assert term not in text, (version, term)
+        slide_props = yaml.safe_load(text)["output_schema"]["properties"]["slides"]["items"]["properties"]
+        assert not any(t in name for name in slide_props for t in ("overlay", "dim", "scrim", "tint", "darken"))
     fields = InstagramCarouselSlideCreative.model_fields
     assert not any(k for k in fields if any(t in k for t in ("overlay", "scrim", "dim", "tint", "darken", "readability")))
     pkg = _package(_slides_with({"composition": "typographic"}))

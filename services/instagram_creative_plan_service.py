@@ -107,6 +107,9 @@ class RecentCarouselFingerprint:
     generated_at: datetime
     content_archetype: str | None
     compositions: tuple[str, ...]  # DISTINCT composition families this ONE post used (post-level, not per slide)
+    # Phase B.5: normalized traits of the post's DECLARATIVE layouts ("media_zone:top-right",
+    # "asymmetry:centered", ...) - distinct per post, never raw coordinates.
+    layout_traits: tuple[str, ...] = ()
 
 
 def _fingerprint_from_draft(draft: InstagramCreativeDraft) -> RecentCarouselFingerprint | None:
@@ -119,7 +122,7 @@ def _fingerprint_from_draft(draft: InstagramCreativeDraft) -> RecentCarouselFing
     # A legacy pre-Phase-B.4 draft's slide dicts never carry the `composition` KEY at all - that
     # absence (not merely a null value) is what marks it as unvalidated for this purpose. Never
     # infer/guess a value for it.
-    if not any(isinstance(slide, dict) and "composition" in slide for slide in slides):
+    if not any(isinstance(slide, dict) and ("composition" in slide or "layout" in slide) for slide in slides):
         return None
     # Fatigue unit is the POST: one post contributes at most one hit per composition family, no
     # matter how many of its slides used it. (Legacy `overlay_mode` keys in old payloads are
@@ -128,11 +131,23 @@ def _fingerprint_from_draft(draft: InstagramCreativeDraft) -> RecentCarouselFing
         slide["composition"] for slide in slides
         if isinstance(slide, dict) and slide.get("composition")
     }))
+    from services.instagram_layout_signature import layout_characteristics
+
+    traits: set[str] = set()
+    for slide in slides:
+        layout = slide.get("layout") if isinstance(slide, dict) else None
+        if isinstance(layout, dict) and isinstance(layout.get("regions"), list):
+            try:
+                for key, value in layout_characteristics(layout).items():
+                    if key in ("headline_zone", "media_zone", "media_dominance", "asymmetry", "visual_weight", "density"):
+                        traits.add(f"{key}:{value}")
+            except (KeyError, TypeError):
+                continue  # a malformed stored layout contributes nothing - never a guessed value
     archetype = payload.get("content_archetype")
     return RecentCarouselFingerprint(
         draft_id=draft.id, generated_at=draft.generated_at,
         content_archetype=archetype if isinstance(archetype, str) else None,
-        compositions=compositions,
+        compositions=compositions, layout_traits=tuple(sorted(traits)),
     )
 
 
@@ -171,9 +186,12 @@ def build_carousel_fatigue_note(fingerprints: list[RecentCarouselFingerprint], *
         return ""
     composition_counts: dict[str, int] = {}
     archetype_counts: dict[str, int] = {}
+    trait_counts: dict[str, int] = {}
     for fp in fingerprints:
         for comp in fp.compositions:
             composition_counts[comp] = composition_counts.get(comp, 0) + 1
+        for trait in fp.layout_traits:
+            trait_counts[trait] = trait_counts.get(trait, 0) + 1
         if fp.content_archetype:
             archetype_counts[fp.content_archetype] = archetype_counts.get(fp.content_archetype, 0) + 1
 
@@ -182,6 +200,12 @@ def build_carousel_fatigue_note(fingerprints: list[RecentCarouselFingerprint], *
         state = evaluate_fatigue_state(dimension="composition", repetition_count=count, window_days=window_days)
         if state in _FATIGUE_NOTEWORTHY_STATES:
             lines.append(f"composition '{comp}' appeared in {count} of the last {window_days}d posts ({state.value}) - avoid unless this content genuinely calls for it")
+    for trait, count in sorted(trait_counts.items(), key=lambda kv: (-kv[1], kv[0])):
+        if trait.endswith(":none"):
+            continue  # "no media"/"no headline" is not a visual treatment worth flagging
+        state = evaluate_fatigue_state(dimension="layout", repetition_count=count, window_days=window_days)
+        if state in _FATIGUE_NOTEWORTHY_STATES:
+            lines.append(f"layout trait '{trait}' appeared in {count} of the last {window_days}d posts ({state.value}) - vary it unless this content genuinely calls for it")
     for archetype, count in sorted(archetype_counts.items(), key=lambda kv: (-kv[1], kv[0])):
         state = evaluate_fatigue_state(dimension="content_archetype", repetition_count=count, window_days=window_days)
         if state in _FATIGUE_NOTEWORTHY_STATES:

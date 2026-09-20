@@ -220,6 +220,7 @@ def render_instagram_carousel(
     hero_image: Image.Image | None = None,
     slide_images: dict[int, Image.Image] | None = None,
     asset_identities: dict[int, str] | None = None,
+    subject_assets: dict[str, tuple[Image.Image, str]] | None = None,
 ) -> list[InstagramRenderResult]:
     """CAROUSEL format -> one CAROUSEL_SLIDE image per planned slide, a real visual GRAMMAR across
     the deck (section 11) - slide layout is chosen from each slide's own real `role`
@@ -277,6 +278,13 @@ def render_instagram_carousel(
             # Phase B.4.1: resolver-supplied, never plan-supplied - see this function's own
             # docstring.
             media_asset_identity=(asset_identities.get(index) if asset_identities is not None else None),
+            # Phase B.5: declarative layout + the resolver's subject->asset map (never a shared hero).
+            layout_plan=slide.get("layout"),
+            subject_assets=(
+                {k: v for k, v in subject_assets.items() if k != "source"}
+                if subject_assets and slide.get("media_function") in ("ui_screenshot", "result", "before_after", "concept")
+                else subject_assets
+            ),
         )
         results.append(_result_from_layout(layout, package, profile=InstagramRenderProfile.CAROUSEL_SLIDE, slide_index=index, slide_count=total))
     return results

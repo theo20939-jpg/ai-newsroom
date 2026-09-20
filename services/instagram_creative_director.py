@@ -88,7 +88,7 @@ EDITORIAL_DECISION_PROMPT_NAME = "instagram_editorial_decision"
 # version file is left untouched/unused, matching this codebase's own established "never edit a
 # shipped prompt version in place" convention.
 _SINGLE_PROMPT_VERSION = "6"
-_CAROUSEL_PROMPT_VERSION = "7"  # Phase B.4.4: v7 removes overlay_mode and adds media/archetype/text-capacity guidance
+_CAROUSEL_PROMPT_VERSION = "8"  # Phase B.5: v8 = visual DNA + declarative per-slide layout + carousel rhythm
 CAROUSEL_PROMPT_VERSION = _CAROUSEL_PROMPT_VERSION
 _REEL_PROMPT_VERSION = "7"
 _EDITORIAL_DECISION_PROMPT_VERSION = "1"
@@ -187,6 +187,9 @@ class CreativeDirectorInput:
     # the model plans against what exists (never invents assets). Empty for every non-carousel call.
     content_archetype: str = ""
     media_note: str = ""
+    # Phase B.5: the STRUCTURED Visual DNA (stored once, reused per post) - rendered rules, never a path.
+    visual_dna_context: str = ""
+    visual_dna_version: str = ""
 
 
 @dataclass(frozen=True)
@@ -252,6 +255,7 @@ def _build_user_text(director_input: CreativeDirectorInput) -> str:
         f"EVIDENCE BULLETS (use ONLY these for any factual claim):\n{evidence_block}"
         + (f"\nCONTENT ARCHETYPE (derived, plan for it): {director_input.content_archetype}" if director_input.content_archetype else "")
         + (f"\nMEDIA AVAILABLE FOR THIS POST:\n{director_input.media_note}" if director_input.media_note else "")
+        + (f"\n{director_input.visual_dna_context}" if director_input.visual_dna_context else "")
         + (
             "\nRECAP STORY KEYS (a slide about one story must set media_subject to exactly that key and "
             "must_match_story=true; never reuse one story's key for another): "

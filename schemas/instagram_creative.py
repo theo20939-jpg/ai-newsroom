@@ -97,6 +97,68 @@ class InstagramSingleCreative(BaseModel):
     creative_execution_plan: InstagramCreativeExecutionPlan | None = None
 
 
+# ---------------------------------------------------------------------------------------------
+# Phase B.5: DECLARATIVE slide layout. The Creative Director describes composition RELATIONSHIPS
+# (regions in normalized 0..1 canvas space); it never supplies fonts, hex colours, pixel sizes,
+# code, CSS or SVG. Brand implementation (type family, sizes per token, colours, logo, margins)
+# is renderer-owned - see services/instagram_declarative_layout.py. Coordinates are only loosely
+# bounded here on purpose: out-of-range values must be adapted or rejected PER SLIDE by
+# services/instagram_layout_validation.py, never fail the whole carousel at parse time.
+# ---------------------------------------------------------------------------------------------
+
+LayoutRegionKind = Literal["surface", "media", "text", "accent", "graphic"]
+ScaleToken = Literal["DISPLAY", "HEADLINE_L", "HEADLINE_M", "HEADLINE_S", "BODY", "CAPTION"]
+TEXT_CONTENT_REFS = ("copy", "copy_lead", "copy_rest", "number", "copy_no_number")
+MEDIA_FUNCTIONS = ("hero", "detail", "evidence_photo", "ui_screenshot", "result", "before_after", "concept", "none")
+
+
+class LayoutRegion(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: LayoutRegionKind
+    x: float = Field(ge=-1.0, le=2.0)
+    y: float = Field(ge=-1.0, le=2.0)
+    w: float = Field(ge=-1.0, le=2.0)
+    h: float = Field(ge=-1.0, le=2.0)
+    z: int = Field(default=0, ge=0, le=9)
+    # text: one of TEXT_CONTENT_REFS (derived deterministically from the slide's own copy - the
+    # model can never introduce new text here); media: a subject key the resolver listed.
+    content_ref: str | None = Field(default=None, max_length=60)
+    scale_token: ScaleToken | None = None
+    align: Literal["left", "center", "right"] | None = None
+    valign: Literal["top", "middle", "bottom"] | None = None
+    max_lines: int | None = Field(default=None, ge=1, le=10)
+    surface: Literal["paper", "soft", "red"] | None = None
+    crop_mode: Literal["cover", "contain"] | None = None
+    focus_x: float | None = Field(default=None, ge=0.0, le=1.0)
+    focus_y: float | None = Field(default=None, ge=0.0, le=1.0)
+    frame: Literal["none", "hairline", "accent"] | None = None
+    accent_type: Literal["rule_h", "rule_v", "block"] | None = None
+    graphic_type: Literal["ui_frame", "flow_diagram"] | None = None
+
+
+class InstagramSlideLayout(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    background: Literal["paper", "soft"] = "paper"
+    density: Literal["LOW", "MEDIUM", "HIGH"]
+    media_dominance: Literal["NONE", "SUPPORTING", "BALANCED", "DOMINANT"]
+    visual_weight: Literal["TEXT", "MEDIA", "MIXED", "GRAPHIC"]
+    show_progress: bool = True
+    regions: list[LayoutRegion] = Field(min_length=1, max_length=8)
+
+
+class InstagramVisualRhythm(BaseModel):
+    """Carousel-level rhythm: how consecutive slides deliberately differ (density / media dominance /
+    headline scale progression, and where a visual interruption is intended)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    arc: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    interruption_slides: list[int] = Field(default_factory=list, max_length=6)
+    repetition_note: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
+
+
 class InstagramCarouselSlideCreative(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -133,6 +195,13 @@ class InstagramCarouselSlideCreative(BaseModel):
     # asset for it - never a free-text instruction the renderer has to interpret.
     media_subject: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
     must_match_story: bool = False
+    # Phase B.5: WHAT the slide's media is FOR (asset planning) and the declarative composition.
+    # `layout` is the new primary art direction; the legacy composition/media_position/media_scale
+    # above remain a compatibility path for persisted B.4 drafts (no DB migration).
+    media_function: Literal[
+        "hero", "detail", "evidence_photo", "ui_screenshot", "result", "before_after", "concept", "none",
+    ] | None = None
+    layout: InstagramSlideLayout | None = None
     # Phase B.4.1 section 7: deliberately NOT a field here. The model may state WHICH subject a
     # slide needs (media_subject) and WHETHER a shared/fallback asset is unacceptable
     # (must_match_story) - both real creative decisions - but never the actual resolved asset's
@@ -157,6 +226,7 @@ class InstagramCarouselCreative(BaseModel):
     # absent archetype is simply "unclassified", not an error, so every existing persisted
     # InstagramCreativeDraft.payload row remains a valid InstagramCarouselCreative.
     content_archetype: Literal["ai_hack", "news_insight", "news_recap", "trend_generative"] | None = None
+    visual_rhythm: InstagramVisualRhythm | None = None
     creative_execution_plan: InstagramCreativeExecutionPlan | None = None
 
     @property

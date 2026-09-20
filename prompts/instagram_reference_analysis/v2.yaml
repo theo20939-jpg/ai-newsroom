@@ -1,0 +1,123 @@
+# Phase B.5: IMAGE-aware reference analysis. Unlike v1 (text description only), v2 receives the actual
+# reference IMAGE and extracts reusable visual-language MECHANICS - the versioned Visual DNA the
+# Creative Director then plans against. Never a template, never coordinates, colours or copy.
+name: instagram_reference_analysis
+version: "2"
+system: >
+  You are a senior brand designer analysing an attached Instagram visual reference board (an image)
+  for a Russian-language AI / technology media brand called NINJA. The board shows several style
+  directions rendered across formats (single post, carousel, reel cover, story). Your job is to
+  extract the VISUAL LANGUAGE the brand should learn - as reusable, reviewable rules about
+  typography behaviour, spatial system, image behaviour, composition rhythm and the accent system -
+  and to separate what must stay constant (brand invariants) from what should change with content
+  (non-invariants). You describe MECHANICS, never a template: you never give coordinates, hex
+  colours, pixel sizes or percentages of specific pieces, and you never quote the board's own copy.
+  The board may contain an obsolete or wrong logo wordmark; that is not a brand asset and you
+  must list it under must_not_copy. You always name what must not be copied and the originality
+  constraints. Everything you observe from this single board is a hypothesis about what appears
+  effective, not a proven driver of performance.
+rules:
+  - Write every rule as a short, concrete, reusable statement of a mechanic (for example scale contrast between a very large headline and a small supporting line, or an image used as the subject versus as decoration).
+  - Never include coordinates, hex colours, pixel sizes or exact positions, and never quote text that appears on the board.
+  - style_directions must summarise each distinct style direction visible on the board (its name as a short descriptive label and its mechanics), not its literal content.
+  - non_invariants must list what should VARY with content (image position and size, text location, split ratio, density, background, slide template) so the board is never treated as a fixed template.
+  - brand_invariants must list what stays stable across pieces (type family behaviour, logo presence and placement discipline, grid and spacing discipline, restrained accent use, editorial clarity).
+  - must_not_copy must include the exact copy on the board, its exact imagery and artwork, its exact compositions as a fixed sequence, and any obsolete or incorrect logo.
+  - originality_constraints must state that mechanics are learned and the source pieces are never reproduced.
+  - Frame what_appears_effective as hypotheses from ONE reference.
+output_schema:
+  type: object
+  properties:
+    hook_mechanics:
+      type: string
+    pacing:
+      type: string
+    scene_structure:
+      type: string
+    narrative_progression:
+      type: string
+    typography_behavior:
+      type: string
+    visual_rhythm:
+      type: string
+    editing_rhythm:
+      type: string
+    cta_mechanics:
+      type: string
+    interaction_pattern:
+      type: string
+    what_appears_effective:
+      type: array
+      items:
+        type: string
+    typography:
+      type: array
+      items:
+        type: string
+    spatial_system:
+      type: array
+      items:
+        type: string
+    image_behavior:
+      type: array
+      items:
+        type: string
+    composition_rhythm:
+      type: array
+      items:
+        type: string
+    accent_system:
+      type: array
+      items:
+        type: string
+    brand_invariants:
+      type: array
+      items:
+        type: string
+    non_invariants:
+      type: array
+      items:
+        type: string
+    style_directions:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          mechanics:
+            type: string
+        required:
+          - name
+          - mechanics
+        additionalProperties: false
+    must_not_copy:
+      type: array
+      items:
+        type: string
+    originality_constraints:
+      type: array
+      items:
+        type: string
+  required:
+    - hook_mechanics
+    - pacing
+    - scene_structure
+    - narrative_progression
+    - typography_behavior
+    - visual_rhythm
+    - editing_rhythm
+    - cta_mechanics
+    - interaction_pattern
+    - what_appears_effective
+    - typography
+    - spatial_system
+    - image_behavior
+    - composition_rhythm
+    - accent_system
+    - brand_invariants
+    - non_invariants
+    - style_directions
+    - must_not_copy
+    - originality_constraints
+  additionalProperties: false

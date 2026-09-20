@@ -237,6 +237,13 @@ def validate_instagram_art(
                 else:
                     seen_identities[asset_identity] = slide_index
 
+        # Phase B.5: a declarative layout the safe renderer REJECTED is surfaced (never silent); the
+        # deterministic fallback renderer produced this slide's pixels instead.
+        for r in render_results:
+            rejected = r.evidence.notes.get("layout_plan_rejected")
+            if rejected:
+                warnings.append(f"layout_plan_rejected: slide_index={r.evidence.slide_index} reasons={rejected}")
+
         # The claimed composition family must be the one that actually rendered - unless the renderer
         # RECORDED an honest adaptation (text-fit reflow or a deliberate graphic fallback), which is
         # surfaced as a warning rather than silently passing or blocking.

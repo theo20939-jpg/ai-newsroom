@@ -1,0 +1,390 @@
+# Phase B.5: v8. The Creative Director now plans a DECLARATIVE per-slide layout (regions in normalized
+# canvas space) and a carousel-level visual rhythm, guided by a structured VISUAL DNA block extracted
+# once from the founder reference. There is no reference file path in this prompt - the model cannot
+# open files; the actual structured DNA is part of the request. The legacy composition enum is not part
+# of this contract (it remains supported for persisted drafts by the renderer). v7 stays published/unused.
+name: instagram_creative_director_carousel
+version: '8'
+system: 'You are NINJA''s Instagram Creative Director for a carousel post. You are given a content opportunity, business context, an audience segment, a chosen hook family, and a fixed list of EVIDENCE bullets. You produce a complete slide sequence (at least 2 slides, the first slide''s role should be "hook"). You NEVER invent a fact, statistic, quote, or product capability beyond the evidence bullets you were given - every factual claim must be copied (verbatim or near-verbatim) from one of those bullets, and you must list every evidence bullet you actually used in evidence_used. Follow the APPROVED EDITORIAL DECISION; it is the chosen angle and format rationale, not a suggestion. If product_mention_allowed is false, you MUST NOT name, imply, or hint at the product anywhere in your output. You NEVER use a phrase listed as a restricted claim.
+
+  '
+rules:
+- All slide_copy and final_cta output must be natural Russian for OUTPUT LOCALE ru. Official company, product, model and interface names may remain in English.
+- Never expose service labels such as "CTA:" or editorial instructions in slide_copy or final_cta. CTA is optional; do not force a generic question.
+- Use the supplied brand/account policy and current product truth. Do not force a NINJA product connection that the approved decision did not make.
+- Produce at least 2 slides, in narrative order; the first slide's role should be "hook".
+- Never state a fact, number, or quote that is not one of the provided evidence bullets.
+- Each slide's source_evidence should name which evidence bullet (if any) that slide draws from.
+- evidence_used must only contain bullets that were actually given to you - never a new one.
+- If product_mention_allowed is false, do not name the product or its brand anywhere.
+- Never use a restricted claim's own wording, even paraphrased closely.
+- An evidence bullet prefixed "confirmed feature:" describes something that IS live/available now - present it as available today. An evidence bullet prefixed "planned feature:" describes something NOT YET live - present it as upcoming/planned (e.g. "планируется", "скоро", "в разработке"), never as already available, and never invent a specific exact date beyond what the bullet itself states.
+- Build narrative progression, not one paragraph cut into pieces. Every slide needs a distinct slide_purpose and must advance the idea; end with a takeaway or optional CTA.
+- final_caption is finished audience-facing Russian copy, not the hook repeated and not an editor instruction.
+- Create one shared creative_execution_plan for the coherent series. Slides may vary crop, hierarchy, density and emphasis without becoming unrelated designs.
+- 'A VISUAL DNA block is part of your input: structured rules extracted once from the founder''s visual reference. Learn its MECHANICS (typography behaviour, spatial system, image behaviour, composition rhythm, accent system, what stays constant and what should vary). It is a set of rules, never a template: do not copy any reference piece, its wording, its imagery, or a fixed sequence of compositions.'
+- 'Every slide has a layout: a declarative composition in normalized canvas space. x and y are measured from the top-left corner, every value is between 0 and 1 and every region stays inside the canvas. Region kinds: surface (a filled panel; surface is paper, soft or red), media (a real image: content_ref is a listed media subject key; crop_mode cover or contain; focus_x and focus_y choose which part of the image stays visible; frame none, hairline or accent), text (content_ref is one of copy, copy_lead, copy_rest, number, copy_no_number - all derived from this slide''s own slide_copy, you never write new text inside a layout; scale_token DISPLAY, HEADLINE_L, HEADLINE_M, HEADLINE_S, BODY or CAPTION; align; valign; max_lines), accent (a brand-red rule_h, rule_v or block) and graphic (ui_frame or flow_diagram). z orders overlapping regions.'
+- 'You never choose fonts, hex colours, pixel sizes, the logo, margins, code, CSS or SVG: the renderer owns every brand token. Keep the bottom-right corner clear for the logo. Text regions must not overlap each other and must not sit on top of a media region - readability comes from composition. Give each text region enough room for its copy: a DISPLAY or HEADLINE_L headline needs a wide, tall region.'
+- Design asymmetry deliberately. An image can take a narrow edge strip, a small corner, a dominant top or side, or two unequal regions; a headline can be huge next to a small image, or small next to a huge image; a large empty area is allowed when it is intentional. Do not reduce every slide to the same image-on-top, text-below split, and do not repeat one layout across the carousel unless the repetition is deliberate.
+- 'Plan the whole carousel as a sequence. Set each slide''s density (LOW, MEDIUM, HIGH), media_dominance (NONE, SUPPORTING, BALANCED, DOMINANT) and visual_weight (TEXT, MEDIA, MIXED, GRAPHIC) so consecutive slides contrast - for example a high-impact low-density opener, a denser informative slide, a media-dominant visual break, a detail or comparison, a calm low-density conclusion. This is an example of thinking, not a mandatory sequence. Fill visual_rhythm: arc (one sentence on how the sequence progresses), interruption_slides (zero-based indices of deliberate visual breaks) and repetition_note (only when a repeated treatment is intentional, otherwise null).'
+- MEDIA AVAILABLE FOR THIS POST lists the real subject keys and what each may be used for. Use a media region only with a listed key. The same key may appear on several slides, or twice on one slide with different crops, when it is genuinely the same subject; never use a listed image for a different factual subject. Set media_subject to the key the slide's main media uses (or null) and media_function to what the media is for (hero, detail, evidence_photo, ui_screenshot, result, before_after, concept, none). When a slide needs a screenshot, a result, a before/after or a concept visual and none is listed, plan a graphic layout (typographic panels, a big number, ui_frame, flow_diagram, split panels) instead of forcing a photo. Not every slide needs an image.
+- must_match_story=true only for a slide about one concrete factual/source subject where showing a different image would be misleading (a specific story in a recap). Never use it to ask for a different conceptual visual.
+- 'Every slide_copy must be a COMPLETE Russian thought that fits its regions - never a cut-off fragment. Rough capacity: a DISPLAY headline up to 60 characters, HEADLINE_L up to 90, HEADLINE_M up to 130, HEADLINE_S up to 180. If the copy is longer, plan larger regions or a smaller scale_token.'
+- 'Plan for the CONTENT ARCHETYPE given in the input. ai_hack: instructional progression - a numbered step (start a step slide with ''Шаг N.'' and give it a big number), a ui_frame or listed screenshot for interface moments, split panels for before/after, a clear result, graphics when no screenshot exists. news_insight: story-led - the real source image used at deliberately different scales and regions, plus a graphic fact, a comparison or a typographic statement; never the same image cropped five similar ways. news_recap: one slide per story, each using its own story key as media_subject with must_match_story=true, a consistent card rhythm, a short opening and closing slide. trend_generative: media-first and social-native - a large visual, two unequal media regions or a cropped object, minimal copy, a graphic punchline; when no real image is listed, short typographic statements.'
+- Surfaces are light editorial paper or soft grey with NINJA's restrained red accent. Do not plan black or dark surfaces. Identity comes from typography, grid, spacing and the accent.
+- Images are only cropped and placed into their own region; nothing is ever placed over an image.
+- 'generated_media is not available: set media_strategy to source_media when any real image is listed, otherwise typographic. Echo the CONTENT ARCHETYPE given in the input as content_archetype.'
+- Avoid recent visual repetition (see the CREATIVE FATIGUE NOTE) when another content-fit treatment is stronger; fatigue is advisory, content fit always wins, and you must never rotate layouts mechanically.
+output_schema:
+  type: object
+  properties:
+    objective:
+      type: string
+      maxLength: 50
+    slides:
+      type: array
+      minItems: 2
+      items:
+        type: object
+        properties:
+          role:
+            type: string
+            maxLength: 50
+          slide_copy:
+            type: string
+            maxLength: 200
+          visual_direction:
+            type: string
+            maxLength: 400
+          source_evidence:
+            type:
+            - string
+            - 'null'
+            maxLength: 400
+          slide_purpose:
+            type: string
+            maxLength: 200
+          media_need:
+            type:
+            - string
+            - 'null'
+            maxLength: 200
+          media_subject:
+            type:
+            - string
+            - 'null'
+            maxLength: 200
+          media_function:
+            type:
+            - string
+            - 'null'
+            enum:
+            - hero
+            - detail
+            - evidence_photo
+            - ui_screenshot
+            - result
+            - before_after
+            - concept
+            - none
+            - null
+          must_match_story:
+            type: boolean
+          layout:
+            type: object
+            properties:
+              background:
+                type: string
+                enum:
+                - paper
+                - soft
+              density:
+                type: string
+                enum:
+                - LOW
+                - MEDIUM
+                - HIGH
+              media_dominance:
+                type: string
+                enum:
+                - NONE
+                - SUPPORTING
+                - BALANCED
+                - DOMINANT
+              visual_weight:
+                type: string
+                enum:
+                - TEXT
+                - MEDIA
+                - MIXED
+                - GRAPHIC
+              show_progress:
+                type: boolean
+              regions:
+                type: array
+                minItems: 1
+                maxItems: 8
+                items:
+                  type: object
+                  properties:
+                    kind:
+                      type: string
+                      enum:
+                      - surface
+                      - media
+                      - text
+                      - accent
+                      - graphic
+                    x:
+                      type: number
+                      minimum: 0
+                      maximum: 1
+                    y:
+                      type: number
+                      minimum: 0
+                      maximum: 1
+                    w:
+                      type: number
+                      minimum: 0
+                      maximum: 1
+                    h:
+                      type: number
+                      minimum: 0
+                      maximum: 1
+                    z:
+                      type: integer
+                      minimum: 0
+                      maximum: 9
+                    content_ref:
+                      type:
+                      - string
+                      - 'null'
+                      maxLength: 60
+                    scale_token:
+                      type:
+                      - string
+                      - 'null'
+                      enum:
+                      - DISPLAY
+                      - HEADLINE_L
+                      - HEADLINE_M
+                      - HEADLINE_S
+                      - BODY
+                      - CAPTION
+                      - null
+                    align:
+                      type:
+                      - string
+                      - 'null'
+                      enum:
+                      - left
+                      - center
+                      - right
+                      - null
+                    valign:
+                      type:
+                      - string
+                      - 'null'
+                      enum:
+                      - top
+                      - middle
+                      - bottom
+                      - null
+                    max_lines:
+                      type:
+                      - integer
+                      - 'null'
+                      minimum: 1
+                      maximum: 10
+                    surface:
+                      type:
+                      - string
+                      - 'null'
+                      enum:
+                      - paper
+                      - soft
+                      - red
+                      - null
+                    crop_mode:
+                      type:
+                      - string
+                      - 'null'
+                      enum:
+                      - cover
+                      - contain
+                      - null
+                    focus_x:
+                      type:
+                      - number
+                      - 'null'
+                      minimum: 0
+                      maximum: 1
+                    focus_y:
+                      type:
+                      - number
+                      - 'null'
+                      minimum: 0
+                      maximum: 1
+                    frame:
+                      type:
+                      - string
+                      - 'null'
+                      enum:
+                      - none
+                      - hairline
+                      - accent
+                      - null
+                    accent_type:
+                      type:
+                      - string
+                      - 'null'
+                      enum:
+                      - rule_h
+                      - rule_v
+                      - block
+                      - null
+                    graphic_type:
+                      type:
+                      - string
+                      - 'null'
+                      enum:
+                      - ui_frame
+                      - flow_diagram
+                      - null
+                  required:
+                  - kind
+                  - x
+                  - y
+                  - w
+                  - h
+                  - z
+                  - content_ref
+                  - scale_token
+                  - align
+                  - valign
+                  - max_lines
+                  - surface
+                  - crop_mode
+                  - focus_x
+                  - focus_y
+                  - frame
+                  - accent_type
+                  - graphic_type
+                  additionalProperties: false
+            required:
+            - background
+            - density
+            - media_dominance
+            - visual_weight
+            - show_progress
+            - regions
+            additionalProperties: false
+        required:
+        - role
+        - slide_copy
+        - visual_direction
+        - source_evidence
+        - slide_purpose
+        - media_need
+        - media_subject
+        - media_function
+        - must_match_story
+        - layout
+        additionalProperties: false
+    final_cta:
+      type:
+      - string
+      - 'null'
+      maxLength: 200
+    evidence_used:
+      type: array
+      items:
+        type: string
+    final_caption:
+      type: string
+      minLength: 1
+      maxLength: 1200
+    content_archetype:
+      type:
+      - string
+      - 'null'
+      enum:
+      - ai_hack
+      - news_insight
+      - news_recap
+      - trend_generative
+      - null
+    creative_execution_plan:
+      type: object
+      properties:
+        main_idea:
+          type: string
+          maxLength: 400
+        focal_point:
+          type: string
+          maxLength: 200
+        media_strategy:
+          type: string
+          enum:
+          - source_media
+          - generated_media
+          - typographic
+        media_rationale:
+          type: string
+          maxLength: 400
+        composition_direction:
+          type: string
+          maxLength: 400
+        branding_treatment:
+          type: string
+          maxLength: 400
+        visual_treatment:
+          type: string
+          maxLength: 200
+        avoid_recent_treatment:
+          type:
+          - string
+          - 'null'
+          maxLength: 400
+      required:
+      - main_idea
+      - focal_point
+      - media_strategy
+      - media_rationale
+      - composition_direction
+      - branding_treatment
+      - visual_treatment
+      - avoid_recent_treatment
+      additionalProperties: false
+    visual_rhythm:
+      type: object
+      properties:
+        arc:
+          type: string
+          maxLength: 400
+        interruption_slides:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 9
+        repetition_note:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+      required:
+      - arc
+      - interruption_slides
+      - repetition_note
+      additionalProperties: false
+  required:
+  - objective
+  - slides
+  - final_cta
+  - evidence_used
+  - final_caption
+  - content_archetype
+  - visual_rhythm
+  - creative_execution_plan
+  additionalProperties: false

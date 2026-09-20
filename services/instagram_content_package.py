@@ -228,12 +228,18 @@ def _carousel_media_plan(creative: Any) -> tuple[str, str | None, str | None, di
          "media_position": getattr(slide, "media_position", None),
          "media_scale": getattr(slide, "media_scale", None),
          "media_subject": getattr(slide, "media_subject", None),
-         "must_match_story": getattr(slide, "must_match_story", False)}
+         "must_match_story": getattr(slide, "must_match_story", False),
+         # Phase B.5: declarative layout + media function, passed through verbatim.
+         "media_function": getattr(slide, "media_function", None),
+         "layout": (slide.layout.model_dump() if getattr(slide, "layout", None) is not None else None)}
         for i, slide in enumerate(creative.slides)
     ]
     media_plan = {
         "kind": "carousel", "objective": creative.objective, "slides": slides,
         "content_archetype": getattr(creative, "content_archetype", None),
+        "visual_rhythm": (
+            creative.visual_rhythm.model_dump() if getattr(creative, "visual_rhythm", None) is not None else None
+        ),
         "creative_execution_plan": (
             creative.creative_execution_plan.model_dump()
             if getattr(creative, "creative_execution_plan", None) is not None else None

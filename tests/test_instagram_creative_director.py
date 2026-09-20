@@ -53,7 +53,7 @@ def _prompt_repository() -> FakePromptRepository:
         output_schema=_SINGLE_SCHEMA,
     ))
     repository.register(RenderedPrompt(
-        name=CAROUSEL_PROMPT_NAME, version="7", system="you are the creative director", rules=["never invent facts"],
+        name=CAROUSEL_PROMPT_NAME, version="8", system="you are the creative director", rules=["never invent facts"],
         output_schema=_CAROUSEL_SCHEMA,
     ))
     repository.register(RenderedPrompt(
@@ -248,7 +248,7 @@ def _strict_mode_violations(node: dict, path: str) -> list[str]:
 
 
 @pytest.mark.parametrize(("prompt_name", "version"), [
-    (SINGLE_PROMPT_NAME, "3"), (CAROUSEL_PROMPT_NAME, "3"), (CAROUSEL_PROMPT_NAME, "6"), (CAROUSEL_PROMPT_NAME, "7"), (REEL_PROMPT_NAME, "4"),
+    (SINGLE_PROMPT_NAME, "3"), (CAROUSEL_PROMPT_NAME, "3"), (CAROUSEL_PROMPT_NAME, "6"), (CAROUSEL_PROMPT_NAME, "7"), (CAROUSEL_PROMPT_NAME, "8"), (REEL_PROMPT_NAME, "4"),
 ])
 def test_real_creative_director_prompts_have_no_openai_strict_mode_violations(prompt_name: str, version: str) -> None:
     repository = FilePromptRepository(_PROMPTS_ROOT)
@@ -343,7 +343,7 @@ def test_reel_prompt_schema_duration_bounds_match_pydantic_model() -> None:
 
 
 @pytest.mark.parametrize(("prompt_name", "version"), [
-    (SINGLE_PROMPT_NAME, "3"), (CAROUSEL_PROMPT_NAME, "3"), (CAROUSEL_PROMPT_NAME, "6"), (CAROUSEL_PROMPT_NAME, "7"), (REEL_PROMPT_NAME, "4"),
+    (SINGLE_PROMPT_NAME, "3"), (CAROUSEL_PROMPT_NAME, "3"), (CAROUSEL_PROMPT_NAME, "6"), (CAROUSEL_PROMPT_NAME, "7"), (CAROUSEL_PROMPT_NAME, "8"), (REEL_PROMPT_NAME, "4"),
 ])
 def test_real_creative_director_prompts_carry_the_state_aware_evidence_rule(prompt_name: str, version: str) -> None:
     repository = FilePromptRepository(_PROMPTS_ROOT)

@@ -303,7 +303,7 @@ async def test_F_draft_history_is_repetition_only_never_performance(db_session: 
     await _draft(db_session, _payload("contained_media"))
     fp = (await fetch_recent_carousel_fingerprints(db_session))[0]
     assert set(RecentCarouselFingerprint.__dataclass_fields__) == {
-        "draft_id", "generated_at", "content_archetype", "compositions",
+        "draft_id", "generated_at", "content_archetype", "compositions", "layout_traits",
     }
     note = build_carousel_fatigue_note([fp] * 6).lower()
     assert not any(word in note for word in ("perform", "winner", "success", "engagement", "best"))
@@ -368,7 +368,7 @@ async def test_E_live_trigger_uses_v6_archetype_structured_composition_fatigue_a
     assert "fatigued" in captured["director_input"].fatigue_note
 
     observability = captured["package"].media_plan["b4_observability"]
-    assert observability["prompt_version"] == CAROUSEL_PROMPT_VERSION == "7"
+    assert observability["prompt_version"] == CAROUSEL_PROMPT_VERSION == "8"
     assert observability["content_archetype"] == "news_insight"  # derived, not the model's stale "ai_hack"
     assert observability["structured_composition_present"] is True
     assert observability["structured_composition_executed"] is True
