@@ -542,11 +542,9 @@ def render_v8_news_card_html(copywriting_output: dict[str, Any], *, treatment: s
 # from normal NEWS delivery unless explicitly enabled" instruction.
 # ---------------------------------------------------------------------------
 
-# Phase 23.1J.1 §"LENGTH POLICY V2": tighter than V8's own ceilings - a further response to human
-# review. Still a *soft* ceiling only (governs whether `ending` is appended on top of the
-# mandatory `main_body`, never a reason to cut `main_body` itself).
-_V81_SOFT_CEILING_BY_TREATMENT: dict[str, int] = {BRIEF: 250, STANDARD: 400, MAJOR: 600}
-_V81_ABSOLUTE_CEILING_BY_TREATMENT: dict[str, int] = {BRIEF: 350, STANDARD: 500, MAJOR: 750}
+# Copywriting 8.9: the old treatment-specific editorial ceilings no longer suppress a valid,
+# distinct ending. Padding remains blocked by the existing filler/redundancy/hedge filters; final
+# whole-card safety is governed only by Telegram's actual hard limit below.
 
 _PARAGRAPH_BREAK_RE = re.compile(r"\n\s*\n+")
 
@@ -575,30 +573,67 @@ def is_v8_family_output(copywriting_output: dict[str, Any]) -> bool:
     return _is_v81_shaped(copywriting_output)
 
 
+def diagnose_v81_ending(
+    copywriting_output: dict[str, Any], *, rendered_html: str | None = None,
+) -> dict[str, str]:
+    """Explain whether the model-produced ending survives deterministic quality filters.
+
+    This diagnostic is intentionally transient: no schema or DB change, and no audience-visible
+    labels. Telegram hard-limit handling occurs later, after title/quote/footer composition.
+    """
+    main_body = copywriting_output.get("main_body")
+    ending = copywriting_output.get("ending")
+    generated = isinstance(ending, str) and bool(ending.strip())
+    result = {
+        "ending_generated": "yes" if generated else "no",
+        "ending_rendered": "no",
+        "ending_drop_reason": "null_from_model" if not generated else "other",
+    }
+    if not generated:
+        return result
+    if not isinstance(main_body, str) or not main_body.strip():
+        return result
+
+    normalized_body = _collapse_to_one_paragraph(main_body)
+    normalized_ending = _collapse_to_one_paragraph(ending)
+    if _is_filler(normalized_ending):
+        result["ending_drop_reason"] = "filler"
+        return result
+    if not _is_distinct(normalized_ending, [normalized_body], threshold=_OPTIONAL_REDUNDANCY_THRESHOLD):
+        result["ending_drop_reason"] = "redundant"
+        return result
+    body_family = _hedge_family(normalized_body)
+    ending_family = _hedge_family(normalized_ending)
+    if ending_family is not None and ending_family == body_family:
+        result["ending_drop_reason"] = "duplicate_hedge"
+        return result
+
+    result["ending_rendered"] = "yes"
+    result["ending_drop_reason"] = "none"
+    if rendered_html is not None and _v8_escape(normalized_ending) not in rendered_html:
+        result["ending_rendered"] = "no"
+        result["ending_drop_reason"] = "telegram_hard_limit"
+    return result
+
+
 def build_v81_news_body(copywriting_output: dict[str, Any], *, treatment: str = STANDARD) -> str:
-    """V8.1's analogue of `build_v8_news_body()` - `main_body` is always collapsed to exactly one
-    paragraph (`_collapse_to_one_paragraph()`, a safety net - never split, never truncated) and
-    always survives whole. `ending`, when present, is rendered as its own second paragraph (never
-    merged into main_body's own single paragraph) only when it passes the same filler/redundancy/
-    hedge-family checks V8 already established, and only while the combined length stays within
-    V8.1's own tighter soft ceiling."""
+    """Render V8-family main body plus a distinct, non-filler ending as whole paragraphs.
+
+    `treatment` remains accepted for API compatibility, but its former editorial character ceiling
+    no longer silently removes a valid ending. Actual Telegram hard safety is enforced after the
+    complete card is composed, without truncating either paragraph.
+    """
+    del treatment
     main_body = copywriting_output.get("main_body")
     if not isinstance(main_body, str) or not main_body.strip():
         return ""
     main_body = _collapse_to_one_paragraph(main_body)
 
     parts = [main_body]
-    ending = copywriting_output.get("ending")
-    if isinstance(ending, str) and ending.strip():
-        ending = _collapse_to_one_paragraph(ending)
-        if not _is_filler(ending) and _is_distinct(ending, parts, threshold=_OPTIONAL_REDUNDANCY_THRESHOLD):
-            main_family = _hedge_family(main_body)
-            ending_family = _hedge_family(ending)
-            if ending_family is None or ending_family != main_family:
-                absolute_ceiling = _V81_ABSOLUTE_CEILING_BY_TREATMENT.get(treatment, 500)
-                candidate_len = len(main_body) + 2 + len(ending)
-                if candidate_len <= absolute_ceiling:
-                    parts.append(ending)
+    diagnostic = diagnose_v81_ending(copywriting_output)
+    if diagnostic["ending_rendered"] == "yes":
+        ending = copywriting_output["ending"]
+        parts.append(_collapse_to_one_paragraph(ending))
 
     return "\n\n".join(parts)
 
@@ -676,7 +711,25 @@ def render_v81_news_card_html(
     if include_ninja_pulse_footer:
         blocks.append(build_ninja_pulse_footer_html())
 
-    return "\n\n".join(blocks)
+    rendered = "\n\n".join(blocks)
+    if _v81_telegram_utf16_length(rendered) <= _V81_QUOTE_SAFE_LIMIT:
+        return rendered
+
+    # Whole-block fallback only: a valid ending may be suppressed solely by Telegram's actual
+    # hard limit, never by an editorial treatment ceiling. Nothing is truncated. If no ending
+    # survived the quality filters, preserve the pre-existing base-card behavior and never recurse.
+    diagnostic = diagnose_v81_ending(copywriting_output)
+    if diagnostic["ending_rendered"] == "yes":
+        without_ending = dict(copywriting_output)
+        without_ending["ending"] = None
+        return render_v81_news_card_html(
+            without_ending,
+            treatment=treatment,
+            include_ninja_pulse_footer=include_ninja_pulse_footer,
+            quote_text=quote_text,
+            quote_speaker=quote_speaker,
+        )
+    return rendered
 
 
 def render_compact_news_card_html(
