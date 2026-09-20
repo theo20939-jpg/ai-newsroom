@@ -151,7 +151,7 @@ async def fetch_recent_carousel_fingerprints(
     stmt = (
         select(InstagramCreativeDraft)
         .where(InstagramCreativeDraft.format == "carousel", InstagramCreativeDraft.generated_at >= cutoff)
-        .order_by(InstagramCreativeDraft.generated_at.desc())
+        .order_by(InstagramCreativeDraft.generated_at.desc(), InstagramCreativeDraft.id.desc())
         .limit(limit)
     )
     drafts = list((await session.execute(stmt)).scalars().all())
@@ -189,3 +189,26 @@ def build_carousel_fatigue_note(fingerprints: list[RecentCarouselFingerprint], *
         if state in _FATIGUE_NOTEWORTHY_STATES:
             lines.append(f"content_archetype '{archetype}' used {count}x in the last {window_days}d ({state.value})")
     return "\n".join(lines)
+
+
+async def record_creative_draft(
+    session: AsyncSession, *, content_opportunity_id: str, objective: str, format: str, payload: dict,
+    hook_family: str | None = None, ai_model: str | None = None, ai_capability: str | None = None,
+    evidence_used: list[str] | None = None,
+) -> InstagramCreativeDraft:
+    """Phase B.4.2: the live trigger's writer for repetition history. Adds the plan + PROPOSED draft
+    with flush() only - the caller's own transaction owns the commit, so a later failure in the
+    same cycle rolls this back with everything else (unlike the create_* helpers above, which
+    commit immediately)."""
+    plan = InstagramCreativePlan(
+        content_opportunity_id=content_opportunity_id, objective=objective, format=format, hook_family=hook_family,
+    )
+    session.add(plan)
+    await session.flush()
+    draft = InstagramCreativeDraft(
+        creative_plan_id=plan.id, format=format, payload=payload, generated_at=datetime.now(timezone.utc),
+        evidence_used=evidence_used or [], ai_model=ai_model, ai_capability=ai_capability,
+    )
+    session.add(draft)
+    await session.flush()
+    return draft
