@@ -23,6 +23,7 @@ from services.weekly_recap_selection import WeeklyRecapCandidate
 
 MIN_RECAP_STORIES = 4
 MAX_RECAP_STORIES = 6
+MAX_RECAP_POOL = 8
 _MIN_IMAGE_SIDE = 256
 
 
@@ -93,14 +94,21 @@ async def build_instagram_recap_bundle(
     session: Any, *, selected: Sequence[WeeklyRecapCandidate],
 ) -> InstagramRecapBundle | None:
     """`None` when fewer than MIN_RECAP_STORIES stories are supplied (a recap needs a real set)."""
-    chosen = list(selected)[:MAX_RECAP_STORIES]
-    if len(chosen) < MIN_RECAP_STORIES:
+    pool = list(selected)[:MAX_RECAP_POOL]
+    if len(pool) < MIN_RECAP_STORIES:
         return None
-    stories: list[RecapStory] = []
-    for index, candidate in enumerate(chosen, start=1):
+    resolved: list[tuple[WeeklyRecapCandidate, Any, bytes | None, str | None]] = []
+    for candidate in pool:
         event = await session.get(NewsEvent, candidate.representative_event_id)
         if event is None:
             continue
+        data, ref = await _story_media(session, event.id)
+        resolved.append((candidate, event, data, ref))
+    # The selection layer decides WHICH stories are recap-worthy; media presence only orders them
+    # (stable partition) so the recap's own slots prefer stories that have a real stored image.
+    resolved.sort(key=lambda item: item[2] is None)
+    stories: list[RecapStory] = []
+    for index, (candidate, event, data, ref) in enumerate(resolved[:MAX_RECAP_STORIES], start=1):
         key = f"story_{index}"
         task = await session.scalar(
             select(EditorialTask)
@@ -112,7 +120,6 @@ async def build_instagram_recap_bundle(
             .order_by(EditorialTask.updated_at.desc()).limit(1)
         )
         evidence = [f"[{key}] {event.title}"] + [f"[{key}] {fact}" for fact in _research_facts(task.workflow if task else None)]
-        data, ref = await _story_media(session, event.id)
         stories.append(RecapStory(
             key=key, story_id=str(candidate.story_id), event_id=str(event.id), title=event.title,
             evidence=evidence, image_bytes=data, source_ref=ref,
