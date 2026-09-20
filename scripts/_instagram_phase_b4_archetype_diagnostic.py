@@ -201,25 +201,25 @@ def _news_recap_creative() -> InstagramCarouselCreative:
             role="story", slide_copy="История A: новая модель снижает стоимость инференса.",
             visual_direction="Контейнерное изображение сверху, привязанное именно к этой истории.",
             slide_purpose="story_a", composition="contained_media", media_position="top", media_scale=0.46,
-            media_subject="story_a_visual", must_match_story=True, media_asset_identity="story-a-2026w38",
+            media_subject="story_a_visual", must_match_story=True,
         ),
         InstagramCarouselSlideCreative(
             role="story", slide_copy="История B: новый бенчмарк для агентных задач.",
             visual_direction="Контейнерное изображение сверху, привязанное именно к этой истории.",
             slide_purpose="story_b", composition="contained_media", media_position="top", media_scale=0.46,
-            media_subject="story_b_visual", must_match_story=True, media_asset_identity="story-b-2026w38",
+            media_subject="story_b_visual", must_match_story=True,
         ),
         InstagramCarouselSlideCreative(
             role="story", slide_copy="История C: обновление в области on-device моделей.",
             visual_direction="Контейнерное изображение сверху, привязанное именно к этой истории.",
             slide_purpose="story_c", composition="contained_media", media_position="top", media_scale=0.46,
-            media_subject="story_c_visual", must_match_story=True, media_asset_identity="story-c-2026w38",
+            media_subject="story_c_visual", must_match_story=True,
         ),
         InstagramCarouselSlideCreative(
             role="story", slide_copy="История D: новая практика safety-тестирования перед релизом.",
             visual_direction="Контейнерное изображение сверху, привязанное именно к этой истории.",
             slide_purpose="story_d", composition="contained_media", media_position="top", media_scale=0.46,
-            media_subject="story_d_visual", must_match_story=True, media_asset_identity="story-d-2026w38",
+            media_subject="story_d_visual", must_match_story=True,
         ),
         InstagramCarouselSlideCreative(
             role="takeaway", slide_copy="Сохраните, чтобы не потерять контекст недели.",
@@ -233,12 +233,22 @@ def _news_recap_creative() -> InstagramCarouselCreative:
     )
 
 
-def _news_recap_assets() -> dict[int, Image.Image]:
+def _fixture_bytes(color: tuple[int, int, int], label: str) -> bytes:
+    buf = io.BytesIO()
+    _fixture(color, label).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _news_recap_available_assets() -> dict[str, bytes]:
+    """The resolver's own input: real bytes per real subject key - never per slide index. Phase
+    B.4.1 section 6/7: resolve_recap_story_assets() (services/instagram_platform_renderer.py)
+    looks each slide's own `media_subject` up here and derives its identity from the actual bytes,
+    never from anything the creative plan declared."""
     return {
-        1: _fixture((60, 90, 140), "Story A"),
-        2: _fixture((140, 60, 90), "Story B"),
-        3: _fixture((90, 140, 60), "Story C"),
-        4: _fixture((140, 120, 40), "Story D"),
+        "story_a_visual": _fixture_bytes((60, 90, 140), "Story A"),
+        "story_b_visual": _fixture_bytes((140, 60, 90), "Story B"),
+        "story_c_visual": _fixture_bytes((90, 140, 60), "Story C"),
+        "story_d_visual": _fixture_bytes((140, 120, 40), "Story D"),
     }
 
 
@@ -292,7 +302,7 @@ def _trend_generative_assets() -> dict[int, Image.Image]:
 _ARCHETYPES = {
     "ai_hack": (_ai_hack_creative, _ai_hack_assets),
     "news_insight": (_news_insight_creative, None),  # uses the real RAW asset instead
-    "news_recap": (_news_recap_creative, _news_recap_assets),
+    "news_recap": (_news_recap_creative, None),  # resolved via resolve_recap_story_assets below
     "trend_generative": (_trend_generative_creative, _trend_generative_assets),
 }
 
@@ -316,10 +326,22 @@ def run_archetype(archetype: str, *, raw_override: str | None, out_dir: Path) ->
     creative_fn, assets_fn = _ARCHETYPES[archetype]
     carousel = creative_fn()
 
+    asset_identities: dict[int, str] | None = None
     if archetype == "news_insight":
         raw_image = _load_news_insight_raw(raw_override)
         slide_images = {i: raw_image for i in range(len(carousel.slides))}
         source_image_ref = "generated:images/ff/ff5300e330b3126330077784b352405e7fbdf2236c46a202ab4c69becfc73d2f.png"
+    elif archetype == "news_recap":
+        # Phase B.4.1: the REAL resolver path - subject -> real bytes -> real content-hash
+        # identity, never the LLM/creative plan declaring an identity itself.
+        from services.instagram_platform_renderer import resolve_recap_story_assets
+
+        subjects = {
+            i: slide.media_subject for i, slide in enumerate(carousel.slides)
+            if slide.must_match_story and slide.media_subject
+        }
+        slide_images, asset_identities = resolve_recap_story_assets(subjects, _news_recap_available_assets())
+        source_image_ref = "fixture:news_recap"
     else:
         slide_images = assets_fn()
         source_image_ref = f"fixture:{archetype}"
@@ -332,7 +354,7 @@ def run_archetype(archetype: str, *, raw_override: str | None, out_dir: Path) ->
         shadow_plan=sp, creative_outcome=CreativeGenerationOutcome(carousel=carousel), account_key="ninja_pulse",
         source_image_ref=source_image_ref,
     )
-    results = render_instagram_carousel(package, slide_images=slide_images)
+    results = render_instagram_carousel(package, slide_images=slide_images, asset_identities=asset_identities)
     art = validate_instagram_art(package, results)
     gate = evaluate_instagram_editorial_gate(package, art)
 

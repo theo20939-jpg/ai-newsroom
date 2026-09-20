@@ -123,7 +123,13 @@ class InstagramCarouselSlideCreative(BaseModel):
     # asset for it - never a free-text instruction the renderer has to interpret.
     media_subject: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
     must_match_story: bool = False
-    media_asset_identity: str | None = Field(default=None, max_length=200)
+    # Phase B.4.1 section 7: deliberately NOT a field here. The model may state WHICH subject a
+    # slide needs (media_subject) and WHETHER a shared/fallback asset is unacceptable
+    # (must_match_story) - both real creative decisions - but never the actual resolved asset's
+    # identity. An LLM cannot know what bytes a resolver will actually attach to a slide, so it
+    # must never be trusted to declare that identity itself (services/instagram_platform_
+    # renderer.py::render_instagram_carousel's own `asset_identities` parameter, supplied by
+    # whatever real code resolves media, is the only source of truth the validator trusts).
 
 
 class InstagramCarouselCreative(BaseModel):

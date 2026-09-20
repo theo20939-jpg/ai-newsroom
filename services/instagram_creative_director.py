@@ -87,7 +87,8 @@ EDITORIAL_DECISION_PROMPT_NAME = "instagram_editorial_decision"
 # version file is left untouched/unused, matching this codebase's own established "never edit a
 # shipped prompt version in place" convention.
 _SINGLE_PROMPT_VERSION = "6"
-_CAROUSEL_PROMPT_VERSION = "5"
+_CAROUSEL_PROMPT_VERSION = "6"  # Phase B.4.1: v6 adds the bounded structured art-direction fields
+# to the REAL output_schema - v5 stays published/unused, never silently edited in place.
 _REEL_PROMPT_VERSION = "7"
 _EDITORIAL_DECISION_PROMPT_VERSION = "1"
 
@@ -438,14 +439,55 @@ async def generate_single_creative(
     return CreativeGenerationOutcome(single=creative, call=call)
 
 
+def derive_content_archetype(
+    decision: InstagramEditorialDecision | None, *, is_recap_bundle: bool = False,
+) -> str | None:
+    """Phase B.4.1 section 3: the REAL archetype decision owner. Reuses the EXISTING upstream
+    `InstagramEditorialDecision` (already produced by this same module's own editorial-decision
+    call, before a Creative Director call ever runs) as the evidence source - no new parallel
+    classifier, no LLM call added. This function's result OVERRIDES whatever the carousel prompt
+    itself may have emitted for `content_archetype` (v6.yaml's own field is advisory only - a
+    model-declared label is not a trustworthy decision the way a deterministic function driven by
+    the real upstream editorial context is).
+
+    `is_recap_bundle` is the one signal this function cannot derive from a single opportunity's
+    own decision: NEWS_RECAP is a multi-opportunity BUNDLING choice a future calendar/planning
+    layer makes before any single Creative Director call - supplied explicitly by that caller,
+    never guessed here. No such bundling layer exists in this repository yet (disclosed gap, not
+    fabricated)."""
+    if is_recap_bundle:
+        return "news_recap"
+    if decision is None:
+        return None
+    if decision.angle_intent == "HOW_TO" or decision.opportunity_type in ("PRODUCT", "EVERGREEN"):
+        return "ai_hack"
+    if decision.opportunity_type in ("NEWS_X_TREND", "PRODUCT_X_TREND") or decision.origin == "TREND":
+        return "trend_generative"
+    return "news_insight"
+
+
+def _parse_editorial_decision(raw: str) -> InstagramEditorialDecision | None:
+    if not raw:
+        return None
+    try:
+        return InstagramEditorialDecision.model_validate_json(raw)
+    except Exception:
+        return None  # best-effort context only - never blocks generation over a parse failure
+
+
 async def generate_carousel_creative(
     gateway: LLMGateway, prompt_repository: PromptRepository, *, director_input: CreativeDirectorInput,
+    is_recap_bundle: bool = False,
 ) -> CreativeGenerationOutcome:
     output, call = await _call_creative_director(
         gateway, prompt_repository, prompt_name=CAROUSEL_PROMPT_NAME, director_input=director_input,
         prompt_version=_CAROUSEL_PROMPT_VERSION,
     )
     creative = InstagramCarouselCreative.model_validate(output)
+    decision = _parse_editorial_decision(director_input.editorial_decision)
+    archetype = derive_content_archetype(decision, is_recap_bundle=is_recap_bundle)
+    if archetype is not None:
+        creative = creative.model_copy(update={"content_archetype": archetype})
     plan = creative.creative_execution_plan
     text_fields = [slide.slide_copy for slide in creative.slides] + [
         creative.final_cta or "", creative.final_caption or "",

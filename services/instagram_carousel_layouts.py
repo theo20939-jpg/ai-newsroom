@@ -285,6 +285,27 @@ def render_carousel_slide(
         "must_match_story": must_match_story,
         "media_asset_identity": media_asset_identity,
     })
+    # Phase B.4.1 section 5: explicit autonomous-execution observability, not visible post copy -
+    # so a real generation run can be audited for "did structured art direction actually reach
+    # this slide, or did it silently collapse back to the B.3 role default" without re-deriving it
+    # from raw notes each time.
+    # `layout_variant` is a top-level `LayoutResult` field, not a `notes` key, at this point in the
+    # pipeline (`_result_from_layout()` in services/instagram_platform_renderer.py only copies it
+    # into `notes` afterward, for the final `InstagramRenderResult`) - reading `result.notes.get(
+    # "layout_variant")` here always returned `None`, so `structured_composition_executed` was
+    # silently `False` for every real composition, never actually True. Found by the Phase B.4.1
+    # fake-gateway-to-pixels integration test (services/instagram_carousel_layouts.py has no
+    # meaningful "notes-only" observability without this fix).
+    executed_variant = result.layout_variant
+    structured_present = composition is not None
+    structured_executed = structured_present and (
+        composition in str(executed_variant or "") or executed_variant == SLIDE_LAYOUT_COMPARISON
+    )
+    result.notes.update({
+        "structured_composition_present": structured_present,
+        "structured_composition_executed": bool(structured_executed),
+        "fallback_role_layout_used": not structured_present,
+    })
     return result
 
 
