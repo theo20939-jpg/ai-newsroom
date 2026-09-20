@@ -83,6 +83,12 @@ def _output_from(creative, *, evidence_used: list[str]) -> dict:
             slide["media_need"] = "photo"
     data["evidence_used"] = evidence_used
     data["final_cta"] = data.get("final_cta")
+    if data.get("creative_execution_plan"):
+        # The diagnostic's plan asks for paid generated media; this canary has zero provider calls,
+        # so the already-stored RAW asset is supplied as the source instead.
+        data["creative_execution_plan"]["media_strategy"] = "source_media"
+        for slide in data["slides"]:
+            slide["media_need"] = "photo"
     data["creative_execution_plan"] = data.get("creative_execution_plan") or {
         "main_idea": "canary", "focal_point": "the subject", "media_strategy": "source_media",
         "media_rationale": "r", "composition_direction": "vary crop and hierarchy", "branding_treatment": "logo",
