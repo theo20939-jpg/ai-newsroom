@@ -112,7 +112,7 @@ def fake_plan(archetype: str, recap_bundle=None) -> dict:
         positions = ["top", "left", "right", "top", "left", "right"]
         for i, story in enumerate(recap_bundle.stories, start=1):
             slides.append(_slide(
-                "story", story.title[:95], f"story {i}", composition="contained_media", media_position=positions[(i - 1) % 6],
+                "story", story.title, f"story {i}", composition="contained_media", media_position=positions[(i - 1) % 6],
                 media_scale=0.5 if positions[(i - 1) % 6] == "top" else 0.44, media_subject=story.key, must_match_story=True,
                 source_evidence=story.evidence[0],
             ))
