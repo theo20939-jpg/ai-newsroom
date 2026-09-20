@@ -74,7 +74,14 @@ def interpret_render_plan(
         slide_copy = str(s.get("text") or "")
         media_need = s.get("media_need")
         layout = select_slide_layout(role=role, index=index, slide_copy=slide_copy)
-        primitive = select_media_primitive(layout=layout, media_need=media_need, has_media=has_source)
+        slide_has_media = has_source
+        for asset in media.get("assets") or []:
+            # Phase B.4.2: when the media executor recorded a per-slide asset identity, prediction
+            # follows THIS slide's own asset (a NEWS_RECAP story with no media is a deliberate
+            # graphic fallback), not package-level media availability.
+            if isinstance(asset, dict) and "asset_identity" in asset and str(asset.get("asset_key")) == str(index):
+                slide_has_media = bool(asset.get("asset_identity"))
+        primitive = select_media_primitive(layout=layout, media_need=media_need, has_media=slide_has_media)
         family = layout
         primitives = ["progress_marker", "brand_anchor", primitive.value]
         source_treatment = primitive.value
