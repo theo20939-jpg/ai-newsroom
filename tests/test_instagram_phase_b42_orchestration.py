@@ -50,10 +50,10 @@ _PROMPTS_ROOT = Path(__file__).resolve().parent.parent / "prompts"
 _EVIDENCE = "confirmed feature: NINJA drafts Instagram carousels on its own"
 
 _DECISION = {
-    "source_summary": "NINJA drafts carousels", "opportunity_type": "NEWS", "why_now": "just shipped",
-    "audience_value": "see the change", "angle": "behind the feature", "angle_intent": "EXPLAINER",
+    "source_summary": "NINJA drafts carousels", "opportunity_type": "NEWS", "why_now": "Функция только что вышла",
+    "audience_value": "Понять, что изменилось", "angle": "Как это работает изнутри", "angle_intent": "EXPLAINER",
     "topic": "carousel autonomy", "purpose": "ENGAGEMENT", "origin": "NEWS", "recommended_format": "carousel",
-    "format_reason": "a sequence reads better", "creative_direction": "show, explain, invite",
+    "format_reason": "Последовательность читается лучше одного кадра", "creative_direction": "Показать, объяснить, пригласить",
     "product_connection": None, "trend_rationale": None, "trend_signal_type": None,
     "trend_signal_provenance": None, "supplementary_story_idea": None, "evidence_used": [],
 }
