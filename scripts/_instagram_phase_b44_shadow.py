@@ -212,7 +212,7 @@ async def _run_one(name, archetype, session, gateway_factory, prompt_repo, prici
     elif archetype == "ai_hack":
         source_image = None  # no screenshot asset exists: plans must use graphic/typographic compositions
     else:
-        source_image = common.fixture_image((60, 90, 140), "trend source fixture")
+        source_image = _load_stored("images/ca/ca3f5f3f973f51f55baac90fcdeedea115707d1a398d40acdbe5da3f9484aa11.png")
         trend_signal = TrendSignal(
             signal_type=TrendSignalType.TOPIC_MOMENTUM, provenance=TrendSignalProvenance.MANUAL_EDITORIAL,
             topic=spec["decision"]["topic"], evidence=list(common.TREND_EVIDENCE),
@@ -307,11 +307,14 @@ async def _run_one(name, archetype, session, gateway_factory, prompt_repo, prici
     return record
 
 
-def _load_b2_raw() -> Image.Image:
+def _load_stored(key: str) -> Image.Image:
     from integrations.storage.image_storage import LocalImageStorage
 
-    key = "images/ff/ff5300e330b3126330077784b352405e7fbdf2236c46a202ab4c69becfc73d2f.png"
     return Image.open(io.BytesIO(LocalImageStorage(settings.image_storage_root).read(key))).convert("RGB")
+
+
+def _load_b2_raw() -> Image.Image:
+    return _load_stored("images/ff/ff5300e330b3126330077784b352405e7fbdf2236c46a202ab4c69becfc73d2f.png")
 
 
 if __name__ == "__main__":

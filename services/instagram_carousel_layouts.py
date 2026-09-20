@@ -130,7 +130,7 @@ def _draw_progress(canvas: Image.Image, spec: ProfileSpec, *, index: int, total:
 def _draw_copy(
     canvas: Image.Image, spec: ProfileSpec, text: str, *, x: int, y: float, width: int, colour, max_frac: float,
     min_frac: float = 0.03, max_lines: int = 9, weight: str = "black", max_height: int | None = None,
-    kind: str = "headline",
+    kind: str = "headline", valign: tuple[float, float, float] | None = None,
 ) -> tuple[list[TextRegionSpec], bool, int]:
     """Fit + draw one copy block. `max_height` (optional) makes an over-tall block count as clipped
     so the caller adapts the composition instead of letting text run off its region."""
@@ -144,6 +144,9 @@ def _draw_copy(
         clipped = True
     regions: list[TextRegionSpec] = []
     py = y
+    if valign is not None:  # (top, bottom, bias): place the block inside that vertical box
+        top_v, bottom_v, bias = valign
+        py = top_v + max(0.0, (bottom_v - top_v - block_h) * bias)
     for i, line in enumerate(lines):
         bbox = draw.textbbox((x, py), line, font=font)
         draw.text((x, py), line, font=font, fill=colour)
@@ -207,14 +210,14 @@ def _render_typographic(spec, text, index, total, *, media_subject, graphic_reas
         variant = "generic_typographic_statement"
         rule_y = top + round(spec.height * 0.10)
         draw.rectangle([margin, rule_y, margin + round(spec.width * tok.ACCENT_RULE_WIDTH_FRAC), rule_y + tok.ACCENT_RULE_THICKNESS_PX], fill=(*tok.RED, 255))
-        avail = spec.height - round(spec.height * spec.safe_bottom_frac) - margin - (rule_y + 60)
-        regions, clipped, _ = _draw_copy(canvas, spec, text, x=margin, y=rule_y + round(spec.height * 0.05), width=width, colour=tok.INK, max_frac=0.105, min_frac=0.045, max_height=avail)
+        bottom = spec.height - round(spec.height * spec.safe_bottom_frac) - margin
+        regions, clipped, _ = _draw_copy(canvas, spec, text, x=margin, y=rule_y, width=width, colour=tok.INK, max_frac=0.105, min_frac=0.045, max_height=bottom - (rule_y + 60), valign=(rule_y + round(spec.height * 0.05), bottom - round(spec.height * 0.05), 0.42))
     else:
         rule_y = top + round(spec.height * 0.08)
         draw.rectangle([margin, rule_y, margin + round(spec.width * tok.ACCENT_RULE_WIDTH_FRAC), rule_y + tok.ACCENT_RULE_THICKNESS_PX], fill=(*tok.RED, 255))
         text_top = rule_y + round(spec.height * 0.045)
-        avail = spec.height - round(spec.height * spec.safe_bottom_frac) - margin - text_top
-        regions, clipped, _ = _draw_copy(canvas, spec, text, x=margin, y=text_top, width=width, colour=tok.INK, max_frac=0.07, min_frac=0.03, max_height=avail)
+        bottom = spec.height - round(spec.height * spec.safe_bottom_frac) - margin
+        regions, clipped, _ = _draw_copy(canvas, spec, text, x=margin, y=text_top, width=width, colour=tok.INK, max_frac=0.07, min_frac=0.03, max_height=bottom - text_top, valign=(text_top, bottom - round(spec.height * 0.04), 0.35))
     hair_y = spec.height - round(spec.height * spec.safe_bottom_frac) - margin - round(spec.height * 0.012)
     draw.line([(margin, hair_y), (margin + round(spec.width * 0.5), hair_y)], fill=(*HAIRLINE, 255), width=2)
     return _result(canvas, spec, regions, clipped, variant=variant, treatment="none", notes={
@@ -388,7 +391,7 @@ def _render_split(spec, text, index, total, *, stacked: bool) -> LayoutResult | 
         draw.rectangle([0, mid_y, spec.width, panel_bottom + margin], fill=(*SURFACE_TINT, 255))
         draw.rectangle([margin, mid_y - 2, margin + round(spec.width * 0.3), mid_y + 2], fill=(*tok.RED, 255))
         for text_part, y0, y1 in ((left, panel_top, mid_y), (right, mid_y + round(spec.height * 0.03), panel_bottom)):
-            r, c, _ = _draw_copy(canvas, spec, text_part, x=margin, y=y0 + round(spec.height * 0.02), width=_content_width(spec, margin), colour=tok.INK, max_frac=0.06, min_frac=0.032, max_height=(y1 - y0) - round(spec.height * 0.03))
+            r, c, _ = _draw_copy(canvas, spec, text_part, x=margin, y=y0, width=_content_width(spec, margin), colour=tok.INK, max_frac=0.075, min_frac=0.032, max_height=(y1 - y0) - round(spec.height * 0.03), valign=(y0, y1, 0.5))
             regions += r
             clipped_any = clipped_any or c
         variant = "generic_split_compare_stacked"
@@ -398,7 +401,7 @@ def _render_split(spec, text, index, total, *, stacked: bool) -> LayoutResult | 
         draw.rectangle([mid_x - 3, panel_top - margin // 2, mid_x + 3, panel_bottom + margin], fill=(*tok.RED, 255))
         col_w = mid_x - margin - round(spec.width * 0.04)
         for text_part, x0 in ((left, margin), (right, mid_x + round(spec.width * 0.04))):
-            r, c, _ = _draw_copy(canvas, spec, text_part, x=x0, y=panel_top + round(spec.height * 0.04), width=col_w - (0 if x0 == margin else max(0, margin - round(spec.width * 0.04))), colour=tok.INK, max_frac=0.05, min_frac=0.03, max_height=panel_bottom - panel_top - round(spec.height * 0.08))
+            r, c, _ = _draw_copy(canvas, spec, text_part, x=x0, y=panel_top, width=col_w - (0 if x0 == margin else max(0, margin - round(spec.width * 0.04))), colour=tok.INK, max_frac=0.07, min_frac=0.03, max_height=panel_bottom - panel_top - round(spec.height * 0.08), valign=(panel_top, panel_bottom, 0.5))
             regions += r
             clipped_any = clipped_any or c
         if explicit_vs:
@@ -430,7 +433,7 @@ def _render_ui_frame(spec, text, index, total) -> LayoutResult:
     inner_w = (fx1 - fx0) - 2 * round(spec.width * 0.05)
     text_y = fy0 + bar_h + round(spec.height * 0.05)
     avail = fy1 - text_y - round(spec.height * 0.03)
-    regions, clipped, _ = _draw_copy(canvas, spec, text, x=fx0 + round(spec.width * 0.05), y=text_y, width=inner_w, colour=tok.INK, max_frac=0.055, min_frac=0.03, max_height=avail)
+    regions, clipped, _ = _draw_copy(canvas, spec, text, x=fx0 + round(spec.width * 0.05), y=text_y, width=inner_w, colour=tok.INK, max_frac=0.07, min_frac=0.03, max_height=avail, valign=(text_y, fy1 - round(spec.height * 0.03), 0.4))
     return _result(canvas, spec, regions, clipped, variant="generic_ui_frame", treatment="none", notes={
         "graphic_fallback_used": True, "graphic_fallback_reason": "no_screenshot_asset", "source_media_pixels_unaltered": None,
     })
@@ -441,13 +444,16 @@ def _render_ui_frame(spec, text, index, total) -> LayoutResult:
 # --------------------------------------------------------------------------------------
 
 
-def _chain_for(comp: str, position: str | None, scale: float | None, has_media: bool) -> list[_Attempt]:
+def _chain_for(comp: str, position: str | None, scale: float | None, has_media: bool, text: str | None = None) -> list[_Attempt]:
     pos = position if position in ("top", "left", "right") else "top"
     sc = scale if scale is not None else 0.46
     if comp == "typographic":
         return [_Attempt("typographic")]
     if comp == "split_compare":
-        return [_Attempt("split_compare"), _Attempt("split_compare", variant="stacked"), _Attempt("typographic")]
+        sides = _split_sides(text) if text is not None else None
+        short = sides is not None and max(len(sides[0]), len(sides[1])) <= 40
+        order = [_Attempt("split_compare"), _Attempt("split_compare", variant="stacked")] if short else [_Attempt("split_compare", variant="stacked"), _Attempt("split_compare")]
+        return order + [_Attempt("typographic")]
     if comp == "screenshot_ui":
         head = [_Attempt("screenshot_ui", pos, sc)] if has_media else [_Attempt("ui_frame")]
         return head + ([_Attempt("screenshot_ui", "top", 0.40)] if has_media else []) + [_Attempt("typographic")]
@@ -491,10 +497,10 @@ def render_carousel_slide(
     fx, fy = _focus_x_from_focal_point(focal_point), _focus_y_from_focal_point(focal_point)
     structured_present = composition is not None
     if structured_present:
-        chain = _chain_for(composition.lower(), media_position, media_scale, selected is not None)
+        chain = _chain_for(composition.lower(), media_position, media_scale, selected is not None, slide_copy)
     else:
         d = _default_composition(role=role, index=index, has_media=selected is not None, slide_copy=slide_copy)
-        chain = _chain_for(d.composition, d.position, d.scale, selected is not None)
+        chain = _chain_for(d.composition, d.position, d.scale, selected is not None, slide_copy)
     graphic_reason = None
     if selected is None and structured_present and composition.lower() in ("contained_media", "full_bleed_media", "collage", "screenshot_ui"):
         graphic_reason = "no_media_for_requested_composition"

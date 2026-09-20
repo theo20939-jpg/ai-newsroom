@@ -110,7 +110,11 @@ def fake_plan(archetype: str, recap_bundle=None) -> dict:
     if archetype == "news_recap":
         slides = [_slide("hook", "Главное за неделю", "open", composition="typographic")]
         positions = ["top", "left", "right", "top", "left", "right"]
-        for i, story in enumerate(recap_bundle.stories, start=1):
+        import re as _re
+
+        # The fake plan stands in for a Creative Director that writes RUSSIAN slide copy; it can only
+        # reuse a story title verbatim when that title is already Russian.
+        for i, story in enumerate([st for st in recap_bundle.stories if _re.search("[А-Яа-яЁё]", st.title)], start=1):
             slides.append(_slide(
                 "story", story.title, f"story {i}", composition="contained_media", media_position=positions[(i - 1) % 6],
                 media_scale=0.5 if positions[(i - 1) % 6] == "top" else 0.44, media_subject=story.key, must_match_story=True,
