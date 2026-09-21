@@ -63,9 +63,9 @@ def assert_no_fixture_substitution(mode: str, out_dir: Path) -> None:
     """The acceptance set (mode=real) can never contain fixture output, and fixture output can never land in an acceptance folder."""
     if mode == "fixture" and "FIXTURE_NOT_MODEL" not in out_dir.name:
         raise FixtureSubstitutionError(f"fixture mode must write to a folder marked FIXTURE_NOT_MODEL, got {out_dir.name!r}")
-    if mode == "real" and "FIXTURE" in out_dir.name.upper():
+    if mode in ("real", "replay") and "FIXTURE" in out_dir.name.upper():
         raise FixtureSubstitutionError("real acceptance output must not live in a fixture folder")
-    if mode not in ("real", "fixture"):
+    if mode not in ("real", "fixture", "replay"):
         raise FixtureSubstitutionError(f"unknown mode {mode!r}")
 
 
@@ -180,6 +180,46 @@ def _load_replays(argv: list[str]) -> dict[str, dict]:
     return replays
 
 
+# B.5.1.3 replay of the persisted B.5.1.2 real outputs. The recap/trend INPUTS are reconstructed from what B.5.1.2 persisted (the exact canonical evidence
+# handles in raw_creative_director_output.json) plus the stored newsroom images. The images were identified from the B.5.1.2 media note (size and tone) and
+# from the rendered pixels; each identity below is the sha256 prefix of the stored file (= the asset identity B.5.1.2 recorded where it recorded one).
+_B512_RECAP_IMAGES = {"story_1": "875a6e7f22d73619", "story_2": "2e945b01913ade52", "story_3": "d281246138d11622",
+                      "story_5": "dea2695ba77c5f05", "story_6": "ea5e738e17182999"}
+
+
+def _stored_image(prefix: str) -> bytes:
+    root = Path(os.environ.get("B513_STORE_ROOT", "/data/image_storage/images"))
+    return next(root.glob(f"{prefix[:2]}/{prefix}*")).read_bytes()
+
+
+def _load_all_replays(argv: list[str]) -> dict[str, dict]:
+    base = Path(argv[argv.index("--replay-from") + 1])
+    replays: dict[str, dict] = {}
+    for name in _ARCHETYPES:
+        path = base / name / "raw_creative_director_output.json"
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        replays[name] = {"output": raw["structured_output"], "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "path": str(path), "handles": raw.get("evidence_handles")}
+    return replays
+
+
+def _reconstruct_replay_inputs(replays: dict[str, dict]):
+    import re
+
+    from services.instagram_recap_bundle import InstagramRecapBundle, RecapStory
+
+    groups: dict[str, list[str]] = {}
+    for line in replays["news_recap"]["handles"].values():
+        groups.setdefault(re.match(r"\[(story_\d)\]", line).group(1), []).append(line)
+    stories = tuple(RecapStory(key=k, story_id=k, event_id=k, title=re.sub(r"^\[story_\d\]\s*", "", v[0]), evidence=v,
+                               image_bytes=_stored_image(_B512_RECAP_IMAGES[k]) if k in _B512_RECAP_IMAGES else None, source_ref=k) for k, v in groups.items())
+    bundle = InstagramRecapBundle(stories=stories)
+    assert bundle.evidence == list(replays["news_recap"]["handles"].values()), "reconstructed recap evidence differs from the persisted handle map"
+    trend_lines = list(replays["trend_generative"]["handles"].values())
+    story_2 = next(st for st in stories if st.key == "story_2")
+    trend = RecapStory(key="trend", story_id="trend", event_id="trend", title=story_2.title, evidence=trend_lines, image_bytes=story_2.image_bytes, source_ref="story_2")
+    return bundle, trend
+
+
 def _v9_fixture_plan(archetype: str, recap_bundle) -> dict:
     """DIAGNOSTIC FIXTURE ONLY: the B.5 hand-authored declarative plan adapted to the v9 contract (bounded roles, a family per slide)."""
     plan = common.fake_plan(archetype, recap_bundle)
@@ -212,7 +252,8 @@ async def main() -> None:
     assert_no_fixture_substitution(mode, out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     real = mode == "real"
-    replays = _load_replays(sys.argv[3:]) if real else {}
+    replay_all = mode == "replay"
+    replays = _load_all_replays(sys.argv[3:]) if replay_all else (_load_replays(sys.argv[3:]) if real else {})
     only = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv else list(_ARCHETYPES)
     max_real = 0 if "--only" in sys.argv and set(only) <= set(replays) else _MAX_REAL_CALLS - len(replays)
 
@@ -239,12 +280,16 @@ async def main() -> None:
         diag_tracker = RedisCostTracker(diag, pricing, ledger_namespace=DIAG_NAMESPACE)
         gateway_factory = lambda archetype, plan: layer.gateway  # noqa: E731
 
-    plain_bundle, pool_bundle, recap_note = await b5._recap_bundles()
-    trend_story = await _trend_inputs(pool_bundle)
+    if replay_all:
+        pool_bundle, trend_story = _reconstruct_replay_inputs(replays)
+        recap_note = "reconstructed from the persisted B.5.1.2 evidence handles and stored images (no production DB read)"
+    else:
+        plain_bundle, pool_bundle, recap_note = await b5._recap_bundles()
+        trend_story = await _trend_inputs(pool_bundle)
     if os.environ.get("B51_PREP"):
         print("PREP", recap_note, "| trend_story:", (trend_story.title[:80], len(trend_story.evidence)) if trend_story else None)
         return
-    if not real:
+    if not real and not replay_all:
         gateway_factory = lambda archetype, plan: common.RoutingFakeGateway(  # noqa: E731
             _decision_for(archetype, trend_story).model_dump(), plan)
 
@@ -341,7 +386,7 @@ async def _run_one(name, session, gateway_factory, prompt_repo, pricing, out_dir
     captured.clear()
     captured["replay"] = replay is not None
     captured["target_dir"] = out_dir / name
-    captured["model_source"] = "REUSED B.5.1.1 REAL OUTPUT" if replay is not None else ("NEW B.5.1.2 REAL CALL" if real else "FIXTURE_NOT_MODEL")
+    captured["model_source"] = ("REUSED B.5.1.1 REAL OUTPUT" if name in REUSABLE_ARCHETYPES else "REUSED B.5.1.2 REAL OUTPUT") if replay is not None else ("NEW B.5.1.2 REAL CALL" if real else "FIXTURE_NOT_MODEL")
     trend_signal = None
     source_image = None
     evidence = list(spec["evidence"])
@@ -366,7 +411,7 @@ async def _run_one(name, session, gateway_factory, prompt_repo, pricing, out_dir
     opportunity = ContentOpportunity(id=f"b51-{name}-{uuid4()}", source_type=OpportunitySourceType.NEWS, story_id=str(uuid4()),
                                      news_value=1.0, audience_relevance=0.5, product_mention_allowed=False, evidence=evidence, confidence=0.5)
     decision = _decision_for(name, trend_story)
-    plan = None if real else _v9_fixture_plan(name, recap_bundle)
+    plan = None if (real or replay is not None) else _v9_fixture_plan(name, recap_bundle)
     gateway = _ReplayGateway(replay["output"]) if replay is not None else gateway_factory(name, plan)
 
     async def fixed_decision(gw, repo, *, decision_input):
@@ -401,7 +446,7 @@ async def _run_one(name, session, gateway_factory, prompt_repo, pricing, out_dir
     finally:
         trigger.render_instagram_carousel, trigger.build_package_snapshot = real_render, real_snapshot
 
-    return _record(name, real, outcome, captured, seen, out_dir, pricing, evidence, replay)
+    return _record(name, real or replay is not None, outcome, captured, seen, out_dir, pricing, evidence, replay)
 
 
 def _record(name, real, outcome, captured, seen, out_dir, pricing, evidence, replay=None) -> dict:
@@ -453,7 +498,10 @@ def _record(name, real, outcome, captured, seen, out_dir, pricing, evidence, rep
             "layout_plan_applied": o.get("layout_plan_applied"), "layout_plan_rejected": o.get("layout_plan_rejected"),
             "layout_adaptations": o.get("layout_adaptations"),
             "calm_zone_adapted": o.get("calm_zone_adapted"), "calm_zone_requested": o.get("calm_zone_requested"), "calm_zone_executed": o.get("calm_zone_executed"),
-            "composition_adapted_for_text_fit": o.get("composition_adapted_for_text_fit"), "actual_media": [{"subject": m["subject"], "identity": m["identity"]} for m in (o.get("media_regions") or [])],
+            "composition_adapted_for_text_fit": o.get("composition_adapted_for_text_fit"),
+            "collage_geometry_adapted": o.get("collage_geometry_adapted"), "collage_adaptation_reasons": o.get("collage_adaptation_reasons"),
+            "requested_media_regions": o.get("requested_media_regions"), "executed_media_regions": o.get("executed_media_regions"),
+            "max_region_displacement": o.get("max_region_displacement"), "max_scale_change": o.get("max_scale_change"), "actual_media": [{"subject": m["subject"], "identity": m["identity"]} for m in (o.get("media_regions") or [])],
             "unresolved_media": o.get("unresolved_media_regions"), "slide_copy": s.get("slide_copy"),
         })
     record = {

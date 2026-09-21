@@ -45,7 +45,7 @@ def main() -> None:
         widest = max(widest, width)
         prepared.append((name, manifest, thumbs))
     W = max(widest, 1500) + 20
-    H = 90 + sum(60 + (thumb_h + 44 if thumbs else 90) + 24 for _, _, thumbs in prepared)
+    H = 90 + sum(60 + (thumb_h + 62 if thumbs else 90) + 24 for _, _, thumbs in prepared)
     sheet = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(sheet)
     d.text((20, 18), "REAL CREATIVE DIRECTOR (prompt v9.1 + Visual DNA v2) - four real archetype posts through the accepted renderer", font=ig_font(32, "black"), fill=FG)
@@ -56,7 +56,8 @@ def main() -> None:
         if valid == "PASS" and manifest.get("art_validation_passed") is False:
             valid = "FAIL (art gate)"
         d.text((20, y), name.upper(), font=ig_font(28, "black"), fill=(255, 255, 0))
-        source = "REUSED FROM B.5.1.1" if "REUSED" in str((manifest or {}).get("MODEL_SOURCE")) else "NEW B.5.1.2 CALL"
+        src = str((manifest or {}).get("MODEL_SOURCE"))
+        source = "REUSED FROM B.5.1.1" if "B.5.1.1" in src else ("REUSED FROM B.5.1.2" if "B.5.1.2 REAL OUTPUT" in src else "NEW B.5.1.2 CALL")
         d.text((320, y + 4), f"REAL MODEL - {source}" if real else "REAL MODEL: NO", font=ig_font(22, "semibold"), fill=OK if real else BAD)
         d.text((820, y + 4), f"VALIDATION: {valid}", font=ig_font(22, "semibold"), fill=OK if valid == "PASS" else BAD)
         warns = [w.split(":")[0] for w in ((manifest or {}).get("art_warnings") or [])]
@@ -78,8 +79,11 @@ def main() -> None:
             d.text((x, y + thumb_h + 4), f"SELECTED: {label}", font=ig_font(16, "semibold"), fill=FG)
             drawn = SHORT.get(executed or "", str(executed))
             d.text((x, y + thumb_h + 24), f"EXECUTED: {drawn}", font=ig_font(15, "medium"), fill=FG if executed == family else BAD)
+            sl = manifest["slides"][i] if i < len(manifest["slides"]) else {}
+            adapted = bool(sl.get("collage_geometry_adapted") or sl.get("calm_zone_adapted"))
+            d.text((x, y + thumb_h + 42), f"ADAPTED: {'YES' if adapted else 'NO'}", font=ig_font(15, "medium"), fill=OK if adapted else MUTED)
             x += t.width + gap
-        y += thumb_h + 44 + 24
+        y += thumb_h + 62 + 24
     sheet.crop((0, 0, W, y + 10)).save(out / "real_archetype_master.png")
     print("master written")
 
