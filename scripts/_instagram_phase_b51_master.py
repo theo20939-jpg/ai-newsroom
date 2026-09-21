@@ -53,6 +53,8 @@ def main() -> None:
     for name, manifest, thumbs in prepared:
         real = bool(manifest and manifest.get("REAL_MODEL"))
         valid = manifest.get("VALIDATION") if manifest else "FAIL"
+        if valid == "PASS" and manifest.get("art_validation_passed") is False:
+            valid = "FAIL (art gate)"
         d.text((20, y), name.upper(), font=ig_font(28, "black"), fill=(255, 255, 0))
         d.text((320, y + 4), f"REAL MODEL: {'YES' if real else 'NO'}", font=ig_font(22, "semibold"), fill=OK if real else BAD)
         d.text((560, y + 4), f"VALIDATION: {valid}", font=ig_font(22, "semibold"), fill=OK if valid == "PASS" else BAD)
