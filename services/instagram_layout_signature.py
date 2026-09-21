@@ -111,6 +111,9 @@ def structure_profile(layout: dict[str, Any]) -> dict[str, str]:
         "tilted_media": "yes" if any(r.get("tilt_deg") for r in medias) else "no",
         "media_coverage": _coverage(medias),
         "text_on_media": "yes" if any(r.get("on_media") for r in regions if r.get("kind") == "text") else "no",
+        "media_ground": "yes" if any(r.get("kind") == "surface" and r.get("surface") == "media_ground" for r in regions) else "no",
+        "edge_bleed": "yes" if any(float(r["x"]) < -0.001 or float(r["y"]) < -0.001 or float(r["x"]) + float(r["w"]) > 1.001 or float(r["y"]) + float(r["h"]) > 1.001
+                                   for r in medias) else "no",
     }
 
 

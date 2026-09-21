@@ -28,6 +28,12 @@ _MAX_TEXT_ON_MEDIA = 0.02
 
 # The logo is renderer-owned (bottom-right, fixed); this padded zone (normalized) is kept clear of text.
 LOGO_ZONE = (0.83, 0.82, 0.94, 0.93)
+LOGO_ZONES = {"BOTTOM_RIGHT": LOGO_ZONE, "BOTTOM_LEFT": (0.05, 0.82, 0.17, 0.93)}
+_COLLAGE_BLEED = 0.10          # collage media fragments may run off the canvas edge by this much (cropped, never clamped)
+_STAGE_BLEED = 0.40            # a staged hero object may bleed further off an edge (the object is cropped by the frame)
+_COLLAGE_MAX_OVERLAP = 0.55    # controlled overlap: at most this share of the smaller fragment may be covered
+_COLLAGE_MIN_HIERARCHY = 1.5   # the primary fragment is at least this many times the area of the secondary one
+_COLLAGE_MIN_SPREAD = 2.5      # ... and this many times the smallest fragment (no equal-card grids)
 PROGRESS_ZONE = (0.05, 0.04, 0.27, 0.10)
 
 _KIND_RANK = {"surface": 0, "media": 1, "graphic": 2, "accent": 3, "text": 4}
@@ -96,6 +102,8 @@ def validate_layout(
     regions: list[LayoutRegion] = []
     unresolved: list[str] = []
     parts = copy_parts(slide_copy)
+    collage = layout.arrangement == "collage"
+    logo_zone = LOGO_ZONES[layout.logo_position]
 
     for idx, region in enumerate(layout.regions):
         x0, y0, x1, y1 = region.x, region.y, region.x + region.w, region.y + region.h
@@ -103,6 +111,12 @@ def validate_layout(
             issues.append(LayoutIssue("non_positive_size", f"{region.kind} {region.w}x{region.h}", "rejected", idx))
             continue
         overshoot = max(-x0, -y0, x1 - 1.0, y1 - 1.0)
+        bleed = _COLLAGE_BLEED if collage else (_STAGE_BLEED if layout.arrangement == "stage" else 0.0)
+        if bleed and region.kind == "media" and overshoot <= bleed:
+            overshoot = 0.0  # deliberate edge bleed: the fragment/object is cropped by the canvas, not moved
+        if region.tilt_deg and region.kind in ("text", "surface") and not collage:
+            issues.append(LayoutIssue("tilt_only_in_collage", region.kind, "rejected", idx))
+            continue
         if overshoot > _CLAMP_TOLERANCE:
             issues.append(LayoutIssue("out_of_bounds", f"{region.kind} overshoots the canvas by {overshoot:.2f}", "rejected", idx))
             continue
@@ -149,6 +163,14 @@ def validate_layout(
             if region.surface is None or region.w < _MIN_SURFACE or region.h < _MIN_SURFACE:
                 issues.append(LayoutIssue("surface_invalid", "", "rejected", idx))
                 continue
+            if region.surface == "media_ground":
+                if not region.content_ref:
+                    issues.append(LayoutIssue("media_ground_without_subject", "", "rejected", idx))
+                    continue
+                if region.content_ref not in resolvable_subjects:
+                    unresolved.append(region.content_ref)
+                    issues.append(LayoutIssue("media_subject_unresolved", region.content_ref, "adapted", idx))
+                    continue
         elif k == "accent":
             if region.accent_type is None:
                 issues.append(LayoutIssue("accent_without_type", "", "rejected", idx))
@@ -159,7 +181,7 @@ def validate_layout(
                 issues.append(LayoutIssue("accent_geometry_invalid", region.accent_type, "rejected", idx))
                 continue
         elif k == "graphic":
-            small_ok = region.graphic_type in ("badge", "scribble")
+            small_ok = region.graphic_type in ("badge", "scribble", "arrow_scribble", "circle_scribble")
             if region.graphic_type is None or region.w < (0.05 if small_ok else 0.15) or region.h < (0.05 if small_ok else 0.1):
                 issues.append(LayoutIssue("graphic_invalid", "", "rejected", idx))
                 continue
@@ -174,12 +196,12 @@ def validate_layout(
     # 1. logo zone is kept clear of text (deterministic width trim, otherwise reject)
     fixed: list[LayoutRegion] = []
     for r in regions:
-        if r.kind == "text" and _inter_area(_rect(r), LOGO_ZONE) > 0:
-            trimmed_right = LOGO_ZONE[0] - 0.01
-            if r.y < LOGO_ZONE[3] and r.y + r.h > LOGO_ZONE[1] and trimmed_right - r.x >= _MIN_TEXT_W:
+        if r.kind == "text" and _inter_area(_rect(r), logo_zone) > 0:
+            trimmed_right = logo_zone[0] - 0.01
+            if layout.logo_position == "BOTTOM_RIGHT" and r.y < logo_zone[3] and r.y + r.h > logo_zone[1] and trimmed_right - r.x >= _MIN_TEXT_W:
                 r = r.model_copy(update={"w": trimmed_right - r.x})
                 issues.append(LayoutIssue("text_trimmed_clear_of_logo", "", "adapted", regions.index(r) if r in regions else None))
-            if _inter_area(_rect(r), LOGO_ZONE) > 0:
+            if _inter_area(_rect(r), logo_zone) > 0:
                 issues.append(LayoutIssue("text_collides_with_logo", "", "rejected"))
         fixed.append(r)
     regions = fixed
@@ -191,10 +213,15 @@ def validate_layout(
             ov = _inter_area(_rect(a), _rect(b))
             if ov > _MAX_TEXT_OVERLAP * min(_area(_rect(a)), _area(_rect(b))):
                 issues.append(LayoutIssue("text_regions_collide", "", "rejected"))
+    max_overlap = _COLLAGE_MAX_OVERLAP if collage else _MAX_MEDIA_OVERLAP
     for i, a in enumerate(medias):
         for b in medias[i + 1:]:
-            if _inter_area(_rect(a), _rect(b)) > _MAX_MEDIA_OVERLAP * min(_area(_rect(a)), _area(_rect(b))):
+            if _inter_area(_rect(a), _rect(b)) > max_overlap * min(_area(_rect(a)), _area(_rect(b))):
                 issues.append(LayoutIssue("media_regions_collide", "", "rejected"))
+    if collage and len(medias) >= 3:
+        areas = sorted((_area(_rect(m)) for m in medias), reverse=True)
+        if areas[0] < _COLLAGE_MIN_HIERARCHY * areas[1] or areas[0] < _COLLAGE_MIN_SPREAD * areas[-1]:
+            issues.append(LayoutIssue("collage_hierarchy_flat", "a collage needs one clearly primary fragment and uneven sizes, not equal cards", "rejected"))
     for t in texts:
         for m in medias:
             overlap = _inter_area(_rect(t), _rect(m))
@@ -230,6 +257,9 @@ def validate_layout(
     if hidden:
         issues.append(LayoutIssue("progress_marker_hidden", "corner covered by media/panel", "note"))
 
-    ordered = sorted(enumerate(regions), key=lambda p: (_KIND_RANK[p[1].kind], p[1].z, p[0]))
+    if collage:  # explicit layer order: z first, so a label chip or sticker can sit above one fragment and below another
+        ordered = sorted(enumerate(regions), key=lambda p: (p[1].z, _KIND_RANK[p[1].kind], p[0]))
+    else:
+        ordered = sorted(enumerate(regions), key=lambda p: (_KIND_RANK[p[1].kind], p[1].z, p[0]))
     final = layout.model_copy(update={"regions": [r for _, r in ordered]})
     return ValidatedLayout(True, final, tuple(issues), hidden, tuple(unresolved))
