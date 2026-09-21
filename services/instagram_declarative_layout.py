@@ -334,6 +334,24 @@ def _scribble_points(kind: str, x0: int, y0: int, w: int, h: int) -> list[tuple[
             t = i / steps
             pts.append((x0 + w * t, y0 + h * (1 - t) - h * 0.28 * math.sin(math.pi * t) + h * 0.03 * math.sin(t * 23)))
         return pts
+    if kind == "box_scribble":
+        # a rough hand-drawn rectangle around a detail: four wobbling sides, the last corner overshoots the first
+        o = 0.05 * min(w, h)
+        corners = [(x0 - o * 0.4, y0 + o * 0.3), (x0 + w + o * 0.5, y0 - o * 0.2), (x0 + w + o * 0.2, y0 + h + o * 0.4), (x0 - o * 0.3, y0 + h - o * 0.1), (x0 - o * 0.2, y0 - o * 0.9)]
+        pts = []
+        for (ax, ay), (bx, by) in zip(corners, corners[1:]):
+            for i in range(19):
+                t = i / 18
+                nx, ny = by - ay, ax - bx
+                norm = math.hypot(nx, ny) or 1.0
+                wob = o * 0.35 * math.sin(t * 9 + ax * 0.01)
+                pts.append((ax + (bx - ax) * t + nx / norm * wob, ay + (by - ay) * t + ny / norm * wob))
+        return pts
+    if kind == "underline_scribble":
+        # a double, connected hand-drawn underline: right along one wavy stroke, back left along a second
+        pts = [(x0 + w * (i / 36), y0 + h * 0.28 + h * 0.12 * math.sin(i * 0.9)) for i in range(37)]
+        pts += [(x0 + w * (1 - i / 36), y0 + h * 0.72 + h * 0.12 * math.sin(i * 0.9 + 1.3)) for i in range(37)]
+        return pts
     if kind == "circle_scribble":
         cx, cy = x0 + w / 2, y0 + h / 2
         pts = []
@@ -369,6 +387,7 @@ def render_declared_slide(
     treatment = "none"
     rotations = layers = object_px = object_bbox_px = 0
     object_boxes: list[list[float]] = []
+    bleed_sides: set[str] = set()
     media_mask, text_mask, content_mask = (Image.new("L", (W, H), 0) for _ in range(3))
     pad_px = round(W * 0.01)
 
@@ -422,7 +441,11 @@ def render_declared_slide(
                 px_count, (ox0_, oy0_, ox1_, oy1_) = _object_extent(tile)
                 ox0_, oy0_, ox1_, oy1_ = ox0_ + pad, oy0_ + pad, ox1_ + pad, oy1_ + pad
             object_px += px_count
-            cx0, cy0, cx1, cy1 = max(0, x0 + ox0_), max(0, y0 + oy0_), min(W, x0 + ox1_), min(H, y0 + oy1_)
+            ux0, uy0, ux1, uy1 = x0 + ox0_, y0 + oy0_, x0 + ox1_, y0 + oy1_
+            for side, hit in (("left", ux0 <= 2), ("right", ux1 >= W - 2), ("top", uy0 <= 2), ("bottom", uy1 >= H - 2)):
+                if hit:
+                    bleed_sides.add(side)
+            cx0, cy0, cx1, cy1 = max(0, ux0), max(0, uy0), min(W, ux1), min(H, uy1)
             object_bbox_px += max(0, cx1 - cx0) * max(0, cy1 - cy0)
             if cx1 > cx0 and cy1 > cy0:
                 object_boxes.append([round(cx0 / W, 3), round(cy0 / H, 3), round(cx1 / W, 3), round(cy1 / H, 3)])
@@ -513,7 +536,7 @@ def render_declared_slide(
                     shape = shape.rotate(-region.tilt_deg, expand=True, resample=Image.Resampling.BICUBIC)
                     rotations += 1
                 canvas.paste(shape, (x0 + w // 2 - shape.width // 2, y0 + h // 2 - shape.height // 2), shape)
-            elif region.graphic_type in ("scribble", "arrow_scribble", "circle_scribble"):
+            elif region.graphic_type in ("scribble", "arrow_scribble", "circle_scribble", "box_scribble", "underline_scribble"):
                 colour = _role_colour(layout, region.tone or "accent", dark=True, default=accent_default)
                 pts = _scribble_points(region.graphic_type, x0, y0, w, h)
                 width = max(4, round(W * 0.007))
@@ -616,6 +639,7 @@ def render_declared_slide(
             "object_canvas_coverage": round(min(object_px, canvas_px) / canvas_px, 4),
             "object_bbox_canvas_coverage": round(min(object_bbox_px, canvas_px) / canvas_px, 4),
             "object_bounding_boxes": object_boxes,
+            "object_edge_bleed": [side for side in ("left", "right", "top", "bottom") if side in bleed_sides],
             "negative_space": round(1 - content_mask.histogram()[255] / canvas_px, 4),
             "text_metrics": text_metrics, "text_zone_reports": zone_reports,
         },

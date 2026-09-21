@@ -136,7 +136,7 @@ class LayoutRegion(BaseModel):
     focus_y: float | None = Field(default=None, ge=0.0, le=1.0)
     frame: Literal["none", "hairline", "accent", "paper", "torn", "die_cut"] | None = None
     accent_type: Literal["rule_h", "rule_v", "block"] | None = None
-    graphic_type: Literal["ui_frame", "flow_diagram", "poll_cards", "badge", "scribble", "arrow_scribble", "circle_scribble", "highlight", "burst"] | None = None
+    graphic_type: Literal["ui_frame", "flow_diagram", "poll_cards", "badge", "scribble", "arrow_scribble", "circle_scribble", "highlight", "burst", "box_scribble", "underline_scribble"] | None = None
     # B.5R: renderer-resolved colour role (the palette itself is renderer-owned), text laid on a media
     # region (contrast is MEASURED on the unaltered pixels, never fixed with an overlay) and a small
     # collage tilt for media fragments.

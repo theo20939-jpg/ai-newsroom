@@ -181,7 +181,7 @@ def validate_layout(
                 issues.append(LayoutIssue("accent_geometry_invalid", region.accent_type, "rejected", idx))
                 continue
         elif k == "graphic":
-            small_ok = region.graphic_type in ("badge", "scribble", "arrow_scribble", "circle_scribble", "highlight", "burst")
+            small_ok = region.graphic_type in ("badge", "scribble", "arrow_scribble", "circle_scribble", "highlight", "burst", "box_scribble", "underline_scribble")
             if region.graphic_type is None or region.w < (0.05 if small_ok else 0.15) or region.h < (0.05 if small_ok else 0.1):
                 issues.append(LayoutIssue("graphic_invalid", "", "rejected", idx))
                 continue
