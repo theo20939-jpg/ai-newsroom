@@ -551,6 +551,7 @@ def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets
         result = render_declared_slide(
             spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
             subject_assets=subject_assets, visual_direction=visual_direction, progress_hidden=validated.progress_hidden,
+            adapt_calm_zone=True,
         )
     except DeclaredRenderRejected as exc:
         return None, [exc.code]
@@ -591,7 +592,7 @@ def render_carousel_slide(
             "media_subject": media_subject, "must_match_story": must_match_story,
             "media_asset_identity": identity,
             "structured_composition_present": True, "structured_composition_executed": True,
-            "fallback_role_layout_used": False, "composition_adapted_for_text_fit": False,
+            "fallback_role_layout_used": False, "composition_adapted_for_text_fit": bool(result.notes.get("composition_adapted_for_text_fit")),
             "composition_executed": result.layout_variant,
             "layout_adaptations": adaptations, "layout_plan_rejected": None,
             "overlay_operations_executed": 0,

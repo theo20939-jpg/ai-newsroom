@@ -31,7 +31,7 @@ from services.instagram_editorial_layouts import LayoutResult, TextRegionSpec
 from services.instagram_image_handling import fit_image_contain, fit_image_cover
 from services.instagram_layout_signature import layout_characteristics, layout_signature
 from services.instagram_layout_validation import PROGRESS_ZONE, copy_parts
-from services.instagram_quiet_zones import measure_zone
+from services.instagram_quiet_zones import NAMED_ZONES, measure_zone
 from services.instagram_text_fit import box4
 from services.instagram_visual_profiles import ProfileSpec, ig_font
 
@@ -366,7 +366,99 @@ def _scribble_points(kind: str, x0: int, y0: int, w: int, h: int) -> list[tuple[
     ]
 
 
+_LOGO_ZONE_RIGHT = (0.83, 0.82, 0.94, 0.93)
+
+
+def _overlap_frac(box: tuple[float, float, float, float], region: LayoutRegion) -> float:
+    ix = min(box[0] + box[2], region.x + region.w) - max(box[0], region.x)
+    iy = min(box[1] + box[3], region.y + region.h) - max(box[1], region.y)
+    return max(0.0, ix) * max(0.0, iy)
+
+
 def render_declared_slide(
+    *, spec: ProfileSpec, layout: InstagramSlideLayout, slide_copy: str, index: int, total: int,
+    subject_assets: dict[str, tuple[Image.Image, str]] | None = None, visual_direction: str | None = None,
+    progress_hidden: bool = False, adapt_calm_zone: bool = False,
+) -> LayoutResult:
+    """Render one declared layout. With `adapt_calm_zone` (the pipeline path), an IMMERSIVE plan whose single on-media text block is rejected
+    as unreadable is deterministically relocated to the best MEASURED calm zone of the actual pixels (no LLM, no randomness, nothing drawn
+    over the image) and re-rendered; if no zone fits it fails closed exactly as before."""
+    kwargs = dict(spec=spec, slide_copy=slide_copy, index=index, total=total, subject_assets=subject_assets,
+                  visual_direction=visual_direction, progress_hidden=progress_hidden)
+    try:
+        return _render_declared_once(layout=layout, **kwargs)
+    except DeclaredRenderRejected as exc:
+        if not adapt_calm_zone or exc.code != "text_on_media_unreadable":
+            raise
+        adapted = _adapt_immersive_calm_zone(layout, kwargs)
+        if adapted is None:
+            raise
+        return adapted
+
+
+def _adapt_immersive_calm_zone(layout: InstagramSlideLayout, kwargs: dict) -> LayoutResult | None:
+    from services.instagram_layout_signature import infer_family
+
+    if infer_family(layout.model_dump()) != "immersive_image_field":
+        return None
+    texts = [r for r in layout.regions if r.kind == "text" and r.on_media]
+    if len(texts) != 1:
+        return None
+    requested = texts[0]
+    base = _render_declared_once(layout=layout.model_copy(update={"regions": [r for r in layout.regions if r.kind in ("surface", "media")]}), **kwargs).image
+    spec = kwargs["spec"]
+    candidates = []
+    for name, box in NAMED_ZONES.items():
+        ix = min(box[0] + box[2], _LOGO_ZONE_RIGHT[2]) - max(box[0], _LOGO_ZONE_RIGHT[0])
+        iy = min(box[1] + box[3], _LOGO_ZONE_RIGHT[3]) - max(box[1], _LOGO_ZONE_RIGHT[1])
+        if ix > 0 and iy > 0:
+            continue
+        m = measure_zone(base, (round(box[0] * base.width), round(box[1] * base.height), round((box[0] + box[2]) * base.width), round((box[1] + box[3]) * base.height)), name=name)
+        if m.quiet:
+            busyness = m.std / 46.0 + m.edge_energy / 14.0
+            candidates.append((-round(_overlap_frac(box, requested), 4), round(busyness, 2), list(NAMED_ZONES).index(name), name, box))
+    tokens = list(SCALE_TOKENS)
+    start = tokens.index(requested.scale_token or "BODY")
+    token_steps = [tokens[start], *(t for t in tokens[start + 1:start + 3] if t.startswith("HEADLINE") or t == "BODY")]
+    ordered = sorted(candidates)
+    for token in token_steps:
+        passing: list[tuple[float, int, LayoutResult]] = []  # keep the requested scale where the measured zone allows it, then step down deterministically
+        for _, _, _, name, box in ordered:
+            widths = list(dict.fromkeys([min(requested.w, box[2]), round(min(requested.w, box[2]) * 0.8, 3)]))
+            y_max = box[1] + box[3] - requested.h
+            ys = [round(box[1] + 0.03 + 0.04 * k, 3) for k in range(0, 8) if box[1] + 0.03 + 0.04 * k <= y_max] or [box[1]]
+            for w in widths:
+                for anchor in ("right", "left"):
+                    x = box[0] + box[2] - w if anchor == "right" else box[0]
+                    for y in ys:
+                        moved = []
+                        for r in layout.regions:
+                            if r is requested:
+                                moved.append(r.model_copy(update={"x": x, "y": y, "w": w, "scale_token": token}))
+                            elif r.kind == "accent" and r.on_media:
+                                moved.append(r.model_copy(update={"x": min(max(x + (r.x - requested.x), 0.0), 1.0 - r.w), "y": min(max(y + (r.y - requested.y), 0.0), 1.0 - r.h)}))
+                            else:
+                                moved.append(r)
+                        try:
+                            result = _render_declared_once(layout=layout.model_copy(update={"regions": moved}), **kwargs)
+                        except DeclaredRenderRejected:
+                            continue
+                        if result.text_clipped:
+                            continue
+                        report = (result.notes.get("text_zone_reports") or [{}])[0]
+                        busyness = float(report.get("std", 0.0)) / 46.0 + float(report.get("edge_energy", 0.0)) / 14.0
+                        result.notes.update({
+                            "calm_zone_requested": [round(requested.x, 3), round(requested.y, 3), round(requested.w, 3), round(requested.h, 3)],
+                            "calm_zone_executed": name, "calm_zone_executed_box": [round(x, 3), round(y, 3), round(w, 3), round(requested.h, 3)],
+                            "calm_zone_adapted": True, "composition_adapted_for_text_fit": True, "calm_zone_scale_token": token,
+                        })
+                        passing.append((round(busyness, 3), len(passing), result))
+        if passing:  # among the placements that pass, the calmest measured one wins (ties: first in fixed search order)
+            return min(passing, key=lambda item: item[:2])[2]
+    return None
+
+
+def _render_declared_once(
     *, spec: ProfileSpec, layout: InstagramSlideLayout, slide_copy: str, index: int, total: int,
     subject_assets: dict[str, tuple[Image.Image, str]] | None = None, visual_direction: str | None = None,
     progress_hidden: bool = False,

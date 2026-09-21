@@ -41,6 +41,9 @@ def build_b4_observability(
             "source_media_pixels_unaltered": notes.get("source_media_pixels_unaltered"),
             "graphic_fallback_used": bool(notes.get("graphic_fallback_used")),
             "composition_adapted_for_text_fit": bool(notes.get("composition_adapted_for_text_fit")),
+            "calm_zone_requested": notes.get("calm_zone_requested"),
+            "calm_zone_executed": notes.get("calm_zone_executed"),
+            "calm_zone_adapted": bool(notes.get("calm_zone_adapted")),
             "structured_composition_present": bool(notes.get("structured_composition_present")),
             "structured_composition_executed": bool(notes.get("structured_composition_executed")),
             "role_fallback_used": bool(notes.get("fallback_role_layout_used")),
@@ -59,4 +62,5 @@ def build_b4_observability(
         "deliberate_fallback_subjects": list(deliberate_fallback_subjects),
         "art_validation_passed": bool(art.passed),
         "art_blocking_issues": list(getattr(art, "blocking_issues", []) or []),
+        "art_warnings": list(getattr(art, "warnings", []) or []),
     }
