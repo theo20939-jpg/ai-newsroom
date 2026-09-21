@@ -215,3 +215,84 @@ def build_dna_from_output(output: dict, *, digest: str, reference_path: Path | s
     except ValueError as exc:
         raise ReferenceAnalysisUnavailableError(f"AI output failed originality/structure validation: {exc}") from exc
     return deconstruction, dna
+
+
+REFERENCE_SAMPLE_ANALYSIS_PROMPT_VERSION = "3"
+
+
+def _jpeg_data_uri(image: Image.Image, *, max_side: int = 1568) -> str:
+    image = image.convert("RGB")
+    if max(image.size) > max_side:
+        scale = max_side / max(image.size)
+        image = image.resize((round(image.width * scale), round(image.height * scale)), Image.Resampling.LANCZOS)
+    out = io.BytesIO()
+    image.save(out, format="JPEG", quality=92)
+    return "data:image/jpeg;base64," + base64.b64encode(out.getvalue()).decode("ascii")
+
+
+def build_sample_analysis_request(prompt: RenderedPrompt, *, board_data_uri: str, montage_data_uris: list[str], sample_ids: list[str]) -> GenerateRequest:
+    """One request carrying the full board AND the labelled per-row sample montages (real image bytes)."""
+    system_text = prompt.system + "\n\nRULES:\n" + "\n".join(f"- {rule}" for rule in prompt.rules)
+    parts = [ContentPart(type="text", text=(
+        "Image 1 is the full reference board. Images 2-" + str(len(montage_data_uris) + 1) + " are close-up montages of its samples, one board row each, "
+        f"with the ids drawn on them. The samples are: {', '.join(sample_ids)}. Analyse every sample separately, then cluster families; "
+        "do not average the board into one overall style."
+    )), ContentPart(type="artifact_ref", artifact_ref=board_data_uri, mime_type="image/jpeg")]
+    parts += [ContentPart(type="artifact_ref", artifact_ref=uri, mime_type="image/jpeg") for uri in montage_data_uris]
+    return GenerateRequest(
+        messages=[Message(role="system", content=[ContentPart(type="text", text=system_text)]), Message(role="user", content=parts)],
+        response_mode="json_schema", response_schema=prompt.output_schema, modalities=["text", "image"],
+    )
+
+
+def build_dna_v2_from_output(output: dict, *, digest: str, repo_relative_path: str, analysis_model: str | None = None):
+    from services.instagram_visual_dna_v2 import InstagramVisualDNAV2, assert_v2_mechanics_only
+
+    try:
+        dna = InstagramVisualDNAV2(
+            version="2", reference_path=repo_relative_path, reference_sha256=digest,
+            analysis_prompt_version=REFERENCE_SAMPLE_ANALYSIS_PROMPT_VERSION, analysis_model=analysis_model,
+            global_invariants=list(output.get("global_invariants") or []), samples=list(output.get("samples") or []),
+            families=[{**f, "image_overlay_allowed": False} for f in (output.get("families") or [])],
+            contradictions_kept_distinct=list(output.get("contradictions_kept_distinct") or []),
+            must_not_copy=list(output.get("must_not_copy") or []), originality_constraints=list(output.get("originality_constraints") or []),
+        )
+        assert_v2_mechanics_only(dna)
+    except ValueError as exc:
+        raise ReferenceAnalysisUnavailableError(f"AI output failed structure/originality validation: {exc}") from exc
+    return dna
+
+
+async def analyze_reference_samples(
+    gateway: LLMGateway, prompt_repository: PromptRepository, *, reference_path: Path | str,
+    repo_relative_path: str, call_sink: list | None = None, raw_sink: list | None = None,
+):
+    """ONE controlled multimodal call: full board + labelled per-sample montages -> Visual DNA v2."""
+    from services.instagram_reference_segmentation import build_row_montages, reference_samples
+
+    _jpeg, board_uri, digest = prepare_reference_image(reference_path)
+    montage_uris = [_jpeg_data_uri(m) for m in build_row_montages(Path(reference_path))]
+    sample_ids = [s.sample_id for s in reference_samples()]
+    try:
+        prompt = prompt_repository.resolve(REFERENCE_ANALYSIS_PROMPT_NAME, REFERENCE_SAMPLE_ANALYSIS_PROMPT_VERSION)
+    except Exception as exc:
+        raise ReferenceAnalysisUnavailableError(f"prompt unavailable: {exc}") from exc
+    request = build_sample_analysis_request(prompt, board_data_uri=board_uri, montage_data_uris=montage_uris, sample_ids=sample_ids)
+    runtime = RuntimeContext(task_id=uuid4(), event_id=uuid4(), capability_name=REFERENCE_ANALYSIS_PROMPT_NAME,
+                             priority=TaskPriority.S, attempt=1, iteration_count=0)
+    try:
+        outcome = await call_generate(gateway, request, runtime=runtime, sequence=0)
+    except Exception as exc:
+        raise ReferenceAnalysisUnavailableError(f"gateway call failed: {exc}") from exc
+    if outcome.error is not None:
+        raise ReferenceAnalysisUnavailableError(str(outcome.error))
+    assert outcome.response is not None
+    if call_sink is not None:
+        call_sink.append(outcome.call)
+    output = outcome.response.structured_output
+    if output is None:
+        raise ReferenceAnalysisUnavailableError("no structured output returned")
+    if raw_sink is not None:
+        raw_sink.append(output)
+    return build_dna_v2_from_output(output, digest=digest, repo_relative_path=repo_relative_path,
+                                    analysis_model=getattr(outcome.call, "model_used", None))

@@ -1,0 +1,255 @@
+# Phase B.5R: sample-by-sample reference analysis. v2 asked for an overall visual language and returned a generic, averaged reading; v3 forces per-sample
+# decomposition and family clustering against labelled crops so family membership is verifiable.
+name: instagram_reference_analysis
+version: '3'
+system: 'You are a senior brand designer and art director reading an Instagram visual reference board for a Russian-language AI / technology media brand called NINJA. You receive the full board image plus
+  close-up montages of the board''s individual samples, each labelled S01, S02, ... (row-major; the montages are the authoritative crops). Your task is NOT to describe an overall aesthetic. Your task is
+  to identify each materially distinct composition example, describe its observable geometry and visual mechanics, and then cluster recurring mechanics into visual families WITHOUT averaging contradictory
+  examples. A sparse light typographic sample and a dense dark media-heavy sample are two valid families, never one ''moderately sparse neutral'' style. The variation on the board is part of the design
+  system. You describe only what is visible; you never quote the text on the board (refer to text by ROLE: headline, number, label, caption), never give coordinates, hex colours, pixel sizes or percentages,
+  and never name the products, people or memes shown (say ''a hero object'', ''a portrait'', ''a reaction image''). The board''s own logo mark may be obsolete; list it under must_not_copy.'
+rules:
+- 'samples: exactly one entry for EVERY labelled sample in the montages, using the exact ids shown. Do not skip, merge or invent samples.'
+- For each sample record surface (a solid dark designed surface, a dark image/illustration field, light, or mixed), visual lead, headline and body scale, text block width, alignment, whether typography
+  itself is the main visual object, media kind, number of media regions, media dominance, density, symmetry, crop and media/copy relation, spatial composition (anchor zones, negative space, intentional
+  imbalance, edge relationships), graphic devices (numbers, rules, frames, cards, stickers, UI fragments, collage pieces), accent use and what creates visual tension.
+- 'Report the real distribution: do not describe the board as mostly light or mostly dark unless the samples show it. Record dark versus light honestly per sample.'
+- 'families: derive a SMALL set (typically 3 to 7) of recurring visual families from the evidence. Do not use predefined names; name each from what is visibly shared. Every family lists member_samples using
+  the ids you analysed. A sample may belong to a second family only if it clearly shares mechanics with both.'
+- 'A family is a set of visual MECHANICS, not a layout: it must still allow substantially different geometry from slide to slide. Describe ranges (density, headline scale, media regions and dominance) that
+  cover its members.'
+- Do not average contradictory examples. If members of the board disagree (sparse versus dense, light versus dark, type-led versus media-led), keep them in separate families and list the tension in contradictions_kept_distinct.
+- Every claim must be tied to an observable behaviour in named samples. Do not use filler adjectives (clean, modern, premium, dynamic, bold) unless the sentence states the specific observed behaviour behind
+  them.
+- Dark design must be described as what it is on the board. Separately note, per family, whether the dark look comes from a solid designed surface with an independent object, or from the image itself being
+  dark. NINJA's renderer never darkens or tints a photograph; the family guidance must describe dark solid surfaces plus independent media, never a translucent overlay.
+- 'global_invariants: only what genuinely persists across the whole board or is an established brand requirement (for example the consistent logo placement discipline, restrained brand red as a signal,
+  a consistent type voice, spacing discipline, clear hierarchy). Do NOT list a background colour, a text alignment, a single image, a split ratio or whitespace as an invariant unless every sample shows
+  it.'
+- must_not_copy must include the exact copy on the board, its exact imagery, characters and artwork, its exact compositions and sample order, and the board's logo artwork if obsolete. originality_constraints
+  must say mechanics are learned and no sample is reproduced.
+- Write in English. Keep each string under 500 characters.
+output_schema:
+  type: object
+  properties:
+    samples:
+      type: array
+      items:
+        type: object
+        properties:
+          sample_id:
+            type: string
+          surface_tone: &id002
+            type: string
+            enum:
+            - dark_solid
+            - dark_image_field
+            - light
+            - mixed
+          visual_lead:
+            type: string
+            enum:
+            - type
+            - media
+            - balanced
+            - interface
+          headline_scale: &id001
+            type: string
+            enum:
+            - small
+            - medium
+            - large
+            - huge
+          body_scale: *id001
+          text_block_width:
+            type: string
+            enum:
+            - narrow
+            - medium
+            - wide
+          alignment:
+            type: string
+            enum:
+            - left
+            - center
+            - right
+            - mixed
+          type_is_main_visual_object:
+            type: boolean
+          media_kind:
+            type: string
+            enum:
+            - none
+            - photograph
+            - illustration
+            - isolated_object
+            - screenshot_or_ui
+            - collage_fragments
+            - meme_or_reaction
+          media_region_count:
+            type: integer
+          media_dominance: &id004
+            type: string
+            enum:
+            - none
+            - minor
+            - balanced
+            - dominant
+          density: &id003
+            type: string
+            enum:
+            - low
+            - medium
+            - high
+          symmetry:
+            type: string
+            enum:
+            - symmetric
+            - asymmetric
+          crop_and_media_relation:
+            type: string
+          spatial_composition:
+            type: string
+          graphic_devices:
+            type: array
+            items:
+              type: string
+          accent_use:
+            type: string
+          visual_tension:
+            type: string
+        required:
+        - sample_id
+        - surface_tone
+        - visual_lead
+        - headline_scale
+        - body_scale
+        - text_block_width
+        - alignment
+        - type_is_main_visual_object
+        - media_kind
+        - media_region_count
+        - media_dominance
+        - density
+        - symmetry
+        - crop_and_media_relation
+        - spatial_composition
+        - graphic_devices
+        - accent_use
+        - visual_tension
+        additionalProperties: false
+    families:
+      type: array
+      items:
+        type: object
+        properties:
+          family_id:
+            type: string
+          name:
+            type: string
+          member_samples:
+            type: array
+            items:
+              type: string
+          visual_intent:
+            type: string
+          allowed_surfaces:
+            type: array
+            items: *id002
+          preferred_visual_weight:
+            type: string
+            enum:
+            - type
+            - media
+            - balanced
+            - interface
+          density_min: *id003
+          density_max: *id003
+          headline_scale_min: *id001
+          headline_scale_max: *id001
+          media_regions_min:
+            type: integer
+          media_regions_max:
+            type: integer
+          media_dominance_min: *id004
+          media_dominance_max: *id004
+          allowed_media_behaviors:
+            type: array
+            items:
+              type: string
+          spatial_tendencies:
+            type: array
+            items:
+              type: string
+          graphic_devices:
+            type: array
+            items:
+              type: string
+          negative_space_behavior:
+            type: string
+          accent_behavior:
+            type: string
+          dark_surface_allowed:
+            type: boolean
+          compatible_content_behaviors:
+            type: array
+            items:
+              type: string
+          what_makes_it_distinct:
+            type: string
+          anti_patterns:
+            type: array
+            items:
+              type: string
+          when_not_to_use:
+            type: string
+        required:
+        - family_id
+        - name
+        - member_samples
+        - visual_intent
+        - allowed_surfaces
+        - preferred_visual_weight
+        - density_min
+        - density_max
+        - headline_scale_min
+        - headline_scale_max
+        - media_regions_min
+        - media_regions_max
+        - media_dominance_min
+        - media_dominance_max
+        - allowed_media_behaviors
+        - spatial_tendencies
+        - graphic_devices
+        - negative_space_behavior
+        - accent_behavior
+        - dark_surface_allowed
+        - compatible_content_behaviors
+        - what_makes_it_distinct
+        - anti_patterns
+        - when_not_to_use
+        additionalProperties: false
+    global_invariants:
+      type: array
+      items:
+        type: string
+    contradictions_kept_distinct:
+      type: array
+      items:
+        type: string
+    must_not_copy:
+      type: array
+      items:
+        type: string
+    originality_constraints:
+      type: array
+      items:
+        type: string
+  required:
+  - samples
+  - families
+  - global_invariants
+  - contradictions_kept_distinct
+  - must_not_copy
+  - originality_constraints
+  additionalProperties: false
