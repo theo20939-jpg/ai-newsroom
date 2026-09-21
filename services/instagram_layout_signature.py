@@ -120,3 +120,32 @@ def structure_profile(layout: dict[str, Any]) -> dict[str, str]:
 def _coverage(medias: list[dict[str, Any]]) -> str:
     area = sum(float(r["w"]) * float(r["h"]) for r in medias)
     return "none" if not medias else "low" if area < 0.25 else "mid" if area < 0.6 else "high"
+
+
+def infer_family(layout: dict[str, Any]) -> str:
+    """Advisory: which accepted visual family an EXECUTED declarative layout actually expresses (Phase B.5.1). Used to compare the family the
+    Creative Director CHOSE with what the renderer drew; a mismatch is reported, never blocked. Deterministic, coordinate-free output."""
+    regions = [r for r in (layout.get("regions") or []) if isinstance(r, dict)]
+    medias = [r for r in regions if r.get("kind") == "media"]
+    graphics = {str(r.get("graphic_type")) for r in regions if r.get("kind") == "graphic"}
+    arrangement = str(layout.get("arrangement") or "standard")
+    dark = str(layout.get("background")) in ("ink", "graphite")
+    coverage = 0.0
+    for r in medias:
+        w = max(0.0, min(1.0, float(r["x"]) + float(r["w"])) - max(0.0, float(r["x"])))
+        h = max(0.0, min(1.0, float(r["y"]) + float(r["h"])) - max(0.0, float(r["y"])))
+        coverage += w * h
+    text_on_media = any(r.get("kind") == "text" and r.get("on_media") for r in regions)
+    if "poll_cards" in graphics and len(medias) <= 1 and arrangement != "collage":
+        return "interface_cards"
+    if arrangement == "collage" and len(medias) >= 2:
+        return "internet_culture_collage"
+    if arrangement == "stage" or any(str(r.get("crop_mode")) in ("object_contain", "object_cover") for r in medias):
+        return "hero_object_stage"
+    if medias and coverage >= 0.8:
+        return "immersive_image_field"
+    if graphics & {"ui_frame", "flow_diagram", "poll_cards"} and len(medias) <= 1:
+        return "interface_cards"
+    if medias and coverage >= 0.45 and (text_on_media or dark):
+        return "immersive_image_field"
+    return "dark_type_number_statement" if dark else "light_utility_editorial"

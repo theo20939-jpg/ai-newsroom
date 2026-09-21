@@ -172,6 +172,22 @@ class InstagramVisualRhythm(BaseModel):
     repetition_note: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
 
 
+# Phase B.5.1: the bounded visual-family vocabulary (Visual DNA v2) and the carousel ROLE contract the model and both validators share.
+VISUAL_FAMILIES = (
+    "immersive_image_field", "hero_object_stage", "internet_culture_collage",
+    "dark_type_number_statement", "interface_cards", "light_utility_editorial",
+)
+VisualFamily = Literal[
+    "immersive_image_field", "hero_object_stage", "internet_culture_collage",
+    "dark_type_number_statement", "interface_cards", "light_utility_editorial",
+]
+# The smallest vocabulary the current architecture actually uses: `hook` opens, `story` is one NEWS_RECAP story, `closing` ends a recap,
+# `result` ends a how-to that shows its outcome, `takeaway`/`cta` end an editorial carousel. Legacy free-text roles in persisted payloads
+# still parse (role stays a str); only the LAST slide must be a conclusion role.
+CAROUSEL_ROLE_VOCABULARY = ("hook", "context", "step", "evidence", "comparison", "story", "result", "takeaway", "cta", "closing")
+TERMINAL_ROLES = ("result", "takeaway", "cta", "closing")
+
+
 class InstagramCarouselSlideCreative(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -215,6 +231,9 @@ class InstagramCarouselSlideCreative(BaseModel):
         "hero", "detail", "evidence_photo", "ui_screenshot", "result", "before_after", "concept", "none",
     ] | None = None
     layout: InstagramSlideLayout | None = None
+    # Phase B.5.1: WHICH accepted visual family this slide is planned in (a bounded value, never a free name) and why, persisted for audit.
+    visual_family: VisualFamily | None = None
+    visual_family_reason: str | None = Field(default=None, max_length=240)
     # Phase B.4.1 section 7: deliberately NOT a field here. The model may state WHICH subject a
     # slide needs (media_subject) and WHETHER a shared/fallback asset is unacceptable
     # (must_match_story) - both real creative decisions - but never the actual resolved asset's
@@ -258,8 +277,8 @@ class InstagramCarouselCreative(BaseModel):
         roles = [slide.role.strip().lower() for slide in self.slides]
         if len(set(roles)) < 2:
             raise ValueError("carousel slides must have distinct narrative functions")
-        if roles[-1] not in {"takeaway", "cta"}:
-            raise ValueError("carousel production sequence must end with takeaway or cta")
+        if roles[-1] not in TERMINAL_ROLES:
+            raise ValueError(f"carousel production sequence must end with a conclusion role {list(TERMINAL_ROLES)}, got {roles[-1]!r}")
         if any(not slide.slide_purpose for slide in self.slides):
             raise ValueError("every production carousel slide requires slide_purpose")
         return self

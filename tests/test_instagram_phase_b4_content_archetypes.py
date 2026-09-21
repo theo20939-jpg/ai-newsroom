@@ -154,12 +154,20 @@ def test_overlay_is_absent_from_every_active_contract() -> None:
 
     from services.instagram_creative_director import CAROUSEL_PROMPT_VERSION
 
-    assert CAROUSEL_PROMPT_VERSION == "8"
-    for version in ("7", "8"):  # the previous and the active contract are both free of the removed concept
+    assert CAROUSEL_PROMPT_VERSION == "9"
+    for version in ("7", "8", "9"):  # the removed concept is absent from every contract's SCHEMA; v9 may only name it in a prohibition
         text = open(f"prompts/instagram_creative_director_carousel/v{version}.yaml", encoding="utf-8").read().lower()
+        parsed = yaml.safe_load(text)
+        schema_text = str(parsed["output_schema"]).lower()
         for term in ("overlay", "scrim", "darken", "dimm", "gradient", "tint"):
-            assert term not in text, (version, term)
-        slide_props = yaml.safe_load(text)["output_schema"]["properties"]["slides"]["items"]["properties"]
+            assert term not in schema_text, (version, term)
+            if version != "9":
+                assert term not in text, (version, term)
+            else:  # v9 states the prohibition itself: every rule that mentions the term must negate it
+                for rule in parsed["rules"]:
+                    if term in rule.lower():
+                        assert any(neg in rule for neg in ("NO ", "never", "NEVER", "not ", "Do NOT")), (term, rule[:80])
+        slide_props = parsed["output_schema"]["properties"]["slides"]["items"]["properties"]
         assert not any(t in name for name in slide_props for t in ("overlay", "dim", "scrim", "tint", "darken"))
     fields = InstagramCarouselSlideCreative.model_fields
     assert not any(k for k in fields if any(t in k for t in ("overlay", "scrim", "dim", "tint", "darken", "readability")))

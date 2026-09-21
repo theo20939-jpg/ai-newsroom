@@ -6,15 +6,26 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
+from services.instagram_layout_signature import infer_family
+
 
 def build_b4_observability(
     *, carousel: Any, prompt_version: str, renders: Sequence[Any], art: Any,
     slide_identities: dict[int, str], deliberate_fallback_subjects: Sequence[str] = (),
+    model_emitted_archetype: str | None = None, archetype_correction_required: bool = False,
 ) -> dict[str, Any]:
     slides = []
     for index, (slide, render) in enumerate(zip(carousel.slides, renders)):
         notes = render.evidence.notes
+        chosen_family = getattr(slide, "visual_family", None)
+        layout_model = getattr(slide, "layout", None)
+        executed_family = (
+            infer_family(layout_model.model_dump()) if notes.get("layout_plan_applied") and layout_model is not None else "legacy_role_fallback"
+        )
         slides.append({
+            "visual_family_chosen": chosen_family,
+            "visual_family_executed": executed_family,
+            "visual_family_matches": bool(chosen_family) and chosen_family == executed_family,
             "index": index,
             "media_subject": slide.media_subject,
             "resolved_asset_identity": slide_identities.get(index),
@@ -36,6 +47,8 @@ def build_b4_observability(
         })
     return {
         "content_archetype": carousel.content_archetype,
+        "model_emitted_archetype": model_emitted_archetype,
+        "archetype_correction_required": archetype_correction_required,
         "prompt_version": prompt_version,
         "slide_count": len(carousel.slides),
         "overlay_operations_executed_total": sum(s["overlay_operations_executed"] for s in slides),

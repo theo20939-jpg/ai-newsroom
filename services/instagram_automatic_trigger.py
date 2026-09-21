@@ -58,9 +58,11 @@ from services.instagram_content_opportunity import (
     OpportunitySourceType,
 )
 from services.instagram_content_package import build_instagram_content_package
+from services.instagram_meta_language_guard import MetaLanguageLeakError
 from services.instagram_creative_director import (
     AudienceFacingCopyError,
     CAROUSEL_PROMPT_VERSION,
+    CreativeContractError,
     CreativeDirectorInput,
     CreativeDirectorUnavailableError,
     CreativeFactSafetyError,
@@ -481,18 +483,18 @@ _MEDIA_COMPOSITIONS = (None, "contained_media", "full_bleed_media", "collage", "
 
 
 def _visual_dna_context() -> str:
-    """The stored, versioned Visual DNA rendered as structured text for the Creative Director (loaded
-    from docs/references/instagram/visual_dna - analysed ONCE, never re-analysed per post)."""
-    from services.instagram_visual_dna import load_visual_dna, render_visual_dna_context
+    """Phase B.5.1: the ACTIVE Visual DNA is v2 (sample-by-sample family library + global invariants), loaded from
+    docs/references/instagram/visual_dna/v2.json - analysed once, never re-sent as an image. v1 stays on disk for history only."""
+    from services.instagram_visual_dna_v2 import load_visual_dna_v2, render_visual_dna_v2_context
 
-    dna = load_visual_dna()
-    return render_visual_dna_context(dna) if dna is not None else ""
+    dna = load_visual_dna_v2()
+    return render_visual_dna_v2_context(dna) if dna is not None else ""
 
 
 def _visual_dna_version() -> str:
-    from services.instagram_visual_dna import load_visual_dna
+    from services.instagram_visual_dna_v2 import load_visual_dna_v2
 
-    dna = load_visual_dna()
+    dna = load_visual_dna_v2()
     return dna.version if dna is not None else ""
 
 
@@ -501,22 +503,33 @@ _NON_PHOTO_FUNCTIONS = ("ui_screenshot", "result", "before_after", "concept")
 
 
 def _carousel_media_note(*, source_image: Any, recap_bundle: InstagramRecapBundle | None) -> str:
-    """Real media availability, told to the Creative Director so it plans against what exists."""
+    """Real media availability, told to the Creative Director so it plans against what exists. Phase B.5.1: every real image
+    carries a deterministic PROFILE (calm text zones per crop, uniform-ground object suitability) so the model can only plan
+    visual families the media honestly supports."""
+    from services.instagram_asset_profile import profile_asset, render_profile_lines
+
     if recap_bundle is not None:
-        lines = [
-            (f"{story.key}: real image of this story (valid media_function: hero, detail, evidence_photo)"
-             if story.image_bytes else f"{story.key}: NO image for this story (a graphic story card is used)")
-            for story in recap_bundle.stories
-        ]
+        with_image = [s for s in recap_bundle.stories if s.image_bytes]
+        lines = []
+        for story in recap_bundle.stories:
+            if not story.image_bytes:
+                lines.append(f"{story.key}: NO image for this story - use a graphic story card (dark_type_number_statement, interface_cards or light_utility_editorial)")
+                continue
+            try:
+                with Image.open(BytesIO(story.image_bytes)) as decoded:
+                    profile = profile_asset(decoded.convert("RGBA" if decoded.mode == "RGBA" else "RGB"), subject_key=story.key)
+                lines.append(render_profile_lines(profile, pool_size=len(with_image), allowed_functions="hero, detail, evidence_photo"))
+            except (OSError, ValueError):
+                lines.append(f"{story.key}: image could not be profiled - treat as NO usable image")
         return "\n".join(lines)
     if source_image is not None:
         return (
-            "subject key 'source': ONE real image of this post's own subject (valid media_function: hero, detail, "
-            "evidence_photo). It may be used on several slides or twice on one slide with different crops. It is NOT a "
-            "screenshot, a result image, a before/after or a concept visual: plan graphics for those."
+            render_profile_lines(profile_asset(source_image, subject_key="source"), pool_size=1, allowed_functions="hero, detail, evidence_photo")
+            + "\nThe image may be used on several slides or several times on one slide with different crops. It is NOT a screenshot, a result image, "
+              "a before/after or a concept visual: plan graphics for those."
         )
-    return ("no real image is available for this post: plan typographic, graphic (ui_frame, flow_diagram, number, panel) "
-            "and split layouts; media regions cannot be used.")
+    return ("no real image is available for this post: plan with the media-free families (dark_type_number_statement, interface_cards, "
+            "light_utility_editorial); media regions cannot be used and no image may be assumed.")
 
 
 def _layout_media_refs(slide: Any) -> list[str]:
@@ -764,7 +777,7 @@ async def evaluate_and_submit_instagram_opportunity(
         creative_outcome = await regenerator(director_input, format_decision.recommended_format)
     except (
         CreativeDirectorUnavailableError, UngroundedEvidenceError, CreativeFactSafetyError,
-        CreativeLanguageError, AudienceFacingCopyError,
+        CreativeLanguageError, AudienceFacingCopyError, CreativeContractError, MetaLanguageLeakError,
     ) as exc:
         logger.warning(
             "instagram_automatic_trigger_creative_director_failed",
@@ -888,6 +901,8 @@ async def evaluate_and_submit_instagram_opportunity(
             carousel=carousel, prompt_version=CAROUSEL_PROMPT_VERSION, renders=renders, art=art,
             slide_identities=creative_media.slide_asset_identities(),
             deliberate_fallback_subjects=deliberate_fallback,
+            model_emitted_archetype=creative_outcome.model_emitted_archetype,
+            archetype_correction_required=creative_outcome.archetype_correction_required,
         )
         pkg = replace(pkg, media_plan={**pkg.media_plan, "b4_observability": observability})
         logger.info("instagram_b4_carousel_observability", extra={

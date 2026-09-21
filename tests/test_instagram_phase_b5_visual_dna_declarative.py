@@ -173,14 +173,13 @@ def test_C_visual_dna_reaches_creative_director_input(monkeypatch: pytest.Monkey
     import services.instagram_automatic_trigger as trigger
     import services.instagram_visual_dna as dna_module
 
-    dna = _fixture_dna("C")
-    (tmp_path / "v1.json").write_text(dna.model_dump_json(), encoding="utf-8")
-    monkeypatch.setattr(dna_module, "DNA_DIR", tmp_path)
-    monkeypatch.setattr(dna_module, "load_visual_dna", lambda version=None, directory=tmp_path: dna_module.InstagramVisualDNA.model_validate_json((tmp_path / "v1.json").read_text(encoding="utf-8")))
+    # Phase B.5.1: the ACTIVE Visual DNA is v2 (family library). The v1 loader must no longer be on the planning path.
+    monkeypatch.setattr(dna_module, "load_visual_dna", lambda *a, **k: (_ for _ in ()).throw(AssertionError("v1 must not be loaded by the planner")))
     context = trigger._visual_dna_context()
-    assert "VISUAL DNA v1" in context and "scale contrast" in context and "MUST NOT COPY" in context
-    assert trigger._visual_dna_version() == "1"
-    director_input = CreativeDirectorInput(objective="saves", format="carousel", opportunity_summary="s", visual_dna_context=context, visual_dna_version="1")
+    assert "VISUAL DNA v2" in context and "MUST NOT COPY" in context and "RENDERER CONSTRAINTS" in context
+    assert "immersive_image_field" in context and "hero_object_stage" in context and "internet_culture_collage" in context
+    assert trigger._visual_dna_version() == "2"
+    director_input = CreativeDirectorInput(objective="saves", format="carousel", opportunity_summary="s", visual_dna_context=context, visual_dna_version="2")
     assert director_input.visual_dna_context == context
 
 
@@ -196,7 +195,7 @@ async def test_D_visual_dna_reaches_the_actual_v8_prompt_request() -> None:
             visual_dna_context=context, visual_dna_version="1",
         ),
     )
-    assert CAROUSEL_PROMPT_VERSION == "8" and outcome.carousel is not None
+    assert CAROUSEL_PROMPT_VERSION == "9" and outcome.carousel is not None
     request = gateway.requests[0]
     user_text = request.messages[1].content[0].text
     assert "VISUAL DNA v1" in user_text and "scale contrast" in user_text and "very large headline" in user_text

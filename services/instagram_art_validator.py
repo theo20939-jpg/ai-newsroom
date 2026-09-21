@@ -11,6 +11,8 @@ with no caller-supplied revision strategy is fail-soft - surface the failure to 
 retry blindly."""
 from __future__ import annotations
 
+from schemas.instagram_creative import TERMINAL_ROLES
+
 from dataclasses import dataclass, field
 from io import BytesIO
 from typing import Any, Callable
@@ -290,7 +292,7 @@ def validate_instagram_art(
             roles = [str(slide.get("role") or "").lower() for slide in slides if isinstance(slide, dict)]
             if slides and (not roles or roles[0] != "hook"):
                 blocking.append("carousel_missing_hook_first")
-            if slides and roles[-1] not in {"takeaway", "cta"}:
+            if slides and roles[-1] not in TERMINAL_ROLES:
                 blocking.append("carousel_missing_closing_function")
             if slides and any(not slide.get("slide_purpose") for slide in slides if isinstance(slide, dict)):
                 blocking.append("carousel_missing_slide_purpose")

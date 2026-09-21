@@ -41,6 +41,8 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from pydantic import ValidationError
+
 from capabilities.gateway_call import call_generate
 from database.models.editorial_task import TaskPriority
 from integrations.llm_gateway.protocol import (
@@ -51,6 +53,7 @@ from integrations.llm_gateway.protocol import (
 )
 from integrations.prompts.protocol import PromptRepository
 from schemas.capability import CapabilityCall, RuntimeContext
+from services.instagram_meta_language_guard import assert_no_meta_language
 from schemas.instagram_creative import (
     InstagramCarouselCreative,
     InstagramEditorialDecision,
@@ -88,7 +91,7 @@ EDITORIAL_DECISION_PROMPT_NAME = "instagram_editorial_decision"
 # version file is left untouched/unused, matching this codebase's own established "never edit a
 # shipped prompt version in place" convention.
 _SINGLE_PROMPT_VERSION = "6"
-_CAROUSEL_PROMPT_VERSION = "8"  # Phase B.5: v8 = visual DNA + declarative per-slide layout + carousel rhythm
+_CAROUSEL_PROMPT_VERSION = "9"  # Phase B.5.1: v9 = Visual DNA v2 families, dark surfaces allowed, bounded roles, meta-language guard
 CAROUSEL_PROMPT_VERSION = _CAROUSEL_PROMPT_VERSION
 _REEL_PROMPT_VERSION = "7"
 _EDITORIAL_DECISION_PROMPT_VERSION = "1"
@@ -108,6 +111,11 @@ class UngroundedEvidenceError(ValueError):
 class CreativeFactSafetyError(Exception):
     """Wraps a ClaimViolationError or product-mention violation raised while validating generated
     creative text - the draft is REJECTED, never silently sanitized."""
+
+
+class CreativeContractError(ValueError):
+    """The model's structured output violated the schema/narrative contract (for example a terminal role outside the conclusion
+    vocabulary). Typed so a contract failure is never reported as an anonymous 'unexpected_error'."""
 
 
 class CreativeLanguageError(ValueError):
@@ -203,6 +211,9 @@ class CreativeGenerationOutcome:
     reel: InstagramReelCreative | None = None
     call: CapabilityCall | None = None
     generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    # Phase B.5.1: whether the model's own archetype echo disagreed with the derived one (the deterministic value still wins, but it is exposed)
+    model_emitted_archetype: str | None = None
+    archetype_correction_required: bool = False
 
 
 def _without_prompt_bullet(value: str) -> str:
@@ -519,7 +530,13 @@ async def generate_carousel_creative(
         gateway, prompt_repository, prompt_name=CAROUSEL_PROMPT_NAME, director_input=director_input,
         prompt_version=_CAROUSEL_PROMPT_VERSION,
     )
-    creative = InstagramCarouselCreative.model_validate(output)
+    try:
+        creative = InstagramCarouselCreative.model_validate(output)
+    except ValidationError as exc:
+        first = exc.errors()[0] if exc.errors() else {}
+        raise CreativeContractError(f"{'.'.join(str(p) for p in first.get('loc', ()))}: {first.get('msg', str(exc))[:240]}") from exc
+    emitted_archetype = creative.content_archetype
+    correction_required = archetype is not None and emitted_archetype != archetype
     if archetype is not None:
         creative = creative.model_copy(update={"content_archetype": archetype})
     plan = creative.creative_execution_plan
@@ -532,7 +549,13 @@ async def generate_carousel_creative(
         [*(slide.slide_copy for slide in creative.slides), creative.final_cta or "", creative.final_caption or ""],
         locale=director_input.locale,
     )
-    return CreativeGenerationOutcome(carousel=creative, call=call)
+    assert_no_meta_language(
+        {**{f"slide_{i}_copy": slide.slide_copy for i, slide in enumerate(creative.slides)},
+         "final_cta": creative.final_cta or "", "final_caption": creative.final_caption or ""},
+        allowed_context=[*director_input.allowed_evidence, director_input.opportunity_summary],
+    )
+    return CreativeGenerationOutcome(carousel=creative, call=call, model_emitted_archetype=emitted_archetype,
+                                     archetype_correction_required=correction_required)
 
 
 async def generate_reel_creative(

@@ -135,6 +135,8 @@ def _fingerprint_from_draft(draft: InstagramCreativeDraft) -> RecentCarouselFing
 
     traits: set[str] = set()
     for slide in slides:
+        if isinstance(slide, dict) and isinstance(slide.get("visual_family"), str):
+            traits.add(f"visual_family:{slide['visual_family']}")
         layout = slide.get("layout") if isinstance(slide, dict) else None
         if isinstance(layout, dict) and isinstance(layout.get("regions"), list):
             try:

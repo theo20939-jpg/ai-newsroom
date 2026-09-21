@@ -193,6 +193,14 @@ def load_visual_dna_v2(*, directory: Path = DNA_DIR) -> InstagramVisualDNAV2 | N
     return dna
 
 
+# The stored DNA v2 predates the bounded output vocabulary; the model must see (and emit) the PUBLIC family ids (schemas.instagram_creative.VISUAL_FAMILIES).
+PUBLIC_FAMILY_IDS = {"culture_collage": "internet_culture_collage"}
+
+
+def public_family_id(family_id: str) -> str:
+    return PUBLIC_FAMILY_IDS.get(family_id, family_id)
+
+
 def render_visual_dna_v2_context(dna: InstagramVisualDNAV2) -> str:
     """Structured text for the Creative Director: invariants + the family library. Not a template:
     families are mechanics, geometry is chosen per slide."""
@@ -205,7 +213,7 @@ def render_visual_dna_v2_context(dna: InstagramVisualDNAV2) -> str:
     ]
     for f in dna.families:
         lines += [
-            f"FAMILY {f.family_id} - {f.name} ({len(f.member_samples)} of {len(dna.samples)} reference samples)",
+            f"FAMILY {public_family_id(f.family_id)} - {f.name} ({len(f.member_samples)} of {len(dna.samples)} reference samples)",
             f"  intent: {f.visual_intent}",
             f"  surfaces: {', '.join(f.allowed_surfaces)} | lead: {f.preferred_visual_weight} | density: {f.density_min}-{f.density_max} | "
             f"headline scale: {f.headline_scale_min}-{f.headline_scale_max} | media regions: {f.media_regions_min}-{f.media_regions_max} | "
