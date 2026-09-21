@@ -48,7 +48,7 @@ def main() -> None:
     H = 90 + sum(60 + (thumb_h + 44 if thumbs else 90) + 24 for _, _, thumbs in prepared)
     sheet = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(sheet)
-    d.text((20, 18), "REAL CREATIVE DIRECTOR (prompt v9 + Visual DNA v2) - four real archetype posts through the accepted renderer", font=ig_font(32, "black"), fill=FG)
+    d.text((20, 18), "REAL CREATIVE DIRECTOR (prompt v9.1 + Visual DNA v2) - four real archetype posts through the accepted renderer", font=ig_font(32, "black"), fill=FG)
     y = 84
     for name, manifest, thumbs in prepared:
         real = bool(manifest and manifest.get("REAL_MODEL"))
@@ -56,8 +56,12 @@ def main() -> None:
         if valid == "PASS" and manifest.get("art_validation_passed") is False:
             valid = "FAIL (art gate)"
         d.text((20, y), name.upper(), font=ig_font(28, "black"), fill=(255, 255, 0))
-        d.text((320, y + 4), f"REAL MODEL: {'YES' if real else 'NO'}", font=ig_font(22, "semibold"), fill=OK if real else BAD)
-        d.text((560, y + 4), f"VALIDATION: {valid}", font=ig_font(22, "semibold"), fill=OK if valid == "PASS" else BAD)
+        source = "REUSED FROM B.5.1.1" if "REUSED" in str((manifest or {}).get("MODEL_SOURCE")) else "NEW B.5.1.2 CALL"
+        d.text((320, y + 4), f"REAL MODEL - {source}" if real else "REAL MODEL: NO", font=ig_font(22, "semibold"), fill=OK if real else BAD)
+        d.text((820, y + 4), f"VALIDATION: {valid}", font=ig_font(22, "semibold"), fill=OK if valid == "PASS" else BAD)
+        warns = [w.split(":")[0] for w in ((manifest or {}).get("art_warnings") or [])]
+        if warns:
+            d.text((1150, y + 6), "WARNINGS: " + ", ".join(warns)[:60], font=ig_font(18, "medium"), fill=MUTED)
         y += 54
         if not thumbs:
             reason = (manifest or {}).get("contract_error") or (manifest or {}).get("outcome_reason") or (manifest or {}).get("error") or "no output"
@@ -71,9 +75,9 @@ def main() -> None:
             family = families[i] if i < len(families) else None
             executed = manifest["slides"][i].get("visual_family_executed") if i < len(manifest["slides"]) else None
             label = SHORT.get(family or "", str(family))
-            d.text((x, y + thumb_h + 4), label, font=ig_font(17, "semibold"), fill=FG)
-            if executed and executed != family:
-                d.text((x, y + thumb_h + 24), f"drawn: {SHORT.get(executed, executed)}", font=ig_font(14, "medium"), fill=MUTED)
+            d.text((x, y + thumb_h + 4), f"SELECTED: {label}", font=ig_font(16, "semibold"), fill=FG)
+            drawn = SHORT.get(executed or "", str(executed))
+            d.text((x, y + thumb_h + 24), f"EXECUTED: {drawn}", font=ig_font(15, "medium"), fill=FG if executed == family else BAD)
             x += t.width + gap
         y += thumb_h + 44 + 24
     sheet.crop((0, 0, W, y + 10)).save(out / "real_archetype_master.png")

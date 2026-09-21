@@ -99,7 +99,7 @@ def _prompt():
 
 
 def test_v9_replaces_the_stale_v8_visual_rules_and_v8_is_untouched() -> None:
-    assert CAROUSEL_PROMPT_VERSION == "9"
+    assert CAROUSEL_PROMPT_VERSION == "9.1"
     rules = " ".join(_prompt().rules)
     for stale in ("Do not plan black or dark surfaces", "light editorial paper or soft grey", "nothing is ever placed over an image"):
         assert stale not in rules
@@ -376,11 +376,11 @@ async def test_creative_director_request_is_bounded_and_otherwise_unchanged() ->
     request, repo, director_input = await _capture_cd_request()
     assert cd._CREATIVE_DIRECTOR_MAX_TOKENS == 16_000
     assert request.max_tokens == 16_000
-    prompt = repo.resolve(cd.CAROUSEL_PROMPT_NAME, "9")
-    assert cd._CAROUSEL_PROMPT_VERSION == "9"
+    prompt = repo.resolve(cd.CAROUSEL_PROMPT_NAME, "9.1")
+    assert cd._CAROUSEL_PROMPT_VERSION == "9.1"
     assert request.response_mode == "json_schema" and request.response_schema == prompt.output_schema
     assert request.messages[0].content[0].text == prompt.system + "\n\nRULES:\n" + "\n".join(f"- {r}" for r in prompt.rules)
-    assert request.messages[1].content[0].text == cd._build_user_text(director_input)
+    assert request.messages[1].content[0].text == cd._build_user_text(director_input, evidence_handles=True)
     # nothing else that steers routing/decoding was introduced
     assert request.temperature is None and request.preferred_model is None
     assert [m.role for m in request.messages] == ["system", "user"]

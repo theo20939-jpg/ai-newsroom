@@ -16,6 +16,7 @@ Usage: python scripts/_instagram_phase_b51_acceptance.py <out_dir> <real|fixture
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
 import json
 import os
@@ -47,9 +48,10 @@ from services.pricing_catalog import ModelRegistryPricingCatalog
 
 _PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
 _MAX_REAL_CALLS = 4
+REUSABLE_ARCHETYPES = ("ai_hack", "news_insight")  # B.5.1.2: these two archetypes may replay their saved B.5.1.1 REAL model output (zero provider calls)
 _ARCHETYPES = ("ai_hack", "news_insight", "news_recap", "trend_generative")
 _EST_INPUT_TOKENS, _EST_OUTPUT_TOKENS = 16000, 9000
-DIAG_NAMESPACE = "instagram_b51_real_cd_acceptance"
+DIAG_NAMESPACE = "instagram_b512_real_cd_acceptance"
 DIAG_HARD_CAP_USD = Decimal("0.75")
 
 
@@ -96,7 +98,7 @@ def gateway_worst_case_by_model() -> dict[str, Decimal]:
         objective="saves", format="carousel", opportunity_summary="s" * 300, allowed_evidence=["x" * 300] * 12, locale="ru", fatigue_note="f" * 1500)
     request = GenerateRequest(
         messages=[Message(role="system", content=[ContentPart(type="text", text=system_text)]),
-                  Message(role="user", content=[ContentPart(type="text", text=cd_module._build_user_text(director_input))])],
+                  Message(role="user", content=[ContentPart(type="text", text=cd_module._build_user_text(director_input, evidence_handles=True))])],
         response_mode="json_schema", response_schema=prompt.output_schema, max_tokens=cd_module._CREATIVE_DIRECTOR_MAX_TOKENS)
     registry = build_model_registry()
     estimator = CostEstimator(ModelRegistryPricingCatalog(registry))
@@ -134,7 +136,7 @@ def _diag_redis():
     return Redis.from_url(url, decode_responses=True)
 
 
-async def _budget_preflight(diag) -> dict:
+async def _budget_preflight(diag, n_real: int = _MAX_REAL_CALLS) -> dict:
     prod_before = await _production_ledger()
     raw = await diag.get(f"phase7:cost_ledger:{DIAG_NAMESPACE}")
     diag_spent = Decimal(str(raw)) if raw is not None else Decimal(0)
@@ -146,10 +148,36 @@ async def _budget_preflight(diag) -> dict:
         "production_ledger_before_usd": str(prod_before), "production_daily_limit_usd": str(settings.llm_daily_budget_usd),
         "instagram_automatic_generation_enabled": bool(getattr(settings, "instagram_automatic_generation_enabled", False)),
         "worst_case_per_call_usd": str(worst_each.quantize(Decimal("0.0001"))),
-        "worst_case_four_calls_usd": str((worst_each * _MAX_REAL_CALLS).quantize(Decimal("0.0001"))),
+        "real_calls_planned": n_real, "worst_case_planned_calls_usd": str((worst_each * n_real).quantize(Decimal("0.0001"))),
         "assumed_tokens_per_call": {"input": _EST_INPUT_TOKENS, "output": _EST_OUTPUT_TOKENS},
-        "safe": diag_spent + worst_each * _MAX_REAL_CALLS <= DIAG_HARD_CAP_USD and all(v <= DIAG_HARD_CAP_USD - diag_spent for v in by_model.values()),
+        "safe": diag_spent + worst_each * n_real <= DIAG_HARD_CAP_USD and all(v <= DIAG_HARD_CAP_USD - diag_spent for v in by_model.values()),
     }
+
+
+class _ReplayGateway:
+    """Returns a SAVED real model output verbatim (B.5.1.1). No provider call, no cost, no edits."""
+
+    def __init__(self, output: dict) -> None:
+        self.output = output
+
+    async def generate(self, request):
+        from integrations.llm_gateway.protocol import GenerateResponse
+        from schemas.capability import CapabilityUsage
+
+        return GenerateResponse(text=None, structured_output=self.output, finish_reason="stop", model_used=None, usage=CapabilityUsage())
+
+
+def _load_replays(argv: list[str]) -> dict[str, dict]:
+    """argv tail: `--replay-from <dir>` (a B.5.1.1 acceptance folder). Only REUSABLE_ARCHETYPES can be replayed; the file is loaded byte-for-byte."""
+    if "--replay-from" not in argv:
+        return {}
+    base = Path(argv[argv.index("--replay-from") + 1])
+    replays: dict[str, dict] = {}
+    for name in REUSABLE_ARCHETYPES:
+        path = base / name / "creative_director_output.json"
+        if path.exists():
+            replays[name] = {"output": json.loads(path.read_text(encoding="utf-8")), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "path": str(path)}
+    return replays
 
 
 def _v9_fixture_plan(archetype: str, recap_bundle) -> dict:
@@ -184,6 +212,8 @@ async def main() -> None:
     assert_no_fixture_substitution(mode, out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     real = mode == "real"
+    replays = _load_replays(sys.argv[3:]) if real else {}
+    max_real = _MAX_REAL_CALLS - len(replays)
 
     preflight = None
     pricing = ModelRegistryPricingCatalog(build_model_registry())
@@ -192,7 +222,7 @@ async def main() -> None:
         from integrations.llm_gateway.boot import assemble_ai_integration_layer
 
         diag = _diag_redis()
-        preflight = await _budget_preflight(diag)
+        preflight = await _budget_preflight(diag, max_real)
         (out_dir / "budget_preflight.json").write_text(json.dumps(preflight, indent=2), encoding="utf-8")
         print("BUDGET_PREFLIGHT", json.dumps(preflight))
         if not preflight["safe"]:
@@ -225,18 +255,19 @@ async def main() -> None:
     real_call = cd_module._call_creative_director
 
     async def counting_call(gw, repo, *, prompt_name, director_input, prompt_version):
-        if real:
-            if calls["count"] >= _MAX_REAL_CALLS:
-                raise RuntimeError("hard cap: no more than four real Creative Director calls")
+        counted = real and not captured.get("replay")
+        if counted:
+            if calls["count"] >= max_real:
+                raise RuntimeError(f"hard cap: no more than {max_real} real Creative Director calls in this run")
             if ledger_spent + calls["actual"] + worst_each > daily_budget:
                 raise RuntimeError("SAFE_STOP: projected spend would exceed the daily budget")
             calls["count"] += 1
             captured["real_call_number"] = calls["count"]
         captured["director_input"] = director_input
-        captured["user_text"] = cd_module._build_user_text(director_input)
+        captured["user_text"] = cd_module._build_user_text(director_input, evidence_handles=cd_module._uses_evidence_handles(prompt_name, prompt_version))
         output, call = await real_call(gw, repo, prompt_name=prompt_name, director_input=director_input, prompt_version=prompt_version)
         captured["model_output"], captured["call"] = output, call
-        if real:
+        if counted:
             try:
                 calls["actual"] += compute_call_cost(call, pricing)
             except Exception:  # noqa: BLE001
@@ -245,6 +276,21 @@ async def main() -> None:
         return output, call
 
     cd_module._call_creative_director = counting_call
+
+    def raw_sink(event: str, payload: dict) -> None:
+        target = captured.get("target_dir")
+        if target is None:
+            return
+        target.mkdir(parents=True, exist_ok=True)
+        path = target / "raw_creative_director_output.json"
+        if event == "raw_output":  # written BEFORE any semantic validation can raise
+            path.write_text(json.dumps({**payload, "model_source": captured.get("model_source")}, ensure_ascii=False, indent=2), encoding="utf-8")
+        elif path.exists():
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            saved["validation_error"] = payload
+            path.write_text(json.dumps(saved, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    cd_module.set_raw_output_sink(raw_sink)
     prompt_repo = FilePromptRepository(_PROMPTS)
     summary = []
     shadow_engine = create_async_engine(f"postgresql+asyncpg://postgres:postgres@{os.environ.get('B5_SHADOW_DB_HOST', 'b5pg')}:5432/ai_newsroom_test")
@@ -255,13 +301,14 @@ async def main() -> None:
                 for name in _ARCHETYPES:
                     bundle = pool_bundle if name == "news_recap" else None
                     try:
-                        summary.append(await _run_one(name, session, gateway_factory, prompt_repo, pricing, out_dir, bundle, trend_story, captured, real))
+                        summary.append(await _run_one(name, session, gateway_factory, prompt_repo, pricing, out_dir, bundle, trend_story, captured, real, replays.get(name)))
                     except Exception as exc:  # noqa: BLE001 - record; NEVER retry a paid call and NEVER substitute a fixture
                         summary.append({"archetype": name, "REAL_MODEL": real, "VALIDATION": "FAIL", "status": "EXCEPTION",
                                         "error": f"{type(exc).__name__}: {str(exc)[:300]}"})
             await connection.rollback()
     finally:
         cd_module._call_creative_director = real_call
+        cd_module.set_raw_output_sink(None)
         await shadow_engine.dispose()
 
     accounting = {}
@@ -288,9 +335,12 @@ def _decision_for(name: str, trend_story):
     return decision
 
 
-async def _run_one(name, session, gateway_factory, prompt_repo, pricing, out_dir, recap_bundle, trend_story, captured, real) -> dict:
+async def _run_one(name, session, gateway_factory, prompt_repo, pricing, out_dir, recap_bundle, trend_story, captured, real, replay=None) -> dict:
     spec = common.SCENARIOS[name]
     captured.clear()
+    captured["replay"] = replay is not None
+    captured["target_dir"] = out_dir / name
+    captured["model_source"] = "REUSED B.5.1.1 REAL OUTPUT" if replay is not None else ("NEW B.5.1.2 REAL CALL" if real else "FIXTURE_NOT_MODEL")
     trend_signal = None
     source_image = None
     evidence = list(spec["evidence"])
@@ -316,7 +366,7 @@ async def _run_one(name, session, gateway_factory, prompt_repo, pricing, out_dir
                                      news_value=1.0, audience_relevance=0.5, product_mention_allowed=False, evidence=evidence, confidence=0.5)
     decision = _decision_for(name, trend_story)
     plan = None if real else _v9_fixture_plan(name, recap_bundle)
-    gateway = gateway_factory(name, plan)
+    gateway = _ReplayGateway(replay["output"]) if replay is not None else gateway_factory(name, plan)
 
     async def fixed_decision(gw, repo, *, decision_input):
         return decision, None
@@ -350,10 +400,10 @@ async def _run_one(name, session, gateway_factory, prompt_repo, pricing, out_dir
     finally:
         trigger.render_instagram_carousel, trigger.build_package_snapshot = real_render, real_snapshot
 
-    return _record(name, real, outcome, captured, seen, out_dir, pricing, evidence)
+    return _record(name, real, outcome, captured, seen, out_dir, pricing, evidence, replay)
 
 
-def _record(name, real, outcome, captured, seen, out_dir, pricing, evidence) -> dict:
+def _record(name, real, outcome, captured, seen, out_dir, pricing, evidence, replay=None) -> dict:
     call = captured.get("call")
     model_output = captured.get("model_output") or {}
     package = seen.get("package")
@@ -362,7 +412,7 @@ def _record(name, real, outcome, captured, seen, out_dir, pricing, evidence) -> 
     target = out_dir / name
     target.mkdir(parents=True, exist_ok=True)
     cost = None
-    if real and call is not None and call.model_used:
+    if real and replay is None and call is not None and call.model_used:
         try:
             cost = str(compute_call_cost(call, pricing))
         except Exception as exc:  # noqa: BLE001
@@ -400,11 +450,16 @@ def _record(name, real, outcome, captured, seen, out_dir, pricing, evidence) -> 
             "media_subject": s.get("media_subject"), "media_function": s.get("media_function"), "must_match_story": s.get("must_match_story"),
             "background": (s.get("layout") or {}).get("background"), "arrangement": (s.get("layout") or {}).get("arrangement"),
             "layout_plan_applied": o.get("layout_plan_applied"), "layout_plan_rejected": o.get("layout_plan_rejected"),
-            "layout_adaptations": o.get("layout_adaptations"), "actual_media": [{"subject": m["subject"], "identity": m["identity"]} for m in (o.get("media_regions") or [])],
+            "layout_adaptations": o.get("layout_adaptations"),
+            "calm_zone_adapted": o.get("calm_zone_adapted"), "calm_zone_requested": o.get("calm_zone_requested"), "calm_zone_executed": o.get("calm_zone_executed"),
+            "composition_adapted_for_text_fit": o.get("composition_adapted_for_text_fit"), "actual_media": [{"subject": m["subject"], "identity": m["identity"]} for m in (o.get("media_regions") or [])],
             "unresolved_media": o.get("unresolved_media_regions"), "slide_copy": s.get("slide_copy"),
         })
     record = {
-        "archetype": name, "REAL_MODEL": real, "VALIDATION": validation, "outcome_reason": outcome.reason, "gate_decision": outcome.gate_decision,
+        "archetype": name, "REAL_MODEL": real, "MODEL_SOURCE": captured.get("model_source"),
+        "REPLAY_OF_B511_OUTPUT_SHA256": (replay or {}).get("sha256"),
+        "EVIDENCE_HANDLE_VALIDATION": "FAIL" if "UngroundedEvidenceError" in str(outcome.reason) else ("PASS" if model_output else "NOT_REACHED"),
+        "VALIDATION": validation, "outcome_reason": outcome.reason, "gate_decision": outcome.gate_decision,
         "contract_error": contract_error, "prompt_version": cd_module.CAROUSEL_PROMPT_VERSION,
         "model": getattr(call, "model_used", None), "cost_usd": cost,
         "input_tokens": getattr(getattr(call, "usage", None), "input_tokens", None), "output_tokens": getattr(getattr(call, "usage", None), "output_tokens", None),
@@ -422,9 +477,12 @@ def _record(name, real, outcome, captured, seen, out_dir, pricing, evidence) -> 
         "legacy_role_fallback_slides": sum(1 for s in obs_slides if s.get("role_fallback_used")),
         "overlay_executions": (obs or {}).get("overlay_operations_executed_total"),
         "headline_overflow_slides": sum(1 for r in seen.get("renders", []) if r.evidence.text_clipped),
-        "art_validation_passed": (obs or {}).get("art_validation_passed"), "art_blocking_issues": (obs or {}).get("art_blocking_issues"),
+        "art_validation_passed": (obs or {}).get("art_validation_passed"), "art_blocking_issues": (obs or {}).get("art_blocking_issues"), "art_warnings": (obs or {}).get("art_warnings"),
+        "layout_diversity_warning": any("layout_diversity" in w for w in ((obs or {}).get("art_warnings") or [])),
         "provider_image_calls": 0, "publication_calls": 0, "fixture_substitution": False,
     }
+    raw_path = target / "raw_creative_director_output.json"
+    record["validation_error"] = json.loads(raw_path.read_text(encoding="utf-8")).get("validation_error") if raw_path.exists() else None
     (target / "creative_director_output.json").write_text(json.dumps(model_output, ensure_ascii=False, indent=2), encoding="utf-8")
     (target / "render_manifest.json").write_text(json.dumps(record, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     return record
