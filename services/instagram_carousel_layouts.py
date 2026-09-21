@@ -545,8 +545,16 @@ def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets
     except ValidationError:
         return None, ["layout_schema_invalid"]
     validated = validate_layout(layout, slide_copy=slide_copy, resolvable_subjects=set(subject_assets))
+    collage_notes: dict = {}
     if not validated.accepted or validated.layout is None:
-        return None, validated.rejection_codes
+        # Phase B.5.1.3: a collage rejected ONLY for media collision / flat hierarchy is deterministically adapted (bounded, unchanged validator);
+        # anything else - or an adaptation that cannot pass - keeps the fail-closed fallback below.
+        from services.instagram_collage_adapter import adapt_collage
+
+        adapted = adapt_collage(layout, slide_copy=slide_copy, resolvable_subjects=set(subject_assets))
+        if adapted is None:
+            return None, validated.rejection_codes
+        validated, collage_notes = adapted.validated, adapted.notes()
     try:
         result = render_declared_slide(
             spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
@@ -558,6 +566,10 @@ def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets
     if result.text_clipped:
         return None, ["text_does_not_fit_declared_regions"]
     adaptations = [f"{i.code}" for i in validated.issues if i.severity in ("adapted", "note")]
+    if layout.arrangement == "collage":
+        result.notes.update(collage_notes or {"collage_geometry_adapted": False})
+        if collage_notes:
+            adaptations = [*adaptations, "collage_geometry_adapted"]
     if validated.unresolved_media:
         # a media region whose subject no resolver listed was dropped - never filled with a hero image
         result.notes["unresolved_media_regions"] = list(result.notes.get("unresolved_media_regions") or []) + list(validated.unresolved_media)
