@@ -24,7 +24,7 @@ from services.instagram_visual_profiles import ig_font  # noqa: E402
 
 TEXT = {
     fam.HERO: (
-        "Objects are staged by their own measured extent (27-61% of the canvas) and cropped by canvas edges; two dark grounds, four light; six different arrangements "
+        "Objects are staged by their own measured extent (31-61% of the canvas, one full-frame) and cropped by canvas edges; two dark grounds, four light; six different arrangements "
         "(bottom-right bleed, full-frame, near full-height, bottom-left crop, lower object + giant numeral, cropped by the left edge); type is tiny, set in a calm zone, or a giant numeral.",
         "Only a handful of real objects sit on a uniform ground and there are no true cut-outs, so light grounds are cleaner than the reference's dark cinematic product shots. "
         "No glow, reflection or light integration on the object.",
