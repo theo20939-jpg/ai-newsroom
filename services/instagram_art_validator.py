@@ -270,7 +270,8 @@ def validate_instagram_art(
 
         # carousel visual GRAMMAR (section 11/21): a real carousel should not present as the
         # identical layout on every slide after the hook - a warning (not blocking: a short, all-
-        # detail-role deck can legitimately share one layout), so an editor can still see it.
+        # detail-role deck can legitimately share one layout), so an editor can still see it. Phase B.5.1.2: the 4+ slide
+        # "fewer than 3 variants" heuristic is a warning too - repetition can be deliberate and never blocks by itself.
         # Phase B.4 exception: NEWS_RECAP's own correct design is uniform per-story card treatment
         # (spec section 10) - its real distinctiveness is enforced separately, by asset identity
         # (news_recap_asset_reuse_violation above), not layout family. Applying a narrative-
@@ -278,7 +279,7 @@ def validate_instagram_art(
         # validator must not become.
         non_hook_variants = {r.evidence.notes.get("layout_variant") for r in render_results if r.evidence.slide_index != 0}
         if not is_news_recap and len(render_results) >= 4 and len(non_hook_variants) < 3:
-            blocking.append(f"carousel_layout_diversity_insufficient: non-hook variants={non_hook_variants}")
+            warnings.append(f"carousel_layout_diversity_insufficient: non-hook variants={non_hook_variants}")  # advisory: repetition can be deliberate
         elif not is_news_recap and len(render_results) >= 3 and len(non_hook_variants) <= 1:
             warnings.append(f"carousel_layout_diversity_low: non-hook slides all use layout_variant={non_hook_variants}")
         if package.media_plan.get("creative_execution_plan"):
