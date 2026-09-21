@@ -387,7 +387,7 @@ def test_R_brand_tokens_are_renderer_owned_the_model_cannot_supply_them() -> Non
         LayoutRegion.model_validate({**_r("text", 0.1, 0.1, 0.5, 0.2, content_ref="copy", scale_token="BODY"), "font_family": "Comic Sans"})
     with pytest.raises(ValueError):
         LayoutRegion.model_validate({**_r("text", 0.1, 0.1, 0.5, 0.2, content_ref="copy", scale_token="BODY"), "color": "#123456"})
-    assert set(SCALE_TOKENS) == {"DISPLAY", "HEADLINE_L", "HEADLINE_M", "HEADLINE_S", "BODY", "CAPTION"}
+    assert set(SCALE_TOKENS) == {"NUMERAL", "DISPLAY", "HEADLINE_L", "HEADLINE_M", "HEADLINE_S", "BODY", "CAPTION"}
     result = render_declared_slide(
         spec=_SPEC, layout=_layout_of("G_image_free_editorial_statement"), slide_copy=EXAMPLES["G_image_free_editorial_statement"]["copy"], index=0, total=3,
     )

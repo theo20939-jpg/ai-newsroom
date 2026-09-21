@@ -50,9 +50,70 @@ def layout_characteristics(layout: dict[str, Any]) -> dict[str, str]:
         "asymmetry": asymmetry,
         "visual_weight": str(layout.get("visual_weight") or "TEXT"),
         "region_count": "1-2" if n <= 2 else "3-4" if n <= 4 else "5+",
+        "surface": "dark" if str(layout.get("background")) in ("ink", "graphite") else "light",
     }
 
 
 def layout_signature(layout: dict[str, Any]) -> str:
     c = layout_characteristics(layout)
-    return "|".join(f"{k}={c[k]}" for k in ("headline_zone", "media_zone", "media_dominance", "density", "asymmetry", "visual_weight", "region_count"))
+    return "|".join(f"{k}={c[k]}" for k in ("headline_zone", "media_zone", "media_dominance", "density", "asymmetry", "visual_weight", "region_count", "surface"))
+
+
+def _rects(layout: dict[str, Any]) -> list[tuple[str, float, float, float, float]]:
+    return [
+        (r["kind"], float(r["x"]), float(r["y"]), float(r["x"]) + float(r["w"]), float(r["y"]) + float(r["h"]))
+        for r in (layout.get("regions") or []) if isinstance(r, dict) and r.get("kind") in ("text", "media", "graphic")
+    ]
+
+
+def _iou(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> float:
+    w, h = min(a[2], b[2]) - max(a[0], b[0]), min(a[3], b[3]) - max(a[1], b[1])
+    inter = max(0.0, w) * max(0.0, h)
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / union if union > 0 else 0.0
+
+
+def geometry_distance(a: dict[str, Any], b: dict[str, Any]) -> float:
+    """0.0 = the same normalized geometry, 1.0 = nothing in common. Compares content regions (text / media / graphic)
+    of the same kind by best overlap; unmatched regions count as fully different. Used only to PROVE that two
+    plans of one visual family are not the same layout nudged - never as a quality score."""
+    ra, rb = _rects(a), _rects(b)
+    if not ra and not rb:
+        return 0.0
+    used: set[int] = set()
+    total = 0.0
+    for kind, *box in ra:
+        best, best_j = 0.0, None
+        for j, (k2, *box2) in enumerate(rb):
+            if j in used or k2 != kind:
+                continue
+            score = _iou(tuple(box), tuple(box2))
+            if score > best:
+                best, best_j = score, j
+        if best_j is not None:
+            used.add(best_j)
+        total += best
+    return 1.0 - total / max(len(ra), len(rb))
+
+
+def structure_profile(layout: dict[str, Any]) -> dict[str, str]:
+    """Coarse visual STRUCTURE of a plan (surface, palette, what carries the weight, which devices appear)."""
+    regions = [r for r in (layout.get("regions") or []) if isinstance(r, dict)]
+    devices = sorted({str(r.get("graphic_type")) for r in regions if r.get("kind") == "graphic"})
+    medias = [r for r in regions if r.get("kind") == "media"]
+    return {
+        "surface": "dark" if str(layout.get("background")) in ("ink", "graphite") else "light",
+        "palette": str(layout.get("palette") or "brand"),
+        "visual_weight": str(layout.get("visual_weight")),
+        "media_count": str(min(len(medias), 3)),
+        "devices": ",".join(devices) or "none",
+        "numeral": "yes" if any(r.get("content_ref") == "number" for r in regions) else "no",
+        "tilted_media": "yes" if any(r.get("tilt_deg") for r in medias) else "no",
+        "media_coverage": _coverage(medias),
+        "text_on_media": "yes" if any(r.get("on_media") for r in regions if r.get("kind") == "text") else "no",
+    }
+
+
+def _coverage(medias: list[dict[str, Any]]) -> str:
+    area = sum(float(r["w"]) * float(r["h"]) for r in medias)
+    return "none" if not medias else "low" if area < 0.25 else "mid" if area < 0.6 else "high"

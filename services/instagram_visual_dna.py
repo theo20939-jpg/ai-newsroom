@@ -136,8 +136,11 @@ def load_visual_dna(version: str | None = None, *, directory: Path = DNA_DIR) ->
     if version is not None:
         path = directory / f"v{version}.json"
     else:
+        # v2+ files use the family-library schema (services/instagram_visual_dna_v2.py); this loader is the v1 (flat
+        # rules) loader and stays pinned to v1-schema files until the founder approves switching the planner.
         candidates = sorted(
-            (p for p in directory.glob("v*.json") if p.stem[1:].isdigit()), key=lambda p: int(p.stem[1:]),
+            (p for p in directory.glob("v*.json") if p.stem[1:].isdigit() and '"families"' not in p.read_text(encoding="utf-8")),
+            key=lambda p: int(p.stem[1:]),
         )
         if not candidates:
             return None

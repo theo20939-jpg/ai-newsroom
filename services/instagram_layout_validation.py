@@ -159,7 +159,8 @@ def validate_layout(
                 issues.append(LayoutIssue("accent_geometry_invalid", region.accent_type, "rejected", idx))
                 continue
         elif k == "graphic":
-            if region.graphic_type is None or region.w < 0.15 or region.h < 0.1:
+            small_ok = region.graphic_type in ("badge", "scribble")
+            if region.graphic_type is None or region.w < (0.05 if small_ok else 0.15) or region.h < (0.05 if small_ok else 0.1):
                 issues.append(LayoutIssue("graphic_invalid", "", "rejected", idx))
                 continue
         regions.append(region)
@@ -196,12 +197,19 @@ def validate_layout(
                 issues.append(LayoutIssue("media_regions_collide", "", "rejected"))
     for t in texts:
         for m in medias:
-            if _inter_area(_rect(t), _rect(m)) > _MAX_TEXT_ON_MEDIA * _area(_rect(t)):
-                issues.append(LayoutIssue("text_over_media", "readability must come from composition, not from text on a photo", "rejected"))
+            overlap = _inter_area(_rect(t), _rect(m))
+            if overlap <= _MAX_TEXT_ON_MEDIA * _area(_rect(t)):
+                continue
+            # text may sit on a media region only when declared (`on_media`) and fully inside it; the renderer then
+            # MEASURES contrast on the unaltered pixels and rejects the plan if unreadable - never an overlay
+            if not (t.on_media and overlap >= 0.9 * _area(_rect(t))):
+                issues.append(LayoutIssue("text_over_media", "text on media must be declared on_media and lie fully inside the media region", "rejected"))
 
     # 3. the slide's own copy must actually be presented, in full
     refs = {r.content_ref for r in texts}
     lead_rest_split = bool(parts["copy_rest"])
+    if any(r.kind == "graphic" and r.graphic_type == "poll_cards" for r in regions):
+        refs = refs | {"copy_rest"}  # poll option cards present the slide's own remainder copy
     covered = (
         "copy" in refs
         or ({"copy_lead", "copy_rest"} <= refs and lead_rest_split)

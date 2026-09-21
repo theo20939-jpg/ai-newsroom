@@ -537,7 +537,7 @@ def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets
     from pydantic import ValidationError
 
     from schemas.instagram_creative import InstagramSlideLayout
-    from services.instagram_declarative_layout import render_declared_slide
+    from services.instagram_declarative_layout import DeclaredRenderRejected, render_declared_slide
     from services.instagram_layout_validation import validate_layout
 
     try:
@@ -547,10 +547,13 @@ def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets
     validated = validate_layout(layout, slide_copy=slide_copy, resolvable_subjects=set(subject_assets))
     if not validated.accepted or validated.layout is None:
         return None, validated.rejection_codes
-    result = render_declared_slide(
-        spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
-        subject_assets=subject_assets, visual_direction=visual_direction, progress_hidden=validated.progress_hidden,
-    )
+    try:
+        result = render_declared_slide(
+            spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
+            subject_assets=subject_assets, visual_direction=visual_direction, progress_hidden=validated.progress_hidden,
+        )
+    except DeclaredRenderRejected as exc:
+        return None, [exc.code]
     if result.text_clipped:
         return None, ["text_does_not_fit_declared_regions"]
     adaptations = [f"{i.code}" for i in validated.issues if i.severity in ("adapted", "note")]

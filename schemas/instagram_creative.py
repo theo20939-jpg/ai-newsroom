@@ -107,7 +107,7 @@ class InstagramSingleCreative(BaseModel):
 # ---------------------------------------------------------------------------------------------
 
 LayoutRegionKind = Literal["surface", "media", "text", "accent", "graphic"]
-ScaleToken = Literal["DISPLAY", "HEADLINE_L", "HEADLINE_M", "HEADLINE_S", "BODY", "CAPTION"]
+ScaleToken = Literal["NUMERAL", "DISPLAY", "HEADLINE_L", "HEADLINE_M", "HEADLINE_S", "BODY", "CAPTION"]
 TEXT_CONTENT_REFS = ("copy", "copy_lead", "copy_rest", "number", "copy_no_number")
 MEDIA_FUNCTIONS = ("hero", "detail", "evidence_photo", "ui_screenshot", "result", "before_after", "concept", "none")
 
@@ -128,24 +128,31 @@ class LayoutRegion(BaseModel):
     align: Literal["left", "center", "right"] | None = None
     valign: Literal["top", "middle", "bottom"] | None = None
     max_lines: int | None = Field(default=None, ge=1, le=10)
-    surface: Literal["paper", "soft", "red"] | None = None
+    surface: Literal["paper", "soft", "red", "ink", "graphite"] | None = None
     crop_mode: Literal["cover", "contain"] | None = None
     focus_x: float | None = Field(default=None, ge=0.0, le=1.0)
     focus_y: float | None = Field(default=None, ge=0.0, le=1.0)
-    frame: Literal["none", "hairline", "accent"] | None = None
+    frame: Literal["none", "hairline", "accent", "paper"] | None = None
     accent_type: Literal["rule_h", "rule_v", "block"] | None = None
-    graphic_type: Literal["ui_frame", "flow_diagram"] | None = None
+    graphic_type: Literal["ui_frame", "flow_diagram", "poll_cards", "badge", "scribble"] | None = None
+    # B.5R: renderer-resolved colour role (the palette itself is renderer-owned), text laid on a media
+    # region (contrast is MEASURED on the unaltered pixels, never fixed with an overlay) and a small
+    # collage tilt for media fragments.
+    tone: Literal["primary", "accent", "accent2", "muted"] | None = None
+    on_media: bool | None = None
+    tilt_deg: float | None = Field(default=None, ge=-12.0, le=12.0)
 
 
 class InstagramSlideLayout(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    background: Literal["paper", "soft"] = "paper"
+    background: Literal["paper", "soft", "ink", "graphite"] = "paper"
+    palette: Literal["brand", "culture", "neo"] = "brand"
     density: Literal["LOW", "MEDIUM", "HIGH"]
     media_dominance: Literal["NONE", "SUPPORTING", "BALANCED", "DOMINANT"]
     visual_weight: Literal["TEXT", "MEDIA", "MIXED", "GRAPHIC"]
     show_progress: bool = True
-    regions: list[LayoutRegion] = Field(min_length=1, max_length=8)
+    regions: list[LayoutRegion] = Field(min_length=1, max_length=10)
 
 
 class InstagramVisualRhythm(BaseModel):
