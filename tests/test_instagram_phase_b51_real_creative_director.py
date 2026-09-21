@@ -358,3 +358,58 @@ def test_the_acceptance_runner_cannot_substitute_a_fixture_for_a_real_output() -
 def test_budget_worst_case_uses_only_models_the_router_can_actually_pick() -> None:
     worst = routed_worst_case_call_cost()
     assert 0 < worst < copy.copy(__import__("decimal").Decimal("0.30"))  # luna/terra ceiling, not the excluded most expensive model
+
+
+# ------------------------------------------------------------------------------------------ B.5.1.1: bounded Creative Director output
+
+
+async def _capture_cd_request():
+    gateway = _Gateway(_output())
+    repo = FilePromptRepository(_PROMPTS)
+    director_input = _input()
+    await cd._call_creative_director(gateway, repo, prompt_name=cd.CAROUSEL_PROMPT_NAME, director_input=director_input, prompt_version=cd._CAROUSEL_PROMPT_VERSION)
+    return gateway.requests[0], repo, director_input
+
+
+@pytest.mark.asyncio
+async def test_creative_director_request_is_bounded_and_otherwise_unchanged() -> None:
+    request, repo, director_input = await _capture_cd_request()
+    assert cd._CREATIVE_DIRECTOR_MAX_TOKENS == 16_000
+    assert request.max_tokens == 16_000
+    prompt = repo.resolve(cd.CAROUSEL_PROMPT_NAME, "9")
+    assert cd._CAROUSEL_PROMPT_VERSION == "9"
+    assert request.response_mode == "json_schema" and request.response_schema == prompt.output_schema
+    assert request.messages[0].content[0].text == prompt.system + "\n\nRULES:\n" + "\n".join(f"- {r}" for r in prompt.rules)
+    assert request.messages[1].content[0].text == cd._build_user_text(director_input)
+    # nothing else that steers routing/decoding was introduced
+    assert request.temperature is None and request.preferred_model is None
+    assert [m.role for m in request.messages] == ["system", "user"]
+
+
+@pytest.mark.asyncio
+async def test_bounded_request_leaves_visual_contract_untouched() -> None:
+    request, repo, _ = await _capture_cd_request()
+    schema = json.dumps(request.response_schema)
+    assert '"visual_family"' in schema and "overlay" not in schema.lower() and "scrim" not in schema.lower()
+    import services.instagram_automatic_trigger as trigger
+
+    assert trigger._visual_dna_version() == "2"
+
+
+def test_gateway_worst_case_with_bound_fits_the_diagnostic_cap_for_the_routed_candidate() -> None:
+    from decimal import Decimal
+
+    from scripts._instagram_phase_b51_acceptance import DIAG_HARD_CAP_USD, gateway_worst_case_by_model
+
+    by_model = gateway_worst_case_by_model()
+    cheapest = min(by_model.values())
+    assert cheapest * 4 <= DIAG_HARD_CAP_USD
+    assert all(v <= DIAG_HARD_CAP_USD for v in by_model.values())  # no single eligible candidate is denied outright
+    assert all(v < Decimal("1") for v in by_model.values())
+
+
+def test_the_editorial_decision_request_is_not_on_the_acceptance_path() -> None:
+    from pathlib import Path as _P
+
+    source = (_P(__file__).resolve().parent.parent / "scripts" / "_instagram_phase_b51_acceptance.py").read_text(encoding="utf-8")
+    assert "trigger.generate_editorial_decision = fixed_decision" in source

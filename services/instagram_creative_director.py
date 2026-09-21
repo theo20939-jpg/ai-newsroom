@@ -91,6 +91,7 @@ EDITORIAL_DECISION_PROMPT_NAME = "instagram_editorial_decision"
 # version file is left untouched/unused, matching this codebase's own established "never edit a
 # shipped prompt version in place" convention.
 _SINGLE_PROMPT_VERSION = "6"
+_CREATIVE_DIRECTOR_MAX_TOKENS = 16_000  # upper safety bound (not a target): keeps the gateway worst-case estimate from pricing a model-maximum completion
 _CAROUSEL_PROMPT_VERSION = "9"  # Phase B.5.1: v9 = Visual DNA v2 families, dark surfaces allowed, bounded roles, meta-language guard
 CAROUSEL_PROMPT_VERSION = _CAROUSEL_PROMPT_VERSION
 _REEL_PROMPT_VERSION = "7"
@@ -421,7 +422,7 @@ async def _call_creative_director(
             Message(role="system", content=[ContentPart(type="text", text=system_text)]),
             Message(role="user", content=[ContentPart(type="text", text=_build_user_text(director_input))]),
         ],
-        response_mode="json_schema", response_schema=prompt.output_schema,
+        response_mode="json_schema", response_schema=prompt.output_schema, max_tokens=_CREATIVE_DIRECTOR_MAX_TOKENS,
     )
     runtime = RuntimeContext(
         task_id=uuid4(), event_id=uuid4(), capability_name=prompt_name, priority=TaskPriority.S,

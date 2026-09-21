@@ -83,6 +83,34 @@ def routed_worst_case_call_cost() -> Decimal:
     return max(Decimal(_EST_INPUT_TOKENS) / 1_000_000 * t.input_price_per_million + Decimal(_EST_OUTPUT_TOKENS) / 1_000_000 * t.output_price_per_million for t in eligible)
 
 
+def gateway_worst_case_by_model() -> dict[str, Decimal]:
+    """The gateway's OWN worst-case estimate (services.cost_estimator.CostEstimator - the exact figure BudgetGuard checks) for the real v9
+    Creative Director request, per model the router can pick, with a deliberately large representative input."""
+    from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, Message
+    from services.cost_estimator import CostEstimator
+
+    repo = FilePromptRepository(_PROMPTS)
+    prompt = repo.resolve(cd_module.CAROUSEL_PROMPT_NAME, cd_module._CAROUSEL_PROMPT_VERSION)
+    system_text = prompt.system + "\n\nRULES:\n" + "\n".join(f"- {rule}" for rule in prompt.rules)
+    director_input = cd_module.CreativeDirectorInput(
+        objective="saves", format="carousel", opportunity_summary="s" * 300, allowed_evidence=["x" * 300] * 12, locale="ru", fatigue_note="f" * 1500)
+    request = GenerateRequest(
+        messages=[Message(role="system", content=[ContentPart(type="text", text=system_text)]),
+                  Message(role="user", content=[ContentPart(type="text", text=cd_module._build_user_text(director_input))])],
+        response_mode="json_schema", response_schema=prompt.output_schema, max_tokens=cd_module._CREATIVE_DIRECTOR_MAX_TOKENS)
+    registry = build_model_registry()
+    estimator = CostEstimator(ModelRegistryPricingCatalog(registry))
+    priced = []
+    for model in registry.all_models():
+        if model.provider_id != "openai" or not model.supports_structured_output:
+            continue
+        tier = next((t for t in model.pricing_tiers if t.condition == "standard"), None)
+        if tier is not None:
+            priced.append((tier.input_price_per_million + tier.output_price_per_million, model))
+    cheapest = min(p for p, _ in priced)
+    return {m.model_id: estimator.estimate(m, request).worst_case for p, m in priced if p <= cheapest * Decimal("3.0")}
+
+
 async def _production_ledger() -> Decimal:
     """READ-ONLY view of the production ledger key (never written by this run)."""
     from redis.asyncio import Redis
@@ -110,15 +138,17 @@ async def _budget_preflight(diag) -> dict:
     prod_before = await _production_ledger()
     raw = await diag.get(f"phase7:cost_ledger:{DIAG_NAMESPACE}")
     diag_spent = Decimal(str(raw)) if raw is not None else Decimal(0)
-    worst_each = routed_worst_case_call_cost()
+    by_model = gateway_worst_case_by_model()
+    worst_each = min(by_model.values())  # the router's LOWEST_COST pick; costlier candidates are fallback only
     return {
+        "request_max_tokens": cd_module._CREATIVE_DIRECTOR_MAX_TOKENS, "gateway_worst_case_by_candidate_usd": {k: str(v) for k, v in by_model.items()},
         "diagnostic_namespace": DIAG_NAMESPACE, "diagnostic_hard_cap_usd": str(DIAG_HARD_CAP_USD), "diagnostic_spent_before_usd": str(diag_spent),
         "production_ledger_before_usd": str(prod_before), "production_daily_limit_usd": str(settings.llm_daily_budget_usd),
         "instagram_automatic_generation_enabled": bool(getattr(settings, "instagram_automatic_generation_enabled", False)),
         "worst_case_per_call_usd": str(worst_each.quantize(Decimal("0.0001"))),
         "worst_case_four_calls_usd": str((worst_each * _MAX_REAL_CALLS).quantize(Decimal("0.0001"))),
         "assumed_tokens_per_call": {"input": _EST_INPUT_TOKENS, "output": _EST_OUTPUT_TOKENS},
-        "safe": diag_spent + worst_each * _MAX_REAL_CALLS <= DIAG_HARD_CAP_USD,
+        "safe": diag_spent + worst_each * _MAX_REAL_CALLS <= DIAG_HARD_CAP_USD and all(v <= DIAG_HARD_CAP_USD - diag_spent for v in by_model.values()),
     }
 
 
