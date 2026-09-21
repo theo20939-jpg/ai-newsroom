@@ -164,7 +164,7 @@ class _ReplayGateway:
         from integrations.llm_gateway.protocol import GenerateResponse
         from schemas.capability import CapabilityUsage
 
-        return GenerateResponse(text=None, structured_output=self.output, finish_reason="stop", model_used=None, usage=CapabilityUsage())
+        return GenerateResponse(text=None, structured_output=self.output, finish_reason="stop", model_used="replay-of-b511-real-output", usage=CapabilityUsage())
 
 
 def _load_replays(argv: list[str]) -> dict[str, dict]:
@@ -213,7 +213,8 @@ async def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     real = mode == "real"
     replays = _load_replays(sys.argv[3:]) if real else {}
-    max_real = _MAX_REAL_CALLS - len(replays)
+    only = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv else list(_ARCHETYPES)
+    max_real = 0 if "--only" in sys.argv and set(only) <= set(replays) else _MAX_REAL_CALLS - len(replays)
 
     preflight = None
     pricing = ModelRegistryPricingCatalog(build_model_registry())
@@ -298,7 +299,7 @@ async def main() -> None:
         async with shadow_engine.connect() as connection:
             await connection.begin()
             async with AsyncSession(bind=connection, join_transaction_mode="create_savepoint", expire_on_commit=False) as session:
-                for name in _ARCHETYPES:
+                for name in [n for n in _ARCHETYPES if n in only]:
                     bundle = pool_bundle if name == "news_recap" else None
                     try:
                         summary.append(await _run_one(name, session, gateway_factory, prompt_repo, pricing, out_dir, bundle, trend_story, captured, real, replays.get(name)))
