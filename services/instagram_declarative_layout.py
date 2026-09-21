@@ -223,6 +223,70 @@ def _fit_cutout(image: Image.Image, width: int, height: int, fx: float, fy: floa
     return layer
 
 
+def _object_bbox(image: Image.Image) -> tuple[int, int, int, int]:
+    """Bounding box of the OBJECT inside its photo: the alpha coverage of a real cutout, otherwise whatever differs from a
+    uniform ground; the whole image when there is no uniform ground (a scene, not an isolated object)."""
+    full = (0, 0, image.width, image.height)
+    if image.mode == "RGBA" and image.getchannel("A").getextrema()[0] < 250:
+        return image.getchannel("A").point(lambda a: 255 if a > 16 else 0).getbbox() or full
+    ground, std = ground_of(image)
+    if std > 10.0:
+        return full
+    diff = ImageChops.difference(image.convert("RGB"), Image.new("RGB", image.size, ground)).convert("L")
+    return diff.point(lambda v: 255 if v > 8 else 0).getbbox() or full
+
+
+def _fit_object(image: Image.Image, width: int, height: int, fx: float, fy: float, *, contain: bool):
+    """Stage an object by ITS extent: scale so the object's bounding box fits (contain) or covers (cover, cropping it at the
+    region edge) the region, aligned by fx/fy. Crop / uniform scale / translate only - pixels are never recoloured. Returns
+    (RGBA layer of the region, object box in region coordinates)."""
+    rgba = image.convert("RGBA")
+    bx0, by0, bx1, by1 = _object_bbox(rgba)
+    bw, bh = max(1, bx1 - bx0), max(1, by1 - by0)
+    scale = min(width / bw, height / bh) if contain else max(width / bw, height / bh)
+    resized = rgba.resize((max(1, round(rgba.width * scale)), max(1, round(rgba.height * scale))), Image.Resampling.LANCZOS)
+    ox = round((width - bw * scale) * fx - bx0 * scale)
+    oy = round((height - bh * scale) * fy - by0 * scale)
+    layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    layer.paste(resized, (ox, oy))
+    return layer, (round(bx0 * scale + ox), round(by0 * scale + oy), round(bx1 * scale + ox), round(by1 * scale + oy))
+
+
+def _torn_mask(w: int, h: int, amp: int) -> Image.Image:
+    """A deterministic jagged 'torn paper' outline (no RNG): an inset rectangle whose edge is displaced by a fixed
+    function of the position along the edge."""
+    pts: list[tuple[float, float]] = []
+    step = max(10, round(min(w, h) / 22))
+
+    def jit(i: int) -> float:
+        return amp * (0.55 + 0.45 * math.sin(i * 1.9) * math.cos(i * 0.61))
+
+    for i, x in enumerate(range(0, w, step)):
+        pts.append((x, jit(i)))
+    for i, y in enumerate(range(0, h, step)):
+        pts.append((w - jit(i + 7), y))
+    for i, x in enumerate(range(w, 0, -step)):
+        pts.append((x, h - jit(i + 13)))
+    for i, y in enumerate(range(h, 0, -step)):
+        pts.append((jit(i + 3), y))
+    mask = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(mask).polygon(pts, fill=255)
+    return mask
+
+
+def _die_cut_outline(alpha: Image.Image, radius: int) -> Image.Image:
+    """Dilate a real alpha mask by `radius` px (offsets on two rings, no filters): the white sticker outline of a die-cut cutout."""
+    out = alpha.point(lambda a: 255 if a > 16 else 0)
+    base = out.copy()
+    for r in (radius, round(radius * 0.6)):
+        for k in range(16):
+            dx, dy = round(r * math.cos(2 * math.pi * k / 16)), round(r * math.sin(2 * math.pi * k / 16))
+            shifted = Image.new("L", alpha.size, 0)
+            shifted.paste(base, (dx, dy))
+            out = ImageChops.lighter(out, shifted)
+    return out
+
+
 def _object_extent(tile: Image.Image) -> tuple[int, tuple[int, int, int, int]]:
     """(object pixel count, object bounding box in tile coordinates). The object is the alpha coverage of a real
     cutout, otherwise whatever differs from a uniform ground. A DIAGNOSTIC only (object dominance), never a gate;
@@ -304,6 +368,7 @@ def render_declared_slide(
     clipped_any = False
     treatment = "none"
     rotations = layers = object_px = object_bbox_px = 0
+    object_boxes: list[list[float]] = []
     media_mask, text_mask, content_mask = (Image.new("L", (W, H), 0) for _ in range(3))
     pad_px = round(W * 0.01)
 
@@ -328,7 +393,7 @@ def render_declared_slide(
                 dropped.append(str(region.content_ref))
                 continue
             image, identity = asset
-            pad = round(W * 0.022) if region.frame == "paper" else 0
+            pad = round(W * {"paper": 0.022, "torn": 0.030, "die_cut": 0.011}.get(region.frame or "", 0))
             if region.frame in ("hairline", "accent"):
                 ring = max(3, round(W * (0.006 if region.frame == "accent" else 0.003)))
                 colour = accent_default if region.frame == "accent" else HAIRLINE
@@ -336,7 +401,11 @@ def render_declared_slide(
             fx, fy = (region.focus_x if region.focus_x is not None else 0.5), (region.focus_y if region.focus_y is not None else 0.42)
             iw, ih = max(1, w - 2 * pad), max(1, h - 2 * pad)
             mode = region.crop_mode or "cover"
-            if mode in ("cutout", "cutout_contain"):
+            object_box = None
+            if mode in ("object_contain", "object_cover"):
+                tile, object_box = _fit_object(image, iw, ih, fx, fy, contain=mode == "object_contain")
+                media_treatment = "object_contained" if mode == "object_contain" else "object_cover_cropped"
+            elif mode in ("cutout", "cutout_contain"):
                 tile = _fit_cutout(image, iw, ih, fx, fy, contain=mode == "cutout_contain")
                 media_treatment = "cutout_contained" if mode == "cutout_contain" else "cutout_cover"
             elif mode == "contain":
@@ -346,12 +415,29 @@ def render_declared_slide(
             else:
                 tile = fit_image_cover(image, width=iw, height=ih, focus_x=fx, focus_y=fy).image
                 media_treatment = "cover_cropped"
-            px_count, (ox0_, oy0_, ox1_, oy1_) = _object_extent(tile)
+            if object_box is not None:
+                ox0_, oy0_, ox1_, oy1_ = (object_box[0] + pad, object_box[1] + pad, object_box[2] + pad, object_box[3] + pad)
+                px_count = max(0, ox1_ - ox0_) * max(0, oy1_ - oy0_)
+            else:
+                px_count, (ox0_, oy0_, ox1_, oy1_) = _object_extent(tile)
+                ox0_, oy0_, ox1_, oy1_ = ox0_ + pad, oy0_ + pad, ox1_ + pad, oy1_ + pad
             object_px += px_count
             cx0, cy0, cx1, cy1 = max(0, x0 + ox0_), max(0, y0 + oy0_), min(W, x0 + ox1_), min(H, y0 + oy1_)
             object_bbox_px += max(0, cx1 - cx0) * max(0, cy1 - cy0)
-            if pad:
-                matted = Image.new("RGB", (w, h), (244, 242, 236))
+            if cx1 > cx0 and cy1 > cy0:
+                object_boxes.append([round(cx0 / W, 3), round(cy0 / H, 3), round(cx1 / W, 3), round(cy1 / H, 3)])
+            if region.frame == "die_cut" and tile.mode == "RGBA" and tile.getchannel("A").getextrema()[0] < 250:
+                inset = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+                inset.paste(tile, (pad, pad))
+                ring = Image.new("RGBA", (w, h), (244, 242, 236, 255))
+                base = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+                base.paste(ring, (0, 0), _die_cut_outline(inset.getchannel("A"), max(3, pad)))
+                base.paste(inset, (0, 0), inset)
+                tile = base
+            elif pad:
+                matted = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+                paper = Image.new("RGBA", (w, h), (244, 242, 236, 255))
+                matted.paste(paper, (0, 0), _torn_mask(w, h, max(4, pad)) if region.frame == "torn" else None)
                 matted.paste(tile.convert("RGB"), (pad, pad))
                 tile = matted
             if region.tilt_deg:
@@ -412,6 +498,21 @@ def render_declared_slide(
                 draw.ellipse([bx, by, bx + side, by + side], fill=(*colour, 255))
                 inset = round(side * 0.16)
                 draw.ellipse([bx + inset, by + inset, bx + side - inset, by + side - inset], outline=(*tok.INK, 255), width=max(3, round(side * 0.04)))
+            elif region.graphic_type in ("highlight", "burst"):
+                colour = _role_colour(layout, region.tone or ("accent" if region.graphic_type == "highlight" else "accent2"), dark=True, default=accent_default)
+                shape = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+                sd = ImageDraw.Draw(shape)
+                if region.graphic_type == "highlight":
+                    sd.rounded_rectangle([0, 0, w - 1, h - 1], radius=round(h * 0.18), fill=(*colour, 255))
+                else:
+                    r_out, cx_, cy_ = min(w, h) / 2, w / 2, h / 2
+                    star = [(cx_ + (r_out if k % 2 == 0 else r_out * 0.76) * math.cos(math.pi * k / 14 - math.pi / 2),
+                             cy_ + (r_out if k % 2 == 0 else r_out * 0.76) * math.sin(math.pi * k / 14 - math.pi / 2)) for k in range(28)]
+                    sd.polygon(star, fill=(*colour, 255))
+                if region.tilt_deg:
+                    shape = shape.rotate(-region.tilt_deg, expand=True, resample=Image.Resampling.BICUBIC)
+                    rotations += 1
+                canvas.paste(shape, (x0 + w // 2 - shape.width // 2, y0 + h // 2 - shape.height // 2), shape)
             elif region.graphic_type in ("scribble", "arrow_scribble", "circle_scribble"):
                 colour = _role_colour(layout, region.tone or "accent", dark=True, default=accent_default)
                 pts = _scribble_points(region.graphic_type, x0, y0, w, h)
@@ -514,6 +615,7 @@ def render_declared_slide(
             "text_canvas_coverage": round(text_mask.histogram()[255] / canvas_px, 4),
             "object_canvas_coverage": round(min(object_px, canvas_px) / canvas_px, 4),
             "object_bbox_canvas_coverage": round(min(object_bbox_px, canvas_px) / canvas_px, 4),
+            "object_bounding_boxes": object_boxes,
             "negative_space": round(1 - content_mask.histogram()[255] / canvas_px, 4),
             "text_metrics": text_metrics, "text_zone_reports": zone_reports,
         },

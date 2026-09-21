@@ -129,12 +129,14 @@ class LayoutRegion(BaseModel):
     valign: Literal["top", "middle", "bottom"] | None = None
     max_lines: int | None = Field(default=None, ge=1, le=10)
     surface: Literal["paper", "soft", "red", "ink", "graphite", "accent", "accent2", "media_ground"] | None = None
-    crop_mode: Literal["cover", "contain", "cutout", "cutout_contain"] | None = None
+    # object_contain / object_cover (B.5R.2): the OBJECT's measured extent (alpha or difference from a uniform ground), not the
+    # photo frame, is fitted to the region - so an object can be staged large and cropped by a canvas edge.
+    crop_mode: Literal["cover", "contain", "cutout", "cutout_contain", "object_contain", "object_cover"] | None = None
     focus_x: float | None = Field(default=None, ge=0.0, le=1.0)
     focus_y: float | None = Field(default=None, ge=0.0, le=1.0)
-    frame: Literal["none", "hairline", "accent", "paper"] | None = None
+    frame: Literal["none", "hairline", "accent", "paper", "torn", "die_cut"] | None = None
     accent_type: Literal["rule_h", "rule_v", "block"] | None = None
-    graphic_type: Literal["ui_frame", "flow_diagram", "poll_cards", "badge", "scribble", "arrow_scribble", "circle_scribble"] | None = None
+    graphic_type: Literal["ui_frame", "flow_diagram", "poll_cards", "badge", "scribble", "arrow_scribble", "circle_scribble", "highlight", "burst"] | None = None
     # B.5R: renderer-resolved colour role (the palette itself is renderer-owned), text laid on a media
     # region (contrast is MEASURED on the unaltered pixels, never fixed with an overlay) and a small
     # collage tilt for media fragments.
