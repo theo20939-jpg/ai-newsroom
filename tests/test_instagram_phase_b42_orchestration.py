@@ -47,6 +47,14 @@ from services.instagram_recap_bundle import InstagramRecapBundle, RecapStory, bu
 import services.instagram_recap_bundle as bundle_module
 
 _PROMPTS_ROOT = Path(__file__).resolve().parent.parent / "prompts"
+
+
+@pytest.fixture(autouse=True)
+def _pre_b6_carousel_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests exercise the pre-B.6 (v9-shaped) carousel contract through the live trigger; the media-first contract has its own tests (test_instagram_phase_b6_media_first.py)."""
+    import services.instagram_automatic_trigger as _trigger
+
+    monkeypatch.setattr(_trigger, "MEDIA_FIRST_CAROUSEL_VERSIONS", frozenset())
 _EVIDENCE = "confirmed feature: NINJA drafts Instagram carousels on its own"
 
 _DECISION = {

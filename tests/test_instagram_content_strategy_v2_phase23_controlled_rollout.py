@@ -28,6 +28,15 @@ from services.product_context_service import create_product
 from tests.fakes.fake_gateway import FakeLLMGateway
 from tests.fakes.fake_prompt_repository import FakePromptRepository
 
+
+
+@pytest.fixture(autouse=True)
+def _pre_b6_carousel_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests exercise the pre-B.6 (v9-shaped) carousel contract through the live trigger; the media-first contract has its own tests (test_instagram_phase_b6_media_first.py)."""
+    import services.instagram_automatic_trigger as _trigger
+
+    monkeypatch.setattr(_trigger, "MEDIA_FIRST_CAROUSEL_VERSIONS", frozenset())
+
 _SINGLE_SCHEMA = {
     "type": "object",
     "properties": {

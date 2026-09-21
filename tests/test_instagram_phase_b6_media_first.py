@@ -477,3 +477,93 @@ async def test_the_media_first_contract_is_off_unless_the_caller_asks_and_fact_s
     with pytest.raises(UngroundedEvidenceError):
         await generate_carousel_creative(_Gateway(tampered), FilePromptRepository(_PROMPTS), director_input=_v10_input())
     assert copy.deepcopy(_ok_slides())[0]["role"] == "hook"
+
+
+# ------------------------------------------------------------------------------------------ the live trigger, end to end (DB session)
+
+
+def _live_slides():
+    slides = [
+        _slide_dict("hook", "Ты платишь за мощность, которая простаивает", "generated", [_media("generated", 0.08, 0.06, 0.84, 0.5, frame="paper"), _text(y=0.62)], brief=BRIEF),
+        _slide_dict("evidence", "Простые задачи не требуют флагмана", "graphic", [_r("graphic", 0.08, 0.12, 0.84, 0.36, graphic_type="flow_diagram", tone="accent"), _text(y=0.56)]),
+        _slide_dict("takeaway", "Выбирай модель под задачу", "source", [_media("source", 0.5, 0.1, 0.42, 0.4, frame="paper"), _text(0.08, 0.55, 0.8, 0.24)], subject="source"),
+    ]
+    slides[1]["visual_direction"] = "«Задача → Модель → Результат»"
+    for slide in slides:
+        slide["source_evidence"] = "E1"
+    return slides
+
+
+def _live_output():
+    out = _v10_output(_live_slides())
+    out["content_archetype"] = "news_insight"
+    out["creative_execution_plan"]["media_strategy"] = "generated_media"
+    return out
+
+
+@pytest.mark.asyncio
+async def test_live_trigger_runs_the_media_first_pipeline_end_to_end(db_session, monkeypatch, tmp_path) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from uuid import uuid4
+
+    import services.instagram_automatic_trigger as trigger
+    from tests.test_instagram_phase_b42_orchestration import RoutingFakeGateway, _news_opportunity, _patch_delivery
+
+    calls: list[dict] = []
+    monkeypatch.setattr(media, "build_budgeted_image_executor", lambda: _Executor(calls))
+    monkeypatch.setattr(settings, "openai_api_key", SecretStr("test-key"))
+    monkeypatch.setattr(settings, "image_storage_root", str(tmp_path))
+    monkeypatch.setattr(settings, "instagram_image_generation_mode", "live")
+    photo = _photo()
+
+    async def fake_source(session, story_id):
+        return photo, SimpleNamespace(id=uuid4(), candidate_id="cand-b6"), 1, 100
+
+    monkeypatch.setattr(trigger, "_resolve_single_source_image", fake_source)
+    captured = _patch_delivery(monkeypatch)
+    gateway = RoutingFakeGateway(_live_output())
+    outcome = await trigger.evaluate_and_submit_instagram_opportunity(
+        db_session, AsyncMock(), opportunity=_news_opportunity(), opportunity_summary="Дешёвая модель для простых задач", gateway=gateway,
+        prompt_repository=FilePromptRepository(_PROMPTS), phase_a_enabled=True)
+    assert outcome.accepted is True and outcome.reason == "submitted", outcome.reason
+    request_text = gateway.carousel_request().messages[1].content[0].text
+    assert "KAGE VOICE (shared brand voice, source of truth docs/brand/kage_voice_v1.md" in request_text
+    assert "SOURCE_SUITABLE_FOR_FINAL_VISUAL: yes" in request_text and "GENERATED media is a first-class option" in request_text
+    assert len(calls) == 1 and calls[0]["max_attempts"] == 1  # exactly the ONE generated slide; no retries
+    obs = captured["package"].media_plan["b4_observability"]
+    assert obs["prompt_version"] == "10" and obs["text_only_slides"] == [] and obs["typographic_final_media_slides"] == []
+    assert [s["media_source"] for s in obs["slides"]] == ["generated", "graphic", "source"]
+    assert obs["overlay_operations_executed_total"] == 0 and obs["art_validation_passed"] is True, obs["art_blocking_issues"]
+    plan = captured["package"].media_plan
+    assert plan["media_first"] is True and plan["media_execution"]["assets"][0]["media_mode"] == "GENERATED"
+    assert plan["media_execution"]["assets"][0]["generation_prompt_sha256"] and plan["media_execution"]["assets"][0]["accounted_cost_usd"] == "0.04310"
+
+
+@pytest.mark.asyncio
+async def test_live_trigger_never_ships_a_generated_slide_without_its_image_or_a_typographic_only_plan(db_session, monkeypatch) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from uuid import uuid4
+
+    import services.instagram_automatic_trigger as trigger
+    from tests.test_instagram_phase_b42_orchestration import RoutingFakeGateway, _news_opportunity, _patch_delivery
+
+    photo = _photo()
+
+    async def fake_source(session, story_id):
+        return photo, SimpleNamespace(id=uuid4(), candidate_id="cand-b6"), 1, 100
+
+    monkeypatch.setattr(trigger, "_resolve_single_source_image", fake_source)
+    _patch_delivery(monkeypatch)
+    monkeypatch.setattr(settings, "instagram_image_generation_mode", "off")  # production default
+    off = await trigger.evaluate_and_submit_instagram_opportunity(
+        db_session, AsyncMock(), opportunity=_news_opportunity(), opportunity_summary="s", gateway=RoutingFakeGateway(_live_output()),
+        prompt_repository=FilePromptRepository(_PROMPTS), phase_a_enabled=True)
+    assert off.reason == "generation_off"  # fail closed: no render, no delivery
+    bare = _live_output()
+    bare["slides"][1] = _slide_dict("evidence", "Пустой слайд", "graphic", [_r("accent", 0.08, 0.5, 0.2, 0.01, accent_type="rule_h"), _text(y=0.56)])
+    typographic = await trigger.evaluate_and_submit_instagram_opportunity(
+        db_session, AsyncMock(), opportunity=_news_opportunity(), opportunity_summary="s", gateway=RoutingFakeGateway(bare),
+        prompt_repository=FilePromptRepository(_PROMPTS), phase_a_enabled=True)
+    assert typographic.reason == "creative_director_failed:MediaFirstContractError"
