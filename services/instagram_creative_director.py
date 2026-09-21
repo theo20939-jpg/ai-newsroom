@@ -92,8 +92,61 @@ EDITORIAL_DECISION_PROMPT_NAME = "instagram_editorial_decision"
 # shipped prompt version in place" convention.
 _SINGLE_PROMPT_VERSION = "6"
 _CREATIVE_DIRECTOR_MAX_TOKENS = 16_000  # upper safety bound (not a target): keeps the gateway worst-case estimate from pricing a model-maximum completion
-_CAROUSEL_PROMPT_VERSION = "9"  # Phase B.5.1: v9 = Visual DNA v2 families, dark surfaces allowed, bounded roles, meta-language guard
+_CAROUSEL_PROMPT_VERSION = "9.1"  # Phase B.5.1.2: v9.1 = v9 + evidence-reference contract (E1..En handles); v9 = Visual DNA v2 families, bounded roles, meta-language guard
 CAROUSEL_PROMPT_VERSION = _CAROUSEL_PROMPT_VERSION
+_EVIDENCE_HANDLE_CAROUSEL_VERSIONS = frozenset({"9.1"})  # prompt versions whose input lists evidence as handles (E1, E2, ...)
+_EVIDENCE_HANDLE_RE = re.compile(r"^E([1-9]\d*)$")
+
+# Phase B.5.1.2: optional diagnostic sink. Called with ("raw_output", ...) as soon as a provider structured output exists - BEFORE any semantic
+# validation can raise - and with ("validation_error", ...) if validation then fails. Never receives credentials or environment.
+_RAW_OUTPUT_SINK = None
+
+
+def set_raw_output_sink(sink) -> None:
+    global _RAW_OUTPUT_SINK
+    _RAW_OUTPUT_SINK = sink
+
+
+def _emit_diagnostic(event: str, payload: dict) -> None:
+    if _RAW_OUTPUT_SINK is not None:
+        try:
+            _RAW_OUTPUT_SINK(event, payload)
+        except Exception:  # noqa: BLE001 - diagnostics must never change the outcome of a generation
+            pass
+
+
+def _uses_evidence_handles(prompt_name: str, prompt_version: str) -> bool:
+    return prompt_name == CAROUSEL_PROMPT_NAME and prompt_version in _EVIDENCE_HANDLE_CAROUSEL_VERSIONS
+
+
+def evidence_handle_map(allowed_evidence: list[str]) -> dict[str, str]:
+    """Deterministic E1..En -> exact canonical evidence string (list order). The handles are references only."""
+    return {f"E{i}": text for i, text in enumerate(allowed_evidence, start=1)}
+
+
+def resolve_evidence_references(claimed: list[str], allowed_evidence: list[str]) -> list[str]:
+    """Resolve the model's citations to exact canonical evidence strings. A known handle resolves to its canonical text; an exact canonical
+    string (legacy outputs) is accepted as-is; anything else - an unknown or invented handle, a paraphrase, a label such as [story_1] - is
+    rejected. There is no fuzzy or semantic matching."""
+    handles = evidence_handle_map(allowed_evidence)
+    resolved: list[str] = []
+    ungrounded: list[str] = []
+    for claim in claimed:
+        candidate = _without_prompt_bullet(str(claim)).strip()
+        if _EVIDENCE_HANDLE_RE.match(candidate):
+            if candidate in handles:
+                resolved.append(handles[candidate])
+            else:
+                ungrounded.append(f"{claim} (unknown evidence handle)")
+        elif _without_prompt_bullet(str(claim)) in allowed_evidence:
+            resolved.append(_without_prompt_bullet(str(claim)))
+        else:
+            ungrounded.append(str(claim))
+    if ungrounded:
+        raise UngroundedEvidenceError(
+            f"Creative Director cited evidence that is neither a supplied handle nor an exact supplied evidence string (possible invented fact): {ungrounded!r}"
+        )
+    return resolved
 _REEL_PROMPT_VERSION = "7"
 _EDITORIAL_DECISION_PROMPT_VERSION = "1"
 
@@ -240,8 +293,13 @@ def _effective_restricted_claims(director_input: CreativeDirectorInput) -> list[
     return restricted
 
 
-def _build_user_text(director_input: CreativeDirectorInput) -> str:
-    evidence_block = "\n".join(f"- {item}" for item in director_input.allowed_evidence) or "(no evidence provided)"
+def _build_user_text(director_input: CreativeDirectorInput, *, evidence_handles: bool = False) -> str:
+    if evidence_handles:
+        evidence_block = "\n".join(f"{handle}: {item}" for handle, item in evidence_handle_map(director_input.allowed_evidence).items()) or "(no evidence provided)"
+        evidence_heading = "EVIDENCE (use ONLY these for any factual claim; cite the handle, e.g. E2, in evidence_used and source_evidence)"
+    else:
+        evidence_block = "\n".join(f"- {item}" for item in director_input.allowed_evidence) or "(no evidence provided)"
+        evidence_heading = "EVIDENCE BULLETS (use ONLY these for any factual claim)"
     return (
         f"OBJECTIVE: {director_input.objective}\n"
         f"OPPORTUNITY: {director_input.opportunity_summary}\n"
@@ -264,7 +322,7 @@ def _build_user_text(director_input: CreativeDirectorInput) -> str:
         f"CURRENT PRODUCT TRUTH:\n{director_input.product_context or '(not supplied)'}\n"
         f"RECENT/IN-FLIGHT CONTENT:\n{director_input.recent_content_context or '(none)'}\n"
         f"APPROVED EDITORIAL DECISION:\n{director_input.editorial_decision or '(legacy call: not supplied)'}\n"
-        f"EVIDENCE BULLETS (use ONLY these for any factual claim):\n{evidence_block}"
+        f"{evidence_heading}:\n{evidence_block}"
         + (f"\nCONTENT ARCHETYPE (derived, plan for it): {director_input.content_archetype}" if director_input.content_archetype else "")
         + (f"\nMEDIA AVAILABLE FOR THIS POST:\n{director_input.media_note}" if director_input.media_note else "")
         + (f"\n{director_input.visual_dna_context}" if director_input.visual_dna_context else "")
@@ -420,7 +478,8 @@ async def _call_creative_director(
     request = GenerateRequest(
         messages=[
             Message(role="system", content=[ContentPart(type="text", text=system_text)]),
-            Message(role="user", content=[ContentPart(type="text", text=_build_user_text(director_input))]),
+            Message(role="user", content=[ContentPart(type="text", text=_build_user_text(
+                director_input, evidence_handles=_uses_evidence_handles(prompt_name, prompt_version)))]),
         ],
         response_mode="json_schema", response_schema=prompt.output_schema, max_tokens=_CREATIVE_DIRECTOR_MAX_TOKENS,
     )
@@ -440,6 +499,13 @@ async def _call_creative_director(
     assert response is not None
     if response.structured_output is None:
         raise CreativeDirectorUnavailableError("no structured output returned")
+    _emit_diagnostic("raw_output", {
+        "prompt_name": prompt_name, "prompt_version": prompt_version, "model": getattr(outcome.call, "model_used", None),
+        "input_tokens": getattr(getattr(outcome.call, "usage", None), "input_tokens", None),
+        "output_tokens": getattr(getattr(outcome.call, "usage", None), "output_tokens", None),
+        "evidence_handles": evidence_handle_map(director_input.allowed_evidence) if _uses_evidence_handles(prompt_name, prompt_version) else None,
+        "structured_output": response.structured_output,
+    })
     return response.structured_output, outcome.call
 
 
@@ -532,10 +598,33 @@ async def generate_carousel_creative(
         prompt_version=_CAROUSEL_PROMPT_VERSION,
     )
     try:
+        return _validate_carousel_output(output, call, director_input=director_input, archetype=archetype)
+    except Exception as exc:
+        _emit_diagnostic("validation_error", {"error_type": type(exc).__name__, "error": str(exc)[:1500]})
+        raise
+
+
+def _validate_carousel_output(
+    output: dict, call: CapabilityCall, *, director_input: CreativeDirectorInput, archetype: str | None,
+) -> CreativeGenerationOutcome:
+    try:
         creative = InstagramCarouselCreative.model_validate(output)
     except ValidationError as exc:
         first = exc.errors()[0] if exc.errors() else {}
         raise CreativeContractError(f"{'.'.join(str(p) for p in first.get('loc', ()))}: {first.get('msg', str(exc))[:240]}") from exc
+    # Phase B.5.1.2: evidence handles (or, for legacy output, exact canonical strings) resolve back to the exact canonical evidence; anything
+    # else raises UngroundedEvidenceError. source_evidence handles resolve the same way (free text there is a display label and stays as-is).
+    canonical_used = resolve_evidence_references(creative.evidence_used, director_input.allowed_evidence)
+    handles = evidence_handle_map(director_input.allowed_evidence)
+    slides = []
+    for slide in creative.slides:
+        ref = (slide.source_evidence or "").strip()
+        if _EVIDENCE_HANDLE_RE.match(ref):
+            if ref not in handles:
+                raise UngroundedEvidenceError(f"slide source_evidence cites an unknown evidence handle: {ref!r}")
+            slide = slide.model_copy(update={"source_evidence": handles[ref]})
+        slides.append(slide)
+    creative = creative.model_copy(update={"evidence_used": canonical_used, "slides": slides})
     emitted_archetype = creative.content_archetype
     correction_required = archetype is not None and emitted_archetype != archetype
     if archetype is not None:
