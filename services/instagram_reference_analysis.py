@@ -173,6 +173,16 @@ async def analyze_reference_image(
     if raw_sink is not None:
         raw_sink.append(output)  # keep the paid output even if validation below rejects it
 
+    return build_dna_from_output(
+        output, digest=digest, reference_path=reference_path, repo_relative_path=repo_relative_path,
+        analysis_model=getattr(outcome.call, "model_used", None),
+    )
+
+def build_dna_from_output(output: dict, *, digest: str, reference_path: Path | str, repo_relative_path: str | None = None, analysis_model: str | None = None):
+    """Structured analysis output -> (ReferenceDeconstruction, InstagramVisualDNA); also used to rebuild
+    from a saved paid output without a second call."""
+    from services.instagram_visual_dna import InstagramVisualDNA, StyleDirection, assert_mechanics_only
+
     try:
         deconstruction = ReferenceDeconstruction(
             reference_description=f"founder Instagram visual reference board ({digest[:12]})",
@@ -188,7 +198,7 @@ async def analyze_reference_image(
         dna = InstagramVisualDNA(
             version="1", reference_path=repo_relative_path or str(reference_path), reference_sha256=digest,
             analysis_prompt_version=REFERENCE_IMAGE_ANALYSIS_PROMPT_VERSION,
-            analysis_model=getattr(outcome.call, "model_used", None),
+            analysis_model=analysis_model,
             typography=list(output.get("typography") or []), spatial_system=list(output.get("spatial_system") or []),
             image_behavior=list(output.get("image_behavior") or []), composition_rhythm=list(output.get("composition_rhythm") or []),
             accent_system=list(output.get("accent_system") or []), brand_invariants=list(output.get("brand_invariants") or []),

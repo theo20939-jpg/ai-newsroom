@@ -66,8 +66,8 @@ class InstagramVisualDNA(BaseModel):
     image_behavior: list[str] = Field(min_length=1, max_length=8)
     composition_rhythm: list[str] = Field(min_length=1, max_length=8)
     accent_system: list[str] = Field(min_length=1, max_length=6)
-    brand_invariants: list[str] = Field(min_length=1, max_length=8)
-    non_invariants: list[str] = Field(min_length=1, max_length=8)
+    brand_invariants: list[str] = Field(min_length=1, max_length=12)
+    non_invariants: list[str] = Field(min_length=1, max_length=12)
     style_directions: list[StyleDirection] = Field(default_factory=list, max_length=6)
     must_not_copy: list[str] = Field(min_length=1, max_length=10)
     originality_constraints: list[str] = Field(min_length=1, max_length=8)
@@ -167,6 +167,10 @@ def render_visual_dna_context(dna: InstagramVisualDNA) -> str:
     ]
     if dna.style_directions:
         sections.append("STYLE DIRECTIONS (mechanics only):\n" + "\n".join(f"- {d.name}: {d.mechanics}" for d in dna.style_directions))
+    sections.append(
+        "RENDERER CONSTRAINTS (override any rule above that conflicts): this renderer has NO overlays, scrims, dimming, tints or "
+        "blur - source images are always shown unaltered; contrast comes only from placement, scale and surface choice."
+    )
     sections.append(block("MUST NOT COPY", dna.must_not_copy))
     sections.append(block("ORIGINALITY CONSTRAINTS", dna.originality_constraints))
     return "\n".join(sections)

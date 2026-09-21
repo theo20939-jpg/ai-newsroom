@@ -1,0 +1,124 @@
+{
+  "version": "1",
+  "reference_path": "docs/references/instagram/instagram_visual_reference_board_v1.png",
+  "reference_sha256": "bf5b4d3d9ee2a6e48521307c26f547e7b3d69a025203b20774be1a0ca40610d8",
+  "analysis_prompt_version": "2",
+  "analysis_model": null,
+  "typography": [
+    "Use a condensed display family or similarly narrow editorial voice for headlines.",
+    "Create hierarchy through scale, weight, case, line length, and deliberate line breaks.",
+    "Keep supporting copy materially quieter than the headline.",
+    "Use accent type selectively for urgency, numbers, categories, or one key phrase.",
+    "Treat typography as a structural graphic element while protecting reading order and contrast.",
+    "Allow typographic treatment to become more expressive in culture and anime directions, but retain a stable editorial core."
+  ],
+  "spatial_system": [
+    "Use a disciplined underlying grid across formats, with visible margins and repeatable alignment logic.",
+    "Build around one dominant reading axis per asset instead of giving every element equal priority.",
+    "Reserve breathing room around the headline, logo, and interactive controls.",
+    "Use modular blocks for labels, lists, buttons, and supporting facts.",
+    "Let the image and type share the frame through intentional overlap or separation, not accidental crowding.",
+    "Adapt the grid to the aspect ratio rather than scaling a square composition into every format."
+  ],
+  "image_behavior": [
+    "Use photography, renders, illustrations, memes, and product imagery according to the editorial direction rather than forcing one image style.",
+    "Treat the image either as the subject, as atmosphere, or as a proof point; make that role obvious.",
+    "Dark editorial imagery can carry mood and urgency, while light product imagery can carry clarity and trust.",
+    "Use image treatment, cropping, contrast, and overlays to unify disparate sources without making every image look identical.",
+    "For culture-led work, expressive or humorous imagery can carry much of the hook.",
+    "For product-led work, show the object clearly and avoid decorative effects that reduce recognition."
+  ],
+  "composition_rhythm": [
+    "Alternate image-led, type-led, and hybrid compositions across a content series.",
+    "Use asymmetry and cropped subjects for energy; use centered or spacious structures for premium clarity.",
+    "Vary density according to information load: fewer elements for a single claim, more modular structure for lists and explainers.",
+    "Use repeated markers such as numbering, labels, and compact metadata to create continuity.",
+    "Build carousel rhythm through contrast between opening promise, supporting evidence, and closing utility.",
+    "Let reel covers prioritize immediate recognition at small viewing size, while stories prioritize vertical reading and interaction."
+  ],
+  "accent_system": [
+    "Maintain a restrained primary accent for brand recognition and high-priority emphasis.",
+    "Allow each editorial direction to introduce a secondary accent family, but keep it subordinate to the brand accent and neutral structure.",
+    "Use accents for signals—breaking status, numbers, keywords, controls, or focal details—not for filling every available surface.",
+    "Pair vivid accents with black, white, grey, or deep atmospheric fields to preserve clarity.",
+    "In culture and anime directions, richer fluorescent accents can expand the mood while retaining a controlled hierarchy.",
+    "Avoid turning accent colour into a fixed content code unless it remains understandable across all formats."
+  ],
+  "brand_invariants": [
+    "A recognisable condensed, high-impact editorial typographic behaviour.",
+    "Clear contrast between dominant headline information and supporting detail.",
+    "Consistent logo presence with disciplined, unobtrusive placement and sufficient clear space.",
+    "A stable grid and spacing discipline adapted to each aspect ratio.",
+    "One obvious primary reading order in every asset.",
+    "Restrained accent use against a controlled neutral or atmospheric base.",
+    "Editorial clarity: the topic, claim, and content type should be understandable quickly.",
+    "A consistent sense of technology, culture, speed, and informed curation without relying on one visual genre.",
+    "Accessible contrast and legibility across static, vertical, and carousel contexts."
+  ],
+  "non_invariants": [
+    "Image position, scale, crop, and degree of prominence.",
+    "Text location, alignment, line count, and relationship to the image.",
+    "The split between image, headline, supporting copy, and negative space.",
+    "Background treatment, from dark cinematic fields to light product surfaces or expressive textured scenes.",
+    "Accent intensity and secondary accent family.",
+    "Information density and number of content blocks.",
+    "Use of photography, 3D renders, anime artwork, memes, diagrams, or plain typography.",
+    "Carousel slide structure and narrative order.",
+    "Story interaction type and whether an interaction is used at all.",
+    "Degree of asymmetry, overlap, texture, and motion implied by the composition.",
+    "Editorial mood: urgent, humorous, futuristic, or premium.",
+    "CTA presence, wording, prominence, and interaction format."
+  ],
+  "style_directions": [
+    {
+      "name": "Dark editorial technology",
+      "mechanics": "Cinematic, high-contrast imagery; dark atmospheric fields; condensed white display type; a sharp warm accent for urgency and key facts; dramatic subject cropping; compact editorial metadata; strong image-to-type tension."
+    },
+    {
+      "name": "Internet culture",
+      "mechanics": "Conversational hooks; meme or reaction imagery; hand-drawn or sticker-like marks; playful secondary accents; irregular annotations; approachable language hierarchy; faster, denser compositions with visible humour."
+    },
+    {
+      "name": "Neo-anime futurism",
+      "mechanics": "Expressive illustrated or synthetic imagery; luminous night environments; energetic accent layering; cyberpunk or anime atmosphere; dramatic vertical depth; large declarative type balanced with immersive scenes."
+    },
+    {
+      "name": "Premium minimal technology",
+      "mechanics": "Light or controlled neutral surfaces; clean product photography or renders; sparse composition; restrained accent interruption; generous negative space; concise utility-led copy; precise alignment and quieter hierarchy."
+    }
+  ],
+  "must_not_copy": [
+    "Any exact wording or copy appearing in the reference board, including its headlines, labels, captions, prompts, buttons, and supporting text.",
+    "The exact imagery, illustrations, renders, meme frames, product photographs, textures, and artwork shown in the reference board.",
+    "The exact compositions, slide order, crop decisions, content pairings, and format-specific arrangements shown in the reference board.",
+    "The source board’s displayed logo or wordmark artwork if it is obsolete, incorrect, or not approved as the current NINJA identity.",
+    "The board as a fixed template or a repeated visual sequence."
+  ],
+  "originality_constraints": [
+    "Learn the mechanics—hierarchy, contrast, pacing, image roles, grid discipline, and accent restraint—not the source executions.",
+    "Create new copy, imagery, artwork, crops, compositions, and narrative sequences for every publication.",
+    "Do not reproduce any source asset, recognisable arrangement, or distinctive combination of elements.",
+    "Validate the current approved NINJA logo separately; the reference-board mark is not automatically a brand asset.",
+    "Treat every conclusion as a hypothesis from one reference board and test it against audience response, accessibility, and content performance."
+  ],
+  "reference_deconstruction": {
+    "hook_mechanics": "What appears effective as a hypothesis: each direction opens with a fast editorial hook through strong scale contrast, a short lead-in or category cue, and one dominant idea. Number-led headlines, provocative statements, product names, and emotionally charged imagery create immediate entry points. This is inferred from one reference board, not established performance evidence.",
+    "pacing": "The board supports several speeds: urgent and high-contrast for breaking news, rapid and conversational for meme content, energetic and sensory for future-facing technology, and slower and more deliberate for premium product coverage. Within carousels, a large lead claim can be followed by explanatory detail or a visual proof point.",
+    "scene_structure": "Most pieces use a clear hierarchy: brand marker, optional category cue, dominant headline, supporting clarification, and an image or graphic subject. Stories add interaction or compact list structures. Carousels alternate between claim-led slides, image-led slides, and information-led slides rather than repeating one layout mechanically.",
+    "narrative_progression": "Content generally moves from attention to explanation, then toward proof, product detail, or a lightweight action cue. Conversational directions use recognition and reaction; editorial directions use urgency and information; premium directions use product focus and concise utility. The sequence should adapt to the story rather than follow a fixed slide order.",
+    "typography_behavior": "Typography is condensed, assertive, and editorial, with very large display headlines contrasted against small explanatory text. Weight, case, line breaks, and occasional italic or narrow treatments create emphasis. Accent typography can identify urgency, category, or key numbers, while body text remains restrained for scanning. Text is treated as a compositional image, but legibility remains primary.",
+    "visual_rhythm": "The reference alternates dense and quiet surfaces, dark and light fields, image-heavy moments and text-heavy moments. Repetition comes from headline scale, numbering, compact labels, and recurring brand marks rather than from an identical layout. The rhythm is intentionally varied across formats and editorial moods.",
+    "editing_rhythm": "For reels and stories, the visual language suggests short attention units: establish the claim quickly, reveal the subject, then provide one compact clarification or interaction. High-energy directions can use sharper transitions and layered graphic interruptions; premium directions benefit from fewer changes and longer visual holds. These are production hypotheses, not measured rules.",
+    "cta_mechanics": "Calls to action are understated and functional: continue, explore, choose, respond, or view more. They appear as compact labels, arrows, buttons, polls, or reply prompts rather than dominant sales language. The CTA should follow the content objective and may be omitted when the post is purely editorial.",
+    "interaction_pattern": "Stories use simple, low-friction interaction patterns such as selectable answers, compact option lists, and conversational prompts. The interaction is visually integrated into the editorial frame, with clear separation between prompt and response controls. It should invite participation without making the brand look like a game interface by default.",
+    "what_appears_effective": [
+      "Strong scale contrast creates a rapid reading order across all four directions.",
+      "A recurring editorial marker helps different visual worlds feel related without flattening their personalities.",
+      "Subject-led imagery works best when the image has one obvious focal point and the headline does not compete with it.",
+      "Numbering and compact labels make list-based technology content quickly scannable.",
+      "The board demonstrates useful range across single posts, carousels, reel covers, and stories.",
+      "Restrained use of a vivid accent against neutral or dark fields appears to improve emphasis.",
+      "These observations are hypotheses from one reference board, not proven drivers of reach, retention, or conversion."
+    ]
+  }
+}
