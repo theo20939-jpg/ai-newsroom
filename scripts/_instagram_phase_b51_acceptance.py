@@ -44,6 +44,7 @@ from services.instagram_content_opportunity import ContentOpportunity, Opportuni
 from services.instagram_layout_signature import infer_family
 from services.instagram_meta_language_guard import find_meta_language
 from services.instagram_trend_radar import TrendSignal, TrendSignalProvenance, TrendSignalType
+from services.kage_voice import load_kage_voice
 from services.pricing_catalog import ModelRegistryPricingCatalog
 
 _PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
@@ -51,8 +52,9 @@ _MAX_REAL_CALLS = 4
 REUSABLE_ARCHETYPES = ("ai_hack", "news_insight")  # B.5.1.2: these two archetypes may replay their saved B.5.1.1 REAL model output (zero provider calls)
 _ARCHETYPES = ("ai_hack", "news_insight", "news_recap", "trend_generative")
 _EST_INPUT_TOKENS, _EST_OUTPUT_TOKENS = 16000, 9000
-DIAG_NAMESPACE = "instagram_b512_real_cd_acceptance"
-DIAG_HARD_CAP_USD = Decimal("0.75")
+DIAG_NAMESPACE = os.environ.get("B51_DIAG_NAMESPACE", "instagram_b512_real_cd_acceptance")
+DIAG_HARD_CAP_USD = Decimal(os.environ.get("B51_DIAG_CAP_USD", "0.75"))
+B6_IMAGES_LIVE = os.environ.get("B6_IMAGE_GENERATION") == "live"  # real generated-image calls ONLY for the isolated acceptance run
 
 
 class FixtureSubstitutionError(RuntimeError):
@@ -95,7 +97,8 @@ def gateway_worst_case_by_model() -> dict[str, Decimal]:
     prompt = repo.resolve(cd_module.CAROUSEL_PROMPT_NAME, cd_module._CAROUSEL_PROMPT_VERSION)
     system_text = prompt.system + "\n\nRULES:\n" + "\n".join(f"- {rule}" for rule in prompt.rules)
     director_input = cd_module.CreativeDirectorInput(
-        objective="saves", format="carousel", opportunity_summary="s" * 300, allowed_evidence=["x" * 300] * 12, locale="ru", fatigue_note="f" * 1500)
+        objective="saves", format="carousel", opportunity_summary="s" * 300, allowed_evidence=["x" * 300] * 12, locale="ru", fatigue_note="f" * 1500,
+        media_note="m" * 2500, kage_voice_context=load_kage_voice().render_context() if cd_module._CAROUSEL_PROMPT_VERSION in cd_module.MEDIA_FIRST_CAROUSEL_VERSIONS else "")
     request = GenerateRequest(
         messages=[Message(role="system", content=[ContentPart(type="text", text=system_text)]),
                   Message(role="user", content=[ContentPart(type="text", text=cd_module._build_user_text(director_input, evidence_handles=True))])],
@@ -111,6 +114,17 @@ def gateway_worst_case_by_model() -> dict[str, Decimal]:
             priced.append((tier.input_price_per_million + tier.output_price_per_million, model))
     cheapest = min(p for p, _ in priced)
     return {m.model_id: estimator.estimate(m, request).worst_case for p, m in priced if p <= cheapest * Decimal("3.0")}
+
+
+def image_worst_case_per_generation() -> Decimal:
+    """Reserved worst case of ONE generated slide image: the same quote BudgetedImageExecutor reserves (gpt-image-2, medium, 1024x1536)."""
+    from integrations.llm_gateway.image_protocol import ImageGenerationOperation, ImageGenerationRequest
+    from services.image_pricing import ImageExecutionProfile, ImagePricingCatalog
+
+    profile = ImageExecutionProfile(provider="openai", model="gpt-image-2", quality="medium", size="1024x1536", operation=ImageGenerationOperation.TEXT_TO_IMAGE)
+    request = ImageGenerationRequest(prompt="x", operation=ImageGenerationOperation.TEXT_TO_IMAGE, preferred_provider="openai", preferred_model="gpt-image-2",
+                                     target_aspect_ratio="2:3", target_width=1024, target_height=1536)
+    return ImagePricingCatalog().quote(profile, request).worst_case_cost_usd
 
 
 async def _production_ledger() -> Decimal:
@@ -136,13 +150,17 @@ def _diag_redis():
     return Redis.from_url(url, decode_responses=True)
 
 
-async def _budget_preflight(diag, n_real: int = _MAX_REAL_CALLS) -> dict:
+async def _budget_preflight(diag, n_real: int = _MAX_REAL_CALLS, image_slots: int = 0) -> dict:
     prod_before = await _production_ledger()
     raw = await diag.get(f"phase7:cost_ledger:{DIAG_NAMESPACE}")
     diag_spent = Decimal(str(raw)) if raw is not None else Decimal(0)
     by_model = gateway_worst_case_by_model()
     worst_each = min(by_model.values())  # the router's LOWEST_COST pick; costlier candidates are fallback only
+    image_each = image_worst_case_per_generation() if image_slots else Decimal(0)
+    planned_total = worst_each * n_real + image_each * image_slots
     return {
+        "image_generation_live": bool(image_slots), "image_worst_case_each_usd": str(image_each), "image_slots_planned": image_slots,
+        "planned_worst_case_total_usd": str(planned_total.quantize(Decimal("0.0001"))),
         "request_max_tokens": cd_module._CREATIVE_DIRECTOR_MAX_TOKENS, "gateway_worst_case_by_candidate_usd": {k: str(v) for k, v in by_model.items()},
         "diagnostic_namespace": DIAG_NAMESPACE, "diagnostic_hard_cap_usd": str(DIAG_HARD_CAP_USD), "diagnostic_spent_before_usd": str(diag_spent),
         "production_ledger_before_usd": str(prod_before), "production_daily_limit_usd": str(settings.llm_daily_budget_usd),
@@ -150,7 +168,7 @@ async def _budget_preflight(diag, n_real: int = _MAX_REAL_CALLS) -> dict:
         "worst_case_per_call_usd": str(worst_each.quantize(Decimal("0.0001"))),
         "real_calls_planned": n_real, "worst_case_planned_calls_usd": str((worst_each * n_real).quantize(Decimal("0.0001"))),
         "assumed_tokens_per_call": {"input": _EST_INPUT_TOKENS, "output": _EST_OUTPUT_TOKENS},
-        "safe": diag_spent + worst_each * n_real <= DIAG_HARD_CAP_USD and all(v <= DIAG_HARD_CAP_USD - diag_spent for v in by_model.values()),
+        "safe": diag_spent + planned_total <= DIAG_HARD_CAP_USD and all(v <= DIAG_HARD_CAP_USD - diag_spent for v in by_model.values()),
     }
 
 
@@ -256,6 +274,9 @@ async def main() -> None:
     replays = _load_all_replays(sys.argv[3:]) if replay_all else (_load_replays(sys.argv[3:]) if real else {})
     only = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv else list(_ARCHETYPES)
     max_real = 0 if "--only" in sys.argv and set(only) <= set(replays) else _MAX_REAL_CALLS - len(replays)
+    from services.instagram_media_first import MAX_GENERATED_SLIDES_PER_POST
+
+    image_slots = max_real * MAX_GENERATED_SLIDES_PER_POST if (real and B6_IMAGES_LIVE) else 0
 
     preflight = None
     pricing = ModelRegistryPricingCatalog(build_model_registry())
@@ -264,7 +285,7 @@ async def main() -> None:
         from integrations.llm_gateway.boot import assemble_ai_integration_layer
 
         diag = _diag_redis()
-        preflight = await _budget_preflight(diag, max_real)
+        preflight = await _budget_preflight(diag, max_real, image_slots)
         (out_dir / "budget_preflight.json").write_text(json.dumps(preflight, indent=2), encoding="utf-8")
         print("BUDGET_PREFLIGHT", json.dumps(preflight))
         if not preflight["safe"]:
@@ -279,6 +300,19 @@ async def main() -> None:
         layer = assemble_ai_integration_layer(diag_settings, FilePromptRepository(_PROMPTS), redis_client=diag)
         diag_tracker = RedisCostTracker(diag, pricing, ledger_namespace=DIAG_NAMESPACE)
         gateway_factory = lambda archetype, plan: layer.gateway  # noqa: E731
+        if B6_IMAGES_LIVE:
+            # Real generated-image calls, isolated: the diagnostic Redis ledger + namespace, the SAME BudgetedImageExecutor / gpt-image-2 path, generated files written
+            # under the run folder (never the production image store), enforce mode, one attempt per image, no retries.
+            import services.instagram_creative_media as media_mod
+            from integrations.storage.image_storage import LocalImageStorage as _Store
+            from services.budgeted_image_execution import BudgetedImageExecutor
+
+            image_guard = RedisBudgetGuard(diag, diag_settings, ledger_namespace=DIAG_NAMESPACE)
+            media_mod.build_budgeted_image_executor = lambda: BudgetedImageExecutor(budget_guard=image_guard)
+            generated_store = out_dir / "generated_store"
+            generated_store.mkdir(parents=True, exist_ok=True)
+            media_mod.LocalImageStorage = lambda _root: _Store(str(generated_store))
+            settings.instagram_image_generation_mode = "live"  # in-process only; production configuration is untouched
 
     if replay_all:
         pool_bundle, trend_story = _reconstruct_replay_inputs(replays)
@@ -364,7 +398,14 @@ async def main() -> None:
                       "diagnostic_ledger_after_usd": str(raw), "production_ledger_before_usd": preflight["production_ledger_before_usd"],
                       "production_ledger_after_usd": str(await _production_ledger())}
         await diag.aclose()
+    image_cost = sum((Decimal(str(r.get("image_generation_cost_usd") or 0)) for r in summary), Decimal(0))
+    image_calls = sum(int(r.get("generated_images_ok") or 0) for r in summary)
+    (out_dir / "media_execution_manifest.json").write_text(json.dumps(
+        {r["archetype"]: {"hook": r.get("hook_text"), "media_slides": r.get("media_slides"), "text_only_slides": r.get("text_only_slides"),
+                          "typographic_final_media_slides": r.get("typographic_final_media_slides"), "media_source_counts": r.get("media_source_counts")}
+         for r in summary}, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     result = {"mode": mode, "REAL_MODEL": real, "real_calls": calls["count"], "actual_cost_usd": str(calls["actual"]), "fixture_substitutions": 0,
+              "image_provider_calls_ok": image_calls, "image_generation_cost_usd": str(image_cost), "image_generation_live": B6_IMAGES_LIVE,
               "budget_accounting": accounting, "recap_selection": recap_note, "runs": summary}
     (out_dir / "run_summary.json").write_text(json.dumps(result, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     print("DONE", json.dumps({"mode": mode, "real_calls": calls["count"], "cost": str(calls["actual"])}))
@@ -423,6 +464,13 @@ async def _run_one(name, session, gateway_factory, prompt_repo, pricing, out_dir
         return source_image, SimpleNamespace(id=uuid4(), candidate_id=f"b51-{name}"), 1, 1
 
     seen: dict = {}
+    real_exec = trigger.execute_instagram_creative_media
+
+    async def spy_exec(**kw):
+        seen["media"] = await real_exec(**kw)
+        return seen["media"]
+
+    trigger.execute_instagram_creative_media = spy_exec
     real_render, real_snapshot = trigger.render_instagram_carousel, trigger.build_package_snapshot
     delivery = AsyncMock(return_value=SimpleNamespace(sent=False, reason="b51_shadow_no_publication", delivery_id=None))
 
@@ -445,8 +493,51 @@ async def _run_one(name, session, gateway_factory, prompt_repo, pricing, out_dir
         )
     finally:
         trigger.render_instagram_carousel, trigger.build_package_snapshot = real_render, real_snapshot
+        trigger.execute_instagram_creative_media = real_exec
 
     return _record(name, real or replay is not None, outcome, captured, seen, out_dir, pricing, evidence, replay)
+
+
+def _b6_fields(model_output: dict, obs: dict | None, seen: dict, captured: dict, target: Path, real: bool) -> dict:
+    """Phase B.6 acceptance facts, read from what actually happened (media execution + render evidence), never from what the plan requested."""
+    slides_raw = model_output.get("slides") or []
+    obs_slides = (obs or {}).get("slides") or []
+    media_result = seen.get("media")
+    assets = {a.asset_key: a for a in (media_result.assets if media_result is not None else ())}
+    di = captured.get("director_input")
+    unsuitable = set(getattr(di, "unsuitable_media_subjects", ()) or ())
+    per_slide = []
+    prompts: dict = {}
+    for i, sl in enumerate(slides_raw):
+        asset = assets.get(str(i))
+        o = obs_slides[i] if i < len(obs_slides) else {}
+        layout = sl.get("layout") or {}
+        card_area = max([r["w"] * r["h"] for r in layout.get("regions", []) if r.get("kind") == "media" and r.get("content_ref") in unsuitable] or [0.0])
+        per_slide.append({
+            "index": i, "media_source": sl.get("media_source"), "executed_media_mode": asset.media_mode.value if asset else None, "media_status": asset.status if asset else None,
+            "generation_prompt_sha256": getattr(asset, "prompt_sha256", None), "generation_cost_usd": getattr(asset, "accounted_cost_usd", None),
+            "generation_reserved_usd": getattr(asset, "reserved_cost_usd", None), "asset_identity": getattr(asset, "asset_identity", None),
+            "generation_brief": sl.get("generation_brief"), "chosen_family": sl.get("visual_family"), "executed_family": o.get("visual_family_executed"),
+            "text_only_slide": o.get("text_only_slide"), "source_card_area": round(card_area, 3),
+        })
+        if asset is not None and asset.prompt:
+            prompts[str(i)] = asset.prompt
+        if asset is not None and asset.raw_image_bytes:
+            (target / f"generated_slide_{i + 1:02d}.png").write_bytes(asset.raw_image_bytes)
+    if prompts:
+        (target / "generation_prompts.json").write_text(json.dumps(prompts, ensure_ascii=False, indent=2), encoding="utf-8")
+    hook = slides_raw[0] if slides_raw else {}
+    generated = [p for p in per_slide if p["executed_media_mode"] == "GENERATED" and p["media_status"] == "generated_media"]
+    return {
+        "hook_text": hook.get("slide_copy"), "hook_reaction_plan": hook.get("slide_purpose"), "hook_evidence_handle": hook.get("source_evidence"),
+        "hook_weak_patterns": (obs or {}).get("weak_hook_patterns"), "final_caption": model_output.get("final_caption"),
+        "media_source_counts": {k: sum(1 for p in per_slide if p["media_source"] == k) for k in ("source", "generated", "graphic")},
+        "text_only_slides": (obs or {}).get("text_only_slides"), "typographic_final_media_slides": (obs or {}).get("typographic_final_media_slides"),
+        "generated_images_ok": len(generated), "image_generation_cost_usd": str(sum((Decimal(str(p["generation_cost_usd"])) for p in generated if p["generation_cost_usd"]), Decimal(0))),
+        "source_card_used_as_hero": any(p["source_card_area"] > 0.10 for p in per_slide), "kage_voice_in_input": bool(getattr(di, "kage_voice_context", "")),
+        "kage_voice_sha256_prefix": (getattr(di, "kage_voice_context", "").split("sha256 ")[1][:12] if getattr(di, "kage_voice_context", "") else None),
+        "media_slides": per_slide,
+    }
 
 
 def _record(name, real, outcome, captured, seen, out_dir, pricing, evidence, replay=None) -> dict:
@@ -532,6 +623,7 @@ def _record(name, real, outcome, captured, seen, out_dir, pricing, evidence, rep
     }
     raw_path = target / "raw_creative_director_output.json"
     record["validation_error"] = json.loads(raw_path.read_text(encoding="utf-8")).get("validation_error") if raw_path.exists() else None
+    record.update(_b6_fields(model_output, obs, seen, captured, target, real))
     (target / "creative_director_output.json").write_text(json.dumps(model_output, ensure_ascii=False, indent=2), encoding="utf-8")
     (target / "render_manifest.json").write_text(json.dumps(record, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     return record
