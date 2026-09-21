@@ -7,12 +7,14 @@ from __future__ import annotations
 from typing import Any, Sequence
 
 from services.instagram_layout_signature import infer_family
+from services.instagram_media_first import slide_has_visual
 
 
 def build_b4_observability(
     *, carousel: Any, prompt_version: str, renders: Sequence[Any], art: Any,
     slide_identities: dict[int, str], deliberate_fallback_subjects: Sequence[str] = (),
     model_emitted_archetype: str | None = None, archetype_correction_required: bool = False,
+    weak_hook_patterns: Sequence[str] = (),
 ) -> dict[str, Any]:
     slides = []
     for index, (slide, render) in enumerate(zip(carousel.slides, renders)):
@@ -23,6 +25,9 @@ def build_b4_observability(
             infer_family(layout_model.model_dump()) if notes.get("layout_plan_applied") and layout_model is not None else "legacy_role_fallback"
         )
         slides.append({
+            "text_only_slide": not slide_has_visual(notes=notes, planned_slide=slide, source_image_treatment=getattr(render.evidence, "source_image_treatment", None)),
+            "media_source": getattr(slide, "media_source", None),
+            "generation_brief": getattr(slide, "generation_brief", None),
             "visual_family_chosen": chosen_family,
             "visual_family_executed": executed_family,
             "visual_family_matches": bool(chosen_family) and chosen_family == executed_family,
@@ -65,6 +70,9 @@ def build_b4_observability(
         "structured_composition_executed": any(s["structured_composition_executed"] for s in slides),
         "role_fallback_used": any(s["role_fallback_used"] for s in slides),
         "slides": slides,
+        "text_only_slides": [s["index"] for s in slides if s["text_only_slide"]],
+        "typographic_final_media_slides": [s["index"] for s in slides if s["media_source"] not in ("source", "generated", "graphic")],
+        "weak_hook_patterns": list(weak_hook_patterns),
         "deliberate_fallback_subjects": list(deliberate_fallback_subjects),
         "art_validation_passed": bool(art.passed),
         "art_blocking_issues": list(getattr(art, "blocking_issues", []) or []),

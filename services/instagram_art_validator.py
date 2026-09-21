@@ -268,6 +268,16 @@ def validate_instagram_art(
                     f"composition={composition_requested!r}, actual layout_variant={executed!r}"
                 )
 
+        # Phase B.6 MEDIA-FIRST: a slide that names its visual source must EXECUTE a meaningful visual (real/generated media or a substantive graphic) - never plain surface + text + logo.
+        if package.media_plan.get("media_first"):
+            from services.instagram_media_first import slide_has_visual
+
+            planned = {int(s.get("index", i)): s for i, s in enumerate(package.media_plan.get("slides") or []) if isinstance(s, dict)}
+            for r in render_results:
+                if not slide_has_visual(notes=r.evidence.notes, planned_slide=planned.get(r.evidence.slide_index),
+                                        source_image_treatment=r.evidence.source_image_treatment):
+                    blocking.append(f"slide_without_meaningful_visual: slide_index={r.evidence.slide_index}")
+
         # carousel visual GRAMMAR (section 11/21): a real carousel should not present as the
         # identical layout on every slide after the hook - a warning (not blocking: a short, all-
         # detail-role deck can legitimately share one layout), so an editor can still see it. Phase B.5.1.2: the 4+ slide

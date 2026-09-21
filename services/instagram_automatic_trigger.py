@@ -58,10 +58,13 @@ from services.instagram_content_opportunity import (
     OpportunitySourceType,
 )
 from services.instagram_content_package import build_instagram_content_package
+from services.instagram_media_first import GENERATED_SUBJECT_KEY, MediaFirstContractError, UnsupportedClickbaitError
 from services.instagram_meta_language_guard import MetaLanguageLeakError
+from services.kage_voice import KageVoiceUnavailableError, load_kage_voice
 from services.instagram_creative_director import (
     AudienceFacingCopyError,
     CAROUSEL_PROMPT_VERSION,
+    MEDIA_FIRST_CAROUSEL_VERSIONS,
     CreativeContractError,
     CreativeDirectorInput,
     CreativeDirectorUnavailableError,
@@ -502,7 +505,42 @@ _PHOTO_FUNCTIONS = ("hero", "detail", "evidence_photo", None, "none")
 _NON_PHOTO_FUNCTIONS = ("ui_screenshot", "result", "before_after", "concept")
 
 
-def _carousel_media_note(*, source_image: Any, recap_bundle: InstagramRecapBundle | None) -> str:
+_GENERATED_OPTION_NOTE = (
+    "GENERATED media is a first-class option for ANY slide: set media_source 'generated', write a concrete generation_brief (what the picture SHOWS) and let the layout use a "
+    "media region with content_ref 'generated'. Every slide needs a meaningful visual: a suitable real subject, a GENERATED contextual visual, or a substantive graphic - "
+    "never a plain surface with text."
+)
+
+
+def _carousel_media_subjects(*, source_image: Any, recap_bundle: InstagramRecapBundle | None) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """(listed real subject keys, the subset that is NOT suitable as a final visual). Deterministic, from the same asset profile the note uses."""
+    from services.instagram_asset_profile import profile_asset
+
+    available: list[str] = []
+    unsuitable: list[str] = []
+
+    def add(key: str, image: Any) -> None:
+        available.append(key)
+        try:
+            if not profile_asset(image.convert("RGBA" if image.mode == "RGBA" else "RGB"), subject_key=key).suitable_for_final_visual:
+                unsuitable.append(key)
+        except (OSError, ValueError):
+            unsuitable.append(key)
+
+    if recap_bundle is not None:
+        for story in recap_bundle.stories:
+            if story.image_bytes:
+                try:
+                    with Image.open(BytesIO(story.image_bytes)) as decoded:
+                        add(story.key, decoded.copy())
+                except (OSError, ValueError):
+                    continue
+    elif source_image is not None:
+        add("source", source_image)
+    return tuple(available), tuple(unsuitable)
+
+
+def _carousel_media_note(*, source_image: Any, recap_bundle: InstagramRecapBundle | None, media_first: bool = False) -> str:
     """Real media availability, told to the Creative Director so it plans against what exists. Phase B.5.1: every real image
     carries a deterministic PROFILE (calm text zones per crop, uniform-ground object suitability) so the model can only plan
     visual families the media honestly supports."""
@@ -513,21 +551,28 @@ def _carousel_media_note(*, source_image: Any, recap_bundle: InstagramRecapBundl
         lines = []
         for story in recap_bundle.stories:
             if not story.image_bytes:
-                lines.append(f"{story.key}: NO image for this story - use a graphic story card (dark_type_number_statement, interface_cards or light_utility_editorial)")
+                lines.append(
+                    f"{story.key}: SOURCE_AVAILABLE: no. Plan a GENERATED contextual visual for this story (media_subject '{story.key}', media_source 'generated')."
+                    if media_first else
+                    f"{story.key}: NO image for this story - use a graphic story card (dark_type_number_statement, interface_cards or light_utility_editorial)"
+                )
                 continue
             try:
                 with Image.open(BytesIO(story.image_bytes)) as decoded:
                     profile = profile_asset(decoded.convert("RGBA" if decoded.mode == "RGBA" else "RGB"), subject_key=story.key)
-                lines.append(render_profile_lines(profile, pool_size=len(with_image), allowed_functions="hero, detail, evidence_photo"))
+                lines.append(render_profile_lines(profile, pool_size=len(with_image), allowed_functions="hero, detail, evidence_photo", include_suitability=media_first))
             except (OSError, ValueError):
                 lines.append(f"{story.key}: image could not be profiled - treat as NO usable image")
-        return "\n".join(lines)
+        return "\n".join(lines + ([_GENERATED_OPTION_NOTE] if media_first else []))
     if source_image is not None:
         return (
-            render_profile_lines(profile_asset(source_image, subject_key="source"), pool_size=1, allowed_functions="hero, detail, evidence_photo")
+            render_profile_lines(profile_asset(source_image, subject_key="source"), pool_size=1, allowed_functions="hero, detail, evidence_photo", include_suitability=media_first)
+            + ("\n" + _GENERATED_OPTION_NOTE if media_first else "")
             + "\nThe image may be used on several slides or several times on one slide with different crops. It is NOT a screenshot, a result image, "
               "a before/after or a concept visual: plan graphics for those."
         )
+    if media_first:
+        return "SOURCE_AVAILABLE: no - no real image is available for this post. " + _GENERATED_OPTION_NOTE
     return ("no real image is available for this post: plan with the media-free families (dark_type_number_statement, interface_cards, "
             "light_utility_editorial); media regions cannot be used and no image may be assumed.")
 
@@ -751,6 +796,11 @@ async def evaluate_and_submit_instagram_opportunity(
         except Exception:
             logger.warning("instagram_fatigue_history_unavailable", extra={"opportunity_id": opportunity.id})
 
+    media_first = format_decision.recommended_format is ContentFormat.CAROUSEL and CAROUSEL_PROMPT_VERSION in MEDIA_FIRST_CAROUSEL_VERSIONS
+    media_subjects = (
+        _carousel_media_subjects(source_image=source_image, recap_bundle=recap_bundle)
+        if format_decision.recommended_format is ContentFormat.CAROUSEL else ((), ())
+    )
     director_input = CreativeDirectorInput(
         fatigue_note=fatigue_note,
         is_recap_bundle=recap_bundle is not None,
@@ -767,9 +817,13 @@ async def evaluate_and_submit_instagram_opportunity(
         visual_dna_context=_visual_dna_context() if format_decision.recommended_format is ContentFormat.CAROUSEL else "",
         visual_dna_version=_visual_dna_version() if format_decision.recommended_format is ContentFormat.CAROUSEL else "",
         media_note=(
-            _carousel_media_note(source_image=source_image, recap_bundle=recap_bundle)
+            _carousel_media_note(source_image=source_image, recap_bundle=recap_bundle, media_first=media_first)
             if format_decision.recommended_format is ContentFormat.CAROUSEL else ""
         ),
+        media_first=media_first,
+        kage_voice_context=load_kage_voice().render_context() if media_first else "",
+        available_media_subjects=media_subjects[0],
+        unsuitable_media_subjects=media_subjects[1],
     )
 
     try:
@@ -778,6 +832,7 @@ async def evaluate_and_submit_instagram_opportunity(
     except (
         CreativeDirectorUnavailableError, UngroundedEvidenceError, CreativeFactSafetyError,
         CreativeLanguageError, AudienceFacingCopyError, CreativeContractError, MetaLanguageLeakError,
+        MediaFirstContractError, UnsupportedClickbaitError, KageVoiceUnavailableError,
     ) as exc:
         logger.warning(
             "instagram_automatic_trigger_creative_director_failed",
@@ -876,6 +931,11 @@ async def evaluate_and_submit_instagram_opportunity(
                 pkg, slide_images=creative_media.slide_images(),
                 asset_identities=creative_media.slide_asset_identities(),
                 subject_assets=subject_assets,
+                slide_subject_assets={
+                    int(a.asset_key): {GENERATED_SUBJECT_KEY: (a.image, a.asset_identity or derive_image_identity(a.image))}
+                    for a in creative_media.assets
+                    if a.media_mode.value == "GENERATED" and a.image is not None and a.asset_key.isdigit()
+                },
             )
             presentation = present_carousel(pkg, renders, version=1)
         elif format_decision.recommended_format is ContentFormat.REEL:
@@ -903,6 +963,7 @@ async def evaluate_and_submit_instagram_opportunity(
             deliberate_fallback_subjects=deliberate_fallback,
             model_emitted_archetype=creative_outcome.model_emitted_archetype,
             archetype_correction_required=creative_outcome.archetype_correction_required,
+            weak_hook_patterns=list(creative_outcome.weak_hook_patterns),
         )
         pkg = replace(pkg, media_plan={**pkg.media_plan, "b4_observability": observability})
         logger.info("instagram_b4_carousel_observability", extra={

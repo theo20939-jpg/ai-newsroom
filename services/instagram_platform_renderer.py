@@ -221,6 +221,7 @@ def render_instagram_carousel(
     slide_images: dict[int, Image.Image] | None = None,
     asset_identities: dict[int, str] | None = None,
     subject_assets: dict[str, tuple[Image.Image, str]] | None = None,
+    slide_subject_assets: dict[int, dict[str, tuple[Image.Image, str]]] | None = None,
 ) -> list[InstagramRenderResult]:
     """CAROUSEL format -> one CAROUSEL_SLIDE image per planned slide, a real visual GRAMMAR across
     the deck (section 11) - slide layout is chosen from each slide's own real `role`
@@ -261,6 +262,8 @@ def render_instagram_carousel(
         render_plan["media_execution_status"] = execution.get("status")
         _persist_render_trace(package, render_plan, slide_index=index)
         explicit_image = slide_images.get(index) if slide_images is not None else None
+        # Phase B.6: a slide's OWN generated image (reserved subject key) is visible to that slide only - never to another slide.
+        this_slide_assets = {**(subject_assets or {}), **((slide_subject_assets or {}).get(index) or {})} or None
         layout = render_carousel_slide(
             spec=profile_spec(InstagramRenderProfile.CAROUSEL_SLIDE), role=role, index=index, total=total,
             slide_copy=slide_copy, source_evidence=slide.get("source_evidence"), package_identity=package.package_id,
@@ -281,9 +284,9 @@ def render_instagram_carousel(
             # Phase B.5: declarative layout + the resolver's subject->asset map (never a shared hero).
             layout_plan=slide.get("layout"),
             subject_assets=(
-                {k: v for k, v in subject_assets.items() if k != "source"}
-                if subject_assets and slide.get("media_function") in ("ui_screenshot", "result", "before_after", "concept")
-                else subject_assets
+                {k: v for k, v in this_slide_assets.items() if k != "source"}
+                if this_slide_assets and slide.get("media_function") in ("ui_screenshot", "result", "before_after", "concept")
+                else this_slide_assets
             ),
         )
         results.append(_result_from_layout(layout, package, profile=InstagramRenderProfile.CAROUSEL_SLIDE, slide_index=index, slide_count=total))

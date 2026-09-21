@@ -53,6 +53,12 @@ from integrations.llm_gateway.protocol import (
 )
 from integrations.prompts.protocol import PromptRepository
 from schemas.capability import CapabilityCall, RuntimeContext
+from services.instagram_media_first import (
+    assert_hook_is_short,
+    assert_media_first,
+    assert_no_unsupported_clickbait,
+    weak_hook_patterns,
+)
 from services.instagram_meta_language_guard import assert_no_meta_language
 from schemas.instagram_creative import (
     InstagramCarouselCreative,
@@ -92,9 +98,11 @@ EDITORIAL_DECISION_PROMPT_NAME = "instagram_editorial_decision"
 # shipped prompt version in place" convention.
 _SINGLE_PROMPT_VERSION = "6"
 _CREATIVE_DIRECTOR_MAX_TOKENS = 16_000  # upper safety bound (not a target): keeps the gateway worst-case estimate from pricing a model-maximum completion
-_CAROUSEL_PROMPT_VERSION = "9.1"  # Phase B.5.1.2: v9.1 = v9 + evidence-reference contract (E1..En handles); v9 = Visual DNA v2 families, bounded roles, meta-language guard
+_CAROUSEL_PROMPT_VERSION = "10"  # Phase B.5.1.2: v9.1 = v9 + evidence-reference contract (E1..En handles); v9 = Visual DNA v2 families, bounded roles, meta-language guard
 CAROUSEL_PROMPT_VERSION = _CAROUSEL_PROMPT_VERSION
-_EVIDENCE_HANDLE_CAROUSEL_VERSIONS = frozenset({"9.1"})  # prompt versions whose input lists evidence as handles (E1, E2, ...)
+_EVIDENCE_HANDLE_CAROUSEL_VERSIONS = frozenset({"9.1", "10"})  # prompt versions whose input lists evidence as handles (E1, E2, ...)
+MEDIA_FIRST_CAROUSEL_VERSIONS = frozenset({"10"})  # Phase B.6: prompt versions under the media-first + KAGE-voice contract
+_MEDIA_FIRST_CAROUSEL_VERSIONS = MEDIA_FIRST_CAROUSEL_VERSIONS
 _EVIDENCE_HANDLE_RE = re.compile(r"^E([1-9]\d*)$")
 
 # Phase B.5.1.2: optional diagnostic sink. Called with ("raw_output", ...) as soon as a provider structured output exists - BEFORE any semantic
@@ -249,6 +257,12 @@ class CreativeDirectorInput:
     # the model plans against what exists (never invents assets). Empty for every non-carousel call.
     content_archetype: str = ""
     media_note: str = ""
+    # Phase B.6: the shared KAGE voice (rendered from docs/brand/kage_voice_v1.md - never copied into a prompt) and the media facts the media-first
+    # contract is checked against: which subject keys are listed, and which of those are NOT suitable as a final visual (article / text cards).
+    media_first: bool = False  # the caller runs the media-first + KAGE-voice contract (prompt v10) for this request
+    kage_voice_context: str = ""
+    available_media_subjects: tuple = ()
+    unsuitable_media_subjects: tuple = ()
     # Phase B.5: the STRUCTURED Visual DNA (stored once, reused per post) - rendered rules, never a path.
     visual_dna_context: str = ""
     visual_dna_version: str = ""
@@ -268,6 +282,8 @@ class CreativeGenerationOutcome:
     # Phase B.5.1: whether the model's own archetype echo disagreed with the derived one (the deterministic value still wins, but it is exposed)
     model_emitted_archetype: str | None = None
     archetype_correction_required: bool = False
+    # Phase B.6: advisory KAGE hook-policy flags (generic openers) for review; never a hard failure.
+    weak_hook_patterns: tuple = ()
 
 
 def _without_prompt_bullet(value: str) -> str:
@@ -318,6 +334,7 @@ def _build_user_text(director_input: CreativeDirectorInput, *, evidence_handles:
         f"WHY THIS MECHANIC IS SPREADING: {director_input.trend_spread_reason or '(n/a)'}\n"
         f"OUTPUT LOCALE: {director_input.locale}\n"
         f"BRAND/ACCOUNT POLICY:\n{director_input.brand_context or '(not supplied)'}\n"
+        f"{director_input.kage_voice_context + chr(10) if director_input.kage_voice_context else ''}"
         f"ACCOUNT STATE:\n{director_input.account_context or '(not supplied)'}\n"
         f"CURRENT PRODUCT TRUTH:\n{director_input.product_context or '(not supplied)'}\n"
         f"RECENT/IN-FLIGHT CONTENT:\n{director_input.recent_content_context or '(none)'}\n"
@@ -644,8 +661,21 @@ def _validate_carousel_output(
          "final_cta": creative.final_cta or "", "final_caption": creative.final_caption or ""},
         allowed_context=[*director_input.allowed_evidence, director_input.opportunity_summary],
     )
+    weak_hooks: tuple = ()
+    if director_input.media_first and _CAROUSEL_PROMPT_VERSION in _MEDIA_FIRST_CAROUSEL_VERSIONS:
+        # Phase B.6: every slide must carry a meaningful visual idea (deterministic, no OCR / model call); the hook is one strong line; bold framing needs literal support.
+        assert_media_first(
+            list(creative.slides), available_subjects=set(director_input.available_media_subjects),
+            unsuitable_subjects=set(director_input.unsuitable_media_subjects),
+        )
+        assert_hook_is_short(creative.slides[0].slide_copy)
+        assert_no_unsupported_clickbait(
+            {**{f"slide_{i}_copy": slide.slide_copy for i, slide in enumerate(creative.slides)}, "final_caption": creative.final_caption or ""},
+            evidence=[*director_input.allowed_evidence, director_input.opportunity_summary],
+        )
+        weak_hooks = tuple(weak_hook_patterns(creative.slides[0].slide_copy))
     return CreativeGenerationOutcome(carousel=creative, call=call, model_emitted_archetype=emitted_archetype,
-                                     archetype_correction_required=correction_required)
+                                     archetype_correction_required=correction_required, weak_hook_patterns=weak_hooks)
 
 
 async def generate_reel_creative(

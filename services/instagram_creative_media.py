@@ -175,6 +175,12 @@ def compile_instagram_generation_prompt(
         return str(raw or "")
 
     evidence_block = "\n".join(f"- {item}" for item in evidence)
+    brief = value("generation_brief").strip()
+    if brief:
+        return _compile_slide_scene_prompt(
+            brief=brief, plan=plan, opportunity_summary=opportunity_summary, evidence_block=evidence_block, content_format=content_format,
+            family=value("visual_family"), function=value("media_function"), purpose=value("slide_purpose"),
+        )
     return (
         f"VISUAL PROFILE VERSION\n{_VISUAL_PROFILE_VERSION}\n\n"
         f"SUBJECT\n{opportunity_summary}\nSupported facts only:\n{evidence_block}\n\n"
@@ -206,6 +212,45 @@ def compile_instagram_generation_prompt(
     )
 
 
+_FAMILY_COMPOSITION = {
+    "immersive_image_field": "a full-bleed scene with ONE large calm, low-detail area (plain wall, sky, fog, table surface or soft floor) in the upper third, kept free of detail so a headline can sit on it",
+    "hero_object_stage": "ONE single object, whole and centred with generous margin, on a plain uniform studio ground (flat light grey or flat near-black); no clutter, no scene",
+    "internet_culture_collage": "ONE clear subject on a simple uncluttered background, strong silhouette, easy to crop into several fragments at different scales",
+}
+
+
+def _compile_slide_scene_prompt(
+    *, brief: str, plan: dict[str, Any], opportunity_summary: str, evidence_block: str, content_format: str,
+    family: str, function: str, purpose: str,
+) -> str:
+    """Phase B.6: a contextual image for ONE slide, built from the approved plan's own scene brief. The image depicts the specific story concept; exact Russian copy and the
+    canonical logo are added afterwards by the deterministic renderer."""
+    composition = _FAMILY_COMPOSITION.get(family, "one decisive focal subject with depth and intentional negative space for a headline")
+    return (
+        f"VISUAL PROFILE VERSION\n{_VISUAL_PROFILE_VERSION}\n\n"
+        f"STORY\n{opportunity_summary}\nSupported facts only:\n{evidence_block}\n\n"
+        f"SPECIFIC SCENE TO DEPICT (approved plan for this slide)\n{brief}\n"
+        f"Slide purpose: {purpose or 'primary visual'}. Media function: {function or 'hero'}.\n\n"
+        f"OVERALL IDEA\n{plan.get('main_idea') or opportunity_summary}\n"
+        f"Visual genre: {plan.get('visual_treatment') or 'editorial conceptual visual'}.\n\n"
+        f"COMPOSITION FOR THIS SLIDE\n{composition}. Portrait 4:5 editorial framing, one decisive focal point, believable depth and material detail.\n\n"
+        "SPECIFICITY\nDepict THIS story's concrete idea so the picture communicates the story before the reader reads the text. Do NOT produce a generic "
+        "AI brain, glowing robot, random cyberpunk city, random laptop, hologram or corporate technology stock art unless this story is literally about it.\n\n"
+        "COLOR / MOOD\nDerive colour from the idea; contemporary, specific, cinematic or editorial, never generic.\n\n"
+        "NEGATIVE CONSTRAINTS\nNO LOGOS. NO WORDMARKS. NO WATERMARKS. NO LARGE TEXT. NO READABLE TEXT OR LETTERING OF ANY KIND. NO FAKE UI. NO RANDOM INTERFACES. NO "
+        "UNSUPPORTED PRODUCTS, FACTS, NUMBERS OR THIRD-PARTY BRANDING. Do not bake any headline into the image; the application adds the exact Russian copy and the "
+        "canonical logo after generation."
+    )
+
+
+def _evidence_for_slide(evidence: list[str], slide: Any | None) -> list[str]:
+    """NEWS_RECAP: a story's image is generated from THAT story's evidence only ('[story_N] ...' lines), never the other stories' facts."""
+    key = _slide_value(slide, "media_subject") if slide is not None else ""
+    prefix = f"[{key}]"
+    own = [line for line in evidence if key and line.startswith(prefix)]
+    return own or list(evidence)
+
+
 def _slide_value(slide: Any, name: str) -> str:
     raw = slide.get(name) if isinstance(slide, dict) else getattr(slide, name, "")
     return str(raw or "")
@@ -219,6 +264,10 @@ def _mode_for_item(*, strategy: str, slide: Any | None, index: int) -> Instagram
             "typographic": InstagramMediaMode.TYPOGRAPHIC,
             "graphic": InstagramMediaMode.GRAPHIC,
         }.get(strategy, InstagramMediaMode.TYPOGRAPHIC)
+    declared = _slide_value(slide, "media_source")
+    if declared in {"source", "generated", "graphic"}:
+        # Phase B.6 media-first: the plan states the slide's visual source explicitly. A media_need such as "minimal" or "text" can never turn it typographic.
+        return {"source": InstagramMediaMode.SOURCE, "generated": InstagramMediaMode.GENERATED, "graphic": InstagramMediaMode.GRAPHIC}[declared]
     if getattr(slide, "must_match_story", False) and getattr(slide, "media_subject", None):
         return InstagramMediaMode.SOURCE  # the plan demands this story's own real asset
     need = _slide_value(slide, "media_need").lower()
@@ -406,7 +455,12 @@ async def execute_instagram_creative_media(
             ),
             focal_subject=str(plan.get("focal_point") or ""),
         )
-        if slide_assets is not None:
+        if media_mode is InstagramMediaMode.GENERATED and _slide_value(slide, "media_source") == "generated":
+            assets.append(await _execute_generated_asset(
+                asset_key=asset_key, slide=slide, plan=plan, opportunity_summary=opportunity_summary, evidence=_evidence_for_slide(evidence, slide),
+                content_format=content_format, creative_id=creative_id, opportunity_id=opportunity_id, effective_mode=effective_mode,
+            ))
+        elif slide_assets is not None:
             # NEWS_RECAP: each slide may only consume ITS OWN resolved story asset; a slide with
             # none gets a deliberate graphic fallback - never another story's (or a shared) image.
             resolved = slide_assets.get(int(asset_key)) if asset_key.isdigit() else None
