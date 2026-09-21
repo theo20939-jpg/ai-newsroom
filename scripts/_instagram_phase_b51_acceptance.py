@@ -49,6 +49,8 @@ _PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
 _MAX_REAL_CALLS = 4
 _ARCHETYPES = ("ai_hack", "news_insight", "news_recap", "trend_generative")
 _EST_INPUT_TOKENS, _EST_OUTPUT_TOKENS = 16000, 9000
+DIAG_NAMESPACE = "instagram_b51_real_cd_acceptance"
+DIAG_HARD_CAP_USD = Decimal("0.75")
 
 
 class FixtureSubstitutionError(RuntimeError):
@@ -81,20 +83,42 @@ def routed_worst_case_call_cost() -> Decimal:
     return max(Decimal(_EST_INPUT_TOKENS) / 1_000_000 * t.input_price_per_million + Decimal(_EST_OUTPUT_TOKENS) / 1_000_000 * t.output_price_per_million for t in eligible)
 
 
-async def _budget_preflight() -> dict:
-    from core.redis import get_redis_client
+async def _production_ledger() -> Decimal:
+    """READ-ONLY view of the production ledger key (never written by this run)."""
+    from redis.asyncio import Redis
 
-    ns = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    raw = await get_redis_client().get(f"phase7:cost_ledger:{ns}")
-    spent = Decimal(str(raw)) if raw is not None else Decimal(0)
+    client = Redis.from_url(settings.redis_url, decode_responses=True)
+    try:
+        ns = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        raw = await client.get(f"phase7:cost_ledger:{ns}")
+        return Decimal(str(raw)) if raw is not None else Decimal(0)
+    finally:
+        await client.aclose()
+
+
+def _diag_redis():
+    """Isolated diagnostic ledger store: a dedicated Redis that is NOT the production one. Refuses to run otherwise."""
+    from redis.asyncio import Redis
+
+    url = os.environ.get("B51_DIAG_REDIS_URL", "")
+    if not url or url == settings.redis_url:
+        raise RuntimeError("SAFE_STOP: B51_DIAG_REDIS_URL must point to a dedicated diagnostic Redis distinct from production")
+    return Redis.from_url(url, decode_responses=True)
+
+
+async def _budget_preflight(diag) -> dict:
+    prod_before = await _production_ledger()
+    raw = await diag.get(f"phase7:cost_ledger:{DIAG_NAMESPACE}")
+    diag_spent = Decimal(str(raw)) if raw is not None else Decimal(0)
     worst_each = routed_worst_case_call_cost()
-    budget = Decimal(str(settings.llm_daily_budget_usd))
     return {
-        "ledger_namespace": ns, "spent_today_usd": str(spent), "daily_budget_usd": str(budget), "budget_mode": settings.llm_budget_mode,
+        "diagnostic_namespace": DIAG_NAMESPACE, "diagnostic_hard_cap_usd": str(DIAG_HARD_CAP_USD), "diagnostic_spent_before_usd": str(diag_spent),
+        "production_ledger_before_usd": str(prod_before), "production_daily_limit_usd": str(settings.llm_daily_budget_usd),
+        "instagram_automatic_generation_enabled": bool(getattr(settings, "instagram_automatic_generation_enabled", False)),
         "worst_case_per_call_usd": str(worst_each.quantize(Decimal("0.0001"))),
         "worst_case_four_calls_usd": str((worst_each * _MAX_REAL_CALLS).quantize(Decimal("0.0001"))),
         "assumed_tokens_per_call": {"input": _EST_INPUT_TOKENS, "output": _EST_OUTPUT_TOKENS},
-        "safe": spent + worst_each * _MAX_REAL_CALLS <= budget,
+        "safe": diag_spent + worst_each * _MAX_REAL_CALLS <= DIAG_HARD_CAP_USD,
     }
 
 
@@ -137,13 +161,21 @@ async def main() -> None:
     if real:
         from integrations.llm_gateway.boot import assemble_ai_integration_layer
 
-        preflight = await _budget_preflight()
+        diag = _diag_redis()
+        preflight = await _budget_preflight(diag)
         (out_dir / "budget_preflight.json").write_text(json.dumps(preflight, indent=2), encoding="utf-8")
         print("BUDGET_PREFLIGHT", json.dumps(preflight))
         if not preflight["safe"]:
             print("SAFE_STOP: budget cannot accommodate four calls; no provider call was made")
             return
-        layer = assemble_ai_integration_layer(settings, FilePromptRepository(_PROMPTS))
+        import integrations.llm_gateway.boot as boot
+        from services.budget_guard import RedisBudgetGuard
+        from services.cost_tracker import RedisCostTracker
+
+        diag_settings = settings.model_copy(update={"llm_budget_mode": "enforce", "llm_daily_budget_usd": float(DIAG_HARD_CAP_USD)})
+        boot.RedisBudgetGuard = lambda redis, st: RedisBudgetGuard(redis, st, ledger_namespace=DIAG_NAMESPACE)
+        layer = assemble_ai_integration_layer(diag_settings, FilePromptRepository(_PROMPTS), redis_client=diag)
+        diag_tracker = RedisCostTracker(diag, pricing, ledger_namespace=DIAG_NAMESPACE)
         gateway_factory = lambda archetype, plan: layer.gateway  # noqa: E731
 
     plain_bundle, pool_bundle, recap_note = await b5._recap_bundles()
@@ -156,9 +188,9 @@ async def main() -> None:
             _decision_for(archetype, trend_story).model_dump(), plan)
 
     calls = {"count": 0, "actual": Decimal(0)}
-    ledger_spent = Decimal(preflight["spent_today_usd"]) if preflight else Decimal(0)
+    ledger_spent = Decimal(preflight["diagnostic_spent_before_usd"]) if preflight else Decimal(0)
     worst_each = Decimal(preflight["worst_case_per_call_usd"]) if preflight else Decimal(0)
-    daily_budget = Decimal(preflight["daily_budget_usd"]) if preflight else Decimal(0)
+    daily_budget = DIAG_HARD_CAP_USD if preflight else Decimal(0)
     captured: dict = {}
     real_call = cd_module._call_creative_director
 
@@ -179,6 +211,7 @@ async def main() -> None:
                 calls["actual"] += compute_call_cost(call, pricing)
             except Exception:  # noqa: BLE001
                 calls["actual"] += worst_each
+            await diag_tracker.record(uuid4(), "instagram_creative_director", call)
         return output, call
 
     cd_module._call_creative_director = counting_call
@@ -201,8 +234,15 @@ async def main() -> None:
         cd_module._call_creative_director = real_call
         await shadow_engine.dispose()
 
+    accounting = {}
+    if real:
+        raw = await diag.get(f"phase7:cost_ledger:{DIAG_NAMESPACE}")
+        accounting = {"diagnostic_namespace": DIAG_NAMESPACE, "diagnostic_hard_cap_usd": str(DIAG_HARD_CAP_USD),
+                      "diagnostic_ledger_after_usd": str(raw), "production_ledger_before_usd": preflight["production_ledger_before_usd"],
+                      "production_ledger_after_usd": str(await _production_ledger())}
+        await diag.aclose()
     result = {"mode": mode, "REAL_MODEL": real, "real_calls": calls["count"], "actual_cost_usd": str(calls["actual"]), "fixture_substitutions": 0,
-              "recap_selection": recap_note, "runs": summary}
+              "budget_accounting": accounting, "recap_selection": recap_note, "runs": summary}
     (out_dir / "run_summary.json").write_text(json.dumps(result, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     print("DONE", json.dumps({"mode": mode, "real_calls": calls["count"], "cost": str(calls["actual"])}))
 
