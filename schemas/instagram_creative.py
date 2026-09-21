@@ -72,7 +72,7 @@ class InstagramCreativeExecutionPlan(BaseModel):
 
     main_idea: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
     focal_point: str = Field(min_length=1, max_length=_SHORT_TEXT_MAX_LENGTH)
-    media_strategy: Literal["source_media", "generated_media", "typographic"]
+    media_strategy: Literal["source_media", "generated_media", "typographic", "graphic"]
     media_rationale: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
     composition_direction: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
     branding_treatment: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
@@ -177,6 +177,9 @@ VISUAL_FAMILIES = (
     "immersive_image_field", "hero_object_stage", "internet_culture_collage",
     "dark_type_number_statement", "interface_cards", "light_utility_editorial",
 )
+MEDIA_SOURCES = ("source", "generated", "graphic")
+MediaSource = Literal["source", "generated", "graphic"]
+
 VisualFamily = Literal[
     "immersive_image_field", "hero_object_stage", "internet_culture_collage",
     "dark_type_number_statement", "interface_cards", "light_utility_editorial",
@@ -234,6 +237,11 @@ class InstagramCarouselSlideCreative(BaseModel):
     # Phase B.5.1: WHICH accepted visual family this slide is planned in (a bounded value, never a free name) and why, persisted for audit.
     visual_family: VisualFamily | None = None
     visual_family_reason: str | None = Field(default=None, max_length=240)
+    # Phase B.6 (MEDIA-FIRST): WHERE the slide's visual idea comes from. `source` = a listed real asset, `generated` = a contextual image produced from
+    # `generation_brief` (a concrete description of what the picture SHOWS; never text, logos or UI), `graphic` = a substantive diagram / interface /
+    # poll composition. Optional so every persisted pre-B.6 draft stays valid; prompt v10 requires it on every slide.
+    media_source: MediaSource | None = None
+    generation_brief: str | None = Field(default=None, max_length=420)
     # Phase B.4.1 section 7: deliberately NOT a field here. The model may state WHICH subject a
     # slide needs (media_subject) and WHETHER a shared/fallback asset is unacceptable
     # (must_match_story) - both real creative decisions - but never the actual resolved asset's

@@ -10,6 +10,7 @@ honestly support (and never fakes media). Measured from the actual pixels with t
 No ML, no provider call. The text lines are advisory guidance; the renderer still validates every plan and fails closed."""
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 
 from PIL import Image
@@ -23,6 +24,7 @@ _SPEC = INSTAGRAM_RENDER_PROFILES[InstagramRenderProfile.CAROUSEL_SLIDE]
 _CROP_FOCI = (0.1, 0.3, 0.5, 0.7, 0.9)
 _MIN_SIDE = 640
 _MAX_OPTIONS = 3
+FLAT_GRAPHIC_MAX_DOMINANT_COLOURS = 12  # <= this many 4-bit colours cover 90% of the pixels: a flat article / text / social card, not a photograph or object
 LOGO_ZONE_RIGHT = (0.83, 0.82, 0.94, 0.93)
 
 
@@ -45,6 +47,13 @@ class AssetProfile:
     ground_is_dark: bool
     object_share: float            # measured object area / image area (1.0 = no isolated object)
     immersive_options: tuple[ImmersiveOption, ...] = field(default_factory=tuple)
+    dominant_colours_90: int = 999
+
+    @property
+    def suitable_for_final_visual(self) -> bool:
+        """Phase B.6 SOURCE_SUITABLE_FOR_FINAL_VISUAL. Deterministic, no OCR: a flat few-colour image is almost always an article / headline / social
+        card whose main content is baked-in text. A false 'unsuitable' is safe (a contextual visual is generated instead)."""
+        return self.dominant_colours_90 > FLAT_GRAPHIC_MAX_DOMINANT_COLOURS
 
     @property
     def hero_ready(self) -> bool:
@@ -62,6 +71,17 @@ class AssetProfile:
             families.append("hero_object_stage")
         families.append("internet_culture_collage")  # as fragment / crops - the plan must still hold 3+ media regions
         return families
+
+
+def dominant_colours_90(rgb: Image.Image) -> int:
+    small = rgb.resize((96, 96), Image.Resampling.BOX)
+    counts = Counter((r >> 4, g >> 4, b >> 4) for r, g, b in small.getdata())
+    total, acc = sum(counts.values()), 0
+    for used, (_colour, k) in enumerate(counts.most_common(), start=1):
+        acc += k
+        if acc >= 0.90 * total:
+            return used
+    return len(counts)
 
 
 def profile_asset(image: Image.Image, *, subject_key: str) -> AssetProfile:
@@ -88,15 +108,21 @@ def profile_asset(image: Image.Image, *, subject_key: str) -> AssetProfile:
             if len(options) >= _MAX_OPTIONS:
                 break
     return AssetProfile(subject_key, rgb.width, rgb.height, tone, has_alpha, uniform, sum(ground) / 3 < 60,
-                        round(min(1.0, share), 2), tuple(options))
+                        round(min(1.0, share), 2), tuple(options), dominant_colours_90(rgb))
 
 
-def render_profile_lines(profile: AssetProfile, *, pool_size: int, allowed_functions: str) -> str:
+def render_profile_lines(profile: AssetProfile, *, pool_size: int, allowed_functions: str, include_suitability: bool = False) -> str:
     families = profile.compatible_families(pool_size=pool_size)
+    if include_suitability and not profile.suitable_for_final_visual:
+        return (f"subject key '{profile.subject_key}': SOURCE_AVAILABLE: yes. SOURCE_SUITABLE_FOR_FINAL_VISUAL: NO - a flat article / text / social card whose content is "
+                "baked-in text. Keep it as evidence only: do NOT use it as a hero, an immersive field or a primary image, and do not plan text on it. Plan a GENERATED "
+                "contextual visual for this subject instead (it may appear only as a small supporting collage fragment when that genuinely helps).")
     lines = [
         f"subject key '{profile.subject_key}': REAL image {profile.width}x{profile.height}, tone={profile.tone} (valid media_function: {allowed_functions}). "
         f"Families this image can honestly support: {', '.join(families)}."
     ]
+    if include_suitability:
+        lines[0] = lines[0].replace(": REAL image", ": SOURCE_AVAILABLE: yes. SOURCE_SUITABLE_FOR_FINAL_VISUAL: yes. REAL image", 1)
     if profile.immersive_ready:
         opts = "; ".join(
             f"crop focus_x={o.focus_x} -> calm text zone '{o.zone}' box x={o.box[0]} y={o.box[1]} w={o.box[2]} h={o.box[3]} ({o.text_colour} type)"

@@ -234,12 +234,17 @@ def _carousel_media_plan(creative: Any) -> tuple[str, str | None, str | None, di
          # Phase B.5.1: the chosen visual family and its reason, persisted for audit (None on every pre-B.5.1 slide).
          "visual_family": getattr(slide, "visual_family", None),
          "visual_family_reason": getattr(slide, "visual_family_reason", None),
+         # Phase B.6: where this slide's visual idea comes from (source / generated / graphic) and the generated picture's brief.
+         "media_source": getattr(slide, "media_source", None),
+         "generation_brief": getattr(slide, "generation_brief", None),
          "layout": (slide.layout.model_dump() if getattr(slide, "layout", None) is not None else None)}
         for i, slide in enumerate(creative.slides)
     ]
     media_plan = {
         "kind": "carousel", "objective": creative.objective, "slides": slides,
         "content_archetype": getattr(creative, "content_archetype", None),
+        # Phase B.6: a media-first plan (every slide names its visual source); the art validator then refuses a slide with no meaningful visual.
+        "media_first": bool(slides) and all(sl.get("media_source") for sl in slides),
         "visual_rhythm": (
             creative.visual_rhythm.model_dump() if getattr(creative, "visual_rhythm", None) is not None else None
         ),
