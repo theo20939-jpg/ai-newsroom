@@ -101,13 +101,16 @@ async def test_each_generated_slide_of_one_post_gets_its_own_attempt(redis_clien
         assert [a.status for a in first.assets] == ["generated_media"] * 4  # the B.6 bug: only slide 0 was allowed
         assert _FakeImageAdapter.executions == ["0", "1", "2", "3"]  # four provider executions, one per slide
         keys = {image_attempt_key(namespace, f"instagram:one-post:visual:{i}") for i in range(4)}
-        assert len(keys) == 4 and all(await redis_client.get(k) == "1" for k in keys)  # four distinct attempt keys, each at attempt 1
+        assert len(keys) == 4
+        for k in keys:
+            assert await redis_client.get(k) == "1"  # four distinct attempt keys, each at attempt 1
         assert await redis_client.exists(image_attempt_key(namespace, "instagram:one-post")) == 0  # nothing is counted at the shared post level any more
         # the SAME slide identity a second time: still denied (duplicate protection is not weakened), and no new provider execution happens
         second = await media.execute_instagram_creative_media(**kwargs)
         assert [a.status for a in second.assets] == ["generation_duplicate"] * 4
         assert _FakeImageAdapter.executions == ["0", "1", "2", "3"]
-        assert all(await redis_client.get(k) == "1" for k in keys)  # max_attempts stays 1
+        for k in keys:
+            assert await redis_client.get(k) == "1"  # max_attempts stays 1
     finally:
         for i in range(4):
             await redis_client.delete(image_attempt_key(namespace, f"instagram:one-post:visual:{i}"), image_execution_key(namespace, f"instagram:one-post:visual:{i}:v2"))
