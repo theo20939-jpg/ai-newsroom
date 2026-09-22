@@ -50,6 +50,7 @@ from services.pricing_catalog import ModelRegistryPricingCatalog
 
 _PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
 _MAX_REAL_CALLS = 4
+_MAX_CONTRACT_RETRY_CALLS = 1  # quality loop: one bounded retry after a recoverable contract miss, inside the same preflight + hard cap
 REUSABLE_ARCHETYPES = ("ai_hack", "news_insight")  # B.5.1.2: these two archetypes may replay their saved B.5.1.1 REAL model output (zero provider calls)
 _ARCHETYPES = ("ai_hack", "news_insight", "news_recap", "trend_generative")
 _EST_INPUT_TOKENS, _EST_OUTPUT_TOKENS = 16000, 9000
@@ -274,10 +275,11 @@ async def main() -> None:
     replay_all = mode == "replay"
     replays = _load_all_replays(sys.argv[3:]) if replay_all else (_load_replays(sys.argv[3:]) if real else {})
     only = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv else list(_ARCHETYPES)
-    max_real = 0 if "--only" in sys.argv and set(only) <= set(replays) else _MAX_REAL_CALLS - len(replays)
+    posts_real = 0 if "--only" in sys.argv and set(only) <= set(replays) else _MAX_REAL_CALLS - len(replays)
+    max_real = posts_real + (_MAX_CONTRACT_RETRY_CALLS if posts_real else 0)  # a retry must not starve the last archetype of its call
     from services.instagram_media_first import MAX_GENERATED_SLIDES_PER_POST
 
-    image_slots = max_real * MAX_GENERATED_SLIDES_PER_POST if (real and B6_IMAGES_LIVE) else 0
+    image_slots = posts_real * MAX_GENERATED_SLIDES_PER_POST if (real and B6_IMAGES_LIVE) else 0
 
     preflight = None
     pricing = ModelRegistryPricingCatalog(build_model_registry())

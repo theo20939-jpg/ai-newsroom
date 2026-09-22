@@ -69,6 +69,13 @@ def adapt_media_scale(layout: InstagramSlideLayout, *, slide_copy: str, force: b
     if layout.arrangement not in ("standard", "stage") and not (force and collage):
         return None
     medias = [r for r in layout.regions if r.kind == "media"]
+    if not collage:
+        # outside a collage, a second region showing the SAME asset is the same picture pasted twice (real TREND iteration-5
+        # slide: one generated photo at 0.49x0.58 plus a tilted 0.25x0.22 copy of it), not a second visual - only the largest counts
+        largest: dict[str | None, LayoutRegion] = {}
+        for r in sorted(medias, key=_clipped_area, reverse=True):
+            largest.setdefault(r.content_ref, r)
+        medias = [r for r in medias if largest.get(r.content_ref) is r]
     texts = [r for r in layout.regions if r.kind == "text"]
     graphics = [r for r in layout.regions if r.kind == "graphic"]
     if force and collage:

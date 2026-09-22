@@ -74,17 +74,38 @@ def _area(rect: tuple[float, float, float, float]) -> float:
     return max(0.0, rect[2] - rect[0]) * max(0.0, rect[3] - rect[1])
 
 
+_CURRENCY = "$€£₽¥"
+
+
+def _without_number(text: str, start: int, end: int) -> str:
+    """The copy with the numeral taken out. A sentence the numeral carried alone ("От $149.") is left as a content-free fragment
+    ("От") - that whole sentence goes, since the numeral itself is set in type beside it."""
+    s0 = max((text.rfind(p, 0, start) for p in ".!?"), default=-1) + 1
+    ends = [i for i in (text.find(p, end) for p in ".!?") if i >= 0]
+    s1 = min(ends) + 1 if ends else len(text)
+    residue = text[s0:start] + text[end:s1]
+    if len(re.findall(r"\w+", residue)) <= 2 and (s0 > 0 or s1 < len(text)):
+        rest = text[:s0] + text[s1:]
+    else:
+        rest = text[:start] + text[end:]
+    rest = re.sub(r"\s+([.,:!?])", r"\1", re.sub(r"\s{2,}", " ", rest))
+    return rest.strip(" :—-.,")
+
+
 def copy_parts(slide_copy: str) -> dict[str, str]:
     """Deterministic derivations of the slide's OWN copy that a text region may reference."""
     text = slide_copy.strip()
-    number_match = re.search(r"\d[\d\s.,]*\d%?|\d%?", text)
+    # the currency travels WITH its amount: "От $149." must never leave "От $." behind once the numeral is set in type
+    number_match = re.search(rf"[{_CURRENCY}]?(?:\d[\d\s.,]*\d|\d)%?(?:\s?[{_CURRENCY}])?", text)
     number = number_match.group(0).strip() if number_match else ""
     step = re.match(r"^\s*(?:шаг|step)\s*\d{1,2}\s*[.:—\-]?\s*", text, re.IGNORECASE)
     if step:  # "Шаг 2. ..." -> the numeral is shown separately; drop the whole label, never leave "Шаг ."
         number = re.search(r"\d{1,2}", step.group(0)).group(0)
         no_number = text[step.end():].strip()
+    elif number_match:
+        no_number = _without_number(text, number_match.start(), number_match.end())
     else:
-        no_number = (text[:number_match.start()] + text[number_match.end():]).strip(" :—-.,") if number_match else text
+        no_number = text
     lead, rest = text, ""
     vs = re.search(r"\s+(?:vs\.?|VS|Vs)\s+", text)
     m = re.search(r"[:.!?—]\s+", text)

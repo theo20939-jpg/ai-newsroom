@@ -8,6 +8,7 @@ copy remain the deterministic renderer's responsibility.
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass, replace
 from enum import Enum
 from io import BytesIO
@@ -177,10 +178,11 @@ def compile_instagram_generation_prompt(
     evidence_block = "\n".join(f"- {item}" for item in evidence)
     brief = value("generation_brief").strip()
     if brief:
+        typeset = _typeset_numeral(value("slide_copy"))
         return _compile_slide_scene_prompt(
-            brief=brief, plan=plan, opportunity_summary=opportunity_summary, evidence_block=evidence_block, content_format=content_format,
-            family=value("visual_family"), function=value("media_function"), purpose=value("slide_purpose"),
-            anchor=value("story_anchor").strip(), direction=value("visual_direction").strip(),
+            brief=_mask_typeset(brief, typeset), plan=plan, opportunity_summary=opportunity_summary, evidence_block=evidence_block,
+            content_format=content_format, family=value("visual_family"), function=value("media_function"), purpose=value("slide_purpose"),
+            anchor=_mask_typeset(value("story_anchor").strip(), typeset), direction=_mask_typeset(value("visual_direction").strip(), typeset),
         )
     return (
         f"VISUAL PROFILE VERSION\n{_VISUAL_PROFILE_VERSION}\n\n"
@@ -220,6 +222,30 @@ _FAMILY_COMPOSITION = {
 }
 
 
+_TYPESET_MASK = "[the numeral the application sets in type over the picture - not part of the picture]"
+
+
+def _typeset_numeral(slide_copy: str) -> str:
+    """The numeral this slide's own copy carries: the renderer draws it (often huge, as a NUMERAL region) on top of the picture."""
+    from services.instagram_layout_validation import copy_parts
+
+    return copy_parts(slide_copy)["number"] if slide_copy.strip() else ""
+
+
+def _mask_typeset(text: str, numeral: str) -> str:
+    """The slide direction describes the FINISHED slide ("a large red 149 anchors the left side"). Handed to the image model as-is,
+    that sentence makes it paint the numeral into the picture (real TREND iteration-5 run: a red "49" collided with the typeset
+    "149"). The slide's own numeral - with or without its currency - is replaced by a marker saying the application draws it.
+    Single digits are left alone: "one watch, 3 straps" is scene content, and a 1-digit token would match inside other words."""
+    if not numeral or not text:
+        return text
+    bare = numeral.strip("$€£₽¥% ")
+    for token in sorted({numeral, bare} - {""}, key=len, reverse=True):
+        if len(re.sub(r"\D", "", token)) >= 2:
+            text = re.sub(rf"(?<![\d.,]){re.escape(token)}(?![\d])", _TYPESET_MASK, text)
+    return text
+
+
 def _compile_slide_scene_prompt(
     *, brief: str, plan: dict[str, Any], opportunity_summary: str, evidence_block: str, content_format: str,
     family: str, function: str, purpose: str, anchor: str = "", direction: str = "",
@@ -232,7 +258,8 @@ def _compile_slide_scene_prompt(
         f"STORY\n{opportunity_summary}\nSupported facts only:\n{evidence_block}\n\n"
         f"SPECIFIC SCENE TO DEPICT (approved plan for this slide)\n{brief}\n"
         + (f"STORY-SPECIFIC ANCHOR (what makes this picture belong to THIS story)\n{anchor}\n" if anchor else "")
-        + (f"WHAT MUST BE PHYSICALLY VISIBLE, AND WHY\n{direction}\n" if direction else "")
+        + (f"WHAT MUST BE PHYSICALLY VISIBLE, AND WHY (the finished slide: every number, price or word it mentions is typography the application adds on top - "
+           f"draw only the scene)\n{direction}\n" if direction else "")
         + 
         f"Slide purpose: {purpose or 'primary visual'}. Media function: {function or 'hero'}.\n\n"
         f"OVERALL IDEA\n{plan.get('main_idea') or opportunity_summary}\n"

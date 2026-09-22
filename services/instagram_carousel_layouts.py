@@ -621,7 +621,12 @@ def _render_scaled_up(*, spec, layout, slide_copy, index, total, subject_assets,
     best = attempt(None)
     if best is None:
         return None
-    if _headline_px(best[0]) < _headline_floor(spec, index):
+    side = str(best[2]["media_scale_orientation"]).startswith("side")
+    # a 0.34-wide side column holds display type only for short words: one long Russian word ("начинается") fits it at ~70px and
+    # leaves most of the column empty (real iteration-5 run, 8 of 20 slides). A side column must reach the hook's display size to be
+    # kept; otherwise the full-width band competes and the larger headline wins.
+    display = HOOK_HEADLINE_FLOOR_FRAC * spec.width if side else _headline_floor(spec, index)
+    if _headline_px(best[0]) < max(display, _headline_floor(spec, index)):
         # e.g. an unbreakable product name in a narrow side column: a full-width band may carry it at display size
         for orientation in ("text_top", "text_bottom"):
             if orientation == best[2]["media_scale_orientation"]:
