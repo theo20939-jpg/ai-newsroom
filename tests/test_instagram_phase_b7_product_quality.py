@@ -222,3 +222,32 @@ def test_evidence_for_slide_scopes_to_the_slides_own_source_evidence_when_no_rec
     assert _evidence_for_slide(whole_post, recap_slide) == ["[story_1] Первая история.", "[story_1] Ещё про первую."]  # unchanged recap behaviour
     empty_slide = {"media_subject": None, "source_evidence": None}
     assert _evidence_for_slide(whole_post, empty_slide) == whole_post  # defensive last resort only
+
+
+# ============================================================================================ 3. real run #1 finding: hook teasing a story's OWN image is not asset reuse
+
+
+def test_the_hook_reusing_its_leading_storys_own_image_is_not_a_reuse_violation() -> None:
+    """The exact real Product Quality Pass finding: a NEWS_RECAP hook (media_subject=story_1) legitimately teases that story's
+    own real photo, which ALSO appears on story_1's own dedicated `story` slide. Same subject, same real asset, deliberate -
+    must not block. Two DIFFERENT story slides (or story vs closing) sharing one asset must still block (unchanged, tested
+    elsewhere in test_instagram_phase_b4_content_archetypes.py)."""
+    from schemas.instagram_creative import InstagramCarouselSlideCreative
+    from tests.test_instagram_phase_b4_content_archetypes import _image, _package
+
+    img = _image()
+    slides = [
+        InstagramCarouselSlideCreative(
+            role="hook", slide_copy="Открываем неделю", visual_direction="v", composition="contained_media", media_position="top",
+            media_subject="story_1", must_match_story=True,
+        ),
+        InstagramCarouselSlideCreative(
+            role="story", slide_copy="Story about story_1", visual_direction="v", composition="contained_media", media_position="top",
+            media_subject="story_1", must_match_story=True,
+        ),
+        InstagramCarouselSlideCreative(role="closing", slide_copy="Итог", visual_direction="v", composition="typographic"),
+    ]
+    pkg = _package(slides, archetype="news_recap")
+    results = render_instagram_carousel(pkg, slide_images={0: img, 1: img}, asset_identities={0: "story1-photo", 1: "story1-photo"})
+    art = validate_instagram_art(pkg, results)
+    assert not any("news_recap_asset_reuse_violation" in b for b in art.blocking_issues), art.blocking_issues

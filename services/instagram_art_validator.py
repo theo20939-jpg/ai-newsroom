@@ -223,10 +223,18 @@ def validate_instagram_art(
 
         # NEWS_RECAP's hard requirement (spec B.4 section 10/17): cross-slide asset uniqueness applies
         # to news_recap ONLY. must_match_story on any other archetype carries no uniqueness meaning.
+        # Product Quality Pass (Phase B.7): the HOOK slide is excluded from the uniqueness set. A recap
+        # legitimately opens by teasing its leading story's own real photo before that same story's own
+        # dedicated `story` slide - same subject, same real asset, deliberate, not a resolver mistake. The
+        # check still catches its real purpose: two DIFFERENT `story` slides (or a story slide and the
+        # closing slide) sharing one real asset, which is exactly the "wrong/duplicated story image"
+        # integrity failure this check exists for.
         if is_news_recap:
+            planned_roles = {int(s.get("index", i)): str(s.get("role") or "") for i, s in enumerate(package.media_plan.get("slides") or []) if isinstance(s, dict)}
             story_slides = [
                 (r.evidence.slide_index, r.evidence.notes.get("media_asset_identity"))
-                for r in render_results if r.evidence.notes.get("must_match_story")
+                for r in render_results
+                if r.evidence.notes.get("must_match_story") and planned_roles.get(r.evidence.slide_index) != "hook"
             ]
             seen_identities: dict[str, int] = {}
             for slide_index, asset_identity in story_slides:
