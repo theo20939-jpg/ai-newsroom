@@ -111,9 +111,12 @@ def profile_asset(image: Image.Image, *, subject_key: str) -> AssetProfile:
                         round(min(1.0, share), 2), tuple(options), dominant_colours_90(rgb))
 
 
-def render_profile_lines(profile: AssetProfile, *, pool_size: int, allowed_functions: str, include_suitability: bool = False) -> str:
+def render_profile_lines(profile: AssetProfile, *, pool_size: int, allowed_functions: str, include_suitability: bool = False,
+                         suitable_override: bool | None = None) -> str:
+    """`suitable_override`: a narrower verdict about this image (services.instagram_source_suitability) replacing the deterministic one."""
     families = profile.compatible_families(pool_size=pool_size)
-    if include_suitability and not profile.suitable_for_final_visual:
+    suitable = profile.suitable_for_final_visual if suitable_override is None else suitable_override
+    if include_suitability and not suitable:
         return (f"subject key '{profile.subject_key}': SOURCE_AVAILABLE: yes. SOURCE_SUITABLE_FOR_FINAL_VISUAL: NO - a flat article / text / social card whose content is "
                 "baked-in text. Keep it as evidence only: do NOT use it as a hero, an immersive field or a primary image, and do not plan text on it. Plan a GENERATED "
                 "contextual visual for this subject instead (it may appear only as a small supporting collage fragment when that genuinely helps).")

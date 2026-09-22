@@ -128,6 +128,76 @@ def _fit_in_box(draw, text: str, *, box_w: int, box_h: int, token: str, max_line
     return font, lines, box_h, True
 
 
+CARD_ON_DARK = (48, 51, 60)  # a card must read as a card on both ink and graphite grounds, not vanish into a same-colour surface
+GRAPHIC_LABEL_MAX_FRAC = 0.075  # graphic labels are read at phone size: up to ~80px, never the old fixed 29px
+GRAPHIC_LABEL_MIN_FRAC = 0.042
+
+
+def _fit_label(draw, text: str, box_w: int, box_h: int, *, W: int, weight: str = "black"):
+    """Largest font (GRAPHIC_LABEL_MIN..MAX of the canvas width) whose label, wrapped to at most two lines, fits the box."""
+    size = round(min(W * GRAPHIC_LABEL_MAX_FRAC, box_h * 0.8))
+    floor = round(W * GRAPHIC_LABEL_MIN_FRAC)
+    while True:
+        font = ig_font(max(size, floor), weight)
+        lines = _wrap(draw, text, font, box_w)
+        heights = [draw.textbbox((0, 0), ln, font=font)[3] - draw.textbbox((0, 0), ln, font=font)[1] for ln in lines]
+        gap = round(font.size * 0.12)
+        block_h = sum(heights) + gap * max(0, len(lines) - 1)
+        if size <= floor or (len(lines) <= 2 and block_h <= box_h and all(draw.textlength(ln, font=font) <= box_w for ln in lines)):
+            return font, lines, block_h, gap
+        size -= 3
+
+
+def _draw_label(draw, lines, font, gap, x: float, y_mid: float, block_h: int, fill, *, center_w: int | None = None) -> None:
+    py = y_mid - block_h / 2
+    for ln in lines:
+        bb = draw.textbbox((0, 0), ln, font=font)
+        px = x + ((center_w - (bb[2] - bb[0])) / 2 if center_w is not None else 0)
+        draw.text((px, py - bb[1]), ln, font=font, fill=fill)
+        py += (bb[3] - bb[1]) + gap
+
+
+def _draw_flow(draw, tokens: list[str], x0: int, y0: int, w: int, h: int, *, W: int, accent, dark_bg: bool) -> None:
+    """A flow is drawn at the scale of its region: a tall region becomes a stack of full-width numbered step cards (the reference's
+    interface-card slides), a wide one a row of cards; labels are fitted to each card, never a fixed small size."""
+    n = len(tokens)
+    card_fill = CARD_ON_DARK if dark_bg else SURFACE_SOFT
+    if h >= 0.55 * w:
+        gap = round(h * 0.05)
+        card_h = (h - gap * (n - 1)) // n
+        pad = round(card_h * 0.22)
+        num_font = ig_font(round(min(card_h * 0.55, W * 0.11)), "black")
+        num_w = round(draw.textlength("00", font=num_font))
+        for i, token in enumerate(tokens):
+            cy0 = y0 + i * (card_h + gap)
+            last = i == n - 1
+            draw.rounded_rectangle([x0, cy0, x0 + w, cy0 + card_h], radius=round(card_h * 0.18),
+                                   fill=(*(accent if last else card_fill), 255), outline=(*accent, 255), width=4)
+            number = f"{i + 1:02d}"
+            nb = draw.textbbox((0, 0), number, font=num_font)
+            draw.text((x0 + pad, cy0 + (card_h - (nb[3] - nb[1])) / 2 - nb[1]), number, font=num_font,
+                      fill=tok.PAPER if last else accent)
+            lx = x0 + pad * 2 + num_w
+            font, lines, block_h, lgap = _fit_label(draw, token, x0 + w - pad - lx, card_h - pad, W=W)
+            _draw_label(draw, lines, font, lgap, lx, cy0 + card_h / 2, block_h, tok.PAPER if (last or dark_bg) else tok.INK)
+            if not last:
+                cx = x0 + pad + num_w // 2
+                draw.line([(cx, cy0 + card_h + 4), (cx, cy0 + card_h + gap - 4)], fill=(*accent, 255), width=6)
+        return
+    gap = round(W * 0.03)
+    node_w = (w - gap * (n - 1)) // n
+    pad = round(node_w * 0.1)
+    for i, token in enumerate(tokens):
+        nx = x0 + i * (node_w + gap)
+        last = i == n - 1
+        draw.rounded_rectangle([nx, y0, nx + node_w, y0 + h], radius=18, fill=(*(accent if last else card_fill), 255), outline=(*accent, 255), width=4)
+        font, lines, block_h, lgap = _fit_label(draw, token, node_w - 2 * pad, h - 2 * pad, W=W)
+        _draw_label(draw, lines, font, lgap, nx, y0 + h / 2, block_h, tok.PAPER if (last or dark_bg) else tok.INK, center_w=node_w)
+        if not last:
+            cy = y0 + h // 2
+            draw.line([(nx + node_w + 4, cy), (nx + node_w + gap - 4, cy)], fill=(*accent, 255), width=6)
+
+
 def _luma_stats(canvas: Image.Image, box: tuple[int, int, int, int]) -> tuple[float, int, int]:
     """(mean, p10, p90) of the luminance of the pixels currently under `box`."""
     hist = canvas.crop(box).convert("L").histogram()
@@ -599,7 +669,7 @@ def _render_declared_once(
                     continue
                 gap = round(W * 0.018)
                 card_h = (h - gap * (len(options) - 1)) // len(options)
-                font = ig_font(max(round(W * _MIN_FONT_FRAC), min(round(card_h * 0.42), round(W * 0.045))), "semibold")
+                font = ig_font(max(round(W * _MIN_FONT_FRAC), min(round(card_h * 0.42), round(W * GRAPHIC_LABEL_MAX_FRAC))), "semibold")
                 for i, option in enumerate(options):
                     cy0 = y0 + i * (card_h + gap)
                     draw.rounded_rectangle([x0, cy0, x1, cy0 + card_h], radius=round(card_h * 0.28), fill=(*SURFACE_SOFT, 255))
@@ -645,18 +715,7 @@ def _render_declared_once(
                 if tokens is None:
                     dropped.append("flow_diagram_without_sequence")
                     continue
-                gap = round(W * 0.03)
-                node_w = (w - gap * (len(tokens) - 1)) // len(tokens)
-                font = ig_font(round(W * 0.027), "semibold")
-                for i, token in enumerate(tokens):
-                    nx = x0 + i * (node_w + gap)
-                    last = i == len(tokens) - 1
-                    draw.rounded_rectangle([nx, y0, nx + node_w, y1], radius=18, fill=(*(accent_default if last else (GRAPHITE if dark_bg else SURFACE_SOFT)), 255), outline=(*accent_default, 255), width=3)
-                    bbox = draw.textbbox((0, 0), token, font=font)
-                    draw.text((nx + (node_w - (bbox[2] - bbox[0])) / 2, y0 + (h - (bbox[3] - bbox[1])) / 2 - bbox[1]), token, font=font, fill=tok.PAPER if (last or dark_bg) else tok.INK)
-                    if not last:
-                        cy = y0 + h // 2
-                        draw.line([(nx + node_w + 4, cy), (nx + node_w + gap - 4, cy)], fill=(*accent_default, 255), width=5)
+                _draw_flow(draw, tokens, x0, y0, w, h, W=W, accent=accent_default, dark_bg=dark_bg)
             ImageDraw.Draw(content_mask).rectangle([x0, y0, x1, y1], fill=255)
             layers += 1
         elif region.kind == "text":

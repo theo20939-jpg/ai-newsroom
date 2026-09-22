@@ -358,6 +358,29 @@ async def main() -> None:
 
     cd_module._call_creative_director = counting_call
 
+    # Loop iteration 4: the narrow source-suitability vision check goes through the same budgeted gateway; every call is counted, costed
+    # into the same projection as the Creative Director calls and recorded per archetype.
+    import services.instagram_source_suitability as suit_module
+
+    real_vision = suit_module._call_vision
+
+    async def counting_vision(gw, request, runtime):
+        if real and not captured.get("replay") and ledger_spent + calls["actual"] + worst_each > daily_budget:
+            raise RuntimeError("SAFE_STOP: projected spend would exceed the daily budget")
+        outcome = await real_vision(gw, request, runtime)
+        captured["vision_calls"] = int(captured.get("vision_calls") or 0) + 1
+        if real and getattr(outcome, "call", None) is not None:
+            try:
+                cost = compute_call_cost(outcome.call, pricing)
+            except Exception:  # noqa: BLE001
+                cost = Decimal("0.02")
+            calls["actual"] += cost
+            captured["vision_cost"] = (captured.get("vision_cost") or Decimal(0)) + cost
+            await diag_tracker.record(uuid4(), suit_module.PROMPT_NAME, outcome.call)
+        return outcome
+
+    suit_module._call_vision = counting_vision
+
     def raw_sink(event: str, payload: dict) -> None:
         target = captured.get("target_dir")
         if target is None:
@@ -439,6 +462,10 @@ async def _run_one(name, session, gateway_factory, prompt_repo, pricing, out_dir
     spec = common.SCENARIOS[name]
     captured.clear()
     captured["replay"] = replay is not None
+    import services.instagram_source_suitability as suit_module
+
+    captured["vision_verdicts"] = []
+    suit_module.set_verdict_sink(captured["vision_verdicts"])
     captured["target_dir"] = out_dir / name
     captured["model_source"] = ("REUSED B.5.1.1 REAL OUTPUT" if name in REUSABLE_ARCHETYPES else "REUSED B.5.1.2 REAL OUTPUT") if replay is not None else ("NEW B.5.1.2 REAL CALL" if real else "FIXTURE_NOT_MODEL")
     trend_signal = None
@@ -562,6 +589,8 @@ def _b6_fields(model_output: dict, obs: dict | None, seen: dict, captured: dict,
         "source_card_used_as_hero": any(p["source_card_area"] > 0.10 for p in per_slide), "kage_voice_in_input": bool(getattr(di, "kage_voice_context", "")),
         "kage_voice_sha256_prefix": (getattr(di, "kage_voice_context", "").split("sha256 ")[1][:12] if getattr(di, "kage_voice_context", "") else None),
         "media_slides": per_slide,
+        "source_suitability_verdicts": list(captured.get("vision_verdicts") or []),
+        "vision_calls": int(captured.get("vision_calls") or 0), "vision_cost_usd": str(captured.get("vision_cost") or Decimal(0)),
     }
 
 

@@ -512,8 +512,45 @@ _GENERATED_OPTION_NOTE = (
 )
 
 
-def _carousel_media_subjects(*, source_image: Any, recap_bundle: InstagramRecapBundle | None) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """(listed real subject keys, the subset that is NOT suitable as a final visual). Deterministic, from the same asset profile the note uses."""
+def _carousel_source_images(*, source_image: Any, recap_bundle: InstagramRecapBundle | None) -> list[tuple[str, Any]]:
+    """(subject key, decoded image) for every real source image of this post."""
+    images: list[tuple[str, Any]] = []
+    if recap_bundle is not None:
+        for story in recap_bundle.stories:
+            if story.image_bytes:
+                try:
+                    with Image.open(BytesIO(story.image_bytes)) as decoded:
+                        images.append((story.key, decoded.copy()))
+                except (OSError, ValueError):
+                    continue
+    elif source_image is not None:
+        images.append(("source", source_image))
+    return images
+
+
+async def _vision_unsuitable_subjects(*, gateway: Any, prompt_repository: Any, source_image: Any,
+                                      recap_bundle: InstagramRecapBundle | None) -> frozenset[str]:
+    """Keys of source images that passed the deterministic flat-card test but that the narrow vision check
+    (services.instagram_source_suitability) reads as a text / article / promo / interface card. Only this post's candidates for primary
+    media are checked; an unknown verdict (error) keeps the deterministic one."""
+    from services.instagram_asset_profile import profile_asset
+    from services.instagram_source_suitability import check_primary_suitability
+
+    candidates = []
+    for key, image in _carousel_source_images(source_image=source_image, recap_bundle=recap_bundle):
+        try:
+            if profile_asset(image.convert("RGBA" if image.mode == "RGBA" else "RGB"), subject_key=key).suitable_for_final_visual:
+                candidates.append((key, image))
+        except (OSError, ValueError):
+            continue
+    verdicts = await check_primary_suitability(gateway, prompt_repository, candidates)
+    return frozenset(k for k, v in verdicts.items() if v.suitable is False)
+
+
+def _carousel_media_subjects(*, source_image: Any, recap_bundle: InstagramRecapBundle | None,
+                             vision_unsuitable: frozenset[str] = frozenset()) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """(listed real subject keys, the subset that is NOT suitable as a final visual). Deterministic, from the same asset profile the note
+    uses, plus any key the narrow vision check found unsuitable."""
     from services.instagram_asset_profile import profile_asset
 
     available: list[str] = []
@@ -521,6 +558,9 @@ def _carousel_media_subjects(*, source_image: Any, recap_bundle: InstagramRecapB
 
     def add(key: str, image: Any) -> None:
         available.append(key)
+        if key in vision_unsuitable:
+            unsuitable.append(key)
+            return
         try:
             if not profile_asset(image.convert("RGBA" if image.mode == "RGBA" else "RGB"), subject_key=key).suitable_for_final_visual:
                 unsuitable.append(key)
@@ -540,7 +580,8 @@ def _carousel_media_subjects(*, source_image: Any, recap_bundle: InstagramRecapB
     return tuple(available), tuple(unsuitable)
 
 
-def _carousel_media_note(*, source_image: Any, recap_bundle: InstagramRecapBundle | None, media_first: bool = False) -> str:
+def _carousel_media_note(*, source_image: Any, recap_bundle: InstagramRecapBundle | None, media_first: bool = False,
+                         vision_unsuitable: frozenset[str] = frozenset()) -> str:
     """Real media availability, told to the Creative Director so it plans against what exists. Phase B.5.1: every real image
     carries a deterministic PROFILE (calm text zones per crop, uniform-ground object suitability) so the model can only plan
     visual families the media honestly supports."""
@@ -560,13 +601,15 @@ def _carousel_media_note(*, source_image: Any, recap_bundle: InstagramRecapBundl
             try:
                 with Image.open(BytesIO(story.image_bytes)) as decoded:
                     profile = profile_asset(decoded.convert("RGBA" if decoded.mode == "RGBA" else "RGB"), subject_key=story.key)
-                lines.append(render_profile_lines(profile, pool_size=len(with_image), allowed_functions="hero, detail, evidence_photo", include_suitability=media_first))
+                lines.append(render_profile_lines(profile, pool_size=len(with_image), allowed_functions="hero, detail, evidence_photo", include_suitability=media_first,
+                                                  suitable_override=False if story.key in vision_unsuitable else None))
             except (OSError, ValueError):
                 lines.append(f"{story.key}: image could not be profiled - treat as NO usable image")
         return "\n".join(lines + ([_GENERATED_OPTION_NOTE] if media_first else []))
     if source_image is not None:
         return (
-            render_profile_lines(profile_asset(source_image, subject_key="source"), pool_size=1, allowed_functions="hero, detail, evidence_photo", include_suitability=media_first)
+            render_profile_lines(profile_asset(source_image, subject_key="source"), pool_size=1, allowed_functions="hero, detail, evidence_photo", include_suitability=media_first,
+                                 suitable_override=False if "source" in vision_unsuitable else None)
             + ("\n" + _GENERATED_OPTION_NOTE if media_first else "")
             + "\nThe image may be used on several slides or several times on one slide with different crops. It is NOT a screenshot, a result image, "
               "a before/after or a concept visual: plan graphics for those."
@@ -797,8 +840,12 @@ async def evaluate_and_submit_instagram_opportunity(
             logger.warning("instagram_fatigue_history_unavailable", extra={"opportunity_id": opportunity.id})
 
     media_first = format_decision.recommended_format is ContentFormat.CAROUSEL and CAROUSEL_PROMPT_VERSION in MEDIA_FIRST_CAROUSEL_VERSIONS
+    vision_unsuitable: frozenset[str] = frozenset()
+    if media_first:
+        vision_unsuitable = await _vision_unsuitable_subjects(gateway=gateway, prompt_repository=prompt_repository,
+                                                              source_image=source_image, recap_bundle=recap_bundle)
     media_subjects = (
-        _carousel_media_subjects(source_image=source_image, recap_bundle=recap_bundle)
+        _carousel_media_subjects(source_image=source_image, recap_bundle=recap_bundle, vision_unsuitable=vision_unsuitable)
         if format_decision.recommended_format is ContentFormat.CAROUSEL else ((), ())
     )
     director_input = CreativeDirectorInput(
@@ -817,7 +864,7 @@ async def evaluate_and_submit_instagram_opportunity(
         visual_dna_context=_visual_dna_context() if format_decision.recommended_format is ContentFormat.CAROUSEL else "",
         visual_dna_version=_visual_dna_version() if format_decision.recommended_format is ContentFormat.CAROUSEL else "",
         media_note=(
-            _carousel_media_note(source_image=source_image, recap_bundle=recap_bundle, media_first=media_first)
+            _carousel_media_note(source_image=source_image, recap_bundle=recap_bundle, media_first=media_first, vision_unsuitable=vision_unsuitable)
             if format_decision.recommended_format is ContentFormat.CAROUSEL else ""
         ),
         media_first=media_first,

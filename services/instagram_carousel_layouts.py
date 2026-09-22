@@ -563,6 +563,34 @@ def _headline_floor(spec, index: int) -> float:
     return (HOOK_HEADLINE_FLOOR_FRAC if index == 0 else HEADLINE_FLOOR_FRAC) * spec.width
 
 
+def _render_graphic_scaled(*, spec, layout, slide_copy, index, total, subject_assets, visual_direction):
+    """A slide whose only visual is one small substantive graphic gets the canvas (services.instagram_graphic_scale_adapter).
+    Returns (result, validated, notes) only when the adapted plan passes the SAME validator and renders without clipping."""
+    from services.instagram_declarative_layout import DeclaredRenderRejected, render_declared_slide
+    from services.instagram_graphic_scale_adapter import adapt_graphic_scale
+    from services.instagram_layout_validation import validate_layout
+
+    adapted = adapt_graphic_scale(layout)
+    if adapted is None:
+        return None
+    new_layout, notes = adapted
+    validated = validate_layout(new_layout, slide_copy=slide_copy, resolvable_subjects=set(subject_assets))
+    if not validated.accepted or validated.layout is None:
+        return None
+    try:
+        result = render_declared_slide(
+            spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
+            subject_assets=subject_assets, visual_direction=visual_direction, progress_hidden=validated.progress_hidden,
+            adapt_calm_zone=True,
+        )
+    except DeclaredRenderRejected:
+        return None
+    if result.text_clipped or result.notes.get("graphic_fallback_used"):
+        return None
+    result.notes.update(notes)
+    return result, validated, notes
+
+
 def _render_scaled_up(*, spec, layout, slide_copy, index, total, subject_assets, visual_direction, force=False):
     """A media-first slide whose one media region is a small inset (or whose plan was rejected, `force`) is re-laid edge to edge
     (services.instagram_media_scale_adapter). Returns (result, validated, notes) only when the adapted plan passes the SAME layout
@@ -645,6 +673,9 @@ def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets
     if media_mode in ("SOURCE", "GENERATED"):
         scaled = _render_scaled_up(spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
                                    subject_assets=subject_assets, visual_direction=visual_direction)
+    else:
+        scaled = _render_graphic_scaled(spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
+                                        subject_assets=subject_assets, visual_direction=visual_direction)
     if scaled is not None:
         result, validated, scale_notes = scaled
         result.notes.update(scale_notes)
@@ -684,7 +715,7 @@ def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets
                 scaled = bigger
     adaptations = [f"{i.code}" for i in validated.issues if i.severity in ("adapted", "note")]
     if scaled is not None:
-        adaptations.append("media_scale_adapted")
+        adaptations.append("graphic_scale_adapted" if scaled[2].get("graphic_scale_adapted") else "media_scale_adapted")
     if layout.arrangement == "collage":
         result.notes.update(collage_notes or {"collage_geometry_adapted": False})
         if collage_notes:
