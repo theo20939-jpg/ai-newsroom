@@ -248,11 +248,17 @@ def _compile_slide_scene_prompt(
 
 
 def _evidence_for_slide(evidence: list[str], slide: Any | None) -> list[str]:
-    """NEWS_RECAP: a story's image is generated from THAT story's evidence only ('[story_N] ...' lines), never the other stories' facts."""
+    """Phase B.6/B.7: a slide's generated image is grounded ONLY in the evidence that belongs to it - never the whole post's
+    evidence blob. NEWS_RECAP: that story's own bullets ('[story_N] ...' lines, via media_subject). Any other slide: exactly
+    the one sentence its own `source_evidence` handle resolved to (services.instagram_creative_director resolves this before
+    media execution runs). The full list is a last-resort fallback only for a caller/slide that supplies neither."""
     key = _slide_value(slide, "media_subject") if slide is not None else ""
     prefix = f"[{key}]"
     own = [line for line in evidence if key and line.startswith(prefix)]
-    return own or list(evidence)
+    if own:
+        return own
+    single = _slide_value(slide, "source_evidence") if slide is not None else ""
+    return [single] if single else list(evidence)
 
 
 def _slide_value(slide: Any, name: str) -> str:

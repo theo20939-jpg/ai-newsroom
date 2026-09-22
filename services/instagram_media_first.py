@@ -23,7 +23,6 @@ GENERIC_AI_ART_TERMS = (
     "glowing cube", "floating cube", "floating sphere", "glowing sphere", "random geometry", "floating geometry", "ai brain", "glowing brain", "robot", "hologram",
     "cyberpunk", "monolith", "neon circuit", "neon grid", "glowing core", "digital brain", "мозг", "робот", "голограмм", "киберпанк", "монолит",
 )
-VAGUE_DIRECTION_PHRASES = ("futuristic ai visual", "abstract technology scene", "dynamic ai composition", "futuristic technology", "abstract ai", "футуристичн")
 _UNSUITABLE_MAX_AREA = 0.10  # an unsuitable source (article card / flat graphic) may only be a small supporting collage fragment
 
 
@@ -79,10 +78,14 @@ def _only_small_fragment(slide: Any, ref: str) -> bool:
 
 
 def find_generic_ai_art(text: str, evidence: list[str]) -> list[str]:
+    """Phase B.7: GENERIC_AI_ART_TERMS only - each hit is excused when the slide's OWN evidence is literally about that
+    object. There is no separate unescaped "vague phrase" denylist any more: it was redundant with MIN_VISUAL_DIRECTION_CHARS
+    (a genuinely lazy one-liner can no longer reach that length) and, having no evidence escape hatch, it false-positived on
+    real grounded prose ("two abstract AI model cores" for a real two-model release). Grounding is now asserted structurally
+    via the slide's own `source_evidence` handle (assert_media_first below), not by guessing from word choice."""
     lowered = str(text or "").lower()
     blob = " ".join(evidence).lower()
-    hits = [t for t in GENERIC_AI_ART_TERMS if t in lowered and t not in blob]
-    return hits + [p for p in VAGUE_DIRECTION_PHRASES if p in lowered]
+    return [t for t in GENERIC_AI_ART_TERMS if t in lowered and t not in blob]
 
 
 def assert_hook_contract(slides: list[Any], *, require_mechanic: bool = False) -> None:
@@ -110,7 +113,10 @@ def assert_hook_contract(slides: list[Any], *, require_mechanic: bool = False) -
 def assert_media_first(
     slides: list[Any], *, available_subjects: set[str], unsuitable_subjects: set[str], evidence: list[str] | None = None,
 ) -> None:
-    """Raise MediaFirstContractError unless every slide has a meaningful visual idea that its own layout actually executes."""
+    """Raise MediaFirstContractError unless every slide has a meaningful visual idea that its own layout actually executes.
+
+    `evidence` (the whole post's evidence) is accepted for caller-signature compatibility but no longer consulted (Phase B.7):
+    a generated slide's grounding is now checked against its OWN resolved `source_evidence` handle, not the post-wide blob."""
     generated = 0
     for index, slide in enumerate(slides):
         source = _get(slide, "media_source")
@@ -128,8 +134,14 @@ def assert_media_first(
                 raise MediaFirstContractError(f"{where}: a generated slide needs a story_anchor - the concrete story-specific thing that makes the image belong to THIS story")
             if len(str(_get(slide, "visual_direction") or "").strip()) < MIN_VISUAL_DIRECTION_CHARS:
                 raise MediaFirstContractError(f"{where}: a generated slide's visual_direction must say what is visible, the story-specific subject, the relationship shown and why it supports the slide")
+            # Phase B.7: grounding is structural, not lexical - a generated slide must cite the evidence handle its image is
+            # FOR (services.instagram_creative_director resolves it to the exact canonical sentence before this runs), and
+            # only THAT sentence - never the whole post's evidence - excuses a GENERIC_AI_ART_TERMS hit.
+            slide_evidence_text = str(_get(slide, "source_evidence") or "").strip()
+            if not slide_evidence_text:
+                raise MediaFirstContractError(f"{where}: a generated slide needs source_evidence (a cited evidence handle) so its image is grounded in that slide's own evidence")
             generic = find_generic_ai_art(
-                " ".join(str(_get(slide, k) or "") for k in ("generation_brief", "story_anchor", "visual_direction")), evidence or [])
+                " ".join(str(_get(slide, k) or "") for k in ("generation_brief", "story_anchor", "visual_direction")), [slide_evidence_text])
             if generic:
                 raise MediaFirstContractError(f"{where}: generic AI-art default in a generated visual plan: {generic}")
         elif source == "source":

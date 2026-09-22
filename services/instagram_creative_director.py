@@ -99,11 +99,11 @@ EDITORIAL_DECISION_PROMPT_NAME = "instagram_editorial_decision"
 # shipped prompt version in place" convention.
 _SINGLE_PROMPT_VERSION = "6"
 _CREATIVE_DIRECTOR_MAX_TOKENS = 16_000  # upper safety bound (not a target): keeps the gateway worst-case estimate from pricing a model-maximum completion
-_CAROUSEL_PROMPT_VERSION = "10.2"  # Phase B.5.1.2: v9.1 = v9 + evidence-reference contract (E1..En handles); v9 = Visual DNA v2 families, bounded roles, meta-language guard
+_CAROUSEL_PROMPT_VERSION = "10.3"  # Phase B.5.1.2: v9.1 = v9 + evidence-reference contract (E1..En handles); v9 = Visual DNA v2 families, bounded roles, meta-language guard
 CAROUSEL_PROMPT_VERSION = _CAROUSEL_PROMPT_VERSION
-_EVIDENCE_HANDLE_CAROUSEL_VERSIONS = frozenset({"9.1", "10", "10.1", "10.2"})  # prompt versions whose input lists evidence as handles (E1, E2, ...)
-MEDIA_FIRST_CAROUSEL_VERSIONS = frozenset({"10", "10.1", "10.2"})  # Phase B.6: prompt versions under the media-first + KAGE-voice contract
-HOOK_MECHANIC_CAROUSEL_VERSIONS = frozenset({"10.2"})  # Phase B.6.2: prompt versions whose schema carries hook_mechanic
+_EVIDENCE_HANDLE_CAROUSEL_VERSIONS = frozenset({"9.1", "10", "10.1", "10.2", "10.3"})  # prompt versions whose input lists evidence as handles (E1, E2, ...)
+MEDIA_FIRST_CAROUSEL_VERSIONS = frozenset({"10", "10.1", "10.2", "10.3"})  # Phase B.6: prompt versions under the media-first + KAGE-voice contract
+HOOK_MECHANIC_CAROUSEL_VERSIONS = frozenset({"10.2", "10.3"})  # Phase B.6.2: prompt versions whose schema carries hook_mechanic
 _MEDIA_FIRST_CAROUSEL_VERSIONS = MEDIA_FIRST_CAROUSEL_VERSIONS
 _EVIDENCE_HANDLE_RE = re.compile(r"^E([1-9]\d*)$")
 
@@ -632,16 +632,19 @@ def _validate_carousel_output(
         first = exc.errors()[0] if exc.errors() else {}
         raise CreativeContractError(f"{'.'.join(str(p) for p in first.get('loc', ()))}: {first.get('msg', str(exc))[:240]}") from exc
     # Phase B.5.1.2: evidence handles (or, for legacy output, exact canonical strings) resolve back to the exact canonical evidence; anything
-    # else raises UngroundedEvidenceError. source_evidence handles resolve the same way (free text there is a display label and stays as-is).
+    # else raises UngroundedEvidenceError.
     canonical_used = resolve_evidence_references(creative.evidence_used, director_input.allowed_evidence)
-    handles = evidence_handle_map(director_input.allowed_evidence)
+    # Phase B.7: a slide's source_evidence is resolved through the SAME handle-or-exact-canonical-string function as evidence_used
+    # above (never a bespoke parallel check) - an invented/unresolvable reference now raises exactly like evidence_used already
+    # does. This is also the structural grounding signal generated-media prompts and the generic-AI-art guard rely on
+    # (services.instagram_media_first) instead of scanning prose for banned words. Gated on the same handle-using prompt
+    # versions as evidence_used, so pre-handle output keeps its exact prior lenient (pass-through, unvalidated) behaviour.
+    handle_aware = _uses_evidence_handles(CAROUSEL_PROMPT_NAME, _CAROUSEL_PROMPT_VERSION)
     slides = []
     for slide in creative.slides:
         ref = (slide.source_evidence or "").strip()
-        if _EVIDENCE_HANDLE_RE.match(ref):
-            if ref not in handles:
-                raise UngroundedEvidenceError(f"slide source_evidence cites an unknown evidence handle: {ref!r}")
-            slide = slide.model_copy(update={"source_evidence": handles[ref]})
+        if ref and handle_aware:
+            slide = slide.model_copy(update={"source_evidence": resolve_evidence_references([ref], director_input.allowed_evidence)[0]})
         slides.append(slide)
     creative = creative.model_copy(update={"evidence_used": canonical_used, "slides": slides})
     emitted_archetype = creative.content_archetype
