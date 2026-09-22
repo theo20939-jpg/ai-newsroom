@@ -158,8 +158,10 @@ def test_the_number_of_checks_per_post_is_bounded(monkeypatch):
 
 
 def _photo_like():
-    from pathlib import Path
-    return Image.open(Path(__file__).resolve().parent.parent / "artifacts" / "instagram_phase_b5r1" / "real_media" / "imm_blacksmith.jpg").convert("RGB")
+    """many hues at the profile's 96px scale - passes the deterministic flat-card test, so it is a real vision candidate"""
+    return Image.merge("RGB", (
+        Image.linear_gradient("L").resize((1200, 900)), Image.linear_gradient("L").rotate(90).resize((1200, 900)),
+        Image.radial_gradient("L").resize((1200, 900))))
 
 
 def test_a_vision_unsuitable_source_is_marked_unsuitable_everywhere_the_director_and_the_contract_read_it(monkeypatch):
