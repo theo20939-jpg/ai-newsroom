@@ -58,7 +58,7 @@ def test_v10_makes_generated_media_first_class_and_v91_is_untouched() -> None:
     assert v10["version"] == "10" and "generated_media is not available" not in text
     assert "GENERATED media is FIRST-CLASS" in text and "There is no typographic-only slide" in text
     assert "generation_brief" in text and "content_ref is `generated`" in text
-    assert cd.CAROUSEL_PROMPT_VERSION == "10.1" and "10" in cd.MEDIA_FIRST_CAROUSEL_VERSIONS and "10.1" in cd.MEDIA_FIRST_CAROUSEL_VERSIONS and "10.1" in cd._EVIDENCE_HANDLE_CAROUSEL_VERSIONS
+    assert cd.CAROUSEL_PROMPT_VERSION == "10.2" and "10" in cd.MEDIA_FIRST_CAROUSEL_VERSIONS and "10.1" in cd.MEDIA_FIRST_CAROUSEL_VERSIONS and "10.1" in cd._EVIDENCE_HANDLE_CAROUSEL_VERSIONS
 
 
 def test_v10_schema_requires_a_visual_source_on_every_slide_and_never_typographic() -> None:
@@ -200,7 +200,8 @@ def _slide_dict(role, copy_text, source, regions, *, brief=None, family="light_u
             "visual_direction": DIRECTION if generated else "v",
             "media_subject": subject, "media_function": "hero" if source != "graphic" else "none", "must_match_story": False, "layout": layout,
             "visual_family": family, "visual_family_reason": "fit", "media_source": source, "generation_brief": brief,
-            "hook_emotion": "tension" if role == "hook" else None, "story_anchor": ANCHOR if generated else None}
+            "hook_emotion": "tension" if role == "hook" else None, "hook_mechanic": "contradiction" if role == "hook" else None,
+            "story_anchor": ANCHOR if generated else None}
     base.update(kw)
     return base
 
@@ -215,7 +216,7 @@ def _ok_slides():
     return [
         _slide_dict("hook", "Ты платишь за мощность, которая простаивает", "generated", [_media("generated", 0.0, 0.0, 1.0, 0.55), _text(y=0.62)], brief=BRIEF),
         _slide_dict("evidence", "Простые задачи не требуют флагмана", "graphic", [
-            _r("graphic", 0.08, 0.12, 0.84, 0.36, graphic_type="flow_diagram", tone="accent"), _text(y=0.56)]),
+            _r("graphic", 0.08, 0.12, 0.84, 0.36, graphic_type="flow_diagram", tone="accent", flow_steps=["ВВОД", "ДЕЙСТВИЕ", "РЕЗУЛЬТАТ"]), _text(y=0.56)]),
         _slide_dict("takeaway", "Выбирай модель под задачу", "source", [_media("source", 0.5, 0.1, 0.42, 0.4, frame="paper"), _text(0.08, 0.55, 0.8, 0.24)], subject="source"),
     ]
 
@@ -247,7 +248,8 @@ def test_a_typographic_only_slide_is_rejected() -> None:
 def test_graphic_needs_ui_flow_or_poll_and_a_generated_slide_needs_brief_and_region() -> None:
     for kind in ("ui_frame", "flow_diagram", "poll_cards"):
         slides = _ok_slides()
-        slides[1] = _slide_dict("evidence", "Выбор: A? Да | Нет" if kind == "poll_cards" else "Шаги", "graphic", [_r("graphic", 0.08, 0.12, 0.84, 0.36, graphic_type=kind, tone="accent"), _text(y=0.56)])
+        region_kw = {"flow_steps": ["ВВОД", "ДЕЙСТВИЕ", "РЕЗУЛЬТАТ"]} if kind == "flow_diagram" else {}
+        slides[1] = _slide_dict("evidence", "Выбор: A? Да | Нет" if kind == "poll_cards" else "Шаги", "graphic", [_r("graphic", 0.08, 0.12, 0.84, 0.36, graphic_type=kind, tone="accent", **region_kw), _text(y=0.56)])
         assert_media_first(list(InstagramCarouselCreative.model_validate({**_carousel_output_with_layouts(), "slides": slides}).slides), available_subjects={"source"}, unsuitable_subjects=set())
     slides = _ok_slides()
     slides[0] = {**slides[0], "generation_brief": "коротко"}
@@ -347,7 +349,7 @@ def _generated_carousel():
         _slide_dict("hook", "Ты платишь за мощность, которая простаивает", "generated", [_media("generated", 0.08, 0.06, 0.84, 0.5, frame="paper"), _text(y=0.62)], brief=BRIEF),
         _slide_dict("evidence", "Простым задачам не нужен флагман", "generated", [_media("generated", 0.5, 0.08, 0.42, 0.4, frame="paper"), _text(0.08, 0.1, 0.36, 0.3)],
                     brief="Крупный план маленькой платы, которая тянет простую задачу, рядом выключенная стойка"),
-        _slide_dict("takeaway", "Выбирай модель под задачу", "graphic", [_r("graphic", 0.08, 0.12, 0.84, 0.36, graphic_type="flow_diagram", tone="accent"), _text(y=0.56)]),
+        _slide_dict("takeaway", "Выбирай модель под задачу", "graphic", [_r("graphic", 0.08, 0.12, 0.84, 0.36, graphic_type="flow_diagram", tone="accent", flow_steps=["ВВОД", "ДЕЙСТВИЕ", "РЕЗУЛЬТАТ"]), _text(y=0.56)]),
     ]
     slides[2]["visual_direction"] = "«Задача → Модель → Результат»"
     return InstagramCarouselCreative.model_validate({**_carousel_output_with_layouts(), "slides": slides})
@@ -491,7 +493,7 @@ async def test_the_media_first_contract_is_off_unless_the_caller_asks_and_fact_s
 def _live_slides():
     slides = [
         _slide_dict("hook", "Ты платишь за мощность, которая простаивает", "generated", [_media("generated", 0.08, 0.06, 0.84, 0.5, frame="paper"), _text(y=0.62)], brief=BRIEF),
-        _slide_dict("evidence", "Простые задачи не требуют флагмана", "graphic", [_r("graphic", 0.08, 0.12, 0.84, 0.36, graphic_type="flow_diagram", tone="accent"), _text(y=0.56)]),
+        _slide_dict("evidence", "Простые задачи не требуют флагмана", "graphic", [_r("graphic", 0.08, 0.12, 0.84, 0.36, graphic_type="flow_diagram", tone="accent", flow_steps=["ВВОД", "ДЕЙСТВИЕ", "РЕЗУЛЬТАТ"]), _text(y=0.56)]),
         _slide_dict("takeaway", "Выбирай модель под задачу", "source", [_media("source", 0.5, 0.1, 0.42, 0.4, frame="paper"), _text(0.08, 0.55, 0.8, 0.24)], subject="source"),
     ]
     slides[1]["visual_direction"] = "«Задача → Модель → Результат»"
@@ -538,7 +540,7 @@ async def test_live_trigger_runs_the_media_first_pipeline_end_to_end(db_session,
     assert "SOURCE_SUITABLE_FOR_FINAL_VISUAL: yes" in request_text and "GENERATED media is a first-class option" in request_text
     assert len(calls) == 1 and calls[0]["max_attempts"] == 1  # exactly the ONE generated slide; no retries
     obs = captured["package"].media_plan["b4_observability"]
-    assert obs["prompt_version"] == "10.1" and obs["text_only_slides"] == [] and obs["typographic_final_media_slides"] == []
+    assert obs["prompt_version"] == "10.2" and obs["text_only_slides"] == [] and obs["typographic_final_media_slides"] == []
     assert [s["media_source"] for s in obs["slides"]] == ["generated", "graphic", "source"]
     assert obs["overlay_operations_executed_total"] == 0 and obs["art_validation_passed"] is True, obs["art_blocking_issues"]
     plan = captured["package"].media_plan

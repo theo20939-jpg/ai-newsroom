@@ -406,10 +406,17 @@ async def main() -> None:
                           "typographic_final_media_slides": r.get("typographic_final_media_slides"), "media_source_counts": r.get("media_source_counts")}
          for r in summary}, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     (out_dir / "hook_review.json").write_text(json.dumps(
-        {r["archetype"]: {"hook": r.get("hook_text"), "hook_emotion": r.get("hook_emotion"), "why_the_emotion_fits_the_fact": r.get("hook_reaction_plan"),
+        {r["archetype"]: {"hook": r.get("hook_text"), "hook_emotion": r.get("hook_emotion"), "hook_mechanic": r.get("hook_mechanic"),
+                          "why_the_emotion_fits_the_fact": r.get("hook_reaction_plan"),
                           "evidence_handle": r.get("hook_evidence_handle"), "weak_generic_newsroom_patterns": r.get("hook_weak_patterns"),
                           "fact_safety_gate": "PASS" if r.get("VALIDATION") == "PASS" or not r.get("contract_error") else "FAIL",
                           "founder_emotional_bar": "AWAITING REVIEW"} for r in summary}, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    (out_dir / "fallback_manifest.json").write_text(json.dumps(
+        {r["archetype"]: {"paid_generated_assets_dropped": r.get("paid_generated_assets_dropped"), "media_preserving_fallbacks_used": r.get("media_preserving_fallbacks_used"),
+                          "slides": [{k: s[k] for k in ("index", "media_source", "declarative_layout", "rejection_reason", "media_preserving_fallback",
+                                                        "meaningful_visual_in_final", "generated_asset_dropped", "chosen_family", "executed_family")}
+                                     for s in (r.get("media_slides") or [])]}
+         for r in summary}, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     result = {"mode": mode, "REAL_MODEL": real, "real_calls": calls["count"], "actual_cost_usd": str(calls["actual"]), "fixture_substitutions": 0,
               "image_provider_calls_ok": image_calls, "image_generation_cost_usd": str(image_cost), "image_generation_live": B6_IMAGES_LIVE,
               "budget_accounting": accounting, "recap_selection": recap_note, "runs": summary}
@@ -527,6 +534,12 @@ def _b6_fields(model_output: dict, obs: dict | None, seen: dict, captured: dict,
             "generic_ai_art": bool(find_generic_ai_art(" ".join(str(sl.get(k) or "") for k in ("generation_brief", "story_anchor", "visual_direction")), list(getattr(di, "allowed_evidence", []) or []))),
             "chosen_family": sl.get("visual_family"), "executed_family": o.get("visual_family_executed"),
             "text_only_slide": o.get("text_only_slide"), "source_card_area": round(card_area, 3),
+            "declarative_layout": "REJECTED" if o.get("layout_plan_rejected") else ("PASS" if o.get("layout_plan_applied") else "N/A"),
+            "rejection_reason": o.get("layout_plan_rejected"),
+            "media_preserving_fallback": bool(o.get("media_preserving_fallback_used")),
+            "meaningful_visual_in_final": not bool(o.get("text_only_slide")),
+            "generated_asset_dropped": bool(o.get("generated_asset_dropped")),
+            "hook_mechanic": sl.get("hook_mechanic"),
         })
         if asset is not None and asset.prompt:
             prompts[str(i)] = asset.prompt
@@ -537,7 +550,10 @@ def _b6_fields(model_output: dict, obs: dict | None, seen: dict, captured: dict,
     hook = slides_raw[0] if slides_raw else {}
     generated = [p for p in per_slide if p["executed_media_mode"] == "GENERATED" and p["media_status"] == "generated_media"]
     return {
-        "hook_text": hook.get("slide_copy"), "hook_emotion": hook.get("hook_emotion"), "hook_reaction_plan": hook.get("slide_purpose"), "hook_evidence_handle": hook.get("source_evidence"),
+        "hook_text": hook.get("slide_copy"), "hook_emotion": hook.get("hook_emotion"), "hook_mechanic": hook.get("hook_mechanic"),
+        "hook_reaction_plan": hook.get("slide_purpose"), "hook_evidence_handle": hook.get("source_evidence"),
+        "paid_generated_assets_dropped": sum(1 for p in per_slide if p["generated_asset_dropped"]),
+        "media_preserving_fallbacks_used": sum(1 for p in per_slide if p["media_preserving_fallback"]),
         "attempt_limit_blocks": sum(1 for p in per_slide if p["media_status"] == "generation_attempt_limit"),
         "hook_weak_patterns": (obs or {}).get("weak_hook_patterns"), "final_caption": model_output.get("final_caption"),
         "media_source_counts": {k: sum(1 for p in per_slide if p["media_source"] == k) for k in ("source", "generated", "graphic")},
