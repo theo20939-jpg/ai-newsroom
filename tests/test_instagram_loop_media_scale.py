@@ -188,3 +188,58 @@ def test_prompt_v10_5_changes_only_the_hook_rule():
     assert v105["version"] == "10.5" and v105["output_schema"] == v104["output_schema"] and len(changed) == 1
     old, new = changed[0]
     assert new.startswith("HOOK CONTRACT (slide 1).") and new.startswith(old[:200]) and "NEVER reuse, translate or paraphrase" in new
+
+
+# ------------------------------------------------------------------------------------------ iteration 3 (real iteration-2 findings)
+
+
+def _collage_hook():
+    """real TREND_GENERATIVE iteration-2 hook shape: a collage of small framed fragments + a scribble, headline rendered at 59px"""
+    return {**REAL_AI_HACK_HOOK, "arrangement": "collage", "palette": "culture", "regions": [
+        _region("surface", 0, 0, 1, 1, z=0, surface="ink"),
+        _region("media", 0.5, 0.12, 0.42, 0.52, z=3, content_ref="generated", crop_mode="cover", frame="paper", tilt_deg=3),
+        _region("media", 0.6, 0.66, 0.2, 0.18, z=4, content_ref="generated", crop_mode="cover", frame="torn", tilt_deg=-6),
+        _region("media", 0.78, 0.8, 0.14, 0.12, z=5, content_ref="generated", crop_mode="cover", frame="die_cut"),
+        _region("graphic", 0.46, 0.1, 0.1, 0.07, z=6, graphic_type="circle_scribble", tone="accent"),
+        _region("text", 0.07, 0.12, 0.38, 0.12, z=2, content_ref="copy", scale_token="HEADLINE_L", on_media=False),
+    ]}
+
+
+def test_a_collage_hook_below_the_hook_floor_keeps_its_largest_fragment_edge_to_edge():
+    result = _render(_collage_hook(), "Титан и сапфир — от $149")
+    assert result.notes["media_scale_adapted"] is True
+    assert _headline_px(result) >= _headline_floor_hook()
+    assert result.notes["media_canvas_coverage"] >= MIN_MEDIA_AREA and result.notes["visual_preserved"] is True
+
+
+def _headline_floor_hook():
+    from services.instagram_carousel_layouts import _headline_floor
+    return _headline_floor(SPEC, 0)
+
+
+def test_a_collage_with_a_substantive_graphic_is_never_flattened():
+    plan = _collage_hook()
+    plan["regions"] = [*plan["regions"], _region("graphic", 0.07, 0.5, 0.36, 0.2, graphic_type="ui_frame")]
+    assert adapt_media_scale(InstagramSlideLayout.model_validate(plan), slide_copy="Титан и сапфир — от $149", force=True) is None
+    assert adapt_media_scale(InstagramSlideLayout.model_validate(_collage_hook()), slide_copy="Титан и сапфир — от $149") is None  # only when forced
+
+
+def test_a_plan_that_validates_but_cannot_be_drawn_is_rebuilt_not_sent_to_the_fallback():
+    """real NEWS_RECAP iteration-2 closing slide: immersive, on-media text rejected at render time (text_on_media_unreadable)"""
+    immersive = {**REAL_AI_HACK_HOOK, "regions": [
+        _region("media", 0, 0, 1, 1, content_ref="generated", crop_mode="cover"),
+        _region("text", 0.07, 0.62, 0.7, 0.2, z=2, content_ref="copy", scale_token="HEADLINE_XL", on_media=True),
+    ]}
+    result = render_carousel_slide(spec=SPEC, role="closing", index=7, total=8, slide_copy="От Wallet до открытых моделей", source_evidence=None,
+                                   package_identity="p", media_image=_busy(), media_mode="GENERATED", layout_plan=immersive,
+                                   subject_assets={"generated": (_busy(), "id")})
+    assert result.notes["media_scale_adapted"] is True and result.notes["media_scale_rescued_rejected_plan"] == ["text_on_media_unreadable"]
+    assert result.notes["media_preserving_fallback_used"] is False
+
+
+def test_prompt_v10_6_changes_only_the_news_recap_opener_clause():
+    v105 = yaml.safe_load((PROMPTS / "v10.5.yaml").read_text(encoding="utf-8"))
+    v106 = yaml.safe_load((PROMPTS / "v10.6.yaml").read_text(encoding="utf-8"))
+    changed = [(a, b) for a, b in zip(v105["rules"], v106["rules"]) if a != b]
+    assert v106["version"] == "10.6" and v106["output_schema"] == v105["output_schema"] and len(changed) == 1
+    assert "never the same picture framed the same way" in changed[0][1]

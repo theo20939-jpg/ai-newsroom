@@ -1,0 +1,42 @@
+{
+  "ai_hack": {
+    "hook": "Чек-лист вместо чтения",
+    "hook_emotion": "usefulness",
+    "hook_mechanic": "sharp_comparison",
+    "why_the_emotion_fits_the_fact": "Sharp comparison creates a useful surprise by contrasting the long reading process with the short checklist outcome described in E4.",
+    "evidence_handle": "E4",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  },
+  "news_insight": {
+    "hook": "Умнее модель. Дешевле выбор.",
+    "hook_emotion": "surprise",
+    "hook_mechanic": "sharp_comparison",
+    "why_the_emotion_fits_the_fact": "Создать удивление через резкое сопоставление: автор ушёл от самых умных и дорогих моделей к более дешёвым.",
+    "evidence_handle": "E1",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  },
+  "news_recap": {
+    "hook": "Права теперь в Wallet",
+    "hook_emotion": "surprise",
+    "hook_mechanic": "specific_surprise",
+    "why_the_emotion_fits_the_fact": "Создать удивление конкретным изменением: цифровые водительские удостоверения уже появились в Apple Wallet в двух штатах.",
+    "evidence_handle": "E2",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  },
+  "trend_generative": {
+    "hook": "Титан и сапфир — от $149",
+    "hook_emotion": "surprise",
+    "hook_mechanic": "sharp_comparison",
+    "why_the_emotion_fits_the_fact": "Создать удивление через резкое сопоставление дорогих материалов и стартовой цены из E1.",
+    "evidence_handle": "E1",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  }
+}

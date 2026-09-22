@@ -16,6 +16,7 @@ from schemas.instagram_creative import InstagramSlideLayout, LayoutRegion
 MIN_MEDIA_AREA = 0.50
 SHORT_COPY_CHARS = 34
 ORIENTATIONS = ("side_right", "side_left", "text_top", "text_bottom")
+DECORATIVE_GRAPHICS = frozenset({"badge", "scribble", "arrow_scribble", "circle_scribble", "box_scribble", "underline_scribble", "highlight", "burst"})
 _HEADLINE_REFS = ("copy", "copy_lead", "copy_no_number")
 _PROMOTE = {"HEADLINE_S", "HEADLINE_M", "HEADLINE_L"}
 
@@ -63,11 +64,18 @@ def adapt_media_scale(layout: InstagramSlideLayout, *, slide_copy: str, force: b
     `orientation` (one of ORIENTATIONS) overrides the one derived from where the plan put its text."""
     if orientation is not None and orientation not in ORIENTATIONS:
         raise ValueError(f"unknown orientation {orientation!r}")
-    if layout.arrangement not in ("standard", "stage"):
+    collage = layout.arrangement == "collage"
+    if layout.arrangement not in ("standard", "stage") and not (force and collage):
         return None
     medias = [r for r in layout.regions if r.kind == "media"]
     texts = [r for r in layout.regions if r.kind == "text"]
-    if len(medias) != 1 or not texts or any(r.kind == "graphic" for r in layout.regions) or (not force and any(t.on_media for t in texts)):
+    graphics = [r for r in layout.regions if r.kind == "graphic"]
+    if force and collage:
+        # a collage whose headline shrank below the floor (or that was rejected): its largest fragment becomes the one image,
+        # the decorative marks go - a substantive graphic (ui_frame, flow_diagram, poll_cards) still keeps the plan as it is
+        graphics = [g for g in graphics if g.graphic_type not in DECORATIVE_GRAPHICS]
+        medias = sorted(medias, key=_clipped_area, reverse=True)[:1]
+    if len(medias) != 1 or not texts or graphics or (not force and any(t.on_media for t in texts)):
         return None
     media = medias[0]
     staged_on_ground = any(r.kind == "surface" and r.surface == "media_ground" for r in layout.regions)

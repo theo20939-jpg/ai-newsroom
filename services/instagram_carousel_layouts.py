@@ -656,9 +656,22 @@ def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets
                 adapt_calm_zone=True,
             )
         except DeclaredRenderRejected as exc:
-            return None, [exc.code]
-        if result.text_clipped:
-            return None, ["text_does_not_fit_declared_regions"]
+            result, rejected_code = None, exc.code
+        else:
+            rejected_code = "text_does_not_fit_declared_regions" if result.text_clipped else None
+        if rejected_code is not None:
+            # the plan passed validation but could not be DRAWN (unreadable on-media text, clipped copy): a media-first slide is
+            # rebuilt edge to edge before the smaller media-preserving fallback, exactly like a validator rejection above
+            rescued = None
+            if media_mode in ("SOURCE", "GENERATED"):
+                rescued = _render_scaled_up(spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
+                                            subject_assets=subject_assets, visual_direction=visual_direction, force=True)
+            if rescued is None:
+                return None, [rejected_code]
+            result, rescued_validated, scale_notes = rescued
+            result.notes.update({**scale_notes, "media_scale_rescued_rejected_plan": [rejected_code]})
+            adaptations = [i.code for i in rescued_validated.issues if i.severity in ("adapted", "note")]
+            return result, [*adaptations, "media_scale_adapted"]
         if media_mode in ("SOURCE", "GENERATED") and _headline_px(result) < _headline_floor(spec, index):
             # the plan's own headline box (or a busy image's only quiet corner) shrank the main line below display size;
             # give it a solid band next to the still edge-to-edge image, but only when that is genuinely larger
