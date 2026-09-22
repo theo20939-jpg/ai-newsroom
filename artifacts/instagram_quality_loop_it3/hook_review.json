@@ -1,0 +1,42 @@
+{
+  "ai_hack": {
+    "hook": "Текст длинный. Решение — короткое.",
+    "hook_emotion": "curiosity",
+    "hook_mechanic": "sharp_comparison",
+    "why_the_emotion_fits_the_fact": "Контраст длины текста и ясности решения создаёт любопытство и обещает практичный способ разобраться быстрее.",
+    "evidence_handle": "E1",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  },
+  "news_insight": {
+    "hook": "Умнее модель. Дороже задача?",
+    "hook_emotion": "curiosity",
+    "hook_mechanic": "sharp_comparison",
+    "why_the_emotion_fits_the_fact": "Создать любопытство через резкое сравнение максимального intelligence index и стоимости задачи, на которое опирается E2.",
+    "evidence_handle": "E2",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  },
+  "news_recap": {
+    "hook": "600 млн слов — древнегреческий",
+    "hook_emotion": "surprise",
+    "hook_mechanic": "specific_surprise",
+    "why_the_emotion_fits_the_fact": "Конкретное число и неожиданный язык сразу создают удивление и открывают неделю историей Apollo.",
+    "evidence_handle": "E7",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  },
+  "trend_generative": {
+    "hook": "Титан за $149 — серьёзно?",
+    "hook_emotion": "disbelief",
+    "hook_mechanic": "sharp_comparison",
+    "why_the_emotion_fits_the_fact": "Создать недоверие через конкретный контраст между титановым корпусом и стартовой ценой из E1.",
+    "evidence_handle": "E1",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  }
+}
