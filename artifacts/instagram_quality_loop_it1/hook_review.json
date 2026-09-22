@@ -1,0 +1,42 @@
+{
+  "ai_hack": {
+    "hook": "Длинный текст. Короткий чек-лист.",
+    "hook_emotion": "usefulness",
+    "hook_mechanic": "sharp_comparison",
+    "why_the_emotion_fits_the_fact": "Резкий контраст между длинным текстом и коротким чек-листом создаёт полезность и любопытство; опирается на задачу из E1 и результат из E4.",
+    "evidence_handle": "E1",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  },
+  "news_insight": {
+    "hook": "Самая умная — не для каждой задачи",
+    "hook_emotion": "surprise",
+    "hook_mechanic": "contradiction",
+    "why_the_emotion_fits_the_fact": "Создать удивление через противоречие: автор ушёл от самых умных и дорогих моделей не вообще, а для каждой задачи подряд — E1.",
+    "evidence_handle": "E1",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  },
+  "news_recap": {
+    "hook": "Будущее — на древнегреческом",
+    "hook_emotion": "surprise",
+    "hook_mechanic": "contradiction",
+    "why_the_emotion_fits_the_fact": "Парадокс древнего языка и новой языковой модели создаёт любопытство и сразу задаёт главный эмоциональный контраст выпуска.",
+    "evidence_handle": "E6",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  },
+  "trend_generative": {
+    "hook": "Титан и сапфир — от $149",
+    "hook_emotion": "surprise",
+    "hook_mechanic": "sharp_comparison",
+    "why_the_emotion_fits_the_fact": "Создать удивление через контраст материалов корпуса и стартовой цены, прямо поддержанный E1.",
+    "evidence_handle": "E1",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  }
+}

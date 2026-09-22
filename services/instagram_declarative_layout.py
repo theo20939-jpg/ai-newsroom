@@ -51,7 +51,8 @@ SCALE_TOKENS: dict[str, tuple[float, str]] = {
     "BODY": (0.042, "semibold"),
     "CAPTION": (0.032, "semibold"),
 }
-_LEADING = {"MEGA": 0.06, "NUMERAL": 0.06, "DISPLAY": 0.07, "HEADLINE_XL": 0.07, "HEADLINE_L": 0.08, "HEADLINE_M": 0.12, "HEADLINE_S": 0.14}
+# line gap as a fraction of the font size; display sizes need room for Cyrillic descenders (р, у, д) above the next line's caps
+_LEADING = {"MEGA": 0.06, "NUMERAL": 0.06, "DISPLAY": 0.10, "HEADLINE_XL": 0.11, "HEADLINE_L": 0.11, "HEADLINE_M": 0.12, "HEADLINE_S": 0.14}
 _MIN_FONT_FRAC = 0.03  # minimum readable size (about 32px on a 1080px canvas)
 GRAPHITE = (30, 32, 38)
 _SURFACE_COLOURS = {"paper": tok.PAPER, "soft": SURFACE_SOFT, "red": tok.RED, "ink": tok.INK, "graphite": GRAPHITE}

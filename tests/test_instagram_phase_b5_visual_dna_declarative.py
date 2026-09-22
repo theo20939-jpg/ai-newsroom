@@ -195,7 +195,7 @@ async def test_D_visual_dna_reaches_the_actual_v8_prompt_request() -> None:
             visual_dna_context=context, visual_dna_version="1",
         ),
     )
-    assert CAROUSEL_PROMPT_VERSION == "10.4" and outcome.carousel is not None
+    assert CAROUSEL_PROMPT_VERSION == "10.5" and outcome.carousel is not None
     request = gateway.requests[0]
     user_text = request.messages[1].content[0].text
     assert "VISUAL DNA v1" in user_text and "scale contrast" in user_text and "very large headline" in user_text

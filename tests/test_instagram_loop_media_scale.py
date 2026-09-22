@@ -151,3 +151,40 @@ def test_prompt_v10_4_changes_exactly_the_three_copy_and_scale_rules():
     assert len(v103["rules"]) == len(v104["rules"]) and len(changed) == 3
     joined = " ".join(changed)
     assert "2 to 7 words" in joined and "at least half of the canvas" in joined and "about 70 characters" not in joined
+
+
+# ------------------------------------------------------------------------------------------ iteration 2 (real iteration-1 findings)
+
+
+def test_a_rejected_staged_object_plan_is_rebuilt_not_sent_to_the_small_caption_fallback():
+    """real NEWS_RECAP 'Watch 6' slide: object_contain on a media_ground stage, rejected for text_over_media"""
+    staged = {**REAL_AI_HACK_HOOK, "arrangement": "stage", "regions": [
+        _region("surface", 0, 0, 1, 1, z=0, surface="media_ground", content_ref="generated"),
+        _region("media", 0.32, -0.08, 0.76, 0.9, content_ref="generated", crop_mode="object_contain"),
+        _region("text", 0.07, 0.13, 0.48, 0.18, z=2, content_ref="copy", scale_token="HEADLINE_L", on_media=False),
+    ]}
+    result = _render(staged, "Watch 6: титан, сапфир, eSIM")
+    assert result.notes["media_scale_adapted"] is True and result.notes["media_preserving_fallback_used"] is False
+
+
+def test_an_unbreakable_name_in_a_side_column_moves_to_a_full_width_band():
+    """real NEWS_RECAP slide: 'AliceAI-Foundation' cannot break, so the side column rendered it at 43px"""
+    result = render_carousel_slide(spec=SPEC, role="story", index=5, total=8, slide_copy="Яндекс открыл AliceAI-Foundation", source_evidence=None,
+                                   package_identity="p", media_image=_plain(), media_mode="GENERATED", layout_plan=REAL_AI_HACK_HOOK,
+                                   subject_assets={"generated": (_plain(), "id")})
+    assert result.notes["media_scale_orientation"] in ("text_top", "text_bottom")
+    assert _headline_px(result) >= HEADLINE_FLOOR_FRAC * SPEC.width
+
+
+def test_the_hook_has_a_higher_floor_than_later_slides():
+    from services.instagram_carousel_layouts import HOOK_HEADLINE_FLOOR_FRAC, _headline_floor
+    assert _headline_floor(SPEC, 0) == HOOK_HEADLINE_FLOOR_FRAC * SPEC.width > _headline_floor(SPEC, 3) == HEADLINE_FLOOR_FRAC * SPEC.width
+
+
+def test_prompt_v10_5_changes_only_the_hook_rule():
+    v104 = yaml.safe_load((PROMPTS / "v10.4.yaml").read_text(encoding="utf-8"))
+    v105 = yaml.safe_load((PROMPTS / "v10.5.yaml").read_text(encoding="utf-8"))
+    changed = [(a, b) for a, b in zip(v104["rules"], v105["rules"]) if a != b]
+    assert v105["version"] == "10.5" and v105["output_schema"] == v104["output_schema"] and len(changed) == 1
+    old, new = changed[0]
+    assert new.startswith("HOOK CONTRACT (slide 1).") and new.startswith(old[:200]) and "NEVER reuse, translate or paraphrase" in new

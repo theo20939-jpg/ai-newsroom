@@ -1,0 +1,248 @@
+{
+  "ai_hack": {
+    "paid_generated_assets_dropped": 0,
+    "media_preserving_fallbacks_used": 0,
+    "slides": [
+      {
+        "index": 0,
+        "media_source": "generated",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "dark_type_number_statement",
+        "executed_family": "dark_type_number_statement"
+      },
+      {
+        "index": 1,
+        "media_source": "generated",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "light_utility_editorial",
+        "executed_family": "light_utility_editorial"
+      },
+      {
+        "index": 2,
+        "media_source": "graphic",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "interface_cards",
+        "executed_family": "interface_cards"
+      },
+      {
+        "index": 3,
+        "media_source": "generated",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "dark_type_number_statement",
+        "executed_family": "dark_type_number_statement"
+      }
+    ]
+  },
+  "news_insight": {
+    "paid_generated_assets_dropped": 0,
+    "media_preserving_fallbacks_used": 0,
+    "slides": [
+      {
+        "index": 0,
+        "media_source": "source",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "immersive_image_field",
+        "executed_family": "immersive_image_field"
+      },
+      {
+        "index": 1,
+        "media_source": "generated",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "light_utility_editorial",
+        "executed_family": "light_utility_editorial"
+      },
+      {
+        "index": 2,
+        "media_source": "graphic",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "light_utility_editorial",
+        "executed_family": "interface_cards"
+      },
+      {
+        "index": 3,
+        "media_source": "generated",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "dark_type_number_statement",
+        "executed_family": "dark_type_number_statement"
+      }
+    ]
+  },
+  "news_recap": {
+    "paid_generated_assets_dropped": 0,
+    "media_preserving_fallbacks_used": 1,
+    "slides": [
+      {
+        "index": 0,
+        "media_source": "generated",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "immersive_image_field",
+        "executed_family": "immersive_image_field"
+      },
+      {
+        "index": 1,
+        "media_source": "source",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "immersive_image_field",
+        "executed_family": "immersive_image_field"
+      },
+      {
+        "index": 2,
+        "media_source": "source",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "immersive_image_field",
+        "executed_family": "immersive_image_field"
+      },
+      {
+        "index": 3,
+        "media_source": "generated",
+        "declarative_layout": "REJECTED",
+        "rejection_reason": [
+          "text_over_media"
+        ],
+        "media_preserving_fallback": true,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "hero_object_stage",
+        "executed_family": "media_preserving_fallback"
+      },
+      {
+        "index": 4,
+        "media_source": "generated",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "dark_type_number_statement",
+        "executed_family": "hero_object_stage"
+      },
+      {
+        "index": 5,
+        "media_source": "source",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "internet_culture_collage",
+        "executed_family": "internet_culture_collage"
+      },
+      {
+        "index": 6,
+        "media_source": "generated",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "light_utility_editorial",
+        "executed_family": "hero_object_stage"
+      },
+      {
+        "index": 7,
+        "media_source": "graphic",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "interface_cards",
+        "executed_family": "interface_cards"
+      }
+    ]
+  },
+  "trend_generative": {
+    "paid_generated_assets_dropped": 0,
+    "media_preserving_fallbacks_used": 0,
+    "slides": [
+      {
+        "index": 0,
+        "media_source": "generated",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "hero_object_stage",
+        "executed_family": "hero_object_stage"
+      },
+      {
+        "index": 1,
+        "media_source": "generated",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "hero_object_stage",
+        "executed_family": "hero_object_stage"
+      },
+      {
+        "index": 2,
+        "media_source": "generated",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "immersive_image_field",
+        "executed_family": "hero_object_stage"
+      },
+      {
+        "index": 3,
+        "media_source": "generated",
+        "declarative_layout": "PASS",
+        "rejection_reason": null,
+        "media_preserving_fallback": false,
+        "meaningful_visual_in_final": true,
+        "generated_asset_dropped": false,
+        "chosen_family": "hero_object_stage",
+        "executed_family": "hero_object_stage"
+      }
+    ]
+  }
+}

@@ -551,11 +551,16 @@ def _run_attempt(a: _Attempt, *, spec, text, index, total, media, fx, fy, subjec
 
 
 HEADLINE_FLOOR_FRAC = 0.06  # below ~65px on a 1080px canvas the slide's main line reads as a caption, not a headline
+HOOK_HEADLINE_FLOOR_FRAC = 0.085  # the hook is the loudest line of the post (founder reference): below ~92px it does not stop the scroll
 
 
 def _headline_px(result) -> int:
     sizes = [int(m.get("font_px") or 0) for m in (result.notes.get("text_metrics") or []) if m.get("ref") in ("copy", "copy_lead", "copy_no_number")]
     return max(sizes, default=0)
+
+
+def _headline_floor(spec, index: int) -> float:
+    return (HOOK_HEADLINE_FLOOR_FRAC if index == 0 else HEADLINE_FLOOR_FRAC) * spec.width
 
 
 def _render_scaled_up(*, spec, layout, slide_copy, index, total, subject_assets, visual_direction, force=False):
@@ -566,23 +571,37 @@ def _render_scaled_up(*, spec, layout, slide_copy, index, total, subject_assets,
     from services.instagram_layout_validation import validate_layout
     from services.instagram_media_scale_adapter import adapt_media_scale
 
-    adaptation = adapt_media_scale(layout, slide_copy=slide_copy, force=force)
-    if adaptation is None:
+    def attempt(orientation):
+        adaptation = adapt_media_scale(layout, slide_copy=slide_copy, force=force, orientation=orientation)
+        if adaptation is None:
+            return None
+        validated = validate_layout(adaptation.layout, slide_copy=slide_copy, resolvable_subjects=set(subject_assets))
+        if not validated.accepted or validated.layout is None:
+            return None
+        try:
+            result = render_declared_slide(
+                spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
+                subject_assets=subject_assets, visual_direction=visual_direction, progress_hidden=validated.progress_hidden,
+                adapt_calm_zone=True,
+            )
+        except DeclaredRenderRejected:
+            return None
+        if result.text_clipped:
+            return None
+        return result, validated, adaptation.notes()
+
+    best = attempt(None)
+    if best is None:
         return None
-    validated = validate_layout(adaptation.layout, slide_copy=slide_copy, resolvable_subjects=set(subject_assets))
-    if not validated.accepted or validated.layout is None:
-        return None
-    try:
-        result = render_declared_slide(
-            spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
-            subject_assets=subject_assets, visual_direction=visual_direction, progress_hidden=validated.progress_hidden,
-            adapt_calm_zone=True,
-        )
-    except DeclaredRenderRejected:
-        return None
-    if result.text_clipped:
-        return None
-    return result, validated, adaptation.notes()
+    if _headline_px(best[0]) < _headline_floor(spec, index):
+        # e.g. an unbreakable product name in a narrow side column: a full-width band may carry it at display size
+        for orientation in ("text_top", "text_bottom"):
+            if orientation == best[2]["media_scale_orientation"]:
+                continue
+            other = attempt(orientation)
+            if other is not None and _headline_px(other[0]) > _headline_px(best[0]):
+                best = other
+    return best
 
 
 def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets, visual_direction, media_mode=None):
@@ -640,7 +659,7 @@ def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets
             return None, [exc.code]
         if result.text_clipped:
             return None, ["text_does_not_fit_declared_regions"]
-        if media_mode in ("SOURCE", "GENERATED") and _headline_px(result) < HEADLINE_FLOOR_FRAC * spec.width:
+        if media_mode in ("SOURCE", "GENERATED") and _headline_px(result) < _headline_floor(spec, index):
             # the plan's own headline box (or a busy image's only quiet corner) shrank the main line below display size;
             # give it a solid band next to the still edge-to-edge image, but only when that is genuinely larger
             bigger = _render_scaled_up(spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,

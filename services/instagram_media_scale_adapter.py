@@ -13,8 +13,9 @@ from dataclasses import dataclass
 
 from schemas.instagram_creative import InstagramSlideLayout, LayoutRegion
 
-MIN_MEDIA_AREA = 0.45
+MIN_MEDIA_AREA = 0.50
 SHORT_COPY_CHARS = 34
+ORIENTATIONS = ("side_right", "side_left", "text_top", "text_bottom")
 _HEADLINE_REFS = ("copy", "copy_lead", "copy_no_number")
 _PROMOTE = {"HEADLINE_S", "HEADLINE_M", "HEADLINE_L"}
 
@@ -56,8 +57,12 @@ def _stack(texts: list[LayoutRegion], x: float, y: float, w: float, h: float) ->
     return out
 
 
-def adapt_media_scale(layout: InstagramSlideLayout, *, slide_copy: str, force: bool = False) -> MediaScaleAdaptation | None:
-    """`force`: the plan was already rejected by the layout validator - rebuild the geometry regardless of the media's size."""
+def adapt_media_scale(layout: InstagramSlideLayout, *, slide_copy: str, force: bool = False,
+                      orientation: str | None = None) -> MediaScaleAdaptation | None:
+    """`force`: the plan was rejected, or its headline rendered below the floor - rebuild the geometry regardless of the media's size.
+    `orientation` (one of ORIENTATIONS) overrides the one derived from where the plan put its text."""
+    if orientation is not None and orientation not in ORIENTATIONS:
+        raise ValueError(f"unknown orientation {orientation!r}")
     if layout.arrangement not in ("standard", "stage"):
         return None
     medias = [r for r in layout.regions if r.kind == "media"]
@@ -66,7 +71,7 @@ def adapt_media_scale(layout: InstagramSlideLayout, *, slide_copy: str, force: b
         return None
     media = medias[0]
     staged_on_ground = any(r.kind == "surface" and r.surface == "media_ground" for r in layout.regions)
-    if staged_on_ground and media.crop_mode in ("object_contain", "object_cover", "cutout", "cutout_contain"):
+    if not force and staged_on_ground and media.crop_mode in ("object_contain", "object_cover", "cutout", "cutout_contain"):
         return None  # a real hero object / cut-out on its own uniform ground merges with it - it reads large by design
     if media.crop_mode in ("cutout", "cutout_contain"):
         return None  # an alpha cut-out is never re-cropped as a rectangular photo
@@ -79,23 +84,25 @@ def adapt_media_scale(layout: InstagramSlideLayout, *, slide_copy: str, force: b
     media_cx, media_cy = media.x + media.w / 2, media.y + media.h / 2
     logo_right = layout.logo_position == "BOTTOM_RIGHT"
 
-    if len(slide_copy.strip()) <= SHORT_COPY_CHARS and abs(media_cx - text_cx) >= 0.25:
-        right = media_cx > text_cx
+    if orientation is None:
+        if len(slide_copy.strip()) <= SHORT_COPY_CHARS and abs(media_cx - text_cx) >= 0.25:
+            orientation = "side_right" if media_cx > text_cx else "side_left"
+        else:
+            orientation = "text_top" if text_cy <= media_cy else "text_bottom"
+    if orientation.startswith("side"):
+        right = orientation == "side_right"
         mbox = (0.44, 0.0, 0.56, 1.0) if right else (0.0, 0.0, 0.56, 1.0)
         col_x = 0.07 if right else 0.60
         band = (col_x, 0.16, 0.34, 0.60)
         rule_at = (col_x, 0.12)
-        orientation = "side_right" if right else "side_left"
-    elif text_cy <= media_cy:
+    elif orientation == "text_top":
         mbox = (0.0, 0.45, 1.0, 0.55)
         band = (0.07, 0.15, 0.86, 0.27)
         rule_at = (0.07, 0.115)
-        orientation = "text_top"
     else:
         mbox = (0.0, 0.0, 1.0, 0.56)
         band = (0.07, 0.63, 0.75 if logo_right else 0.86, 0.29)
         rule_at = (0.07, 0.595)
-        orientation = "text_bottom"
 
     regions: list[LayoutRegion] = [r for r in layout.regions if r.kind == "surface" and r.w >= 0.99 and r.h >= 0.99 and r.surface != "media_ground"]
     new_media = media.model_copy(update={
