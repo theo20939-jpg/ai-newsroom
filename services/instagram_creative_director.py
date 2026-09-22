@@ -54,6 +54,7 @@ from integrations.llm_gateway.protocol import (
 from integrations.prompts.protocol import PromptRepository
 from schemas.capability import CapabilityCall, RuntimeContext
 from services.instagram_media_first import (
+    assert_hook_contract,
     assert_hook_is_short,
     assert_media_first,
     assert_no_unsupported_clickbait,
@@ -98,10 +99,10 @@ EDITORIAL_DECISION_PROMPT_NAME = "instagram_editorial_decision"
 # shipped prompt version in place" convention.
 _SINGLE_PROMPT_VERSION = "6"
 _CREATIVE_DIRECTOR_MAX_TOKENS = 16_000  # upper safety bound (not a target): keeps the gateway worst-case estimate from pricing a model-maximum completion
-_CAROUSEL_PROMPT_VERSION = "10"  # Phase B.5.1.2: v9.1 = v9 + evidence-reference contract (E1..En handles); v9 = Visual DNA v2 families, bounded roles, meta-language guard
+_CAROUSEL_PROMPT_VERSION = "10.1"  # Phase B.5.1.2: v9.1 = v9 + evidence-reference contract (E1..En handles); v9 = Visual DNA v2 families, bounded roles, meta-language guard
 CAROUSEL_PROMPT_VERSION = _CAROUSEL_PROMPT_VERSION
-_EVIDENCE_HANDLE_CAROUSEL_VERSIONS = frozenset({"9.1", "10"})  # prompt versions whose input lists evidence as handles (E1, E2, ...)
-MEDIA_FIRST_CAROUSEL_VERSIONS = frozenset({"10"})  # Phase B.6: prompt versions under the media-first + KAGE-voice contract
+_EVIDENCE_HANDLE_CAROUSEL_VERSIONS = frozenset({"9.1", "10", "10.1"})  # prompt versions whose input lists evidence as handles (E1, E2, ...)
+MEDIA_FIRST_CAROUSEL_VERSIONS = frozenset({"10", "10.1"})  # Phase B.6: prompt versions under the media-first + KAGE-voice contract
 _MEDIA_FIRST_CAROUSEL_VERSIONS = MEDIA_FIRST_CAROUSEL_VERSIONS
 _EVIDENCE_HANDLE_RE = re.compile(r"^E([1-9]\d*)$")
 
@@ -667,7 +668,9 @@ def _validate_carousel_output(
         assert_media_first(
             list(creative.slides), available_subjects=set(director_input.available_media_subjects),
             unsuitable_subjects=set(director_input.unsuitable_media_subjects),
+            evidence=[*director_input.allowed_evidence, director_input.opportunity_summary],
         )
+        assert_hook_contract(list(creative.slides))
         assert_hook_is_short(creative.slides[0].slide_copy)
         assert_no_unsupported_clickbait(
             {**{f"slide_{i}_copy": slide.slide_copy for i, slide in enumerate(creative.slides)}, "final_caption": creative.final_caption or ""},

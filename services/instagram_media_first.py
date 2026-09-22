@@ -16,6 +16,14 @@ SUBSTANTIVE_GRAPHICS = frozenset({"ui_frame", "flow_diagram", "poll_cards"})
 MAX_GENERATED_SLIDES_PER_POST = 6
 MIN_GENERATION_BRIEF_CHARS = 24
 MAX_HOOK_CHARS = 120
+MIN_STORY_ANCHOR_CHARS = 12
+MIN_VISUAL_DIRECTION_CHARS = 60  # a generated slide's visual_direction must answer: what is visible, the story-specific subject, the relationship/action, why it supports the slide
+# Generic AI-art defaults (Phase B.6.1). A term is forbidden in a generated slide's plan UNLESS the supplied story evidence itself uses it (the story is literally about it).
+GENERIC_AI_ART_TERMS = (
+    "glowing cube", "floating cube", "floating sphere", "glowing sphere", "random geometry", "floating geometry", "ai brain", "glowing brain", "robot", "hologram",
+    "cyberpunk", "monolith", "neon circuit", "neon grid", "glowing core", "digital brain", "мозг", "робот", "голограмм", "киберпанк", "монолит",
+)
+VAGUE_DIRECTION_PHRASES = ("futuristic ai visual", "abstract technology scene", "dynamic ai composition", "futuristic technology", "abstract ai", "футуристичн")
 _UNSUITABLE_MAX_AREA = 0.10  # an unsuitable source (article card / flat graphic) may only be a small supporting collage fragment
 
 
@@ -54,7 +62,33 @@ def _only_small_fragment(slide: Any, ref: str) -> bool:
     return True
 
 
-def assert_media_first(slides: list[Any], *, available_subjects: set[str], unsuitable_subjects: set[str]) -> None:
+def find_generic_ai_art(text: str, evidence: list[str]) -> list[str]:
+    lowered = str(text or "").lower()
+    blob = " ".join(evidence).lower()
+    hits = [t for t in GENERIC_AI_ART_TERMS if t in lowered and t not in blob]
+    return hits + [p for p in VAGUE_DIRECTION_PHRASES if p in lowered]
+
+
+def assert_hook_contract(slides: list[Any]) -> None:
+    """Phase B.6.1: the first slide is the hook and states its ONE intended reader reaction; every other slide has none. The model declares the emotion; whether it is
+    actually felt is founder review, never a regex."""
+    from schemas.instagram_creative import HOOK_EMOTIONS
+
+    first = slides[0]
+    if str(_get(first, "role")) != "hook":
+        raise MediaFirstContractError("slide 0 must be the hook")
+    if not str(_get(first, "slide_copy") or "").strip():
+        raise MediaFirstContractError("the hook slide has no copy")
+    if _get(first, "hook_emotion") not in HOOK_EMOTIONS:
+        raise MediaFirstContractError("the hook slide must state hook_emotion (one of the bounded reactions)")
+    for index, slide in enumerate(slides[1:], start=1):
+        if _get(slide, "hook_emotion") is not None:
+            raise MediaFirstContractError(f"slide {index}: hook_emotion belongs to the hook slide only")
+
+
+def assert_media_first(
+    slides: list[Any], *, available_subjects: set[str], unsuitable_subjects: set[str], evidence: list[str] | None = None,
+) -> None:
     """Raise MediaFirstContractError unless every slide has a meaningful visual idea that its own layout actually executes."""
     generated = 0
     for index, slide in enumerate(slides):
@@ -69,6 +103,14 @@ def assert_media_first(slides: list[Any], *, available_subjects: set[str], unsui
                 raise MediaFirstContractError(f"{where}: a generated slide needs a concrete generation_brief")
             if GENERATED_SUBJECT_KEY not in refs:
                 raise MediaFirstContractError(f"{where}: a generated slide's layout must contain a media region with content_ref '{GENERATED_SUBJECT_KEY}'")
+            if len(str(_get(slide, "story_anchor") or "").strip()) < MIN_STORY_ANCHOR_CHARS:
+                raise MediaFirstContractError(f"{where}: a generated slide needs a story_anchor - the concrete story-specific thing that makes the image belong to THIS story")
+            if len(str(_get(slide, "visual_direction") or "").strip()) < MIN_VISUAL_DIRECTION_CHARS:
+                raise MediaFirstContractError(f"{where}: a generated slide's visual_direction must say what is visible, the story-specific subject, the relationship shown and why it supports the slide")
+            generic = find_generic_ai_art(
+                " ".join(str(_get(slide, k) or "") for k in ("generation_brief", "story_anchor", "visual_direction")), evidence or [])
+            if generic:
+                raise MediaFirstContractError(f"{where}: generic AI-art default in a generated visual plan: {generic}")
         elif source == "source":
             real = [r for r in refs if r in available_subjects]
             if not real:
@@ -101,7 +143,7 @@ def slide_has_visual(*, notes: dict[str, Any], planned_slide: dict[str, Any] | N
 
 _CLICKBAIT = (r"ты обязан", r"все делают неправильно", r"это уничтожит", r"интернет умер", r"всё изменилось", r"все изменилось")
 _WEAK_HOOK_OPENERS = (
-    r"^компания\s+\S+\s+представил", r"^новая модель получила", r"^\d+\s+функци\w+\s+нового", r"^главные\s+(истории|новости)", r"^вот что произошло",
+    r"^неделя,\s+когда", r"^эта неделя", r"^компания\s+\S+\s+представил", r"^новая модель получила", r"^\d+\s+функци\w+\s+нового", r"^главные\s+(истории|новости)", r"^вот что произошло",
 )
 
 

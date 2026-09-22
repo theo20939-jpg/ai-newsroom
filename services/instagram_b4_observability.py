@@ -28,6 +28,8 @@ def build_b4_observability(
             "text_only_slide": not slide_has_visual(notes=notes, planned_slide=slide, source_image_treatment=getattr(render.evidence, "source_image_treatment", None)),
             "media_source": getattr(slide, "media_source", None),
             "generation_brief": getattr(slide, "generation_brief", None),
+            "hook_emotion": getattr(slide, "hook_emotion", None),
+            "story_anchor": getattr(slide, "story_anchor", None),
             "visual_family_chosen": chosen_family,
             "visual_family_executed": executed_family,
             "visual_family_matches": bool(chosen_family) and chosen_family == executed_family,

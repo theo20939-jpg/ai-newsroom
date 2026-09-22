@@ -179,6 +179,8 @@ VISUAL_FAMILIES = (
 )
 MEDIA_SOURCES = ("source", "generated", "graphic")
 MediaSource = Literal["source", "generated", "graphic"]
+HOOK_EMOTIONS = ("surprise", "curiosity", "humour", "disbelief", "tension", "desire", "relatable_frustration", "usefulness", "absurdity")
+HookEmotion = Literal["surprise", "curiosity", "humour", "disbelief", "tension", "desire", "relatable_frustration", "usefulness", "absurdity"]
 
 VisualFamily = Literal[
     "immersive_image_field", "hero_object_stage", "internet_culture_collage",
@@ -242,6 +244,10 @@ class InstagramCarouselSlideCreative(BaseModel):
     # poll composition. Optional so every persisted pre-B.6 draft stays valid; prompt v10 requires it on every slide.
     media_source: MediaSource | None = None
     generation_brief: str | None = Field(default=None, max_length=420)
+    # Phase B.6.1: the hook slide states the ONE reader reaction it targets (internal planning field, never audience copy; null on every other slide), and every
+    # generated slide names the concrete story-specific thing that makes its image belong to THIS story.
+    hook_emotion: HookEmotion | None = None
+    story_anchor: str | None = Field(default=None, max_length=240)
     # Phase B.4.1 section 7: deliberately NOT a field here. The model may state WHICH subject a
     # slide needs (media_subject) and WHETHER a shared/fallback asset is unacceptable
     # (must_match_story) - both real creative decisions - but never the actual resolved asset's

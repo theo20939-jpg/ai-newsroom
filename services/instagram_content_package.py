@@ -237,6 +237,8 @@ def _carousel_media_plan(creative: Any) -> tuple[str, str | None, str | None, di
          # Phase B.6: where this slide's visual idea comes from (source / generated / graphic) and the generated picture's brief.
          "media_source": getattr(slide, "media_source", None),
          "generation_brief": getattr(slide, "generation_brief", None),
+         "hook_emotion": getattr(slide, "hook_emotion", None),
+         "story_anchor": getattr(slide, "story_anchor", None),
          "layout": (slide.layout.model_dump() if getattr(slide, "layout", None) is not None else None)}
         for i, slide in enumerate(creative.slides)
     ]
