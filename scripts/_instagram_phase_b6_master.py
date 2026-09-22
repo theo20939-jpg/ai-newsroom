@@ -52,14 +52,14 @@ def main() -> None:
     H = 90 + sum(row_h if thumbs else 190 for _, _, thumbs in prepared)
     sheet = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(sheet)
-    d.text((20, 18), "KAGE INSTAGRAM - media-first, real Creative Director v10.1 + generated media + Visual DNA v2", font=ig_font(32, "black"), fill=FG)
+    d.text((20, 18), "KAGE INSTAGRAM - real Creative Director + generated media + Visual DNA v2 (" + (sys.argv[2] if len(sys.argv) > 2 else "") + ")", font=ig_font(32, "black"), fill=FG)
     y = 84
     for name, manifest, thumbs in prepared:
         valid = manifest.get("VALIDATION") if manifest else "FAIL"
         if valid == "PASS" and manifest.get("art_validation_passed") is False:
             valid = "FAIL (art gate)"
         d.text((20, y), name.upper(), font=ig_font(28, "black"), fill=GOLD)
-        d.text((330, y + 4), "REAL MODEL: YES - FRESH B.6.1 CALL" if manifest and manifest.get("REAL_MODEL") else "REAL MODEL: NO", font=ig_font(22, "semibold"), fill=OK)
+        d.text((330, y + 4), "REAL MODEL: YES - FRESH CALL" if manifest and manifest.get("REAL_MODEL") else "REAL MODEL: NO", font=ig_font(22, "semibold"), fill=OK)
         d.text((820, y + 4), f"VALIDATION: {valid}", font=ig_font(22, "semibold"), fill=OK if valid == "PASS" else BAD)
         counts = (manifest or {}).get("media_source_counts") or {}
         if counts:

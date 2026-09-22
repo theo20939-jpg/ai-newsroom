@@ -619,6 +619,8 @@ def _record(name, real, outcome, captured, seen, out_dir, pricing, evidence, rep
             "requested_media_regions": o.get("requested_media_regions"), "executed_media_regions": o.get("executed_media_regions"),
             "max_region_displacement": o.get("max_region_displacement"), "max_scale_change": o.get("max_scale_change"), "actual_media": [{"subject": m["subject"], "identity": m["identity"]} for m in (o.get("media_regions") or [])],
             "unresolved_media": o.get("unresolved_media_regions"), "slide_copy": s.get("slide_copy"),
+            "media_scale_adapted": o.get("media_scale_adapted"), "media_scale_orientation": o.get("media_scale_orientation"),
+            "media_scale_reason": o.get("media_scale_reason"), "media_canvas_coverage": o.get("media_canvas_coverage"), "headline_px": o.get("headline_px"),
         })
     record = {
         "archetype": name, "REAL_MODEL": real, "MODEL_SOURCE": captured.get("model_source"),

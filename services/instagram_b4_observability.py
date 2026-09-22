@@ -60,6 +60,12 @@ def build_b4_observability(
             "executed_media_regions": notes.get("executed_media_regions"),
             "max_region_displacement": notes.get("max_region_displacement"),
             "max_scale_change": notes.get("max_scale_change"),
+            "media_scale_adapted": bool(notes.get("media_scale_adapted")),
+            "media_scale_orientation": notes.get("media_scale_orientation"),
+            "media_scale_reason": notes.get("media_scale_reason"),
+            "media_canvas_coverage": notes.get("media_canvas_coverage"),
+            "headline_px": max((int(m.get("font_px") or 0) for m in (notes.get("text_metrics") or [])
+                                if m.get("ref") in ("copy", "copy_lead", "copy_no_number")), default=None),
             "structured_composition_present": bool(notes.get("structured_composition_present")),
             "structured_composition_executed": bool(notes.get("structured_composition_executed")),
             "role_fallback_used": bool(notes.get("fallback_role_layout_used")),

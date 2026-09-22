@@ -550,7 +550,42 @@ def _run_attempt(a: _Attempt, *, spec, text, index, total, media, fx, fy, subjec
     return _render_contained(spec, text, index, total, media, a.position or "top", a.scale or 0.46, fx, fy, framed=a.composition == "screenshot_ui")
 
 
-def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets, visual_direction):
+HEADLINE_FLOOR_FRAC = 0.06  # below ~65px on a 1080px canvas the slide's main line reads as a caption, not a headline
+
+
+def _headline_px(result) -> int:
+    sizes = [int(m.get("font_px") or 0) for m in (result.notes.get("text_metrics") or []) if m.get("ref") in ("copy", "copy_lead", "copy_no_number")]
+    return max(sizes, default=0)
+
+
+def _render_scaled_up(*, spec, layout, slide_copy, index, total, subject_assets, visual_direction, force=False):
+    """A media-first slide whose one media region is a small inset (or whose plan was rejected, `force`) is re-laid edge to edge
+    (services.instagram_media_scale_adapter). Returns (result, validated, notes) only when the adapted plan passes the SAME layout
+    validator and renders without clipping; else None."""
+    from services.instagram_declarative_layout import DeclaredRenderRejected, render_declared_slide
+    from services.instagram_layout_validation import validate_layout
+    from services.instagram_media_scale_adapter import adapt_media_scale
+
+    adaptation = adapt_media_scale(layout, slide_copy=slide_copy, force=force)
+    if adaptation is None:
+        return None
+    validated = validate_layout(adaptation.layout, slide_copy=slide_copy, resolvable_subjects=set(subject_assets))
+    if not validated.accepted or validated.layout is None:
+        return None
+    try:
+        result = render_declared_slide(
+            spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
+            subject_assets=subject_assets, visual_direction=visual_direction, progress_hidden=validated.progress_hidden,
+            adapt_calm_zone=True,
+        )
+    except DeclaredRenderRejected:
+        return None
+    if result.text_clipped:
+        return None
+    return result, validated, adaptation.notes()
+
+
+def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets, visual_direction, media_mode=None):
     """Phase B.5: render a DECLARATIVE layout when the slide carries one. Returns None when the slide
     has no layout; (result, adaptations) when it rendered; (None, rejection_codes) when the plan was
     unsafe or its text could not fit - the caller then runs the deterministic role fallback."""
@@ -575,19 +610,49 @@ def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets
 
         adapted = adapt_collage(layout, slide_copy=slide_copy, resolvable_subjects=set(subject_assets))
         if adapted is None:
-            return None, validated.rejection_codes
+            rescued = None
+            if media_mode in ("SOURCE", "GENERATED"):
+                # a media-first plan rejected for its geometry: rebuild it edge to edge before the smaller media-preserving fallback
+                rescued = _render_scaled_up(spec=spec, layout=layout, slide_copy=slide_copy, index=index, total=total,
+                                            subject_assets=subject_assets, visual_direction=visual_direction, force=True)
+            if rescued is None:
+                return None, validated.rejection_codes
+            result, rescued_validated, scale_notes = rescued
+            result.notes.update({**scale_notes, "media_scale_rescued_rejected_plan": list(validated.rejection_codes)})
+            adaptations = [i.code for i in rescued_validated.issues if i.severity in ("adapted", "note")]
+            return result, [*adaptations, "media_scale_adapted"]
         validated, collage_notes = adapted.validated, adapted.notes()
-    try:
-        result = render_declared_slide(
-            spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
-            subject_assets=subject_assets, visual_direction=visual_direction, progress_hidden=validated.progress_hidden,
-            adapt_calm_zone=True,
-        )
-    except DeclaredRenderRejected as exc:
-        return None, [exc.code]
-    if result.text_clipped:
-        return None, ["text_does_not_fit_declared_regions"]
+    scaled = None
+    if media_mode in ("SOURCE", "GENERATED"):
+        scaled = _render_scaled_up(spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
+                                   subject_assets=subject_assets, visual_direction=visual_direction)
+    if scaled is not None:
+        result, validated, scale_notes = scaled
+        result.notes.update(scale_notes)
+    else:
+        try:
+            result = render_declared_slide(
+                spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
+                subject_assets=subject_assets, visual_direction=visual_direction, progress_hidden=validated.progress_hidden,
+                adapt_calm_zone=True,
+            )
+        except DeclaredRenderRejected as exc:
+            return None, [exc.code]
+        if result.text_clipped:
+            return None, ["text_does_not_fit_declared_regions"]
+        if media_mode in ("SOURCE", "GENERATED") and _headline_px(result) < HEADLINE_FLOOR_FRAC * spec.width:
+            # the plan's own headline box (or a busy image's only quiet corner) shrank the main line below display size;
+            # give it a solid band next to the still edge-to-edge image, but only when that is genuinely larger
+            bigger = _render_scaled_up(spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
+                                       subject_assets=subject_assets, visual_direction=visual_direction, force=True)
+            if bigger is not None and _headline_px(bigger[0]) > _headline_px(result):
+                before = _headline_px(result)
+                result, validated, scale_notes = bigger
+                result.notes.update({**scale_notes, "media_scale_reason": "headline_below_floor", "headline_px_before": before})
+                scaled = bigger
     adaptations = [f"{i.code}" for i in validated.issues if i.severity in ("adapted", "note")]
+    if scaled is not None:
+        adaptations.append("media_scale_adapted")
     if layout.arrangement == "collage":
         result.notes.update(collage_notes or {"collage_geometry_adapted": False})
         if collage_notes:
@@ -611,7 +676,7 @@ def render_carousel_slide(
 ) -> LayoutResult:
     declared = _try_declared(
         spec=spec, layout_plan=layout_plan, slide_copy=slide_copy, index=index, total=total,
-        subject_assets=subject_assets or {}, visual_direction=visual_direction,
+        subject_assets=subject_assets or {}, visual_direction=visual_direction, media_mode=media_mode,
     )
     if declared is not None and declared[0] is not None:
         result, adaptations = declared
