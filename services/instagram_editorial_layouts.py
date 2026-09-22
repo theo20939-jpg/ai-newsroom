@@ -49,6 +49,18 @@ class LayoutResult:
     notes: dict[str, Any] = field(default_factory=dict)
 
 
+# The renderer's own CLOSED vocabulary for `LayoutResult.source_image_treatment` (Phase B.7). `services/instagram_declarative_layout.py`
+# derives its `media_treatment` labels from CROP_MODE_TREATMENTS below - it never hand-types a second copy of these strings.
+# `services/instagram_art_validator.py` imports SOURCE_IMAGE_TREATMENTS as its ONLY source of truth for "is this a real treatment the
+# renderer can legitimately produce" - it must never hand-maintain an independent whitelist that can silently drift from this one
+# (a real bug: `object_contain`/`cutout` crop modes were added to the renderer without ever being added to the validator's own copy).
+CROP_MODE_TREATMENTS: dict[str, str] = {
+    "object_contain": "object_contained", "object_cover": "object_cover_cropped",
+    "cutout_contain": "cutout_contained", "cutout": "cutout_cover", "contain": "contain_preserved",
+}
+SOURCE_IMAGE_TREATMENTS = frozenset({"none", "cover_cropped", *CROP_MODE_TREATMENTS.values()})
+
+
 NEWS_VARIANT_FULL_BLEED = "news_full_bleed"
 NEWS_VARIANT_SPLIT_PANEL = "news_split_panel"
 NEWS_VARIANT_FRAMED = "news_framed"

@@ -27,7 +27,7 @@ from PIL import Image, ImageChops, ImageDraw
 
 from schemas.instagram_creative import InstagramSlideLayout, LayoutRegion
 from services import instagram_design_tokens as tok
-from services.instagram_editorial_layouts import LayoutResult, TextRegionSpec
+from services.instagram_editorial_layouts import CROP_MODE_TREATMENTS, LayoutResult, TextRegionSpec
 from services.instagram_image_handling import fit_image_contain, fit_image_cover
 from services.instagram_layout_signature import layout_characteristics, layout_signature
 from services.instagram_layout_validation import PROGRESS_ZONE, copy_parts
@@ -515,17 +515,15 @@ def _render_declared_once(
             object_box = None
             if mode in ("object_contain", "object_cover"):
                 tile, object_box = _fit_object(image, iw, ih, fx, fy, contain=mode == "object_contain")
-                media_treatment = "object_contained" if mode == "object_contain" else "object_cover_cropped"
             elif mode in ("cutout", "cutout_contain"):
                 tile = _fit_cutout(image, iw, ih, fx, fy, contain=mode == "cutout_contain")
-                media_treatment = "cutout_contained" if mode == "cutout_contain" else "cutout_cover"
             elif mode == "contain":
                 bg = canvas.getpixel((min(W - 1, max(0, x0 + 2)), min(H - 1, max(0, y0 + 2))))[:3]
                 tile = fit_image_contain(image, width=iw, height=ih, bg=bg).image
-                media_treatment = "contain_preserved"
             else:
                 tile = fit_image_cover(image, width=iw, height=ih, focus_x=fx, focus_y=fy).image
-                media_treatment = "cover_cropped"
+            # the treatment LABEL is derived from the shared vocabulary (services.instagram_editorial_layouts), never hand-typed here
+            media_treatment = CROP_MODE_TREATMENTS.get(mode, "cover_cropped")
             if object_box is not None:
                 ox0_, oy0_, ox1_, oy1_ = (object_box[0] + pad, object_box[1] + pad, object_box[2] + pad, object_box[3] + pad)
                 px_count = max(0, ox1_ - ox0_) * max(0, oy1_ - oy0_)

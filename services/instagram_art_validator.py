@@ -20,6 +20,7 @@ from typing import Any, Callable
 from PIL import Image, ImageStat
 
 from services.instagram_content_package import InstagramContentPackage
+from services.instagram_editorial_layouts import SOURCE_IMAGE_TREATMENTS
 from services.instagram_platform_renderer import InstagramRenderResult
 from services.instagram_visual_profiles import InstagramRenderProfile, profile_spec
 
@@ -136,10 +137,11 @@ def validate_instagram_art(
             blocking.append(f"rendered_media_unusable: slide_index={ev.slide_index}")
 
         # 6. source/media consistency (INSTAGRAM-VISUAL-SYSTEM-V1-1: this renderer now genuinely
-        #    composites real source imagery - section 13). Any value outside the image-handling
-        #    module's own truthful vocabulary would mean the evidence lied about what happened to
-        #    the pixels - that is a BLOCKING integrity failure, not a warning.
-        if ev.source_image_treatment not in ("none", "cover_cropped", "contain_preserved"):
+        #    composites real source imagery - section 13). Any value outside the renderer's own
+        #    closed vocabulary (services.instagram_editorial_layouts.SOURCE_IMAGE_TREATMENTS - the
+        #    ONLY source of truth; never a second hand-copied list here, Phase B.7) would mean the
+        #    evidence lied about what happened to the pixels - a BLOCKING integrity failure, not a warning.
+        if ev.source_image_treatment not in SOURCE_IMAGE_TREATMENTS:
             blocking.append(f"unknown_source_image_treatment: {ev.source_image_treatment!r} slide_index={ev.slide_index}")
         # a package that recorded a real `source_image_ref` but whose render shows no image was
         # actually applied usually means the caller forgot to pass the real bytes at render time -
