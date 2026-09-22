@@ -22,13 +22,16 @@ def build_b4_observability(
         chosen_family = getattr(slide, "visual_family", None)
         layout_model = getattr(slide, "layout", None)
         executed_family = (
-            infer_family(layout_model.model_dump()) if notes.get("layout_plan_applied") and layout_model is not None else "legacy_role_fallback"
+            infer_family(layout_model.model_dump()) if notes.get("layout_plan_applied") and layout_model is not None
+            else "media_preserving_fallback" if notes.get("media_preserving_fallback_used")
+            else "legacy_role_fallback"
         )
         slides.append({
             "text_only_slide": not slide_has_visual(notes=notes, planned_slide=slide, source_image_treatment=getattr(render.evidence, "source_image_treatment", None)),
             "media_source": getattr(slide, "media_source", None),
             "generation_brief": getattr(slide, "generation_brief", None),
             "hook_emotion": getattr(slide, "hook_emotion", None),
+            "hook_mechanic": getattr(slide, "hook_mechanic", None),
             "story_anchor": getattr(slide, "story_anchor", None),
             "visual_family_chosen": chosen_family,
             "visual_family_executed": executed_family,
@@ -60,6 +63,11 @@ def build_b4_observability(
             "structured_composition_present": bool(notes.get("structured_composition_present")),
             "structured_composition_executed": bool(notes.get("structured_composition_executed")),
             "role_fallback_used": bool(notes.get("fallback_role_layout_used")),
+            # Phase B.6.2: DECLARED LAYOUT EXECUTED / MEDIA-PRESERVING FALLBACK / TRUE NO-MEDIA FALLBACK, told apart explicitly.
+            "media_preserving_fallback_used": bool(notes.get("media_preserving_fallback_used")),
+            "media_origin": notes.get("media_origin"),
+            "visual_preserved": bool(notes.get("visual_preserved")),
+            "generated_asset_dropped": bool(getattr(slide, "media_source", None) == "generated" and not notes.get("visual_preserved")),
         })
     return {
         "content_archetype": carousel.content_archetype,

@@ -26,6 +26,7 @@ from PIL import Image, ImageChops, ImageDraw
 from services import instagram_design_tokens as tok
 from services.instagram_editorial_layouts import LayoutResult, TextRegionSpec
 from services.instagram_image_handling import build_detail_crop_field, fit_image_cover, mark_reserve_width, place_brand_mark
+from services.instagram_media_first import slide_has_visual
 from services.instagram_text_fit import box4, fit_text_block, measure_block_height
 from services.instagram_visual_profiles import ProfileSpec, ig_font
 
@@ -509,6 +510,27 @@ def _chain_for(comp: str, position: str | None, scale: float | None, has_media: 
     return head + [_Attempt("contained_media", "top", 0.42), _Attempt("contained_media", "top", 0.32), _Attempt("typographic")]
 
 
+_MEDIA_PRESERVING_SCALES = (0.55, 0.46, 0.38, 0.30, 0.22, 0.16)
+
+
+def _render_media_preserving_fallback(spec, text, index, total, media, fx, fy) -> LayoutResult:
+    """Phase B.6.2: the slide has a resolved SOURCE/GENERATED image but its declarative layout was rejected (bad geometry, a
+    text-fit problem, an unparseable graphic). Layout failure is never permission to discard a valid or paid visual: shrink the
+    media (never drop it) across a fixed, deterministic sequence of scales until the FULL slide copy fits without clipping;
+    the smallest scale is the last-resort result (it always shows the media - `_draw_copy` degrades the type, it never omits
+    text outright)."""
+    last: LayoutResult | None = None
+    for scale in _MEDIA_PRESERVING_SCALES:
+        result = _render_contained(spec, text, index, total, media, "top", scale, fx, fy, framed=False)
+        if result is None:
+            continue
+        last = result
+        if not result.text_clipped:
+            return result
+    assert last is not None  # "top" placement never returns None from _render_contained
+    return last
+
+
 def _run_attempt(a: _Attempt, *, spec, text, index, total, media, fx, fy, subject, graphic_reason, visual_direction=None) -> LayoutResult | None:
     if a.composition == "typographic":
         return _render_typographic(spec, text, index, total, media_subject=subject, graphic_reason=graphic_reason)
@@ -608,11 +630,39 @@ def render_carousel_slide(
             "composition_executed": result.layout_variant,
             "layout_adaptations": adaptations, "layout_plan_rejected": None,
             "overlay_operations_executed": 0,
+            "media_preserving_fallback_used": False, "media_origin": media_mode.lower() if media_mode else None,
         })
+        result.notes["visual_preserved"] = slide_has_visual(
+            notes=result.notes, planned_slide={"layout": layout_plan}, source_image_treatment=result.source_image_treatment)
         return result
     rejected_codes = declared[1] if declared is not None else None
     selected = media_image if media_image is not None else hero_image
     fx, fy = _focus_x_from_focal_point(focal_point), _focus_y_from_focal_point(focal_point)
+
+    if declared is not None and rejected_codes is not None and selected is not None and media_mode in ("SOURCE", "GENERATED"):
+        # Phase B.6.2: a media-first slide's declarative layout was rejected (bad geometry, a text-fit problem, an unparseable
+        # graphic) but the slide already has a valid resolved SOURCE/GENERATED visual - preserve it deterministically instead of
+        # falling through to the role-based chain below, which can legitimately choose "typographic" and silently drop it
+        # (e.g. every closing-role slide, per _default_composition - correct behaviour there, wrong here).
+        result = _render_media_preserving_fallback(spec, slide_copy, index, total, selected, fx, fy)
+        result.notes.update(render_plan or {})
+        result.notes.update({
+            "rendered_copy": [slide_copy], "internal_labels_rendered": [],
+            "visual_direction_consumed": bool(visual_direction), "media_mode_consumed": media_mode,
+            "per_slide_media_consumed": True, "media_need_consumed": media_need,
+            "composition_requested": composition, "media_position_requested": media_position,
+            "media_subject": media_subject, "must_match_story": must_match_story,
+            "media_asset_identity": media_asset_identity,
+            "structured_composition_present": True, "structured_composition_executed": False,
+            "fallback_role_layout_used": False, "composition_adapted_for_text_fit": False,
+            "composition_executed": result.layout_variant,
+            "layout_adaptations": [], "layout_plan_rejected": rejected_codes, "layout_plan_applied": False,
+            "overlay_operations_executed": 0,
+            "media_preserving_fallback_used": True, "media_origin": media_mode.lower(),
+        })
+        result.notes["visual_preserved"] = True
+        return result
+
     structured_present = composition is not None
     if structured_present:
         chain = _chain_for(composition.lower(), media_position, media_scale, selected is not None, slide_copy)
@@ -664,9 +714,12 @@ def render_carousel_slide(
         "source_media_pixels_unaltered": fidelity,
         # a declared layout was supplied but rejected: the deterministic role fallback ran instead
         "layout_plan_applied": False, "layout_plan_rejected": rejected_codes,
+        "media_preserving_fallback_used": False, "media_origin": media_mode.lower() if media_mode else None,
     })
     if rejected_codes:
         result.notes["structured_composition_present"] = True
         result.notes["structured_composition_executed"] = False
         result.notes["fallback_role_layout_used"] = True
+    result.notes["visual_preserved"] = slide_has_visual(
+        notes=result.notes, planned_slide={"layout": layout_plan}, source_image_treatment=result.source_image_treatment)
     return result
