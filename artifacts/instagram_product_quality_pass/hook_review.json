@@ -1,0 +1,42 @@
+{
+  "ai_hack": {
+    "hook": "Тебе нужен не длинный текст, а понятное решение.",
+    "hook_emotion": "usefulness",
+    "hook_mechanic": "sharp_comparison",
+    "why_the_emotion_fits_the_fact": "Создать полезное напряжение между длинным текстом и понятным решением, опираясь на задачу из E1.",
+    "evidence_handle": "E1",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  },
+  "news_insight": {
+    "hook": "Самая дорогая модель — уже не план по умолчанию.",
+    "hook_emotion": "surprise",
+    "hook_mechanic": "contradiction",
+    "why_the_emotion_fits_the_fact": "Создать лёгкое удивление через противоречие: автор отказался от самой дорогой модели как выбора по умолчанию.",
+    "evidence_handle": "E1",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  },
+  "news_recap": {
+    "hook": "ИИ учит не будущее — а древнегреческий.",
+    "hook_emotion": "surprise",
+    "hook_mechanic": "sharp_comparison",
+    "why_the_emotion_fits_the_fact": "Создать удивление через контраст между современным ИИ и древнегреческим языком; опора — E2.",
+    "evidence_handle": "E2",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  },
+  "trend_generative": {
+    "hook": "Титан и сапфир — а старт от $149",
+    "hook_emotion": "surprise",
+    "hook_mechanic": "sharp_comparison",
+    "why_the_emotion_fits_the_fact": "Создать удивление через резкий контраст материалов корпуса и стартовой цены, прямо поддержанный E1.",
+    "evidence_handle": "E1",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  }
+}
