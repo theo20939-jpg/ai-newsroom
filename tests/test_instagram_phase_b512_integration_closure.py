@@ -106,7 +106,7 @@ def test_v91_is_v9_except_for_the_evidence_contract_and_v9_is_untouched() -> Non
     strip = lambda d: {k: v for k, v in d["output_schema"]["properties"].items() if k != "evidence_used"}  # noqa: E731
     assert strip(v9) == strip(v91)  # the whole visual/layout/family schema is unchanged
     assert v9["system"].replace("evidence", "") != "" and v9["output_schema"]["required"] == v91["output_schema"]["required"]
-    assert cd.CAROUSEL_PROMPT_VERSION == "10.2" and cd._CREATIVE_DIRECTOR_MAX_TOKENS == 16_000
+    assert cd.CAROUSEL_PROMPT_VERSION == "10.3" and cd._CREATIVE_DIRECTOR_MAX_TOKENS == 16_000
 
 
 class _Gateway:
@@ -177,7 +177,7 @@ async def test_raw_structured_output_is_persisted_before_validation_and_survives
     assert [e for e, _ in events] == ["raw_output", "validation_error"]  # raw first, then the failure - in that order
     saved = json.loads((tmp_path / "raw_creative_director_output.json").read_text(encoding="utf-8"))
     assert saved["structured_output"]["evidence_used"] == ["a paraphrase the model invented"]
-    assert saved["evidence_handles"] == {"E1": "real evidence"} and saved["prompt_version"] == "10.2"
+    assert saved["evidence_handles"] == {"E1": "real evidence"} and saved["prompt_version"] == "10.3"
     assert events[1][1]["error_type"] == "UngroundedEvidenceError"
     blob = json.dumps(saved).lower()
     assert not any(word in blob for word in ("api_key", "password", "secret", "token=", "bearer", "postgres://", "redis://"))

@@ -194,7 +194,7 @@ def _load(version: str) -> dict:
 
 def test_v102_is_v101_plus_flow_steps_grounding_and_hook_mechanic_and_v101_is_untouched() -> None:
     v101, v102 = _load("10.1"), _load("10.2")
-    assert v101["version"] == "10.1" and v102["version"] == "10.2" and cd.CAROUSEL_PROMPT_VERSION == "10.2"
+    assert v101["version"] == "10.1" and v102["version"] == "10.2" and cd.CAROUSEL_PROMPT_VERSION == "10.3"
     changed = [i for i, (a, b) in enumerate(zip(v101["rules"], v102["rules"])) if a != b]
     assert len(v101["rules"]) == len(v102["rules"]) and len(changed) == 4
     assert "10.2" in cd.HOOK_MECHANIC_CAROUSEL_VERSIONS and "10.1" not in cd.HOOK_MECHANIC_CAROUSEL_VERSIONS

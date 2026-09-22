@@ -130,7 +130,7 @@ def test_the_attempt_identity_is_derived_from_the_post_and_the_slide_key_only() 
 
 def test_v101_is_v10_plus_only_the_hook_and_generated_contracts_and_v10_is_untouched() -> None:
     v10, v101 = _load("10"), _load("10.1")
-    assert v10["version"] == "10" and v101["version"] == "10.1" and cd.CAROUSEL_PROMPT_VERSION == "10.2"
+    assert v10["version"] == "10" and v101["version"] == "10.1" and cd.CAROUSEL_PROMPT_VERSION == "10.3"
     changed = [i for i, (a, b) in enumerate(zip(v10["rules"], v101["rules"])) if a != b]
     assert len(v10["rules"]) == len(v101["rules"]) and len(changed) == 2
     assert v101["rules"][changed[0]].startswith("GENERATED slide contract") and v101["rules"][changed[1]].startswith("HOOK CONTRACT")
@@ -244,10 +244,16 @@ def test_generic_ai_art_defaults_are_rejected_unless_the_story_is_literally_abou
     assert literal == []  # the evidence itself is about a robot: allowed
 
 
-def test_vague_directions_are_never_enough_even_with_evidence() -> None:
-    for phrase in ("abstract technology scene", "dynamic AI composition", "futuristic AI visual"):
-        assert find_generic_ai_art(phrase, ["dynamic AI composition abstract technology scene futuristic AI visual"])
+def test_generic_ai_art_terms_list_is_unchanged_and_there_is_no_separate_unescaped_phrase_list() -> None:
+    """Phase B.7: VAGUE_DIRECTION_PHRASES (no evidence escape hatch) is removed - it was redundant with MIN_VISUAL_DIRECTION_CHARS
+    and produced a real false positive ("abstract AI model cores", a grounded B.6.2 plan). GENERIC_AI_ART_TERMS (evidence-aware)
+    is the only remaining lexical guard; grounding itself is now the structural source_evidence requirement (see b62/b7 tests)."""
+    import services.instagram_media_first as m
+
+    assert not hasattr(m, "VAGUE_DIRECTION_PHRASES")
     assert len(GENERIC_AI_ART_TERMS) >= 15
+    for phrase in ("abstract technology scene", "dynamic AI composition", "futuristic AI visual", "two abstract AI model cores"):
+        assert find_generic_ai_art(phrase, []) == []  # no longer flagged - these were never generic OBJECTS, just prose
 
 
 def test_the_generation_prompt_carries_the_anchor_direction_and_forbids_the_generic_defaults() -> None:
