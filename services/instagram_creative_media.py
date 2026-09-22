@@ -180,6 +180,7 @@ def compile_instagram_generation_prompt(
         return _compile_slide_scene_prompt(
             brief=brief, plan=plan, opportunity_summary=opportunity_summary, evidence_block=evidence_block, content_format=content_format,
             family=value("visual_family"), function=value("media_function"), purpose=value("slide_purpose"),
+            anchor=value("story_anchor").strip(), direction=value("visual_direction").strip(),
         )
     return (
         f"VISUAL PROFILE VERSION\n{_VISUAL_PROFILE_VERSION}\n\n"
@@ -221,7 +222,7 @@ _FAMILY_COMPOSITION = {
 
 def _compile_slide_scene_prompt(
     *, brief: str, plan: dict[str, Any], opportunity_summary: str, evidence_block: str, content_format: str,
-    family: str, function: str, purpose: str,
+    family: str, function: str, purpose: str, anchor: str = "", direction: str = "",
 ) -> str:
     """Phase B.6: a contextual image for ONE slide, built from the approved plan's own scene brief. The image depicts the specific story concept; exact Russian copy and the
     canonical logo are added afterwards by the deterministic renderer."""
@@ -230,12 +231,15 @@ def _compile_slide_scene_prompt(
         f"VISUAL PROFILE VERSION\n{_VISUAL_PROFILE_VERSION}\n\n"
         f"STORY\n{opportunity_summary}\nSupported facts only:\n{evidence_block}\n\n"
         f"SPECIFIC SCENE TO DEPICT (approved plan for this slide)\n{brief}\n"
+        + (f"STORY-SPECIFIC ANCHOR (what makes this picture belong to THIS story)\n{anchor}\n" if anchor else "")
+        + (f"WHAT MUST BE PHYSICALLY VISIBLE, AND WHY\n{direction}\n" if direction else "")
+        + 
         f"Slide purpose: {purpose or 'primary visual'}. Media function: {function or 'hero'}.\n\n"
         f"OVERALL IDEA\n{plan.get('main_idea') or opportunity_summary}\n"
         f"Visual genre: {plan.get('visual_treatment') or 'editorial conceptual visual'}.\n\n"
         f"COMPOSITION FOR THIS SLIDE\n{composition}. Portrait 4:5 editorial framing, one decisive focal point, believable depth and material detail.\n\n"
-        "SPECIFICITY\nDepict THIS story's concrete idea so the picture communicates the story before the reader reads the text. Do NOT produce a generic "
-        "AI brain, glowing robot, random cyberpunk city, random laptop, hologram or corporate technology stock art unless this story is literally about it.\n\n"
+        "SPECIFICITY\nDepict THIS story's concrete idea so the picture communicates the story before the reader reads the text. The picture must not be reusable unchanged for ten unrelated AI posts. Do NOT produce a "
+        "glowing cube, floating spheres or random geometry, a generic AI brain, an anonymous robot, a hologram, a cyberpunk city, an abstract monolith, neon circuitry or corporate technology stock art unless this story is literally about it.\n\n"
         "COLOR / MOOD\nDerive colour from the idea; contemporary, specific, cinematic or editorial, never generic.\n\n"
         "NEGATIVE CONSTRAINTS\nNO LOGOS. NO WORDMARKS. NO WATERMARKS. NO LARGE TEXT. NO READABLE TEXT OR LETTERING OF ANY KIND. NO FAKE UI. NO RANDOM INTERFACES. NO "
         "UNSUPPORTED PRODUCTS, FACTS, NUMBERS OR THIRD-PARTY BRANDING. Do not bake any headline into the image; the application adds the exact Russian copy and the "
@@ -374,7 +378,7 @@ async def _execute_generated_asset(
         mode=effective_mode,  # type: ignore[arg-type]
         purpose="instagram_phase_b2",
         execution_id=execution_id,
-        creative_id=f"instagram:{creative_id}",
+        creative_id=f"instagram:{creative_id}:visual:{asset_key}",  # Phase B.6.1: the attempt guard is per generated SLIDE, not per post
         package_id=creative_id,
         opportunity_id=opportunity_id,
         max_attempts=1,
