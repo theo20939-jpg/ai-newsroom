@@ -265,6 +265,9 @@ class CreativeDirectorInput:
     kage_voice_context: str = ""
     available_media_subjects: tuple = ()
     unsuitable_media_subjects: tuple = ()
+    # Quality loop: set ONLY on a retry after a recoverable structural contract miss (never on a first attempt, so every
+    # existing request text stays byte-identical); tells the model exactly what its previous attempt broke.
+    contract_retry_note: str = ""
     # Phase B.5: the STRUCTURED Visual DNA (stored once, reused per post) - rendered rules, never a path.
     visual_dna_context: str = ""
     visual_dna_version: str = ""
@@ -351,6 +354,7 @@ def _build_user_text(director_input: CreativeDirectorInput, *, evidence_handles:
             + ", ".join(director_input.recap_subjects)
             if director_input.recap_subjects else ""
         )
+        + (f"\nPREVIOUS ATTEMPT REJECTED: {director_input.contract_retry_note}" if director_input.contract_retry_note else "")
     )
 
 

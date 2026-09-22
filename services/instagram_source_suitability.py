@@ -25,9 +25,10 @@ from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, Mess
 from schemas.capability import RuntimeContext, TaskPriority
 
 PROMPT_NAME = "instagram_source_visual_suitability"
-PROMPT_VERSION = "1"
+PROMPT_VERSION = "2"
 MAX_CHECKS_PER_POST = 8
 SUITABLE_KINDS = frozenset({"photograph", "product_render", "illustration_or_artwork"})
+UNSUITABLE_KINDS = frozenset({"article_or_news_card", "promo_or_press_graphic", "screenshot_or_interface", "logo_or_wordmark", "chart_or_diagram"})
 _MAX_SIDE = 768
 
 _sink: list[dict] | None = None
@@ -51,8 +52,9 @@ class SuitabilityVerdict:
 
 
 def decide(structured: dict) -> bool:
-    return (bool(structured.get("primary_media_suitable")) and not bool(structured.get("baked_in_text_prominent"))
-            and structured.get("image_kind") in SUITABLE_KINDS)
+    """Decided from WHAT the image is, not from the model's own overall opinion: asking for a suitability judgement made it
+    reject a real photographed papyrus. `primary_media_suitable` is still recorded, it just does not veto a real picture."""
+    return not (structured.get("image_kind") in UNSUITABLE_KINDS or bool(structured.get("baked_in_text_prominent")))
 
 
 def _data_uri(image: Image.Image) -> str:

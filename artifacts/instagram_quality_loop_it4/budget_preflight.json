@@ -1,0 +1,25 @@
+{
+  "image_generation_live": true,
+  "image_worst_case_each_usd": "0.08100",
+  "image_slots_planned": 24,
+  "planned_worst_case_total_usd": "2.3660",
+  "request_max_tokens": 16000,
+  "gateway_worst_case_by_candidate_usd": {
+    "gpt-5.6-terra": "0.263750",
+    "gpt-5.6-luna": "0.105500"
+  },
+  "diagnostic_namespace": "instagram_quality_loop_it4",
+  "diagnostic_hard_cap_usd": "2.50",
+  "diagnostic_spent_before_usd": "0",
+  "production_ledger_before_usd": "2.894326",
+  "production_daily_limit_usd": "1.0",
+  "instagram_automatic_generation_enabled": false,
+  "worst_case_per_call_usd": "0.1055",
+  "real_calls_planned": 4,
+  "worst_case_planned_calls_usd": "0.4220",
+  "assumed_tokens_per_call": {
+    "input": 16000,
+    "output": 9000
+  },
+  "safe": true
+}

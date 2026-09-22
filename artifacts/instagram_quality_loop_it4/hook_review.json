@@ -1,0 +1,42 @@
+{
+  "ai_hack": {
+    "hook": "Длинный текст. Решение — короткое.",
+    "hook_emotion": "curiosity",
+    "hook_mechanic": "sharp_comparison",
+    "why_the_emotion_fits_the_fact": "Sharp comparison creates curiosity by contrasting the long source text with the clear decision it needs to become.",
+    "evidence_handle": "E1",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  },
+  "news_insight": {
+    "hook": "Самая умная больше не первая",
+    "hook_emotion": "surprise",
+    "hook_mechanic": "contradiction",
+    "why_the_emotion_fits_the_fact": "Создать удивление через контраст: автор ушёл от самых умных и дорогих моделей к более дешёвым.",
+    "evidence_handle": "E1",
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  },
+  "news_recap": {
+    "hook": "Древнегреческий ИИ — уже в планах",
+    "hook_emotion": "surprise",
+    "hook_mechanic": "specific_surprise",
+    "why_the_emotion_fits_the_fact": "Создать удивление конкретной историей Apollo и открыть подборку через неожиданный контраст между древним языком и современным ИИ — E6.",
+    "evidence_handle": null,
+    "weak_generic_newsroom_patterns": [],
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  },
+  "trend_generative": {
+    "hook": "Ожидание громче реальности",
+    "hook_emotion": "curiosity",
+    "hook_mechanic": "contradiction",
+    "why_the_emotion_fits_the_fact": "Создать любопытство через контраст между первым впечатлением и тем, что остаётся после него.",
+    "evidence_handle": null,
+    "weak_generic_newsroom_patterns": null,
+    "fact_safety_gate": "PASS",
+    "founder_emotional_bar": "AWAITING REVIEW"
+  }
+}

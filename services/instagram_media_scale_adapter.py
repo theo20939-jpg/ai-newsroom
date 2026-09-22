@@ -15,7 +15,8 @@ from schemas.instagram_creative import InstagramSlideLayout, LayoutRegion
 
 MIN_MEDIA_AREA = 0.50
 SHORT_COPY_CHARS = 34
-ORIENTATIONS = ("side_right", "side_left", "text_top", "text_bottom")
+ORIENTATIONS = ("side_right", "side_left", "text_top", "text_bottom", "mixed_bands")
+SUBSTANTIVE_GRAPHICS = frozenset({"flow_diagram", "poll_cards", "ui_frame"})
 DECORATIVE_GRAPHICS = frozenset({"badge", "scribble", "arrow_scribble", "circle_scribble", "box_scribble", "underline_scribble", "highlight", "burst"})
 _HEADLINE_REFS = ("copy", "copy_lead", "copy_no_number")
 _PROMOTE = {"HEADLINE_S", "HEADLINE_M", "HEADLINE_L"}
@@ -75,7 +76,12 @@ def adapt_media_scale(layout: InstagramSlideLayout, *, slide_copy: str, force: b
         # the decorative marks go - a substantive graphic (ui_frame, flow_diagram, poll_cards) still keeps the plan as it is
         graphics = [g for g in graphics if g.graphic_type not in DECORATIVE_GRAPHICS]
         medias = sorted(medias, key=_clipped_area, reverse=True)[:1]
-    if len(medias) != 1 or not texts or graphics or (not force and any(t.on_media for t in texts)):
+    substantive = [g for g in graphics if g.graphic_type in SUBSTANTIVE_GRAPHICS]
+    # one image + one substantive graphic on a plain slide: both get a band. A collage is never flattened into this - its other
+    # fragments would be lost - so a collage carrying a substantive graphic still keeps the plan the model wrote.
+    one_image_one_graphic = not collage and len(medias) == 1 and len(graphics) == 1 and len(substantive) == 1
+    mixed = bool(one_image_one_graphic and (force or _clipped_area(medias[0]) < MIN_MEDIA_AREA))
+    if len(medias) != 1 or not texts or (graphics and not mixed) or (not force and any(t.on_media for t in texts)):
         return None
     media = medias[0]
     staged_on_ground = any(r.kind == "surface" and r.surface == "media_ground" for r in layout.regions)
@@ -92,6 +98,17 @@ def adapt_media_scale(layout: InstagramSlideLayout, *, slide_copy: str, force: b
     media_cx, media_cy = media.x + media.w / 2, media.y + media.h / 2
     logo_right = layout.logo_position == "BOTTOM_RIGHT"
 
+    if mixed:
+        # a slide carrying BOTH a paid image and a substantive graphic: neither may be dropped, so both get a full-width band
+        regions = [r for r in layout.regions if r.kind == "surface" and r.w >= 0.99 and r.h >= 0.99 and r.surface != "media_ground"]
+        regions.append(media.model_copy(update={"x": 0.0, "y": 0.0, "w": 1.0, "h": 0.44, "z": 1, "frame": "none", "tilt_deg": None, "crop_mode": "cover"}))
+        rule_region = next((r for r in layout.regions if r.kind == "accent" and r.accent_type == "rule_h"), None)
+        if rule_region is not None:
+            regions.append(rule_region.model_copy(update={"x": 0.07, "y": 0.475, "w": 0.1, "h": 0.018, "z": 2, "on_media": None}))
+        regions.extend(t.model_copy(update={"z": 2}) for t in _stack(texts, 0.07, 0.51, 0.86, 0.15))
+        regions.append(substantive[0].model_copy(update={"x": 0.07, "y": 0.68, "w": 0.86, "h": 0.12, "z": 2, "tilt_deg": None}))
+        adapted_mixed = layout.model_copy(update={"regions": regions, "media_dominance": "DOMINANT", "arrangement": "standard"})
+        return MediaScaleAdaptation(adapted_mixed, (media.x, media.y, media.w, media.h), (0.0, 0.0, 1.0, 0.44), "mixed_bands")
     if orientation is None:
         if len(slide_copy.strip()) <= SHORT_COPY_CHARS and abs(media_cx - text_cx) >= 0.25:
             orientation = "side_right" if media_cx > text_cx else "side_left"

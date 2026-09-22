@@ -875,7 +875,17 @@ async def evaluate_and_submit_instagram_opportunity(
 
     try:
         regenerator = build_default_regenerator(gateway, prompt_repository)
-        creative_outcome = await regenerator(director_input, format_decision.recommended_format)
+        try:
+            creative_outcome = await regenerator(director_input, format_decision.recommended_format)
+        except MediaFirstContractError as exc:
+            # A recoverable STRUCTURAL miss (e.g. a generated slide that forgot its source_evidence handle) killed the whole post in a
+            # real run. The contract itself is unchanged - the model simply gets one more attempt, told exactly what it broke. Fact-safety
+            # errors (ungrounded evidence, unsupported claims, clickbait, language) are never retried: those must fail.
+            logger.info("instagram_media_first_contract_retry", extra={"opportunity_id": opportunity.id, "error": str(exc)[:200]})
+            creative_outcome = await regenerator(
+                replace(director_input, contract_retry_note=f"Your previous attempt was rejected: {exc}. Fix exactly that and keep everything else."),
+                format_decision.recommended_format,
+            )
     except (
         CreativeDirectorUnavailableError, UngroundedEvidenceError, CreativeFactSafetyError,
         CreativeLanguageError, AudienceFacingCopyError, CreativeContractError, MetaLanguageLeakError,

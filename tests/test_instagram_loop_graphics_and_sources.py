@@ -188,3 +188,79 @@ def test_a_vision_unsuitable_source_is_marked_unsuitable_everywhere_the_director
     note = trig._carousel_media_note(source_image=None, recap_bundle=bundle, media_first=True, vision_unsuitable=flagged)
     story_1_line = next(line for line in note.splitlines() if line.startswith("subject key 'story_1'"))
     assert "SOURCE_SUITABLE_FOR_FINAL_VISUAL: NO" in story_1_line
+
+
+# ------------------------------------------------------------------------------------------ iteration 5 (real iteration-4 findings)
+
+
+def test_a_slide_carrying_both_an_image_and_a_graphic_gives_each_a_band():
+    """real iteration-4 AI_HACK slide: media 0.46x0.78 + a flow strip + a narrow text column -> 55px headline, 0.36 media coverage.
+    Neither adapter owned it (one refuses graphics, the other refuses media), so nothing grew."""
+    from services.instagram_media_scale_adapter import adapt_media_scale
+    mixed_plan = {**REAL_FLOW, "regions": [
+        REAL_FLOW["regions"][0],
+        _r("media", 0, 0.22, 0.46, 0.78, content_ref="generated", crop_mode="cover"),
+        _r("text", 0.54, 0.08, 0.38, 0.16, z=2, content_ref="copy", scale_token="HEADLINE_L", on_media=False),
+        _r("graphic", 0.54, 0.35, 0.38, 0.28, graphic_type="flow_diagram", flow_steps=["ДЛИННЫЙ ТЕКСТ", "РЕШЕНИЯ", "ЧИСТЫЙ ВЫВОД"]),
+    ]}
+    copy = "Шаг 1. Оставь только решения."
+    adaptation = adapt_media_scale(InstagramSlideLayout.model_validate(mixed_plan), slide_copy=copy)  # the image is under the area floor
+    assert adaptation.orientation == "mixed_bands"
+    kinds = [r.kind for r in adaptation.layout.regions]
+    assert kinds.count("media") == 1 and kinds.count("graphic") == 1  # nothing paid for, and nothing informative, is dropped
+
+    img = Image.new("RGB", (1024, 1280), (90, 90, 96))
+    result = render_carousel_slide(spec=SPEC, role="step", index=1, total=4, slide_copy=copy, source_evidence=None, package_identity="p",
+                                   media_image=img, media_mode="GENERATED", layout_plan=mixed_plan, subject_assets={"generated": (img, "i")})
+    from services.instagram_carousel_layouts import HEADLINE_FLOOR_FRAC
+    headline = max(m["font_px"] for m in result.notes["text_metrics"] if m["ref"] == "copy")
+    assert result.notes["media_scale_orientation"] == "mixed_bands" and headline >= HEADLINE_FLOOR_FRAC * SPEC.width
+    assert result.notes["media_canvas_coverage"] > 0.36
+
+
+def test_a_photographed_manuscript_is_not_rejected_for_its_own_writing():
+    """real iteration-4 false positive: the Apollo papyrus was called unsuitable because its ancient writing is 'prominent text'"""
+    papyrus = {"image_kind": "illustration_or_artwork", "baked_in_text_prominent": False, "primary_media_suitable": False,
+               "reason": "a classical bust over a manuscript"}
+    assert suit.decide(papyrus) is True  # the model's own overall opinion no longer vetoes a real picture
+    assert suit.decide({"image_kind": "promo_or_press_graphic", "baked_in_text_prominent": False, "primary_media_suitable": True}) is False
+    assert suit.decide({"image_kind": "illustration_or_artwork", "baked_in_text_prominent": True, "primary_media_suitable": True}) is False
+
+
+def test_the_suitability_prompt_v2_separates_added_text_from_the_photographed_subject():
+    import yaml
+    from pathlib import Path
+    prompts = Path(__file__).resolve().parent.parent / "prompts" / "instagram_source_visual_suitability"
+    v1 = yaml.safe_load((prompts / "v1.yaml").read_text(encoding="utf-8"))
+    v2 = yaml.safe_load((prompts / "v2.yaml").read_text(encoding="utf-8"))
+    assert v1["version"] == "1" and v2["version"] == "2" and suit.PROMPT_VERSION == "2"
+    assert v2["output_schema"] == v1["output_schema"] and v2["system"] == v1["system"]
+    baked = next(r for r in v2["rules"] if r.startswith("baked_in_text_prominent"))
+    assert "ADDED ON TOP" in baked and "manuscript" in baked
+
+
+def test_a_recoverable_contract_miss_is_retried_once_with_what_it_broke(monkeypatch):
+    """real iteration-4 TREND_GENERATIVE: one missing source_evidence handle killed the whole post"""
+    import services.instagram_automatic_trigger as trig
+    from services.instagram_creative_director import CreativeDirectorInput
+    from services.instagram_media_first import MediaFirstContractError
+
+    attempts: list = []
+
+    async def regenerator(director_input, fmt):
+        attempts.append(director_input)
+        if len(attempts) == 1:
+            raise MediaFirstContractError("slide 0: a generated slide needs source_evidence (a cited evidence handle)")
+        return "ok"
+
+    monkeypatch.setattr(trig, "build_default_regenerator", lambda gateway, repo: regenerator)
+    src = "\n".join(__import__("inspect").getsource(trig.evaluate_and_submit_instagram_opportunity).splitlines())
+    assert "contract_retry_note=" in src and "MediaFirstContractError as exc" in src
+    base = CreativeDirectorInput(objective="o", format="carousel", opportunity_summary="s", allowed_evidence=["E"], approved_claims=[], restricted_claims=[])
+    assert base.contract_retry_note == ""  # never set on a first attempt: existing request text stays byte-identical
+
+    from dataclasses import replace as dc_replace
+    retried = dc_replace(base, contract_retry_note="slide 0: needs source_evidence")
+    from services.instagram_creative_director import _build_user_text
+    assert "PREVIOUS ATTEMPT REJECTED: slide 0: needs source_evidence" in _build_user_text(retried)
+    assert "PREVIOUS ATTEMPT REJECTED" not in _build_user_text(base)

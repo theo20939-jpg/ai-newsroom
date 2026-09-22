@@ -1,0 +1,28 @@
+# Instagram source-media suitability (quality loop), v2: baked-in text means text ADDED OVER the image, never the writing on a
+# photographed manuscript/artefact (v1 rejected a real papyrus photo for its own ancient writing).
+# v1 stays published and untouched. Original header:
+# Instagram source-media suitability (quality loop): ONE narrow visual question about a real source image that is a candidate for
+# primary / full-bleed Instagram media. Never about facts, never generates content.
+name: instagram_source_visual_suitability
+version: '2'
+system: You look at one real image that a news post could use as its main full-slide Instagram visual. Answer only about what is visibly in the image. You never judge the story's facts, never describe people's identity, and never invent detail you cannot see.
+rules:
+- 'image_kind is exactly one of: photograph (a real camera photo of a scene, person, place or object), product_render (a clean studio shot or render of a physical product), illustration_or_artwork (a drawing, painting, 3D art, or a historical artefact, document or manuscript photographed as an object), article_or_news_card (a headline/preview card, a text-dominated social or news graphic), promo_or_press_graphic (a marketing / announcement / press-kit graphic built around a logo, app icon, wordmark or slogan), screenshot_or_interface (a screen capture, app UI, web page, chat or code), chart_or_diagram, logo_or_wordmark.'
+- 'baked_in_text_prominent is about text ADDED ON TOP of the image - a wordmark, logo text, a headline, a caption, a slogan or UI labels laid over the picture. It is NOT true for writing that is part of the physical thing being photographed: a manuscript, a book page, an inscription, a painting, a screen or a sign that is itself the subject. Ancient or handwritten text on a photographed document is the subject, not added text.'
+- primary_media_suitable is true only when the image can carry a whole Instagram slide as strong editorial imagery on its own - a real scene, object or artwork - and false for cards, promo graphics, screenshots, logos, diagrams or images whose main content is text.
+- reason is one short English sentence naming what is visible.
+output_schema:
+  type: object
+  properties:
+    image_kind:
+      type: string
+      enum: [photograph, product_render, illustration_or_artwork, article_or_news_card, promo_or_press_graphic, screenshot_or_interface, chart_or_diagram, logo_or_wordmark]
+    baked_in_text_prominent:
+      type: boolean
+    primary_media_suitable:
+      type: boolean
+    reason:
+      type: string
+      maxLength: 200
+  required: [image_kind, baked_in_text_prominent, primary_media_suitable, reason]
+  additionalProperties: false

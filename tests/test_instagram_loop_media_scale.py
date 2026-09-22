@@ -103,8 +103,11 @@ def test_large_media_collage_hero_object_and_graphic_slides_are_untouched():
         REAL_AI_HACK_HOOK["regions"][3],
     ]}
     assert adapt_media_scale(InstagramSlideLayout.model_validate(staged), slide_copy=REAL_AI_HACK_COPY) is None
-    graphic = {**REAL_AI_HACK_HOOK, "regions": [*REAL_AI_HACK_HOOK["regions"], _region("graphic", 0.08, 0.55, 0.4, 0.2, graphic_type="ui_frame")]}
-    assert adapt_media_scale(InstagramSlideLayout.model_validate(graphic), slide_copy=REAL_AI_HACK_COPY) is None
+    decorative = {**REAL_AI_HACK_HOOK, "regions": [*REAL_AI_HACK_HOOK["regions"], _region("graphic", 0.08, 0.55, 0.1, 0.06, graphic_type="burst")]}
+    assert adapt_media_scale(InstagramSlideLayout.model_validate(decorative), slide_copy=REAL_AI_HACK_COPY) is None  # a decorative mark is not a band
+    substantive = {**REAL_AI_HACK_HOOK, "regions": [*REAL_AI_HACK_HOOK["regions"], _region("graphic", 0.08, 0.55, 0.4, 0.2, graphic_type="ui_frame")]}
+    both = adapt_media_scale(InstagramSlideLayout.model_validate(substantive), slide_copy=REAL_AI_HACK_COPY)
+    assert both is not None and both.orientation == "mixed_bands"  # one small image + one substantive graphic: each gets a band
 
 
 def test_an_object_on_a_plain_surface_is_not_treated_as_a_staged_hero():
