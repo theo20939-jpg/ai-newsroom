@@ -640,7 +640,9 @@ def _render_declared_once(
                     for side in (-0.5, 0.5):
                         draw.line([(bx, by), (bx - head * math.cos(ang + side), by - head * math.sin(ang + side))], fill=(*colour, 255), width=width)
             elif region.graphic_type == "flow_diagram":
-                tokens = _flow_tokens(visual_direction)
+                # Phase B.6.2: structured flow_steps (new v10.2 contract) owns the diagram; free-form visual_direction parsing
+                # is kept only as a legacy compatibility path for output written before this field existed.
+                tokens = list(region.flow_steps) if region.flow_steps else _flow_tokens(visual_direction)
                 if tokens is None:
                     dropped.append("flow_diagram_without_sequence")
                     continue

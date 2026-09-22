@@ -48,8 +48,24 @@ def media_refs(slide: Any) -> list[str]:
     return [str(_get(r, "content_ref")) for r in _regions(slide) if _get(r, "kind") == "media" and _get(r, "content_ref")]
 
 
+def _flow_steps_valid(steps: Any) -> bool:
+    return isinstance(steps, (list, tuple)) and 2 <= len(steps) <= 4 and all(isinstance(s, str) and 1 <= len(s.strip()) <= 22 for s in steps)
+
+
 def has_substantive_graphic(slide: Any) -> bool:
-    return any(_get(r, "kind") == "graphic" and _get(r, "graphic_type") in SUBSTANTIVE_GRAPHICS for r in _regions(slide))
+    """Phase B.6.2: a flow_diagram is substantive only with valid structured flow_steps (2-4 short node labels) - free-form
+    visual_direction prose is a legacy render-time fallback (services/instagram_declarative_layout.py), never a way to pass this
+    generation-time content check, so a broken flow_diagram plan is rejected here rather than silently rendering text-only."""
+    for r in _regions(slide):
+        if _get(r, "kind") != "graphic":
+            continue
+        graphic_type = _get(r, "graphic_type")
+        if graphic_type == "flow_diagram":
+            if _flow_steps_valid(_get(r, "flow_steps")):
+                return True
+        elif graphic_type in SUBSTANTIVE_GRAPHICS:
+            return True
+    return False
 
 
 def _only_small_fragment(slide: Any, ref: str) -> bool:
@@ -69,10 +85,11 @@ def find_generic_ai_art(text: str, evidence: list[str]) -> list[str]:
     return hits + [p for p in VAGUE_DIRECTION_PHRASES if p in lowered]
 
 
-def assert_hook_contract(slides: list[Any]) -> None:
-    """Phase B.6.1: the first slide is the hook and states its ONE intended reader reaction; every other slide has none. The model declares the emotion; whether it is
-    actually felt is founder review, never a regex."""
-    from schemas.instagram_creative import HOOK_EMOTIONS
+def assert_hook_contract(slides: list[Any], *, require_mechanic: bool = False) -> None:
+    """Phase B.6.1/B.6.2: the first slide is the hook and states its ONE intended reader reaction (hook_emotion) and, from v10.2,
+    HOW it creates that reaction (hook_mechanic); every other slide has neither. The model declares both; whether the copy
+    actually cashes the mechanic out is founder review, never a regex - see hook_review.json for both fields side by side."""
+    from schemas.instagram_creative import HOOK_EMOTIONS, HOOK_MECHANICS
 
     first = slides[0]
     if str(_get(first, "role")) != "hook":
@@ -81,9 +98,13 @@ def assert_hook_contract(slides: list[Any]) -> None:
         raise MediaFirstContractError("the hook slide has no copy")
     if _get(first, "hook_emotion") not in HOOK_EMOTIONS:
         raise MediaFirstContractError("the hook slide must state hook_emotion (one of the bounded reactions)")
+    if require_mechanic and _get(first, "hook_mechanic") not in HOOK_MECHANICS:
+        raise MediaFirstContractError("the hook slide must state hook_mechanic (one of the bounded mechanics)")
     for index, slide in enumerate(slides[1:], start=1):
         if _get(slide, "hook_emotion") is not None:
             raise MediaFirstContractError(f"slide {index}: hook_emotion belongs to the hook slide only")
+        if _get(slide, "hook_mechanic") is not None:
+            raise MediaFirstContractError(f"slide {index}: hook_mechanic belongs to the hook slide only")
 
 
 def assert_media_first(

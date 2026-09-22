@@ -7,7 +7,7 @@ not explicitly supply as allowed evidence - the Creative Director may transform 
 may never invent a fact."""
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -143,6 +143,9 @@ class LayoutRegion(BaseModel):
     tone: Literal["primary", "accent", "accent2", "muted"] | None = None
     on_media: bool | None = None
     tilt_deg: float | None = Field(default=None, ge=-12.0, le=12.0)
+    # Phase B.6.2: structured content for graphic_type="flow_diagram" - the renderer's node diagram reads THIS, never free-form
+    # visual_direction prose (services/instagram_declarative_layout.py). 2-4 short node labels, each within the node-label render budget.
+    flow_steps: list[Annotated[str, Field(min_length=1, max_length=22)]] | None = Field(default=None, min_length=2, max_length=4)
 
 
 class InstagramSlideLayout(BaseModel):
@@ -181,6 +184,9 @@ MEDIA_SOURCES = ("source", "generated", "graphic")
 MediaSource = Literal["source", "generated", "graphic"]
 HOOK_EMOTIONS = ("surprise", "curiosity", "humour", "disbelief", "tension", "desire", "relatable_frustration", "usefulness", "absurdity")
 HookEmotion = Literal["surprise", "curiosity", "humour", "disbelief", "tension", "desire", "relatable_frustration", "usefulness", "absurdity"]
+# Phase B.6.2: HOW the hook creates its stated emotion - the hook copy must visibly instantiate this mechanic (services.instagram_media_first).
+HOOK_MECHANICS = ("personal_stake", "contradiction", "unexpected_consequence", "relatable_pain", "specific_surprise", "absurdity", "sharp_comparison")
+HookMechanic = Literal["personal_stake", "contradiction", "unexpected_consequence", "relatable_pain", "specific_surprise", "absurdity", "sharp_comparison"]
 
 VisualFamily = Literal[
     "immersive_image_field", "hero_object_stage", "internet_culture_collage",
@@ -247,6 +253,9 @@ class InstagramCarouselSlideCreative(BaseModel):
     # Phase B.6.1: the hook slide states the ONE reader reaction it targets (internal planning field, never audience copy; null on every other slide), and every
     # generated slide names the concrete story-specific thing that makes its image belong to THIS story.
     hook_emotion: HookEmotion | None = None
+    # Phase B.6.2: HOW the hook slide creates hook_emotion (null elsewhere) - a second bounded planning field the founder review
+    # checks the copy actually instantiates, never a substitute for hook_emotion.
+    hook_mechanic: HookMechanic | None = None
     story_anchor: str | None = Field(default=None, max_length=240)
     # Phase B.4.1 section 7: deliberately NOT a field here. The model may state WHICH subject a
     # slide needs (media_subject) and WHETHER a shared/fallback asset is unacceptable
