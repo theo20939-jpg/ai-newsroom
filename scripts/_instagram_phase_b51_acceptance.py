@@ -44,6 +44,7 @@ from services.instagram_content_opportunity import ContentOpportunity, Opportuni
 from services.instagram_layout_signature import infer_family
 from services.instagram_meta_language_guard import find_meta_language
 from services.instagram_trend_radar import TrendSignal, TrendSignalProvenance, TrendSignalType
+from services.instagram_media_first import find_generic_ai_art
 from services.kage_voice import load_kage_voice
 from services.pricing_catalog import ModelRegistryPricingCatalog
 
@@ -404,6 +405,11 @@ async def main() -> None:
         {r["archetype"]: {"hook": r.get("hook_text"), "media_slides": r.get("media_slides"), "text_only_slides": r.get("text_only_slides"),
                           "typographic_final_media_slides": r.get("typographic_final_media_slides"), "media_source_counts": r.get("media_source_counts")}
          for r in summary}, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    (out_dir / "hook_review.json").write_text(json.dumps(
+        {r["archetype"]: {"hook": r.get("hook_text"), "hook_emotion": r.get("hook_emotion"), "why_the_emotion_fits_the_fact": r.get("hook_reaction_plan"),
+                          "evidence_handle": r.get("hook_evidence_handle"), "weak_generic_newsroom_patterns": r.get("hook_weak_patterns"),
+                          "fact_safety_gate": "PASS" if r.get("VALIDATION") == "PASS" or not r.get("contract_error") else "FAIL",
+                          "founder_emotional_bar": "AWAITING REVIEW"} for r in summary}, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     result = {"mode": mode, "REAL_MODEL": real, "real_calls": calls["count"], "actual_cost_usd": str(calls["actual"]), "fixture_substitutions": 0,
               "image_provider_calls_ok": image_calls, "image_generation_cost_usd": str(image_cost), "image_generation_live": B6_IMAGES_LIVE,
               "budget_accounting": accounting, "recap_selection": recap_note, "runs": summary}
@@ -517,7 +523,9 @@ def _b6_fields(model_output: dict, obs: dict | None, seen: dict, captured: dict,
             "index": i, "media_source": sl.get("media_source"), "executed_media_mode": asset.media_mode.value if asset else None, "media_status": asset.status if asset else None,
             "generation_prompt_sha256": getattr(asset, "prompt_sha256", None), "generation_cost_usd": getattr(asset, "accounted_cost_usd", None),
             "generation_reserved_usd": getattr(asset, "reserved_cost_usd", None), "asset_identity": getattr(asset, "asset_identity", None),
-            "generation_brief": sl.get("generation_brief"), "chosen_family": sl.get("visual_family"), "executed_family": o.get("visual_family_executed"),
+            "generation_brief": sl.get("generation_brief"), "story_anchor": sl.get("story_anchor"), "visual_direction": sl.get("visual_direction"),
+            "generic_ai_art": bool(find_generic_ai_art(" ".join(str(sl.get(k) or "") for k in ("generation_brief", "story_anchor", "visual_direction")), list(getattr(di, "allowed_evidence", []) or []))),
+            "chosen_family": sl.get("visual_family"), "executed_family": o.get("visual_family_executed"),
             "text_only_slide": o.get("text_only_slide"), "source_card_area": round(card_area, 3),
         })
         if asset is not None and asset.prompt:
@@ -529,7 +537,8 @@ def _b6_fields(model_output: dict, obs: dict | None, seen: dict, captured: dict,
     hook = slides_raw[0] if slides_raw else {}
     generated = [p for p in per_slide if p["executed_media_mode"] == "GENERATED" and p["media_status"] == "generated_media"]
     return {
-        "hook_text": hook.get("slide_copy"), "hook_reaction_plan": hook.get("slide_purpose"), "hook_evidence_handle": hook.get("source_evidence"),
+        "hook_text": hook.get("slide_copy"), "hook_emotion": hook.get("hook_emotion"), "hook_reaction_plan": hook.get("slide_purpose"), "hook_evidence_handle": hook.get("source_evidence"),
+        "attempt_limit_blocks": sum(1 for p in per_slide if p["media_status"] == "generation_attempt_limit"),
         "hook_weak_patterns": (obs or {}).get("weak_hook_patterns"), "final_caption": model_output.get("final_caption"),
         "media_source_counts": {k: sum(1 for p in per_slide if p["media_source"] == k) for k in ("source", "generated", "graphic")},
         "text_only_slides": (obs or {}).get("text_only_slides"), "typographic_final_media_slides": (obs or {}).get("typographic_final_media_slides"),

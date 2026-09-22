@@ -52,14 +52,14 @@ def main() -> None:
     H = 90 + sum(row_h if thumbs else 190 for _, _, thumbs in prepared)
     sheet = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(sheet)
-    d.text((20, 18), "KAGE INSTAGRAM - media-first, real Creative Director v10 + generated media + Visual DNA v2", font=ig_font(32, "black"), fill=FG)
+    d.text((20, 18), "KAGE INSTAGRAM - media-first, real Creative Director v10.1 + generated media + Visual DNA v2", font=ig_font(32, "black"), fill=FG)
     y = 84
     for name, manifest, thumbs in prepared:
         valid = manifest.get("VALIDATION") if manifest else "FAIL"
         if valid == "PASS" and manifest.get("art_validation_passed") is False:
             valid = "FAIL (art gate)"
         d.text((20, y), name.upper(), font=ig_font(28, "black"), fill=GOLD)
-        d.text((330, y + 4), "REAL MODEL: YES - NEW B.6 CALL" if manifest and manifest.get("REAL_MODEL") else "REAL MODEL: NO", font=ig_font(22, "semibold"), fill=OK)
+        d.text((330, y + 4), "REAL MODEL: YES - FRESH B.6.1 CALL" if manifest and manifest.get("REAL_MODEL") else "REAL MODEL: NO", font=ig_font(22, "semibold"), fill=OK)
         d.text((820, y + 4), f"VALIDATION: {valid}", font=ig_font(22, "semibold"), fill=OK if valid == "PASS" else BAD)
         counts = (manifest or {}).get("media_source_counts") or {}
         if counts:
@@ -69,7 +69,8 @@ def main() -> None:
         hook = (manifest or {}).get("hook_text")
         if hook:
             font = ig_font(24, "black")
-            for line in _wrap(d, f"HOOK: {hook}", font, W - 60)[:2]:
+            emotion = str((manifest or {}).get("hook_emotion") or "?").upper().replace("_", " ")
+            for line in _wrap(d, f"HOOK [{emotion}]: {hook}", font, W - 60)[:2]:
                 d.text((20, y), line, font=font, fill=FG)
                 y += 30
         y = max(y, y) + 6
@@ -84,8 +85,8 @@ def main() -> None:
             sheet.paste(t, (x, y))
             slide = manifest["slides"][i] if i < len(manifest["slides"]) else {}
             ms = media_slides[i] if i < len(media_slides) else {}
-            source = str(ms.get("media_source") or "?").upper()
-            d.text((x, y + thumb_h + 4), source, font=ig_font(17, "black"), fill=GOLD if source == "GENERATED" else FG)
+            source = {"SOURCE": "S", "GENERATED": "GEN", "GRAPHIC": "GFX"}.get(str(ms.get("media_source") or "?").upper(), "?")
+            d.text((x, y + thumb_h + 4), source, font=ig_font(17, "black"), fill=GOLD if source == "GEN" else FG)
             chosen, executed = slide.get("visual_family_chosen"), slide.get("visual_family_executed")
             d.text((x, y + thumb_h + 26), f"{SHORT.get(chosen or '', chosen)} > {SHORT.get(executed or '', executed)}", font=ig_font(15, "medium"), fill=FG if chosen == executed else BAD)
             x += t.width + gap
