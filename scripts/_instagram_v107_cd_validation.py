@@ -48,7 +48,8 @@ from services.pricing_catalog import ModelRegistryPricingCatalog  # noqa: E402
 ORDER = ("ai_hack", "news_insight", "news_recap", "trend_generative")
 NAMESPACE = os.environ.get("B51_DIAG_NAMESPACE", "instagram_v107_cd_validation")
 CAP = Decimal(os.environ.get("B51_CD_CAP_USD", "1.10"))
-CUMULATIVE_BEFORE = Decimal("3.2907")
+CUMULATIVE_BEFORE = Decimal(os.environ.get("B51_CUMULATIVE_BEFORE_USD", "3.2907"))
+EXPECT_PROMPT = os.environ.get("B51_EXPECT_PROMPT_VERSION", "10.7")
 CUMULATIVE_CEILING = Decimal("5.00")
 
 
@@ -264,6 +265,16 @@ def _render_raw_for_review(out: Path, name: str, src: Path, r2: Path, rec: dict)
     slides = plan.get("slides") or []
     pool = _pool(src, r2, name)
     spec = profile_spec(InstagramRenderProfile.CAROUSEL_SLIDE)
+    sources = {}
+    for key, (_e, _c, storage_key) in comp.PINNED.items():
+        path = comp.STORE_ROOT / storage_key
+        if path.exists():
+            with Image.open(path) as decoded:
+                sources[key] = decoded.convert("RGB")
+    if name == "news_insight":
+        import scripts._instagram_phase_b5_shadow as b5
+
+        sources["source"] = b5._load_b2_raw()
     images, used = [], 0
     for i, slide in enumerate(slides):
         mode = {"source": "SOURCE", "generated": "GENERATED", "graphic": "GRAPHIC"}.get(slide.get("media_source") or "")
@@ -273,6 +284,11 @@ def _render_raw_for_review(out: Path, name: str, src: Path, r2: Path, rec: dict)
                 img = decoded.convert("RGB")
             used += 1
             assets["generated"] = (img, derive_image_identity(img))
+        for region in (slide.get("layout") or {}).get("regions") or []:
+            # the plan's own real source images (a recap story's photo, the insight's source), exactly as the live path resolves them
+            ref = region.get("content_ref")
+            if region.get("kind") == "media" and ref in sources and ref not in assets:
+                assets[ref] = (sources[ref], derive_image_identity(sources[ref]))
         result = render_carousel_slide(spec=spec, role=slide.get("role", ""), index=i, total=len(slides), slide_copy=slide.get("slide_copy", ""),
                                        slide_body=slide.get("slide_body"), source_evidence=None, package_identity=f"review-{name}",
                                        visual_direction=slide.get("visual_direction"), media_mode=mode, layout_plan=slide.get("layout"),
@@ -300,7 +316,7 @@ async def main() -> None:
         "prompt_version": cd.CAROUSEL_PROMPT_VERSION, "dry_run_provider_image_calls": dry["provider_image_calls"],
     }
     preflight["safe"] = (len(per_call) == 4 and len(dry["notes_checked"]) == 4 and total <= CAP and CUMULATIVE_BEFORE + total < CUMULATIVE_CEILING
-                         and cd.CAROUSEL_PROMPT_VERSION == "10.7" and dry["provider_image_calls"] == 0)
+                         and cd.CAROUSEL_PROMPT_VERSION == EXPECT_PROMPT and dry["provider_image_calls"] == 0)
     (out / "validation_preflight.json").write_text(json.dumps(preflight, indent=2, ensure_ascii=False), encoding="utf-8")
     print("PREFLIGHT", json.dumps({k: v for k, v in preflight.items() if k != "worst_by_model"}, ensure_ascii=False))
     if mode == "preflight":
@@ -316,6 +332,25 @@ async def main() -> None:
     for rec in live["records"]:
         if rec.get("VALIDATION") != "PASS":
             _render_raw_for_review(final, rec["archetype"], src, r2, rec)
+    # first pass vs critic: the deterministic editor over EVERY raw first-pass output (zero cost), including plans rejected earlier for
+    # another reason - what the Creative Director did by itself stays separate from what the critic caught afterwards
+    from services.instagram_editorial_critic import critique
+
+    critic_report = {}
+    for rec in live["records"]:
+        name = rec["archetype"]
+        raw_path = final / name / "raw_creative_director_output.json"
+        if not raw_path.exists():
+            continue
+        raw = json.loads(raw_path.read_text(encoding="utf-8"))
+        plan = raw.get("structured_output") or {}
+        findings = critique(plan.get("slides") or [], list(comp._saved(src, name)["raw"]["evidence_handles"].values()), archetype=name,
+                            caption=plan.get("final_caption") or "")
+        critic_report[name] = {"first_pass_contract": rec.get("VALIDATION"), "acceptance_error": raw.get("validation_error"),
+                               "critic_result": "REJECT" if any(f.severity == "blocking" for f in findings) else "PASS",
+                               "blocking": [f.render() for f in findings if f.severity == "blocking"],
+                               "advisory": [f.render() for f in findings if f.severity != "blocking"]}
+    (final / "critic_report.json").write_text(json.dumps(critic_report, ensure_ascii=False, indent=2), encoding="utf-8")
     summary = {"creative_director_calls": sum(live["calls"].values()), "retries": 0, "image_calls": live["provider_image_calls"], "vision_calls": 0,
                "cost_usd": str(live["actual"]), "diagnostic_ledger_usd": live["ledger"], "cap_usd": str(CAP),
                "cumulative_usd": str(CUMULATIVE_BEFORE + Decimal(str(live["ledger"] or live["actual"]))), "runs": live["records"]}
