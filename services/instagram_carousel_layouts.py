@@ -711,7 +711,13 @@ def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets
             result.notes.update({**scale_notes, "media_scale_rescued_rejected_plan": [rejected_code]})
             adaptations = [i.code for i in rescued_validated.issues if i.severity in ("adapted", "note")]
             return result, [*adaptations, "media_scale_adapted"]
-        if media_mode in ("SOURCE", "GENERATED") and _headline_px(result) < _headline_floor(spec, index):
+        floor = _headline_floor(spec, index)
+        if validated.layout.arrangement != "collage" and any(
+                r.kind == "text" and r.content_ref in ("copy", "copy_lead", "copy_no_number") and r.w <= 0.45 for r in validated.layout.regions):
+            # the same rule the scale adapter applies to its own side panels: a narrow column is kept only at the hook's display size
+            # (real iteration-6r NEWS_RECAP: three declared side columns at 67-75px passed the plain floor and read as captions)
+            floor = max(floor, HOOK_HEADLINE_FLOOR_FRAC * spec.width)
+        if media_mode in ("SOURCE", "GENERATED") and _headline_px(result) < floor:
             # the plan's own headline box (or a busy image's only quiet corner) shrank the main line below display size;
             # give it a solid band next to the still edge-to-edge image, but only when that is genuinely larger
             bigger = _render_scaled_up(spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
@@ -743,8 +749,17 @@ def render_carousel_slide(
     composition: str | None = None, media_position: str | None = None, media_scale: float | None = None,
     media_subject: str | None = None, must_match_story: bool = False,
     media_asset_identity: str | None = None,
-    layout_plan: dict | None = None, subject_assets: dict | None = None,
+    layout_plan: dict | None = None, subject_assets: dict | None = None, slide_body: str | None = None,
 ) -> LayoutResult:
+    body_placement = None
+    if slide_body and slide_body.strip():
+        # content pass v10.7: the headline and its explanatory body travel as one string through every render path (copy_parts splits
+        # them); a plan that does not place the body itself gets a deterministic body region under its headline
+        from services.instagram_body_copy import attach_body_region
+        from services.instagram_layout_validation import compose_slide_text
+
+        slide_copy = compose_slide_text(slide_copy, slide_body)
+        layout_plan, body_placement = attach_body_region(layout_plan, slide_copy)
     declared = _try_declared(
         spec=spec, layout_plan=layout_plan, slide_copy=slide_copy, index=index, total=total,
         subject_assets=subject_assets or {}, visual_direction=visual_direction, media_mode=media_mode,
@@ -752,6 +767,7 @@ def render_carousel_slide(
     if declared is not None and declared[0] is not None:
         result, adaptations = declared
         result.notes.update(render_plan or {})
+        result.notes["body_placement"] = body_placement
         media_regions = result.notes.get("media_regions") or []
         identity = media_asset_identity or (media_regions[0]["identity"] if media_regions else None)
         result.notes.update({

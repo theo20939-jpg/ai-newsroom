@@ -56,6 +56,7 @@ from schemas.capability import CapabilityCall, RuntimeContext
 from services.instagram_media_first import (
     assert_hook_contract,
     assert_hook_is_short,
+    assert_information_density,
     assert_media_first,
     assert_no_unsupported_clickbait,
     weak_hook_patterns,
@@ -99,11 +100,12 @@ EDITORIAL_DECISION_PROMPT_NAME = "instagram_editorial_decision"
 # shipped prompt version in place" convention.
 _SINGLE_PROMPT_VERSION = "6"
 _CREATIVE_DIRECTOR_MAX_TOKENS = 16_000  # upper safety bound (not a target): keeps the gateway worst-case estimate from pricing a model-maximum completion
-_CAROUSEL_PROMPT_VERSION = "10.6"  # Phase B.5.1.2: v9.1 = v9 + evidence-reference contract (E1..En handles); v9 = Visual DNA v2 families, bounded roles, meta-language guard
+_CAROUSEL_PROMPT_VERSION = "10.7"  # content pass: headline + slide_body, editorial_angle, information density; Phase B.5.1.2: v9.1 = v9 + evidence-reference contract (E1..En handles); v9 = Visual DNA v2 families, bounded roles, meta-language guard
 CAROUSEL_PROMPT_VERSION = _CAROUSEL_PROMPT_VERSION
-_EVIDENCE_HANDLE_CAROUSEL_VERSIONS = frozenset({"9.1", "10", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6"})  # prompt versions whose input lists evidence as handles (E1, E2, ...)
-MEDIA_FIRST_CAROUSEL_VERSIONS = frozenset({"10", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6"})  # Phase B.6: prompt versions under the media-first + KAGE-voice contract
-HOOK_MECHANIC_CAROUSEL_VERSIONS = frozenset({"10.2", "10.3", "10.4", "10.5", "10.6"})  # Phase B.6.2: prompt versions whose schema carries hook_mechanic
+_EVIDENCE_HANDLE_CAROUSEL_VERSIONS = frozenset({"9.1", "10", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7"})  # prompt versions whose input lists evidence as handles (E1, E2, ...)
+MEDIA_FIRST_CAROUSEL_VERSIONS = frozenset({"10", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7"})  # Phase B.6: prompt versions under the media-first + KAGE-voice contract
+HOOK_MECHANIC_CAROUSEL_VERSIONS = frozenset({"10.2", "10.3", "10.4", "10.5", "10.6", "10.7"})
+BODY_COPY_CAROUSEL_VERSIONS = frozenset({"10.7"})  # content pass: headline + explanatory slide_body, editorial_angle, information-density contract  # Phase B.6.2: prompt versions whose schema carries hook_mechanic
 _MEDIA_FIRST_CAROUSEL_VERSIONS = MEDIA_FIRST_CAROUSEL_VERSIONS
 _EVIDENCE_HANDLE_RE = re.compile(r"^E([1-9]\d*)$")
 
@@ -656,17 +658,19 @@ def _validate_carousel_output(
     if archetype is not None:
         creative = creative.model_copy(update={"content_archetype": archetype})
     plan = creative.creative_execution_plan
-    text_fields = [slide.slide_copy for slide in creative.slides] + [
+    text_fields = [slide.slide_copy for slide in creative.slides] + [slide.slide_body or "" for slide in creative.slides] + [
         creative.final_cta or "", creative.final_caption or "",
         *(str(value or "") for value in (plan.model_dump().values() if plan is not None else [])),
     ]
     _enforce_fact_safety(text_fields=text_fields, evidence_used=creative.evidence_used, director_input=director_input)
     _enforce_output_policy(
-        [*(slide.slide_copy for slide in creative.slides), creative.final_cta or "", creative.final_caption or ""],
+        [*(slide.slide_copy for slide in creative.slides), *(slide.slide_body for slide in creative.slides if slide.slide_body),
+         creative.final_cta or "", creative.final_caption or ""],
         locale=director_input.locale,
     )
     assert_no_meta_language(
         {**{f"slide_{i}_copy": slide.slide_copy for i, slide in enumerate(creative.slides)},
+         **{f"slide_{i}_body": slide.slide_body for i, slide in enumerate(creative.slides) if slide.slide_body},
          "final_cta": creative.final_cta or "", "final_caption": creative.final_caption or ""},
         allowed_context=[*director_input.allowed_evidence, director_input.opportunity_summary],
     )
@@ -681,10 +685,15 @@ def _validate_carousel_output(
         assert_hook_contract(list(creative.slides), require_mechanic=_CAROUSEL_PROMPT_VERSION in HOOK_MECHANIC_CAROUSEL_VERSIONS)
         assert_hook_is_short(creative.slides[0].slide_copy)
         assert_no_unsupported_clickbait(
-            {**{f"slide_{i}_copy": slide.slide_copy for i, slide in enumerate(creative.slides)}, "final_caption": creative.final_caption or ""},
+            {**{f"slide_{i}_copy": slide.slide_copy for i, slide in enumerate(creative.slides)},
+             **{f"slide_{i}_body": slide.slide_body for i, slide in enumerate(creative.slides) if slide.slide_body},
+             "final_caption": creative.final_caption or ""},
             evidence=[*director_input.allowed_evidence, director_input.opportunity_summary],
         )
         weak_hooks = tuple(weak_hook_patterns(creative.slides[0].slide_copy))
+        if _CAROUSEL_PROMPT_VERSION in BODY_COPY_CAROUSEL_VERSIONS:
+            # content pass: every slide must say something concrete on its own (recoverable: the one contract retry names the thin slides)
+            assert_information_density(list(creative.slides))
     return CreativeGenerationOutcome(carousel=creative, call=call, model_emitted_archetype=emitted_archetype,
                                      archetype_correction_required=correction_required, weak_hook_patterns=weak_hooks)
 

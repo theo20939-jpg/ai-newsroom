@@ -206,3 +206,47 @@ def weak_hook_patterns(hook_copy: str) -> list[str]:
 def assert_hook_is_short(hook_copy: str) -> None:
     if len(str(hook_copy or "").strip()) > MAX_HOOK_CHARS:
         raise MediaFirstContractError(f"hook copy is {len(str(hook_copy).strip())} chars; the Instagram hook is one strong line (<= {MAX_HOOK_CHARS})")
+
+
+# Content pass (prompt v10.7). A slide must communicate something concrete on its own: the founder's rejected examples ("Он сменил критерий",
+# "Сначала задача. Потом модель.", "И ещё: пульс и кислород.") are clean phrases that say almost nothing without the caption. Deterministic
+# floor only - whether the copy is actually INTERESTING is editorial review, never a regex.
+MIN_BODY_WORDS = 6
+SELF_SUFFICIENT_HEADLINE_WORDS = 9
+_STEP_LABEL = re.compile(r"^\s*(?:шаг|step)\s*\d{1,2}\s*[.:—\-]?\s*", re.IGNORECASE)
+
+
+def _words(text: str) -> list[str]:
+    return re.findall(r"[\w$€£₽%]+", text or "")
+
+
+def has_concrete_anchor(text: str) -> bool:
+    """A number/price/percentage or a Latin-script name (products, companies, models) that the reader can hold on to. A step label's
+    numeral is structure, not content."""
+    body = _STEP_LABEL.sub("", text or "")
+    return bool(re.search(r"\d", body) or re.search(r"[$€£₽]", body) or re.search(r"\b[A-Za-z][A-Za-z0-9.\-]+", body))
+
+
+def find_thin_slides(slides: list[Any]) -> list[str]:
+    """Slides that carry no concrete information of their own. The hook needs a concrete anchor or explanatory body; every other slide
+    needs an explanatory body of MIN_BODY_WORDS words unless its headline is itself a full, anchored statement."""
+    thin: list[str] = []
+    for index, slide in enumerate(slides):
+        headline = str(_get(slide, "slide_copy") or "")
+        body_words = len(_words(str(_get(slide, "slide_body") or "")))
+        if index == 0:
+            if not has_concrete_anchor(headline) and body_words < MIN_BODY_WORDS:
+                thin.append(f"slide {index} (hook) names no concrete fact, number or name and has no explanatory body: {headline!r}")
+            continue
+        if body_words >= MIN_BODY_WORDS:
+            continue
+        if has_concrete_anchor(headline) and len(_words(_STEP_LABEL.sub("", headline))) >= SELF_SUFFICIENT_HEADLINE_WORDS:
+            continue
+        thin.append(f"slide {index} has no explanatory body (>= {MIN_BODY_WORDS} words) and its headline alone is not a full concrete statement: {headline!r}")
+    return thin
+
+
+def assert_information_density(slides: list[Any]) -> None:
+    thin = find_thin_slides(slides)
+    if thin:
+        raise MediaFirstContractError("informationally empty slides - the carousel must make sense without the caption: " + "; ".join(thin))

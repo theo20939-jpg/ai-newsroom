@@ -58,7 +58,7 @@ def test_v10_makes_generated_media_first_class_and_v91_is_untouched() -> None:
     assert v10["version"] == "10" and "generated_media is not available" not in text
     assert "GENERATED media is FIRST-CLASS" in text and "There is no typographic-only slide" in text
     assert "generation_brief" in text and "content_ref is `generated`" in text
-    assert cd.CAROUSEL_PROMPT_VERSION == "10.6" and "10" in cd.MEDIA_FIRST_CAROUSEL_VERSIONS and "10.1" in cd.MEDIA_FIRST_CAROUSEL_VERSIONS and "10.1" in cd._EVIDENCE_HANDLE_CAROUSEL_VERSIONS
+    assert cd.CAROUSEL_PROMPT_VERSION == "10.7" and "10" in cd.MEDIA_FIRST_CAROUSEL_VERSIONS and "10.1" in cd.MEDIA_FIRST_CAROUSEL_VERSIONS and "10.1" in cd._EVIDENCE_HANDLE_CAROUSEL_VERSIONS
 
 
 def test_v10_schema_requires_a_visual_source_on_every_slide_and_never_typographic() -> None:
@@ -201,7 +201,9 @@ def _slide_dict(role, copy_text, source, regions, *, brief=None, family="light_u
             "media_subject": subject, "media_function": "hero" if source != "graphic" else "none", "must_match_story": False, "layout": layout,
             "visual_family": family, "visual_family_reason": "fit", "media_source": source, "generation_brief": brief,
             "hook_emotion": "tension" if role == "hook" else None, "hook_mechanic": "contradiction" if role == "hook" else None,
-            "story_anchor": ANCHOR if generated else None}
+            "story_anchor": ANCHOR if generated else None,
+            # content pass (v10.7): every fixture slide says something concrete on its own, like a real plan must
+            "slide_body": "Для простой задачи хватает небольшой модели, а мощная всё это время простаивает."}
     base.update(kw)
     return base
 
@@ -540,7 +542,7 @@ async def test_live_trigger_runs_the_media_first_pipeline_end_to_end(db_session,
     assert "SOURCE_SUITABLE_FOR_FINAL_VISUAL: yes" in request_text and "GENERATED media is a first-class option" in request_text
     assert len(calls) == 1 and calls[0]["max_attempts"] == 1  # exactly the ONE generated slide; no retries
     obs = captured["package"].media_plan["b4_observability"]
-    assert obs["prompt_version"] == "10.6" and obs["text_only_slides"] == [] and obs["typographic_final_media_slides"] == []
+    assert obs["prompt_version"] == "10.7" and obs["text_only_slides"] == [] and obs["typographic_final_media_slides"] == []
     assert [s["media_source"] for s in obs["slides"]] == ["generated", "graphic", "source"]
     assert obs["overlay_operations_executed_total"] == 0 and obs["art_validation_passed"] is True, obs["art_blocking_issues"]
     plan = captured["package"].media_plan

@@ -108,7 +108,7 @@ class InstagramSingleCreative(BaseModel):
 
 LayoutRegionKind = Literal["surface", "media", "text", "accent", "graphic"]
 ScaleToken = Literal["MEGA", "NUMERAL", "DISPLAY", "HEADLINE_XL", "HEADLINE_L", "HEADLINE_M", "HEADLINE_S", "BODY", "CAPTION"]
-TEXT_CONTENT_REFS = ("copy", "copy_lead", "copy_rest", "number", "copy_no_number")
+TEXT_CONTENT_REFS = ("copy", "copy_lead", "copy_rest", "number", "copy_no_number", "body")
 MEDIA_FUNCTIONS = ("hero", "detail", "evidence_photo", "ui_screenshot", "result", "before_after", "concept", "none")
 
 
@@ -215,6 +215,9 @@ class InstagramCarouselSlideCreative(BaseModel):
 
     role: str = Field(min_length=1, max_length=50)
     slide_copy: str = Field(min_length=1, max_length=_SHORT_TEXT_MAX_LENGTH)
+    # Content pass (prompt v10.7): the slide's HEADLINE stays slide_copy; slide_body carries the 1-3 short explanatory lines that make
+    # the slide understandable without the caption (what happened / changed / why it matters). Rendered in BODY type under the headline.
+    slide_body: str | None = Field(default=None, max_length=260)
     visual_direction: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
     source_evidence: str | None = Field(default=None, max_length=_MEDIUM_TEXT_MAX_LENGTH)
     slide_purpose: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX_LENGTH)
@@ -282,6 +285,8 @@ class InstagramCarouselCreative(BaseModel):
     # InstagramCreativeDraft.payload row remains a valid InstagramCarouselCreative.
     content_archetype: Literal["ai_hack", "news_insight", "news_recap", "trend_generative"] | None = None
     visual_rhythm: InstagramVisualRhythm | None = None
+    # Content pass (prompt v10.7): the ONE strongest supported reason to care, chosen before any copy is written (internal planning, never audience copy).
+    editorial_angle: str | None = Field(default=None, max_length=400)
     creative_execution_plan: InstagramCreativeExecutionPlan | None = None
 
     @property

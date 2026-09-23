@@ -218,7 +218,7 @@ def _carousel_media_plan(creative: Any) -> tuple[str, str | None, str | None, di
     caption = getattr(creative, "final_caption", None) or creative.hook_slide.slide_copy
     cta = creative.final_cta
     slides = [
-        {"index": i, "role": slide.role, "text": slide.slide_copy, "visual_direction": slide.visual_direction,
+        {"index": i, "role": slide.role, "text": slide.slide_copy, "body": getattr(slide, "slide_body", None), "visual_direction": slide.visual_direction,
          "source_evidence": slide.source_evidence, "slide_purpose": getattr(slide, "slide_purpose", None),
          "media_need": getattr(slide, "media_need", None),
          # Phase B.4: bounded structured art direction, passed through verbatim - never

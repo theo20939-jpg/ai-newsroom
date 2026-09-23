@@ -266,7 +266,7 @@ def render_instagram_carousel(
         this_slide_assets = {**(subject_assets or {}), **((slide_subject_assets or {}).get(index) or {})} or None
         layout = render_carousel_slide(
             spec=profile_spec(InstagramRenderProfile.CAROUSEL_SLIDE), role=role, index=index, total=total,
-            slide_copy=slide_copy, source_evidence=slide.get("source_evidence"), package_identity=package.package_id,
+            slide_copy=slide_copy, slide_body=slide.get("body"), source_evidence=slide.get("source_evidence"), package_identity=package.package_id,
             hero_image=(hero_image if slide_images is None else None),
             media_image=explicit_image, media_mode=execution.get("media_mode"),
             media_need=slide.get("media_need"),

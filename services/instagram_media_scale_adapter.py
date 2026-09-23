@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from schemas.instagram_creative import InstagramSlideLayout, LayoutRegion
+from services.instagram_layout_validation import copy_parts
 
 MIN_MEDIA_AREA = 0.50
 SHORT_COPY_CHARS = 34
@@ -43,15 +44,21 @@ def _clipped_area(r: LayoutRegion) -> float:
     return w * h
 
 
-def _stack(texts: list[LayoutRegion], x: float, y: float, w: float, h: float) -> list[LayoutRegion]:
-    """Stack the text regions top to bottom (original reading order) inside one band, heights proportional to the plan."""
+def _stack(texts: list[LayoutRegion], x: float, y: float, w: float, h: float, *, body: str = "") -> list[LayoutRegion]:
+    """Stack the text regions top to bottom (original reading order) inside one band, heights proportional to the plan. A body region
+    (content pass v10.7) gets only the height its text needs at BODY size; the headline keeps the rest and stays display-sized."""
+    from services.instagram_body_copy import body_height_needed
+
     ordered = sorted(texts, key=lambda t: (round(t.y, 2), t.x))
-    total = sum(t.h for t in ordered) or 1.0
     gap = 0.015 if len(ordered) > 1 else 0.0
     usable = h - gap * (len(ordered) - 1)
+    fixed = {id(t): min(body_height_needed(body, w) * 1.1, usable * 0.5) for t in ordered if t.content_ref == "body" and body}
+    rest = [t for t in ordered if id(t) not in fixed]
+    total = sum(t.h for t in rest) or 1.0
+    free = usable - sum(fixed.values())
     out, cy = [], y
     for t in ordered:
-        th = max(0.05, usable * t.h / total)
+        th = fixed[id(t)] if id(t) in fixed else max(0.05, free * t.h / total)
         token = "HEADLINE_XL" if t.content_ref in _HEADLINE_REFS and t.scale_token in _PROMOTE else t.scale_token
         out.append(t.model_copy(update={"x": x, "y": cy, "w": w, "h": th, "scale_token": token, "valign": "top", "on_media": False,
                                   "max_lines": None}))  # the band now bounds the block; a plan's line cap for its old narrow box would only shrink the type
@@ -117,24 +124,30 @@ def adapt_media_scale(layout: InstagramSlideLayout, *, slide_copy: str, force: b
         adapted_mixed = layout.model_copy(update={"regions": regions, "media_dominance": "DOMINANT", "arrangement": "standard"})
         return MediaScaleAdaptation(adapted_mixed, (media.x, media.y, media.w, media.h), (0.0, 0.0, 1.0, 0.44), "mixed_bands")
     if orientation is None:
-        if len(slide_copy.strip()) <= SHORT_COPY_CHARS and abs(media_cx - text_cx) >= 0.25:
+        if len(copy_parts(slide_copy)["copy"]) <= SHORT_COPY_CHARS and abs(media_cx - text_cx) >= 0.25:
             orientation = "side_right" if media_cx > text_cx else "side_left"
         else:
             orientation = "text_top" if text_cy <= media_cy else "text_bottom"
+    body = copy_parts(slide_copy)["body"]
     if orientation.startswith("side"):
         right = orientation == "side_right"
-        mbox = (0.44, 0.0, 0.56, 1.0) if right else (0.0, 0.0, 0.56, 1.0)
-        col_x = 0.07 if right else 0.60
-        band = (col_x, 0.16, 0.34, 0.60)
+        if body:  # a headline plus explanatory lines needs a real column, not a 0.34 sliver; the image keeps half the canvas edge to edge
+            mbox = (0.50, 0.0, 0.50, 1.0) if right else (0.0, 0.0, 0.50, 1.0)
+            col_x = 0.06 if right else 0.54
+            band = (col_x, 0.15, 0.40, 0.66)
+        else:
+            mbox = (0.44, 0.0, 0.56, 1.0) if right else (0.0, 0.0, 0.56, 1.0)
+            col_x = 0.07 if right else 0.60
+            band = (col_x, 0.16, 0.34, 0.60)
         rule_at = (col_x, 0.12)
     elif orientation == "text_top":
-        mbox = (0.0, 0.45, 1.0, 0.55)
-        band = (0.07, 0.15, 0.86, 0.27)
-        rule_at = (0.07, 0.115)
+        mbox = (0.0, 0.52, 1.0, 0.48) if body else (0.0, 0.45, 1.0, 0.55)
+        band = (0.07, 0.14, 0.86, 0.35) if body else (0.07, 0.15, 0.86, 0.27)
+        rule_at = (0.07, 0.105 if body else 0.115)
     else:
-        mbox = (0.0, 0.0, 1.0, 0.56)
-        band = (0.07, 0.63, 0.75 if logo_right else 0.86, 0.29)
-        rule_at = (0.07, 0.595)
+        mbox = (0.0, 0.0, 1.0, 0.50) if body else (0.0, 0.0, 1.0, 0.56)
+        band = (0.07, 0.565, 0.75 if logo_right else 0.86, 0.365) if body else (0.07, 0.63, 0.75 if logo_right else 0.86, 0.29)
+        rule_at = (0.07, 0.53 if body else 0.595)
 
     regions: list[LayoutRegion] = [r for r in layout.regions if r.kind == "surface" and r.w >= 0.99 and r.h >= 0.99 and r.surface != "media_ground"]
     new_media = media.model_copy(update={
@@ -145,6 +158,6 @@ def adapt_media_scale(layout: InstagramSlideLayout, *, slide_copy: str, force: b
     rule = next((r for r in layout.regions if r.kind == "accent" and r.accent_type == "rule_h"), None)
     if rule is not None:
         regions.append(rule.model_copy(update={"x": rule_at[0], "y": rule_at[1], "w": 0.1, "h": 0.018, "z": 2, "on_media": None}))
-    regions.extend(t.model_copy(update={"z": 2}) for t in _stack(texts, *band))
+    regions.extend(t.model_copy(update={"z": 2}) for t in _stack(texts, *band, body=body))
     adapted = layout.model_copy(update={"regions": regions, "media_dominance": "DOMINANT", "arrangement": "standard"})
     return MediaScaleAdaptation(adapted, (media.x, media.y, media.w, media.h), mbox, orientation)

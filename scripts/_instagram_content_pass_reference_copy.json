@@ -1,0 +1,214 @@
+{
+  "_note": "EDITORIAL REFERENCE copy for the content, hooks & virality pass - written by Claude acting as the senior social editor to the prompt v10.7 contract, strictly from each post's own evidence handles. NOT Creative Director model output. Applied to the preserved real iteration-6r plans (visuals, families and paid media unchanged except the two disclosed plan_edits).",
+  "ai_hack": {
+    "editorial_angle": "Pain the reader knows (long texts) + a concrete fix: two exact prompts turn any long text into a three-point checklist to verify instead of reading everything (E1-E4). Save value: the prompt wording itself.",
+    "final_caption": "Два запроса, которые стоит сохранить:\n1. «Выдели только принятые решения, без описания проблемы».\n2. «Переформулируй вывод в чек-лист из трёх пунктов».\nВместо чтения всего текста у тебя остаётся короткий чек-лист для проверки.",
+    "slides": {
+      "0": {
+        "slide_copy": "Хватит читать длинные тексты целиком",
+        "slide_body": "Два запроса к ИИ — и вместо всего текста у тебя чек-лист из трёх пунктов.",
+        "hook_emotion": "relatable_frustration",
+        "hook_mechanic": "relatable_pain",
+        "slide_purpose": "Relatable frustration with long texts, instantly relieved by a concrete outcome from E4 (checklist instead of reading)."
+      },
+      "1": {
+        "slide_copy": "Шаг 1. Оставь только решения",
+        "slide_body": "Вставь текст и напиши: «Выдели только принятые решения, без описания проблемы». Предыстория уйдёт, решения останутся."
+      },
+      "2": {
+        "slide_copy": "Шаг 2. Собери чек-лист",
+        "slide_body": "Второй запрос: «Переформулируй вывод в чек-лист из трёх пунктов». Больше ничего писать не нужно."
+      },
+      "3": {
+        "slide_copy": "Итог: 3 пункта вместо длинного текста",
+        "slide_body": "Короткий чек-лист легко проверить. Сохрани оба запроса — пригодятся, когда придёт следующий длинный текст."
+      }
+    }
+  },
+  "news_insight": {
+    "editorial_angle": "Contradiction the reader can act on: the author moved from the smartest, most expensive models to cheaper ones because the metric that matters is the cost of a finished task, not the intelligence index (E1, E2). Save value: a selection criterion the reader can apply themselves.",
+    "final_caption": "Разработчик на Хабре описал простой сдвиг: вместо самых умных и дорогих моделей он смотрит на стоимость выполненной задачи. Не индекс интеллекта сам по себе, а то, сколько стоит закрыть конкретную работу. Проверить это на своих задачах можно за один вечер расчётов.",
+    "slides": {
+      "0": {
+        "slide_copy": "Самая умная модель — самая невыгодная?",
+        "slide_body": "Автор на Хабре перестал выбирать ИИ по intelligence index и перешёл на модели дешевле.",
+        "hook_emotion": "surprise",
+        "hook_mechanic": "contradiction",
+        "slide_purpose": "Contradiction between 'smartest' and 'most worth paying for', supported by E1 and E2."
+      },
+      "1": {
+        "slide_copy": "Главный критерий — цена выполненной задачи",
+        "slide_body": "Не сколько баллов у модели в рейтинге интеллекта, а сколько стоит закрыть конкретную работу."
+      },
+      "2": {
+        "slide_copy": "Как проверить это у себя",
+        "slide_body": "Возьми типовую задачу и посчитай, во что она обходится на разных моделях. Выбирай по этой цифре, а не по рейтингу."
+      },
+      "3": {
+        "slide_copy": "Модель выбирают под задачу, а не по рейтингу",
+        "slide_body": "Если модель попроще справляется с работой, платить за самую умную незачем. Сохрани — пригодится при следующем выборе."
+      }
+    }
+  },
+  "news_recap": {
+    "editorial_angle": "The week's jaw-dropper: OpenAI says Luna matches GPT-5.6 Sol at about 1% of its cost (E4) - open with that, then give every story its practical 'so what' (fewer errors, IDs on the phone, a free Ancient Greek model, open weights, one agent-instruction standard across rivals).",
+    "final_caption": "Неделя в ИИ и технологиях: OpenAI показала GPT-6 Sol и Luna, Apple Wallet добирается почти до 20 штатов, Apollo учит древнегреческий, vivo продаёт титановые часы от $149, Xiaomi открыла веса MiMo-V2.6, а Claude Code перешёл на формат инструкций OpenAI.",
+    "slides": {
+      "0": {
+        "slide_copy": "Уровень GPT-5.6 Sol — за 1% цены",
+        "slide_body": "Так OpenAI описывает новую Luna. И это только первая история недели.",
+        "source_evidence": "E4",
+        "hook_emotion": "disbelief",
+        "hook_mechanic": "specific_surprise",
+        "slide_purpose": "Disbelief at a 100x price gap for the same performance level, stated by OpenAI in E4."
+      },
+      "1": {
+        "slide_copy": "GPT-6 Sol: примерно вдвое меньше ошибок",
+        "slide_body": "Так OpenAI сравнивает её с GPT-5.6 Sol. Меньше ошибок — меньше перепроверок за моделью."
+      },
+      "2": {
+        "slide_copy": "Права в Apple Wallet: скоро ещё три штата",
+        "slide_body": "Функция только что заработала в Вирджинии и Оклахоме. С новыми штатами их будет почти 20."
+      },
+      "3": {
+        "slide_copy": "ИИ, который выучил древнегреческий",
+        "slide_body": "Apollo обучили примерно на 600 млн исторических греческих слов. Делают Австрийская академия наук, Mistral и Sail Reply — модель обещают бесплатной."
+      },
+      "4": {
+        "slide_copy": "Титан, сапфир и eSIM — от $149",
+        "slide_body": "Это новые vivo Watch 6. Внутри ещё датчики пульса и кислорода в крови."
+      },
+      "5": {
+        "slide_copy": "Xiaomi открыла веса MiMo-V2.6",
+        "slide_body": "Заявлено: Pro на уровне Opus 5 и GPT-5.6 Sol в большинстве агентских тестов."
+      },
+      "6": {
+        "slide_copy": "Claude Code теперь понимает AGENTS.md",
+        "slide_body": "Это формат инструкций для ИИ-агентов, который предложила OpenAI. Anthropic поддержала стандарт конкурента."
+      },
+      "7": {
+        "slide_copy": "Неделя в четырёх фактах",
+        "slide_body": "Сохрани — пригодится, когда эти названия снова появятся в ленте.",
+        "flow_steps": [
+          "LUNA: 1% ЦЕНЫ",
+          "APOLLO: 600 МЛН СЛОВ",
+          "MIMO: ОТКРЫТЫЕ ВЕСА",
+          "WALLET: ~20 ШТАТОВ"
+        ]
+      }
+    },
+    "plan_edits": {
+      "2": {
+        "reason": "visual factuality: the generated image shows recognisable Oklahoma and Virginia outlines (the two states ALREADY live, E6) dropping in as the 'three new' unnamed states (E7). Zero-cost fix: a band layout cropped to the hand and phone only, so the misleading state shapes are out of frame.",
+        "layout": {
+          "background": "ink",
+          "density": "MEDIUM",
+          "media_dominance": "DOMINANT",
+          "visual_weight": "MIXED",
+          "show_progress": true,
+          "palette": "brand",
+          "logo_position": "BOTTOM_RIGHT",
+          "arrangement": "standard",
+          "regions": [
+            {
+              "kind": "surface",
+              "x": 0,
+              "y": 0,
+              "w": 1,
+              "h": 1,
+              "z": 0,
+              "surface": "ink"
+            },
+            {
+              "kind": "media",
+              "x": 0,
+              "y": 0,
+              "w": 1,
+              "h": 0.5,
+              "z": 1,
+              "content_ref": "generated",
+              "crop_mode": "cover",
+              "focus_x": 0.62,
+              "focus_y": 0.0,
+              "frame": "none"
+            },
+            {
+              "kind": "accent",
+              "x": 0.07,
+              "y": 0.545,
+              "w": 0.11,
+              "h": 0.018,
+              "z": 2,
+              "accent_type": "rule_h",
+              "tone": "accent"
+            },
+            {
+              "kind": "text",
+              "x": 0.07,
+              "y": 0.58,
+              "w": 0.86,
+              "h": 0.15,
+              "z": 2,
+              "content_ref": "copy",
+              "scale_token": "HEADLINE_L",
+              "align": "left",
+              "valign": "top",
+              "tone": "primary",
+              "on_media": false
+            },
+            {
+              "kind": "text",
+              "x": 0.07,
+              "y": 0.745,
+              "w": 0.74,
+              "h": 0.19,
+              "z": 2,
+              "content_ref": "body",
+              "scale_token": "BODY",
+              "align": "left",
+              "valign": "top",
+              "tone": "primary",
+              "on_media": false
+            }
+          ]
+        }
+      }
+    }
+  },
+  "trend_generative": {
+    "editorial_angle": "Price versus materials: $149 buys a titanium case, sapphire glass and eSIM (E1) - the reader instinctively looks for the catch; give the full spec list (E3, E4) and end on an honest direct question.",
+    "final_caption": "vivo Watch 6: титановый корпус, сапфировое стекло, eSIM, датчики пульса и кислорода в крови, две версии корпуса — и цена от $149. Часы вышли вместе со смартфонами X500, X500 Pro и X500 Pro Max.",
+    "slides": {
+      "0": {
+        "slide_copy": "$149 — за титан, сапфир и eSIM?",
+        "slide_body": "Это стартовая цена новых vivo Watch 6.",
+        "hook_emotion": "disbelief",
+        "hook_mechanic": "sharp_comparison",
+        "slide_purpose": "Disbelief at premium materials for a low price - both sides of the comparison are in the line, supported by E1."
+      },
+      "1": {
+        "slide_copy": "Что дают за эти $149",
+        "slide_body": "Корпус из титана, стекло из сапфира, eSIM."
+      },
+      "2": {
+        "slide_copy": "Плюс датчики пульса и кислорода в крови",
+        "slide_body": "Часы вышли вместе со смартфонами vivo X500, X500 Pro и X500 Pro Max. Ты бы взял такие за $149?",
+        "flow_steps": [
+          "ТИТАН + САПФИР",
+          "ESIM",
+          "ПУЛЬС",
+          "КИСЛОРОД В КРОВИ"
+        ]
+      }
+    },
+    "plan_edits": {
+      "1": {
+        "reason": "weak graphic: the plan's arrow and circle scribbles point at arbitrary spots (a frame edge, a lug hole) that the copy never names - removed; the collage itself is unchanged.",
+        "drop_graphic_types": [
+          "arrow_scribble",
+          "circle_scribble"
+        ]
+      }
+    }
+  }
+}

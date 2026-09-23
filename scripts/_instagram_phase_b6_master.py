@@ -59,7 +59,7 @@ def main() -> None:
         if valid == "PASS" and manifest.get("art_validation_passed") is False:
             valid = "FAIL (art gate)"
         d.text((20, y), name.upper(), font=ig_font(28, "black"), fill=GOLD)
-        d.text((330, y + 4), (("REAL PLAN: " + manifest["MODEL_SOURCE"]) if manifest.get("MODEL_SOURCE", "").startswith("REPLAYED") else "REAL MODEL: YES - FRESH CALL") if manifest and manifest.get("REAL_MODEL") else "REAL MODEL: NO", font=ig_font(22, "semibold"), fill=OK)
+        d.text((330, y + 4), ((("REAL PLAN: " if manifest["MODEL_SOURCE"].startswith("REPLAYED") else "") + manifest["MODEL_SOURCE"]) if manifest.get("MODEL_SOURCE", "").startswith(("REPLAYED", "EDITORIAL")) else "REAL MODEL: YES - FRESH CALL") if manifest and manifest.get("REAL_MODEL") else "REAL MODEL: NO", font=ig_font(22, "semibold"), fill=OK)
         d.text((820, y + 4), f"VALIDATION: {valid}", font=ig_font(22, "semibold"), fill=OK if valid == "PASS" else BAD)
         counts = (manifest or {}).get("media_source_counts") or {}
         if counts:

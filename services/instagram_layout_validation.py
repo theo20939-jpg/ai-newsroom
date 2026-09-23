@@ -92,8 +92,25 @@ def _without_number(text: str, start: int, end: int) -> str:
     return rest.strip(" :—-.,")
 
 
+BODY_SEPARATOR = "\n\n"
+
+
+def compose_slide_text(headline: str, body: str | None) -> str:
+    """The one string every renderer path carries: the headline, then (content pass v10.7) its explanatory body after a blank line."""
+    body = (body or "").strip()
+    return f"{headline.strip()}{BODY_SEPARATOR}{body}" if body else headline.strip()
+
+
 def copy_parts(slide_copy: str) -> dict[str, str]:
-    """Deterministic derivations of the slide's OWN copy that a text region may reference."""
+    """Deterministic derivations of the slide's OWN copy that a text region may reference. Everything after the first blank line is the
+    slide's body (BODY_SEPARATOR); every headline derivation (number, lead/rest, ...) comes from the headline only."""
+    head, _, body = slide_copy.strip().partition(BODY_SEPARATOR)
+    parts = _headline_parts(head)
+    parts["body"] = " ".join(body.split())
+    return parts
+
+
+def _headline_parts(slide_copy: str) -> dict[str, str]:
     text = slide_copy.strip()
     # the currency travels WITH its amount: "От $149." must never leave "От $." behind once the numeral is set in type
     number_match = re.search(rf"[{_CURRENCY}]?(?:\d[\d\s.,]*\d|\d)%?(?:\s?[{_CURRENCY}])?", text)
@@ -266,6 +283,8 @@ def validate_layout(
     )
     if not texts or not covered:
         issues.append(LayoutIssue("copy_not_fully_presented", f"text refs={sorted(str(r) for r in refs)}", "rejected"))
+    elif parts["body"] and "body" not in refs:
+        issues.append(LayoutIssue("copy_not_fully_presented", "the slide's explanatory body has no text region", "rejected"))
 
     if any(i.severity == "rejected" for i in issues):
         return ValidatedLayout(False, None, tuple(issues), False, tuple(unresolved))

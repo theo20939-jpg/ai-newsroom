@@ -269,7 +269,9 @@ def _compile_slide_scene_prompt(
         "glowing cube, floating spheres or random geometry, a generic AI brain, an anonymous robot, a hologram, a cyberpunk city, an abstract monolith, neon circuitry or corporate technology stock art unless this story is literally about it.\n\n"
         "COLOR / MOOD\nDerive colour from the idea; contemporary, specific, cinematic or editorial, never generic.\n\n"
         "NEGATIVE CONSTRAINTS\nNO LOGOS. NO WORDMARKS. NO WATERMARKS. NO LARGE TEXT. NO READABLE TEXT OR LETTERING OF ANY KIND. NO FAKE UI. NO RANDOM INTERFACES. NO "
-        "UNSUPPORTED PRODUCTS, FACTS, NUMBERS OR THIRD-PARTY BRANDING. Do not bake any headline into the image; the application adds the exact Russian copy and the "
+        "UNSUPPORTED PRODUCTS, FACTS, NUMBERS OR THIRD-PARTY BRANDING. Paper, pages, cards, screens and objects are BLANK: no handwriting, no scribbled lines imitating "
+        "writing, no marks, stamps or engravings. Anything the story leaves unnamed (which places, people, companies or products) stays abstract and unidentifiable: "
+        "no recognisable map or state outlines, faces or product designs. Do not bake any headline into the image; the application adds the exact Russian copy and the "
         "canonical logo after generation."
     )
 
