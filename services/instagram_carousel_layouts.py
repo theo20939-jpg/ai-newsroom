@@ -622,7 +622,8 @@ def _render_scaled_up(*, spec, layout, slide_copy, index, total, subject_assets,
     if best is None:
         # the default orientation can fail on its own (real iteration-6 AI_HACK slide 3: text_collides_with_logo) while a full-width
         # band passes at display size; without this the slide fell through to the small media-preserving fallback
-        bands = [r for r in (attempt(o) for o in ("text_top", "text_bottom")) if r is not None]
+        # a headline + body may need a side panel (a tall column) rather than a band
+        bands = [r for r in (attempt(o) for o in ("text_top", "text_bottom", "side_right", "side_left")) if r is not None]
         return max(bands, key=lambda r: _headline_px(r[0]), default=None)
     side = str(best[2]["media_scale_orientation"]).startswith("side")
     # a 0.34-wide side column holds display type only for short words: one long Russian word ("начинается") fits it at ~70px and
@@ -764,6 +765,22 @@ def render_carousel_slide(
         spec=spec, layout_plan=layout_plan, slide_copy=slide_copy, index=index, total=total,
         subject_assets=subject_assets or {}, visual_direction=visual_direction, media_mode=media_mode,
     )
+    if slide_body and slide_body.strip() and (declared is None or declared[0] is None):
+        # no layout could hold the body at its readable size: relax ONLY the body minimum before any fallback that would lose the
+        # image or run headline and body together (real v10.7 recap card: a long body sent the slide to the text-only fallback)
+        from services.instagram_declarative_layout import BODY_MIN_FONT_FRAC
+
+        token = BODY_MIN_FONT_FRAC.set(0.03)
+        try:
+            relaxed = _try_declared(
+                spec=spec, layout_plan=layout_plan, slide_copy=slide_copy, index=index, total=total,
+                subject_assets=subject_assets or {}, visual_direction=visual_direction, media_mode=media_mode,
+            )
+        finally:
+            BODY_MIN_FONT_FRAC.reset(token)
+        if relaxed is not None and relaxed[0] is not None:
+            declared = relaxed
+            body_placement = f"{body_placement or 'plan'}+body_min_relaxed"
     if declared is not None and declared[0] is not None:
         result, adaptations = declared
         result.notes.update(render_plan or {})

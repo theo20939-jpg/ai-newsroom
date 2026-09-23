@@ -338,7 +338,9 @@ def test_type_hierarchy_can_be_extreme_without_clipping_cyrillic() -> None:
     assert result is not None and not result.text_clipped
     sizes = {m["ref"]: m for m in result.notes["text_metrics"]}
     assert sizes["copy_lead"]["font_px"] / sizes["copy_rest"]["font_px"] >= 5
-    assert sizes["copy_lead"]["block_h_frac"] >= 0.14 and sizes["copy_lead"]["font_px"] >= 0.15 * _SPEC.width  # short copy gets genuinely large type
+    assert sizes["copy_lead"]["font_px"] >= 0.15 * _SPEC.width  # short copy gets genuinely large type
+    # editorial typography: a spelled-out numeral stays with its noun ("Два слова." is one unit, never "Два / слова.")
+    assert sizes["copy_lead"]["lines"] == 1 and sizes["copy_lead"]["block_h_frac"] >= 0.12
 
 
 def test_logo_placement_is_bounded_renderer_owned_and_canonical() -> None:

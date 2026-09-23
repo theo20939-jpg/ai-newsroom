@@ -20,6 +20,8 @@ alpha-composite of a real transparent cutout, and (collage fragments only) a bou
 optional flat paper-white mat. Colour, brightness, blur and gradients are never applied to a source."""
 from __future__ import annotations
 
+from contextvars import ContextVar
+
 import math
 from typing import Any
 
@@ -53,6 +55,10 @@ SCALE_TOKENS: dict[str, tuple[float, str]] = {
 }
 # line gap as a fraction of the font size; display sizes need room for Cyrillic descenders (р, у, д) above the next line's caps
 _LEADING = {"MEGA": 0.06, "NUMERAL": 0.06, "DISPLAY": 0.10, "HEADLINE_XL": 0.11, "HEADLINE_L": 0.11, "HEADLINE_M": 0.12, "HEADLINE_S": 0.14}
+_MIN_BODY_FONT_FRAC = 0.037  # ~40px body copy on a 1080px canvas (real v10.7 validation: a 37px body read as fine print)
+# the renderer asks for a readable body first; only when no layout (declared or rebuilt) can hold it does the caller relax this, never
+# dropping the paid image or the body itself
+BODY_MIN_FONT_FRAC: ContextVar[float] = ContextVar("instagram_body_min_font_frac", default=_MIN_BODY_FONT_FRAC)
 _MIN_FONT_FRAC = 0.03  # minimum readable size (about 32px on a 1080px canvas)
 GRAPHITE = (30, 32, 38)
 _SURFACE_COLOURS = {"paper": tok.PAPER, "soft": SURFACE_SOFT, "red": tok.RED, "ink": tok.INK, "graphite": GRAPHITE}
@@ -84,7 +90,9 @@ def _px(region: LayoutRegion, spec: ProfileSpec) -> tuple[int, int, int, int]:
 def _wrap(draw: ImageDraw.ImageDraw, text: str, font, width: int) -> list[str]:
     lines: list[str] = []
     current = ""
-    for word in text.split():
+    from services.instagram_typography import wrap_units
+
+    for word in wrap_units(text):  # never break inside a protected unit (Watch 6, два шага, a dash at a line start)
         candidate = f"{current} {word}".strip()
         if draw.textlength(candidate, font=font) <= width:
             current = candidate
@@ -107,7 +115,8 @@ def _fit_in_box(draw, text: str, *, box_w: int, box_h: int, token: str, max_line
     max_frac, weight = SCALE_TOKENS[token]
     limit_lines = max_lines or 10
     size = round(spec.width * max_frac)
-    min_size = round(spec.width * _MIN_FONT_FRAC)
+    # an explanatory body below ~40px stops being read on a phone: it must get space, not shrink into a caption
+    min_size = round(spec.width * (BODY_MIN_FONT_FRAC.get() if token == "BODY" else _MIN_FONT_FRAC))
     while size >= min_size:
         font = ig_font(size, weight)
         lines = _wrap(draw, text, font, box_w)

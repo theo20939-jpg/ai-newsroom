@@ -287,6 +287,8 @@ class InstagramCarouselCreative(BaseModel):
     visual_rhythm: InstagramVisualRhythm | None = None
     # Content pass (prompt v10.7): the ONE strongest supported reason to care, chosen before any copy is written (internal planning, never audience copy).
     editorial_angle: str | None = Field(default=None, max_length=400)
+    # Editorial judgment reset (prompt v10.8): the 2-4 angles the model compared before choosing editorial_angle (internal planning).
+    angle_candidates: list[dict[str, str]] = Field(default_factory=list, max_length=4)
     creative_execution_plan: InstagramCreativeExecutionPlan | None = None
 
     @property

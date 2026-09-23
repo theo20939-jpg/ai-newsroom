@@ -16,7 +16,9 @@ def fit_text_block(
     """Deterministic shrink-then-wrap-then-truncate text fit. Returns (font, lines, clipped).
     `clipped=True` whenever real content had to be truncated with an ellipsis - never silently
     dropped without a signal."""
-    words = text.split()
+    from services.instagram_typography import wrap_units
+
+    words = wrap_units(text)  # never break inside a protected unit (Watch 6, два шага, a dash at a line start)
     size = font_max
     while size >= font_min:
         font = ig_font(size, weight)
