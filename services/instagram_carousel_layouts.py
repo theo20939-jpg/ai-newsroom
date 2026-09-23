@@ -620,7 +620,10 @@ def _render_scaled_up(*, spec, layout, slide_copy, index, total, subject_assets,
 
     best = attempt(None)
     if best is None:
-        return None
+        # the default orientation can fail on its own (real iteration-6 AI_HACK slide 3: text_collides_with_logo) while a full-width
+        # band passes at display size; without this the slide fell through to the small media-preserving fallback
+        bands = [r for r in (attempt(o) for o in ("text_top", "text_bottom")) if r is not None]
+        return max(bands, key=lambda r: _headline_px(r[0]), default=None)
     side = str(best[2]["media_scale_orientation"]).startswith("side")
     # a 0.34-wide side column holds display type only for short words: one long Russian word ("начинается") fits it at ~70px and
     # leaves most of the column empty (real iteration-5 run, 8 of 20 slides). A side column must reach the hook's display size to be

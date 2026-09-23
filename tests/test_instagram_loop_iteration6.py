@@ -106,3 +106,27 @@ def test_the_image_prompt_never_asks_for_the_numeral_the_renderer_sets_in_type()
 def test_single_digit_scene_counts_are_not_masked():
     assert media._mask_typeset("three cards and 3 straps", "3") == "three cards and 3 straps"
     assert media._mask_typeset("a price tag of 1490 next to 149", "149") == f"a price tag of 1490 next to {media._TYPESET_MASK}"
+
+
+# the EXACT real iteration-6 AI_HACK slide 3: a small headline box on a large framed image, rejected (text_region_too_small)
+REAL_AI_HACK_STEP = {
+    "background": "graphite", "density": "HIGH", "media_dominance": "DOMINANT", "visual_weight": "MEDIA", "show_progress": True,
+    "palette": "neo", "logo_position": "BOTTOM_LEFT", "arrangement": "standard",
+    "regions": [
+        _region("surface", 0, 0, 1, 1, z=0, surface="graphite"),
+        _region("media", 0.05, 0.08, 0.9, 0.84, content_ref="generated", crop_mode="cover", focus_x=0.56, focus_y=0.5, frame="paper",
+                on_media=False, tilt_deg=0),
+        _region("text", 0.09, 0.14, 0.4, 0.16, z=2, content_ref="copy", scale_token="HEADLINE_L", align="left", valign="top", max_lines=2,
+                tone="primary", on_media=True),
+        _region("text", 0.84, 0.84, 0.08, 0.08, z=2, content_ref="number", scale_token="NUMERAL", align="right", valign="bottom", max_lines=1,
+                tone="accent", on_media=True),
+    ],
+}
+
+
+def test_rejected_plan_is_rescued_by_a_band_when_the_default_orientation_fails():
+    # the default rescue collides with the BOTTOM_LEFT logo; a full-width band must still compete instead of the small fallback
+    result = _render(REAL_AI_HACK_STEP, "Шаг 2. Собери чек-лист", index=2)
+    assert not result.notes.get("media_preserving_fallback_used")
+    assert result.notes.get("media_scale_rescued_rejected_plan") == ["text_region_too_small"]
+    assert _headline_px(result) >= HOOK_HEADLINE_FLOOR_FRAC * SPEC.width
