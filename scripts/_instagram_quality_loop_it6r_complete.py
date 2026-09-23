@@ -12,12 +12,18 @@ Inputs are pinned, never re-selected: the recap bundle is rebuilt from the persi
 (read-only lookup 2026-09-23: rank-1 editorial candidate of the event with that exact title); the rebuilt deterministic media note must equal
 the note the real run passed to the model, byte for byte, or nothing is generated.
 
+Replacement attempt r1 (founder-approved after the first launch SAFE STOPPED on a deleted story_5 binary): a pinned recap binary may be
+absent ONLY when no slide consumes it, the preserved note had it available-but-unsuitable, and the image prompt builder reads text only
+(missing_source_block_reason). It is never substituted; only its preserved note line and available/unsuitable status are restored, and
+the whole note must still equal the preserved one. Any other missing binary still stops the run.
+
 Usage: python scripts/_instagram_quality_loop_it6r_complete.py <preserved it6r dir> <out dir> preflight|live
 """
 from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import json
 import os
 import re
@@ -78,23 +84,95 @@ def _json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _pinned_inputs(src: Path) -> tuple[InstagramRecapBundle, RecapStory]:
+# The generated-image prompt is compiled from text only (plan, story summary, evidence lines, format, slide). A source image can never
+# reach it; if the builder ever grows another input, the missing-file exception below is refused.
+PROMPT_INPUTS = frozenset({"plan", "opportunity_summary", "evidence", "content_format", "slide"})
+
+
+def note_segment(note: str, key: str) -> str | None:
+    """The preserved note's block for one subject: its `subject key '<key>'` line plus any indented profile lines under it."""
+    lines = note.split("\n")
+    for i, line in enumerate(lines):
+        if line.startswith(f"subject key '{key}':"):
+            block = [line]
+            for follow in lines[i + 1:]:
+                if not follow.startswith("  "):
+                    break
+                block.append(follow)
+            return "\n".join(block)
+    return None
+
+
+def missing_source_block_reason(key: str, plan_slides: list[dict], saved_note: str) -> str | None:
+    """None only when a recap story's stored binary may be absent without changing anything the real run used: no slide consumes that
+    story's image, the preserved note had it available-but-unsuitable (so the plan was made knowing it was evidence only), and the image
+    prompt builder cannot read an image. Otherwise the reason it must SAFE STOP."""
+    for i, slide in enumerate(plan_slides):
+        layout = slide.get("layout") or {}
+        refs = [r.get("content_ref") for r in layout.get("regions") or [] if r.get("kind") == "media"]
+        if key in refs:
+            return f"slide {i} has a media region consuming {key}"
+        if slide.get("media_subject") == key and slide.get("media_source") == "source":
+            return f"slide {i} plans {key}'s own source media"
+        if not layout and slide.get("media_subject") == key:
+            return f"slide {i} has no declarative layout, so its asset resolves from media_subject {key}"
+    segment = note_segment(saved_note, key)
+    if segment is None:
+        return f"{key} is absent from the preserved media note"
+    if "\n" in segment or "SOURCE_AVAILABLE: yes." not in segment or "SOURCE_SUITABLE_FOR_FINAL_VISUAL: NO" not in segment:
+        return f"{key} was not preserved as available-but-unsuitable"
+    extra = set(inspect.signature(media_mod.compile_instagram_generation_prompt).parameters) - PROMPT_INPUTS
+    if extra:
+        return f"the image prompt builder takes inputs beyond text: {sorted(extra)}"
+    return None
+
+
+def restore_preserved_note_lines(rebuilt: str, saved_note: str, missing: list[str]) -> str:
+    """With a missing binary the note builder writes `<key>: SOURCE_AVAILABLE: no...`; put back that key's preserved line (and only that).
+    The caller still requires the WHOLE note to equal the preserved one byte for byte."""
+    lines = rebuilt.split("\n")
+    for key in missing:
+        hits = [i for i, line in enumerate(lines) if line.startswith(f"{key}: SOURCE_AVAILABLE: no.")]
+        if len(hits) != 1:
+            raise SafeStop(f"{key}: expected exactly one 'no image' note line to restore, found {len(hits)}")
+        lines[hits[0]] = note_segment(saved_note, key) or ""
+    return "\n".join(lines)
+
+
+def _pinned_inputs(src: Path, *, allow_unused_missing: bool = True) -> tuple[InstagramRecapBundle, RecapStory, dict[str, dict]]:
+    """allow_unused_missing=False is the first launch's behaviour: any missing pinned binary stops the run."""
     handles = _json(src / "news_recap" / "raw_creative_director_output.json")["evidence_handles"]
+    plan_slides = _json(src / "news_recap" / "creative_director_output.json")["slides"]
+    saved_note = _json(src / "news_recap" / "render_manifest.json")["media_note_passed_to_model"]
     groups: dict[str, list[str]] = {}
     for line in handles.values():
         groups.setdefault(re.match(r"\[(story_\d)\]", line).group(1), []).append(line)
     stories = []
+    missing: dict[str, dict] = {}
     for key, lines in groups.items():
         event_id, candidate_id, storage_key = PINNED[key]
+        path = STORE_ROOT / storage_key
+        data = path.read_bytes() if path.exists() else None
+        if data is None:
+            if not allow_unused_missing:
+                raise SafeStop(f"{key}: pinned source file {storage_key} is missing")
+            reason = missing_source_block_reason(key, plan_slides, saved_note)
+            if reason is not None:
+                raise SafeStop(f"{key}: pinned source file {storage_key} is missing and {reason}")
+            missing[key] = {"storage_key": storage_key, "event_id": event_id, "candidate_id": candidate_id, "title": lines[0],
+                            "preserved_note_line": note_segment(saved_note, key), "slides_consuming_image": [],
+                            "substituted_image": None}
         stories.append(RecapStory(key=key, story_id=event_id, event_id=event_id, title=re.sub(r"^\[story_\d\]\s*", "", lines[0]), evidence=lines,
-                                  image_bytes=(STORE_ROOT / storage_key).read_bytes(), source_ref=candidate_id))
+                                  image_bytes=data, source_ref=candidate_id))
     bundle = InstagramRecapBundle(stories=tuple(stories))
     if bundle.evidence != list(handles.values()):
         raise SafeStop("rebuilt recap evidence differs from the persisted handle map")
     trend = next(s for s in stories if s.key == "story_4")  # acc._trend_inputs: first pool story with an image, >=2 facts and a Cyrillic title
+    if trend.image_bytes is None:
+        raise SafeStop("the trend story's own source image is missing")
     if list(trend.evidence) != list(_json(src / "trend_generative" / "raw_creative_director_output.json")["evidence_handles"].values()):
         raise SafeStop("trend evidence differs from the persisted handle map")
-    return bundle, trend
+    return bundle, trend, missing
 
 
 def _saved(src: Path, name: str) -> dict:
@@ -115,10 +193,24 @@ def _sha(text: str) -> str:
 
 async def _run_pass(src: Path, out: Path, *, live: bool, approved: dict[str, str] | None) -> dict:
     """One pass over all four archetypes. live=False: generation in dry_run (no provider call) - collects the exact prompts."""
-    bundle, trend_story = _pinned_inputs(src)
+    bundle, trend_story, missing = _pinned_inputs(src)
     saved = {name: _saved(src, name) for name in ORDER}
-    state: dict = {"prompts": {}, "provider_calls": 0, "notes_checked": {}, "reused": {}}
+    state: dict = {"prompts": {}, "provider_calls": 0, "notes_checked": {}, "reused": {}, "missing_sources": missing}
     current: dict = {}
+    real_note, real_subjects = trigger._carousel_media_note, trigger._carousel_media_subjects
+
+    def note_with_preserved(**kw):
+        note = real_note(**kw)
+        return restore_preserved_note_lines(note, saved["news_recap"]["media_note"], list(missing)) if kw.get("recap_bundle") is not None and missing else note
+
+    def subjects_with_preserved(**kw):
+        # The real run listed every missing-binary story as available AND unsuitable (proven from its preserved note line).
+        available, unsuitable = real_subjects(**kw)
+        recap = kw.get("recap_bundle")
+        if recap is None or not missing:
+            return available, unsuitable
+        order = [s.key for s in recap.stories]
+        return (tuple(k for k in order if k in set(available) | set(missing)), tuple(k for k in order if k in set(unsuitable) | set(missing)))
 
     async def saved_vision(**_kw):
         return saved[current["name"]]["unsuitable"]
@@ -185,7 +277,8 @@ async def _run_pass(src: Path, out: Path, *, live: bool, approved: dict[str, str
     store = out / "generated_store"
     store.mkdir(parents=True, exist_ok=True)
     patches = [
-        (trigger, "_vision_unsuitable_subjects", saved_vision), (suit_module, "check_primary_suitability", no_vision), (suit_module, "_call_vision", no_vision),
+        (trigger, "_vision_unsuitable_subjects", saved_vision), (trigger, "_carousel_media_note", note_with_preserved),
+        (trigger, "_carousel_media_subjects", subjects_with_preserved), (suit_module, "check_primary_suitability", no_vision), (suit_module, "_call_vision", no_vision),
         (cd_module, "_call_creative_director", replay_call), (media_mod, "_execute_generated_asset", generate),
         (media_mod, "build_budgeted_image_executor", lambda: BudgetedImageExecutor(budget_guard=guard)),
         (media_mod, "LocalImageStorage", lambda _root: _Store(str(store))), (OpenAIImageAdapter, "generate_image", counted_generate),
@@ -227,7 +320,7 @@ async def _run_pass(src: Path, out: Path, *, live: bool, approved: dict[str, str
         await engine.dispose()
         await diag.aclose()
     return {"records": records, "prompts": state["prompts"], "provider_calls": state["provider_calls"], "notes_checked": state["notes_checked"],
-            "reused": state["reused"], "ledger": ledger}
+            "reused": state["reused"], "missing_sources": state["missing_sources"], "ledger": ledger}
 
 
 def _worst_cases(prompts: dict[str, str]) -> dict:
@@ -283,7 +376,7 @@ async def main() -> None:
     reuse_ok = all(r.get("VALIDATION") == "PASS" for r in dry["records"] if r["archetype"] in REUSE)
     preflight = {
         "missing_generated_slots": sorted(wanted), "prompts_compiled": sorted(missing), "slots_match": set(missing) == wanted,
-        "media_notes_verified": dry["notes_checked"], "reuse_archetypes_render_pass": reuse_ok, "reused_paid_images": dry["reused"],
+        "media_notes_verified": dry["notes_checked"], "missing_source_exceptions": dry["missing_sources"], "reuse_archetypes_render_pass": reuse_ok, "reused_paid_images": dry["reused"],
         "per_call": rows, "exact_prompt_worst_total_usd": str(exact_total), "catalog_reservation_total_usd": str(catalog_total),
         "completion_cap_usd": str(CAP), "cumulative_before_usd": str(CUMULATIVE_BEFORE),
         "cumulative_worst_usd": str(CUMULATIVE_BEFORE + exact_total), "cumulative_worst_catalog_usd": str(CUMULATIVE_BEFORE + catalog_total),
