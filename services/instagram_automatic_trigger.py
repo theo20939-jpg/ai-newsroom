@@ -912,6 +912,16 @@ async def evaluate_and_submit_instagram_opportunity(
     slide_assets: dict[int, ResolvedSlideAsset] | None = None
     subject_assets: dict[str, Any] = {}
     deliberate_fallback: list[str] = []
+    exact_subject_notes: list[dict] = []
+    if carousel is not None and media_first:
+        # product polish: a slide ABOUT a real subject shows the exact product photo the pipeline holds, never a generated stand-in
+        from services.instagram_exact_subject_media import exact_subject_keys, prefer_exact_subject_media
+
+        exact_keys = exact_subject_keys(_carousel_source_images(source_image=source_image, recap_bundle=recap_bundle), exclude=vision_unsuitable)
+        carousel, exact_subject_notes = prefer_exact_subject_media(carousel, exact_keys)
+        if exact_subject_notes:
+            creative_outcome = replace(creative_outcome, carousel=carousel)
+            logger.info("instagram_exact_subject_media_preferred", extra={"opportunity_id": opportunity.id, "slides": exact_subject_notes})
     if carousel is not None:
         slide_assets, deliberate_fallback, carousel, subject_assets = _resolve_carousel_slide_assets(
             carousel, recap_bundle=recap_bundle, source_image=source_image,

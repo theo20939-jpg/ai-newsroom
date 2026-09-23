@@ -559,6 +559,13 @@ def _headline_px(result) -> int:
     return max(sizes, default=0)
 
 
+CRAMPED_BODY_LINES = 7  # an explanatory body this long in one column is fine print on a phone
+
+
+def _body_lines(result) -> int:
+    return max([int(m.get("lines") or 0) for m in (result.notes.get("text_metrics") or []) if m.get("ref") == "body"], default=0)
+
+
 def _headline_floor(spec, index: int) -> float:
     return (HOOK_HEADLINE_FLOOR_FRAC if index == 0 else HEADLINE_FLOOR_FRAC) * spec.width
 
@@ -570,7 +577,9 @@ def _render_graphic_scaled(*, spec, layout, slide_copy, index, total, subject_as
     from services.instagram_graphic_scale_adapter import adapt_graphic_scale
     from services.instagram_layout_validation import validate_layout
 
-    adapted = adapt_graphic_scale(layout)
+    from services.instagram_layout_validation import copy_parts
+
+    adapted = adapt_graphic_scale(layout, body=copy_parts(slide_copy)["body"])
     if adapted is None:
         return None
     new_layout, notes = adapted
@@ -728,6 +737,17 @@ def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets
                 result, validated, scale_notes = bigger
                 result.notes.update({**scale_notes, "media_scale_reason": "headline_below_floor", "headline_px_before": before})
                 scaled = bigger
+        elif media_mode in ("SOURCE", "GENERATED") and scaled is None and _body_lines(result) >= CRAMPED_BODY_LINES:
+            # a long explanatory body poured down a narrow column reads as fine print (real polish pass: 8-9 line bodies in 0.33-wide
+            # columns); a rebuilt band or wider side panel is kept only when the body gets shorter and the headline stays large
+            roomier = _render_scaled_up(spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
+                                        subject_assets=subject_assets, visual_direction=visual_direction, force=True)
+            if (roomier is not None and _body_lines(roomier[0]) < _body_lines(result)
+                    and _headline_px(roomier[0]) >= max(floor, 0.85 * _headline_px(result))):
+                before = _body_lines(result)
+                result, validated, scale_notes = roomier
+                result.notes.update({**scale_notes, "media_scale_reason": "body_cramped", "body_lines_before": before})
+                scaled = roomier
     adaptations = [f"{i.code}" for i in validated.issues if i.severity in ("adapted", "note")]
     if scaled is not None:
         adaptations.append("graphic_scale_adapted" if scaled[2].get("graphic_scale_adapted") else "media_scale_adapted")
@@ -756,11 +776,14 @@ def render_carousel_slide(
     if slide_body and slide_body.strip():
         # content pass v10.7: the headline and its explanatory body travel as one string through every render path (copy_parts splits
         # them); a plan that does not place the body itself gets a deterministic body region under its headline
-        from services.instagram_body_copy import attach_body_region
+        from services.instagram_body_copy import attach_body_region, widen_headline_into_free_space
         from services.instagram_layout_validation import compose_slide_text
 
         slide_copy = compose_slide_text(slide_copy, slide_body)
         layout_plan, body_placement = attach_body_region(layout_plan, slide_copy)
+        layout_plan, _widened = widen_headline_into_free_space(layout_plan)
+        if _widened:
+            body_placement = f"{body_placement or 'plan'}+headline_widened"
     declared = _try_declared(
         spec=spec, layout_plan=layout_plan, slide_copy=slide_copy, index=index, total=total,
         subject_assets=subject_assets or {}, visual_direction=visual_direction, media_mode=media_mode,

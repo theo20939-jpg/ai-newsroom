@@ -16,6 +16,7 @@ from services.instagram_layout_validation import copy_parts
 
 MIN_MEDIA_AREA = 0.50
 SHORT_COPY_CHARS = 34
+SIDE_PANEL_MAX_BODY_CHARS = 70
 ORIENTATIONS = ("side_right", "side_left", "text_top", "text_bottom", "mixed_bands")
 SUBSTANTIVE_GRAPHICS = frozenset({"flow_diagram", "poll_cards", "ui_frame"})
 DECORATIVE_GRAPHICS = frozenset({"badge", "scribble", "arrow_scribble", "circle_scribble", "box_scribble", "underline_scribble", "highlight", "burst"})
@@ -124,7 +125,10 @@ def adapt_media_scale(layout: InstagramSlideLayout, *, slide_copy: str, force: b
         adapted_mixed = layout.model_copy(update={"regions": regions, "media_dominance": "DOMINANT", "arrangement": "standard"})
         return MediaScaleAdaptation(adapted_mixed, (media.x, media.y, media.w, media.h), (0.0, 0.0, 1.0, 0.44), "mixed_bands")
     if orientation is None:
-        if len(copy_parts(slide_copy)["copy"]) <= SHORT_COPY_CHARS and abs(media_cx - text_cx) >= 0.25:
+        # a side panel suits a short headline with at most a one-line-ish body; a real explanatory body gets a full-width band instead
+        # (real polish pass: 100+ character bodies poured into a 0.40 column ran to 8-9 lines of fine print)
+        if (len(copy_parts(slide_copy)["copy"]) <= SHORT_COPY_CHARS and len(copy_parts(slide_copy)["body"]) <= SIDE_PANEL_MAX_BODY_CHARS
+                and abs(media_cx - text_cx) >= 0.25):
             orientation = "side_right" if media_cx > text_cx else "side_left"
         else:
             orientation = "text_top" if text_cy <= media_cy else "text_bottom"
@@ -152,7 +156,9 @@ def adapt_media_scale(layout: InstagramSlideLayout, *, slide_copy: str, force: b
     regions: list[LayoutRegion] = [r for r in layout.regions if r.kind == "surface" and r.w >= 0.99 and r.h >= 0.99 and r.surface != "media_ground"]
     new_media = media.model_copy(update={
         "x": mbox[0], "y": mbox[1], "w": mbox[2], "h": mbox[3], "z": 1, "frame": "none", "tilt_deg": None,
-        "crop_mode": "cover",
+        # an isolated product keeps its object crop: a rebuild must never cut the exact product in half (real polish pass: the vivo Watch 6
+        # planned as object_contain was re-cropped to 'cover' and lost half its face)
+        "crop_mode": media.crop_mode if media.crop_mode in ("object_contain", "object_cover") else "cover",
     })
     regions.append(new_media)
     rule = next((r for r in layout.regions if r.kind == "accent" and r.accent_type == "rule_h"), None)

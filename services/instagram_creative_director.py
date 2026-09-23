@@ -653,6 +653,10 @@ def _validate_carousel_output(
         if ref and handle_aware:
             slide = slide.model_copy(update={"source_evidence": resolve_evidence_references([ref], director_input.allowed_evidence)[0]})
         slides.append(slide)
+    if _CAROUSEL_PROMPT_VERSION in EDITORIAL_CRITIC_CAROUSEL_VERSIONS:
+        # hook_emotion / hook_mechanic are internal planning fields of the HOOK; on any other slide they carry nothing, so they are cleared
+        # instead of failing a whole post (real v10.9 run: 3 of 4 posts rejected only for this after the v10.9 prompt simplification)
+        slides = [slides[0], *(s.model_copy(update={"hook_emotion": None, "hook_mechanic": None}) for s in slides[1:])] if slides else slides
     creative = creative.model_copy(update={"evidence_used": canonical_used, "slides": slides})
     emitted_archetype = creative.content_archetype
     correction_required = archetype is not None and emitted_archetype != archetype

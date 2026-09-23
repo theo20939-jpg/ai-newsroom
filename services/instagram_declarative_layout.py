@@ -20,9 +20,8 @@ alpha-composite of a real transparent cutout, and (collage fragments only) a bou
 optional flat paper-white mat. Colour, brightness, blur and gradients are never applied to a source."""
 from __future__ import annotations
 
-from contextvars import ContextVar
-
 import math
+from contextvars import ContextVar
 from typing import Any
 
 from PIL import Image, ImageChops, ImageDraw
@@ -171,7 +170,10 @@ def _draw_flow(draw, tokens: list[str], x0: int, y0: int, w: int, h: int, *, W: 
     interface-card slides), a wide one a row of cards; labels are fitted to each card, never a fixed small size."""
     n = len(tokens)
     card_fill = CARD_ON_DARK if dark_bg else SURFACE_SOFT
-    if h >= 0.55 * w:
+    # long labels squeezed into narrow side-by-side boxes shrink to fine print (real polish pass: "CLAUDE CODE: AGENTS.MD" in a third of
+    # a row); full-width stacked cards read far better once the region has some height
+    long_labels = max((len(t) for t in tokens), default=0) > 10
+    if h >= 0.55 * w or (long_labels and h >= 0.28 * w):
         gap = round(h * 0.05)
         card_h = (h - gap * (n - 1)) // n
         pad = round(card_h * 0.22)
@@ -678,12 +680,19 @@ def _render_declared_once(
                     continue
                 gap = round(W * 0.018)
                 card_h = (h - gap * (len(options) - 1)) // len(options)
-                font = ig_font(max(round(W * _MIN_FONT_FRAC), min(round(card_h * 0.42), round(W * GRAPHIC_LABEL_MAX_FRAC))), "semibold")
+                pad = round(card_h * 0.36)
+                inner_w, inner_h = max(1, w - 2 * pad), max(1, round(card_h * 0.82))
+                # every label fits its card (real v10.9 insight card: "Максимальный intelligence index" ran out of the card at a fixed size);
+                # all cards share the smallest fitting size so the options read as one set
+                fitted = [_fit_label(draw, option, inner_w, inner_h, W=W, weight="semibold") for option in options]
+                shared = ig_font(min(f[0].size for f in fitted), "semibold")
                 for i, option in enumerate(options):
                     cy0 = y0 + i * (card_h + gap)
                     draw.rounded_rectangle([x0, cy0, x1, cy0 + card_h], radius=round(card_h * 0.28), fill=(*SURFACE_SOFT, 255))
-                    bbox = draw.textbbox((0, 0), option, font=font)
-                    draw.text((x0 + round(card_h * 0.36), cy0 + (card_h - (bbox[3] - bbox[1])) / 2 - bbox[1]), option, font=font, fill=tok.INK)
+                    lines = _wrap(draw, option, shared, inner_w)[:2]
+                    line_gap = round(shared.size * 0.12)
+                    heights = [draw.textbbox((0, 0), ln, font=shared)[3] - draw.textbbox((0, 0), ln, font=shared)[1] for ln in lines]
+                    _draw_label(draw, lines, shared, line_gap, x0 + pad, cy0 + card_h / 2, sum(heights) + line_gap * max(0, len(lines) - 1), tok.INK)
             elif region.graphic_type == "badge":
                 colour = _role_colour(layout, region.tone or "accent2", dark=True, default=accent_default)
                 side = min(w, h)

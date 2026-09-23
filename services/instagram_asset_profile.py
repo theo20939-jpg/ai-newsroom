@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 from services.instagram_declarative_layout import _object_bbox, ground_of
 from services.instagram_image_handling import fit_image_cover
@@ -24,6 +24,9 @@ _SPEC = INSTAGRAM_RENDER_PROFILES[InstagramRenderProfile.CAROUSEL_SLIDE]
 _CROP_FOCI = (0.1, 0.3, 0.5, 0.7, 0.9)
 _MIN_SIDE = 640
 _MAX_OPTIONS = 3
+PRODUCT_MIN_OBJECT_FILL = 0.45  # an isolated object this solid is a product shot (measured: vivo watch 0.64; wallet card 0.29, OpenAI graphic 0.28)
+PRODUCT_MAX_EMPTY_ROWS = 0.05  # a product is ONE connected object; a card stacks bands of text with empty rows between them (watch 0.0; wallet card 0.16,
+# a flat headline-band article card 0.29)
 FLAT_GRAPHIC_MAX_DOMINANT_COLOURS = 12  # <= this many 4-bit colours cover 90% of the pixels: a flat article / text / social card, not a photograph or object
 LOGO_ZONE_RIGHT = (0.83, 0.82, 0.94, 0.93)
 
@@ -48,12 +51,18 @@ class AssetProfile:
     object_share: float            # measured object area / image area (1.0 = no isolated object)
     immersive_options: tuple[ImmersiveOption, ...] = field(default_factory=tuple)
     dominant_colours_90: int = 999
+    object_fill: float = 0.0       # how solidly the isolated object fills its own box (a product ~0.6; the strokes of a text card ~0.3)
 
     @property
     def suitable_for_final_visual(self) -> bool:
         """Phase B.6 SOURCE_SUITABLE_FOR_FINAL_VISUAL. Deterministic, no OCR: a flat few-colour image is almost always an article / headline / social
         card whose main content is baked-in text. A false 'unsuitable' is safe (a contextual visual is generated instead)."""
-        return self.dominant_colours_90 > FLAT_GRAPHIC_MAX_DOMINANT_COLOURS
+        if self.dominant_colours_90 > FLAT_GRAPHIC_MAX_DOMINANT_COLOURS:
+            return True
+        # a dark or light PRODUCT SHOT on a uniform ground also has few colours (real v10.9 TREND: the official vivo Watch 6 photo on black
+        # had 11 and was told to the Creative Director as a 'flat text card', so the carousel about the watch never showed the watch). An
+        # isolated, solid object is a product, not a card: cards fill the whole frame or are thin strokes of text.
+        return self.hero_ready and self.object_fill >= PRODUCT_MIN_OBJECT_FILL
 
     @property
     def hero_ready(self) -> bool:
@@ -108,7 +117,20 @@ def profile_asset(image: Image.Image, *, subject_key: str) -> AssetProfile:
             if len(options) >= _MAX_OPTIONS:
                 break
     return AssetProfile(subject_key, rgb.width, rgb.height, tone, has_alpha, uniform, sum(ground) / 3 < 60,
-                        round(min(1.0, share), 2), tuple(options), dominant_colours_90(rgb))
+                        round(min(1.0, share), 2), tuple(options), dominant_colours_90(rgb), _object_fill(rgb, ground) if uniform else 0.0)
+
+
+def _object_fill(rgb: Image.Image, ground: tuple[int, int, int]) -> float:
+    small = rgb.resize((160, 160))
+    mask = ImageChops.difference(small, Image.new("RGB", small.size, ground)).convert("L").point(lambda v: 255 if v > 24 else 0)
+    box = mask.getbbox()
+    if not box:
+        return 0.0
+    crop = mask.crop(box)
+    empty_rows = sum(1 for y in range(crop.height) if not crop.crop((0, y, crop.width, y + 1)).getbbox())
+    if empty_rows / crop.height > PRODUCT_MAX_EMPTY_ROWS:  # bands of text / highlighted lines, not one object
+        return 0.0
+    return round(crop.histogram()[255] / max(1, crop.width * crop.height), 3)
 
 
 def render_profile_lines(profile: AssetProfile, *, pool_size: int, allowed_functions: str, include_suitability: bool = False,

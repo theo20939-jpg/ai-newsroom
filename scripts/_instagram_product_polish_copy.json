@@ -1,0 +1,41 @@
+{
+  "_note": "FINAL RUSSIAN LINE EDIT of the real v10.9 first-pass Creative Director outputs (founder product-polish pass). Editor edits only: every angle, hook decision, card order and media plan stays the Creative Director's; each change is listed with its reason. Facts only from each post's own evidence. NOT model output.",
+  "ai_hack": {
+    "slides": {
+      "0": {"slide_copy": "Не читай длинный текст — сожми его до трёх пунктов", "slide_body": "Два запроса к ИИ: сначала вытащить решения, потом собрать из них чек-лист.", "why": "hook was a topic label («Длинный текст. Три пункта.») - now the benefit"},
+      "1": {"slide_copy": "Шаг 1. Оставь только решения", "slide_body": "Вставь текст и попроси: «Выдели только принятые решения, без описания проблемы».", "why": "restore the exact prompt (save value); no period in a headline"},
+      "2": {"slide_copy": "Шаг 2. Сожми до трёх пунктов", "slide_body": "Второй запрос: «Переформулируй вывод в чек-лист из трёх пунктов».", "why": "restore the exact prompt"},
+      "3": {"slide_copy": "На выходе — чек-лист вместо простыни текста", "slide_body": "Три пункта, по которым легко проверить решения.", "why": "«проверить решение» -> plural; body no longer repeats the headline"},
+      "4": {"slide_copy": "Сохрани оба запроса", "slide_body": "Пригодятся, когда снова придёт длинный текст, а нужен только вывод.", "why": "«Сначала решения. Потом проверка.» was the empty poster pattern and repeated cards 2-4"}
+    }
+  },
+  "news_insight": {
+    "slides": {
+      "0": {"slide_copy": "Автор с Хабра перестал брать самую дорогую модель", "slide_body": "Теперь главный вопрос не «насколько она умная», а «сколько стоит задача».", "why": "«Он перестал...» had no referent on the first screen"},
+      "1": {"slide_copy": "Умнее — не значит выгоднее", "slide_body": "Рейтинг интеллекта показывает, насколько модель сильна. Но не показывает, сколько ты заплатишь за результат.", "why": "body repeated card 1; now explains the contrast"},
+      "2": {"slide_body": "Автор выбрал второе — и перешёл на модели дешевле.", "why": "«В этом кейсе выбор сместился от максимального показателя...» - translated construction, repeated card 1"},
+      "3": {"slide_copy": "Посчитай цену одной задачи", "slide_body": "Прогони одну типовую задачу на разных моделях и сравни, во что она обходится. Бери ту, что справляется дешевле.", "why": "«Сначала считай задачу» unnatural; «...и только потом выбирай самую умную» contradicted the thesis"}
+    }
+  },
+  "news_recap": {
+    "slides": {
+      "0": {"slide_body": "OpenAI заявляет, что по производительности она не уступает GPT-5.6 Sol.", "why": "«производительность — на уровне» -> natural sentence; the hook itself is the CD's and is kept"},
+      "1": {"slide_body": "OpenAI запустила Sol и Luna. Sol, по словам компании, ошибается примерно вдвое реже GPT-5.6 Sol.", "why": "«совершает ... меньше ошибок, чем» -> natural"},
+      "2": {"slide_body": "Цифровые права уже работают в Вирджинии и Оклахоме. Скоро добавятся ещё три штата — всего будет почти 20.", "why": "restore the facts v10.8 had kept (states, almost 20)"},
+      "3": {"slide_copy": "Apollo обучили древнегреческому", "slide_body": "Модель от Австрийской академии наук, Mistral и Sail Reply обучена примерно на 600 млн исторических греческих слов. Её планируют сделать бесплатной.", "why": "«Apollo учит ИИ древнегреческому» - wrong actor (Apollo IS the model); Russian institution name instead of «Austrian Academy of Science»"},
+      "4": {"slide_copy": "vivo Watch 6 — от $149", "slide_body": "Титановый корпус, сапфировое стекло и eSIM.", "why": "brand + product named together; shows the real watch now"},
+      "5": {"slide_copy": "Xiaomi открыла веса MiMo-V2.6", "slide_body": "Pro и Flash можно развернуть у себя. Утверждается, что Pro не уступает Opus 5 и GPT-5.6 Sol в большинстве агентских тестов.", "why": "restore the story's strongest claim with its attribution"},
+      "6": {"slide_body": "Это формат инструкций для ИИ-агентов, который придумала OpenAI, а потом передала в Agentic AI Foundation.", "why": "participle chain «предложенной ... и переданной ...»"},
+      "7": {"slide_copy": "Что запомнить с этой недели", "slide_body": "Сохрани — пригодится, когда эти названия снова всплывут в ленте.", "flow_steps": ["LUNA: 1% ЦЕНЫ", "MIMO: ОТКРЫТЫЕ ВЕСА", "CLAUDE CODE: AGENTS.MD"], "why": "«ИИ стал дешевле, открытее и понятнее» - a claim broader than the evidence; abstract cards ЦЕНА/ДОСТУП/ИНСТРУКЦИИ -> the facts themselves"}
+    }
+  },
+  "trend_generative": {
+    "slides": {
+      "0": {"slide_copy": "Титан, сапфир, eSIM — от $149", "slide_body": "Это стартовая цена новых vivo Watch 6.", "why": "«выглядят как часы с ценником заметно выше» is not in the evidence"},
+      "1": {"slide_body": "Корпус — титан, стекло — сапфир, связь — eSIM.", "why": "«Главный набор заявленных характеристик» - bureaucratic"},
+      "2": {"drop": true, "why": "«Две версии корпуса» / «доступны не в одном варианте исполнения» said one fact twice; the fact moves to the sensors card"},
+      "3": {"slide_copy": "И пульс с кислородом в крови", "slide_body": "Датчики следят за сердечным ритмом и уровнем кислорода. Корпус — в двух версиях.", "why": "carries the dropped card's fact"},
+      "4": {"slide_copy": "Ты бы взял такие за $149?", "slide_body": "Часы вышли вместе со смартфонами vivo X500, X500 Pro и X500 Pro Max.", "why": "the takeaway re-listed the specs a third time; now an honest direct question + the one fact not yet used"}
+    }
+  }
+}

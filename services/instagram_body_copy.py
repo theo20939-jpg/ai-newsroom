@@ -91,3 +91,24 @@ def attach_body_region(layout_plan: dict | None, slide_text: str) -> tuple[dict 
     anchor["h"] = max(0.05, total - body_h - _GAP)
     regions.append({**base, "y": anchor["y"] + anchor["h"] + _GAP, "h": body_h})
     return {**layout_plan, "regions": regions}, "headline_box_shared"
+
+
+def widen_headline_into_free_space(layout_plan: dict | None) -> tuple[dict | None, bool]:
+    """A headline box planned narrower than the free canvas beside it takes that free width (nothing else sits in its band), so a longer,
+    information-carrying headline keeps its size instead of shrinking (real polish pass: «Шаг 1. Оставь только решения» in a 0.52 box with
+    empty canvas to its right). Only the width grows; nothing moves."""
+    if not layout_plan:
+        return layout_plan, False
+    regions = [dict(r) for r in layout_plan.get("regions") or []]
+    changed = False
+    for region in regions:
+        if region.get("kind") != "text" or region.get("content_ref") not in HEADLINE_REFS or region.get("on_media") or region["w"] >= 0.6:
+            continue
+        y0, y1, x1 = region["y"], region["y"] + region["h"], region["x"] + region["w"]
+        blockers = [r["x"] for r in regions if r is not region and r.get("kind") in ("media", "graphic", "text")
+                    and r["x"] >= x1 - 0.01 and min(r["y"] + r["h"], y1) - max(r["y"], y0) > 0.005]
+        right = min(blockers + [0.94]) - 0.02
+        if right - x1 >= 0.1:
+            region["w"] = round(right - region["x"], 3)
+            changed = True
+    return ({**layout_plan, "regions": regions}, True) if changed else (layout_plan, False)
