@@ -376,7 +376,7 @@ async def test_E_live_trigger_uses_v6_archetype_structured_composition_fatigue_a
     assert "fatigued" in captured["director_input"].fatigue_note
 
     observability = captured["package"].media_plan["b4_observability"]
-    assert observability["prompt_version"] == CAROUSEL_PROMPT_VERSION == "10.8"
+    assert observability["prompt_version"] == CAROUSEL_PROMPT_VERSION == "10.9"
     assert observability["content_archetype"] == "news_insight"  # derived, not the model's stale "ai_hack"
     assert observability["structured_composition_present"] is True
     assert observability["structured_composition_executed"] is True

@@ -154,7 +154,7 @@ def test_overlay_is_absent_from_every_active_contract() -> None:
 
     from services.instagram_creative_director import CAROUSEL_PROMPT_VERSION
 
-    assert CAROUSEL_PROMPT_VERSION == "10.8"
+    assert CAROUSEL_PROMPT_VERSION == "10.9"
     for version in ("7", "8", "9"):  # the removed concept is absent from every contract's SCHEMA; v9 may only name it in a prohibition
         text = open(f"prompts/instagram_creative_director_carousel/v{version}.yaml", encoding="utf-8").read().lower()
         parsed = yaml.safe_load(text)

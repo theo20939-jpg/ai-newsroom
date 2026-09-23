@@ -28,6 +28,12 @@ from services.instagram_media_first import MediaFirstContractError
 BLOCKING = "blocking"
 ADVISORY = "advisory"
 HOOK_DISPLAY_MAX_CHARS = 60
+# the only findings that reject a plan: the post would be false, its core value would be lost, or it cannot be displayed
+GATING_CODES = frozenset({
+    "completed_fact_turned_into_plan", "claim_stronger_than_evidence", "launch_after_discussion",  # false
+    "strongest_fact_dropped", "usable_instruction_paraphrased", "card_repeats_card",                # core value lost
+    "hook_too_long_for_display",                                                                      # cannot be set at display size
+})
 
 _WORD = re.compile(r"[A-Za-zА-Яа-яЁё0-9$%€£₽][A-Za-zА-Яа-яЁё0-9$%€£₽.\-]*")
 _STOP = frozenset(
@@ -138,6 +144,12 @@ def _cards(slides: list[Any]) -> list[dict[str, Any]]:
     return out
 
 
+def _unquoted(text: str) -> str:
+    """Quoted wording is the reader's usable content (an exact prompt), not a restatement - repetition checks never count it
+    (real v10.8 AI_HACK card 3: the quoted prompt shares the step headline's words by design and was wrongly rejected)."""
+    return re.sub(r"«[^»]*»|\"[^\"]*\"", " ", text or "")
+
+
 def _full(card: dict[str, Any]) -> str:
     return f"{card['head']} {card['body']} {card['steps']}"
 
@@ -204,7 +216,7 @@ def critique(slides: list[Any], evidence: list[str], *, archetype: str | None = 
     # 4. REPETITION: every card adds something; headline and body do not restate each other
     seen: set[str] = set()
     for idx, card in enumerate(cards):
-        head, body = content_stems(card["head"]), content_stems(card["body"])
+        head, body = content_stems(card["head"]), content_stems(_unquoted(card["body"]))
         stems = head | body | content_stems(card["steps"])
         if idx > 0 and len(stems) >= 5:
             new = stems - seen
@@ -212,7 +224,7 @@ def critique(slides: list[Any], evidence: list[str], *, archetype: str | None = 
                 add(EditorialFinding("card_adds_no_new_information", BLOCKING, idx,
                                      f"only {len(new)} of {len(stems)} content words are new - the card restates earlier cards"))
         for prev in range(idx):
-            other = content_stems(cards[prev]["body"])
+            other = content_stems(_unquoted(cards[prev]["body"]))
             if len(body) >= 5 and len(other) >= 5 and len(body & other) / len(body | other) >= 0.45:
                 add(EditorialFinding("card_repeats_card", BLOCKING, idx, f"its body repeats card {prev + 1}'s body"))
         if head and body:
@@ -297,7 +309,9 @@ def critique(slides: list[Any], evidence: list[str], *, archetype: str | None = 
         if not any(imperative.search(c["body"]) or imperative.search(c["head"]) for c in cards[1:]):
             add(EditorialFinding("no_practical_takeaway", BLOCKING, None,
                                  "a how-to/insight post with no card telling the reader what to actually do"))
-    return findings
+    # The critic is a safety net, not the editor (founder, after the v10.8 run): it BLOCKS only what makes a post false, loses its core
+    # value or cannot be displayed; every taste / language judgment is reported as advisory for the editorial review instead.
+    return [EditorialFinding(f.code, BLOCKING if f.code in GATING_CODES else ADVISORY, f.card, f.detail) for f in findings]
 
 
 def blocking(findings: list[EditorialFinding]) -> list[EditorialFinding]:

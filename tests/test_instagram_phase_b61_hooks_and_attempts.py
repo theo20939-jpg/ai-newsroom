@@ -130,7 +130,7 @@ def test_the_attempt_identity_is_derived_from_the_post_and_the_slide_key_only() 
 
 def test_v101_is_v10_plus_only_the_hook_and_generated_contracts_and_v10_is_untouched() -> None:
     v10, v101 = _load("10"), _load("10.1")
-    assert v10["version"] == "10" and v101["version"] == "10.1" and cd.CAROUSEL_PROMPT_VERSION == "10.8"
+    assert v10["version"] == "10" and v101["version"] == "10.1" and cd.CAROUSEL_PROMPT_VERSION == "10.9"
     changed = [i for i, (a, b) in enumerate(zip(v10["rules"], v101["rules"])) if a != b]
     assert len(v10["rules"]) == len(v101["rules"]) and len(changed) == 2
     assert v101["rules"][changed[0]].startswith("GENERATED slide contract") and v101["rules"][changed[1]].startswith("HOOK CONTRACT")

@@ -51,7 +51,17 @@ def test_every_known_paid_failure_is_caught(name):
                         caption=data["paid_output"].get("final_caption") or "")
     codes = {f.code for f in findings}
     assert EXPECTED[name] <= codes, EXPECTED[name] - codes
-    assert any(f.severity == "blocking" for f in findings)
+    # since the v10.9 judgment reset the critic only GATES what is false, loses core value or cannot be displayed; taste is advisory
+    gating = {f.code for f in findings if f.severity == "blocking"}
+    assert gating == GATING_EXPECTED[name], gating
+
+
+GATING_EXPECTED = {
+    "ai_hack": {"usable_instruction_paraphrased"},
+    "news_insight": {"hook_too_long_for_display"},
+    "news_recap": {"strongest_fact_dropped", "completed_fact_turned_into_plan", "claim_stronger_than_evidence", "launch_after_discussion"},
+    "trend_generative": set(),  # its defects are Russian/taste - reported as advisory, never a gate
+}
 
 
 @pytest.mark.parametrize("name", ARCHETYPES)
@@ -98,7 +108,7 @@ def test_the_recap_contract_overflow_is_blocked_and_the_bound_is_now_stated():
 def test_v10_8_is_active_and_is_exactly_what_its_generator_builds():
     import scripts._instagram_make_prompt_v10_8 as gen
 
-    assert cd.CAROUSEL_PROMPT_VERSION == "10.8" and "10.8" in cd.EDITORIAL_CRITIC_CAROUSEL_VERSIONS and "10.8" in cd.BODY_COPY_CAROUSEL_VERSIONS
+    assert cd.CAROUSEL_PROMPT_VERSION == "10.9" and "10.8" in cd.EDITORIAL_CRITIC_CAROUSEL_VERSIONS and "10.8" in cd.BODY_COPY_CAROUSEL_VERSIONS
     committed = yaml.safe_load((ROOT / "prompts" / "instagram_creative_director_carousel" / "v10.8.yaml").read_text(encoding="utf-8"))
     assert committed == gen.build()
     schema = committed["output_schema"]

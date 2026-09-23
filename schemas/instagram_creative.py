@@ -7,7 +7,7 @@ not explicitly supply as allowed evidence - the Creative Director may transform 
 may never invent a fact."""
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -289,6 +289,9 @@ class InstagramCarouselCreative(BaseModel):
     editorial_angle: str | None = Field(default=None, max_length=400)
     # Editorial judgment reset (prompt v10.8): the 2-4 angles the model compared before choosing editorial_angle (internal planning).
     angle_candidates: list[dict[str, str]] = Field(default_factory=list, max_length=4)
+    # Creative Director judgment reset (prompt v10.9): the one decision written BEFORE the slides - the strongest true thing, why a reader
+    # cares, what must survive, what each card adds (internal planning, never audience copy).
+    editorial_decision: dict[str, Any] | None = None
     creative_execution_plan: InstagramCreativeExecutionPlan | None = None
 
     @property

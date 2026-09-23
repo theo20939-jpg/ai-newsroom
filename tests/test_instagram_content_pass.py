@@ -130,7 +130,7 @@ def test_schema_carries_body_and_the_guards_read_it():
 def test_v10_7_is_active_and_is_exactly_what_its_generator_builds():
     import scripts._instagram_make_prompt_v10_7 as gen
 
-    assert cd.CAROUSEL_PROMPT_VERSION == "10.8" and "10.7" in cd.BODY_COPY_CAROUSEL_VERSIONS and "10.7" in cd._EVIDENCE_HANDLE_CAROUSEL_VERSIONS
+    assert cd.CAROUSEL_PROMPT_VERSION == "10.9" and "10.7" in cd.BODY_COPY_CAROUSEL_VERSIONS and "10.7" in cd._EVIDENCE_HANDLE_CAROUSEL_VERSIONS
     committed = yaml.safe_load((ROOT / "prompts" / "instagram_creative_director_carousel" / "v10.7.yaml").read_text(encoding="utf-8"))
     assert committed == gen.build()
     text = "\n".join(committed["rules"])

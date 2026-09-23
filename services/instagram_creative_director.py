@@ -100,13 +100,13 @@ EDITORIAL_DECISION_PROMPT_NAME = "instagram_editorial_decision"
 # shipped prompt version in place" convention.
 _SINGLE_PROMPT_VERSION = "6"
 _CREATIVE_DIRECTOR_MAX_TOKENS = 16_000  # upper safety bound (not a target): keeps the gateway worst-case estimate from pricing a model-maximum completion
-_CAROUSEL_PROMPT_VERSION = "10.8"  # editorial judgment reset: compared angles, stated bounds, editorial critic; 10.7 = content pass: headline + slide_body, editorial_angle, information density; Phase B.5.1.2: v9.1 = v9 + evidence-reference contract (E1..En handles); v9 = Visual DNA v2 families, bounded roles, meta-language guard
+_CAROUSEL_PROMPT_VERSION = "10.9"  # judgment reset: editor-first system text, scoped product rule, editorial_decision first, 22 rules removed; 10.8 = compared angles + critic; 10.7 = content pass: headline + slide_body, editorial_angle, information density; Phase B.5.1.2: v9.1 = v9 + evidence-reference contract (E1..En handles); v9 = Visual DNA v2 families, bounded roles, meta-language guard
 CAROUSEL_PROMPT_VERSION = _CAROUSEL_PROMPT_VERSION
-_EVIDENCE_HANDLE_CAROUSEL_VERSIONS = frozenset({"9.1", "10", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8"})  # prompt versions whose input lists evidence as handles (E1, E2, ...)
-MEDIA_FIRST_CAROUSEL_VERSIONS = frozenset({"10", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8"})  # Phase B.6: prompt versions under the media-first + KAGE-voice contract
-HOOK_MECHANIC_CAROUSEL_VERSIONS = frozenset({"10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8"})  # Phase B.6.2: prompt versions whose schema carries hook_mechanic
-BODY_COPY_CAROUSEL_VERSIONS = frozenset({"10.7", "10.8"})  # content pass: headline + explanatory slide_body, editorial_angle, information-density contract
-EDITORIAL_CRITIC_CAROUSEL_VERSIONS = frozenset({"10.8"})  # editorial judgment reset: angle_candidates + deterministic editorial critic
+_EVIDENCE_HANDLE_CAROUSEL_VERSIONS = frozenset({"9.1", "10", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8", "10.9"})  # prompt versions whose input lists evidence as handles (E1, E2, ...)
+MEDIA_FIRST_CAROUSEL_VERSIONS = frozenset({"10", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8", "10.9"})  # Phase B.6: prompt versions under the media-first + KAGE-voice contract
+HOOK_MECHANIC_CAROUSEL_VERSIONS = frozenset({"10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8", "10.9"})  # Phase B.6.2: prompt versions whose schema carries hook_mechanic
+BODY_COPY_CAROUSEL_VERSIONS = frozenset({"10.7", "10.8", "10.9"})  # content pass: headline + explanatory slide_body, editorial_angle, information-density contract
+EDITORIAL_CRITIC_CAROUSEL_VERSIONS = frozenset({"10.8", "10.9"})  # editorial judgment reset: angle_candidates + deterministic editorial critic
 _MEDIA_FIRST_CAROUSEL_VERSIONS = MEDIA_FIRST_CAROUSEL_VERSIONS
 _EVIDENCE_HANDLE_RE = re.compile(r"^E([1-9]\d*)$")
 
