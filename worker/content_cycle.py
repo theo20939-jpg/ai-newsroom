@@ -118,6 +118,18 @@ from services.instagram_automatic_trigger import (
     evaluate_and_submit_instagram_candidate,
     evaluate_and_submit_instagram_opportunity,
 )
+from services.instagram_content_opportunity import ContentOpportunity, OpportunitySourceType
+from services.instagram_feed_planner import (
+    load_feed_candidates,
+    load_feed_usage,
+    load_recent_event_ids,
+    mark_tried,
+    open_slots,
+    select_weekly_recap_candidates,
+    weekly_recap_identity,
+)
+from services.instagram_feed_product import DAILY_MAX_POSTS
+from services.instagram_recap_bundle import build_instagram_recap_bundle
 from services.director_execution_service import run_instagram_growth_strategist
 
 # Phase 23.1Q (Media Roadmap Recovery step 1): initial product cap on router-mode NEWS media-group
@@ -672,6 +684,8 @@ class ContentCycleResult:
     # lane's real production behavior stays independently observable. Additive, default None -
     # same "every pre-existing caller/test unaffected" convention as the field above.
     instagram_product_lane_report: InstagramTriggerCycleReport | None = None
+    # KAGE feed product: the weekly news recap (None when not due / disabled)
+    instagram_weekly_recap_outcome: Any = None
     # Phase 18.10 M3 (Telegram reply context, story_memory_mode != "off" only - all zero
     # otherwise). `story_fail_closed_review`: an update whose story had no discoverable root
     # message - never sent as a standalone post, routed to review instead (see
@@ -1081,7 +1095,7 @@ async def _select_eligible_events(
     return [event_id for _rank, event_id in eligible[:result_limit]]
 
 
-# INSTAGRAM-AUTOMATIC-EDITORIAL-TRIGGER-1 §10: a pure rollout-safety throughput cap, deliberately
+# INSTAGRAM-AUTOMATIC-EDITORIAL-TRIGGER-1 §10 (KAGE feed product: now bounds Director decisions per cycle): a pure rollout-safety throughput cap, deliberately
 # NOT an editorial policy - MAJOR-treatment stories beyond this count in one cycle are simply
 # picked up on the NEXT cycle (the same event stays eligible until _select_eligible_events()'s own
 # existing freshness cutoff excludes it), never dropped/rejected. Separate from and orthogonal to
@@ -1122,7 +1136,31 @@ async def _run_instagram_automatic_trigger(
     dup_deliveries = 0
     candidates: list[Any] = []
 
-    for event_id in event_ids[:_INSTAGRAM_TRIGGER_MAX_PER_CYCLE]:
+    # KAGE feed product (services/instagram_feed_planner.py): Instagram is not a news feed. Read what each fresh event IS, count what
+    # was already published today, and try only the shortlists of today's OPEN slots (at most 2 posts a day, AI_HACK first, TREND
+    # selective, ordinary news never). Each try is one Director decision; _INSTAGRAM_TRIGGER_MAX_PER_CYCLE bounds them per cycle.
+    now = datetime.now(timezone.utc)
+    day_key = now.date().isoformat()
+    try:
+        async with session_factory() as session:
+            usage = await load_feed_usage(session, now=now)
+            pool = list(dict.fromkeys([*event_ids, *await load_recent_event_ids(session, now=now)]))
+            feed_candidates = await load_feed_candidates(session, pool)
+    except Exception:
+        logger.exception("instagram_feed_planning_failed")
+        return report
+    _reads, slots = open_slots(feed_candidates, usage, day_key=day_key)
+    attempts = [(slot.format, UUID(candidate.id)) for slot in slots for candidate, _ in slot.shortlist][:_INSTAGRAM_TRIGGER_MAX_PER_CYCLE]
+    filled: set[Any] = set()
+    if not attempts:
+        logger.info("instagram_feed_no_open_slot_or_candidate", extra={
+            "published_today": usage.today_total, "fresh_events": len(event_ids), "open_slots": [s.format.value for s in slots],
+        })
+
+    for slot_format, event_id in attempts:
+        if slot_format in filled:
+            continue
+        mark_tried(day_key, str(event_id))
         try:
             async with session_factory() as session:
                 treatment = await _classify_event_for_router_treatment(session, event_id)
@@ -1140,11 +1178,13 @@ async def _run_instagram_automatic_trigger(
                     .limit(1)
                 )
                 facts = _extract_research_facts(na_task.workflow if na_task is not None else None)
+                if not facts:  # an Instagram-pool event the news pipeline never analysed: its own headline and lead are the evidence
+                    facts = [fact for fact in (event_row.title, (event_row.summary or event_row.content or "")[:600]) if fact]
 
                 outcome = await evaluate_and_submit_instagram_candidate(
                     session, bot, event_id=str(event_id), event_title=event_row.title or "", treatment=treatment,
                     research_facts=facts, gateway=gate_gateway, prompt_repository=gate_prompt_repository,
-                    source_url=event_row.url, phase_a_enabled=True,
+                    source_url=event_row.url, phase_a_enabled=True, feed_format=slot_format,
                 )
                 await session.commit()
         except Exception:
@@ -1152,6 +1192,8 @@ async def _run_instagram_automatic_trigger(
             continue
 
         candidates.append(outcome)
+        if outcome.accepted and outcome.reason in ("submitted", "already_submitted"):
+            filled.add(slot_format)
         if not outcome.accepted:
             rejected += 1
             continue
@@ -1179,6 +1221,45 @@ async def _run_instagram_automatic_trigger(
     if report.stories_evaluated:
         logger.info("instagram_automatic_trigger_cycle_finished", extra=report.as_log_extra())
     return report
+
+
+async def _run_instagram_weekly_recap(
+    session_factory: async_sessionmaker[AsyncSession], bot: Bot, *,
+    gate_gateway: object | None, gate_prompt_repository: object | None,
+) -> Any:
+    """KAGE feed product: news is bundled into ONE weekly carousel of the week's strongest AI / GADGET / VIRAL stories, never
+    streamed as daily posts. No-op unless `instagram_weekly_recap_enabled`, when a recap was already delivered in the previous 7
+    days, or when today's 2-post maximum is already used. Picks no publishing time: it runs on the first cycle that finds it due."""
+    if not settings.instagram_automatic_generation_enabled or not settings.instagram_weekly_recap_enabled:
+        return None
+    if gate_gateway is None or gate_prompt_repository is None:
+        return None
+    now = datetime.now(timezone.utc)
+    try:
+        async with session_factory() as session:
+            usage = await load_feed_usage(session, now=now)
+            if usage.recap_this_week or usage.today_total >= DAILY_MAX_POSTS:
+                return None
+            selected = await select_weekly_recap_candidates(session, now=now, used_story_ids=usage.daily_story_ids_this_week)
+            bundle = await build_instagram_recap_bundle(session, selected=selected)
+            if bundle is None:
+                logger.info("instagram_weekly_recap_not_enough_stories", extra={"selected": len(selected)})
+                return None
+            recap_id = weekly_recap_identity(now)
+            opportunity = ContentOpportunity(
+                id=recap_id, source_type=OpportunitySourceType.NEWS, story_id=recap_id, news_value=1.0, audience_relevance=0.5,
+                product_mention_allowed=False, evidence=list(bundle.evidence), confidence=0.5,
+            )
+            outcome = await evaluate_and_submit_instagram_opportunity(
+                session, bot, opportunity=opportunity, opportunity_summary="Главное за неделю: ИИ, гаджеты, интернет",
+                gateway=gate_gateway, prompt_repository=gate_prompt_repository, phase_a_enabled=True, recap_bundle=bundle,
+            )
+            await session.commit()
+    except Exception:
+        logger.exception("instagram_weekly_recap_failed")
+        return None
+    logger.info("instagram_weekly_recap_cycle_finished", extra={"reason": outcome.reason, "delivered": outcome.delivery_sent})
+    return outcome
 
 
 # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2: a brand-new, never-before-live lane - conservative,
@@ -1324,6 +1405,9 @@ async def run_content_cycle(
     # couple" principle, applied to a second lane). A safe no-op whenever gate_gateway/
     # gate_prompt_repository are None, same contract as the NEWS lane.
     result.instagram_product_lane_report = await _run_instagram_product_lane(
+        session_factory, bot, gate_gateway=gate_gateway, gate_prompt_repository=gate_prompt_repository,
+    )
+    result.instagram_weekly_recap_outcome = await _run_instagram_weekly_recap(
         session_factory, bot, gate_gateway=gate_gateway, gate_prompt_repository=gate_prompt_repository,
     )
 

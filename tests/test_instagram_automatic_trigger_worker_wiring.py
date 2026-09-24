@@ -16,6 +16,8 @@ import worker.content_cycle as cc
 from core.config import settings
 from services.editorial_treatment import MAJOR, EditorialTreatmentDecision
 from services.instagram_automatic_trigger import InstagramTriggerCandidateOutcome
+from services.instagram_feed_planner import FeedUsage
+from services.instagram_feed_product import FeedCandidate
 
 pytestmark = pytest.mark.asyncio
 
@@ -45,6 +47,18 @@ class _FakeEventRow:
     def __init__(self, title: str = "A real story") -> None:
         self.title = title
         self.url = None
+        self.summary = None
+        self.content = None
+
+
+def _feed_pool(monkeypatch: pytest.MonkeyPatch, ids, titles) -> None:
+    """KAGE feed product: the worker plans from its own pool (DB loaders stubbed here) - these are strong AI_HACK candidates."""
+    monkeypatch.setattr(cc, "load_feed_usage", AsyncMock(return_value=FeedUsage()))
+    monkeypatch.setattr(cc, "load_recent_event_ids", AsyncMock(return_value=[]))
+    monkeypatch.setattr(cc, "load_feed_candidates", AsyncMock(return_value=[
+        FeedCandidate(id=str(i), title=t, source_name="Engadget") for i, t in zip(ids, titles)
+    ]))
+    monkeypatch.setattr(cc, "mark_tried", lambda day, cid: None)
 
 
 async def test_d_and_j_gate_gateway_none_is_a_complete_safe_no_op(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -69,21 +83,26 @@ async def test_d_and_j_gate_gateway_none_is_a_complete_safe_no_op(monkeypatch: p
 async def test_n_per_cycle_cap_bounds_evaluation_even_with_more_eligible_events(monkeypatch: pytest.MonkeyPatch) -> None:
     """§9/§10/§16.N: even if `_select_eligible_events()` (or an override) returns many eligible
     ids, the automatic trigger only evaluates up to `_INSTAGRAM_TRIGGER_MAX_PER_CYCLE` per cycle -
-    never a first-deploy flood."""
+    never a first-deploy flood. (KAGE feed product: each attempt is one Director decision; here every
+    decision declines, so the cap - not a filled slot - is what stops the cycle.)"""
     monkeypatch.setattr(settings, "instagram_automatic_generation_enabled", True)
     seen: list[str] = []
 
     async def _fake_classify(session, event_id):
         return EditorialTreatmentDecision(treatment=MAJOR, human_review_required=False, reason="test")
 
-    async def _fake_submit(session, bot, *, event_id, event_title, treatment, research_facts, gateway, prompt_repository, source_url=None, phase_a_enabled=False):
+    async def _fake_submit(session, bot, *, event_id, event_title, treatment, research_facts, gateway, prompt_repository, source_url=None, phase_a_enabled=False, feed_format=None):
         seen.append(event_id)
-        return InstagramTriggerCandidateOutcome(event_id=event_id, accepted=True, reason="submitted", gate_decision="ready_for_editor", delivery_sent=True)
+        return InstagramTriggerCandidateOutcome(event_id=event_id, accepted=False, reason="feed_format_mismatch:weekly_news")
 
     monkeypatch.setattr(cc, "_classify_event_for_router_treatment", _fake_classify)
     monkeypatch.setattr(cc, "evaluate_and_submit_instagram_candidate", _fake_submit)
 
     many_ids = [uuid4() for _ in range(10)]
+    _feed_pool(monkeypatch, many_ids, ["How to use Claude voice mode", "How to disable Gemini in Gmail and Docs",
+                                        "Here's how to summarize meetings with ChatGPT", "How to write better Copilot prompts",
+                                        "Physicist rigged his hamster wheel to Strava", "$580M cable rerouted to avoid Dobby's grave"]
+               + ["eBay reports Q2 revenue up 15%"] * 4)
     report = await cc._run_instagram_automatic_trigger(
         _session_factory_for(_FakeEventRow()), AsyncMock(), many_ids,
         gate_gateway=object(), gate_prompt_repository=object(),
@@ -102,7 +121,7 @@ async def test_i_a_per_story_failure_never_aborts_the_remaining_candidates(monke
     async def _fake_classify(session, event_id):
         return EditorialTreatmentDecision(treatment=MAJOR, human_review_required=False, reason="test")
 
-    async def _flaky_submit(session, bot, *, event_id, event_title, treatment, research_facts, gateway, prompt_repository, source_url=None, phase_a_enabled=False):
+    async def _flaky_submit(session, bot, *, event_id, event_title, treatment, research_facts, gateway, prompt_repository, source_url=None, phase_a_enabled=False, feed_format=None):
         calls.append(event_id)
         if len(calls) == 1:
             raise RuntimeError("simulated Telegram/DB failure for the first candidate")
@@ -112,6 +131,7 @@ async def test_i_a_per_story_failure_never_aborts_the_remaining_candidates(monke
     monkeypatch.setattr(cc, "evaluate_and_submit_instagram_candidate", _flaky_submit)
 
     ids = [uuid4(), uuid4()]
+    _feed_pool(monkeypatch, ids, ["How to use Claude voice mode", "How to disable Gemini in Gmail"])
     report = await cc._run_instagram_automatic_trigger(
         _session_factory_for(_FakeEventRow()), AsyncMock(), ids,
         gate_gateway=object(), gate_prompt_repository=object(),

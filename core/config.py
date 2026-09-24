@@ -1098,6 +1098,9 @@ class Settings(BaseSettings):
     # canary may pass its own local override without ever touching this persistent config.
     instagram_product_lane_enabled: bool = False
     instagram_reel_execution_enabled: bool = False
+    # KAGE feed product: the weekly news-recap carousel (services/instagram_feed_planner.py). Off until the founder approves the
+    # weekly cadence; when on, at most one recap per 7 days, and only on a day with an open slot (it counts as a feed post).
+    instagram_weekly_recap_enabled: bool = False
     # INSTAGRAM-GROWTH-3 - same discipline again: real semantic-matching/Creative-Director code
     # exists (services/instagram_semantic_matching.py, services/instagram_creative_director.py),
     # both defaulting False and unread by any live/production code path. Still no publication flag

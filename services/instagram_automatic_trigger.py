@@ -46,7 +46,8 @@ from database.models.social_launch_context import SocialLaunchPlatform
 from database.models.story import Story
 from database.models.story_link import NewsEventStoryLink
 from services.business_context_snapshot_service import get_business_context_snapshot
-from services.editorial_treatment import MAJOR, EditorialTreatmentDecision
+from services.editorial_treatment import MAJOR, SKIP, EditorialTreatmentDecision
+from services.instagram_feed_product import FeedFormat, format_from_editorial_decision
 from services.image_persistence import (
     EditorialImageCandidate,
     get_editorial_image_candidates,
@@ -682,14 +683,21 @@ def _resolve_carousel_slide_assets(
 async def evaluate_and_submit_instagram_candidate(
     session: Any, bot: Any, *, event_id: str, event_title: str, treatment: EditorialTreatmentDecision,
     research_facts: list[str], gateway: Any, prompt_repository: Any, source_url: str | None = None,
-    phase_a_enabled: bool = False,
+    phase_a_enabled: bool = False, feed_format: FeedFormat | None = None,
 ) -> InstagramTriggerCandidateOutcome:
     """The one entry point per story. Never raises - a Creative Director failure (rate limit,
     ungrounded evidence, provider error) degrades to a rejected/failed outcome for THIS story only,
     never crashing the caller's cycle (§8 crash safety - a per-story failure must not take down the
-    whole scan)."""
-    if treatment.treatment not in _ELIGIBLE_TREATMENTS:
+    whole scan).
+
+    `feed_format` (the KAGE feed product, services/instagram_feed_planner.py): the story was planned for a daily AI_HACK / MEME_TREND /
+    NEWS_INSIGHT slot. The MAJOR news-significance gate does not apply to it (a hack or a meme is rarely "major news"); a SKIP
+    treatment (weak evidence / negative recommendation) is still refused, and the Director decision must produce that format."""
+    if feed_format is None and treatment.treatment not in _ELIGIBLE_TREATMENTS:
         return InstagramTriggerCandidateOutcome(event_id=event_id, accepted=False, reason=f"treatment={treatment.treatment}")
+    if feed_format is not None and treatment.treatment == SKIP and "weak evidence" in (treatment.reason or ""):
+        # low NEWS significance is irrelevant to a hack or a meme; evidence too weak to trust is not
+        return InstagramTriggerCandidateOutcome(event_id=event_id, accepted=False, reason="treatment=SKIP:weak_evidence")
 
     canonical_story_id = await _resolve_canonical_story_id(session, event_id) if phase_a_enabled else event_id
     normalized_trend_signal = (
@@ -708,7 +716,7 @@ async def evaluate_and_submit_instagram_candidate(
         session, bot, opportunity=opportunity, opportunity_summary=event_title,
         gateway=gateway, prompt_repository=prompt_repository, source_url=source_url,
         source_event_id=event_id, trend_context=trend_context, trend_signal=normalized_trend_signal,
-        phase_a_enabled=phase_a_enabled,
+        phase_a_enabled=phase_a_enabled, required_feed_format=feed_format,
     )
 
 # ---------------------------------------------------------------------------
@@ -729,6 +737,7 @@ async def evaluate_and_submit_instagram_opportunity(
     source_event_id: str | None = None, trend_context: str = "",
     trend_signal: TrendSignal | None = None, allow_duplicate_canary: bool = False,
     phase_a_enabled: bool = False, recap_bundle: InstagramRecapBundle | None = None,
+    required_feed_format: FeedFormat | None = None,
 ) -> InstagramTriggerCandidateOutcome:
     """Takes an ALREADY-BUILT, ALREADY-RANKED `ContentOpportunity` (any `source_type` - selection/
     ranking is `generate_growth_strategy()`'s job, called by whichever lane constructs the
@@ -795,6 +804,18 @@ async def evaluate_and_submit_instagram_opportunity(
             opportunity=opportunity, reason="duplicate_angle_blocked", trend_signal=trend_context,
             duplicate=phase_a_plan.duplicate, accepted=False,
         )
+    if required_feed_format is not None:
+        # KAGE feed product: the slot was planned for one format; the Director decided before any generation. If it reads the story
+        # differently (plain news, or another format), the story is dropped here - no Creative Director call, no filler.
+        decided = format_from_editorial_decision(opportunity.editorial_decision)
+        if decided is not required_feed_format:
+            logger.info("instagram_feed_format_mismatch", extra={
+                "opportunity_id": opportunity.id, "planned": required_feed_format.value, "decided": decided.value if decided else None,
+            })
+            return _decision_outcome(
+                opportunity=opportunity, reason=f"feed_format_mismatch:{decided.value if decided else 'none'}",
+                trend_signal=trend_context, duplicate=phase_a_plan.duplicate, accepted=False,
+            )
 
     identity = compute_package_identity(source_key=opportunity.id, content_format=format_decision.recommended_format.value)
     delivery_service = InstagramEditorialDeliveryService()
