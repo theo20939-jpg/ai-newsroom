@@ -352,10 +352,35 @@ def _recent_history_context(history: list[Any]) -> tuple[str, list[str]]:
     return "\n".join(lines), compact
 
 
+# KAGE downstream format contract: the frozen feed planner's product format -> (Phase A product name, Creative Director archetype)
+_PLANNED_PRODUCT = {
+    FeedFormat.AI_HACK: ("AI_HACK", "ai_hack"),
+    FeedFormat.MEME_TREND: ("TREND", "trend_generative"),
+    FeedFormat.NEWS_INSIGHT: ("NEWS_INSIGHT", "news_insight"),
+}
+_WEEKLY_RECAP = ("WEEKLY_RECAP", "news_recap")
+
+
+def planned_product(required_feed_format: FeedFormat | None, recap_bundle: Any) -> tuple[str, str] | None:
+    if recap_bundle is not None:
+        return _WEEKLY_RECAP
+    return _PLANNED_PRODUCT.get(required_feed_format) if required_feed_format is not None else None
+
+
+def _executable_formats(planned: tuple[str, str] | None) -> list[str]:
+    """What can actually be produced for a planned post: a REEL only when REEL execution is on, a recap only as a carousel."""
+    if planned is None:
+        return ["single", "carousel", "reel"]
+    if planned is _WEEKLY_RECAP:
+        return ["carousel"]
+    return ["single", "carousel", *(["reel"] if settings.instagram_reel_execution_enabled else [])]
+
+
 async def _build_phase_a_editorial_plan(
     session: Any, *, opportunity: ContentOpportunity, source_summary: str, trend_context: str,
     trend_signal: TrendSignal | None,
     gateway: Any, prompt_repository: Any, allow_duplicate_canary: bool,
+    planned: tuple[str, str] | None = None, recap_stories: list | None = None,
 ) -> _PhaseAEditorialPlan:
     now = datetime.now(UTC)
     snapshot = await get_business_context_snapshot(session, now=now)
@@ -380,6 +405,9 @@ async def _build_phase_a_editorial_plan(
             trend_signal_provenance=trend_signal.provenance.value if trend_signal else None,
             trend_signal_is_platform_native=trend_signal.is_platform_native if trend_signal else False,
             recent_content_context=recent_note,
+            executable_formats=_executable_formats(planned),
+            planned_format=planned[0] if planned else "",
+            recap_stories=list(recap_stories or []),
         ),
     )
     if not opportunity.product_mention_allowed and decision.product_connection:
@@ -780,13 +808,17 @@ async def evaluate_and_submit_instagram_opportunity(
         except ValueError:
             pass
     recommendation = recommend_objective(opportunity=opportunity, has_multi_step_narrative=has_multi_step_narrative)
+    planned = planned_product(required_feed_format, recap_bundle)
     if phase_a_enabled:
         try:
             phase_a_plan = await _build_phase_a_editorial_plan(
                 session, opportunity=opportunity, source_summary=opportunity_summary,
                 trend_context=trend_context, trend_signal=trend_signal,
                 gateway=gateway, prompt_repository=prompt_repository,
-                allow_duplicate_canary=allow_duplicate_canary,
+                allow_duplicate_canary=allow_duplicate_canary, planned=planned,
+                recap_stories=[{"story_key": s.key, "premise": s.premise or s.title, "category": s.category,
+                                "evidence_quality": s.evidence_quality, "source_image": bool(s.image_bytes)}
+                               for s in recap_bundle.stories] if recap_bundle is not None else None,
             )
         except (
             CreativeDirectorUnavailableError, UngroundedEvidenceError, CreativeFactSafetyError,
@@ -823,18 +855,19 @@ async def evaluate_and_submit_instagram_opportunity(
             opportunity=opportunity, reason="duplicate_angle_blocked", trend_signal=trend_context,
             duplicate=phase_a_plan.duplicate, accepted=False,
         )
-    if required_feed_format is not None:
-        # KAGE feed product: the slot was planned for one format; the Director decided before any generation. If it reads the story
-        # differently (plain news, or another format), the story is dropped here - no Creative Director call, no filler.
+    if planned is not None and phase_a_enabled:
+        # KAGE downstream format contract: the frozen feed planner's product format is AUTHORITATIVE. Phase A chooses the angle inside
+        # it; its source taxonomy (origin NEWS, an EXPLAINER angle) never re-decides the product. A differing taxonomy is recorded as a
+        # diagnostic only - the post is never dropped or silently reclassified for it.
         decided = format_from_editorial_decision(opportunity.editorial_decision)
-        if decided is not required_feed_format:
-            logger.info("instagram_feed_format_mismatch", extra={
-                "opportunity_id": opportunity.id, "planned": required_feed_format.value, "decided": decided.value if decided else None,
+        if required_feed_format is not None and decided is not required_feed_format:
+            logger.info("instagram_phase_a_taxonomy_ignored", extra={
+                "opportunity_id": opportunity.id, "planned": planned[0], "phase_a_taxonomy": decided.value if decided else None,
             })
-            return _decision_outcome(
-                opportunity=opportunity, reason=f"feed_format_mismatch:{decided.value if decided else 'none'}",
-                trend_signal=trend_context, duplicate=phase_a_plan.duplicate, accepted=False,
-            )
+        opportunity = replace(opportunity, editorial_decision={
+            **(opportunity.editorial_decision or {}), "planned_format": planned[0],
+            "phase_a_source_taxonomy_format": decided.value if decided else None,
+        })
 
     identity = compute_package_identity(source_key=opportunity.id, content_format=format_decision.recommended_format.value)
     delivery_service = InstagramEditorialDeliveryService()
@@ -909,6 +942,9 @@ async def evaluate_and_submit_instagram_opportunity(
         ),
         media_first=media_first,
         generated_media_available=generated_media_available(),
+        planned_format=planned[0] if planned else "",
+        planned_archetype=planned[1] if planned else "",
+        recap_required_subjects=[s.key for s in recap_bundle.stories if s.evidence_quality != "BLOCKING"] if recap_bundle is not None else [],
         kage_voice_context=load_kage_voice().render_context() if media_first else "",
         available_media_subjects=media_subjects[0],
         unsuitable_media_subjects=media_subjects[1],

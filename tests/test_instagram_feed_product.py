@@ -232,17 +232,19 @@ async def test_the_news_lane_without_a_feed_format_keeps_the_major_gate(monkeypa
     assert outcome.accepted is False and outcome.reason == "treatment=BRIEF"
 
 
-class _NoCreativeDirector:
-    async def generate(self, *args, **kwargs):  # pragma: no cover - reaching it is the failure
-        raise AssertionError("a mismatched format must never reach the Creative Director")
+class _CreativeDirectorUnavailable:
+    async def generate(self, *args, **kwargs):  # reaching the Creative Director is the point: the planned product survived
+        raise RuntimeError("creative director reached")
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("decision_intent", "planned", "rejected"), [
-    ("BREAKING", FeedFormat.AI_HACK, True),   # the Director reads plain news: the hack slot stays empty
-    ("HOW_TO", FeedFormat.MEME_TREND, True),  # another format: not this slot
+@pytest.mark.parametrize(("decision_intent", "planned"), [
+    ("BREAKING", FeedFormat.AI_HACK),   # the Director reads plain news: the planned AI_HACK still goes on (downstream format contract)
+    ("HOW_TO", FeedFormat.MEME_TREND),  # the Director reads a how-to: the planned TREND still goes on
 ])
-async def test_a_director_decision_that_disagrees_leaves_the_slot_empty_before_generation(monkeypatch, decision_intent, planned, rejected):
+async def test_a_director_taxonomy_that_disagrees_never_drops_or_reclassifies_the_planned_product(monkeypatch, decision_intent, planned):
+    """KAGE downstream format contract (2026-09-25): the frozen planner's format is authoritative; Phase A's taxonomy is a diagnostic,
+    never a reason to drop the slot (it previously returned feed_format_mismatch:* here)."""
     decision = InstagramEditorialDecision(
         source_summary="s", opportunity_type="NEWS", why_now="w", audience_value="a", angle="a", angle_intent=decision_intent,
         topic="t", purpose="VALUE", origin="NEWS", recommended_format="carousel", format_reason="f", creative_direction="c",
@@ -266,11 +268,14 @@ async def test_a_director_decision_that_disagrees_leaves_the_slot_empty_before_g
 
     monkeypatch.setattr(trigger, "_build_phase_a_editorial_plan", fake_plan)
     monkeypatch.setattr(trigger, "get_video_candidates_for_event", AsyncMock(return_value=[]))
+    monkeypatch.setattr(trigger.InstagramEditorialDeliveryService, "find_current", AsyncMock(return_value=None))
+    monkeypatch.setattr(trigger, "_resolve_single_source_image", AsyncMock(return_value=(None, None, 0, 0)))
     outcome = await trigger.evaluate_and_submit_instagram_opportunity(
-        AsyncMock(), AsyncMock(), opportunity=opportunity, opportunity_summary="s", gateway=_NoCreativeDirector(),
+        AsyncMock(), AsyncMock(), opportunity=opportunity, opportunity_summary="s", gateway=_CreativeDirectorUnavailable(),
         prompt_repository=object(), phase_a_enabled=True, required_feed_format=planned,
     )
-    assert outcome.accepted is False and outcome.reason.startswith("feed_format_mismatch:")
+    assert not outcome.reason.startswith("feed_format_mismatch"), outcome.reason
+    assert outcome.reason.startswith("creative_director_failed")  # the planned product reached the Creative Director
 
 
 # --- stage 2: the shortlist read again with its stored evidence ---------------------------------------------------------------

@@ -101,14 +101,15 @@ class RoutingFakeGateway:
     """Answers the editorial-decision call and the carousel call the way the real gateway would,
     keyed on the response schema each real prompt sends."""
 
-    def __init__(self, carousel: dict) -> None:
+    def __init__(self, carousel: dict, decision: dict | None = None) -> None:
         self.carousel = carousel
+        self.decision = decision or _DECISION
         self.requests: list[GenerateRequest] = []
 
     async def generate(self, request: GenerateRequest) -> GenerateResponse:
         self.requests.append(request)
         props = (request.response_schema or {}).get("properties", {})
-        out = _DECISION if "opportunity_type" in props else self.carousel
+        out = self.decision if "opportunity_type" in props else self.carousel
         return GenerateResponse(text=None, structured_output=out, finish_reason="stop", model_used="fake", usage=CapabilityUsage())
 
     def carousel_request(self) -> GenerateRequest:
@@ -413,7 +414,9 @@ async def test_live_trigger_news_recap_gives_each_story_its_own_asset_and_a_deli
             media_subject=f"story_{i}", must_match_story=True,
         ))
     slides.append(_slide("takeaway", "Это главное за неделю", "close"))
-    gateway = RoutingFakeGateway(_carousel_output(slides, bundle.evidence))
+    # the downstream format contract: a WEEKLY_RECAP decision carries every selected story in its coverage plan
+    coverage = [{"story_key": s.key, "role": "LEAD" if i == 0 else "STANDARD", "angle": s.title} for i, s in enumerate(stories)]
+    gateway = RoutingFakeGateway(_carousel_output(slides, bundle.evidence), decision={**_DECISION, "coverage_plan": coverage})
     captured = _patch_delivery(monkeypatch)
 
     outcome = await trigger.evaluate_and_submit_instagram_opportunity(

@@ -54,6 +54,7 @@ from integrations.llm_gateway.protocol import (
 from integrations.prompts.protocol import PromptRepository
 from schemas.capability import CapabilityCall, RuntimeContext
 from services.instagram_media_first import (
+    MediaFirstContractError,
     assert_hook_contract,
     assert_hook_is_short,
     assert_information_density,
@@ -162,6 +163,10 @@ def resolve_evidence_references(claimed: list[str], allowed_evidence: list[str])
     return resolved
 _REEL_PROMPT_VERSION = "7"
 _EDITORIAL_DECISION_PROMPT_VERSION = "1"
+# KAGE downstream format contract: a post whose product format the frozen feed planner already fixed (AI_HACK / TREND / WEEKLY_RECAP)
+# is decided with v2 - the angle INSIDE the planned product, plus the recap coverage plan. Every other caller keeps v1 unchanged.
+_EDITORIAL_DECISION_PLANNED_PROMPT_VERSION = "2"
+WEEKLY_RECAP = "WEEKLY_RECAP"
 # Phase A output bound (2026-09-25): it used to send none, so the gateway priced the model's full 128k output (~$0.77 a call). Sized from
 # the schema, not from a budget: 15 strings capped at 3,800 characters in total + `evidence_used` quoting a whole evidence package (the
 # largest real one, 5-11 Aug 2026: 3,364 characters) + JSON ~ 7,600 characters ~ 3,800 tokens at a conservative 2 characters per token,
@@ -184,6 +189,11 @@ class UngroundedEvidenceError(ValueError):
 class CreativeFactSafetyError(Exception):
     """Wraps a ClaimViolationError or product-mention violation raised while validating generated
     creative text - the draft is REJECTED, never silently sanitized."""
+
+
+class RecapCoverageContractError(CreativeFactSafetyError):
+    """Phase A's WEEKLY_RECAP coverage plan does not carry every selected story exactly once (a recap collapsed into one story,
+    a dropped / duplicated / invented story)."""
 
 
 class CreativeContractError(ValueError):
@@ -218,6 +228,10 @@ class InstagramEditorialDecisionInput:
     recent_content_context: str = ""
     executable_formats: list[str] = field(default_factory=lambda: ["single", "carousel", "reel"])
     locale: str = "ru"
+    # KAGE downstream format contract: the product format the frozen feed planner fixed ("" = no plan: the legacy / product lanes), and
+    # for a WEEKLY_RECAP every selected story (story_key, premise, category, evidence_quality, source_image)
+    planned_format: str = ""
+    recap_stories: list = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -271,6 +285,11 @@ class CreativeDirectorInput:
     # Phase B.6: the shared KAGE voice (rendered from docs/brand/kage_voice_v1.md - never copied into a prompt) and the media facts the media-first
     # contract is checked against: which subject keys are listed, and which of those are NOT suitable as a final visual (article / text cards).
     media_first: bool = False  # the caller runs the media-first + KAGE-voice contract (prompt v10) for this request
+    # KAGE downstream format contract: the product the frozen feed planner fixed and its archetype - authoritative over the archetype a
+    # Phase A decision would imply; for a WEEKLY_RECAP the story keys that must each get a slide (every non-BLOCKING selected story)
+    planned_format: str = ""
+    planned_archetype: str = ""
+    recap_required_subjects: list[str] = field(default_factory=list)
     # the runtime capability boundary: False when this run cannot produce generated images (instagram_image_generation_mode != "live")
     generated_media_available: bool = True
     kage_voice_context: str = ""
@@ -365,8 +384,23 @@ def _build_user_text(director_input: CreativeDirectorInput, *, evidence_handles:
             + ", ".join(director_input.recap_subjects)
             if director_input.recap_subjects else ""
         )
+        + (f"\nPLANNED PRODUCT FORMAT (fixed by the feed planner; the carousel delivers THIS product): {director_input.planned_format}"
+           if director_input.planned_format else "")
+        + (_recap_coverage_text(director_input) if director_input.recap_required_subjects else "")
         + (f"\nPREVIOUS ATTEMPT REJECTED: {director_input.contract_retry_note}" if director_input.contract_retry_note else "")
     )
+
+
+def _recap_coverage_text(director_input: CreativeDirectorInput) -> str:
+    plan = []
+    try:
+        plan = json.loads(director_input.editorial_decision or "{}").get("coverage_plan") or []
+    except (ValueError, AttributeError):
+        plan = []
+    lines = [f"{item.get('story_key')} ({item.get('role')}): {item.get('angle')}" for item in plan if isinstance(item, dict)]
+    return ("\nRECAP COVERAGE PLAN - build ONE carousel that covers EVERY story below; each story gets at least one slide whose "
+            "media_subject is its key (compatible stories may sit in one visual rhythm, but none is dropped or merged away): "
+            + ", ".join(director_input.recap_required_subjects) + ("\n" + "\n".join(lines) if lines else ""))
 
 
 def _build_decision_user_text(decision_input: InstagramEditorialDecisionInput) -> str:
@@ -385,7 +419,27 @@ def _build_decision_user_text(decision_input: InstagramEditorialDecisionInput) -
         f"TREND/MOMENTUM EVIDENCE (may be absent or a bad fit):\n{decision_input.trend_context or '(none)'}\n"
         f"RECENT/IN-FLIGHT INSTAGRAM CONTENT:\n{decision_input.recent_content_context or '(none)'}\n"
         f"EVIDENCE BULLETS:\n{evidence}"
+        + (f"\nPLANNED PRODUCT FORMAT (fixed by the feed planner - choose the strongest angle INSIDE it, never another product): "
+           f"{decision_input.planned_format}" if decision_input.planned_format else "")
+        + ("\nWEEKLY RECAP STORIES (every story_key exactly once in coverage_plan):\n" + "\n".join(
+            f"{s['story_key']} | category {s.get('category') or '-'} | evidence {s.get('evidence_quality') or '-'} | "
+            f"source image {'yes' if s.get('source_image') else 'no'} | premise: {s.get('premise')}" for s in decision_input.recap_stories)
+           if decision_input.recap_stories else "")
     )
+
+
+def assert_recap_coverage(decision: InstagramEditorialDecision, story_keys: list[str]) -> None:
+    """Every selected weekly-recap story appears in the coverage plan exactly once: no collapse to one story, no omission, no
+    duplicate, no injected story."""
+    plan = decision.coverage_plan or []
+    planned = [item.story_key for item in plan]
+    missing = [k for k in story_keys if k not in planned]
+    duplicated = sorted({k for k in planned if planned.count(k) > 1})
+    unknown = [k for k in planned if k not in story_keys]
+    if missing or duplicated or unknown:
+        raise RecapCoverageContractError(
+            f"weekly recap coverage plan must carry every selected story exactly once: missing={missing} duplicated={duplicated} "
+            f"unknown={unknown}")
 
 
 _CYRILLIC_RE = re.compile(r"[А-Яа-яЁё]")
@@ -420,15 +474,37 @@ def assert_trend_rationale_grounded(
         )
 
 
+_TECHNICAL_LITERAL_RES = (
+    re.compile(r"```.*?```", re.S),  # fenced code
+    re.compile(r"`[^`]+`"),  # inline code
+    re.compile(r"\{[^{}]*\}|\[[^\[\]]*\]"),  # JSON / config fragments
+    re.compile(r"https?://\S+|\b[\w.-]+\.(?:com|ru|io|ai|dev|org|net|app|json|yaml|yml|md|py|js|ts|txt)\b\S*"),  # URLs, files
+    re.compile(r"[«\"“„][^«»\"“”„]*[»\"”]"),  # quoted literals (a button, a setting, a config value)
+    re.compile(r"(?:[^\s>→]+(?:\s+[^\s>→]+){0,3}\s*(?:>|→|->)\s*)+[^\s>→]+(?:\s+[A-Z][\w.+-]*){0,3}"),  # menu / navigation paths
+    re.compile(r"[@/$][\w./-]+"),  # handles, slash commands, paths, shell prompts
+    re.compile(r"^\s*[\w.-]+\s*:\s*\S.*$", re.M),  # key: value config lines
+)
+
+
+def strip_technical_literals(text: str) -> str:
+    """Remove source-faithful technical literals (UI labels in quotes, menu paths, commands, code, config, URLs, file names) so the
+    language rule judges only the editorial prose around them."""
+    for pattern in _TECHNICAL_LITERAL_RES:
+        text = pattern.sub(" ", text)
+    return text
+
+
 def assert_russian_final_text(text_fields: list[str], *, locale: str = "ru") -> None:
     """Reject clearly English final output without penalizing normal Russian with Latin names.
 
     The check is intentionally asymmetric and conservative: it catches an English paragraph or
     complete English script, but a short official name such as ``NINJA AI``/``OpenAI`` is allowed.
+    Editorial prose must be Russian; source-faithful technical literals (UI labels, menu paths, commands, config, code, URLs, file
+    names) keep their own language and are not counted (KAGE AI_HACK: translating a UI string would make the instruction wrong).
     """
     if locale.lower() not in ("ru", "ru-ru"):
         return
-    meaningful = [text.strip() for text in text_fields if text and text.strip()]
+    meaningful = [prose for text in text_fields if text and (prose := strip_technical_literals(text).strip())]
     for text in meaningful:
         latin_words = _LATIN_WORD_RE.findall(text)
         cyrillic_letters = len(_CYRILLIC_RE.findall(text))
@@ -453,8 +529,9 @@ def _enforce_output_policy(text_fields: list[str], *, locale: str) -> None:
 async def generate_editorial_decision(
     gateway: LLMGateway, prompt_repository: PromptRepository, *, decision_input: InstagramEditorialDecisionInput,
 ) -> tuple[InstagramEditorialDecision, CapabilityCall]:
+    version = _EDITORIAL_DECISION_PLANNED_PROMPT_VERSION if decision_input.planned_format else _EDITORIAL_DECISION_PROMPT_VERSION
     try:
-        prompt = prompt_repository.resolve(EDITORIAL_DECISION_PROMPT_NAME, _EDITORIAL_DECISION_PROMPT_VERSION)
+        prompt = prompt_repository.resolve(EDITORIAL_DECISION_PROMPT_NAME, version)
     except Exception as exc:
         raise CreativeDirectorUnavailableError(f"prompt unavailable: {exc}") from exc
     request = GenerateRequest(
@@ -485,6 +562,8 @@ async def generate_editorial_decision(
         raise CreativeDirectorUnavailableError("no structured output returned")
     decision = InstagramEditorialDecision.model_validate(outcome.response.structured_output)
     assert_evidence_grounded(decision.evidence_used, decision_input.allowed_evidence)
+    if decision_input.planned_format == WEEKLY_RECAP:
+        assert_recap_coverage(decision, [str(s["story_key"]) for s in decision_input.recap_stories])
     assert_trend_rationale_grounded(
         decision.trend_rationale,
         signal_type=decision_input.trend_signal_type,
@@ -625,7 +704,8 @@ async def generate_carousel_creative(
     # The archetype is derived from the real upstream decision BEFORE generation so the model plans
     # for it; the derived value still overrides whatever the model echoes back afterwards.
     decision = _parse_editorial_decision(director_input.editorial_decision)
-    archetype = derive_content_archetype(
+    # the planned product format is authoritative; only an unplanned (legacy / product-lane) call derives it from the decision
+    archetype = director_input.planned_archetype or derive_content_archetype(
         decision, is_recap_bundle=is_recap_bundle or director_input.is_recap_bundle,
     )
     if archetype is not None and not director_input.content_archetype:
@@ -635,7 +715,14 @@ async def generate_carousel_creative(
         prompt_version=_CAROUSEL_PROMPT_VERSION,
     )
     try:
-        return _validate_carousel_output(output, call, director_input=director_input, archetype=archetype)
+        outcome = _validate_carousel_output(output, call, director_input=director_input, archetype=archetype)
+        if director_input.recap_required_subjects:
+            covered = {slide.media_subject for slide in outcome.carousel.slides}
+            missing = [key for key in director_input.recap_required_subjects if key not in covered]
+            if missing:  # a recap collapsed into fewer stories: the existing single contract retry gets this exact note
+                raise MediaFirstContractError(f"weekly recap coverage: stories {missing} have no slide of their own - every selected "
+                                              "story must be covered by at least one slide with its key as media_subject")
+        return outcome
     except Exception as exc:
         _emit_diagnostic("validation_error", {"error_type": type(exc).__name__, "error": str(exc)[:1500]})
         raise

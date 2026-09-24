@@ -45,7 +45,8 @@ OFFICIAL_DOC_HOSTS = (
 )
 MAX_OFFICIAL_DOCS = 2
 MAX_STEPS, MAX_FACTS, MAX_LIMITATIONS = 10, 6, 3
-ITEM_CHARS = 300
+ITEM_CHARS = 300  # display preview length only
+MAX_EXACT_CHARS = 700  # a longer exact line is left out of the Director's evidence, never shortened
 RECAP_EXCERPTS_PER_STORY = 3
 
 _STEP_OPEN_EN = (r"open|go to|head to|navigate|click|tap|press|select|choose|pick|type|enter|paste|copy|install|download|sign in|log in|"
@@ -93,10 +94,15 @@ class EvidenceSource:
 @dataclass(frozen=True)
 class EvidenceItem:
     kind: str  # STEP / FACT / LIMITATION
-    text: str  # verbatim source text (whitespace-normalised, clipped)
+    text: str  # EXACT source text (whitespace-normalised only, never shortened) - the authoritative grounding string
     source_url: str | None
     source_type: str
     grounding: str = "verbatim_source_text"
+    display_preview: str = ""  # UI / logging only - the one place a long line may be shortened with an ellipsis
+
+    @property
+    def exact_text(self) -> str:
+        return self.text
 
 
 @dataclass(frozen=True)
@@ -136,7 +142,8 @@ class InstagramEvidencePackage:
         """What the Director may cite: the premise, then the verbatim STEP / FACT / LIMITATION texts, then the media truth. Each item is
         EXACTLY the source text, because the Director's evidence_used must quote an item verbatim (assert_evidence_grounded); the
         provenance (source URL / type) and the STEP / FACT / LIMITATION kind stay in the package itself, never glued onto the text."""
-        lines = [self.premise] + [item.text for item in (*self.steps, *self.facts, *self.limitations)]
+        lines = [self.premise] + [item.exact_text for item in (*self.steps, *self.facts, *self.limitations)
+                                  if len(item.exact_text) <= MAX_EXACT_CHARS]
         lines.append("SOURCE MEDIA: " + (f"{self.media.width}x{self.media.height} source image available" if self.media.status == AVAILABLE
                                          else "NONE - do not plan a source-image-dependent layout"))
         return list(dict.fromkeys(lines))
@@ -160,7 +167,9 @@ def article_span(text: str, title: str) -> str:
     target = _stems(title)
     if not target:
         return text
-    matches = [i for i, line in enumerate(lines) if (w := _stems(line)) and len(w & target) >= max(2, int(0.6 * len(target)))]
+    title_len = max(200, 2 * len(title))  # a title line is title-sized: a body sentence that merely repeats its words is not one
+    matches = [i for i, line in enumerate(lines)
+               if len(line) <= title_len and (w := _stems(line)) and len(w & target) >= max(2, int(0.6 * len(target)))]
     for index in matches:
         if any(len(line) >= 120 for line in lines[index + 1:index + 41]):
             return "\n".join(lines[index + 1:])
@@ -192,7 +201,10 @@ def _blocks(text: str) -> list[str]:
         # a full-length instruction line starts its own block even after an unpunctuated caption ("Courtesy of ..."); a SHORT
         # capitalised UI label ("Turn off") stays inside the sentence an inline link split it out of
         starts_new = (not blocks or _NUMBERED_RX.match(line) or line[:1] in "{[•-–" or blocks[-1].rstrip()[-1:] in ".!?:;…}]"
-                      or _COMMAND_RX.search(line) is not None or (len(line) >= 25 and _STEP_RX.match(line) is not None))
+                      or _COMMAND_RX.search(line) is not None or (len(line) >= 25 and _STEP_RX.match(line) is not None)
+                      # a sentence line after an unpunctuated heading / attribution (it ends on a label-like word, not mid-phrase) is its
+                      # own item, so it can be quoted exactly; a sentence an inline link broke ("...previously released") continues
+                      or (len(line.split()) >= 6 and line[:1].isupper() and re.search(r"[a-zа-яё,;(]$", blocks[-1].rstrip()) is None))
         if starts_new:
             blocks.append(line)
         else:
@@ -239,8 +251,9 @@ def extract_items(source: EvidenceSource, *, premise: str, how_to: bool = True) 
                 kind = FACT  # a story that mentions a restriction states a fact; a caveat is a how-to's limitation
             if kind == FACT and (len(sentence) < 60 if own else len(_stems(sentence) & target) < 2):
                 continue
-            items.append(EvidenceItem(kind=kind, text=_clip(sentence, 400 if kind == STEP else ITEM_CHARS), source_url=source.url,
-                                      source_type=source.source_type))
+            exact = " ".join(sentence.split())
+            items.append(EvidenceItem(kind=kind, text=exact, source_url=source.url, source_type=source.source_type,
+                                      display_preview=_clip(exact, ITEM_CHARS)))
     return items
 
 

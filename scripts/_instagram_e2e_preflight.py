@@ -43,6 +43,9 @@ def main() -> None:
     brand = load_instagram_director_context()
 
     posts = [p for p in readiness["daily"] if "steps" in p]  # dedup-blocked item is priced separately below
+    only = set(sys.argv[3].split(",")) if len(sys.argv) > 3 else None  # a targeted canary: "2026-08-05#1,2026-08-06#1,..."
+    if only is not None:
+        posts = [p for p in posts if f"{p['day']}#{p['slot']}" in only]
     recap = readiness["recap"]
     rows, base, expected, retry = [], Decimal(0), Decimal(0), Decimal(0)
 
@@ -80,13 +83,16 @@ def main() -> None:
         rows.append({"post": f"{p['day']} #{p['slot']} {p['format']}", "evidence_quality": p["quality"], "decision_worst": str(d_w.quantize(Decimal('0.0001'))),
                      "creative_worst": str(c_w.quantize(Decimal('0.0001'))), "vision_worst": str(v.quantize(Decimal('0.0001')))})
     # the Tuesday gym copy: one Phase A decision whose frozen dedup verdict is part of what the E2E proves (no Creative Director)
-    monday_gym = next(p for p in posts if p["day"] == "2026-08-10" and p["slot"] == 2)  # same event: its evidence size is the proxy
-    gym_w, gym_t = decision(evidence_lines(monday_gym), "AI agent hacks gym to get its owner spot in pilates class")
-    calls["phase_a_decisions"] += 1
-    base += gym_w
-    expected += gym_t
+    if only is None:  # the full week also prices the Tuesday gym copy's one Phase A decision
+        monday_gym = next(p for p in posts if p["day"] == "2026-08-10" and p["slot"] == 2)  # same event: its evidence size is the proxy
+        gym_w, gym_t = decision(evidence_lines(monday_gym), "AI agent hacks gym to get its owner spot in pilates class")
+        calls["phase_a_decisions"] += 1
+        base += gym_w
+        expected += gym_t
     # the weekly recap: one decision + one Creative Director over ALL story evidence; one vision check per recap story image (all of them)
     recap_ev = [line for r in recap for line in evidence_lines(r)[:4]]
+    # v2 Phase A: the recap story block (one line per story) is part of the input; the coverage plan fits the same 8,000 bound
+    recap_ev += [f"story_{i} | category - | evidence {r['quality']} | source image - | premise: {r['premise']}" for i, r in enumerate(recap, 1)]
     r_dw, r_dt = decision(recap_ev, "Weekly recap")
     r_cw, r_ct = creative(sum(len(x) for x in recap_ev))
     calls["phase_a_decisions"] += 1

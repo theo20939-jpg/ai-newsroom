@@ -38,6 +38,10 @@ class RecapStory:
     evidence: list[str]
     image_bytes: bytes | None = None
     source_ref: str | None = None
+    # KAGE recap story preservation contract: what Phase A and the Creative Director must carry for this story
+    premise: str = ""
+    category: str = ""
+    evidence_quality: str = ""
 
 
 @dataclass(frozen=True)
@@ -168,9 +172,13 @@ async def build_instagram_recap_bundle(
             headlines, bodies = [event.title or ""], []
         package = await build_recap_story_package(post_id=key, premise=event.title or "", headlines=headlines, bodies=bodies)
         evidence += [f"[{key}] {item.text}" for item in package.facts[:RECAP_EXCERPTS_PER_STORY]]
+        premise = str(getattr(candidate, "reason", "") or "").split(" - ", 1)[0].strip() or (event.title or "")
+        tier = str(getattr(candidate, "relevance_tier", "") or "")
         stories.append(RecapStory(
             key=key, story_id=str(candidate.story_id), event_id=str(event.id), title=event.title,
-            evidence=evidence, image_bytes=data, source_ref=ref,
+            evidence=evidence, image_bytes=data, source_ref=ref, premise=premise,
+            category=tier.removeprefix("INSTAGRAM_WEEKLY_") if tier.startswith("INSTAGRAM_WEEKLY_") else "",
+            evidence_quality=package.quality,
         ))
     if len(stories) < MIN_RECAP_STORIES:
         return None

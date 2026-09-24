@@ -18,6 +18,16 @@ _MEDIUM_TEXT_MAX_LENGTH = 400
 _LONG_TEXT_MAX_LENGTH = 1200
 
 
+class RecapCoverageItem(BaseModel):
+    """One selected weekly-recap story in Phase A's coverage plan: every selected story appears exactly once."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    story_key: str = Field(min_length=1, max_length=40)
+    role: Literal["LEAD", "STANDARD", "BRIEF"]
+    angle: str = Field(min_length=1, max_length=_SHORT_TEXT_MAX_LENGTH)
+
+
 class InstagramEditorialDecision(BaseModel):
     """The pre-generation decision made by the existing Instagram Director.
 
@@ -53,6 +63,8 @@ class InstagramEditorialDecision(BaseModel):
     trend_signal_provenance: str | None = Field(default=None, max_length=50)
     supplementary_story_idea: str | None = Field(default=None, max_length=_MEDIUM_TEXT_MAX_LENGTH)
     evidence_used: list[str] = Field(default_factory=list)
+    # KAGE downstream format contract (prompt v2): the WEEKLY_RECAP coverage plan; None for every other product and for v1 decisions
+    coverage_plan: list[RecapCoverageItem] | None = None
 
     @model_validator(mode="after")
     def validate_intersections(self) -> InstagramEditorialDecision:
