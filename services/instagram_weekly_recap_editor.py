@@ -11,10 +11,19 @@ Why a recall-oriented candidate set and not the coverage rank alone: production 
 Stories (a Galaxy Z Fold 8 week is twenty fragments of coverage 1; the OpenAI speaker leak is "puck-sized", "doughnut-shaped" and
 "ring-shaped" in six one-outlet Stories), so a coverage-only cut loses whole defining stories. A candidate is therefore also ranked by
 its ECHO: the outlets that carried the same headline words within two days. The echo only decides which candidates the editor gets to
-read - it never merges anything, and it is never written back to Story identity."""
+read - it never merges anything, and it is never written back to Story identity.
+
+FROZEN 2026-09-24 (founder-accepted): prompt v2, gpt-5.6-terra, reasoning medium, max_tokens 8000. Known accepted limitations -
+monitoring items, not blockers, deliberately NOT tuned against the validation week:
+  1. the v2 calibration was validated on ONE historical week (5-11 Aug 2026), and its principles were written from that week;
+  2. that week, Galaxy Z Fold 8 was an obvious miss (7 stories returned, slot 8 left empty);
+  3. rogue AI agents and OpenAI's Astra safety response were not consolidated into one broader story;
+  4. the Meta Muse item merged 10 candidates - broad, but one launch week of one product family;
+  5. weekly selection quality must keep being observed on real future weeks (`instagram_weekly_recap_editor_call` logs)."""
 from __future__ import annotations
 
 import html
+import logging
 import re
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
@@ -32,9 +41,13 @@ from services.instagram_feed_product import OUTSIDE_WORLD_REASON, FeedFormat, re
 from services.instagram_weekly_recap import _CYRILLIC, RecapItem, _item_read
 from services.text_normalization import normalize_story_identity_title
 
+logger = logging.getLogger(__name__)
+
 EDITOR_PROMPT_NAME = "instagram_weekly_recap_editor"
 EDITOR_PROMPT_VERSION = "2"
-EDITOR_MAX_TOKENS = 3000  # bounds the worst-case output cost (reasoning + answer); the answer itself is ~1.2k tokens
+# the founder-accepted runtime (validated 2026-09-24 on 5-11 Aug 2026: terra, medium reasoning, 8000 -> finish=stop, 2,459 output tokens
+# incl. 1,552 reasoning, $0.062). Reasoning counts against this budget: 3000 truncated once. Instagram weekly editor ONLY.
+EDITOR_MAX_TOKENS = 8000
 # editorial judgment, not the router's lowest-cost pick: the strongest configured model whose worst case fits the weekly cap
 # (gpt-5.6-sol cannot: ~10k input tokens alone are ~$0.05); the preference is advisory - the router still owns the choice
 EDITOR_PREFERRED_MODEL = "gpt-5.6-terra"
@@ -297,6 +310,37 @@ def validate_editor_output(output: Any, candidates: Sequence[EditorCandidate]) -
     return EditorResult(picks=tuple(picks), dropped=tuple(dropped), daily_exclusions=exclusions)
 
 
+def _call_cost(call: Any) -> str | None:
+    """The project's one cost formula (services/cost_tracker.py::compute_call_cost) over the static model catalog - never a guess."""
+    if call is None:
+        return None
+    try:
+        from integrations.llm_gateway.models.catalog import build_model_registry
+        from services.cost_tracker import compute_call_cost
+        from services.pricing_catalog import ModelRegistryPricingCatalog
+
+        return str(compute_call_cost(call, ModelRegistryPricingCatalog(build_model_registry())))
+    except Exception:  # noqa: BLE001 - observability must never break the recap; the missing figure is logged as None
+        return None
+
+
+def log_editor_call(request: GenerateRequest, call: Any, response: Any, *, valid: bool, error: str | None = None,
+                    picks: int | None = None, dropped: int | None = None) -> dict:
+    """One structured record per weekly-editor provider call, success or failure: model, reasoning, budget, token usage, finish
+    reason, actual cost and whether the structured output was accepted."""
+    usage = getattr(call, "usage", None)
+    record = {
+        "model": getattr(call, "model_used", None) or getattr(response, "model_used", None) or request.preferred_model,
+        "reasoning_effort": request.reasoning_effort, "max_tokens": request.max_tokens,
+        "input_tokens": getattr(usage, "input_tokens", None), "reasoning_tokens": getattr(usage, "reasoning_tokens", None),
+        "output_tokens": getattr(usage, "output_tokens", None), "finish_reason": getattr(response, "finish_reason", None),
+        "actual_cost_usd": _call_cost(call), "structured_output_valid": valid, "picks": picks, "dropped": dropped,
+        "error": error[:300] if error else None,
+    }
+    (logger.info if valid else logger.warning)("instagram_weekly_recap_editor_call", extra=record)
+    return record
+
+
 async def run_weekly_recap_editor(
     gateway: LLMGateway, prompt_repository: PromptRepository, *, candidates: Sequence[EditorCandidate],
     daily_premises: Sequence[str], week_label: str,
@@ -315,16 +359,24 @@ async def run_weekly_recap_editor(
     try:
         outcome = await call_generate(gateway, request, runtime=runtime, sequence=0)
     except Exception as exc:
+        log_editor_call(request, None, None, valid=False, error=f"gateway call failed: {exc}")
         raise WeeklyRecapEditorError(f"gateway call failed: {exc}") from exc
     call = getattr(outcome, "call", None)
-    if outcome.error is not None:
-        raise WeeklyRecapEditorError(str(outcome.error), call=call)
     response = outcome.response
-    if response is not None and response.finish_reason == "length":  # checked first: a truncated answer also has no structured output
-        raise WeeklyRecapEditorError("answer truncated at the token limit (reasoning + answer exceeded max_tokens)", call=call)
-    if response is None or response.structured_output is None:
-        raise WeeklyRecapEditorError(f"no structured output returned (finish_reason={getattr(response, 'finish_reason', None)})", call=call)
     try:
-        return validate_editor_output(response.structured_output, candidates), call
+        if outcome.error is not None:
+            raise WeeklyRecapEditorError(str(outcome.error), call=call)
+        if response is not None and response.finish_reason == "length":  # first: a truncated answer also has no structured output
+            raise WeeklyRecapEditorError("answer truncated at the token limit (reasoning + answer exceeded max_tokens)", call=call)
+        if response is None or response.structured_output is None:
+            raise WeeklyRecapEditorError(
+                f"no structured output returned (finish_reason={getattr(response, 'finish_reason', None)})", call=call)
+        try:
+            result = validate_editor_output(response.structured_output, candidates)
+        except WeeklyRecapEditorError as exc:
+            raise WeeklyRecapEditorError(str(exc), call=call) from exc
     except WeeklyRecapEditorError as exc:
-        raise WeeklyRecapEditorError(str(exc), call=call) from exc
+        log_editor_call(request, call, response, valid=False, error=str(exc))
+        raise
+    log_editor_call(request, call, response, valid=True, picks=len(result.picks), dropped=len(result.dropped))
+    return result, call

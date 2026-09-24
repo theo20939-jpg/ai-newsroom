@@ -220,6 +220,59 @@ async def test_a_truncated_answer_is_reported_as_truncation_and_keeps_the_paid_c
     assert info.value.call is not None and info.value.call.usage.output_tokens == 100
 
 
+def _terra(output, finish="stop"):
+    return GenerateResponse(text=None, structured_output=output, finish_reason=finish, model_used="gpt-5.6-terra",
+                            usage=CapabilityUsage(input_tokens=10151, output_tokens=2459, reasoning_tokens=1552))
+
+
+def test_the_production_default_is_the_founder_accepted_runtime():
+    """Frozen 2026-09-24: prompt v2, gpt-5.6-terra, medium reasoning, 8000 tokens - in the module itself, not a harness override."""
+    request = ed.build_editor_request(PROMPTS.resolve(ed.EDITOR_PROMPT_NAME, ed.EDITOR_PROMPT_VERSION), _candidates(),
+                                      daily_premises=[], week_label="w")
+    assert (ed.EDITOR_PROMPT_VERSION, request.preferred_model, request.reasoning_effort, request.max_tokens) == (
+        "2", "gpt-5.6-terra", "medium", 8000)
+
+
+def test_the_budget_belongs_to_the_weekly_editor_only():
+    import services.instagram_creative_director as cd
+
+    assert cd._CREATIVE_DIRECTOR_MAX_TOKENS == 16_000  # other OpenAI calls keep their own budgets, unchanged
+    assert "EDITOR_MAX_TOKENS" not in Path(cd.__file__).read_text(encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_every_successful_call_is_logged_with_usage_finish_reason_and_actual_cost(caplog):
+    candidates = _candidates()
+    tg = _ids(candidates, "Telegram")[0]
+    gateway = FakeLLMGateway(generate_response=_terra({"items": [_entry(1, tg)], "daily_overlap_exclusions": []}))
+    with caplog.at_level("INFO", logger=ed.__name__):
+        await ed.run_weekly_recap_editor(gateway, PROMPTS, candidates=candidates, daily_premises=[], week_label="w")
+    record = next(r for r in caplog.records if r.getMessage() == "instagram_weekly_recap_editor_call")
+    assert (record.model, record.reasoning_effort, record.max_tokens) == ("gpt-5.6-terra", "medium", 8000)
+    assert (record.input_tokens, record.reasoning_tokens, record.output_tokens) == (10151, 1552, 2459)
+    assert record.finish_reason == "stop" and record.structured_output_valid is True and record.picks == 1
+    assert record.actual_cost_usd == "0.06226250"  # the validated call's real figure: 10,151 x $2.50/M + 2,459 x $15/M
+
+
+@pytest.mark.asyncio
+async def test_a_truncated_call_is_logged_invalid_with_its_spend_and_never_accepted(caplog):
+    gateway = FakeLLMGateway(generate_response=_terra({"items": []}, finish="length"))  # even a parseable partial answer is refused
+    with caplog.at_level("INFO", logger=ed.__name__), pytest.raises(ed.WeeklyRecapEditorError, match="truncated") as info:
+        await ed.run_weekly_recap_editor(gateway, PROMPTS, candidates=_candidates(), daily_premises=[], week_label="w")
+    record = next(r for r in caplog.records if r.getMessage() == "instagram_weekly_recap_editor_call")
+    assert record.structured_output_valid is False and record.finish_reason == "length"
+    assert record.actual_cost_usd == "0.06226250" and info.value.call is not None
+
+
+@pytest.mark.asyncio
+async def test_a_gateway_exception_is_logged_invalid_without_inventing_usage(caplog):
+    gateway = FakeLLMGateway(generate_error=RuntimeError("provider down"))
+    with caplog.at_level("INFO", logger=ed.__name__), pytest.raises(ed.WeeklyRecapEditorError):
+        await ed.run_weekly_recap_editor(gateway, PROMPTS, candidates=_candidates(), daily_premises=[], week_label="w")
+    record = next(r for r in caplog.records if r.getMessage() == "instagram_weekly_recap_editor_call")
+    assert record.structured_output_valid is False and record.max_tokens == 8000
+
+
 # --- planner + worker wiring ----------------------------------------------------------------------------------------------------
 
 class _Rows:

@@ -50,7 +50,6 @@ ROOT = Path(__file__).resolve().parent.parent
 CAP = Decimal(os.environ.get("KAGE_EDITOR_CAP_USD", "0.08"))
 RUN_TAG = os.environ.get("KAGE_EDITOR_RUN_TAG", f"v{EDITOR_PROMPT_VERSION}")  # one ledger (and one call) per authorized run
 NAMESPACE = f"kage_weekly_recap_editor_validation_{RUN_TAG}"
-MAX_TOKENS = int(os.environ["KAGE_EDITOR_MAX_TOKENS"]) if os.environ.get("KAGE_EDITOR_MAX_TOKENS") else None  # run-only override
 DIAG_REDIS_URL = os.environ.get("KAGE_EDITOR_DIAG_REDIS_URL", "redis://localhost:6379/13")
 WEEK_LABEL = "5-11 August 2026"
 _AGGREGATORS = ("Google News", "arXiv")
@@ -201,10 +200,6 @@ def main() -> None:
     mode = sys.argv[5]
     out.mkdir(parents=True, exist_ok=True)
     RAW_DIR = out
-    if MAX_TOKENS is not None:
-        import services.instagram_weekly_recap_editor as editor_module
-
-        editor_module.EDITOR_MAX_TOKENS = MAX_TOKENS  # this authorized run only; the committed module default is unchanged
     items, evidence, daily_by_story, daily_posts = _week(window, identity, replay)
     candidates = attach_evidence(build_editor_candidates(items, daily_premise_by_story=daily_by_story), evidence)
     daily_premises = [p["title"] for p in daily_posts]
