@@ -33,9 +33,12 @@ from services.instagram_weekly_recap import _CYRILLIC, RecapItem, _item_read
 from services.text_normalization import normalize_story_identity_title
 
 EDITOR_PROMPT_NAME = "instagram_weekly_recap_editor"
-EDITOR_PROMPT_VERSION = "1"
-EDITOR_MAX_TOKENS = 3000  # bounds the provider's worst-case output cost; the answer itself is ~1k tokens
-EDITOR_REASONING_EFFORT = "low"
+EDITOR_PROMPT_VERSION = "2"
+EDITOR_MAX_TOKENS = 3000  # bounds the worst-case output cost (reasoning + answer); the answer itself is ~1.2k tokens
+# editorial judgment, not the router's lowest-cost pick: the strongest configured model whose worst case fits the weekly cap
+# (gpt-5.6-sol cannot: ~10k input tokens alone are ~$0.05); the preference is advisory - the router still owns the choice
+EDITOR_PREFERRED_MODEL = "gpt-5.6-terra"
+EDITOR_REASONING_EFFORT = "medium"
 EDITOR_MAX_ITEMS = 8
 
 CULTURE_MIN_COVERAGE = 3  # an item outside the daily feed's world (games, streaming) enters only when several outlets carried it
@@ -58,7 +61,12 @@ _DIGITS = re.compile(r"\d+")
 
 
 class WeeklyRecapEditorError(RuntimeError):
-    """The editor call failed or answered outside its contract - the caller falls back to the deterministic recap."""
+    """The editor call failed or answered outside its contract - the caller falls back to the deterministic recap. `call` is the
+    provider call when one was made (a truncated or unparseable answer is still paid for), so the spend can always be recorded."""
+
+    def __init__(self, message: str, *, call: Any = None) -> None:
+        super().__init__(message)
+        self.call = call
 
 
 @dataclass(frozen=True)
@@ -90,6 +98,7 @@ class EditorPick:
     why_this_made_the_week: str
     why_now: str
     daily_overlap: str
+    strongest_alternative_beaten: str = ""
 
     @property
     def coverage(self) -> int:
@@ -230,7 +239,7 @@ def build_editor_request(prompt: Any, candidates: Sequence[EditorCandidate], *, 
             Message(role="user", content=[ContentPart(type="text", text=render_editor_input(candidates, daily_premises=daily_premises, week_label=week_label))]),
         ],
         response_mode="json_schema", response_schema=prompt.output_schema, max_tokens=EDITOR_MAX_TOKENS,
-        reasoning_effort=EDITOR_REASONING_EFFORT,
+        reasoning_effort=EDITOR_REASONING_EFFORT, preferred_model=EDITOR_PREFERRED_MODEL,
     )
 
 
@@ -279,6 +288,7 @@ def validate_editor_output(output: Any, candidates: Sequence[EditorCandidate]) -
                 rank=len(picks) + 1, primary=merged[0], merged=merged, weekly_premise=entry["weekly_premise"].strip(),
                 category=entry["category"], why_this_made_the_week=entry["why_this_made_the_week"].strip(),
                 why_now=entry["why_now"].strip(), daily_overlap=entry["daily_overlap"],
+                strongest_alternative_beaten=str(entry.get("strongest_alternative_beaten") or "").strip(),
             ))
     exclusions = tuple(
         (tuple(str(i) for i in e.get("candidate_ids") or []), str(e.get("reason") or ""))
@@ -306,11 +316,15 @@ async def run_weekly_recap_editor(
         outcome = await call_generate(gateway, request, runtime=runtime, sequence=0)
     except Exception as exc:
         raise WeeklyRecapEditorError(f"gateway call failed: {exc}") from exc
+    call = getattr(outcome, "call", None)
     if outcome.error is not None:
-        raise WeeklyRecapEditorError(str(outcome.error))
+        raise WeeklyRecapEditorError(str(outcome.error), call=call)
     response = outcome.response
+    if response is not None and response.finish_reason == "length":  # checked first: a truncated answer also has no structured output
+        raise WeeklyRecapEditorError("answer truncated at the token limit (reasoning + answer exceeded max_tokens)", call=call)
     if response is None or response.structured_output is None:
-        raise WeeklyRecapEditorError("no structured output returned")
-    if response.finish_reason == "length":
-        raise WeeklyRecapEditorError("answer truncated at the token limit")
-    return validate_editor_output(response.structured_output, candidates), outcome.call
+        raise WeeklyRecapEditorError(f"no structured output returned (finish_reason={getattr(response, 'finish_reason', None)})", call=call)
+    try:
+        return validate_editor_output(response.structured_output, candidates), call
+    except WeeklyRecapEditorError as exc:
+        raise WeeklyRecapEditorError(str(exc), call=call) from exc

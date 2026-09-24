@@ -393,6 +393,7 @@ async def _build_phase_a_editorial_plan(
         angle_intent=decision.angle_intent,
         allow_duplicate_canary=allow_duplicate_canary,
         now=now,
+        why_now=decision.why_now,
     )
     decision_payload = decision.model_dump()
     decision_payload.update(

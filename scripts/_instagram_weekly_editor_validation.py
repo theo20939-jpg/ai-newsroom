@@ -35,8 +35,10 @@ from integrations.prompts.file_repository import FilePromptRepository  # noqa: E
 from scripts._instagram_v107_cd_validation import _eligible_models, request_worst_case  # noqa: E402
 from services.instagram_weekly_recap import RecapStory, consolidate, select_weekly_recap_items  # noqa: E402
 from services.instagram_weekly_recap_editor import (  # noqa: E402
+    EDITOR_PREFERRED_MODEL,
     EDITOR_PROMPT_NAME,
     EDITOR_PROMPT_VERSION,
+    WeeklyRecapEditorError,
     attach_evidence,
     build_editor_candidates,
     build_editor_request,
@@ -46,7 +48,7 @@ from services.instagram_weekly_recap_editor import (  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 CAP = Decimal(os.environ.get("KAGE_EDITOR_CAP_USD", "0.08"))
-NAMESPACE = "kage_weekly_recap_editor_validation"
+NAMESPACE = f"kage_weekly_recap_editor_validation_v{EDITOR_PROMPT_VERSION}"  # one ledger (and one call) per prompt version
 DIAG_REDIS_URL = os.environ.get("KAGE_EDITOR_DIAG_REDIS_URL", "redis://localhost:6379/13")
 WEEK_LABEL = "5-11 August 2026"
 _AGGREGATORS = ("Google News", "arXiv")
@@ -103,10 +105,14 @@ def preflight(request) -> dict:
         tier = next(t for t in model.pricing_tiers if t.condition == "standard")
         conservative[model.model_id] = (Decimal(tokens_in) * tier.input_price_per_million
                                         + Decimal(request.max_tokens) * tier.output_price_per_million) / Decimal(1_000_000)
-    worst = max([*estimator.values(), *conservative.values()])
+    # exactly one provider request can be sent and the live wrapper refuses any model but the preferred one, so the preferred model's
+    # worst case is the gate; with no preference, the costliest model the router may pick
+    gate = [request.preferred_model] if request.preferred_model else list(estimator)
+    worst = max(max(estimator[m], conservative[m]) for m in gate)
     return {"estimator_worst_case_usd": {k: str(v) for k, v in estimator.items()},
             "conservative_input_tokens": tokens_in, "max_output_tokens": request.max_tokens,
             "conservative_worst_case_usd": {k: str(v.quantize(Decimal("0.0001"))) for k, v in conservative.items()},
+            "model": request.preferred_model, "reasoning_effort": request.reasoning_effort,
             "preflight_worst_case_usd": str(worst.quantize(Decimal("0.0001"))), "cap_usd": str(CAP), "within_cap": worst <= CAP}
 
 
@@ -141,6 +147,8 @@ async def live_call(candidates, daily_premises, repo) -> dict:
         provider_requests["n"] += 1
         if provider_requests["n"] > 1:
             raise SafeStop("a second provider request was attempted - the authorization is ONE call, retries 0")
+        if EDITOR_PREFERRED_MODEL and self._resolve_model_id(request) != EDITOR_PREFERRED_MODEL:
+            raise SafeStop(f"the router picked {self._resolve_model_id(request)}, not {EDITOR_PREFERRED_MODEL} - refused before sending")
         self._client = self._client.with_options(max_retries=0)
         return await real_generate(self, request)
 
@@ -148,6 +156,12 @@ async def live_call(candidates, daily_premises, repo) -> dict:
     try:
         result, call = await run_weekly_recap_editor(layer.gateway, repo, candidates=candidates, daily_premises=daily_premises,
                                                      week_label=WEEK_LABEL)
+    except WeeklyRecapEditorError as exc:
+        if exc.call is not None:  # a failed answer is still paid for: record it before reporting the failure
+            await tracker.record(uuid4(), EDITOR_PROMPT_NAME, exc.call)
+            exc.args = (f"{exc.args[0]} | provider_requests={provider_requests['n']} model={getattr(exc.call, 'model_used', None)} "
+                        f"usage={getattr(exc.call, 'usage', None)} cost_usd={compute_call_cost(exc.call, pricing)}",)
+        raise
     finally:
         OpenAIAdapter.generate = real_generate
     cost = compute_call_cost(call, pricing)
@@ -164,7 +178,8 @@ def _pick_json(pick) -> dict:
             "outlets": sorted(set().union(*(c.item.sources for c in pick.merged))),
             "story_ids": sorted(set().union(*(c.item.story_ids for c in pick.merged))),
             "cited_headlines": {c.candidate_id: c.headline for c in pick.merged},
-            "daily_overlap": pick.daily_overlap, "why_this_made_the_week": pick.why_this_made_the_week, "why_now": pick.why_now}
+            "daily_overlap": pick.daily_overlap, "why_this_made_the_week": pick.why_this_made_the_week, "why_now": pick.why_now,
+            "strongest_alternative_beaten": pick.strongest_alternative_beaten}
 
 
 def main() -> None:
@@ -206,7 +221,7 @@ def main() -> None:
                 "picks": [_pick_json(p) for p in result.picks], "dropped": list(result.dropped),
                 "daily_overlap_exclusions": [{"candidate_ids": list(ids), "reason": reason} for ids, reason in result.daily_exclusions]}
         print(json.dumps(report["live"], ensure_ascii=False, indent=1))
-    (out / f"weekly_editor_{mode}.json").write_text(json.dumps(report, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+    (out / f"weekly_editor_{mode}_v{EDITOR_PROMPT_VERSION}.json").write_text(json.dumps(report, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
 
 
 if __name__ == "__main__":

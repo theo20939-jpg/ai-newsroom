@@ -190,6 +190,9 @@ async def test_the_editor_makes_exactly_one_bounded_call_with_the_real_prompt_co
     request = gateway.received_requests[0]
     assert request.max_tokens == ed.EDITOR_MAX_TOKENS and request.response_mode == "json_schema"
     assert request.response_schema["properties"]["items"]["maxItems"] == ed.EDITOR_MAX_ITEMS
+    # editorial judgment: the strongest configured model that fits the weekly cap, with real reasoning - not the lowest-cost route
+    assert request.preferred_model == ed.EDITOR_PREFERRED_MODEL == "gpt-5.6-terra" and request.reasoning_effort == "medium"
+    assert "strongest_alternative_beaten" in request.response_schema["properties"]["items"]["items"]["required"]
     user = request.messages[1].content[0].text
     assert "D1: Google Assistant is going away" in user and f"\n{tg} " in user and "Telegram briefly pulled" in user
     assert [p.primary.candidate_id for p in result.picks] == [tg]
@@ -205,6 +208,16 @@ async def test_any_call_failure_raises_the_editor_error_and_never_retries(gatewa
     with pytest.raises(ed.WeeklyRecapEditorError):
         await ed.run_weekly_recap_editor(gateway, PROMPTS, candidates=_candidates(), daily_premises=[], week_label="w")
     assert len(gateway.received_requests) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_truncated_answer_is_reported_as_truncation_and_keeps_the_paid_call_for_accounting():
+    """The first calibrated live call (terra, medium reasoning) came back truncated with no structured output: the error must say
+    so (finish_reason is checked before the missing output) and carry the provider call, so its spend is recorded."""
+    gateway = FakeLLMGateway(generate_response=_response(None, finish="length"))
+    with pytest.raises(ed.WeeklyRecapEditorError, match="truncated") as info:
+        await ed.run_weekly_recap_editor(gateway, PROMPTS, candidates=_candidates(), daily_premises=[], week_label="w")
+    assert info.value.call is not None and info.value.call.usage.output_tokens == 100
 
 
 # --- planner + worker wiring ----------------------------------------------------------------------------------------------------

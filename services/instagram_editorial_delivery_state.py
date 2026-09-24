@@ -66,6 +66,7 @@ class InstagramEditorialHistoryItem:
     purpose: str = ""
     origin: str = ""
     caption: str = ""
+    why_now: str = ""
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,7 @@ def _history_item(row: InstagramEditorialDelivery) -> InstagramEditorialHistoryI
         angle=str(decision.get("angle") or ""), angle_intent=str(decision.get("angle_intent") or ""),
         topic=str(decision.get("topic") or ""), purpose=str(decision.get("purpose") or ""),
         origin=str(decision.get("origin") or ""), caption=str(package.get("caption") or ""),
+        why_now=str(decision.get("why_now") or ""),
     )
 
 
@@ -133,25 +135,68 @@ def angle_similarity(left: str, right: str) -> float:
     return round(len(a & b) / len(a | b), 3)
 
 
+# Cross-Story premise guard. Production Story identity is precision-first: a Russian and an English copy of one event are often two
+# Stories, so the same premise could run twice on consecutive days. The Director is required to write its angle / why_now in Russian
+# whatever the source language, so its own decision is the language-agnostic premise signature - compared here, at the Instagram
+# publication boundary, never written back to Story identity.
+_PREMISE_STEM = 5
+CROSS_STORY_PREMISE_MIN = 0.17  # 5-11 Aug 2026 calibration: gym RU->EN 0.21; same event, how-to angle 0.13; different events <= 0.08
+_INTENT_FAMILY = {
+    "BREAKING": "react", "IMPACT": "react", "REACTION": "react", "DEBATE": "react", "MEME": "react",
+    "EXPLAINER": "use", "COMPARISON": "use", "HOW_TO": "use", "PRODUCT_USE_CASE": "use", "EVERGREEN_VALUE": "use",
+}
+
+
+def _premise_stems(angle: str, why_now: str) -> set[str]:
+    return {token[:_PREMISE_STEM] for token in _angle_tokens(f"{angle} {why_now}")}
+
+
+def premise_similarity(angle: str, why_now: str, other_angle: str, other_why_now: str) -> float:
+    a, b = _premise_stems(angle, why_now), _premise_stems(other_angle, other_why_now)
+    if not a or not b:
+        return 0.0
+    return round(len(a & b) / len(a | b), 3)
+
+
+def _same_intent_family(left: str, right: str) -> bool:
+    return bool(left and right and _INTENT_FAMILY.get(left, left) == _INTENT_FAMILY.get(right, right))
+
+
 async def check_instagram_editorial_duplicate(
     session: AsyncSession, *, source_story_id: str | None, angle: str, angle_intent: str,
-    allow_duplicate_canary: bool = False, now: datetime | None = None,
+    allow_duplicate_canary: bool = False, now: datetime | None = None, why_now: str = "",
 ) -> InstagramEditorialDuplicateDecision:
     """Enforce ONE STORY + ONE ANGLE -> ONE primary item across every format.
 
     Canonical Story identity is resolved by the caller through the existing Story Memory link.
     Angle identity combines the Director's structured intent with normalized angle text; headline
     equality is never used. Different intents remain eligible even on the same Story.
+
+    Across DIFFERENT Stories (another language's or another outlet's copy of the same event), the
+    same premise is blocked too: the Director's own angle + why_now (always Russian) match at
+    CROSS_STORY_PREMISE_MIN and the intents belong to the same family (a reaction vs a how-to on one
+    event are two premises). Items without a Director angle are never matched across Stories.
     """
     history = await load_recent_instagram_editorial_history(session, now=now)
-    if not source_story_id:
-        return InstagramEditorialDuplicateDecision(
-            False, "no canonical story identity; no story-angle block", recent_history=history,
-        )
-
     for item in history:
-        if item.source_story_id != source_story_id:
-            continue
+        if not source_story_id or item.source_story_id != source_story_id:
+            if not (angle and item.angle and _same_intent_family(angle_intent, item.angle_intent)):
+                continue
+            premise = premise_similarity(angle, why_now, item.angle, item.why_now)
+            if premise < CROSS_STORY_PREMISE_MIN:
+                continue
+            reason = (
+                f"same premise as an item already {item.state.lower()} as {item.content_format} on a different Story "
+                f"(another language / source copy of the event); premise_similarity={premise:.3f}"
+            )
+            if allow_duplicate_canary:
+                return InstagramEditorialDuplicateDecision(
+                    False, f"explicit canary override: {reason}", matched_delivery_id=item.delivery_id,
+                    angle_similarity=premise, canary_override_used=True, recent_history=history,
+                )
+            return InstagramEditorialDuplicateDecision(
+                True, reason, matched_delivery_id=item.delivery_id, angle_similarity=premise, recent_history=history,
+            )
         previous_angle = item.angle or item.caption
         similarity = angle_similarity(angle, previous_angle)
         same_intent = bool(angle_intent and item.angle_intent and angle_intent == item.angle_intent)
@@ -171,8 +216,12 @@ async def check_instagram_editorial_duplicate(
             True, reason, matched_delivery_id=item.delivery_id, angle_similarity=similarity,
             recent_history=history,
         )
+    if not source_story_id:
+        return InstagramEditorialDuplicateDecision(
+            False, "no canonical story identity; no story-angle block; no cross-story premise match", recent_history=history,
+        )
     return InstagramEditorialDuplicateDecision(
-        False, "no recent or in-flight item has the same canonical story and material angle",
+        False, "no recent or in-flight item has the same canonical story and material angle, nor the same premise on another story",
         recent_history=history,
     )
 
