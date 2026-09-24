@@ -1248,6 +1248,8 @@ async def _run_instagram_weekly_recap(
                 return None
             selected = await select_weekly_recap_candidates(
                 session, now=now, used_story_ids=usage.daily_story_ids_this_week, daily_titles=usage.daily_titles_this_week,
+                daily_premise_by_story=usage.daily_premise_by_story,
+                editor_gateway=gate_gateway, editor_prompt_repository=gate_prompt_repository,  # ONE weekly editor call
             )
             bundle = await build_instagram_recap_bundle(session, selected=selected)
             if bundle is None:

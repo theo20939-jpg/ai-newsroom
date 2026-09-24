@@ -56,6 +56,9 @@ class FeedCandidate:
     coverage: int = 1  # how many events / sources carry this story (Story Memory event_count) - the weekly "worth remembering" proxy
 
 
+OUTSIDE_WORLD_REASON = "outside the account's world (not AI / tech / gadgets / internet culture)"
+
+
 @dataclass(frozen=True)
 class FeedRead:
     format: FeedFormat
@@ -242,7 +245,7 @@ def read_candidate(candidate: FeedCandidate) -> FeedRead:
     if ks & {"tech", "ai_tool", "gadget"}:
         return read(FeedFormat.WEEKLY_NEWS, False, "ordinary tech / AI news - weekly recap material at most, never a daily post",
                     min(3.0, math.log2(max(1, candidate.coverage)) + 0.1))
-    return read(FeedFormat.REJECT, False, "outside the account's world (not AI / tech / gadgets / internet culture)", 0.0)
+    return read(FeedFormat.REJECT, False, OUTSIDE_WORLD_REASON, 0.0)
 
 
 # --- stage 2: the shortlist read again with its strongest stored evidence -----------------------------------------------------------

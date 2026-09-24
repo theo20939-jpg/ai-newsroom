@@ -56,6 +56,7 @@ class FeedUsage:
     recap_this_week: bool = False
     daily_story_ids_this_week: set[str] = field(default_factory=set)
     daily_titles_this_week: list[str] = field(default_factory=list)
+    daily_premise_by_story: dict[str, str] = field(default_factory=dict)  # the exact premise each daily post ran with
 
 
 def _archetype(snapshot: Any) -> str | None:
@@ -93,6 +94,8 @@ async def load_feed_usage(session: Any, *, now: datetime) -> FeedUsage:
         director_input = row.package_snapshot.get("director_input") if isinstance(row.package_snapshot, dict) else None
         if isinstance(director_input, dict) and director_input.get("opportunity_summary"):
             usage.daily_titles_this_week.append(str(director_input["opportunity_summary"]))
+            if row.source_story_id:
+                usage.daily_premise_by_story[str(row.source_story_id)] = str(director_input["opportunity_summary"])
         fmt = FORMAT_BY_ARCHETYPE.get(archetype or "")
         if fmt is FeedFormat.NEWS_INSIGHT:
             usage.news_insight_this_week += 1
@@ -230,12 +233,18 @@ def weekly_recap_identity(now: datetime) -> str:
     return f"kage-weekly-news-recap-{year}-W{week:02d}"
 
 
-async def select_weekly_recap_candidates(session: Any, *, now: datetime, used_story_ids: set[str], daily_titles: list[str] | None = None):
+async def select_weekly_recap_candidates(
+    session: Any, *, now: datetime, used_story_ids: set[str], daily_titles: list[str] | None = None,
+    daily_premise_by_story: dict[str, str] | None = None, editor_gateway: Any = None, editor_prompt_repository: Any = None,
+):
     """The week's recap on PRODUCTION Story identity (services/instagram_weekly_recap.py): every Story touched in the previous 7 days
     with its CONFIRMED members, plus each event that production linked only for observability (a strong UNCERTAIN_MATCH belongs to no
-    confirmed story - it is its own unit), consolidated with Story Memory's own confirmed-match rule, selected for "what defined the
-    week", minus this week's daily stories and premises. Returns `WeeklyRecapCandidate`s for `build_instagram_recap_bundle`."""
+    confirmed story - it is its own unit), consolidated with Story Memory's own confirmed-match rule. With an editor gateway, the
+    final selection is ONE weekly editor call over a deterministic candidate set (services/instagram_weekly_recap_editor.py); without
+    one, or when that call fails or answers outside its contract, the deterministic "what defined the week" selection. Either way this
+    week's daily stories and premises are not repeated. Returns `WeeklyRecapCandidate`s for `build_instagram_recap_bundle`."""
     from services.instagram_weekly_recap import RecapStory, consolidate, select_weekly_recap_items
+    from services.instagram_weekly_recap_editor import WeeklyRecapEditorError
     from services.text_normalization import is_google_news_provenance
     from services.weekly_recap_selection import WeeklyRecapCandidate
 
@@ -261,7 +270,16 @@ async def select_weekly_recap_candidates(session: Any, *, now: datetime, used_st
             first_seen=members[0][0].collected_at, category=getattr(members[0][0].category, "value", ""),
         ))
         representative[unit_id] = members[0][0]
-    picks = select_weekly_recap_items(consolidate(stories), daily_story_ids=used_story_ids, daily_titles=daily_titles or [])
+    items = consolidate(stories)
+    if editor_gateway is not None and editor_prompt_repository is not None:
+        try:
+            return await _weekly_editor_candidates(
+                session, items, representative, now=now, daily_titles=daily_titles or [],
+                daily_premise_by_story=daily_premise_by_story or {}, gateway=editor_gateway, prompt_repository=editor_prompt_repository,
+            )
+        except WeeklyRecapEditorError as exc:
+            logger.warning("instagram_weekly_recap_editor_failed_deterministic_fallback", extra={"error": str(exc)[:300]})
+    picks = select_weekly_recap_items(items, daily_story_ids=used_story_ids, daily_titles=daily_titles or [])
     out = []
     for pick in picks:
         main = max(pick.item.stories, key=lambda s: len(s.sources))
@@ -271,5 +289,49 @@ async def select_weekly_recap_candidates(session: Any, *, now: datetime, used_st
             story_id=story_uuid, representative_event_id=event.id, relevance_tier=f"INSTAGRAM_WEEKLY_{pick.category}", score=None,
             significance=None, major_impact_override=False, company_key=None, entities=list(pick.item.evidence),
             updated_at=event.collected_at, reason=pick.why, rank_score=float(pick.score),
+        ))
+    return out
+
+
+async def _weekly_editor_candidates(
+    session: Any, items: list, representative: dict[str, Any], *, now: datetime, daily_titles: list[str],
+    daily_premise_by_story: dict[str, str], gateway: Any, prompt_repository: Any,
+) -> list:
+    """ONE editor call; its validated picks become `WeeklyRecapCandidate`s (the primary candidate's widest Story fragment represents
+    the item). A valid answer with no picks is respected - no recap, never filler."""
+    from services.instagram_weekly_recap_editor import (
+        EDITOR_MAX_ITEMS,
+        EVIDENCE_TOP,
+        attach_evidence,
+        build_editor_candidates,
+        run_weekly_recap_editor,
+    )
+    from services.weekly_recap_selection import WeeklyRecapCandidate
+
+    candidates = build_editor_candidates(items, daily_premise_by_story=daily_premise_by_story)
+    headline_event = {}
+    for candidate in candidates[:EVIDENCE_TOP]:
+        story = next((s for s in candidate.item.stories if candidate.headline in s.titles), None)
+        if story is not None:
+            headline_event[story.story_id] = representative[story.story_id].id
+    by_event = await load_feed_evidence(session, list(headline_event.values()))
+    candidates = attach_evidence(candidates, {sid: by_event.get(str(eid), "") for sid, eid in headline_event.items()})
+    week_start = (now - timedelta(days=7)).date()
+    result, _call = await run_weekly_recap_editor(
+        gateway, prompt_repository, candidates=candidates, daily_premises=daily_titles,
+        week_label=f"{week_start:%d %b} - {now.date():%d %b %Y}",
+    )
+    logger.info("instagram_weekly_recap_editor_selected", extra={
+        "candidates": len(candidates), "picks": len(result.picks), "dropped": list(result.dropped)})
+    out = []
+    for pick in result.picks:
+        main = max(pick.primary.item.stories, key=lambda s: len(s.sources))
+        event = representative[main.story_id]
+        story_uuid = UUID(main.story_id) if not main.story_id.startswith("event:") else event.id
+        out.append(WeeklyRecapCandidate(
+            story_id=story_uuid, representative_event_id=event.id, relevance_tier=f"INSTAGRAM_WEEKLY_{pick.category}", score=None,
+            significance=None, major_impact_override=False, company_key=None, entities=list(pick.primary.item.evidence),
+            updated_at=event.collected_at, reason=f"{pick.weekly_premise} - {pick.why_this_made_the_week}",
+            rank_score=float(EDITOR_MAX_ITEMS + 1 - pick.rank),
         ))
     return out
