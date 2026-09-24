@@ -48,12 +48,17 @@ from services.instagram_weekly_recap_editor import (  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 CAP = Decimal(os.environ.get("KAGE_EDITOR_CAP_USD", "0.08"))
-NAMESPACE = f"kage_weekly_recap_editor_validation_v{EDITOR_PROMPT_VERSION}"  # one ledger (and one call) per prompt version
+RUN_TAG = os.environ.get("KAGE_EDITOR_RUN_TAG", f"v{EDITOR_PROMPT_VERSION}")  # one ledger (and one call) per authorized run
+NAMESPACE = f"kage_weekly_recap_editor_validation_{RUN_TAG}"
+MAX_TOKENS = int(os.environ["KAGE_EDITOR_MAX_TOKENS"]) if os.environ.get("KAGE_EDITOR_MAX_TOKENS") else None  # run-only override
 DIAG_REDIS_URL = os.environ.get("KAGE_EDITOR_DIAG_REDIS_URL", "redis://localhost:6379/13")
 WEEK_LABEL = "5-11 August 2026"
 _AGGREGATORS = ("Google News", "arXiv")
 _CONFIRMED = ("story_update", "supporting_source", "semantic_duplicate")
 _CYR = re.compile(r"[Ѐ-ӿ]")
+
+
+RAW_DIR = Path(".")
 
 
 class SafeStop(RuntimeError):
@@ -142,6 +147,7 @@ async def live_call(candidates, daily_premises, repo) -> dict:
 
     provider_requests = {"n": 0}
     real_generate = OpenAIAdapter.generate
+    raw_path = RAW_DIR / f"raw_provider_response_{RUN_TAG}.json"
 
     async def one_request_only(self, request):
         provider_requests["n"] += 1
@@ -150,7 +156,14 @@ async def live_call(candidates, daily_premises, repo) -> dict:
         if EDITOR_PREFERRED_MODEL and self._resolve_model_id(request) != EDITOR_PREFERRED_MODEL:
             raise SafeStop(f"the router picked {self._resolve_model_id(request)}, not {EDITOR_PREFERRED_MODEL} - refused before sending")
         self._client = self._client.with_options(max_retries=0)
-        return await real_generate(self, request)
+        try:
+            response = await real_generate(self, request)
+        except Exception as exc:  # the provider's own failure: kept as the artifact, then re-raised (never retried)
+            raw_path.write_text(json.dumps({"provider_error": f"{type(exc).__name__}: {str(exc)[:800]}"}, indent=1), encoding="utf-8")
+            raise
+        # the response artifact is kept BEFORE any parsing / validation, whatever its shape: finish_reason, usage, text, structured output
+        raw_path.write_text(json.dumps(response.model_dump(mode="json"), ensure_ascii=False, indent=1), encoding="utf-8")
+        return response
 
     OpenAIAdapter.generate = one_request_only
     try:
@@ -183,9 +196,15 @@ def _pick_json(pick) -> dict:
 
 
 def main() -> None:
+    global RAW_DIR
     window, identity, replay, out = (Path(a) for a in sys.argv[1:5])
     mode = sys.argv[5]
     out.mkdir(parents=True, exist_ok=True)
+    RAW_DIR = out
+    if MAX_TOKENS is not None:
+        import services.instagram_weekly_recap_editor as editor_module
+
+        editor_module.EDITOR_MAX_TOKENS = MAX_TOKENS  # this authorized run only; the committed module default is unchanged
     items, evidence, daily_by_story, daily_posts = _week(window, identity, replay)
     candidates = attach_evidence(build_editor_candidates(items, daily_premise_by_story=daily_by_story), evidence)
     daily_premises = [p["title"] for p in daily_posts]
@@ -221,7 +240,7 @@ def main() -> None:
                 "picks": [_pick_json(p) for p in result.picks], "dropped": list(result.dropped),
                 "daily_overlap_exclusions": [{"candidate_ids": list(ids), "reason": reason} for ids, reason in result.daily_exclusions]}
         print(json.dumps(report["live"], ensure_ascii=False, indent=1))
-    (out / f"weekly_editor_{mode}_v{EDITOR_PROMPT_VERSION}.json").write_text(json.dumps(report, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+    (out / f"weekly_editor_{mode}_{RUN_TAG}.json").write_text(json.dumps(report, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
 
 
 if __name__ == "__main__":
