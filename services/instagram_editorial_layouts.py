@@ -189,8 +189,9 @@ def _news_split_panel(*, spec: ProfileSpec, source_image, kicker, headline, dek,
 
     regions: list[TextRegionSpec] = []
     y: float = panel_top + round(spec.height * tok.PANEL_PADDING_FRAC)
-    cw, ch = draw_kicker_chip(canvas, x=margin, y=y, text=kicker)
-    y += ch + round(spec.height * 0.025)
+    if kicker:
+        _, ch = draw_kicker_chip(canvas, x=margin, y=y, text=kicker)
+        y += ch + round(spec.height * 0.025)
 
     headline_font, headline_lines, headline_clipped = fit_text_block(
         draw, headline, font_max=round(spec.width * tok.TYPE_HEADLINE_M.size_frac), font_min=round(spec.width * 0.04),
@@ -232,8 +233,9 @@ def _news_framed(*, spec: ProfileSpec, source_image, kicker, headline, dek, pack
     content_w = spec.width - margin - max(margin, mark_reserve_width(spec))
 
     y: float = round(spec.height * spec.safe_top_frac) + margin
-    cw, ch = draw_kicker_chip(canvas, x=margin, y=y, text=kicker)
-    y += ch + round(spec.height * 0.03)
+    if kicker:
+        _, ch = draw_kicker_chip(canvas, x=margin, y=y, text=kicker)
+        y += ch + round(spec.height * 0.03)
 
     frame_w = content_w
     frame_h = round(spec.height * 0.42)

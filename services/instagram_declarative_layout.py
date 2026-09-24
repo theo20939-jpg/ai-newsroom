@@ -2,7 +2,7 @@
 
 The Creative Director supplies composition relationships in normalized 0..1 canvas space. This
 module owns everything brand-specific: the type family, the pixel size behind each scale token,
-the colours (paper / soft / NINJA red / ink / palettes), the logo, margins and the progress marker.
+the colours (the KAGE roles via services/instagram_kage_brand.py), the K mark, margins and the progress marker.
 There is no path for the model to introduce a font, a colour, a pixel size, code, CSS or SVG.
 
 Guarantees (all deterministic - identical layout + copy + assets => identical pixels, no RNG):
@@ -28,6 +28,7 @@ from PIL import Image, ImageChops, ImageDraw
 
 from schemas.instagram_creative import InstagramSlideLayout, LayoutRegion
 from services import instagram_design_tokens as tok
+from services import instagram_kage_brand as kage
 from services.instagram_editorial_layouts import CROP_MODE_TREATMENTS, LayoutResult, TextRegionSpec
 from services.instagram_image_handling import fit_image_contain, fit_image_cover
 from services.instagram_layout_signature import layout_characteristics, layout_signature
@@ -36,9 +37,9 @@ from services.instagram_quiet_zones import NAMED_ZONES, measure_zone
 from services.instagram_text_fit import box4
 from services.instagram_visual_profiles import ProfileSpec, ig_font
 
-SURFACE_SOFT = (233, 236, 241)
-MUTED_INK = (96, 101, 110)
-HAIRLINE = (208, 212, 219)
+SURFACE_SOFT = kage.LIGHT  # KAGE has ONE approved light surface: 'soft' and 'paper' both render it (structure comes from type, rules, cards)
+MUTED_INK = kage.STONE  # muted copy on LIGHT stays readable; MIST on LIGHT is too faint for text
+HAIRLINE = kage.MIST
 
 # scale token -> (max font as a fraction of canvas width, font weight). Renderer-owned metrics.
 SCALE_TOKENS: dict[str, tuple[float, str]] = {
@@ -59,17 +60,22 @@ _MIN_BODY_FONT_FRAC = 0.037  # ~40px body copy on a 1080px canvas (real v10.7 va
 # dropping the paid image or the body itself
 BODY_MIN_FONT_FRAC: ContextVar[float] = ContextVar("instagram_body_min_font_frac", default=_MIN_BODY_FONT_FRAC)
 _MIN_FONT_FRAC = 0.03  # minimum readable size (about 32px on a 1080px canvas)
-GRAPHITE = (30, 32, 38)
-_SURFACE_COLOURS = {"paper": tok.PAPER, "soft": SURFACE_SOFT, "red": tok.RED, "ink": tok.INK, "graphite": GRAPHITE}
-MUTED_ON_DARK = (150, 155, 166)
+GRAPHITE = kage.GRAPHITE
+# the schema's 'red' surface name is kept; KAGE renders it as a neutral raised surface (no coloured surfaces)
+_SURFACE_COLOURS = {"paper": tok.PAPER, "soft": SURFACE_SOFT, "red": kage.STONE, "ink": tok.INK, "graphite": GRAPHITE}
+MUTED_ON_DARK = kage.MIST
+MAT = kage.LIGHT  # paper / torn / die-cut collage mats
 MAX_GROUND_STD = 12.0  # a `media_ground` surface needs an asset whose border is genuinely uniform
 # Renderer-owned accent roles per palette (the model only names the palette / the role, never a colour).
-# brand = NINJA red only; culture and neo are the secondary accent families Visual DNA v2 permits.
+# KAGE is near-monochrome: the palette names of the Creative Director contract are kept, but every palette renders
+# through the same system - accent = the KAGE violet, accent2 = MIST (a neutral, never a second bright colour).
 PALETTES: dict[str, tuple[tuple[int, int, int], tuple[int, int, int]]] = {
-    "brand": (tok.RED, tok.RED),
-    "culture": ((212, 240, 36), (255, 72, 200)),
-    "neo": ((152, 96, 255), (255, 72, 190)),
+    "brand": (kage.ACCENT, kage.MIST),
+    "culture": (kage.ACCENT, kage.MIST),
+    "neo": (kage.ACCENT, kage.MIST),
 }
+# a declared accent SURFACE is large by nature: KAGE renders it neutral, the violet stays small
+_ACCENT_SURFACES = {"accent": kage.STONE, "accent2": kage.GRAPHITE}
 
 
 class DeclaredRenderRejected(ValueError):
@@ -136,7 +142,7 @@ def _fit_in_box(draw, text: str, *, box_w: int, box_h: int, token: str, max_line
     return font, lines, box_h, True
 
 
-CARD_ON_DARK = (48, 51, 60)  # a card must read as a card on both ink and graphite grounds, not vanish into a same-colour surface
+CARD_ON_DARK = kage.STONE  # a card must read as a card on both ink and graphite grounds, not vanish into a same-colour surface
 GRAPHIC_LABEL_MAX_FRAC = 0.075  # graphic labels are read at phone size: up to ~80px, never the old fixed 29px
 GRAPHIC_LABEL_MIN_FRAC = 0.042
 
@@ -165,11 +171,13 @@ def _draw_label(draw, lines, font, gap, x: float, y_mid: float, block_h: int, fi
         py += (bb[3] - bb[1]) + gap
 
 
-def _draw_flow(draw, tokens: list[str], x0: int, y0: int, w: int, h: int, *, W: int, accent, dark_bg: bool) -> None:
+def _draw_flow(draw, tokens: list[str], x0: int, y0: int, w: int, h: int, *, W: int, accent) -> None:
     """A flow is drawn at the scale of its region: a tall region becomes a stack of full-width numbered step cards (the reference's
-    interface-card slides), a wide one a row of cards; labels are fitted to each card, never a fixed small size."""
+    interface-card slides), a wide one a row of cards; labels are fitted to each card, never a fixed small size.
+    KAGE: every card is a dark neutral (STONE) card; only the KEY (last) card carries the violet - an outline and its number - never a
+    solid violet mass. Connectors and the other numbers are neutral. Geometry is unchanged."""
     n = len(tokens)
-    card_fill = CARD_ON_DARK if dark_bg else SURFACE_SOFT
+    card_fill = CARD_ON_DARK
     # long labels squeezed into narrow side-by-side boxes shrink to fine print (real polish pass: "CLAUDE CODE: AGENTS.MD" in a third of
     # a row); full-width stacked cards read far better once the region has some height
     long_labels = max((len(t) for t in tokens), default=0) > 10
@@ -183,17 +191,17 @@ def _draw_flow(draw, tokens: list[str], x0: int, y0: int, w: int, h: int, *, W: 
             cy0 = y0 + i * (card_h + gap)
             last = i == n - 1
             draw.rounded_rectangle([x0, cy0, x0 + w, cy0 + card_h], radius=round(card_h * 0.18),
-                                   fill=(*(accent if last else card_fill), 255), outline=(*accent, 255), width=4)
+                                   fill=(*card_fill, 255), outline=(*(accent if last else card_fill), 255), width=4)
             number = f"{i + 1:02d}"
             nb = draw.textbbox((0, 0), number, font=num_font)
             draw.text((x0 + pad, cy0 + (card_h - (nb[3] - nb[1])) / 2 - nb[1]), number, font=num_font,
-                      fill=tok.PAPER if last else accent)
+                      fill=accent if last else MUTED_ON_DARK)
             lx = x0 + pad * 2 + num_w
             font, lines, block_h, lgap = _fit_label(draw, token, x0 + w - pad - lx, card_h - pad, W=W)
-            _draw_label(draw, lines, font, lgap, lx, cy0 + card_h / 2, block_h, tok.PAPER if (last or dark_bg) else tok.INK)
+            _draw_label(draw, lines, font, lgap, lx, cy0 + card_h / 2, block_h, tok.PAPER)
             if not last:
                 cx = x0 + pad + num_w // 2
-                draw.line([(cx, cy0 + card_h + 4), (cx, cy0 + card_h + gap - 4)], fill=(*accent, 255), width=6)
+                draw.line([(cx, cy0 + card_h + 4), (cx, cy0 + card_h + gap - 4)], fill=(*MUTED_ON_DARK, 255), width=6)
         return
     gap = round(W * 0.03)
     node_w = (w - gap * (n - 1)) // n
@@ -201,12 +209,12 @@ def _draw_flow(draw, tokens: list[str], x0: int, y0: int, w: int, h: int, *, W: 
     for i, token in enumerate(tokens):
         nx = x0 + i * (node_w + gap)
         last = i == n - 1
-        draw.rounded_rectangle([nx, y0, nx + node_w, y0 + h], radius=18, fill=(*(accent if last else card_fill), 255), outline=(*accent, 255), width=4)
+        draw.rounded_rectangle([nx, y0, nx + node_w, y0 + h], radius=18, fill=(*card_fill, 255), outline=(*(accent if last else card_fill), 255), width=4)
         font, lines, block_h, lgap = _fit_label(draw, token, node_w - 2 * pad, h - 2 * pad, W=W)
-        _draw_label(draw, lines, font, lgap, nx, y0 + h / 2, block_h, tok.PAPER if (last or dark_bg) else tok.INK, center_w=node_w)
+        _draw_label(draw, lines, font, lgap, nx, y0 + h / 2, block_h, tok.PAPER, center_w=node_w)
         if not last:
             cy = y0 + h // 2
-            draw.line([(nx + node_w + 4, cy), (nx + node_w + gap - 4, cy)], fill=(*accent, 255), width=6)
+            draw.line([(nx + node_w + 4, cy), (nx + node_w + gap - 4, cy)], fill=(*MUTED_ON_DARK, 255), width=6)
 
 
 def _luma_stats(canvas: Image.Image, box: tuple[int, int, int, int]) -> tuple[float, int, int]:
@@ -278,10 +286,8 @@ def ground_of(image: Image.Image) -> tuple[tuple[int, int, int], float]:
 
 def _surface_colour(layout: InstagramSlideLayout, region: LayoutRegion, subject_assets: dict) -> tuple[int, int, int] | None:
     s = region.surface or "soft"
-    if s == "accent":
-        return PALETTES[layout.palette][0]
-    if s == "accent2":
-        return PALETTES[layout.palette][1]
+    if s in _ACCENT_SURFACES:
+        return _ACCENT_SURFACES[s]
     if s == "media_ground":
         asset = subject_assets.get(str(region.content_ref))
         if asset is None:
@@ -389,22 +395,15 @@ def _object_extent(tile: Image.Image) -> tuple[int, tuple[int, int, int, int]]:
 
 
 def _place_adaptive_mark(canvas: Image.Image, spec: ProfileSpec, position: str) -> int:
-    """The canonical brand mark at a bounded, renderer-owned corner (BOTTOM_RIGHT default, BOTTOM_LEFT).
-    The LIGHT approved variant is used when the pixels beneath it are dark. It chooses between two approved
-    brand assets; it never alters the image and never draws a new mark."""
-    from services.instagram_visual_profiles import ig_brand_mark
-
-    frac = tok.LOGO_WIDTH_FRAC_COMPACT
+    """The ONE KAGE K at a bounded, renderer-owned corner (BOTTOM_RIGHT default, BOTTOM_LEFT), inside the same reserved mark box as
+    before. The dark-on-light variant is used when the pixels beneath it are light, the supplied light-on-dark one otherwise. It chooses
+    between two approved brand assets; it never alters the image and never draws a new mark."""
+    reserve = round(spec.width * tok.LOGO_WIDTH_FRAC_COMPACT)
     margin = round(spec.width * tok.LOGO_MARGIN_FRAC)
-    probe = ig_brand_mark(target_width=round(spec.width * frac), red=True)
-    x = margin if position == "BOTTOM_LEFT" else spec.width - margin - probe.width
-    y = spec.height - round(spec.height * spec.safe_bottom_frac) - margin - probe.height
-    region = canvas.crop((x - 8, y - 8, x + probe.width + 8, y + probe.height + 8)).convert("L")
-    hist = region.histogram()
-    total = sum(hist) or 1
-    mean = sum(i * c for i, c in enumerate(hist)) / total
-    mark = probe if mean >= 118 else ig_brand_mark(target_width=round(spec.width * frac), red=False)
-    canvas.paste(mark, (x, y), mark)  # brand asset placement (paste-with-mask), not an image treatment
+    left = position == "BOTTOM_LEFT"
+    kage.place_kage_symbol(canvas, reserve_x=margin if left else spec.width - margin - reserve,
+                           bottom_y=spec.height - round(spec.height * spec.safe_bottom_frac) - margin, reserve_width=reserve,
+                           align="left" if left else "right")
     return 1
 
 
@@ -624,14 +623,14 @@ def _render_declared_once(
             if region.frame == "die_cut" and tile.mode == "RGBA" and tile.getchannel("A").getextrema()[0] < 250:
                 inset = Image.new("RGBA", (w, h), (0, 0, 0, 0))
                 inset.paste(tile, (pad, pad))
-                ring = Image.new("RGBA", (w, h), (244, 242, 236, 255))
+                ring = Image.new("RGBA", (w, h), (*MAT, 255))
                 base = Image.new("RGBA", (w, h), (0, 0, 0, 0))
                 base.paste(ring, (0, 0), _die_cut_outline(inset.getchannel("A"), max(3, pad)))
                 base.paste(inset, (0, 0), inset)
                 tile = base
             elif pad:
                 matted = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-                paper = Image.new("RGBA", (w, h), (244, 242, 236, 255))
+                paper = Image.new("RGBA", (w, h), (*MAT, 255))
                 matted.paste(paper, (0, 0), _torn_mask(w, h, max(4, pad)) if region.frame == "torn" else None)
                 matted.paste(tile.convert("RGB"), (pad, pad))
                 tile = matted
@@ -733,7 +732,7 @@ def _render_declared_once(
                 if tokens is None:
                     dropped.append("flow_diagram_without_sequence")
                     continue
-                _draw_flow(draw, tokens, x0, y0, w, h, W=W, accent=accent_default, dark_bg=dark_bg)
+                _draw_flow(draw, tokens, x0, y0, w, h, W=W, accent=accent_default)
             ImageDraw.Draw(content_mask).rectangle([x0, y0, x1, y1], fill=255)
             layers += 1
         elif region.kind == "text":

@@ -327,7 +327,9 @@ def test_brand_assets_and_colours_stay_renderer_owned() -> None:
         LayoutRegion.model_validate({**fam._t(0.1, 0.1, 0.5, 0.2), "tone": "#ff0000"})
     with pytest.raises(ValueError):
         InstagramSlideLayout.model_validate({**fam._layout([fam._t(0.1, 0.1, 0.5, 0.2)]), "palette": "custom"})
-    assert set(PALETTES) == {"brand", "culture", "neo"} and PALETTES["brand"][0] == PALETTES["brand"][1]
+    from services import instagram_kage_brand as kage
+
+    assert set(PALETTES) == {"brand", "culture", "neo"} and PALETTES["brand"] == (kage.ACCENT, kage.MIST)  # KAGE: one accent + a neutral
     import services.instagram_declarative_layout as renderer
 
-    assert "ig_brand_mark" in Path(renderer.__file__).read_text(encoding="utf-8")  # the canonical mark, never redrawn
+    assert "place_kage_symbol" in Path(renderer.__file__).read_text(encoding="utf-8")  # the canonical K, never redrawn

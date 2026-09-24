@@ -140,7 +140,8 @@ def test_die_cut_outline_is_drawn_around_a_real_alpha_cutout_only() -> None:
     a = _run(plain, "Заголовок", {"obj": _LOGO})[1]
     b = _run(cut, "Заголовок", {"obj": _LOGO})[1]
     assert a is not None and b is not None
-    paper = (244, 242, 236)
+    from services.instagram_kage_brand import LIGHT as paper  # the KAGE mat colour
+
     light_px = lambda im: sum(1 for px in im.crop((80, 100, 700, 700)).getdata() if px == paper)  # noqa: E731
     assert light_px(a.image) == 0 and light_px(b.image) > 500  # the white sticker outline exists only with die_cut
 

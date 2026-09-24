@@ -13,7 +13,8 @@ from dataclasses import dataclass
 from PIL import Image, ImageDraw, ImageFilter
 
 from services import instagram_design_tokens as tok
-from services.instagram_visual_profiles import ProfileSpec, ig_brand_mark, ig_font
+from services.instagram_kage_brand import place_kage_symbol
+from services.instagram_visual_profiles import ProfileSpec, ig_font
 
 
 class ImageOrientation(str, enum.Enum):
@@ -236,16 +237,15 @@ def mark_reserve_width(spec: ProfileSpec, *, compact: bool = False) -> int:
 
 
 def place_brand_mark(canvas: Image.Image, spec: ProfileSpec, *, compact: bool = False) -> int:
-    """Composites the ONE canonical NNJ mark into the bottom-right safe corner and returns the
-    visible-mark count (always 1) so callers can populate `LayoutResult.visible_brand_mark_count`
-    truthfully instead of hardcoding it."""
+    """Composites the ONE KAGE K into the bottom-right safe corner (the reserved mark box, see
+    `mark_reserve_width`) - the dark-on-light variant over light pixels, the supplied light-on-dark one
+    otherwise - and returns the visible-mark count (always 1) so callers can populate
+    `LayoutResult.visible_brand_mark_count` truthfully instead of hardcoding it."""
     frac = tok.LOGO_WIDTH_FRAC_COMPACT if compact else tok.LOGO_WIDTH_FRAC_STANDARD
-    mark = ig_brand_mark(target_width=round(spec.width * frac), red=True)
+    reserve = round(spec.width * frac)
     margin = round(spec.width * tok.LOGO_MARGIN_FRAC)
     bottom_safe = round(spec.height * spec.safe_bottom_frac)
-    x = spec.width - margin - mark.width
-    y = spec.height - bottom_safe - margin - mark.height
-    canvas.alpha_composite(mark, (x, y))
+    place_kage_symbol(canvas, reserve_x=spec.width - margin - reserve, bottom_y=spec.height - bottom_safe - margin, reserve_width=reserve)
     return 1
 
 
@@ -272,7 +272,7 @@ def draw_corner_brackets(canvas: Image.Image, spec: ProfileSpec, *, top: bool = 
 
 def draw_kicker_chip(canvas: Image.Image, *, x: float, y: float, text: str, accent: bool = False) -> tuple[int, int]:
     """A small rounded-rect metadata chip (category / BREAKING indicator). Returns (width, height)
-    actually drawn so callers can lay out what follows. `accent=True` -> filled NNJ red (BREAKING /
+    actually drawn so callers can lay out what follows. `accent=True` -> filled KAGE accent (BREAKING /
     emphasis); otherwise a quiet outlined chip (standard NEWS category metadata)."""
     draw = ImageDraw.Draw(canvas, "RGBA")
     role = tok.TYPE_KICKER_ACCENT if accent else tok.TYPE_KICKER

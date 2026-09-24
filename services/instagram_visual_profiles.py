@@ -5,11 +5,9 @@ asset resolution point for the Instagram renderer.
 Deliberately independent of `services/brand_renderer.py` (the Founder-approved, FROZEN Telegram V8
 renderer) - this module imports nothing from it and it imports nothing from here
 (TELEGRAM_V8_RUNTIME_CHANGED=false). It reuses the SAME bundled Fira Sans Condensed files
-(assets/brand/fonts/, SIL OFL 1.1) and the SAME canonical NNJ mark rasterizer
-(services/nnj_master_news_mark.py::rasterize_nnj_mark) - both are brand-neutral, already-approved
-assets shared across every NINJA surface, not Telegram-renderer internals. No new font/asset
-dependency is introduced (section 8's own "no new external font dependency without explicit
-justification").
+(assets/brand/fonts/, SIL OFL 1.1). The visible brand mark is Instagram's own KAGE K symbol
+(services/instagram_kage_brand.py, assets/brand/kage/) - the shared NNJ mark rasterizer is no longer
+used by Instagram and stays untouched for Telegram.
 
 Instagram's own platform geometry (not Telegram's, not invented from a Telegram card resized):
   PORTRAIT_FEED   1080x1350 (4:5)   - Instagram's maximum-height feed post, the platform's own
@@ -25,7 +23,6 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image, ImageFont
@@ -116,11 +113,9 @@ def ig_font(size: int, weight: str = "regular") -> ImageFont.FreeTypeFont:
     return font
 
 
-@lru_cache(maxsize=4)
-def ig_brand_mark(*, target_width: int, red: bool = True) -> Image.Image:
-    """The ONE canonical NNJ mark, reused read-only from the shared, brand-neutral rasterizer -
-    never generatively redrawn (section 7). Cached (the underlying SVG parse + rasterize is pure
-    and deterministic)."""
-    from services.nnj_master_news_mark import rasterize_nnj_mark
+def ig_brand_mark(*, target_width: int, on_light: bool = False) -> Image.Image:
+    """The ONE canonical KAGE K symbol (founder-approved geometry, never redrawn): dark planes for a
+    light surface, the supplied light planes for a dark one."""
+    from services.instagram_kage_brand import kage_symbol
 
-    return rasterize_nnj_mark(target_width=target_width, red=red)
+    return kage_symbol(target_width=target_width, on_light=on_light)

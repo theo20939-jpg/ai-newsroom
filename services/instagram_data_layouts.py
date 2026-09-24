@@ -114,7 +114,7 @@ def _draw_series_chart(
 
 
 def render_data_layout(
-    *, spec: ProfileSpec, kicker: str, metric_value: str, metric_unit: str | None, metric_label: str,
+    *, spec: ProfileSpec, kicker: str | None, metric_value: str, metric_unit: str | None, metric_label: str,
     context: str | None, series: list[tuple[str, float]] | None, package_identity: str,
 ) -> LayoutResult:
     variant = select_data_variant(series)
@@ -128,8 +128,11 @@ def render_data_layout(
     regions: list[TextRegionSpec] = []
 
     top_y = round(spec.height * spec.safe_top_frac) + margin
-    cw, ch = draw_kicker_chip(canvas, x=margin, y=top_y, text=kicker)
-    kicker_bottom = top_y + ch + round(spec.height * 0.035)
+    if kicker:  # KAGE: no brand-name chip - the K mark is the slide's one brand signature
+        _, ch = draw_kicker_chip(canvas, x=margin, y=top_y, text=kicker)
+        kicker_bottom = top_y + ch + round(spec.height * 0.035)
+    else:
+        kicker_bottom = top_y
     bottom_safe_px = round(spec.height * spec.safe_bottom_frac) + margin
 
     # --- measurement pass: know every block's real height BEFORE placing anything, so the whole

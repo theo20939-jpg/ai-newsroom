@@ -6,7 +6,7 @@ dimmed photo. Source media is only ever cropped, contained, repositioned or scal
 region - and every render records evidence proving its pixels were left untouched
 (`source_media_pixels_unaltered`, `overlay_operations_executed == 0`).
 
-Surfaces are LIGHT by default (paper / soft-tint), with NINJA's restrained red accent, typography
+Surfaces are LIGHT by default (paper / soft-tint), with KAGE's restrained violet accent, typography
 and grid carrying the identity - not a black rectangle with white copy. If text cannot stay
 readable directly on a photograph, the composition changes (media in its own region + clean text
 surface); the photograph is never darkened to make text fit.
@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from PIL import Image, ImageChops, ImageDraw
 
 from services import instagram_design_tokens as tok
+from services import instagram_kage_brand as kage
 from services.instagram_editorial_layouts import LayoutResult, TextRegionSpec
 from services.instagram_image_handling import build_detail_crop_field, fit_image_cover, mark_reserve_width, place_brand_mark
 from services.instagram_media_first import slide_has_visual
@@ -31,9 +32,9 @@ from services.instagram_text_fit import box4, fit_text_block, measure_block_heig
 from services.instagram_visual_profiles import ProfileSpec, ig_font
 
 # A second LIGHT surface (soft cool grey) - structural separation without a dark panel.
-SURFACE_SOFT = (233, 236, 241)
-MUTED_INK = (96, 101, 110)
-HAIRLINE = (208, 212, 219)
+SURFACE_SOFT = kage.LIGHT
+MUTED_INK = kage.STONE
+HAIRLINE = kage.MIST
 
 _CLOSING_ROLES = {"cta", "takeaway"}
 _STEP_RE = re.compile(r"^\s*(?:шаг|step)\s*(\d{1,2})\s*[.:—\-]?\s*(.*)$", re.IGNORECASE | re.DOTALL)
@@ -443,12 +444,12 @@ def _render_flow(spec, text, index, total, tokens: list[str]) -> LayoutResult:
         x = margin + i * (node_w + gap)
         last = i == len(tokens) - 1
         draw.rounded_rectangle([x, node_y, x + node_w, node_y + node_h], radius=18,
-                               fill=(*(tok.RED if last else SURFACE_SOFT), 255), outline=(*tok.RED, 255), width=3)
+                               fill=(*kage.STONE, 255), outline=(*(tok.RED if last else kage.STONE), 255), width=3)  # KAGE: violet only on the key node
         bbox = draw.textbbox((0, 0), token, font=font)
-        draw.text((x + (node_w - (bbox[2] - bbox[0])) / 2, node_y + (node_h - (bbox[3] - bbox[1])) / 2 - bbox[1]), token, font=font, fill=tok.WHITE if last else tok.INK)
+        draw.text((x + (node_w - (bbox[2] - bbox[0])) / 2, node_y + (node_h - (bbox[3] - bbox[1])) / 2 - bbox[1]), token, font=font, fill=tok.WHITE)
         if not last:
             cy = node_y + node_h // 2
-            draw.line([(x + node_w + 4, cy), (x + node_w + gap - 4, cy)], fill=(*tok.RED, 255), width=5)
+            draw.line([(x + node_w + 4, cy), (x + node_w + gap - 4, cy)], fill=(*kage.MIST, 255), width=5)
     text_top = node_y + node_h + round(spec.height * 0.06)
     avail = spec.height - round(spec.height * spec.safe_bottom_frac) - margin - text_top
     regions, clipped, _ = _draw_copy(canvas, spec, text, x=margin, y=text_top, width=_content_width(spec, margin), colour=tok.INK, max_frac=0.06, min_frac=0.03, max_height=avail)

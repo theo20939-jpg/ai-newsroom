@@ -5,23 +5,28 @@ HERE - no scattered magic numbers in the layout modules themselves.
 Independent of Telegram V8 (`services/brand_renderer.py` and friends remain untouched and
 unimported) - this is a fresh, Instagram-native token set, not a resize/reuse of Telegram's
 constants. Reuses only the brand-neutral shared assets already established in
-`services/instagram_visual_profiles.py` (bundled Fira Sans Condensed, the canonical NNJ mark)."""
+`services/instagram_visual_profiles.py` (bundled Fira Sans Condensed) and the Instagram KAGE brand
+layer (`services/instagram_kage_brand.py`: palette + K symbol) - every colour below is a KAGE role."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from services import instagram_kage_brand as kage
+
 # ---------------------------------------------------------------------------------------------
-# Palette - one small, deliberate set. Red is an ACCENT (kicker chips, rules, the brand mark),
-# never a full-canvas wash (section 1's own "not by adding more red" instruction).
+# Palette - the KAGE roles (near-monochrome). The violet ACCENT is small and precise (kicker bars, rules,
+# key numbers, outlines), never a surface. The historical names RED / RED_DEEP are kept so every
+# Instagram layout inherits the new identity without a scattered rewrite: they are the ACCENT role and
+# a neutral deep role now - there is no red left in the Instagram skin.
 # ---------------------------------------------------------------------------------------------
-INK = (10, 11, 13)              # near-black canvas/panel ground
-INK_RAISED = (20, 22, 26)       # a slightly lighter structural panel, for layered depth
-PAPER = (245, 246, 248)         # near-white, used sparingly (framed-variant margins)
-WHITE = (247, 248, 250)
-GREY_STRONG = (198, 202, 209)   # secondary copy on dark
-GREY_SOFT = (140, 145, 154)     # tertiary/metadata copy on dark
-RED = (218, 30, 38)             # NNJ red - accents only
-RED_DEEP = (140, 18, 24)        # a darker red for gradients/panels behind red kickers
+INK = kage.SHADOW               # near-black canvas/panel ground
+INK_RAISED = kage.GRAPHITE      # a slightly lighter structural panel, for layered depth
+PAPER = kage.LIGHT              # the one approved light surface
+WHITE = kage.LIGHT
+GREY_STRONG = kage.MIST         # secondary copy on dark
+GREY_SOFT = kage.MIST           # tertiary/metadata copy on dark
+RED = kage.ACCENT               # the accent role (was NNJ red)
+RED_DEEP = kage.STONE           # neutral deep role for tints/panels (was a deep red)
 
 # ---------------------------------------------------------------------------------------------
 # Spacing / margins - fractions of canvas WIDTH unless noted, so they scale across profiles.
@@ -52,7 +57,7 @@ class TypeRole:
 
 
 TYPE_KICKER = TypeRole(size_frac=0.032, weight="semibold", max_lines=1, color=GREY_STRONG)
-TYPE_KICKER_ACCENT = TypeRole(size_frac=0.032, weight="semibold", max_lines=1, color=WHITE)  # on a red chip
+TYPE_KICKER_ACCENT = TypeRole(size_frac=0.032, weight="semibold", max_lines=1, color=WHITE)  # on an accent chip
 TYPE_HEADLINE_L = TypeRole(size_frac=0.088, weight="black", max_lines=4, color=WHITE)
 TYPE_HEADLINE_M = TypeRole(size_frac=0.072, weight="black", max_lines=4, color=WHITE)
 TYPE_HEADLINE_S = TypeRole(size_frac=0.058, weight="black", max_lines=5, color=WHITE)
@@ -79,7 +84,7 @@ LOGO_MARGIN_FRAC = MARGIN_FRAC
 # ---------------------------------------------------------------------------------------------
 # Accent rules / geometry
 # ---------------------------------------------------------------------------------------------
-ACCENT_RULE_WIDTH_FRAC = 0.14      # a short red rule under a kicker/eyebrow
+ACCENT_RULE_WIDTH_FRAC = 0.14      # a short accent rule under a kicker/eyebrow
 ACCENT_RULE_THICKNESS_PX = 6
 CORNER_RADIUS_FRAC = 0.02          # rounded corners on chips/panels/frames
 
@@ -92,8 +97,8 @@ GRADIENT_BOTTOM_MAX_ALPHA = 235
 GRADIENT_TOP_HEIGHT_FRAC = 0.30
 GRADIENT_TOP_MAX_ALPHA = 200
 
-# BREAKING-specific: a stronger, redder top treatment (section 8 - "NINJA red as an ACCENT, not a
-# full cheap-looking overlay" - so this still eases to transparent, it is simply tinted).
+# BREAKING-specific: a stronger top treatment that still eases to transparent; tinted with the neutral
+# deep role (KAGE: no coloured wash).
 BREAKING_ACCENT_GRADIENT_HEIGHT_FRAC = 0.22
 BREAKING_ACCENT_GRADIENT_MAX_ALPHA = 190
 

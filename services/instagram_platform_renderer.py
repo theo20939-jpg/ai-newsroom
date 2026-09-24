@@ -66,9 +66,10 @@ def _content_identity(package: InstagramContentPackage, *, slide_index: int | No
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
 
-def _kicker_for(package: InstagramContentPackage) -> str:
-    """Only an audience-facing brand label; internal objectives must never become pixels."""
-    return "NINJA PULSE"
+def _kicker_for(package: InstagramContentPackage) -> str | None:
+    """The old audience-facing brand label ("NINJA PULSE") is gone: every Instagram slide already carries the ONE KAGE K mark, and
+    the KAGE wordmark is never typeset in the content font. Internal objectives must never become pixels either, so: no kicker."""
+    return None
 
 
 def _persist_render_trace(
