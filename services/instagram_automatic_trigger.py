@@ -507,6 +507,22 @@ _PHOTO_FUNCTIONS = ("hero", "detail", "evidence_photo", None, "none")
 _NON_PHOTO_FUNCTIONS = ("ui_screenshot", "result", "before_after", "concept")
 
 
+_GENERATION_OFF_NOTE = (
+    "RUNTIME CAPABILITY: image generation is OFF for this post - media_source 'generated' is NOT available and a generated slide "
+    "cannot be rendered. Every slide uses a listed SOURCE_SUITABLE subject (media_source 'source') or a substantive graphic "
+    "(media_source 'graphic': ui_frame, poll_cards, or flow_diagram with flow_steps). Never plan a generated slide."
+)
+
+
+def generated_media_available() -> bool:
+    """The runtime capability boundary: only a LIVE image-generation mode can put a generated picture on a slide."""
+    return settings.instagram_image_generation_mode == "live"
+
+
+def _generation_note() -> str:
+    return _GENERATED_OPTION_NOTE if generated_media_available() else _GENERATION_OFF_NOTE
+
+
 _GENERATED_OPTION_NOTE = (
     "GENERATED media is a first-class option for ANY slide: set media_source 'generated', write a concrete generation_brief (what the picture SHOWS) and let the layout use a "
     "media region with content_ref 'generated'. Every slide needs a meaningful visual: a suitable real subject, a GENERATED contextual visual, or a substantive graphic - "
@@ -595,7 +611,9 @@ def _carousel_media_note(*, source_image: Any, recap_bundle: InstagramRecapBundl
         for story in recap_bundle.stories:
             if not story.image_bytes:
                 lines.append(
-                    f"{story.key}: SOURCE_AVAILABLE: no. Plan a GENERATED contextual visual for this story (media_subject '{story.key}', media_source 'generated')."
+                    (f"{story.key}: SOURCE_AVAILABLE: no. Plan a GENERATED contextual visual for this story (media_subject '{story.key}', media_source 'generated')."
+                     if generated_media_available() else
+                     f"{story.key}: SOURCE_AVAILABLE: no. Give this story a substantive graphic story card (media_source 'graphic', media_subject '{story.key}').")
                     if media_first else
                     f"{story.key}: NO image for this story - use a graphic story card (dark_type_number_statement, interface_cards or light_utility_editorial)"
                 )
@@ -607,17 +625,17 @@ def _carousel_media_note(*, source_image: Any, recap_bundle: InstagramRecapBundl
                                                   suitable_override=False if story.key in vision_unsuitable else None))
             except (OSError, ValueError):
                 lines.append(f"{story.key}: image could not be profiled - treat as NO usable image")
-        return "\n".join(lines + ([_GENERATED_OPTION_NOTE] if media_first else []))
+        return "\n".join(lines + ([_generation_note()] if media_first else []))
     if source_image is not None:
         return (
             render_profile_lines(profile_asset(source_image, subject_key="source"), pool_size=1, allowed_functions="hero, detail, evidence_photo", include_suitability=media_first,
                                  suitable_override=False if "source" in vision_unsuitable else None)
-            + ("\n" + _GENERATED_OPTION_NOTE if media_first else "")
+            + ("\n" + _generation_note() if media_first else "")
             + "\nThe image may be used on several slides or several times on one slide with different crops. It is NOT a screenshot, a result image, "
               "a before/after or a concept visual: plan graphics for those."
         )
     if media_first:
-        return "SOURCE_AVAILABLE: no - no real image is available for this post. " + _GENERATED_OPTION_NOTE
+        return "SOURCE_AVAILABLE: no - no real image is available for this post. " + _generation_note()
     return ("no real image is available for this post: plan with the media-free families (dark_type_number_statement, interface_cards, "
             "light_utility_editorial); media regions cannot be used and no image may be assumed.")
 
@@ -890,6 +908,7 @@ async def evaluate_and_submit_instagram_opportunity(
             if format_decision.recommended_format is ContentFormat.CAROUSEL else ""
         ),
         media_first=media_first,
+        generated_media_available=generated_media_available(),
         kage_voice_context=load_kage_voice().render_context() if media_first else "",
         available_media_subjects=media_subjects[0],
         unsuitable_media_subjects=media_subjects[1],

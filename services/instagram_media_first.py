@@ -112,6 +112,7 @@ def assert_hook_contract(slides: list[Any], *, require_mechanic: bool = False) -
 
 def assert_media_first(
     slides: list[Any], *, available_subjects: set[str], unsuitable_subjects: set[str], evidence: list[str] | None = None,
+    generated_media_available: bool = True,
 ) -> None:
     """Raise MediaFirstContractError unless every slide has a meaningful visual idea that its own layout actually executes.
 
@@ -124,6 +125,10 @@ def assert_media_first(
         if source not in ("source", "generated", "graphic"):
             raise MediaFirstContractError(f"{where}: media_source must be source, generated or graphic (typographic-only slides are not allowed)")
         refs = media_refs(slide)
+        if source == "generated" and not generated_media_available:
+            # the runtime capability boundary (settings.instagram_image_generation_mode): a generated slide could never be rendered
+            raise MediaFirstContractError(f"{where}: image generation is off for this run - use media_source 'source' (a listed suitable "
+                                          f"subject) or 'graphic' (ui_frame, poll_cards or flow_diagram with flow_steps), never 'generated'")
         if source == "generated":
             generated += 1
             if len(str(_get(slide, "generation_brief") or "").strip()) < MIN_GENERATION_BRIEF_CHARS:

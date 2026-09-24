@@ -169,7 +169,8 @@ def test_a_flat_article_card_is_not_suitable_as_a_final_visual_but_a_photo_is() 
     assert profile_asset(_photo(), subject_key="source").suitable_for_final_visual is True
 
 
-def test_the_media_note_tells_the_model_source_available_vs_suitable_and_offers_generated() -> None:
+def test_the_media_note_tells_the_model_source_available_vs_suitable_and_offers_generated(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "instagram_image_generation_mode", "live")  # generated media is offered only when it can be rendered
     card_note = _carousel_media_note(source_image=_article_card(), recap_bundle=None, media_first=True)
     assert "SOURCE_AVAILABLE: yes" in card_note and "SOURCE_SUITABLE_FOR_FINAL_VISUAL: NO" in card_note and "GENERATED" in card_note
     assert "immersive_image_field: full-canvas" not in card_note  # an unsuitable card is never offered as an immersive field
@@ -178,6 +179,9 @@ def test_the_media_note_tells_the_model_source_available_vs_suitable_and_offers_
     none_note = _carousel_media_note(source_image=None, recap_bundle=None, media_first=True)
     assert "SOURCE_AVAILABLE: no" in none_note and "media-free families" not in none_note and "GENERATED" in none_note
     assert "media-free families" in _carousel_media_note(source_image=None, recap_bundle=None)  # v9.x note unchanged
+    monkeypatch.setattr(settings, "instagram_image_generation_mode", "off")  # the runtime boundary is told, never a GENERATED offer
+    off_note = _carousel_media_note(source_image=_photo(), recap_bundle=None, media_first=True)
+    assert "image generation is OFF" in off_note and "first-class option" not in off_note
     assert _carousel_media_subjects(source_image=_article_card(), recap_bundle=None) == (("source",), ("source",))
     assert _carousel_media_subjects(source_image=_photo(), recap_bundle=None) == (("source",), ())
 
@@ -578,7 +582,9 @@ async def test_live_trigger_never_ships_a_generated_slide_without_its_image_or_a
     off = await trigger.evaluate_and_submit_instagram_opportunity(
         db_session, AsyncMock(), opportunity=_news_opportunity(), opportunity_summary="s", gateway=RoutingFakeGateway(_live_output()),
         prompt_repository=FilePromptRepository(_PROMPTS), phase_a_enabled=True)
-    assert off.reason == "generation_off"  # fail closed: no render, no delivery
+    # fail closed, now one step earlier: with generation off the Director's generated slide breaks the media-first contract (the
+    # capability boundary), so nothing reaches media execution, render or delivery
+    assert off.reason == "creative_director_failed:MediaFirstContractError"
     bare = _live_output()
     bare["slides"][1] = _slide_dict("evidence", "Пустой слайд", "graphic", [_r("accent", 0.08, 0.5, 0.2, 0.01, accent_type="rule_h"), _text(y=0.56)])
     typographic = await trigger.evaluate_and_submit_instagram_opportunity(

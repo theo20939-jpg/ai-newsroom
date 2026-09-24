@@ -271,6 +271,8 @@ class CreativeDirectorInput:
     # Phase B.6: the shared KAGE voice (rendered from docs/brand/kage_voice_v1.md - never copied into a prompt) and the media facts the media-first
     # contract is checked against: which subject keys are listed, and which of those are NOT suitable as a final visual (article / text cards).
     media_first: bool = False  # the caller runs the media-first + KAGE-voice contract (prompt v10) for this request
+    # the runtime capability boundary: False when this run cannot produce generated images (instagram_image_generation_mode != "live")
+    generated_media_available: bool = True
     kage_voice_context: str = ""
     available_media_subjects: tuple = ()
     unsuitable_media_subjects: tuple = ()
@@ -695,6 +697,7 @@ def _validate_carousel_output(
             list(creative.slides), available_subjects=set(director_input.available_media_subjects),
             unsuitable_subjects=set(director_input.unsuitable_media_subjects),
             evidence=[*director_input.allowed_evidence, director_input.opportunity_summary],
+            generated_media_available=director_input.generated_media_available,
         )
         assert_hook_contract(list(creative.slides), require_mechanic=_CAROUSEL_PROMPT_VERSION in HOOK_MECHANIC_CAROUSEL_VERSIONS)
         assert_hook_is_short(creative.slides[0].slide_copy)

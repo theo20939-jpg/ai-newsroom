@@ -133,12 +133,10 @@ class InstagramEvidencePackage:
         return tuple(s for s in self.sources if s.source_type in (OFFICIAL_DOC, STORED_BODY) and s.text)
 
     def director_evidence(self) -> list[str]:
-        """What the Director may cite: the premise, then verbatim STEP / FACT / LIMITATION lines with their source, then the media
-        truth. Each line is quoted verbatim by the Director's evidence_used, so it stays short."""
-        lines = [self.premise]
-        for item in (*self.steps, *self.facts, *self.limitations):
-            host = urlparse(item.source_url).netloc.removeprefix("www.") if item.source_url else item.source_type.lower()
-            lines.append(f"{item.kind} ({host}): {item.text}")
+        """What the Director may cite: the premise, then the verbatim STEP / FACT / LIMITATION texts, then the media truth. Each item is
+        EXACTLY the source text, because the Director's evidence_used must quote an item verbatim (assert_evidence_grounded); the
+        provenance (source URL / type) and the STEP / FACT / LIMITATION kind stay in the package itself, never glued onto the text."""
+        lines = [self.premise] + [item.text for item in (*self.steps, *self.facts, *self.limitations)]
         lines.append("SOURCE MEDIA: " + (f"{self.media.width}x{self.media.height} source image available" if self.media.status == AVAILABLE
                                          else "NONE - do not plan a source-image-dependent layout"))
         return list(dict.fromkeys(lines))

@@ -25,7 +25,7 @@ from services.weekly_recap_selection import WeeklyRecapCandidate
 logger = logging.getLogger(__name__)
 
 MIN_RECAP_STORIES = 4
-MAX_RECAP_STORIES = 6
+MAX_RECAP_STORIES = 8  # the weekly editor's product contract is 5-8 stories; a carousel carries hook + 8 stories + closing = 10 slides
 _MIN_IMAGE_SIDE = 256
 
 
@@ -128,13 +128,18 @@ async def build_instagram_recap_bundle(
     session: Any, *, selected: Sequence[WeeklyRecapCandidate],
 ) -> InstagramRecapBundle | None:
     """`None` when fewer than MIN_RECAP_STORIES stories are supplied (a recap needs a real set)."""
-    pool = list(selected)[:MAX_RECAP_STORIES]
+    pool = list(selected)
+    if len(pool) > MAX_RECAP_STORIES:
+        # never a silent slice: an accepted pick is never discarded downstream - a selection outside the contract gets no recap
+        logger.error("instagram_recap_bundle_over_contract", extra={"selected": len(pool), "max": MAX_RECAP_STORIES})
+        return None
     if len(pool) < MIN_RECAP_STORIES:
         return None
     resolved: list[tuple[WeeklyRecapCandidate, Any, bytes | None, str | None]] = []
     for candidate in pool:
         event = await session.get(NewsEvent, candidate.representative_event_id)
         if event is None:
+            logger.error("instagram_recap_story_event_missing", extra={"story_id": str(candidate.story_id)})
             continue
         data, ref = await _story_media(session, event.id)
         resolved.append((candidate, event, data, ref))

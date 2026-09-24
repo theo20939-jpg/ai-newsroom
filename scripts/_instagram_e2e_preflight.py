@@ -85,16 +85,16 @@ def main() -> None:
     calls["phase_a_decisions"] += 1
     base += gym_w
     expected += gym_t
-    # the weekly recap: one decision + one Creative Director over ALL story evidence; vision per recap story image (up to 6 in the bundle)
+    # the weekly recap: one decision + one Creative Director over ALL story evidence; one vision check per recap story image (all of them)
     recap_ev = [line for r in recap for line in evidence_lines(r)[:4]]
     r_dw, r_dt = decision(recap_ev, "Weekly recap")
     r_cw, r_ct = creative(sum(len(x) for x in recap_ev))
     calls["phase_a_decisions"] += 1
     calls["creative_director"] += 1
     calls["creative_director_existing_retry_max"] += 1
-    calls["vision"] += 6
-    base += r_dw + r_cw + vision_worst * 6
-    expected += r_dt + r_ct + vision_worst * 3
+    calls["vision"] += len(recap)
+    base += r_dw + r_cw + vision_worst * len(recap)
+    expected += r_dt + r_ct + vision_worst * len(recap) / 2
     retry += r_cw
     q = Decimal("0.01")
     report = {"model_priced": MODEL, "calls": calls, "provider_calls_base": calls["phase_a_decisions"] + calls["creative_director"] + calls["vision"],

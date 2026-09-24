@@ -265,3 +265,16 @@ def test_selection_modules_never_read_the_downstream_package():
     root = Path(__file__).resolve().parent.parent / "services"
     for module in ("instagram_feed_product.py", "instagram_feed_planner.py", "instagram_weekly_recap.py", "instagram_weekly_recap_editor.py"):
         assert "instagram_evidence_package" not in (root / module).read_text(encoding="utf-8"), module
+
+
+def test_every_line_the_director_receives_survives_the_real_grounding_check_when_quoted_verbatim():
+    """E2E 2026-09-25: provenance glued onto the text ('STEP (host): ...') made the Director's verbatim quotes fail
+    assert_evidence_grounded on every post. The Director gets the exact source text; provenance stays in the package."""
+    from services.instagram_creative_director import assert_evidence_grounded
+
+    package = _pkg("ai_hack", "How to Disable Gemini in Gmail and Google Docs", _src(WIRED))
+    evidence = package.director_evidence()
+    quoted = [s.text for s in package.steps] + [f.text for f in package.facts]
+    assert quoted and all(q in evidence for q in quoted)
+    assert_evidence_grounded(quoted, evidence)  # raises on any mismatch
+    assert package.steps[0].source_url == "https://www.wired.com/story/x"  # provenance kept in the package
