@@ -7,6 +7,7 @@ no scheduling. A story with no usable stored image simply has no asset - the exe
 THAT slide a deliberate graphic fallback; another story's image is never substituted."""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from io import BytesIO
 from typing import Any, Sequence
@@ -20,6 +21,8 @@ from database.models.news_event import NewsEvent
 from schemas.workflow import WorkflowType
 from services.image_persistence import get_editorial_image_candidates, read_candidate_bytes
 from services.weekly_recap_selection import WeeklyRecapCandidate
+
+logger = logging.getLogger(__name__)
 
 MIN_RECAP_STORIES = 4
 MAX_RECAP_STORIES = 6
@@ -89,6 +92,38 @@ async def _story_media(session: Any, event_id: UUID) -> tuple[bytes | None, str 
     return None, None
 
 
+_MAX_STORY_BODY_EVENTS = 12
+
+
+async def _story_bodies(session: Any, story_id: Any, representative: Any) -> tuple[list[str], list[tuple[str, str]]]:
+    """(headlines, (ref, body)) of the story's CONFIRMED members (origin + update / supporting / semantic-duplicate links - never an
+    observability-only link): stored bodies and trusted acquired article text, cleaned on the fly. The recap package then keeps only
+    the bodies that talk about the selected premise - the same Story id is not evidence of relevance."""
+    from database.models.story_link import NewsEventStoryLink
+    from services.article_acquisition import get_effective_acquisition
+    from services.evidence_package import TRUSTED_FULL_ARTICLE_STATUSES
+    from services.instagram_evidence_package import clean_body
+    from services.instagram_feed_planner import CONFIRMED_MATCH_TYPES
+
+    events = [representative]
+    if story_id is not None and story_id != representative.id:
+        events += list((await session.execute(
+            select(NewsEvent).join(NewsEventStoryLink, NewsEventStoryLink.news_event_id == NewsEvent.id)
+            .where(NewsEventStoryLink.story_id == story_id, NewsEventStoryLink.match_type.in_(CONFIRMED_MATCH_TYPES),
+                   NewsEvent.id != representative.id)
+            .limit(_MAX_STORY_BODY_EVENTS)
+        )).scalars().all())
+    headlines = [e.title for e in events if e.title]
+    bodies: list[tuple[str, str]] = []
+    for e in events:
+        if e.content:
+            bodies.append((f"event:{e.id}:body", e.content))
+        acquisition = await get_effective_acquisition(session, e.id)
+        if acquisition is not None and acquisition.acquisition_status in TRUSTED_FULL_ARTICLE_STATUSES and acquisition.raw_extracted_text:
+            bodies.append((f"event:{e.id}:article", clean_body(acquisition.raw_extracted_text, e.title)))
+    return headlines, bodies
+
+
 async def build_instagram_recap_bundle(
     session: Any, *, selected: Sequence[WeeklyRecapCandidate],
 ) -> InstagramRecapBundle | None:
@@ -118,6 +153,16 @@ async def build_instagram_recap_bundle(
             .order_by(EditorialTask.updated_at.desc()).limit(1)
         )
         evidence = [f"[{key}] {event.title}"] + [f"[{key}] {fact}" for fact in _research_facts(task.workflow if task else None)]
+        # KAGE evidence package: a few verbatim lines from the story's own bodies, only those about its premise (never polluted bodies)
+        from services.instagram_evidence_package import RECAP_EXCERPTS_PER_STORY, build_recap_story_package
+
+        try:
+            headlines, bodies = await _story_bodies(session, candidate.story_id, event)
+        except Exception:  # enrichment is optional: without it the story keeps its headline + stored facts, never a polluted body
+            logger.warning("instagram_recap_story_bodies_unavailable", extra={"story_id": str(candidate.story_id)})
+            headlines, bodies = [event.title or ""], []
+        package = await build_recap_story_package(post_id=key, premise=event.title or "", headlines=headlines, bodies=bodies)
+        evidence += [f"[{key}] {item.text}" for item in package.facts[:RECAP_EXCERPTS_PER_STORY]]
         stories.append(RecapStory(
             key=key, story_id=str(candidate.story_id), event_id=str(event.id), title=event.title,
             evidence=evidence, image_bytes=data, source_ref=ref,

@@ -162,6 +162,12 @@ def resolve_evidence_references(claimed: list[str], allowed_evidence: list[str])
     return resolved
 _REEL_PROMPT_VERSION = "7"
 _EDITORIAL_DECISION_PROMPT_VERSION = "1"
+# Phase A output bound (2026-09-25): it used to send none, so the gateway priced the model's full 128k output (~$0.77 a call). Sized from
+# the schema, not from a budget: 15 strings capped at 3,800 characters in total + `evidence_used` quoting a whole evidence package (the
+# largest real one, 5-11 Aug 2026: 3,364 characters) + JSON ~ 7,600 characters ~ 3,800 tokens at a conservative 2 characters per token,
+# plus the model's default reasoning (the project's measured medium-reasoning call used 1,552 tokens; ~2x allowed) - about 15% above
+# that pathological maximum; a typical decision needs ~3k. Instagram Phase A decision call ONLY.
+_EDITORIAL_DECISION_MAX_TOKENS = 8000
 
 
 class CreativeDirectorUnavailableError(Exception):
@@ -459,6 +465,7 @@ async def generate_editorial_decision(
         ],
         response_mode="json_schema",
         response_schema=prompt.output_schema,
+        max_tokens=_EDITORIAL_DECISION_MAX_TOKENS,
     )
     runtime = RuntimeContext(
         task_id=uuid4(), event_id=uuid4(), capability_name=EDITORIAL_DECISION_PROMPT_NAME,
@@ -470,6 +477,8 @@ async def generate_editorial_decision(
         raise CreativeDirectorUnavailableError(f"gateway call failed: {exc}") from exc
     if outcome.error is not None:
         raise CreativeDirectorUnavailableError(str(outcome.error))
+    if outcome.response is not None and outcome.response.finish_reason == "length":  # first: a truncated answer has no structured output
+        raise CreativeDirectorUnavailableError(f"editorial decision truncated at max_tokens={_EDITORIAL_DECISION_MAX_TOKENS}")
     if outcome.response is None or outcome.response.structured_output is None:
         raise CreativeDirectorUnavailableError("no structured output returned")
     decision = InstagramEditorialDecision.model_validate(outcome.response.structured_output)

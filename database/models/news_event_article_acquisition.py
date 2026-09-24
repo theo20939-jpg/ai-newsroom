@@ -44,6 +44,7 @@ ACQUISITION_STATUS_REDIRECT_UNRESOLVED = "REDIRECT_UNRESOLVED"
 
 TRIGGERED_BY_CONTENT_GENERATION_SELECTED = "content_generation_selected"
 TRIGGERED_BY_STORY_UPDATE_REUSE = "story_update_reuse"
+TRIGGERED_BY_INSTAGRAM_SELECTED = "instagram_selected"  # a KAGE Instagram post already selected (services/instagram_evidence_package.py)
 
 
 class NewsEventArticleAcquisition(Base):

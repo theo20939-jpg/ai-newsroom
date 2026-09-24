@@ -7,6 +7,7 @@ file."""
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -49,6 +50,7 @@ class _FakeEventRow:
         self.url = None
         self.summary = None
         self.content = None
+        self.source_id = None
 
 
 def _feed_pool(monkeypatch: pytest.MonkeyPatch, ids, titles) -> None:
@@ -60,6 +62,9 @@ def _feed_pool(monkeypatch: pytest.MonkeyPatch, ids, titles) -> None:
     ]))
     monkeypatch.setattr(cc, "load_feed_evidence", AsyncMock(return_value={}))  # stage 2: no stored evidence in these fakes
     monkeypatch.setattr(cc, "mark_tried", lambda day, cid: None)
+    # the downstream evidence package (post-selection article / media acquisition) - no network in these tests
+    monkeypatch.setattr(cc, "build_daily_evidence_package", AsyncMock(return_value=SimpleNamespace(
+        quality="SUFFICIENT", why="stub", director_evidence=lambda: ["stub evidence"])))
 
 
 async def test_d_and_j_gate_gateway_none_is_a_complete_safe_no_op(monkeypatch: pytest.MonkeyPatch) -> None:

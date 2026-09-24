@@ -31,6 +31,8 @@ from database.models.editorial_task import EditorialTask, TaskStatus
 from database.models.news_event import NewsEvent
 from database.models.news_event_article_acquisition import NewsEventArticleAcquisition
 from database.models.news_source import NewsSource
+from services.instagram_evidence_package import BLOCKING as EVIDENCE_BLOCKING
+from services.instagram_evidence_package import build_daily_evidence_package
 from database.models.story_telegram_delivery import DeliveryStatus, DeliveryType
 from database.session import async_session_factory
 from schemas.editorial_route import EditorialDestination
@@ -1181,11 +1183,26 @@ async def _run_instagram_automatic_trigger(
                     .order_by(EditorialTask.updated_at.desc())
                     .limit(1)
                 )
-                facts = _extract_research_facts(na_task.workflow if na_task is not None else None)
-                if not facts:  # an Instagram-pool event the news pipeline never analysed: its stored evidence is what the Director reads
-                    stored = evidence.get(str(event_id), "")
-                    facts = [event_row.title or ""] + [part.strip() for part in stored.splitlines() if part.strip()][:4]
-                    facts = [fact[:800] for fact in facts if fact]
+                # KAGE evidence package (services/instagram_evidence_package.py): AFTER selection, the post's own article (or the article
+                # its Telegram post links), official docs it links and its source media - through the existing acquisition / image
+                # paths, under their existing modes. The Director reads verbatim, provenance-tagged lines; a post whose evidence would
+                # have to be invented (an AI_HACK with no step, a story with nothing beyond its headline) never reaches the Director.
+                # Stored NEWS_ANALYSIS facts, when they exist, are supporting evidence only - never required.
+                source_row = await session.get(NewsSource, event_row.source_id)
+                package = await build_daily_evidence_package(
+                    post_id=str(event_id), fmt=slot_format.value, title=event_row.title or "", url=event_row.url,
+                    source_type=getattr(getattr(source_row, "type", None), "value", "RSS"), source_name=getattr(source_row, "name", None),
+                    stored_body=event_row.content or event_row.summary, event=event_row, event_id=event_id, session=session,
+                    acquisition_enabled=settings.article_acquisition_mode != "off", media_mode=settings.image_intelligence_mode,
+                )
+                await session.commit()  # the acquisition / image rows the existing paths persisted
+                if package.quality == EVIDENCE_BLOCKING:
+                    logger.info("instagram_evidence_blocking", extra={
+                        "event_id": str(event_id), "format": slot_format.value, "why": package.why})
+                    continue
+                facts = package.director_evidence() + [
+                    fact[:800] for fact in _extract_research_facts(na_task.workflow if na_task is not None else None) if fact
+                ]
 
                 outcome = await evaluate_and_submit_instagram_candidate(
                     session, bot, event_id=str(event_id), event_title=event_row.title or "", treatment=treatment,

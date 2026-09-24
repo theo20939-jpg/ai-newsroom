@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -59,6 +60,9 @@ async def test_master_on_preserves_existing_news_lane_reachability(monkeypatch) 
     ]))
     monkeypatch.setattr(cc, "load_feed_evidence", AsyncMock(return_value={}))
     monkeypatch.setattr(cc, "mark_tried", lambda day, cid: None)
+    # the downstream evidence package (post-selection article / media acquisition) - no network in these tests
+    monkeypatch.setattr(cc, "build_daily_evidence_package", AsyncMock(return_value=SimpleNamespace(
+        quality="SUFFICIENT", why="stub", director_evidence=lambda: ["stub evidence"])))
     with patch.object(
         cc, "_classify_event_for_router_treatment", new=AsyncMock(side_effect=RuntimeError("reached"))
     ) as classify:
