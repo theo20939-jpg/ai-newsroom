@@ -121,6 +121,7 @@ from services.instagram_automatic_trigger import (
 from services.instagram_content_opportunity import ContentOpportunity, OpportunitySourceType
 from services.instagram_feed_planner import (
     load_feed_candidates,
+    load_feed_evidence,
     load_feed_usage,
     load_recent_event_ids,
     mark_tried,
@@ -128,7 +129,7 @@ from services.instagram_feed_planner import (
     select_weekly_recap_candidates,
     weekly_recap_identity,
 )
-from services.instagram_feed_product import DAILY_MAX_POSTS
+from services.instagram_feed_product import DAILY_MAX_POSTS, read_candidate, stage_one_shortlist
 from services.instagram_recap_bundle import build_instagram_recap_bundle
 from services.director_execution_service import run_instagram_growth_strategist
 
@@ -1146,10 +1147,13 @@ async def _run_instagram_automatic_trigger(
             usage = await load_feed_usage(session, now=now)
             pool = list(dict.fromkeys([*event_ids, *await load_recent_event_ids(session, now=now)]))
             feed_candidates = await load_feed_candidates(session, pool)
+            # stage 2: only the cheap-screen shortlist loads its strongest STORED source material (no fetch, no model call)
+            shortlist = stage_one_shortlist([(c, read_candidate(c)) for c in feed_candidates])
+            evidence = await load_feed_evidence(session, [UUID(c.id) for c, _ in shortlist])
     except Exception:
         logger.exception("instagram_feed_planning_failed")
         return report
-    _reads, slots = open_slots(feed_candidates, usage, day_key=day_key)
+    _reads, slots = open_slots(feed_candidates, usage, day_key=day_key, evidence=evidence)
     attempts = [(slot.format, UUID(candidate.id)) for slot in slots for candidate, _ in slot.shortlist][:_INSTAGRAM_TRIGGER_MAX_PER_CYCLE]
     filled: set[Any] = set()
     if not attempts:
@@ -1178,8 +1182,10 @@ async def _run_instagram_automatic_trigger(
                     .limit(1)
                 )
                 facts = _extract_research_facts(na_task.workflow if na_task is not None else None)
-                if not facts:  # an Instagram-pool event the news pipeline never analysed: its own headline and lead are the evidence
-                    facts = [fact for fact in (event_row.title, (event_row.summary or event_row.content or "")[:600]) if fact]
+                if not facts:  # an Instagram-pool event the news pipeline never analysed: its stored evidence is what the Director reads
+                    stored = evidence.get(str(event_id), "")
+                    facts = [event_row.title or ""] + [part.strip() for part in stored.splitlines() if part.strip()][:4]
+                    facts = [fact[:800] for fact in facts if fact]
 
                 outcome = await evaluate_and_submit_instagram_candidate(
                     session, bot, event_id=str(event_id), event_title=event_row.title or "", treatment=treatment,
@@ -1240,7 +1246,9 @@ async def _run_instagram_weekly_recap(
             usage = await load_feed_usage(session, now=now)
             if usage.recap_this_week or usage.today_total >= DAILY_MAX_POSTS:
                 return None
-            selected = await select_weekly_recap_candidates(session, now=now, used_story_ids=usage.daily_story_ids_this_week)
+            selected = await select_weekly_recap_candidates(
+                session, now=now, used_story_ids=usage.daily_story_ids_this_week, daily_titles=usage.daily_titles_this_week,
+            )
             bundle = await build_instagram_recap_bundle(session, selected=selected)
             if bundle is None:
                 logger.info("instagram_weekly_recap_not_enough_stories", extra={"selected": len(selected)})

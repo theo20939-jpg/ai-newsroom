@@ -45,6 +45,20 @@ async def test_master_on_preserves_existing_news_lane_reachability(monkeypatch) 
     async def session_factory():
         yield object()
 
+    # KAGE feed product: the lane plans from its own pool first - one real daily-format candidate, DB loaders stubbed
+    from uuid import uuid4
+
+    from services.instagram_feed_planner import FeedUsage
+    from services.instagram_feed_product import FeedCandidate
+
+    candidate_id = uuid4()
+    monkeypatch.setattr(cc, "load_feed_usage", AsyncMock(return_value=FeedUsage()))
+    monkeypatch.setattr(cc, "load_recent_event_ids", AsyncMock(return_value=[]))
+    monkeypatch.setattr(cc, "load_feed_candidates", AsyncMock(return_value=[
+        FeedCandidate(id=str(candidate_id), title="How to use Claude voice mode", source_name="Engadget")
+    ]))
+    monkeypatch.setattr(cc, "load_feed_evidence", AsyncMock(return_value={}))
+    monkeypatch.setattr(cc, "mark_tried", lambda day, cid: None)
     with patch.object(
         cc, "_classify_event_for_router_treatment", new=AsyncMock(side_effect=RuntimeError("reached"))
     ) as classify:

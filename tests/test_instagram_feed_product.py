@@ -24,7 +24,8 @@ from services.instagram_feed_product import (
     format_from_editorial_decision,
     plan_daily_slots,
     read_candidate,
-    select_weekly_recap,
+    read_with_evidence,
+    stage_one_shortlist,
 )
 
 
@@ -177,32 +178,6 @@ def test_the_planned_format_is_the_archetype_the_creative_director_generates(kin
         assert ARCHETYPE_BY_FORMAT[fmt] == archetype
 
 
-def test_the_weekly_recap_is_broad_skips_daily_stories_and_small_stories():
-    daily = _pair("Physicist Rigged His Pet Hamster's Wheel to Strava. It Runs Far Every Night", coverage=9)
-    pool = [
-        _pair("Demis Hassabis drops DeepMind CEO role to become Chair and focus on AGI", coverage=12),
-        _pair("OpenAI is giving ChatGPT free users unlimited text chats", coverage=8),
-        _pair("Samsung confirms Galaxy Z Fold 8’s record-breaking sales numbers", coverage=7),
-        _pair("Telegram CEO says extortionist planted illegal content that triggered App Store removal", coverage=6),
-        _pair("Some tiny AI model update nobody covered", coverage=1),
-        _pair("eBay reports Q2 revenue up 15% YoY to $3.13B", coverage=4),  # business needs twice the coverage
-        _pair("Anthropic AI created fake profiles and impersonated people in attempted hack", coverage=5),
-        _pair("Meta claims its own AI also hacked into a third-party service during testing", coverage=5),
-        daily,
-    ]
-    picked = select_weekly_recap(pool, used_daily_ids={daily[0].id})
-    titles = [c.title for c, _, _ in picked]
-    categories = {cat for _, _, cat in picked}
-    assert {"AI", "GADGET"} <= categories
-    assert daily[0].title not in titles and "Some tiny AI model update nobody covered" not in titles
-    assert not any("eBay" in t for t in titles)
-    assert sum("hack" in t for t in titles) <= 1  # a wave of AI incidents is one story of the week
-
-
-def test_a_weekly_recap_needs_a_real_set():
-    assert select_weekly_recap([_pair("OpenAI is giving ChatGPT free users unlimited text chats", coverage=8)]) == []
-
-
 def test_one_recap_identity_per_iso_week():
     from datetime import datetime, timezone
 
@@ -296,3 +271,69 @@ async def test_a_director_decision_that_disagrees_leaves_the_slot_empty_before_g
         prompt_repository=object(), phase_a_enabled=True, required_feed_format=planned,
     )
     assert outcome.accepted is False and outcome.reason.startswith("feed_format_mismatch:")
+
+
+# --- stage 2: the shortlist read again with its stored evidence ---------------------------------------------------------------
+
+
+def _cand(title: str, source: str = "CNET", source_type: str = "RSS", summary: str = ""):
+    return FeedCandidate(id=str(uuid4()), title=title, summary=summary, source_name=source, source_type=source_type)
+
+
+def test_an_ai_tool_only_in_the_lead_never_makes_a_strong_hack():
+    # a column titled "... how to live" whose lead talks about AI is not a method for the reader
+    read = read_candidate(_cand("Mark Zuckerberg doesn’t understand how to live", summary="The Meta CEO's AI manifesto ..."))
+    assert read.format is FeedFormat.AI_HACK and not read.strong
+
+
+def test_the_body_can_supply_the_ai_feature_a_hack_headline_does_not_name():
+    candidate = _cand("How to Turn Your Favorite Pet Photos Into Cute iPhone Emoji in 4 Easy Steps")
+    first = read_candidate(candidate)
+    assert not first.strong  # the headline never names the AI feature
+    body = "Genmoji uses Apple Intelligence. First, open the Messages app, tap the emoji button, then type a description of your pet."
+    final = read_with_evidence(candidate, first, body)
+    assert final.format is FeedFormat.AI_HACK and final.strong and "stored evidence" in final.reason
+
+
+def test_a_passing_mention_of_ai_in_the_body_is_not_a_method():
+    candidate = _cand("A developer got Word 1.1a from 1990 to run on Windows 11 - try it yourself")
+    body = "Longing for Word without all the bells, whistles, and AI slop? One developer managed to coax Word 1.1a to run."
+    assert not read_with_evidence(candidate, read_candidate(candidate), body).strong
+
+
+def test_a_security_headline_is_never_upgraded():
+    candidate = _cand("Хакеры превратили навыки для ИИ-агентов в оружие — вредоносные пакеты скачали 1,7 млн раз", source="3DNews")
+    body = "Вредоносные навыки для ChatGPT и Claude распространялись через каталог. Откройте настройки ..."
+    final = read_with_evidence(candidate, read_candidate(candidate), body)
+    assert not (final.strong and final.format in (FeedFormat.MEME_TREND, FeedFormat.AI_HACK))
+
+
+def test_an_ordinary_headline_over_absurd_ai_behaviour_becomes_a_trend():
+    candidate = _cand("An AI assistant and a Sydney gym's booking website", source="BBC Technology")  # plain news wording
+    body = "An AI agent asked to book a pilates class hacked the gym's booking system and kicked another member off the waitlist."
+    final = read_with_evidence(candidate, read_candidate(candidate), body)
+    assert final.format is FeedFormat.MEME_TREND and final.strong
+
+
+def test_evidence_never_changes_a_strong_read_or_a_rejected_one():
+    strong = _cand("How to Disable Gemini in Gmail and Google Docs", source="WIRED AI")
+    first = read_candidate(strong)
+    assert read_with_evidence(strong, first, "Security testing in a sandbox by researchers ...").format is first.format
+    tag = _cand("ciflow/trunk/192514: [UPDATE] Update", source="PyTorch Releases")
+    assert read_with_evidence(tag, read_candidate(tag), "How to use ChatGPT: open the app ...").format is FeedFormat.REJECT
+
+
+def test_only_a_small_shortlist_loads_evidence():
+    candidates = [_cand(f"How to use ChatGPT feature number {n} for work") for n in range(20)]
+    candidates += [_cand(f"Samsung phone story {n} with Galaxy news") for n in range(20)]
+    shortlist = stage_one_shortlist([(c, read_candidate(c)) for c in candidates])
+    assert 0 < len(shortlist) <= 3 * 6 + 4
+
+
+def test_stage_two_plans_only_the_shortlist():
+    hack = _cand("How to Turn Your Favorite Pet Photos Into Cute iPhone Emoji in 4 Easy Steps")
+    evidence = {hack.id: "Genmoji uses Apple Intelligence. Open the Messages app, tap the emoji button, type a description."}
+    _, plans = open_slots([hack], FeedUsage(), day_key=f"test-{uuid4()}", evidence=evidence)
+    assert [p.format for p in plans] == [FeedFormat.AI_HACK]
+    _, plans_without = open_slots([hack], FeedUsage(), day_key=f"test-{uuid4()}")
+    assert plans_without == []  # the b9733c2 headline read alone misses it

@@ -38,8 +38,6 @@ DAILY_MAX_POSTS = 2
 DAILY_MAX_PER_FORMAT = {FeedFormat.AI_HACK: 1, FeedFormat.MEME_TREND: 1, FeedFormat.NEWS_INSIGHT: 1}
 WEEKLY_MAX_NEWS_INSIGHT = 1
 DAILY_SHORTLIST_PER_FORMAT = 3  # how many candidates a slot may try (each try is one Director decision) before it stays empty
-WEEKLY_RECAP_MAX_STORIES = 8
-WEEKLY_RECAP_MIN_STORIES = 3
 
 # the Creative Director archetype each daily format is generated as (services.instagram_creative_director.derive_content_archetype)
 ARCHETYPE_BY_FORMAT = {FeedFormat.AI_HACK: "ai_hack", FeedFormat.MEME_TREND: "trend_generative", FeedFormat.NEWS_INSIGHT: "news_insight"}
@@ -226,21 +224,87 @@ def read_candidate(candidate: FeedCandidate) -> FeedRead:
                     min(3.0, math.log2(max(1, candidate.coverage)) + 0.1))
     if "ai_misbehaviour" in ks:
         return read(FeedFormat.MEME_TREND, True, "absurd AI behaviour in ordinary life - a story people send", 2.6)
-    if "instruction" in ks and "ai_tool" in ks and "business" not in ks:
+    ai_in_headline = _has(_AI_TOOL, title)
+    if "instruction" in ks and ai_in_headline and "business" not in ks:
         return read(FeedFormat.AI_HACK, True, "an AI method / tool the reader can try now",
                     2.5 + 0.4 * ("measured" in ks) + 0.2 * ("mainstream_tool" in ks) + 0.2 * ("explicit_howto" in ks))
+    if "instruction" in ks and "ai_tool" in ks and "business" not in ks:
+        # the tool is only in the lead ("...how to live" over an AI essay): a candidate for stage 2, never a slot on its own
+        return read(FeedFormat.AI_HACK, False, "a how-to whose AI side is not in the headline - needs its stored evidence", 0.9)
     if "oddity" in ks and ks & {"tech", "gadget", "ai_tool"} and not ks & {"business", "security"}:
         return read(FeedFormat.MEME_TREND, True, "a strange / funny tech or internet-culture premise", 2.3 + 0.2 * ("culture_source" in ks))
     if "evergreen" in ks and "ai_tool" in ks and "business" not in ks:
         return read(FeedFormat.NEWS_INSIGHT, True, "an evergreen explanation / principle about AI", 1.5)
     if "instruction" in ks and "business" not in ks:
         return read(FeedFormat.AI_HACK, False, "a how-to without an AI tool", 0.8)
-    if "oddity" in ks and "business" not in ks:
+    if "oddity" in ks and not ks & {"business", "security"}:
         return read(FeedFormat.MEME_TREND, False, "an oddity outside tech", 0.5)
     if ks & {"tech", "ai_tool", "gadget"}:
         return read(FeedFormat.WEEKLY_NEWS, False, "ordinary tech / AI news - weekly recap material at most, never a daily post",
                     min(3.0, math.log2(max(1, candidate.coverage)) + 0.1))
     return read(FeedFormat.REJECT, False, "outside the account's world (not AI / tech / gadgets / internet culture)", 0.0)
+
+
+# --- stage 2: the shortlist read again with its strongest stored evidence -----------------------------------------------------------
+STAGE1_PER_FORMAT = 6  # cheap-screened candidates per daily format that get their stored evidence loaded
+STAGE1_NEWS_PROBES = 4  # the widest-covered ordinary headlines: a bizarre premise can hide behind a plain headline
+EVIDENCE_CHARS = 1500
+
+# the body tells the READER to do something with a tool (the method the headline only hints at)
+_BODY_METHOD = _rx(r"\bstep \d\b", r"\bfirst,? (open|go to|tap)\b", r"\b(open|tap|select|choose|type|paste|enter) (the|your|a)\b",
+                   r"\bgo to settings\b", r"\bprompt\b", r"\bshortcut\b", r"\bhere.s how\b", r"\bhow to\b",
+                   r"\bшаг \d", r"\b(откройте|нажмите|выберите|введите|вставьте|перейдите)\b", r"\bпромпт", r"\bинструкци")
+
+
+# a body upgrade needs a NAMED AI tool or feature - a passing "AI" in an article about something else is not the method
+_NAMED_AI_TOOL = _rx(r"\bchatgpt\b", r"\bclaude\b", r"\bgemini\b", r"\bcopilot\b", r"\bcodex\b", r"\bcursor\b", r"\bmidjourney\b",
+                     r"\bflux\b", r"\bsora\b", r"\bperplexity\b", r"\bgenmoji\b", r"\bimage playground\b", r"\bapple intelligence\b",
+                     r"\bgalaxy ai\b", r"\bnotebooklm\b", r"\bgrok\b", r"\bdeepseek\b", r"\bqwen\b", r"\bkimi\b", r"\bollama\b",
+                     r"\bwhisper\b", r"\bllm\b", r"\bgpt[- ]?\d", r"\bнейросет", r"\bчат-?бот")
+
+
+def stage_one_shortlist(reads: Sequence[tuple[FeedCandidate, FeedRead]]) -> list[tuple[FeedCandidate, FeedRead]]:
+    """The few candidates worth loading evidence for: the top daily-format reads (strong or weak - a weak read may only lack what the
+    body carries) and a handful of the widest-covered ordinary headlines. Everything else never leaves the cheap screen."""
+    picked: list[tuple[FeedCandidate, FeedRead]] = []
+    for fmt in DAILY_FORMATS:
+        ranked = sorted((r for r in reads if r[1].format is fmt), key=lambda r: (not r[1].strong, -r[1].rank))
+        picked.extend(ranked[:STAGE1_PER_FORMAT])
+    news = sorted((r for r in reads if r[1].format is FeedFormat.WEEKLY_NEWS and "business" not in r[1].kinds),
+                  key=lambda r: -r[0].coverage)
+    picked.extend(news[:STAGE1_NEWS_PROBES])
+    return picked
+
+
+def read_with_evidence(candidate: FeedCandidate, first: FeedRead, evidence: str) -> FeedRead:
+    """Stage 2: the same product read, now with the candidate's stored source material (article text, source body, sibling
+    coverage of the same Story, research facts). The headline still decides what the item is NOT (a tag, a promo, business news);
+    the body may supply what the headline lacks, or reveal that a 'hack' story is a security incident."""
+    if first.format is FeedFormat.REJECT or not evidence.strip():
+        return first
+    body = " ".join(evidence.split())[:EVIDENCE_CHARS]
+    if candidate.source_type.upper() == "TELEGRAM":
+        body = body[:400]  # a channel post bundles several stories after its first paragraph
+    has = {name: _has(pattern, body) for name, pattern in (
+        ("ai_tool", _AI_TOOL), ("method", _BODY_METHOD), ("misbehaviour", _AI_MISBEHAVIOUR), ("lab", _LAB_SAFETY),
+        ("industry", _AI_INDUSTRY), ("security", _SECURITY), ("tech", _TECH), ("gadget", _GADGET))}
+    kinds = tuple(dict.fromkeys([*first.kinds, *(f"body_{k}" for k, v in has.items() if v)]))
+
+    def upgrade(fmt: FeedFormat, reason: str, rank: float) -> FeedRead:
+        return FeedRead(fmt, True, kinds, f"{reason} (stored evidence)", round(rank, 3))
+
+    if first.strong:
+        return FeedRead(first.format, True, kinds, first.reason, first.rank)
+    if "security" in first.kinds:
+        return FeedRead(first.format, False, kinds, first.reason, first.rank)  # a security headline never becomes a hack or a meme
+    if first.format is FeedFormat.AI_HACK and _has(_NAMED_AI_TOOL, body) and has["method"]:
+        return upgrade(FeedFormat.AI_HACK, "a method the reader can try - the AI feature is named in the body, not the headline",
+                       first.rank + 1.7)
+    if first.format is FeedFormat.MEME_TREND and (has["tech"] or has["gadget"] or has["ai_tool"]) and not has["security"]:
+        return upgrade(FeedFormat.MEME_TREND, "a strange premise whose tech side is in the body", first.rank + 1.8)
+    if first.format is FeedFormat.WEEKLY_NEWS and has["misbehaviour"] and not (has["lab"] or has["industry"] or has["security"]):
+        return upgrade(FeedFormat.MEME_TREND, "an ordinary headline over absurd AI behaviour in ordinary life", 2.4)
+    return FeedRead(first.format, first.strong, kinds, first.reason, first.rank)
 
 
 def format_from_editorial_decision(decision: Mapping | None) -> FeedFormat | None:
@@ -324,47 +388,3 @@ def recap_category(candidate: FeedCandidate, read: FeedRead) -> str:
     if candidate.category.upper() in ("GADGETS", "HARDWARE"):
         return "GADGET"
     return "VIRAL" if "tech" in kinds else "OTHER"
-
-
-def select_weekly_recap(
-    reads: Sequence[tuple[FeedCandidate, FeedRead]], *, used_daily_ids: Iterable[str] = (), max_items: int = WEEKLY_RECAP_MAX_STORIES,
-    min_coverage: int = 3,
-) -> list[tuple[FeedCandidate, FeedRead, str]]:
-    """The week's strongest stories, AI + GADGET + VIRAL. "Worth telling someone who ignored tech news all week" is approximated by
-    how widely the story was carried (coverage) - a story few outlets picked up does not make the cut, however loud its headline.
-    Business-only stories (earnings, funding, lawsuits) need twice the coverage. Stories already used as a daily post are left out."""
-    used = set(used_daily_ids)
-    pool = []
-    for candidate, read in reads:
-        if candidate.id in used or read.format is FeedFormat.REJECT:
-            continue
-        need = min_coverage * (2 if "business" in read.kinds else 1)
-        if candidate.coverage < need:
-            continue
-        category = recap_category(candidate, read)
-        if category == "OTHER":
-            continue
-        pool.append((candidate, read, category))
-    pool.sort(key=lambda item: (-item[0].coverage, -item[1].rank))
-    caps = {"AI": max_items // 2, "GADGET": max_items // 3 + 1, "VIRAL": max_items // 3 + 1}
-    picked: list[tuple[FeedCandidate, FeedRead, str]] = []
-    counts = {k: 0 for k in caps}
-    for category in ("AI", "GADGET", "VIRAL"):  # breadth first: the strongest story of each category is always in, if it exists
-        best = next((item for item in pool if item[2] == category), None)
-        if best is not None:
-            picked.append(best)
-            counts[category] += 1
-    incident_theme = any("ai_misbehaviour" in item[1].kinds for item in picked)
-    for item in pool:
-        if len(picked) >= max_items:
-            break
-        if item in picked or counts[item[2]] >= caps[item[2]]:
-            continue
-        if "ai_misbehaviour" in item[1].kinds:  # a wave of AI incidents is ONE story of the week, not several slides
-            if incident_theme:
-                continue
-            incident_theme = True
-        picked.append(item)
-        counts[item[2]] += 1
-    picked.sort(key=lambda item: (-item[0].coverage, -item[1].rank))
-    return picked if len(picked) >= WEEKLY_RECAP_MIN_STORIES else []

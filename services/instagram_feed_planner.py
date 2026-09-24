@@ -5,8 +5,9 @@ shortlist of each OPEN slot (AI_HACK first) through the existing evaluate-and-su
 must agree with the planned format (`required_feed_format`), otherwise the candidate is dropped before any Creative Director call and the
 next one is tried; when the shortlist runs out, the slot stays empty. Ordinary news is never submitted as a daily post.
 
-Weekly: over the previous 7 days of Story Memory (coverage = Story.event_count), select the strongest AI / GADGET / VIRAL stories that
-were not already a daily post and submit them as ONE news-recap carousel. Runs only when `instagram_weekly_recap_enabled` is on and no
+Weekly: over the previous 7 days of production Story identity (confirmed membership, fragments consolidated with Story Memory's own
+match rule - services/instagram_weekly_recap.py), select what defined the week (AI / GADGET / VIRAL) that was not already a daily post
+and submit it as ONE news-recap carousel. Runs only when `instagram_weekly_recap_enabled` is on and no
 recap was delivered in the previous 7 days; this module picks no publishing time.
 
 No new table: today's counts come from `instagram_editorial_deliveries` (initial versions; HOLD / BLOCK never take a slot), the format
@@ -35,7 +36,8 @@ from services.instagram_feed_product import (
     FeedRead,
     plan_daily_slots,
     read_candidate,
-    select_weekly_recap,
+    read_with_evidence,
+    stage_one_shortlist,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,6 +55,7 @@ class FeedUsage:
     news_insight_this_week: int = 0
     recap_this_week: bool = False
     daily_story_ids_this_week: set[str] = field(default_factory=set)
+    daily_titles_this_week: list[str] = field(default_factory=list)
 
 
 def _archetype(snapshot: Any) -> str | None:
@@ -87,6 +90,9 @@ async def load_feed_usage(session: Any, *, now: datetime) -> FeedUsage:
             continue
         if row.source_story_id:
             usage.daily_story_ids_this_week.add(str(row.source_story_id))
+        director_input = row.package_snapshot.get("director_input") if isinstance(row.package_snapshot, dict) else None
+        if isinstance(director_input, dict) and director_input.get("opportunity_summary"):
+            usage.daily_titles_this_week.append(str(director_input["opportunity_summary"]))
         fmt = FORMAT_BY_ARCHETYPE.get(archetype or "")
         if fmt is FeedFormat.NEWS_INSIGHT:
             usage.news_insight_this_week += 1
@@ -116,7 +122,7 @@ async def load_feed_candidates(session: Any, event_ids: list[UUID]) -> list[Feed
     if not event_ids:
         return []
     rows = (await session.execute(
-        select(NewsEvent, NewsSource.name, NewsSource.type, Story.event_count)
+        select(NewsEvent, NewsSource.name, NewsSource.type, Story.event_count, Story.first_event_id, NewsEventStoryLink.match_type)
         .join(NewsSource, NewsSource.id == NewsEvent.source_id)
         .outerjoin(NewsEventStoryLink, NewsEventStoryLink.news_event_id == NewsEvent.id)
         .outerjoin(Story, Story.id == NewsEventStoryLink.story_id)
@@ -124,21 +130,85 @@ async def load_feed_candidates(session: Any, event_ids: list[UUID]) -> list[Feed
     )).all()
     seen: set[str] = set()
     candidates = []
-    for event, source_name, source_type, event_count in rows:
+    for event, source_name, source_type, event_count, first_event_id, match_type in rows:
         if str(event.id) in seen:
             continue
         seen.add(str(event.id))
+        # a strong UNCERTAIN_MATCH is linked to a story for observability only - it must not inherit that story's coverage
+        confirmed = first_event_id == event.id or match_type in CONFIRMED_MATCH_TYPES
         candidates.append(FeedCandidate(
             id=str(event.id), title=event.title or "", summary=(event.summary or event.content or "")[:600],
             source_name=source_name or "", source_type=getattr(source_type, "value", str(source_type or "")),
-            category=getattr(event.category, "value", str(event.category or "")), views=event.views_count, coverage=int(event_count or 1),
+            category=getattr(event.category, "value", str(event.category or "")), views=event.views_count,
+            coverage=int(event_count or 1) if confirmed else 1,
         ))
     return candidates
 
 
-def open_slots(candidates: list[FeedCandidate], usage: FeedUsage, *, day_key: str):
-    """Pure planning step over loaded candidates: today's open slots with their shortlists (already-tried candidates excluded)."""
+CONFIRMED_MATCH_TYPES = ("story_update", "supporting_source", "semantic_duplicate")
+
+
+async def load_feed_evidence(session: Any, event_ids: list[UUID]) -> dict[str, str]:
+    """The strongest STORED source material for a shortlist (no fetch, no model): the cleaned article text when article acquisition
+    kept it, the event's own stored body, its confirmed Story siblings' bodies, and research facts when a NEWS_ANALYSIS already ran.
+    NEWS_ANALYSIS is never required - it only adds what already exists."""
+    from database.models.editorial_task import EditorialTask, TaskStatus
+    from schemas.workflow import WorkflowType
+    from database.models.news_event_article_acquisition import NewsEventArticleAcquisition
+    from services.instagram_recap_bundle import _research_facts
+
+    if not event_ids:
+        return {}
+    events = {e.id: e for e in (await session.execute(select(NewsEvent).where(NewsEvent.id.in_(event_ids)))).scalars().all()}
+    acquisitions = {a.news_event_id: a for a in (await session.execute(
+        select(NewsEventArticleAcquisition).where(NewsEventArticleAcquisition.news_event_id.in_(event_ids))
+    )).scalars().all()}
+    links = {link.news_event_id: link for link in (await session.execute(
+        select(NewsEventStoryLink).where(NewsEventStoryLink.news_event_id.in_(event_ids))
+    )).scalars().all()}
+    story_ids = {link.story_id for link in links.values()}
+    siblings: dict[Any, list[str]] = {}
+    if story_ids:
+        for link, body in (await session.execute(
+            select(NewsEventStoryLink, NewsEvent.content).join(NewsEvent, NewsEvent.id == NewsEventStoryLink.news_event_id)
+            .where(NewsEventStoryLink.story_id.in_(story_ids), NewsEventStoryLink.match_type.in_(CONFIRMED_MATCH_TYPES))
+        )).all():
+            if body:
+                siblings.setdefault(link.story_id, []).append(body)
+    tasks = {}
+    for task in (await session.execute(
+        select(EditorialTask).where(
+            EditorialTask.event_id.in_(event_ids), EditorialTask.status == TaskStatus.COMPLETED,
+            EditorialTask.workflow["workflow_name"].as_string() == WorkflowType.NEWS_ANALYSIS.value,
+        )
+    )).scalars().all():
+        tasks[task.event_id] = task
+    out: dict[str, str] = {}
+    for event_id, event in events.items():
+        parts = []
+        acquisition = acquisitions.get(event_id)
+        if acquisition is not None and acquisition.cleaned_text:
+            parts.append(acquisition.cleaned_text)
+        if event.content:
+            parts.append(event.content)
+        link = links.get(event_id)
+        # siblings only through a confirmed membership (or the story's own origin) - never through an observability-only link
+        confirmed_link = link is not None and link.match_type in (*CONFIRMED_MATCH_TYPES, "new_story", "related_story")
+        if confirmed_link:
+            parts.extend(siblings.get(link.story_id, [])[:3])
+        task = tasks.get(event_id)
+        if task is not None:
+            parts.extend(_research_facts(task.workflow))
+        out[str(event_id)] = "\n".join(dict.fromkeys(p for p in parts if p and len(p) > 40))
+    return out
+
+
+def open_slots(candidates: list[FeedCandidate], usage: FeedUsage, *, day_key: str, evidence: dict[str, str] | None = None):
+    """Pure planning step over loaded candidates: today's open slots with their shortlists (already-tried candidates excluded).
+    With `evidence` (stage 2), only the cheap-screen shortlist is planned, each read again with its stored source material."""
     reads: list[tuple[FeedCandidate, FeedRead]] = [(c, read_candidate(c)) for c in candidates]
+    if evidence is not None:
+        reads = [(c, read_with_evidence(c, r, evidence.get(c.id, ""))) for c, r in stage_one_shortlist(reads)]
     usage_counts = {fmt: usage.today_by_format.get(fmt, 0) for fmt in ARCHETYPE_BY_FORMAT}
     # posts whose format is unknown (a SINGLE / REEL package) still count towards the hard daily maximum
     unknown = max(0, usage.today_total - sum(usage_counts.values()))
@@ -160,41 +230,46 @@ def weekly_recap_identity(now: datetime) -> str:
     return f"kage-weekly-news-recap-{year}-W{week:02d}"
 
 
-async def select_weekly_recap_candidates(session: Any, *, now: datetime, used_story_ids: set[str]):
-    """Story-level weekly selection: every Story touched in the previous 7 days, read at its representative headline, with
-    Story Memory's event_count as coverage. Returns `WeeklyRecapCandidate`s for `build_instagram_recap_bundle` (editorial order)."""
+async def select_weekly_recap_candidates(session: Any, *, now: datetime, used_story_ids: set[str], daily_titles: list[str] | None = None):
+    """The week's recap on PRODUCTION Story identity (services/instagram_weekly_recap.py): every Story touched in the previous 7 days
+    with its CONFIRMED members, plus each event that production linked only for observability (a strong UNCERTAIN_MATCH belongs to no
+    confirmed story - it is its own unit), consolidated with Story Memory's own confirmed-match rule, selected for "what defined the
+    week", minus this week's daily stories and premises. Returns `WeeklyRecapCandidate`s for `build_instagram_recap_bundle`."""
+    from services.instagram_weekly_recap import RecapStory, consolidate, select_weekly_recap_items
+    from services.text_normalization import is_google_news_provenance
     from services.weekly_recap_selection import WeeklyRecapCandidate
 
-    stories = (await session.execute(select(Story).where(Story.updated_at >= now - timedelta(days=7)))).scalars().all()
-    if not stories:
-        return []
-    events = {e.id: e for e in (await session.execute(
-        select(NewsEvent).where(NewsEvent.id.in_([s.first_event_id for s in stories]))
-    )).scalars().all()}
-    sources = {s.id: s for s in (await session.execute(
-        select(NewsSource).where(NewsSource.id.in_({e.source_id for e in events.values()}))
-    )).scalars().all()}
-    reads = []
-    by_id = {}
-    for story in stories:
-        event = events.get(story.first_event_id)
-        if event is None:
-            continue
-        source = sources.get(event.source_id)
-        candidate = FeedCandidate(
-            id=str(story.id), title=story.title or event.title or "", summary=(event.summary or "")[:600],
-            source_name=source.name if source else "", source_type=getattr(getattr(source, "type", None), "value", ""),
-            category=getattr(story.category, "value", str(story.category or "")), coverage=int(story.event_count or 1),
-        )
-        reads.append((candidate, read_candidate(candidate)))
-        by_id[candidate.id] = (story, event)
-    picked = select_weekly_recap(reads, used_daily_ids=used_story_ids)
+    week_start = now - timedelta(days=7)
+    rows = (await session.execute(
+        select(NewsEventStoryLink, NewsEvent, NewsSource, Story)
+        .join(NewsEvent, NewsEvent.id == NewsEventStoryLink.news_event_id)
+        .join(NewsSource, NewsSource.id == NewsEvent.source_id)
+        .join(Story, Story.id == NewsEventStoryLink.story_id)
+        .where(NewsEvent.collected_at >= week_start)
+    )).all()
+    units: dict[str, list[tuple[Any, Any]]] = {}
+    for link, event, source, story in rows:
+        confirmed = story.first_event_id == event.id or link.match_type in CONFIRMED_MATCH_TYPES
+        units.setdefault(str(story.id) if confirmed else f"event:{event.id}", []).append((event, source))
+    stories = []
+    representative: dict[str, Any] = {}
+    for unit_id, members in units.items():
+        members.sort(key=lambda m: m[0].collected_at)
+        stories.append(RecapStory(
+            story_id=unit_id, titles=tuple(e.title or "" for e, _ in members),
+            sources=frozenset(src.name for e, src in members if not is_google_news_provenance(e.url, src.url)),
+            first_seen=members[0][0].collected_at, category=getattr(members[0][0].category, "value", ""),
+        ))
+        representative[unit_id] = members[0][0]
+    picks = select_weekly_recap_items(consolidate(stories), daily_story_ids=used_story_ids, daily_titles=daily_titles or [])
     out = []
-    for candidate, read, category in picked:
-        story, event = by_id[candidate.id]
+    for pick in picks:
+        main = max(pick.item.stories, key=lambda s: len(s.sources))
+        event = representative[main.story_id]
+        story_uuid = UUID(main.story_id) if not main.story_id.startswith("event:") else event.id
         out.append(WeeklyRecapCandidate(
-            story_id=story.id, representative_event_id=event.id, relevance_tier=f"INSTAGRAM_WEEKLY_{category}", score=None,
-            significance=None, major_impact_override=False, company_key=None, entities=list(story.entities or []),
-            updated_at=story.updated_at, reason=read.reason, rank_score=float(candidate.coverage),
+            story_id=story_uuid, representative_event_id=event.id, relevance_tier=f"INSTAGRAM_WEEKLY_{pick.category}", score=None,
+            significance=None, major_impact_override=False, company_key=None, entities=list(pick.item.evidence),
+            updated_at=event.collected_at, reason=pick.why, rank_score=float(pick.score),
         ))
     return out

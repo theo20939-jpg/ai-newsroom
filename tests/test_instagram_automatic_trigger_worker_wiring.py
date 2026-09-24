@@ -58,6 +58,7 @@ def _feed_pool(monkeypatch: pytest.MonkeyPatch, ids, titles) -> None:
     monkeypatch.setattr(cc, "load_feed_candidates", AsyncMock(return_value=[
         FeedCandidate(id=str(i), title=t, source_name="Engadget") for i, t in zip(ids, titles)
     ]))
+    monkeypatch.setattr(cc, "load_feed_evidence", AsyncMock(return_value={}))  # stage 2: no stored evidence in these fakes
     monkeypatch.setattr(cc, "mark_tried", lambda day, cid: None)
 
 
