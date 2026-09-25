@@ -1,0 +1,36 @@
+{
+ "record": {
+  "post": "weekly_recap",
+  "kind": "VISION",
+  "model": "gpt-5.6-luna",
+  "max_tokens": 400,
+  "worst_case_usd": "0.00281800",
+  "status": "OK",
+  "finish_reason": "stop",
+  "input_tokens": 1158,
+  "output_tokens": 54,
+  "reasoning_tokens": 0,
+  "cost_usd": "0.001482"
+ },
+ "response": {
+  "text": "{\"image_kind\":\"photograph\",\"baked_in_text_prominent\":false,\"primary_media_suitable\":true,\"reason\":\"A close-up photograph shows a smiling man in glasses seated in a red chair against a dark background.\"}",
+  "structured_output": {
+   "image_kind": "photograph",
+   "baked_in_text_prominent": false,
+   "primary_media_suitable": true,
+   "reason": "A close-up photograph shows a smiling man in glasses seated in a red chair against a dark background."
+  },
+  "tool_calls": null,
+  "artifacts": null,
+  "finish_reason": "stop",
+  "model_used": "gpt-5.6-luna",
+  "usage": {
+   "input_tokens": 1158,
+   "output_tokens": 54,
+   "units": null,
+   "unit_type": null,
+   "cached_input_tokens": 0,
+   "reasoning_tokens": 0
+  }
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "model_priced": "gpt-5.6-luna",
+ "calls": {
+  "phase_a_decisions": 3,
+  "creative_director": 3,
+  "creative_director_existing_retry_max": 3,
+  "vision": 9,
+  "image_generation": 0
+ },
+ "provider_calls_base": 15,
+ "phase_a_max_tokens": 8000,
+ "creative_director_max_tokens": 16000,
+ "base_worst_case_usd": "0.53",
+ "worst_case_with_existing_retry_usd": "0.86",
+ "expected_usd": "0.23",
+ "rows": [
+  {
+   "post": "2026-08-05 #2 meme_trend",
+   "evidence_quality": "STRONG",
+   "decision_worst": "0.0543",
+   "creative_worst": "0.1090",
+   "vision_worst": "0.0039"
+  },
+  {
+   "post": "2026-08-06 #1 ai_hack",
+   "evidence_quality": "STRONG",
+   "decision_worst": "0.0552",
+   "creative_worst": "0.1099",
+   "vision_worst": "0.0039"
+  }
+ ]
+}

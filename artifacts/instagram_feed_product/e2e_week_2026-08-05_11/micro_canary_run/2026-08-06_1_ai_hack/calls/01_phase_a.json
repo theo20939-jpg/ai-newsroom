@@ -1,0 +1,59 @@
+{
+ "record": {
+  "post": "2026-08-06_1_ai_hack",
+  "kind": "PHASE_A",
+  "model": "gpt-5.6-luna",
+  "max_tokens": 8000,
+  "worst_case_usd": "0.05049600",
+  "status": "OK",
+  "finish_reason": "stop",
+  "input_tokens": 2457,
+  "output_tokens": 944,
+  "reasoning_tokens": 336,
+  "cost_usd": "0.008121"
+ },
+ "response": {
+  "text": "{\"source_summary\":\"Adobe запустила интеграцию Adobe for ChatGPT: более 70 инструментов Adobe доступны прямо в ChatGPT, включая Work и Codex.\",\"opportunity_type\":\"NEWS\",\"why_now\":\"Интеграция уже доступна в ChatGPT web и app и переносит привычные creative-задачи в интерфейс чата.\",\"audience_value\":\"Пользователь получает понятную карту сценариев: где в ChatGPT искать возможности Adobe для фото, видео, маркетинговых материалов и PDF — без переключения между отдельными приложениями.\",\"angle\":\"Практический гайд: какие задачи можно решать через Adobe for ChatGPT и в каких рабочих пространствах это доступно.\",\"angle_intent\":\"HOW_TO\",\"topic\":\"Adobe for ChatGPT: 70+ creative-инструментов внутри Work и Codex\",\"purpose\":\"VALUE\",\"origin\":\"NEWS\",\"recommended_format\":\"carousel\",\"format_reason\":\"Карусель позволит разложить по слайдам доступность интеграции, поддерживаемые сценарии и важное ограничение по лимитам использования.\",\"creative_direction\":\"Первый слайд — контраст «70+ инструментов Adobe внутри чата». Далее: Work и Codex; редактирование фото; campaign videos; marketing assets; polished PDFs; финальный слайд — пометка, что у free account holders есть usage limits. Визуально — интерфейсный tech-editorial стиль, без изображения NINJA-продукта.\",\"product_connection\":null,\"trend_rationale\":null,\"supplementary_story_idea\":\"Короткая Story с опросом: какая задача важнее — фото, видео, маркетинговые материалы или PDF?\",\"evidence_used\":[\"You can use 70+ Adobe tools without leaving ChatGPT now - here's how\",\"Adobe is expanding its partnership with OpenAI’s ChatGPT through a new integration: an Adobe for ChatGPT plugin.\",\"Adobe's new plugin works both in Work and Codex, and is available today in ChatGPT.\",\"ZDNET’s key takeaways Adobe’s new plugin for ChatGPT puts the company’s tools directly in Work and Codex.\",\"The new tool lets users access Adobe-quality creative tools via the interface many have become accustomed to for everything from search to coding.\",\"The plugin works in both Work and Codex, and is available today in the ChatGPT web and app.\",\"Drawing on more than 70 tools across Adobe’s creative and productivity suites, the Adobe plugin in ChatGPT supports a wide range of workflows, from editing photos and creating campaign videos to designing marketing assets and generating polished PDFs — all through rich, interactive experiences right in the flow of the conversation, Adobe said in the release.\",\"While ZDNET has yet to test the plugin, Adobe said it unifies and builds on the company’s existing ChatGPT apps, which include Photoshop, Express, and Acrobat.\",\"Free account holders, for example, will have usage limits.\"],\"coverage_plan\":null}",
+  "structured_output": {
+   "source_summary": "Adobe запустила интеграцию Adobe for ChatGPT: более 70 инструментов Adobe доступны прямо в ChatGPT, включая Work и Codex.",
+   "opportunity_type": "NEWS",
+   "why_now": "Интеграция уже доступна в ChatGPT web и app и переносит привычные creative-задачи в интерфейс чата.",
+   "audience_value": "Пользователь получает понятную карту сценариев: где в ChatGPT искать возможности Adobe для фото, видео, маркетинговых материалов и PDF — без переключения между отдельными приложениями.",
+   "angle": "Практический гайд: какие задачи можно решать через Adobe for ChatGPT и в каких рабочих пространствах это доступно.",
+   "angle_intent": "HOW_TO",
+   "topic": "Adobe for ChatGPT: 70+ creative-инструментов внутри Work и Codex",
+   "purpose": "VALUE",
+   "origin": "NEWS",
+   "recommended_format": "carousel",
+   "format_reason": "Карусель позволит разложить по слайдам доступность интеграции, поддерживаемые сценарии и важное ограничение по лимитам использования.",
+   "creative_direction": "Первый слайд — контраст «70+ инструментов Adobe внутри чата». Далее: Work и Codex; редактирование фото; campaign videos; marketing assets; polished PDFs; финальный слайд — пометка, что у free account holders есть usage limits. Визуально — интерфейсный tech-editorial стиль, без изображения NINJA-продукта.",
+   "product_connection": null,
+   "trend_rationale": null,
+   "supplementary_story_idea": "Короткая Story с опросом: какая задача важнее — фото, видео, маркетинговые материалы или PDF?",
+   "evidence_used": [
+    "You can use 70+ Adobe tools without leaving ChatGPT now - here's how",
+    "Adobe is expanding its partnership with OpenAI’s ChatGPT through a new integration: an Adobe for ChatGPT plugin.",
+    "Adobe's new plugin works both in Work and Codex, and is available today in ChatGPT.",
+    "ZDNET’s key takeaways Adobe’s new plugin for ChatGPT puts the company’s tools directly in Work and Codex.",
+    "The new tool lets users access Adobe-quality creative tools via the interface many have become accustomed to for everything from search to coding.",
+    "The plugin works in both Work and Codex, and is available today in the ChatGPT web and app.",
+    "Drawing on more than 70 tools across Adobe’s creative and productivity suites, the Adobe plugin in ChatGPT supports a wide range of workflows, from editing photos and creating campaign videos to designing marketing assets and generating polished PDFs — all through rich, interactive experiences right in the flow of the conversation, Adobe said in the release.",
+    "While ZDNET has yet to test the plugin, Adobe said it unifies and builds on the company’s existing ChatGPT apps, which include Photoshop, Express, and Acrobat.",
+    "Free account holders, for example, will have usage limits."
+   ],
+   "coverage_plan": null
+  },
+  "tool_calls": null,
+  "artifacts": null,
+  "finish_reason": "stop",
+  "model_used": "gpt-5.6-luna",
+  "usage": {
+   "input_tokens": 2457,
+   "output_tokens": 944,
+   "units": null,
+   "unit_type": null,
+   "cached_input_tokens": 1242,
+   "reasoning_tokens": 336
+  }
+ }
+}

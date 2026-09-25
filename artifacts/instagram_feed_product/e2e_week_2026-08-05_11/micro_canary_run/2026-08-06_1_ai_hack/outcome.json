@@ -1,0 +1,32 @@
+{
+ "key": "2026-08-06_1_ai_hack",
+ "day": "2026-08-06",
+ "slot": 1,
+ "format": "ai_hack",
+ "title": "You can use 70+ Adobe tools without leaving ChatGPT now - here's how",
+ "source": "ZDNET",
+ "evidence": "THIN",
+ "evidence_why": "a single step - not a workflow",
+ "source_media": "AVAILABLE",
+ "reason": "editorial_decision_failed:UngroundedEvidenceError",
+ "stage": "PHASE A",
+ "gate": null,
+ "delivery": null,
+ "calls": [
+  {
+   "post": "2026-08-06_1_ai_hack",
+   "kind": "PHASE_A",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 8000,
+   "worst_case_usd": "0.05049600",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 2457,
+   "output_tokens": 944,
+   "reasoning_tokens": 336,
+   "cost_usd": "0.008121"
+  }
+ ],
+ "slides": 0,
+ "spent_so_far": "0.033792"
+}

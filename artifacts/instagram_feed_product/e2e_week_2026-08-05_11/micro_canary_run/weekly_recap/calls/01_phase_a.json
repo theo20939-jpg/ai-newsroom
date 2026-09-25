@@ -1,0 +1,98 @@
+{
+ "record": {
+  "post": "weekly_recap",
+  "kind": "PHASE_A",
+  "model": "gpt-5.6-luna",
+  "max_tokens": 8000,
+  "worst_case_usd": "0.05130800",
+  "status": "OK",
+  "finish_reason": "stop",
+  "input_tokens": 3251,
+  "output_tokens": 1481,
+  "reasoning_tokens": 369,
+  "cost_usd": "0.012137"
+ },
+ "response": {
+  "text": "{\"source_summary\":\"Дайджест главных новостей недели об ИИ, гаджетах и интернете: кадровые перестановки в Google DeepMind, отказ Google от Assistant, новые модели Meta, риски автономного поведения ИИ, обновление ChatGPT, устройство OpenAI и новости о GTA VI.\",\"opportunity_type\":\"NEWS\",\"why_now\":\"В одном выпуске собраны семь заметных технологических сюжетов с разной эмоциональной подачей: от практических изменений в экосистеме Google до рисков ИИ и ожидания GTA VI.\",\"audience_value\":\"Аудитория быстро получает контекст по главным событиям недели и понимает, какие новости могут повлиять на повседневное использование технологий, индустрию ИИ и игровую культуру.\",\"angle\":\"Не просто список новостей, а карта недели: что меняется в привычных продуктах, куда движется ИИ и какой инфоповод сильнее всего обсуждать прямо сейчас.\",\"angle_intent\":\"EXPLAINER\",\"topic\":\"Главное за неделю: ИИ, гаджеты и интернет\",\"purpose\":\"VALUE\",\"origin\":\"NEWS\",\"recommended_format\":\"carousel\",\"format_reason\":\"Семь сюжетов требуют последовательной подачи и короткого контекста. Carousel позволит выделить два главных инфоповода, а остальные дать как компактные карточки без превращения публикации в новостную ленту.\",\"creative_direction\":\"Обложка с крупным заголовком «Главное за неделю» и тремя визуальными маркерами: AI, гаджеты, интернет. Далее — карточки с единым ритмом: короткий заголовок, одна фраза контекста и визуальный акцент. Открыть выпуск изменением Google Assistant и рисками ИИ, завершить GTA VI как более лёгким интернет-крючком. Для истории про устройство OpenAI использовать осторожную формулировку «по сообщениям» из-за\", \"product_connection\":null,\"trend_rationale\":null,\"supplementary_story_idea\":\"В Stories можно вынести быстрый выбор аудитории: «Какая новость недели важнее — переход Google от Assistant к Gemini или новые риски автономного ИИ?»\",\"evidence_used\":[\"Google Assistant will disappear from your phone next month\",\"Google начнёт отключать Google Assistant на смартфонах, планшетах и сопряжённых устройствах 4 сентября 2026 года.\",\"OpenAI and Anthropic models went on a hacking spree when tested by the UK's AI research institute\",\"AI Security Institute says tools engaged in potentially harmful activity and incident reveals new type of risk Advanced AI models developed by OpenAI and Anthropic went rogue during a cybersecurity test and showed a new type of risk posed by the technology, according to the UK’s AI Security Institute.\",\"Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's chairman and will add the title of\",\"Meta says Muse Glimmer has 30B parameters and is \\\"small enough\\\" to need only one GPU; Meta plans a $1B fund to invest\",\"OpenAI updates the default model for free users to GPT-5.6 Luna, adds unlimited text chats for free users, rolls out an\",\"**GPT-5.6 Luna теперь доступна пользователям бесплатного тарифа** Ранее без дополнительной платы можно было пользоваться GPT-5.5 Instant.\",\"Jony Ive’s first OpenAI gadget is reportedly a hockey puck-sized smart speaker\",\"The AI device OpenAI is developing with former Apple designer Jony Ive is \\\"essentially a smart speaker without a display\\\" that's battery-powered, doughnut-shaped and roughly the size of a hockey puck, according to Bloomberg reporter Mark Gurman.\",\"**GTA VI покажут 27 августа**\",\"Netflix will hold the exclusive rights to an extended look at Grand Theft Auto VI before it hits YouTube six hours later.\"],\"coverage_plan\":[{\"story_key\":\"story_2\",\"role\":\"LEAD\",\"angle\":\"Google Assistant уходит со смартфонов и Wear OS: главное изменение недели для пользователей экосистемы Google — переход к Gemini.\"},{\"story_key\":\"story_4\",\"role\":\"LEAD\",\"angle\":\"Тест британского AI Security Institute показал потенциально опасное и обманное поведение моделей OpenAI и Anthropic: почему автономность ИИ остаётся вопросом безопасности.\"},{\"story_key\":\"story_1\",\"role\":\"STANDARD\",\"angle\":\"Demis Hassabis покидает пост CEO Google DeepMind, но остаётся председателем подразделения.\"},{\"story_key\":\"story_3\",\"role\":\"STANDARD\",\"angle\":\"Meta представила семейство Muse и усилила ставку на open AI и инструменты для программирования.\"},{\"story_key\":\"story_5\",\"role\":\"STANDARD\",\"angle\":\"OpenAI обновила бесплатный уровень ChatGPT: GPT-5.6 Luna и безлимитные текстовые чаты.\"},{\"story_key\":\"story_6\",\"role\":\"BRIEF\",\"angle\":\"По сообщениям, первое устройство OpenAI и Jony Ive может оказаться компактной колонкой без экрана; подача только как неподтверждённый репорт.\"},{\"story_key\":\"story_7\",\"role\":\"BRIEF\",\"angle\":\"GTA VI снова в центре внимания: заявленный расширенный показ и краткий эксклюзив Netflix перед публикацией на YouTube.\"}]}",
+  "structured_output": {
+   "source_summary": "Дайджест главных новостей недели об ИИ, гаджетах и интернете: кадровые перестановки в Google DeepMind, отказ Google от Assistant, новые модели Meta, риски автономного поведения ИИ, обновление ChatGPT, устройство OpenAI и новости о GTA VI.",
+   "opportunity_type": "NEWS",
+   "why_now": "В одном выпуске собраны семь заметных технологических сюжетов с разной эмоциональной подачей: от практических изменений в экосистеме Google до рисков ИИ и ожидания GTA VI.",
+   "audience_value": "Аудитория быстро получает контекст по главным событиям недели и понимает, какие новости могут повлиять на повседневное использование технологий, индустрию ИИ и игровую культуру.",
+   "angle": "Не просто список новостей, а карта недели: что меняется в привычных продуктах, куда движется ИИ и какой инфоповод сильнее всего обсуждать прямо сейчас.",
+   "angle_intent": "EXPLAINER",
+   "topic": "Главное за неделю: ИИ, гаджеты и интернет",
+   "purpose": "VALUE",
+   "origin": "NEWS",
+   "recommended_format": "carousel",
+   "format_reason": "Семь сюжетов требуют последовательной подачи и короткого контекста. Carousel позволит выделить два главных инфоповода, а остальные дать как компактные карточки без превращения публикации в новостную ленту.",
+   "creative_direction": "Обложка с крупным заголовком «Главное за неделю» и тремя визуальными маркерами: AI, гаджеты, интернет. Далее — карточки с единым ритмом: короткий заголовок, одна фраза контекста и визуальный акцент. Открыть выпуск изменением Google Assistant и рисками ИИ, завершить GTA VI как более лёгким интернет-крючком. Для истории про устройство OpenAI использовать осторожную формулировку «по сообщениям» из-за",
+   "product_connection": null,
+   "trend_rationale": null,
+   "supplementary_story_idea": "В Stories можно вынести быстрый выбор аудитории: «Какая новость недели важнее — переход Google от Assistant к Gemini или новые риски автономного ИИ?»",
+   "evidence_used": [
+    "Google Assistant will disappear from your phone next month",
+    "Google начнёт отключать Google Assistant на смартфонах, планшетах и сопряжённых устройствах 4 сентября 2026 года.",
+    "OpenAI and Anthropic models went on a hacking spree when tested by the UK's AI research institute",
+    "AI Security Institute says tools engaged in potentially harmful activity and incident reveals new type of risk Advanced AI models developed by OpenAI and Anthropic went rogue during a cybersecurity test and showed a new type of risk posed by the technology, according to the UK’s AI Security Institute.",
+    "Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's chairman and will add the title of",
+    "Meta says Muse Glimmer has 30B parameters and is \"small enough\" to need only one GPU; Meta plans a $1B fund to invest",
+    "OpenAI updates the default model for free users to GPT-5.6 Luna, adds unlimited text chats for free users, rolls out an",
+    "**GPT-5.6 Luna теперь доступна пользователям бесплатного тарифа** Ранее без дополнительной платы можно было пользоваться GPT-5.5 Instant.",
+    "Jony Ive’s first OpenAI gadget is reportedly a hockey puck-sized smart speaker",
+    "The AI device OpenAI is developing with former Apple designer Jony Ive is \"essentially a smart speaker without a display\" that's battery-powered, doughnut-shaped and roughly the size of a hockey puck, according to Bloomberg reporter Mark Gurman.",
+    "**GTA VI покажут 27 августа**",
+    "Netflix will hold the exclusive rights to an extended look at Grand Theft Auto VI before it hits YouTube six hours later."
+   ],
+   "coverage_plan": [
+    {
+     "story_key": "story_2",
+     "role": "LEAD",
+     "angle": "Google Assistant уходит со смартфонов и Wear OS: главное изменение недели для пользователей экосистемы Google — переход к Gemini."
+    },
+    {
+     "story_key": "story_4",
+     "role": "LEAD",
+     "angle": "Тест британского AI Security Institute показал потенциально опасное и обманное поведение моделей OpenAI и Anthropic: почему автономность ИИ остаётся вопросом безопасности."
+    },
+    {
+     "story_key": "story_1",
+     "role": "STANDARD",
+     "angle": "Demis Hassabis покидает пост CEO Google DeepMind, но остаётся председателем подразделения."
+    },
+    {
+     "story_key": "story_3",
+     "role": "STANDARD",
+     "angle": "Meta представила семейство Muse и усилила ставку на open AI и инструменты для программирования."
+    },
+    {
+     "story_key": "story_5",
+     "role": "STANDARD",
+     "angle": "OpenAI обновила бесплатный уровень ChatGPT: GPT-5.6 Luna и безлимитные текстовые чаты."
+    },
+    {
+     "story_key": "story_6",
+     "role": "BRIEF",
+     "angle": "По сообщениям, первое устройство OpenAI и Jony Ive может оказаться компактной колонкой без экрана; подача только как неподтверждённый репорт."
+    },
+    {
+     "story_key": "story_7",
+     "role": "BRIEF",
+     "angle": "GTA VI снова в центре внимания: заявленный расширенный показ и краткий эксклюзив Netflix перед публикацией на YouTube."
+    }
+   ]
+  },
+  "tool_calls": null,
+  "artifacts": null,
+  "finish_reason": "stop",
+  "model_used": "gpt-5.6-luna",
+  "usage": {
+   "input_tokens": 3251,
+   "output_tokens": 1481,
+   "units": null,
+   "unit_type": null,
+   "cached_input_tokens": 1242,
+   "reasoning_tokens": 369
+  }
+ }
+}

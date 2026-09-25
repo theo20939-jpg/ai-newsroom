@@ -1,0 +1,166 @@
+{
+ "schema_version": "v1",
+ "package_id": "ec36c79a-4032-4a2d-9b2b-f97e77d7ed73",
+ "platform": "instagram",
+ "account_key": "default",
+ "content_format": "single",
+ "caption": "Telegram-бот на DeepSeek: 460 целей — и ноль автономных взломов.\n\nНейросеть сама искала в интернете подходящие мишени, оценивала их, скачивала готовый код для атаки и пробовала его применить. Ничего не добившись, она самостоятельно решала, что цель бесперспективна, и уходила искать другую.\n\nЭту сессию целиком восстановили исследователи из Unit 42, подразделения Palo Alto Networks, и 30 июля опубликовали разбор.\n\nФреймворк дал агенту доступ к терминалу и возможность работать без надзора. Модель писала код, оценивала уязвимости и выбирала цели.\n\nИтог кампании: больше 460 целей под атакой и ноль систем, взломанных автономным контуром.",
+ "caption_is_draft": false,
+ "on_image_copy": "460 целей\n0 взломов\n\nTelegram-бот на DeepSeek",
+ "cta": null,
+ "hashtags": [],
+ "media_plan": {
+  "kind": "single",
+  "source_subject": "Telegram-бот на DeepSeek",
+  "visual_concept": "Минималистичный типографический пост с крупным «460» и «0», соединёнными стрелкой или жёстким разделителем. Под числовым контрастом — короткая подпись «Telegram-бот на DeepSeek». Визуальный тон сухой, точный, без образа всемогущего ИИ-хакера.",
+  "asset_requirements": [
+   "Типографический макет для одной публикации в Instagram.",
+   "Крупные числовые акценты «460» и «0», читаемые на экране смартфона.",
+   "Короткая подпись «Telegram-бот на DeepSeek» вторичным кеглем.",
+   "Использовать актуальные бренд-ассеты NINJA; не создавать логотип или текст средствами генерации изображения.",
+   "Сохранить высокий контраст и свободное поле вокруг числового сообщения."
+  ],
+  "creative_execution_plan": {
+   "main_idea": "Показать разрыв между количеством выбранных целей и фактическим результатом через один мгновенно считываемый контраст: «460 → 0».",
+   "focal_point": "Крупная пара чисел «460» и «0»; подпись уточняет, что речь идёт о Telegram-боте на DeepSeek.",
+   "media_strategy": "typographic",
+   "media_rationale": "Одного числового контраста достаточно, чтобы передать утверждённый угол. Изображение не должно превращать историю в визуальный образ всемогущего хакера.",
+   "composition_direction": "Вертикальная иерархия: сверху небольшой контекст, в центре крупное «460», затем стрелка или разделитель и ещё более контрастное «0», внизу короткая подпись о Telegram-боте на DeepSeek.",
+   "branding_treatment": "Небольшой актуальный брендинг NINJA в одном углу или в нижней служебной зоне, без центрального водяного знака и без реконструкции устаревшего логотипа.",
+   "visual_treatment": "Сдержанная контрастная палитра, крупная гротескная типографика, много свободного пространства и точечный акцент на нуле. Без generic dark futuristic technology и без декоративных изображений кода.",
+   "avoid_recent_treatment": null
+  },
+  "media_execution": {
+   "strategy": "typographic",
+   "status": "typographic",
+   "generation_cost_usd": null,
+   "generation_request_id": null,
+   "assets": [
+    {
+     "asset_key": "primary",
+     "media_mode": "TYPOGRAPHIC",
+     "status": "typographic",
+     "asset_ref": null,
+     "source_asset_ref": null,
+     "generated_asset_ref": null,
+     "generation_execution_id": null,
+     "provider_request_id": null,
+     "provider": null,
+     "model": null,
+     "generation_prompt": null,
+     "generation_prompt_sha256": null,
+     "size": null,
+     "quality": null,
+     "reserved_cost_usd": null,
+     "accounted_cost_usd": null,
+     "composition_intent": "Вертикальная иерархия: сверху небольшой контекст, в центре крупное «460», затем стрелка или разделитель и ещё более контрастное «0», внизу короткая подпись о Telegram-боте на DeepSeek.",
+     "focal_subject": "Крупная пара чисел «460» и «0»; подпись уточняет, что речь идёт о Telegram-боте на DeepSeek.",
+     "source_treatment": null,
+     "final_compositor_treatment": "deterministic_typography_canonical_logo_safe_zones",
+     "asset_identity": null
+    }
+   ]
+  },
+  "render_trace": {
+   "assets": [
+    {
+     "slide_index": null,
+     "creative_plan": {
+      "main_idea": "Показать разрыв между количеством выбранных целей и фактическим результатом через один мгновенно считываемый контраст: «460 → 0».",
+      "focal_point": "Крупная пара чисел «460» и «0»; подпись уточняет, что речь идёт о Telegram-боте на DeepSeek.",
+      "composition_direction": "Вертикальная иерархия: сверху небольшой контекст, в центре крупное «460», затем стрелка или разделитель и ещё более контрастное «0», внизу короткая подпись о Telegram-боте на DeepSeek.",
+      "visual_treatment": "Сдержанная контрастная палитра, крупная гротескная типографика, много свободного пространства и точечный акцент на нуле. Без generic dark futuristic technology и без декоративных изображений кода."
+     },
+     "render_interpretation": "typographic_focal",
+     "used_primitives": [
+      "field_background",
+      "background_typography",
+      "display_copy",
+      "brand_anchor"
+     ],
+     "source_media_treatment": "none",
+     "typography_treatment": "display_symbol_plus_supporting_copy",
+     "asset_key": "primary"
+    }
+   ]
+  }
+ },
+ "external_video_asset_ref": null,
+ "opportunity_id": "3f78b564-7b07-458d-bf53-e16533f12067",
+ "story_id": "3f78b564-7b07-458d-bf53-e16533f12067",
+ "trend_id": null,
+ "campaign_id": null,
+ "campaign_name": null,
+ "campaign_phase": null,
+ "approved_claims": [],
+ "restricted_claims": [],
+ "product_mention_allowed": false,
+ "director_evidence": {
+  "evidence": [
+   "460 целей, ноль автономных взломов: как Telegram-бот на DeepSeek подставил хозяина",
+   "Все остальное сделала нейросеть: нашла в интернете подходящие мишени, оценила их, скачала готовый код для атаки, попробовала его применить, ничего не добилась, самостоятельно решила, что цель бесперспективная, и ушла искать другую.",
+   "Эту сессию целиком восстановили исследователи из Unit 42, подразделения Palo Alto Networks, и 30 июля опубликовали разбор.",
+   "Итог кампании выглядит так: больше 460 целей под атакой и ноль систем, взломанных автономным контуром.",
+   "Некто под никами knaithe и KnYuan, кто, по оценке Unit 42, находится в китайском Чжухае, взял открытый агентный фреймворк Hermes Agent — обвязку, которая превращает языковую модель в исполнителя с руками, — и подключил к нему DeepSeek.",
+   "Фреймворк дал агенту доступ к терминалу, набор многоразовых навыков и возможность работать без надзора.",
+   "Модель отвечала за рассуждения — писала код, оценивала уязвимости, выбирала цели.",
+   "SOURCE MEDIA: 1200x630 source image available"
+  ],
+  "editorial_decision": {
+   "source_summary": "Разбор Unit 42 показывает: Telegram-бот на DeepSeek автономно искал цели, оценивал уязвимости и пытался атаковать системы, но после более чем 460 целей не добился ни одного взлома.",
+   "opportunity_type": "NEWS",
+   "why_now": "Есть сильный контраст между масштабом автономной активности и результатом: агент действовал без надзора, но итогом стали 460 целей и ноль взломанных систем. Это позволяет подать новость как реакцию на разрыв между образом «ИИ-хакера» и реальными возможностями автономного контура.",
+   "audience_value": "Помогает быстро понять, что наличие у модели доступа к терминалу, коду и выбору целей ещё не делает её эффективным автономным взломщиком.",
+   "angle": "460 целей, 0 взломов: ИИ уже умеет действовать сам, но автономный хакер из него пока не получился.",
+   "angle_intent": "REACTION",
+   "topic": "Автономные ИИ-агенты в кибератаках: масштаб действий против реальной эффективности",
+   "purpose": "REACH",
+   "origin": "NEWS",
+   "recommended_format": "single",
+   "format_reason": "Один контрастный тезис «460 → 0» полностью держит идею и лучше работает как мгновенная реакция, чем перегруженный разбор в карусели.",
+   "creative_direction": "Крупная типографика с визуальным столкновением «460 целей» и «0 взломов». Второй слой — короткая подпись: агент сам искал цели, скачивал код и оценивал результат, но не смог завершить атаку. Тон — сухой WTF-эффект без алармизма и без изображения ИИ как всемогущего хакера.",
+   "product_connection": null,
+   "trend_rationale": null,
+   "trend_signal_type": null,
+   "trend_signal_provenance": null,
+   "supplementary_story_idea": "Сторис-опрос: «Автономный агент с доступом к терминалу — уже хакер или пока только очень самостоятельный ассистент?»",
+   "evidence_used": [
+    "460 целей, ноль автономных взломов: как Telegram-бот на DeepSeek подставил хозяина",
+    "Все остальное сделала нейросеть: нашла в интернете подходящие мишени, оценила их, скачала готовый код для атаки, попробовала его применить, ничего не добилась, самостоятельно решила, что цель бесперспективная, и ушла искать другую.",
+    "Эту сессию целиком восстановили исследователи из Unit 42, подразделения Palo Alto Networks, и 30 июля опубликовали разбор.",
+    "Итог кампании выглядит так: больше 460 целей под атакой и ноль систем, взломанных автономным контуром.",
+    "Некто под никами knaithe и KnYuan, кто, по оценке Unit 42, находится в китайском Чжухае, взял открытый агентный фреймворк Hermes Agent — обвязку, которая превращает языковую модель в исполнителя с руками, — и подключил к нему DeepSeek.",
+    "Фреймворк дал агенту доступ к терминалу, набор многоразовых навыков и возможность работать без надзора.",
+    "Модель отвечала за рассуждения — писала код, оценивала уязвимости, выбирала цели."
+   ],
+   "coverage_plan": null,
+   "duplication_decision": "ALLOW",
+   "duplication_rationale": "no recent or in-flight item has the same canonical story and material angle, nor the same premise on another story",
+   "recent_history_count": 0,
+   "canary_override_used": false,
+   "output_language": "ru",
+   "planned_format": "TREND",
+   "phase_a_source_taxonomy_format": "weekly_news"
+  },
+  "confidence": 0.5,
+  "primary_objective": "reach",
+  "recommended_format": "single",
+  "hook_family": null,
+  "format_decision_why": "Один контрастный тезис «460 → 0» полностью держит идею и лучше работает как мгновенная реакция, чем перегруженный разбор в карусели.",
+  "format_decision_risk": "low",
+  "format_decision_confidence": 0.5,
+  "format_decision_warnings": []
+ },
+ "render_profiles": [
+  "portrait_feed"
+ ],
+ "slide_count": null,
+ "presentation_family": null,
+ "source_image_ref": null,
+ "media_candidate_id": null,
+ "media_subject_match": null,
+ "media_usage_classification": null,
+ "reel_script_readiness": null,
+ "publication_metadata": {},
+ "created_at": "2026-09-25 09:41:31.614573+00:00"
+}

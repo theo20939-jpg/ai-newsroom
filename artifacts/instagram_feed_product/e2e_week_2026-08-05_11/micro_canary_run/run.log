@@ -1,0 +1,16 @@
+2026-08-05_2_meme_trend                  STRONG     OK             submitted                                                    slides=0 spent=$0.0257
+instagram_editorial_decision_failed
+2026-08-06_1_ai_hack                     THIN       PHASE A        editorial_decision_failed:UngroundedEvidenceError            slides=0 spent=$0.0338
+instagram_automatic_trigger_creative_director_failed
+weekly_recap                             -          DIRECTOR       creative_director_failed:MediaFirstContractError             slides=0 spent=$0.1802
+{
+ "actual_cost_usd": "0.180218",
+ "diagnostic_ledger_usd": "0.180218",
+ "provider_calls": 8,
+ "calls_by_kind": {
+  "PHASE_A": 3,
+  "DIRECTOR": 3,
+  "VISION": 2
+ }
+}
+exit 0
