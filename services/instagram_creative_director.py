@@ -811,6 +811,30 @@ def _parse_editorial_decision(raw: str, planned_format: str = "") -> InstagramEd
         return None  # best-effort context only - never blocks generation over a parse failure
 
 
+_HEADLINE_TOKEN = re.compile(r"[^\W_]{3,}|\d+")
+
+
+def _headline_tokens(text: str) -> set[str]:
+    return {t.lower() for t in _HEADLINE_TOKEN.findall(str(text or ""))}
+
+
+def _cover_repeats_a_story(slides: list) -> tuple[str, str, str] | None:
+    """(cover headline, story key, story headline) when the recap cover's headline is essentially one story slide's headline: at least
+    two shared words that make up half or more of the cover's own words (real recap v2: '4 сентября Assistant исчезнет' over
+    'Assistant уходит 4 сентября'). Deterministic word overlap - it only catches repetition, it never judges the copy."""
+    if not slides:
+        return None
+    cover = str(getattr(slides[0], "slide_copy", "") or "")
+    words = _headline_tokens(cover)
+    for slide in slides[1:]:
+        if getattr(slide, "role", None) != "story":
+            continue
+        shared = words & _headline_tokens(getattr(slide, "slide_copy", ""))
+        if len(shared) >= 2 and len(shared) * 2 >= len(words):
+            return cover, str(getattr(slide, "media_subject", "") or "a story"), str(getattr(slide, "slide_copy", ""))
+    return None
+
+
 async def generate_carousel_creative(
     gateway: LLMGateway, prompt_repository: PromptRepository, *, director_input: CreativeDirectorInput,
     is_recap_bundle: bool = False,
@@ -842,6 +866,12 @@ async def generate_carousel_creative(
             hook = outcome.carousel.slides[0] if outcome.carousel.slides else None
             cover_stories = {r.content_ref for r in (hook.layout.regions if hook is not None and getattr(hook, "layout", None) else [])
                              if r.kind == "media" and r.content_ref in photo_stories}
+            repeated = _cover_repeats_a_story(outcome.carousel.slides)
+            if repeated is not None:
+                # the weekly cover's headline is about the WEEK; one story's headline belongs to that story's own slide
+                raise MediaFirstContractError(f"weekly recap cover: the slide 1 headline {repeated[0]!r} repeats the {repeated[1]} slide headline "
+                                              f"{repeated[2]!r} - write a cover headline about the week as a whole (what connects the stories, "
+                                              "or the week's N stories), not about one story")
             if hook is not None and len(photo_stories) >= RECAP_COVER_MIN_STORIES and len(cover_stories) < RECAP_COVER_MIN_STORIES:
                 # the weekly cover frames the WEEK: it shows several stories, never one story's card
                 raise MediaFirstContractError(f"weekly recap cover: slide 1 shows {len(cover_stories)} stories' images - the cover must show "

@@ -1,0 +1,74 @@
+{
+ "post_id": "53146da6-59f2-4e08-bb3a-ed493b0b50df",
+ "format": "weekly_recap_story",
+ "premise": "UK AI research testing found OpenAI and Anthropic models went on a hacking spree in tests.",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "The UK AI Security Institute says OpenAI's and and Anthropic's models engaged in deceptive behavior and harmful activity during testing.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "OpenAI and Anthropic models ‘went rogue’ during UK cybersecurity test The Guardian",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "AI Security Institute says tools engaged in potentially harmful activity and incident reveals new type of risk Advanced AI models developed by OpenAI and Anthropic went rogue during a cybersecurity test and showed a new type of risk posed by the technology, according to the UK’s AI Security Institute. AISI described the actions carried out by the agents – the term for AI systems that can perform tasks without human help – as a “serious incident”. In one example, an agent powered by Anthropic’s Mythos model sent targeted emails to people. Continue reading...",
+   "status": "OK"
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "The UK AI Security Institute says OpenAI's and and Anthropic's models engaged in deceptive behavior and harmful activity during testing.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "The UK AI Security Institute says OpenAI's and and Anthropic's models engaged in deceptive behavior and harmful activity during testing."
+  },
+  {
+   "kind": "FACT",
+   "text": "OpenAI and Anthropic models ‘went rogue’ during UK cybersecurity test The Guardian",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "OpenAI and Anthropic models ‘went rogue’ during UK cybersecurity test The Guardian"
+  },
+  {
+   "kind": "FACT",
+   "text": "AI Security Institute says tools engaged in potentially harmful activity and incident reveals new type of risk Advanced AI models developed by OpenAI and Anthropic went rogue during a cybersecurity test and showed a new type of risk posed by the technology, according to the UK’s AI Security Institute.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "AI Security Institute says tools engaged in potentially harmful activity and incident reveals new type of risk Advanced AI models developed by OpenAI and Anthropic went rogue during a cybersecurity test and showed a new type of risk posed by the technology, according to the UK’s AI Security Institu…"
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "NOT_AVAILABLE",
+  "url": null,
+  "width": null,
+  "height": null,
+  "mime_type": null,
+  "source": null,
+  "reason": "recap media is resolved per story by the recap bundle"
+ },
+ "quality": "SUFFICIENT",
+ "why": "3 premise facts",
+ "excluded_bodies": [
+  "event:7788be05-a120-4bfc-a52c-6805d343e467:body",
+  "event:c4ce7080-50b9-4103-a9c5-e8cfa07f9681:body",
+  "event:7bdc268b-c85c-47f8-96e3-f82ea1c5e2eb:body",
+  "event:e77aa3d1-4cb6-43a0-af33-1b3dd4fd294b:body",
+  "event:a57c4554-07cb-4fe1-a4d0-c23e272ce37a:body",
+  "event:2e75ac55-7cc9-413b-bec5-5b3f80ab749b:body",
+  "event:05dbcf3a-b58b-4c07-9323-17d4e10a3ef7:body",
+  "event:464a1e79-cfaa-4869-a547-02a1859492e1:body"
+ ]
+}

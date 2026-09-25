@@ -178,9 +178,11 @@ def test_the_closer_gets_a_strip_and_fewer_than_three_stories_or_a_story_slide_k
 def test_a_story_slide_shows_its_photo_once():
     from services.instagram_recap_frames import single_photo_story_layout
 
-    single = single_photo_story_layout(_plan(["story_7", "story_7", "story_7"]), role="story")
+    plan = _plan(["story_7", "story_7", "story_7"])
+    plan["regions"][3].update({"x": 0.0, "y": 0.45, "w": 1.0, "h": 0.55})  # the largest crop: a dominant photo band
+    single = single_photo_story_layout(plan, role="story")
     media = [r for r in single["regions"] if r["kind"] == "media"]
-    assert len(media) == 1 and media[0]["h"] == pytest.approx(0.3)  # the largest crop is the one kept
+    assert len(media) == 1 and media[0]["h"] == pytest.approx(0.55)  # the largest crop is the one kept
     assert single_photo_story_layout(_plan(["story_7"]), role="story") is None
 
 
@@ -224,3 +226,44 @@ def test_the_rendered_recap_cover_and_closer_keep_every_story_they_show():
             subject_assets=assets, recap=True)
         assert [m["subject"] for m in result.notes["media_regions"]] == [f"story_{i}" for i in range(1, 5)], role
         assert result.notes.get("recap_frame") is True
+
+
+# --- final product verification fixes -----------------------------------------------------------------------------------------------
+
+def test_a_cover_headline_that_repeats_a_story_headline_is_caught_and_a_week_headline_is_not():
+    story = lambda copy, key: SimpleNamespace(role="story", slide_copy=copy, media_subject=key)  # noqa: E731
+    hook = lambda copy: SimpleNamespace(role="hook", slide_copy=copy)  # noqa: E731
+    stories = [story("Assistant уходит 4 сентября", "story_2"), story("GTA VI забирает финал недели", "story_7")]
+    assert cd._cover_repeats_a_story([hook("4 сентября Assistant исчезнет"), *stories])[1] == "story_2"  # the real recap v2 cover
+    assert cd._cover_repeats_a_story([hook("7 историй недели: от Gemini до GTA VI"), *stories]) is None
+    assert cd._cover_repeats_a_story([hook("Неделя, когда ИИ вышел за пределы чата"), *stories]) is None
+
+
+def test_a_story_slides_duplicate_crops_leave_decoration_behind_and_a_small_single_photo_keeps_the_plan():
+    from services.instagram_recap_frames import single_photo_story_layout
+
+    plan = _plan(["story_7", "story_7"])
+    plan["regions"][1].update({"x": 0.04, "y": 0.43, "w": 0.92, "h": 0.48})
+    plan["regions"].append({"kind": "graphic", "x": 0.07, "y": 0.25, "w": 0.2, "h": 0.05, "z": 7, "graphic_type": "underline_scribble"})
+    single = single_photo_story_layout(plan, role="story")
+    assert not any(r.get("graphic_type") == "underline_scribble" for r in single["regions"])
+    headline = next(r for r in single["regions"] if r["kind"] == "text")
+    assert (headline["x"], headline["w"]) == (0.07, 0.86)  # the copy takes the removed crops' width above the photo
+    small = _plan(["story_3", "story_3", "story_3"])  # every crop smaller than the dominance bound
+    assert single_photo_story_layout(small, role="story") is None
+
+
+def test_a_side_panel_headline_sits_right_above_its_body():
+    from schemas.instagram_creative import InstagramSlideLayout
+    from services.instagram_media_scale_adapter import adapt_media_scale
+
+    layout = InstagramSlideLayout.model_validate({
+        "background": "ink", "density": "MEDIUM", "media_dominance": "BALANCED", "visual_weight": "MIXED",
+        "regions": [{"kind": "surface", "x": 0, "y": 0, "w": 1, "h": 1}, {"kind": "media", "x": 0.55, "y": 0.2, "w": 0.4, "h": 0.4, "content_ref": "story_3"},
+                    {"kind": "text", "x": 0.07, "y": 0.2, "w": 0.4, "h": 0.2, "content_ref": "copy"},
+                    {"kind": "text", "x": 0.07, "y": 0.5, "w": 0.4, "h": 0.1, "content_ref": "body"}]})
+    adapted = adapt_media_scale(layout, slide_copy="Meta делает Muse\n\nВ семействе — Muse Spark.", force=True, orientation="side_right")
+    texts = {r.content_ref: r for r in adapted.layout.regions if r.kind == "text"}
+    assert texts["copy"].valign == "bottom" and texts["body"].valign == "top"
+    banded = adapt_media_scale(layout, slide_copy="Meta делает Muse\n\nВ семействе — Muse Spark.", force=True, orientation="text_top")
+    assert all(r.valign == "top" for r in banded.layout.regions if r.kind == "text")  # bands are unchanged

@@ -804,11 +804,15 @@ def render_carousel_slide(
             from services.instagram_body_copy import attach_body_region
             from services.instagram_layout_validation import compose_slide_text
 
-            probe_copy = compose_slide_text(slide_copy, slide_body) if slide_body and slide_body.strip() else slide_copy
-            probe = _try_declared(spec=spec, layout_plan=attach_body_region(single, probe_copy)[0], slide_copy=probe_copy, index=index,
-                                  total=total, subject_assets=subject_assets or {}, visual_direction=visual_direction, media_mode=media_mode)
-            if probe is not None and probe[0] is not None:
-                recap_frame = single
+            probes = [compose_slide_text(slide_copy, slide_body)] if slide_body and slide_body.strip() else [slide_copy]
+            if slide_body and _first_sentence(slide_body) != slide_body.strip():
+                probes.append(compose_slide_text(slide_copy, _first_sentence(slide_body)))  # the render's own one-sentence step
+            for probe_copy in probes:
+                probe = _try_declared(spec=spec, layout_plan=attach_body_region(single, probe_copy)[0], slide_copy=probe_copy, index=index,
+                                      total=total, subject_assets=subject_assets or {}, visual_direction=visual_direction, media_mode=media_mode)
+                if probe is not None and probe[0] is not None:
+                    recap_frame = single
+                    break
         if recap_frame is not None:
             layout_plan = recap_frame
     original_plan, headline_only = layout_plan, slide_copy
@@ -827,6 +831,17 @@ def render_carousel_slide(
         spec=spec, layout_plan=layout_plan, slide_copy=slide_copy, index=index, total=total,
         subject_assets=subject_assets or {}, visual_direction=visual_direction, media_mode=media_mode,
     )
+    if (recap and role.strip().lower() != "hook" and slide_body and slide_body.strip() and (declared is None or declared[0] is None)
+            and _first_sentence(slide_body) != slide_body.strip()):  # the cover's body names the week's stories: never shortened first
+        # weekly recap: one sentence at its readable size beats the whole body in fine print - tried before the body minimum is relaxed
+        from services.instagram_layout_validation import compose_slide_text as _compose
+
+        short_copy = _compose(headline_only, _first_sentence(slide_body))
+        short_plan = attach_body_region(original_plan, short_copy)[0]
+        short = _try_declared(spec=spec, layout_plan=short_plan, slide_copy=short_copy, index=index, total=total,
+                              subject_assets=subject_assets or {}, visual_direction=visual_direction, media_mode=media_mode)
+        if short is not None and short[0] is not None and not short[0].notes.get("media_scale_rescued_rejected_plan"):
+            declared, slide_copy, layout_plan, body_placement = short, short_copy, short_plan, "plan+recap_body_first_sentence"
     if slide_body and slide_body.strip() and (declared is None or declared[0] is None):
         # no layout could hold the body at its readable size: relax ONLY the body minimum before any fallback that would lose the
         # image or run headline and body together (real v10.7 recap card: a long body sent the slide to the text-only fallback)

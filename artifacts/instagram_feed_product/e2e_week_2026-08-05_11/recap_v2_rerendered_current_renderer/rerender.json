@@ -56,8 +56,8 @@
    "arrangement": "standard",
    "media_scale_orientation": "text_bottom",
    "media_scale_rescued_rejected_plan": null,
-   "recap_frame": true,
-   "body_placement": null,
+   "recap_frame": false,
+   "body_placement": "plan+recap_body_first_sentence",
    "layout_variant": "declared_bottom-center_top-center_DOMINANT_5+",
    "media": [
     "story_5"
@@ -90,15 +90,13 @@
    ]
   },
   {
-   "arrangement": "collage",
-   "media_scale_orientation": null,
+   "arrangement": "standard",
+   "media_scale_orientation": "text_top",
    "media_scale_rescued_rejected_plan": null,
-   "recap_frame": false,
-   "body_placement": "plan+recap_body_first_sentence",
-   "layout_variant": "declared_middle-left_multi_DOMINANT_5+",
+   "recap_frame": true,
+   "body_placement": null,
+   "layout_variant": "declared_middle-center_bottom-center_DOMINANT_3-4",
    "media": [
-    "story_7",
-    "story_7",
     "story_7"
    ]
   },

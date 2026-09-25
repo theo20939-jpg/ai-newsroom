@@ -45,7 +45,7 @@ def _clipped_area(r: LayoutRegion) -> float:
     return w * h
 
 
-def _stack(texts: list[LayoutRegion], x: float, y: float, w: float, h: float, *, body: str = "") -> list[LayoutRegion]:
+def _stack(texts: list[LayoutRegion], x: float, y: float, w: float, h: float, *, body: str = "", hug_body: bool = False) -> list[LayoutRegion]:
     """Stack the text regions top to bottom (original reading order) inside one band, heights proportional to the plan. A body region
     (content pass v10.7) gets only the height its text needs at BODY size; the headline keeps the rest and stays display-sized."""
     from services.instagram_body_copy import body_height_needed
@@ -61,7 +61,10 @@ def _stack(texts: list[LayoutRegion], x: float, y: float, w: float, h: float, *,
     for t in ordered:
         th = fixed[id(t)] if id(t) in fixed else max(0.05, free * t.h / total)
         token = "HEADLINE_XL" if t.content_ref in _HEADLINE_REFS and t.scale_token in _PROMOTE else t.scale_token
-        out.append(t.model_copy(update={"x": x, "y": cy, "w": w, "h": th, "scale_token": token, "valign": "top", "on_media": False,
+        # hug_body (a side panel): the headline sits on the bottom of its box, right above the body - a narrow column's display type
+        # rarely fills the box's height, and a top-set headline left a hole between it and its body (real recap v2 Meta slide)
+        valign = "bottom" if hug_body and body and t.content_ref in _HEADLINE_REFS else "top"
+        out.append(t.model_copy(update={"x": x, "y": cy, "w": w, "h": th, "scale_token": token, "valign": valign, "on_media": False,
                                   "max_lines": None}))  # the band now bounds the block; a plan's line cap for its old narrow box would only shrink the type
         cy += th + gap
     return out
@@ -164,6 +167,6 @@ def adapt_media_scale(layout: InstagramSlideLayout, *, slide_copy: str, force: b
     rule = next((r for r in layout.regions if r.kind == "accent" and r.accent_type == "rule_h"), None)
     if rule is not None:
         regions.append(rule.model_copy(update={"x": rule_at[0], "y": rule_at[1], "w": 0.1, "h": 0.018, "z": 2, "on_media": None}))
-    regions.extend(t.model_copy(update={"z": 2}) for t in _stack(texts, *band, body=body))
+    regions.extend(t.model_copy(update={"z": 2}) for t in _stack(texts, *band, body=body, hug_body=orientation.startswith("side")))
     adapted = layout.model_copy(update={"regions": regions, "media_dominance": "DOMINANT", "arrangement": "standard"})
     return MediaScaleAdaptation(adapted, (media.x, media.y, media.w, media.h), mbox, orientation)

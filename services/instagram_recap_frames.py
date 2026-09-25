@@ -12,6 +12,7 @@ from typing import Any
 MIN_FRAME_STORIES = 3
 MAX_FRAME_STORIES = 4
 _GAP = 0.016
+MIN_STORY_PHOTO_AREA = 0.35  # a recap story's single photo must stay the dominant surface
 
 
 def _story_refs(layout: dict[str, Any]) -> list[str]:
@@ -82,5 +83,16 @@ def single_photo_story_layout(layout: dict[str, Any] | None, *, role: str) -> di
     kept = [r for i, r in enumerate(regions) if not (r.get("kind") == "media" and r.get("content_ref") and largest.get(r["content_ref"]) != i)]
     if len(kept) == len(regions):
         return None
+    photos = [r for r in kept if r.get("kind") == "media"]
+    if max((m.get("w", 0) * m.get("h", 0) for m in photos), default=0) < MIN_STORY_PHOTO_AREA:
+        return None  # the one photo left would be a small inset: the planned slide (rebuilt edge to edge by the renderer) reads better
+    # decorative scribbles were drawn around the removed crops / the old text boxes - they are not content
+    kept = [r for r in kept if not (r.get("kind") == "graphic" and str(r.get("graphic_type") or "").endswith("scribble"))]
+
+    def clear_of_photos(x: float, y: float, w: float, h: float) -> bool:
+        return all(x + w <= m["x"] or m["x"] + m["w"] <= x or y + h <= m["y"] or m["y"] + m["h"] <= y for m in photos)
+
+    # the removed crops' space goes to the copy: a text box that stays clear of the one photo spans the full text width
+    kept = [{**r, "x": 0.07, "w": 0.86} if r.get("kind") == "text" and clear_of_photos(0.07, r["y"], 0.86, r["h"]) else r for r in kept]
     media = sum(1 for r in kept if r.get("kind") == "media")
     return {**layout, "regions": kept, "arrangement": "standard" if media < 2 else layout.get("arrangement", "standard")}
