@@ -1,0 +1,15 @@
+{
+ "slide_count": 6,
+ "primitive_distribution": {
+  "flow_diagram": 5,
+  "poll_cards": 1
+ },
+ "source_asset_reuse": {},
+ "asset_reuse_within_slide": [],
+ "layout_signature_repetition": [],
+ "design_repetition_warning": true,
+ "warnings": [
+  "flow_diagram carries 5 of 6 slides"
+ ],
+ "degenerate_composition": null
+}

@@ -1,0 +1,31 @@
+{
+ "planned_format": "AI_HACK",
+ "prompt_version": "2",
+ "structured_output": {
+  "source_summary": "Adobe запустила плагин для ChatGPT: более 70 инструментов Adobe доступны в одном диалоге — от обработки фото и создания видео до дизайна маркетинговых материалов и PDF.",
+  "opportunity_type": "NEWS",
+  "why_now": "Новость дает конкретный сценарий, который можно превратить в сохраняемую инструкцию: подключить Adobe в ChatGPT и пройти путь от запроса до готового креатива.",
+  "audience_value": "Аудитория получает понятный workflow для создания визуалов, видео и документов без переключения между несколькими сервисами.",
+  "angle": "Как подключить Adobe в ChatGPT и собрать первый креатив за один диалог.",
+  "angle_intent": "HOW_TO",
+  "topic": "Adobe plugin в ChatGPT: практический старт с 70+ инструментами",
+  "purpose": "VALUE",
+  "origin": "NEWS",
+  "recommended_format": "carousel",
+  "format_reason": "Карусель лучше подходит для пошаговой инструкции: каждый слайд может объяснять отдельный этап подключения и создания результата.",
+  "creative_direction": "Техно-карусель в формате «от пустого чата до готового креатива»: первый слайд — сильный хук про 70+ инструментов, затем последовательность действий с короткими UI-подсказками, финал — список задач, которые можно попробовать в одном диалоге. Не выдавать Adobe за продукт NINJA.",
+  "product_connection": null,
+  "trend_rationale": null,
+  "supplementary_story_idea": "Отдельная Story-идея: мини-опрос «Что вы бы делегировали Adobe в ChatGPT — фото, видео, дизайн или PDF?»",
+  "evidence_used": [
+   "You can use 70+ Adobe tools without leaving ChatGPT now - here's how",
+   "Open ChatGPT, go to Plugins, and add the Adobe plugin.",
+   "Start a new chat, then type “@Adobe” and select Adobe from the menu or use the “+” button to choose it from your installed plugins.",
+   "Sign in with your Adobe account to unlock generative capabilities, access your Creative Cloud files, and save your work across sessions, making it even easier to pick up where you left off in ChatGPT.",
+   "Simply activate the Adobe plugin, describe what you want to create, and it automatically brings together the right Adobe tools behind the scenes to get you there.",
+   "Drawing on more than 70 tools across Adobe’s creative and productivity suites, the Adobe plugin in ChatGPT supports a wide range of workflows, from editing photos and creating campaign videos to designing marketing assets and generating polished PDFs — all through rich, interactive experiences right in the flow of the conversation.",
+   "Free account holders, for example, will have usage limits."
+  ],
+  "coverage_plan": null
+ }
+}

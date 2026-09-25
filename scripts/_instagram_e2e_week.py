@@ -133,7 +133,10 @@ def _install_provider_guard(pricing, estimator, models, tracker):
         STATE["calls"].append(record)
         if STATE["post_dir"] is not None:
             n = sum(1 for c in STATE["calls"] if c["post"] == STATE["post"])
-            _write(STATE["post_dir"] / "calls" / f"{n:02d}_{kind.lower()}.json", {"record": record, "response": response})
+            request_text = [{"role": m.role, "text": [part.text for part in m.content if getattr(part, "type", None) == "text"]}
+                            for m in request.messages]  # the request INPUT (text only: image parts are not copied)
+            _write(STATE["post_dir"] / "calls" / f"{n:02d}_{kind.lower()}.json", {"record": record, "request": request_text,
+                                                                               "response": response})
         return response
 
     OpenAIAdapter.generate = guarded
@@ -310,8 +313,11 @@ async def main() -> None:
                     await session.commit()
                     _write(out / key / "evidence_package.json", package)
                     row.update(evidence=package.quality, evidence_why=package.why, source_media=package.media.status)
+                    min_ok = os.environ.get("KAGE_E2E_REQUIRE_EVIDENCE")  # e.g. "STRONG,SUFFICIENT": no paid stage below it
                     if package.quality == BLOCKING:
                         row.update(reason="evidence_blocking", stage="EVIDENCE")
+                    elif min_ok and package.quality not in min_ok.split(","):
+                        row.update(reason=f"acquisition_failure: evidence {package.quality} (no provider call)", stage="EVIDENCE")
                     else:
                         facts = package.director_evidence() + [
                             f[:800] for f in cc._extract_research_facts(na_task.workflow if na_task is not None else None) if f]

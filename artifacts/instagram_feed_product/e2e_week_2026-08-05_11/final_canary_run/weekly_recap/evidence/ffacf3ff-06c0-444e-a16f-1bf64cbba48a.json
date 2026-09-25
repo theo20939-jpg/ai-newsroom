@@ -1,0 +1,95 @@
+{
+ "post_id": "ffacf3ff-06c0-444e-a16f-1bf64cbba48a",
+ "format": "weekly_recap_story",
+ "premise": "OpenAI updated ChatGPT’s free tier with GPT-5.6 models and unlimited text chats.",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "**GPT-5.6 Luna теперь доступна пользователям бесплатного тарифа** Ранее без дополнительной платы можно было пользоваться GPT-5.5 Instant. Компания также рассказала, что флагманская модель Sol стала умнее — она перестанет делиться в ответах нерелевантными деталями, а также будет совершать меньше фактических ошибок. Наконец, пользователям платных тарифов отныне доступен слайдер для регулировки вдумчивости ответа нейросети. rozetked.me/news/47613",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "ChatGPT has become so much more than just chat over the last year. To that end, OpenAI is removing limits on text chat. ChatGPT will also improve with a smarter version of GPT-5.6 Sol. Details below.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Herb Scribner / Axios : OpenAI updates the default model for free users to GPT-5.6 Luna, adds unlimited text chats for free users, rolls out an improved GPT-5.6 Sol version, and more — OpenAI on Thursday announced a series of changes that will upgrade ChatGPT for both paid and free users.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Компания OpenAI сегодня анонсировала отмену ограничений на текстовые чаты для всех пользователей ChatGPT. Новой моделью по умолчанию для пользователей ChatGPT Free и Go станет GPT-5.6 Luna, которая заменит модель GPT-5.5. Источник изображения: Berke Citak / unsplash.com",
+   "status": "OK"
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "**GPT-5.6 Luna теперь доступна пользователям бесплатного тарифа** Ранее без дополнительной платы можно было пользоваться GPT-5.5 Instant.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "**GPT-5.6 Luna теперь доступна пользователям бесплатного тарифа** Ранее без дополнительной платы можно было пользоваться GPT-5.5 Instant."
+  },
+  {
+   "kind": "FACT",
+   "text": "Наконец, пользователям платных тарифов отныне доступен слайдер для регулировки вдумчивости ответа нейросети. rozetked.me/news/47613",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Наконец, пользователям платных тарифов отныне доступен слайдер для регулировки вдумчивости ответа нейросети. rozetked.me/news/47613"
+  },
+  {
+   "kind": "FACT",
+   "text": "To that end, OpenAI is removing limits on text chat.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "To that end, OpenAI is removing limits on text chat."
+  },
+  {
+   "kind": "FACT",
+   "text": "ChatGPT will also improve with a smarter version of GPT-5.6 Sol.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "ChatGPT will also improve with a smarter version of GPT-5.6 Sol."
+  },
+  {
+   "kind": "FACT",
+   "text": "Herb Scribner / Axios : OpenAI updates the default model for free users to GPT-5.6 Luna, adds unlimited text chats for free users, rolls out an improved GPT-5.6 Sol version, and more — OpenAI on Thursday announced a series of changes that will upgrade ChatGPT for both paid and free users.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Herb Scribner / Axios : OpenAI updates the default model for free users to GPT-5.6 Luna, adds unlimited text chats for free users, rolls out an improved GPT-5.6 Sol version, and more — OpenAI on Thursday announced a series of changes that will upgrade ChatGPT for both paid and free users."
+  },
+  {
+   "kind": "FACT",
+   "text": "Компания OpenAI сегодня анонсировала отмену ограничений на текстовые чаты для всех пользователей ChatGPT.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Компания OpenAI сегодня анонсировала отмену ограничений на текстовые чаты для всех пользователей ChatGPT."
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "NOT_AVAILABLE",
+  "url": null,
+  "width": null,
+  "height": null,
+  "mime_type": null,
+  "source": null,
+  "reason": "recap media is resolved per story by the recap bundle"
+ },
+ "quality": "SUFFICIENT",
+ "why": "6 premise facts",
+ "excluded_bodies": []
+}

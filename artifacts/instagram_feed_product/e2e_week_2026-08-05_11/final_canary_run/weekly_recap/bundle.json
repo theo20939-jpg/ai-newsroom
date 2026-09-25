@@ -1,0 +1,77 @@
+{
+ "subjects": [
+  "story_1",
+  "story_2",
+  "story_3",
+  "story_4",
+  "story_5",
+  "story_6",
+  "story_7"
+ ],
+ "evidence": [
+  "Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's chairman and will add the title of",
+  "Alphabet CEO Sundar Pichai announced changes to the Google DeepMind team today, including a new role for Demis Hassabis.",
+  "Ina Fried / Axios : Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's chairman and will add the title of Alphabet chief scientist — Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's Chairman.",
+  "Chief scientist Jeff Dean and another Google AI executive …",
+  "Google Assistant will disappear from your phone next month",
+  "As expected , Google Assistant is going away in 2026, and the company just provided a September 4 date for Android.",
+  "Google начнёт отключать Google Assistant на смартфонах, планшетах и сопряжённых устройствах 4 сентября 2026 года.",
+  "Компания объявила об отказе от Google Assistant в пользу Gemini ещё в 2025 году, но перенесла срок vc.ru/services/3064051",
+  "Meta says Muse Glimmer has 30B parameters and is \"small enough\" to need only one GPU; Meta plans a $1B fund to invest",
+  "With coding as a key capability for AI companies, Meta throws its hat into the ring.",
+  "Meta’s new open-weight Muse Glimmer model offers a glimpse of Mark Zuckerberg’s personal superintelligence vision, as well as the emerging divide between AI users can own and access.",
+  "The terminal-based coding tool is powered by a new AI model, Muse Spark 1.2.",
+  "OpenAI and Anthropic models went on a hacking spree when tested by the UK's AI research institute",
+  "The UK AI Security Institute says OpenAI's and and Anthropic's models engaged in deceptive behavior and harmful activity during testing.",
+  "OpenAI and Anthropic models ‘went rogue’ during UK cybersecurity test The Guardian",
+  "AI Security Institute says tools engaged in potentially harmful activity and incident reveals new type of risk Advanced AI models developed by OpenAI and Anthropic went rogue during a cybersecurity test and showed a new type of risk posed by the technology, according to the UK’s AI Security Institute.",
+  "OpenAI updates the default model for free users to GPT-5.6 Luna, adds unlimited text chats for free users, rolls out an",
+  "**GPT-5.6 Luna теперь доступна пользователям бесплатного тарифа** Ранее без дополнительной платы можно было пользоваться GPT-5.5 Instant.",
+  "Наконец, пользователям платных тарифов отныне доступен слайдер для регулировки вдумчивости ответа нейросети. rozetked.me/news/47613",
+  "To that end, OpenAI is removing limits on text chat.",
+  "Jony Ive’s first OpenAI gadget is reportedly a hockey puck-sized smart speaker",
+  "The AI device OpenAI is developing with former Apple designer Jony Ive is \"essentially a smart speaker without a display\" that's battery-powered, doughnut-shaped and roughly the size of a hockey puck, according to Bloomberg reporter Mark Gurman.",
+  "The device, expected to launch in 2027 for a price over $300, reportedly \"will have a unique look, […]",
+  "**GTA VI покажут 27 августа**",
+  "Расширенный показ ожидаемого криминального боевика с открытым миром GTA VI состоится 27 августа в 22:00 по Москве.",
+  "Netflix will hold the exclusive rights to an extended look at Grand Theft Auto VI before it hits YouTube six hours later.",
+  "Американский актёр Роберт Боуг (Robert Bogue), сыгравший агента ФБР Стива Хейнса в криминальном боевике Grand Theft Auto V от Rockstar Games, не смог получить роль в горячо ожидаемой GTA VI, несмотря на все свои старания."
+ ],
+ "stories": [
+  {
+   "key": "story_1",
+   "title": "Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's chairman and will add the title of",
+   "has_image": false
+  },
+  {
+   "key": "story_2",
+   "title": "Google Assistant will disappear from your phone next month",
+   "has_image": true
+  },
+  {
+   "key": "story_3",
+   "title": "Meta says Muse Glimmer has 30B parameters and is \"small enough\" to need only one GPU; Meta plans a $1B fund to invest",
+   "has_image": false
+  },
+  {
+   "key": "story_4",
+   "title": "OpenAI and Anthropic models went on a hacking spree when tested by the UK's AI research institute",
+   "has_image": true
+  },
+  {
+   "key": "story_5",
+   "title": "OpenAI updates the default model for free users to GPT-5.6 Luna, adds unlimited text chats for free users, rolls out an",
+   "has_image": false
+  },
+  {
+   "key": "story_6",
+   "title": "Jony Ive’s first OpenAI gadget is reportedly a hockey puck-sized smart speaker",
+   "has_image": true
+  },
+  {
+   "key": "story_7",
+   "title": "**GTA VI покажут 27 августа**",
+   "has_image": false
+  }
+ ]
+}

@@ -1,0 +1,169 @@
+{
+ "cap_usd": "0.65",
+ "actual_cost_usd": "0.058209",
+ "diagnostic_ledger_usd": "0.058209",
+ "provider_calls": 5,
+ "calls_by_kind": {
+  "PHASE_A": 3,
+  "VISION": 1,
+  "DIRECTOR": 1
+ },
+ "image_generation_mode": "off",
+ "posts": [
+  {
+   "key": "2026-08-06_1_ai_hack",
+   "day": "2026-08-06",
+   "slot": 1,
+   "format": "ai_hack",
+   "title": "You can use 70+ Adobe tools without leaving ChatGPT now - here's how",
+   "source": "ZDNET",
+   "evidence": "STRONG",
+   "evidence_why": "10 verbatim steps incl. a concrete location / command",
+   "source_media": "AVAILABLE",
+   "reason": "submitted",
+   "stage": "OK",
+   "gate": "block",
+   "delivery": "recorded_block_no_telegram",
+   "calls": [
+    {
+     "post": "2026-08-06_1_ai_hack",
+     "kind": "PHASE_A",
+     "model": "gpt-5.6-luna",
+     "max_tokens": 8000,
+     "worst_case_usd": "0.05075300",
+     "status": "OK",
+     "finish_reason": "stop",
+     "input_tokens": 2604,
+     "output_tokens": 838,
+     "reasoning_tokens": 277,
+     "cost_usd": "0.007632"
+    },
+    {
+     "post": "2026-08-06_1_ai_hack",
+     "kind": "VISION",
+     "model": "gpt-5.6-luna",
+     "max_tokens": 400,
+     "worst_case_usd": "0.00281800",
+     "status": "OK",
+     "finish_reason": "stop",
+     "input_tokens": 985,
+     "output_tokens": 232,
+     "reasoning_tokens": 170,
+     "cost_usd": "0.002377"
+    },
+    {
+     "post": "2026-08-06_1_ai_hack",
+     "kind": "DIRECTOR",
+     "model": "gpt-5.6-luna",
+     "max_tokens": 16000,
+     "worst_case_usd": "0.10844700",
+     "status": "OK",
+     "finish_reason": "stop",
+     "input_tokens": 12338,
+     "output_tokens": 5977,
+     "reasoning_tokens": 984,
+     "cost_usd": "0.0482"
+    }
+   ],
+   "slides": 6,
+   "spent_so_far": "0.058209"
+  },
+  {
+   "key": "weekly_recap",
+   "format": "weekly_recap",
+   "title": "Главное за неделю: ИИ, гаджеты, интернет",
+   "recap_selected": 7,
+   "recap_entering_downstream": 7,
+   "recap_with_media": 3,
+   "reason": "editorial_decision_failed:CreativeDirectorUnavailableError",
+   "stage": "PHASE A",
+   "gate": null,
+   "delivery": null,
+   "calls": [
+    {
+     "post": "weekly_recap",
+     "kind": "PHASE_A",
+     "model": "gpt-5.6-luna",
+     "max_tokens": 8000,
+     "worst_case_usd": "0.05129600",
+     "status": "PROVIDER_ERROR",
+     "error": "ProviderTransientError: openai: APITimeoutError: Request timed out.",
+     "cost_usd": "0"
+    },
+    {
+     "post": "weekly_recap",
+     "kind": "PHASE_A",
+     "model": "gpt-5.6-luna",
+     "max_tokens": 8000,
+     "worst_case_usd": "0.05129600",
+     "status": "PROVIDER_ERROR",
+     "error": "ProviderTransientError: openai: APITimeoutError: Request timed out.",
+     "cost_usd": "0"
+    }
+   ],
+   "slides": 0,
+   "spent_so_far": "0.058209"
+  }
+ ],
+ "calls": [
+  {
+   "post": "2026-08-06_1_ai_hack",
+   "kind": "PHASE_A",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 8000,
+   "worst_case_usd": "0.05075300",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 2604,
+   "output_tokens": 838,
+   "reasoning_tokens": 277,
+   "cost_usd": "0.007632"
+  },
+  {
+   "post": "2026-08-06_1_ai_hack",
+   "kind": "VISION",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 400,
+   "worst_case_usd": "0.00281800",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 985,
+   "output_tokens": 232,
+   "reasoning_tokens": 170,
+   "cost_usd": "0.002377"
+  },
+  {
+   "post": "2026-08-06_1_ai_hack",
+   "kind": "DIRECTOR",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 16000,
+   "worst_case_usd": "0.10844700",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 12338,
+   "output_tokens": 5977,
+   "reasoning_tokens": 984,
+   "cost_usd": "0.0482"
+  },
+  {
+   "post": "weekly_recap",
+   "kind": "PHASE_A",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 8000,
+   "worst_case_usd": "0.05129600",
+   "status": "PROVIDER_ERROR",
+   "error": "ProviderTransientError: openai: APITimeoutError: Request timed out.",
+   "cost_usd": "0"
+  },
+  {
+   "post": "weekly_recap",
+   "kind": "PHASE_A",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 8000,
+   "worst_case_usd": "0.05129600",
+   "status": "PROVIDER_ERROR",
+   "error": "ProviderTransientError: openai: APITimeoutError: Request timed out.",
+   "cost_usd": "0"
+  }
+ ]
+}

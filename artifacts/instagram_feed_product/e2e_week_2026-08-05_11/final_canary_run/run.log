@@ -1,0 +1,14 @@
+2026-08-06_1_ai_hack                     STRONG     OK             submitted                                                    slides=6 spent=$0.0582
+instagram_editorial_decision_failed
+weekly_recap                             -          PHASE A        editorial_decision_failed:CreativeDirectorUnavailableError   slides=0 spent=$0.0582
+{
+ "actual_cost_usd": "0.058209",
+ "diagnostic_ledger_usd": "0.058209",
+ "provider_calls": 5,
+ "calls_by_kind": {
+  "PHASE_A": 3,
+  "VISION": 1,
+  "DIRECTOR": 1
+ }
+}
+exit 0
