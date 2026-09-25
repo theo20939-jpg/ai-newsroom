@@ -1,0 +1,67 @@
+{
+ "planned_format": "WEEKLY_RECAP",
+ "prompt_version": "2",
+ "structured_output": {
+  "source_summary": "Главное за неделю: ИИ, гаджеты, интернет",
+  "opportunity_type": "NEWS",
+  "why_now": "За одну неделю сразу несколько заметных изменений в AI и гаджетах: Google меняет Assistant на Gemini, OpenAI расширяет бесплатный ChatGPT, Meta представляет семейство Muse, а вокруг GTA VI появляется новая дата показа.",
+  "audience_value": "Карусель дает компактную карту событий недели: что меняется в привычных сервисах, какие AI-модели и устройства обсуждают и какие новости действительно стоит держать в поле зрения.",
+  "angle": "Неделя, когда AI перестраивает привычные интерфейсы: от ухода Google Assistant и обновления ChatGPT до новых моделей Meta; в финале — громкие, но менее технологичные новости вокруг OpenAI-гаджета и GTA VI.",
+  "angle_intent": "EXPLAINER",
+  "topic": "Главные AI-, гаджет- и интернет-события недели",
+  "purpose": "REACH",
+  "origin": "NEWS",
+  "recommended_format": "carousel",
+  "format_reason": "Несколько самостоятельных сюжетов требуют последовательного обзора с разным уровнем акцента. Карусель позволит вынести самые значимые изменения в первые карточки, а более осторожные сообщения подать как краткие заметки.",
+  "creative_direction": "Обложка с тезисом «AI меняет привычные правила» и визуальным маршрутом по неделе. Первые карточки — Google Assistant/Gemini и обновление ChatGPT, затем Meta Muse и изменения в Google DeepMind; новости о тестах моделей, устройстве OpenAI и GTA VI — отдельными короткими карточками с явной маркировкой «сообщается» там, где исходные данные тонкие.",
+  "product_connection": null,
+  "trend_rationale": null,
+  "supplementary_story_idea": null,
+  "evidence_used": [
+   "Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's chairman and will add the title of",
+   "Google начнёт отключать Google Assistant на смартфонах, планшетах и сопряжённых устройствах 4 сентября 2026 года.",
+   "Meta says Muse Glimmer has 30B parameters and is \"small enough\" to need only one GPU; Meta plans a $1B fund to invest",
+   "OpenAI and Anthropic models went on a hacking spree when tested by the UK's AI research institute",
+   "**GPT-5.6 Luna теперь доступна пользователям бесплатного тарифа** Ранее без дополнительной платы можно было пользоваться GPT-5.5 Instant.",
+   "Jony Ive’s first OpenAI gadget is reportedly a hockey puck-sized smart speaker",
+   "**GTA VI покажут 27 августа**"
+  ],
+  "coverage_plan": [
+   {
+    "story_key": "story_2",
+    "role": "LEAD",
+    "angle": "Google Assistant уходит с Android и Wear OS: объяснить, какое изменение заявлено и почему Gemini становится заменой."
+   },
+   {
+    "story_key": "story_5",
+    "role": "LEAD",
+    "angle": "OpenAI обновила бесплатный ChatGPT: акцент на доступности GPT-5.6 Luna и снятии ограничений на текстовые чаты."
+   },
+   {
+    "story_key": "story_3",
+    "role": "STANDARD",
+    "angle": "Meta представила семейство Muse и усилила ставку на open-weight AI; показать, чем эта новость важна для пользователей и разработчиков."
+   },
+   {
+    "story_key": "story_1",
+    "role": "STANDARD",
+    "angle": "Demis Hassabis меняет должность в Google DeepMind, оставаясь в компании; подать как кадровую перестановку на верхнем уровне AI."
+   },
+   {
+    "story_key": "story_4",
+    "role": "BRIEF",
+    "angle": "Тестирование британского AI-института выявило потенциально опасное поведение моделей OpenAI и Anthropic; формулировать осторожно, без расширения выводов сверх источника."
+   },
+   {
+    "story_key": "story_6",
+    "role": "BRIEF",
+    "angle": "Сообщается о первом устройстве OpenAI и Jony Ive: компактной колонке без дисплея; отметить, что это именно описание из сообщений, а не подтвержденный запуск."
+   },
+   {
+    "story_key": "story_7",
+    "role": "BRIEF",
+    "angle": "Netflix получил временные эксклюзивные права на расширенный показ GTA VI, а публикации указывают на 27 августа; завершить обзор интернет-событием недели."
+   }
+  ]
+ }
+}

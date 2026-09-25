@@ -1,0 +1,157 @@
+{
+ "post_id": "7fc22b67-2f2a-4ba0-907a-8bd06197fa29",
+ "format": "weekly_recap_story",
+ "premise": "Demis Hassabis stepped down as Google DeepMind CEO, remaining at Google as chairman.",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Alphabet CEO Sundar Pichai announced changes to the Google DeepMind team today, including a new role for Demis Hassabis.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Ina Fried / Axios :",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's chairman and will add the title of Alphabet chief scientist — Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's Chairman. Chief scientist Jeff Dean and another Google AI executive …",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Google DeepMind CEO Demis Hassabis is stepping down",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Google's AI reshuffle: Chief scientist Jeff Dean exits and Demis Hassabis steps down as DeepMind CEO CNBC",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Reed Albergotti / Semafor :",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Sources: Demis Hassabis had been drifting away from day-to-day duties as Google DeepMind CEO for at least a year and struggled to find satisfaction in the role — THE SCOOP — Google DeepMind CEO Demis Hassabis's departure Wednesday from the top job at the company he founded in 2010 …",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Sir Demis Hassabis steps down as Google DeepMind chief executive The Times",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Mark Bergen / Bloomberg :",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Demis Hassabis stepping down as Google DeepMind CEO may weaken the UK tech scene, marking an end for Hassabis' effort to keep his native UK as an AI stronghold — For years, Demis Hassabis was the only executive to oversee a US technology giant's artificial intelligence development from outside the country.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Observers express concern that the division has lost its independence and commercial reality has taken over",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "When Sir Demis Hassabis said AI had brought the world to a “pivotal moment in human history” last month, he knew another big change was imminent.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "This shift was closer to home. The Nobel prize-winning head of Google DeepMind, Google’s AI unit, announced this week he was relinquishing his day-to-day duties as chief executive and becoming chair. He is also taking on the role of chief scientist at DeepMind’s parent, Alphabet.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Continue reading...",
+   "status": "OK"
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "Alphabet CEO Sundar Pichai announced changes to the Google DeepMind team today, including a new role for Demis Hassabis.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Alphabet CEO Sundar Pichai announced changes to the Google DeepMind team today, including a new role for Demis Hassabis."
+  },
+  {
+   "kind": "FACT",
+   "text": "Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's chairman and will add the title of Alphabet chief scientist — Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's Chairman.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's chairman and will add the title of Alphabet chief scientist — Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's Chairman."
+  },
+  {
+   "kind": "FACT",
+   "text": "Chief scientist Jeff Dean and another Google AI executive …",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Chief scientist Jeff Dean and another Google AI executive …"
+  },
+  {
+   "kind": "FACT",
+   "text": "Sources: Demis Hassabis had been drifting away from day-to-day duties as Google DeepMind CEO for at least a year and struggled to find satisfaction in the role — THE SCOOP — Google DeepMind CEO Demis Hassabis's departure Wednesday from the top job at the company he founded in 2010 …",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Sources: Demis Hassabis had been drifting away from day-to-day duties as Google DeepMind CEO for at least a year and struggled to find satisfaction in the role — THE SCOOP — Google DeepMind CEO Demis Hassabis's departure Wednesday from the top job at the company he founded in 2010 …"
+  },
+  {
+   "kind": "FACT",
+   "text": "Demis Hassabis stepping down as Google DeepMind CEO may weaken the UK tech scene, marking an end for Hassabis' effort to keep his native UK as an AI stronghold — For years, Demis Hassabis was the only executive to oversee a US technology giant's artificial intelligence development from outside the country.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Demis Hassabis stepping down as Google DeepMind CEO may weaken the UK tech scene, marking an end for Hassabis' effort to keep his native UK as an AI stronghold — For years, Demis Hassabis was the only executive to oversee a US technology giant's artificial intelligence development from outside the…"
+  },
+  {
+   "kind": "FACT",
+   "text": "When Sir Demis Hassabis said AI had brought the world to a “pivotal moment in human history” last month, he knew another big change was imminent.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "When Sir Demis Hassabis said AI had brought the world to a “pivotal moment in human history” last month, he knew another big change was imminent."
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "NOT_AVAILABLE",
+  "url": null,
+  "width": null,
+  "height": null,
+  "mime_type": null,
+  "source": null,
+  "reason": "recap media is resolved per story by the recap bundle"
+ },
+ "quality": "SUFFICIENT",
+ "why": "6 premise facts",
+ "excluded_bodies": [
+  "event:6a09e2a6-0c79-4a1c-93d2-f25ecca030d8:body"
+ ]
+}

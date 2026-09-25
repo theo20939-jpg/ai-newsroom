@@ -513,14 +513,38 @@ async def build_daily_evidence_package(
     return assemble_package(post_id=post_id, fmt=fmt, premise=title, sources=sources, media=media)
 
 
+_HTML_BLOCK_END = re.compile(r"</(?:p|h[1-6]|li|div|blockquote|figcaption|tr)\s*>|<br\s*/?>", re.IGNORECASE)
+_COMPLETE_SENTENCE = re.compile(r"[.!?…][\"»”’')\]]*$")
+
+
+def recap_paragraphs(body: str) -> list[str]:
+    """A stored HTML body's own paragraphs, each as plain text. An RSS body often opens with an unpunctuated standfirst paragraph
+    (<p>AI Security Institute says ... new type of risk</p><p>Advanced AI models ...</p>): flattened into one line it was glued onto
+    the lede and cut as ONE malformed evidence item, which the model then 'completed' ('UK AI Security Institute ...') - and the strict
+    quote check correctly rejected the whole recap (real recap runs, 2 of 3). A body without block markup stays one piece."""
+    pieces = [plain_text(piece) for piece in _HTML_BLOCK_END.split(body or "")]
+    return [piece for piece in pieces if piece]
+
+
+def _complete_sentence(item: EvidenceItem) -> bool:
+    """A recap fact is quotable only as a complete sentence: a heading / standfirst / truncated line (no closing . ! ? …) invites
+    the model to finish it, and a finished fragment is never an exact quote."""
+    return _COMPLETE_SENTENCE.search(item.text.strip()) is not None
+
+
 async def build_recap_story_package(
     *, post_id: str, premise: str, headlines: Sequence[str], bodies: Sequence[tuple[str, str]],
 ) -> InstagramEvidencePackage:
-    """ONE weekly-recap story: only bodies that talk about its selected premise survive (sanitize_recap_bodies)."""
+    """ONE weekly-recap story: only bodies that talk about its selected premise survive (sanitize_recap_bodies); each body is cut
+    along its own paragraphs, and only complete sentences become facts."""
     kept, excluded = sanitize_recap_bodies(premise, headlines, [(ref, plain_text(body)) for ref, body in bodies])
-    sources = [EvidenceSource(url=ref if ref.startswith("http") else None, source_type=STORED_BODY, text=body) for ref, body in kept]
+    originals = dict(bodies)
+    sources = [EvidenceSource(url=ref if ref.startswith("http") else None, source_type=STORED_BODY, text=paragraph)
+               for ref, body in kept for paragraph in recap_paragraphs(originals.get(ref, body))]
     focus = premise + " " + " ".join(headlines)
     package = assemble_package(post_id=post_id, fmt="weekly_recap_story", premise=focus, sources=sources,
                                media=SourceMedia(status=NOT_AVAILABLE, reason="recap media is resolved per story by the recap bundle"),
                                excluded_bodies=excluded)
-    return InstagramEvidencePackage(**{**package.__dict__, "premise": premise})
+    facts = tuple(item for item in package.facts if _complete_sentence(item))
+    quality, why = grade("weekly_recap_story", (), facts, sources) if facts != package.facts else (package.quality, package.why)
+    return InstagramEvidencePackage(**{**package.__dict__, "premise": premise, "facts": facts, "quality": quality, "why": why})
