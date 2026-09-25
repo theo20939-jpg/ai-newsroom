@@ -1,0 +1,18 @@
+[
+ {
+  "subject_key": "story_4",
+  "suitable": true,
+  "image_kind": "photograph",
+  "baked_in_text_prominent": false,
+  "reason": "A close-up photograph shows a smartphone screen with multiple AI app icons and their built-in labels.",
+  "error": null
+ },
+ {
+  "subject_key": "story_6",
+  "suitable": true,
+  "image_kind": "photograph",
+  "baked_in_text_prominent": false,
+  "reason": "A real photograph shows a smiling bald man wearing glasses and a white shirt seated in a red chair against a dark background.",
+  "error": null
+ }
+]

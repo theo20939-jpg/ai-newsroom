@@ -1,0 +1,1 @@
+{"method":"standard preflight assumes 7 recap vision calls; the zero-cost dry pass measured 3 stories with media (max 3 vision calls)","phase_a_worst":"0.056383","director_worst":"0.111058","vision_worst_per_call":"0.0039","standard_7_vision_worst_with_retry":"0.305841","measured_3_vision_worst_with_retry":"0.290199","cap":"0.30","harness_pre_send_cap":"0.30"}

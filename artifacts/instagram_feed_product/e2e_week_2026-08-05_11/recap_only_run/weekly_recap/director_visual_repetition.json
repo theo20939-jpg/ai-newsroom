@@ -1,0 +1,35 @@
+{
+ "slide_count": 9,
+ "primitive_distribution": {
+  "flow_diagram": 7,
+  "source_media": 2
+ },
+ "source_asset_reuse": {
+  "story_4": [
+   2
+  ],
+  "story_6": [
+   6
+  ]
+ },
+ "asset_reuse_within_slide": [
+  {
+   "slide": 2,
+   "asset": "story_4",
+   "uses": 3
+  },
+  {
+   "slide": 6,
+   "asset": "story_6",
+   "uses": 3
+  }
+ ],
+ "layout_signature_repetition": [],
+ "design_repetition_warning": true,
+ "warnings": [
+  "flow_diagram carries 7 of 9 slides",
+  "asset 'story_4' used 3x on slide 2",
+  "asset 'story_6' used 3x on slide 6"
+ ],
+ "degenerate_composition": null
+}

@@ -1,0 +1,1729 @@
+[
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     73,
+     189,
+     857,
+     271
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     281,
+     536,
+     378
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     402,
+     955,
+     449
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     458,
+     855,
+     506
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     515,
+     985,
+     563
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": 0,
+  "slide_count": 9,
+  "caption_linkage": "ec380371-0136-42eb-830b-34bfa49324ed",
+  "content_identity": "239378120f027d39",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=top-center|media_zone=none|media_dominance=BALANCED|density=LOW|asymmetry=centered|visual_weight=GRAPHIC|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "top-center",
+    "media_zone": "none",
+    "media_dominance": "BALANCED",
+    "density": "LOW",
+    "asymmetry": "centered",
+    "visual_weight": "GRAPHIC",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": null,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "brand",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 4,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.0,
+   "text_canvas_coverage": 0.2344,
+   "object_canvas_coverage": 0.0,
+   "object_bbox_canvas_coverage": 0.0,
+   "object_bounding_boxes": [],
+   "object_edge_bleed": [],
+   "negative_space": 0.4808,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "DISPLAY",
+     "font_px": 97,
+     "lines": 2,
+     "block_h_frac": 0.14,
+     "block_w_frac": 0.7222,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 3,
+     "block_h_frac": 0.1193,
+     "block_w_frac": 0.8417,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "graphic_scale_adapted": true,
+   "graphic_scale_requested": [
+    0.45,
+    0.18,
+    0.47,
+    0.58
+   ],
+   "graphic_scale_executed": [
+    0.07,
+    0.47,
+    0.86,
+    0.33
+   ],
+   "creative_plan": {
+    "main_idea": "A weekly signal map showing how AI moves from familiar interfaces into models, devices, safety systems and internet culture.",
+    "focal_point": "The exact September 4 Google Assistant shutdown date, followed by a visual rhythm of transitions, risk boundaries, model systems and release timelines.",
+    "composition_direction": "Alternate high-impact dark statements, structured flow graphics and serious image collages; keep each story visually distinct while maintaining a clear editorial progression.",
+    "visual_treatment": "A recurring visual language of arrows, nodes, transitions and cropped evidence fragments makes the week feel like a map of systems changing position."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "display",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GRAPHIC",
+   "media_execution_status": "graphic",
+   "body_placement": null,
+   "rendered_copy": [
+    "Assistant исчезнет 4 сентября\n\nGoogle начнёт отключать его на смартфонах, планшетах и сопряжённых устройствах. Привычный интерфейс уступает место Gemini."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GRAPHIC",
+   "per_slide_media_consumed": false,
+   "media_need_consumed": "Substantive flow diagram showing the transition from Google Assistant to Gemini.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_2",
+   "must_match_story": false,
+   "media_asset_identity": null,
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_top-center_none_BALANCED_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden",
+    "graphic_scale_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "graphic",
+   "visual_preserved": true,
+   "layout_variant": "declared_top-center_none_BALANCED_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     189,
+     627,
+     275
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     285,
+     667,
+     372
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     402,
+     898,
+     445
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     453,
+     942,
+     497
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     505,
+     773,
+     549
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": 1,
+  "slide_count": 9,
+  "caption_linkage": "ec380371-0136-42eb-830b-34bfa49324ed",
+  "content_identity": "8ba7e351afcf9b96",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=middle-center|media_zone=none|media_dominance=BALANCED|density=MEDIUM|asymmetry=centered|visual_weight=GRAPHIC|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "middle-center",
+    "media_zone": "none",
+    "media_dominance": "BALANCED",
+    "density": "MEDIUM",
+    "asymmetry": "centered",
+    "visual_weight": "GRAPHIC",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": null,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "graphite",
+   "palette": "brand",
+   "logo_position": "BOTTOM_LEFT",
+   "arrangement": "standard",
+   "layer_count": 4,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.0,
+   "text_canvas_coverage": 0.1903,
+   "object_canvas_coverage": 0.0,
+   "object_bbox_canvas_coverage": 0.0,
+   "object_bounding_boxes": [],
+   "object_edge_bleed": [],
+   "negative_space": 0.5249,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 87,
+     "lines": 2,
+     "block_h_frac": 0.1356,
+     "block_w_frac": 0.5463,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 41,
+     "lines": 3,
+     "block_h_frac": 0.1089,
+     "block_w_frac": 0.8019,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "graphic_scale_adapted": true,
+   "graphic_scale_requested": [
+    0.08,
+    0.49,
+    0.84,
+    0.31
+   ],
+   "graphic_scale_executed": [
+    0.07,
+    0.47,
+    0.86,
+    0.33
+   ],
+   "creative_plan": {
+    "main_idea": "A weekly signal map showing how AI moves from familiar interfaces into models, devices, safety systems and internet culture.",
+    "focal_point": "The exact September 4 Google Assistant shutdown date, followed by a visual rhythm of transitions, risk boundaries, model systems and release timelines.",
+    "composition_direction": "Alternate high-impact dark statements, structured flow graphics and serious image collages; keep each story visually distinct while maintaining a clear editorial progression.",
+    "visual_treatment": "A recurring visual language of arrows, nodes, transitions and cropped evidence fragments makes the week feel like a map of systems changing position."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GRAPHIC",
+   "media_execution_status": "graphic",
+   "body_placement": null,
+   "rendered_copy": [
+    "Google меняет голосовой вход\n\nGoogle объявила об отказе от Google Assistant в пользу Gemini ещё в 2025 году. Теперь переход получает конкретную дату для Android."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GRAPHIC",
+   "per_slide_media_consumed": false,
+   "media_need_consumed": "Substantive flow diagram for the move from Google Assistant to Gemini.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_2",
+   "must_match_story": false,
+   "media_asset_identity": null,
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_middle-center_none_BALANCED_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden",
+    "graphic_scale_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "graphic",
+   "visual_preserved": true,
+   "layout_variant": "declared_middle-center_none_BALANCED_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     189,
+     627,
+     285
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     298,
+     985,
+     390
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     435,
+     850,
+     477
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     485,
+     894,
+     529
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     537,
+     998,
+     581
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     75,
+     589,
+     868,
+     631
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 2,
+  "slide_count": 9,
+  "caption_linkage": "ec380371-0136-42eb-830b-34bfa49324ed",
+  "content_identity": "1247b29e45f5609b",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=middle-center|media_zone=bottom-center|media_dominance=DOMINANT|density=HIGH|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "middle-center",
+    "media_zone": "bottom-center",
+    "media_dominance": "DOMINANT",
+    "density": "HIGH",
+    "asymmetry": "centered",
+    "visual_weight": "MEDIA",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "story_4",
+     "identity": "44f35a7c0a34a85a",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "culture",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 4,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.48,
+   "text_canvas_coverage": 0.2851,
+   "object_canvas_coverage": 0.48,
+   "object_bbox_canvas_coverage": 0.48,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.52,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "bottom"
+   ],
+   "negative_space": 0.2349,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 115,
+     "lines": 2,
+     "block_h_frac": 0.1489,
+     "block_w_frac": 0.8417,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 41,
+     "lines": 4,
+     "block_h_frac": 0.1452,
+     "block_w_frac": 0.8537,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "media_scale_adapted": true,
+   "media_scale_orientation": "text_top",
+   "media_scale_requested": [
+    0.04,
+    0.39,
+    0.65,
+    0.5
+   ],
+   "media_scale_executed": [
+    0.0,
+    0.52,
+    1.0,
+    0.48
+   ],
+   "media_scale_rescued_rejected_plan": [
+    "text_over_media"
+   ],
+   "creative_plan": {
+    "main_idea": "A weekly signal map showing how AI moves from familiar interfaces into models, devices, safety systems and internet culture.",
+    "focal_point": "The exact September 4 Google Assistant shutdown date, followed by a visual rhythm of transitions, risk boundaries, model systems and release timelines.",
+    "composition_direction": "Alternate high-impact dark statements, structured flow graphics and serious image collages; keep each story visually distinct while maintaining a clear editorial progression.",
+    "visual_treatment": "A recurring visual language of arrows, nodes, transitions and cropped evidence fragments makes the week feel like a map of systems changing position."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "SOURCE",
+   "media_execution_status": "source_media",
+   "body_placement": null,
+   "rendered_copy": [
+    "ИИ «пошёл вразнос» на тесте\n\nИнститут безопасности ИИ Великобритании сообщил о потенциально вредной активности и обманном поведении моделей OpenAI и Anthropic. Автономность — это уже не только удобство."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "SOURCE",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Real cybersecurity test image shown as a serious multi-crop collage.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_4",
+   "must_match_story": true,
+   "media_asset_identity": "44f35a7c0a34a85a",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_middle-center_bottom-center_DOMINANT_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden",
+    "media_scale_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "source",
+   "visual_preserved": true,
+   "layout_variant": "declared_middle-center_bottom-center_DOMINANT_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     189,
+     883,
+     281
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     291,
+     504,
+     373
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     402,
+     993,
+     446
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     454,
+     987,
+     493
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     75,
+     501,
+     877,
+     543
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     75,
+     551,
+     238,
+     593
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": 3,
+  "slide_count": 9,
+  "caption_linkage": "ec380371-0136-42eb-830b-34bfa49324ed",
+  "content_identity": "3e82b05f14beec68",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=middle-center|media_zone=none|media_dominance=BALANCED|density=MEDIUM|asymmetry=centered|visual_weight=GRAPHIC|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "middle-center",
+    "media_zone": "none",
+    "media_dominance": "BALANCED",
+    "density": "MEDIUM",
+    "asymmetry": "centered",
+    "visual_weight": "GRAPHIC",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": null,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "graphite",
+   "palette": "brand",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 4,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.0,
+   "text_canvas_coverage": 0.2558,
+   "object_canvas_coverage": 0.0,
+   "object_bbox_canvas_coverage": 0.0,
+   "object_bounding_boxes": [],
+   "object_edge_bleed": [],
+   "negative_space": 0.4594,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 87,
+     "lines": 2,
+     "block_h_frac": 0.1363,
+     "block_w_frac": 0.7472,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 41,
+     "lines": 4,
+     "block_h_frac": 0.1415,
+     "block_w_frac": 0.8491,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "graphic_scale_adapted": true,
+   "graphic_scale_requested": [
+    0.08,
+    0.46,
+    0.84,
+    0.28
+   ],
+   "graphic_scale_executed": [
+    0.07,
+    0.47,
+    0.86,
+    0.33
+   ],
+   "creative_plan": {
+    "main_idea": "A weekly signal map showing how AI moves from familiar interfaces into models, devices, safety systems and internet culture.",
+    "focal_point": "The exact September 4 Google Assistant shutdown date, followed by a visual rhythm of transitions, risk boundaries, model systems and release timelines.",
+    "composition_direction": "Alternate high-impact dark statements, structured flow graphics and serious image collages; keep each story visually distinct while maintaining a clear editorial progression.",
+    "visual_treatment": "A recurring visual language of arrows, nodes, transitions and cropped evidence fragments makes the week feel like a map of systems changing position."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GRAPHIC",
+   "media_execution_status": "graphic",
+   "body_placement": null,
+   "rendered_copy": [
+    "В DeepMind меняется кресло CEO\n\nDemis Hassabis покидает роль CEO Google DeepMind и станет председателем подразделения. Также ему добавят титул главного научного сотрудника Alphabet."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GRAPHIC",
+   "per_slide_media_consumed": false,
+   "media_need_consumed": "Substantive role-transition flow diagram.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_1",
+   "must_match_story": false,
+   "media_asset_identity": null,
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_middle-center_none_BALANCED_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden",
+    "graphic_scale_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "graphic",
+   "visual_preserved": true,
+   "layout_variant": "declared_middle-center_none_BALANCED_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     189,
+     975,
+     288
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     300,
+     443,
+     377
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     402,
+     938,
+     439
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     446,
+     827,
+     483
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     490,
+     979,
+     526
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     533,
+     148,
+     560
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": 4,
+  "slide_count": 9,
+  "caption_linkage": "ec380371-0136-42eb-830b-34bfa49324ed",
+  "content_identity": "3f08665773ad38c6",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=middle-center|media_zone=none|media_dominance=BALANCED|density=HIGH|asymmetry=centered|visual_weight=GRAPHIC|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "middle-center",
+    "media_zone": "none",
+    "media_dominance": "BALANCED",
+    "density": "HIGH",
+    "asymmetry": "centered",
+    "visual_weight": "GRAPHIC",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": null,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "neo",
+   "logo_position": "BOTTOM_LEFT",
+   "arrangement": "standard",
+   "layer_count": 4,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.0,
+   "text_canvas_coverage": 0.2481,
+   "object_canvas_coverage": 0.0,
+   "object_bbox_canvas_coverage": 0.0,
+   "object_bounding_boxes": [],
+   "object_edge_bleed": [],
+   "negative_space": 0.4671,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 107,
+     "lines": 2,
+     "block_h_frac": 0.1393,
+     "block_w_frac": 0.8306,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 37,
+     "lines": 4,
+     "block_h_frac": 0.117,
+     "block_w_frac": 0.8361,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "graphic_scale_adapted": true,
+   "graphic_scale_requested": [
+    0.07,
+    0.48,
+    0.86,
+    0.29
+   ],
+   "graphic_scale_executed": [
+    0.07,
+    0.47,
+    0.86,
+    0.33
+   ],
+   "creative_plan": {
+    "main_idea": "A weekly signal map showing how AI moves from familiar interfaces into models, devices, safety systems and internet culture.",
+    "focal_point": "The exact September 4 Google Assistant shutdown date, followed by a visual rhythm of transitions, risk boundaries, model systems and release timelines.",
+    "composition_direction": "Alternate high-impact dark statements, structured flow graphics and serious image collages; keep each story visually distinct while maintaining a clear editorial progression.",
+    "visual_treatment": "A recurring visual language of arrows, nodes, transitions and cropped evidence fragments makes the week feel like a map of systems changing position."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GRAPHIC",
+   "media_execution_status": "graphic",
+   "body_placement": "plan+body_min_relaxed",
+   "rendered_copy": [
+    "Meta делает ставку на Muse\n\nВ семействе — Muse Spark, Muse Glimmer и Muse Code. Meta говорит, что Muse Glimmer имеет 30 млрд параметров и достаточно мал, чтобы работать на одном GPU."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GRAPHIC",
+   "per_slide_media_consumed": false,
+   "media_need_consumed": "Substantive model-family and hardware-scale flow diagram.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_3",
+   "must_match_story": false,
+   "media_asset_identity": null,
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_middle-center_none_BALANCED_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden",
+    "graphic_scale_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "graphic",
+   "visual_preserved": true,
+   "layout_variant": "declared_middle-center_none_BALANCED_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     189,
+     972,
+     272
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     283,
+     1002,
+     377
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     402,
+     852,
+     444
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     452,
+     982,
+     496
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     504,
+     865,
+     543
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     75,
+     551,
+     514,
+     591
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": 5,
+  "slide_count": 9,
+  "caption_linkage": "ec380371-0136-42eb-830b-34bfa49324ed",
+  "content_identity": "4f167e7564b24047",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=middle-center|media_zone=none|media_dominance=BALANCED|density=MEDIUM|asymmetry=centered|visual_weight=GRAPHIC|region_count=3-4|surface=light",
+   "layout_characteristics": {
+    "headline_zone": "middle-center",
+    "media_zone": "none",
+    "media_dominance": "BALANCED",
+    "density": "MEDIUM",
+    "asymmetry": "centered",
+    "visual_weight": "GRAPHIC",
+    "region_count": "3-4",
+    "surface": "light"
+   },
+   "media_regions": [],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": null,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "paper",
+   "palette": "brand",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 4,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.0,
+   "text_canvas_coverage": 0.2724,
+   "object_canvas_coverage": 0.0,
+   "object_bbox_canvas_coverage": 0.0,
+   "object_bounding_boxes": [],
+   "object_edge_bleed": [],
+   "negative_space": 0.4428,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 99,
+     "lines": 2,
+     "block_h_frac": 0.1393,
+     "block_w_frac": 0.8574,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 41,
+     "lines": 4,
+     "block_h_frac": 0.14,
+     "block_w_frac": 0.8389,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "graphic_scale_adapted": true,
+   "graphic_scale_requested": [
+    0.08,
+    0.5,
+    0.84,
+    0.27
+   ],
+   "graphic_scale_executed": [
+    0.07,
+    0.47,
+    0.86,
+    0.33
+   ],
+   "creative_plan": {
+    "main_idea": "A weekly signal map showing how AI moves from familiar interfaces into models, devices, safety systems and internet culture.",
+    "focal_point": "The exact September 4 Google Assistant shutdown date, followed by a visual rhythm of transitions, risk boundaries, model systems and release timelines.",
+    "composition_direction": "Alternate high-impact dark statements, structured flow graphics and serious image collages; keep each story visually distinct while maintaining a clear editorial progression.",
+    "visual_treatment": "A recurring visual language of arrows, nodes, transitions and cropped evidence fragments makes the week feel like a map of systems changing position."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GRAPHIC",
+   "media_execution_status": "graphic",
+   "body_placement": null,
+   "rendered_copy": [
+    "Бесплатный ChatGPT получил GPT-5.6 Luna\n\nOpenAI обновила модель по умолчанию для бесплатных пользователей и убирает ограничения на текстовые чаты. Раньше без доплаты был доступен GPT-5.5 Instant."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GRAPHIC",
+   "per_slide_media_consumed": false,
+   "media_need_consumed": "Substantive before-and-after flow graphic for free access.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_5",
+   "must_match_story": false,
+   "media_asset_identity": null,
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_middle-center_none_BALANCED_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden",
+    "graphic_scale_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "graphic",
+   "visual_preserved": true,
+   "layout_variant": "declared_middle-center_none_BALANCED_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     189,
+     1000,
+     277
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     287,
+     980,
+     373
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     75,
+     435,
+     936,
+     482
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     491,
+     994,
+     534
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     543,
+     985,
+     591
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     600,
+     949,
+     648
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 6,
+  "slide_count": 9,
+  "caption_linkage": "ec380371-0136-42eb-830b-34bfa49324ed",
+  "content_identity": "24af281c0e355836",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=middle-center|media_zone=bottom-center|media_dominance=DOMINANT|density=HIGH|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=light",
+   "layout_characteristics": {
+    "headline_zone": "middle-center",
+    "media_zone": "bottom-center",
+    "media_dominance": "DOMINANT",
+    "density": "HIGH",
+    "asymmetry": "centered",
+    "visual_weight": "MEDIA",
+    "region_count": "3-4",
+    "surface": "light"
+   },
+   "media_regions": [
+    {
+     "subject": "story_6",
+     "identity": "690ca1142822ff51",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "soft",
+   "palette": "culture",
+   "logo_position": "BOTTOM_LEFT",
+   "arrangement": "standard",
+   "layer_count": 4,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.48,
+   "text_canvas_coverage": 0.2866,
+   "object_canvas_coverage": 0.48,
+   "object_bbox_canvas_coverage": 0.48,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.52,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "bottom"
+   ],
+   "negative_space": 0.2334,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 91,
+     "lines": 2,
+     "block_h_frac": 0.1363,
+     "block_w_frac": 0.8556,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 4,
+     "block_h_frac": 0.1578,
+     "block_w_frac": 0.8491,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "media_scale_adapted": true,
+   "media_scale_orientation": "text_top",
+   "media_scale_requested": [
+    0.07,
+    0.38,
+    0.63,
+    0.5
+   ],
+   "media_scale_executed": [
+    0.0,
+    0.52,
+    1.0,
+    0.48
+   ],
+   "media_scale_rescued_rejected_plan": [
+    "text_over_media"
+   ],
+   "creative_plan": {
+    "main_idea": "A weekly signal map showing how AI moves from familiar interfaces into models, devices, safety systems and internet culture.",
+    "focal_point": "The exact September 4 Google Assistant shutdown date, followed by a visual rhythm of transitions, risk boundaries, model systems and release timelines.",
+    "composition_direction": "Alternate high-impact dark statements, structured flow graphics and serious image collages; keep each story visually distinct while maintaining a clear editorial progression.",
+    "visual_treatment": "A recurring visual language of arrows, nodes, transitions and cropped evidence fragments makes the week feel like a map of systems changing position."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "SOURCE",
+   "media_execution_status": "source_media",
+   "body_placement": null,
+   "rendered_copy": [
+    "Колонка OpenAI — пока только по сообщениям\n\nУстройство, которое разрабатывают OpenAI и Jony Ive, описывают как компактную колонку без дисплея, размером примерно с хоккейную шайбу. Подтверждённого продукта пока нет."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "SOURCE",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Real reported-device image used as a multi-crop collage.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_6",
+   "must_match_story": true,
+   "media_asset_identity": "690ca1142822ff51",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_middle-center_bottom-center_DOMINANT_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden",
+    "media_scale_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "source",
+   "visual_preserved": true,
+   "layout_variant": "declared_middle-center_bottom-center_DOMINANT_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     189,
+     703,
+     280
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     74,
+     290,
+     494,
+     379
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     402,
+     993,
+     449
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     458,
+     890,
+     505
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     514,
+     883,
+     549
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     558,
+     495,
+     594
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": 7,
+  "slide_count": 9,
+  "caption_linkage": "ec380371-0136-42eb-830b-34bfa49324ed",
+  "content_identity": "4750e6ef118512c4",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=middle-center|media_zone=none|media_dominance=BALANCED|density=MEDIUM|asymmetry=centered|visual_weight=GRAPHIC|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "middle-center",
+    "media_zone": "none",
+    "media_dominance": "BALANCED",
+    "density": "MEDIUM",
+    "asymmetry": "centered",
+    "visual_weight": "GRAPHIC",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": null,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "culture",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 4,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.0,
+   "text_canvas_coverage": 0.2333,
+   "object_canvas_coverage": 0.0,
+   "object_bbox_canvas_coverage": 0.0,
+   "object_bounding_boxes": [],
+   "object_edge_bleed": [],
+   "negative_space": 0.4819,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 95,
+     "lines": 2,
+     "block_h_frac": 0.1407,
+     "block_w_frac": 0.5787,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 4,
+     "block_h_frac": 0.1422,
+     "block_w_frac": 0.8491,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "graphic_scale_adapted": true,
+   "graphic_scale_requested": [
+    0.08,
+    0.5,
+    0.84,
+    0.27
+   ],
+   "graphic_scale_executed": [
+    0.07,
+    0.47,
+    0.86,
+    0.33
+   ],
+   "creative_plan": {
+    "main_idea": "A weekly signal map showing how AI moves from familiar interfaces into models, devices, safety systems and internet culture.",
+    "focal_point": "The exact September 4 Google Assistant shutdown date, followed by a visual rhythm of transitions, risk boundaries, model systems and release timelines.",
+    "composition_direction": "Alternate high-impact dark statements, structured flow graphics and serious image collages; keep each story visually distinct while maintaining a clear editorial progression.",
+    "visual_treatment": "A recurring visual language of arrows, nodes, transitions and cropped evidence fragments makes the week feel like a map of systems changing position."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GRAPHIC",
+   "media_execution_status": "graphic",
+   "body_placement": null,
+   "rendered_copy": [
+    "GTA VI покажут 27 августа\n\nРасширенный показ должен состояться в 22:00 по Москве. Netflix получил эксклюзивные права на него, а через шесть часов видео появится на YouTube."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GRAPHIC",
+   "per_slide_media_consumed": false,
+   "media_need_consumed": "Substantive release-timeline flow diagram.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_7",
+   "must_match_story": false,
+   "media_asset_identity": null,
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_middle-center_none_BALANCED_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden",
+    "graphic_scale_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "graphic",
+   "visual_preserved": true,
+   "layout_variant": "declared_middle-center_none_BALANCED_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     189,
+     996,
+     265
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     75,
+     275,
+     699,
+     343
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     402,
+     942,
+     440
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     447,
+     901,
+     485
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     492,
+     904,
+     529
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     536,
+     365,
+     564
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": 8,
+  "slide_count": 9,
+  "caption_linkage": "ec380371-0136-42eb-830b-34bfa49324ed",
+  "content_identity": "60f8b7bf1e5472ad",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=middle-center|media_zone=none|media_dominance=BALANCED|density=LOW|asymmetry=centered|visual_weight=GRAPHIC|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "middle-center",
+    "media_zone": "none",
+    "media_dominance": "BALANCED",
+    "density": "LOW",
+    "asymmetry": "centered",
+    "visual_weight": "GRAPHIC",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": null,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "graphite",
+   "palette": "brand",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 4,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.0,
+   "text_canvas_coverage": 0.2273,
+   "object_canvas_coverage": 0.0,
+   "object_bbox_canvas_coverage": 0.0,
+   "object_bounding_boxes": [],
+   "object_edge_bleed": [],
+   "negative_space": 0.4879,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 87,
+     "lines": 2,
+     "block_h_frac": 0.1141,
+     "block_w_frac": 0.8519,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 37,
+     "lines": 4,
+     "block_h_frac": 0.12,
+     "block_w_frac": 0.8019,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "graphic_scale_adapted": true,
+   "graphic_scale_requested": [
+    0.56,
+    0.2,
+    0.36,
+    0.5
+   ],
+   "graphic_scale_executed": [
+    0.07,
+    0.47,
+    0.86,
+    0.33
+   ],
+   "creative_plan": {
+    "main_idea": "A weekly signal map showing how AI moves from familiar interfaces into models, devices, safety systems and internet culture.",
+    "focal_point": "The exact September 4 Google Assistant shutdown date, followed by a visual rhythm of transitions, risk boundaries, model systems and release timelines.",
+    "composition_direction": "Alternate high-impact dark statements, structured flow graphics and serious image collages; keep each story visually distinct while maintaining a clear editorial progression.",
+    "visual_treatment": "A recurring visual language of arrows, nodes, transitions and cropped evidence fragments makes the week feel like a map of systems changing position."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GRAPHIC",
+   "media_execution_status": "graphic",
+   "body_placement": "plan+body_min_relaxed",
+   "rendered_copy": [
+    "Неделя, когда ИИ вышел за пределы чата\n\nОн меняет привычные интерфейсы, получает больше автономности, приходит в устройства и становится частью главных интернет-событий. Сохрани, чтобы не потерять даты."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GRAPHIC",
+   "per_slide_media_consumed": false,
+   "media_need_consumed": "Substantive summary graphic using the carousel's established visual motifs.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_2",
+   "must_match_story": false,
+   "media_asset_identity": null,
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_middle-center_none_BALANCED_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden",
+    "graphic_scale_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "graphic",
+   "visual_preserved": true,
+   "layout_variant": "declared_middle-center_none_BALANCED_3-4"
+  }
+ }
+]

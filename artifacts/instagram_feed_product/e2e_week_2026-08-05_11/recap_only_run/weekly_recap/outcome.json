@@ -1,0 +1,68 @@
+{
+ "key": "weekly_recap",
+ "format": "weekly_recap",
+ "title": "Главное за неделю: ИИ, гаджеты, интернет",
+ "recap_selected": 7,
+ "recap_entering_downstream": 7,
+ "recap_with_media": 3,
+ "reason": "submitted",
+ "stage": "OK",
+ "gate": "ready_for_editor",
+ "delivery": "recorded_ready_for_editor_no_telegram",
+ "calls": [
+  {
+   "post": "weekly_recap",
+   "kind": "PHASE_A",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 8000,
+   "worst_case_usd": "0.05125300",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 3179,
+   "output_tokens": 1179,
+   "reasoning_tokens": 258,
+   "cost_usd": "0.010253"
+  },
+  {
+   "post": "weekly_recap",
+   "kind": "VISION",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 400,
+   "worst_case_usd": "0.00281800",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 870,
+   "output_tokens": 53,
+   "reasoning_tokens": 0,
+   "cost_usd": "0.001188"
+  },
+  {
+   "post": "weekly_recap",
+   "kind": "VISION",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 400,
+   "worst_case_usd": "0.00281800",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1158,
+   "output_tokens": 58,
+   "reasoning_tokens": 0,
+   "cost_usd": "0.001506"
+  },
+  {
+   "post": "weekly_recap",
+   "kind": "DIRECTOR",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 16000,
+   "worst_case_usd": "0.10980200",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 13898,
+   "output_tokens": 8736,
+   "reasoning_tokens": 474,
+   "cost_usd": "0.066314"
+  }
+ ],
+ "slides": 9,
+ "spent_so_far": "0.079261"
+}

@@ -1,0 +1,67 @@
+{
+ "planned_format": "WEEKLY_RECAP",
+ "prompt_version": "2",
+ "structured_output": {
+  "source_summary": "Главное за неделю: ИИ, гаджеты, интернет",
+  "opportunity_type": "NEWS",
+  "why_now": "В подборке собраны семь заметных сигналов недели: кадровые перестановки в Google DeepMind, уход Google Assistant, новые модели Meta и OpenAI, риски автономного поведения ИИ, устройство OpenAI и новость вокруг GTA VI. Вместе они дают цельную картину того, как меняются ИИ, гаджеты и интернет-культура.",
+  "audience_value": "Карусель быстро объяснит, какие события действительно важны и почему они затрагивают привычные продукты, безопасность ИИ, устройства и игровую культуру.",
+  "angle": "Неделя, когда ИИ меняет не только модели, но и привычные интерфейсы: от Google Assistant до новых устройств OpenAI — плюс главный игровой инфоповод.",
+  "angle_intent": "EVERGREEN_VALUE",
+  "topic": "Главное за неделю: перестановки в AI, замена Google Assistant, новые модели, риски автономного ИИ, устройство OpenAI и GTA VI",
+  "purpose": "REACH",
+  "origin": "NEWS",
+  "recommended_format": "carousel",
+  "format_reason": "Семь историй требуют иерархии и коротких пояснений. Карусель позволит открыть выпуск главным тезисом, затем провести читателя от новостей AI к гаджетам и завершить поп-культурным инфоповодом.",
+  "creative_direction": "Карусель в формате редакционного дайджеста: первый слайд — общий тезис «ИИ меняет привычный интерфейс», далее крупные карточки с одной историей и коротким объяснением «что произошло / почему важно». Истории 2 и 4 визуально усилить как наиболее понятные последствия для пользователя и безопасности; GTA VI оставить финальным контрастным слайдом.",
+  "product_connection": null,
+  "trend_rationale": null,
+  "supplementary_story_idea": null,
+  "evidence_used": [
+   "Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's chairman and will add the title of",
+   "Google начнёт отключать Google Assistant на смартфонах, планшетах и сопряжённых устройствах 4 сентября 2026 года.",
+   "Meta says Muse Glimmer has 30B parameters and is \"small enough\" to need only one GPU; Meta plans a $1B fund to invest",
+   "OpenAI and Anthropic models went on a hacking spree when tested by the UK's AI research institute",
+   "**GPT-5.6 Luna теперь доступна пользователям бесплатного тарифа** Ранее без дополнительной платы можно было пользоваться GPT-5.5 Instant.",
+   "Jony Ive’s first OpenAI gadget is reportedly a hockey puck-sized smart speaker",
+   "**GTA VI покажут 27 августа**"
+  ],
+  "coverage_plan": [
+   {
+    "story_key": "story_2",
+    "role": "LEAD",
+    "angle": "Google Assistant уходит с Android и Wear OS: что меняется в привычном голосовом интерфейсе и почему Google переводит пользователей на Gemini."
+   },
+   {
+    "story_key": "story_4",
+    "role": "LEAD",
+    "angle": "Модели OpenAI и Anthropic проявили потенциально опасное поведение в тестах: почему автономность ИИ требует новых правил безопасности."
+   },
+   {
+    "story_key": "story_1",
+    "role": "STANDARD",
+    "angle": "Demis Hassabis покидает пост CEO Google DeepMind, но остаётся в Google в роли председателя — важная перестановка в руководстве AI-направления."
+   },
+   {
+    "story_key": "story_3",
+    "role": "STANDARD",
+    "angle": "Meta представила семейство Muse AI, включая Muse Spark, Muse Glimmer и Muse Code: новая ставка компании на собственные модели и open-AI messaging."
+   },
+   {
+    "story_key": "story_5",
+    "role": "STANDARD",
+    "angle": "OpenAI обновила бесплатный уровень ChatGPT: GPT-5.6 Luna и unlimited text chats меняют ожидания пользователей от бесплатного доступа."
+   },
+   {
+    "story_key": "story_6",
+    "role": "BRIEF",
+    "angle": "По сообщениям, первое устройство OpenAI и Jony Ive — компактная колонка без дисплея; пока это история о направлении, а не о подтверждённом продукте."
+   },
+   {
+    "story_key": "story_7",
+    "role": "BRIEF",
+    "angle": "GTA VI получает отдельный инфоповод: Netflix ненадолго получил эксклюзив на расширенный показ, а релиз показа связывают с 27 августа."
+   }
+  ]
+ }
+}

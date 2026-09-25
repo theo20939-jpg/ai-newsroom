@@ -1,0 +1,12 @@
+weekly_recap                             -          OK             submitted                                                    slides=9 spent=$0.0793
+{
+ "actual_cost_usd": "0.079261",
+ "diagnostic_ledger_usd": "0.079261",
+ "provider_calls": 4,
+ "calls_by_kind": {
+  "PHASE_A": 1,
+  "VISION": 2,
+  "DIRECTOR": 1
+ }
+}
+exit 0
