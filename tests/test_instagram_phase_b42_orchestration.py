@@ -206,7 +206,8 @@ async def test_recap_bundle_bridge_gives_each_story_its_own_media_or_none(monkey
     assert bundle is not None and bundle.subjects == ["story_1", "story_2", "story_3", "story_4"]
     assert set(bundle.available_assets) == {"story_1", "story_2", "story_3"}  # story_4 has no media
     assert len({derive_asset_identity(b) for b in bundle.available_assets.values()}) == 3
-    assert bundle.evidence[0] == "[story_1] Story 1"
+    assert bundle.evidence[0] == "Story 1"  # the exact text - the story is structural metadata, never a label glued onto the quote
+    assert bundle.evidence_story_keys["Story 1"] == "story_1"
     assert await build_instagram_recap_bundle(_FakeBundleSession(titles), selected=candidates[:3]) is None
 
 

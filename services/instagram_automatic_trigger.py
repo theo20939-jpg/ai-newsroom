@@ -59,7 +59,12 @@ from services.instagram_content_opportunity import (
     OpportunitySourceType,
 )
 from services.instagram_content_package import build_instagram_content_package
-from services.instagram_media_first import GENERATED_SUBJECT_KEY, MediaFirstContractError, UnsupportedClickbaitError
+from services.instagram_media_first import (
+    EXECUTABLE_VISUAL_PRIMITIVES,
+    GENERATED_SUBJECT_KEY,
+    MediaFirstContractError,
+    UnsupportedClickbaitError,
+)
 from services.instagram_meta_language_guard import MetaLanguageLeakError
 from services.kage_voice import KageVoiceUnavailableError, load_kage_voice
 from services.instagram_creative_director import (
@@ -380,7 +385,7 @@ async def _build_phase_a_editorial_plan(
     session: Any, *, opportunity: ContentOpportunity, source_summary: str, trend_context: str,
     trend_signal: TrendSignal | None,
     gateway: Any, prompt_repository: Any, allow_duplicate_canary: bool,
-    planned: tuple[str, str] | None = None, recap_stories: list | None = None,
+    planned: tuple[str, str] | None = None, recap_stories: list | None = None, evidence_story_keys: dict | None = None,
 ) -> _PhaseAEditorialPlan:
     now = datetime.now(UTC)
     snapshot = await get_business_context_snapshot(session, now=now)
@@ -408,6 +413,7 @@ async def _build_phase_a_editorial_plan(
             executable_formats=_executable_formats(planned),
             planned_format=planned[0] if planned else "",
             recap_stories=list(recap_stories or []),
+            evidence_story_keys=dict(evidence_story_keys or {}),
         ),
     )
     if not opportunity.product_mention_allowed and decision.product_connection:
@@ -537,8 +543,10 @@ _NON_PHOTO_FUNCTIONS = ("ui_screenshot", "result", "before_after", "concept")
 
 _GENERATION_OFF_NOTE = (
     "RUNTIME CAPABILITY: image generation is OFF for this post - media_source 'generated' is NOT available and a generated slide "
-    "cannot be rendered. Every slide uses a listed SOURCE_SUITABLE subject (media_source 'source') or a substantive graphic "
-    "(media_source 'graphic': ui_frame, poll_cards, or flow_diagram with flow_steps). Never plan a generated slide."
+    "cannot be rendered. The renderer can draw ONLY these into meaningful pixels: " + "; ".join(EXECUTABLE_VISUAL_PRIMITIVES)
+    + ". A ui_frame alone is an empty placeholder and is rejected. Map the evidence to them: a menu path or sequence -> flow_diagram, "
+    "a checklist / config keys / list of uses -> poll_cards, one decisive step -> a big step number with its exact UI or command as "
+    "text, a real photo -> the listed source subject. Vary the treatment across slides."
 )
 
 
@@ -819,6 +827,7 @@ async def evaluate_and_submit_instagram_opportunity(
                 recap_stories=[{"story_key": s.key, "premise": s.premise or s.title, "category": s.category,
                                 "evidence_quality": s.evidence_quality, "source_image": bool(s.image_bytes)}
                                for s in recap_bundle.stories] if recap_bundle is not None else None,
+                evidence_story_keys=recap_bundle.evidence_story_keys if recap_bundle is not None else None,
             )
         except (
             CreativeDirectorUnavailableError, UngroundedEvidenceError, CreativeFactSafetyError,
@@ -945,6 +954,7 @@ async def evaluate_and_submit_instagram_opportunity(
         planned_format=planned[0] if planned else "",
         planned_archetype=planned[1] if planned else "",
         recap_required_subjects=[s.key for s in recap_bundle.stories if s.evidence_quality != "BLOCKING"] if recap_bundle is not None else [],
+        evidence_story_keys=recap_bundle.evidence_story_keys if recap_bundle is not None else {},
         kage_voice_context=load_kage_voice().render_context() if media_first else "",
         available_media_subjects=media_subjects[0],
         unsuitable_media_subjects=media_subjects[1],
@@ -1014,6 +1024,7 @@ async def evaluate_and_submit_instagram_opportunity(
             source_ref=image_candidate.candidate_id if image_candidate else None,
             opportunity_summary=opportunity_summary,
             evidence=list(opportunity.evidence),
+            evidence_story_keys=recap_bundle.evidence_story_keys if recap_bundle is not None else None,
             content_format=format_decision.recommended_format.value,
             creative_id=identity,
             opportunity_id=opportunity.id,

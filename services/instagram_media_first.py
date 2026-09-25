@@ -13,6 +13,17 @@ from typing import Any
 
 GENERATED_SUBJECT_KEY = "generated"
 SUBSTANTIVE_GRAPHICS = frozenset({"ui_frame", "flow_diagram", "poll_cards"})
+# What services/instagram_declarative_layout.py actually draws into meaningful pixels without a generated image. `ui_frame` draws ONLY
+# an empty window chrome (rounded box, title bar, three dots) - it is a frame AROUND a real UI image, never content on its own.
+EXECUTABLE_VISUAL_PRIMITIVES = (
+    "source media: a listed SOURCE_SUITABLE subject (media region with its key)",
+    "flow_diagram with 2-4 short flow_steps (a sequence, a menu path, a before/after)",
+    "poll_cards with 2-4 short options written in the slide copy (a checklist, choices, config keys and values, a list of uses)",
+    "text: headline, body, a big step number, code or config quoted as text",
+    "ui_frame ONLY around a listed real UI screenshot subject placed inside it - never an empty frame",
+)
+GENERIC_PRIMITIVE_MAX_SHARE = 0.6  # near-total repetition: one generic graphic on 5+ slides AND over 60% of a 5+ slide carousel
+GENERIC_PRIMITIVES = frozenset({"flow_diagram", "poll_cards"})
 MAX_GENERATED_SLIDES_PER_POST = 6
 MIN_GENERATION_BRIEF_CHARS = 24
 MAX_HOOK_CHARS = 120
@@ -119,7 +130,19 @@ def assert_media_first(
     `evidence` (the whole post's evidence) is accepted for caller-signature compatibility but no longer consulted (Phase B.7):
     a generated slide's grounding is now checked against its OWN resolved `source_evidence` handle, not the post-wide blob."""
     generated = 0
+    generic_use: dict[str, int] = {}
     for index, slide in enumerate(slides):
+        regions = _regions(slide)
+        media_refs_on_slide = {_get(r, "content_ref") for r in regions if _get(r, "kind") == "media"}
+        fillable = set(available_subjects) - set(unsuitable_subjects) | ({GENERATED_SUBJECT_KEY} if generated_media_available else set())
+        if any(_get(r, "kind") == "graphic" and _get(r, "graphic_type") == "ui_frame" for r in regions) and not (media_refs_on_slide & fillable):
+            raise MediaFirstContractError(
+                f"slide {index}: ui_frame renders only an empty window frame and this slide has no real UI image inside it - use "
+                "flow_diagram (2-4 flow_steps), poll_cards (2-4 options in the copy), a listed source subject, or text")
+        main_generic = next((_get(r, "graphic_type") for r in regions
+                             if _get(r, "kind") == "graphic" and _get(r, "graphic_type") in GENERIC_PRIMITIVES), None)
+        if main_generic and not media_refs_on_slide:
+            generic_use[main_generic] = generic_use.get(main_generic, 0) + 1
         source = _get(slide, "media_source")
         where = f"slide {index}"
         if source not in ("source", "generated", "graphic"):
@@ -164,6 +187,12 @@ def assert_media_first(
         stray = [r for r in refs if r != GENERATED_SUBJECT_KEY and r not in available_subjects]
         if stray:
             raise MediaFirstContractError(f"{where}: media region uses an unlisted subject {stray}")
+    if len(slides) >= 5:
+        for primitive, count in generic_use.items():
+            if count >= 5 and count > GENERIC_PRIMITIVE_MAX_SHARE * len(slides):
+                raise MediaFirstContractError(
+                    f"{primitive} carries {count} of {len(slides)} slides - vary the executable treatment: poll_cards for a list or config, "
+                    "flow_diagram for a sequence, a big step number or quoted code as text, a listed source subject")
     if generated > MAX_GENERATED_SLIDES_PER_POST:
         raise MediaFirstContractError(f"{generated} generated slides exceed the per-post bound {MAX_GENERATED_SLIDES_PER_POST}")
 

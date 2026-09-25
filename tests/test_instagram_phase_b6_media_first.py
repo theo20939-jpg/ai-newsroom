@@ -260,11 +260,18 @@ def test_a_typographic_only_slide_is_rejected() -> None:
 
 
 def test_graphic_needs_ui_flow_or_poll_and_a_generated_slide_needs_brief_and_region() -> None:
-    for kind in ("ui_frame", "flow_diagram", "poll_cards"):
+    for kind in ("flow_diagram", "poll_cards"):
         slides = _ok_slides()
         region_kw = {"flow_steps": ["ВВОД", "ДЕЙСТВИЕ", "РЕЗУЛЬТАТ"]} if kind == "flow_diagram" else {}
         slides[1] = _slide_dict("evidence", "Выбор: A? Да | Нет" if kind == "poll_cards" else "Шаги", "graphic", [_r("graphic", 0.08, 0.12, 0.84, 0.36, graphic_type=kind, tone="accent", **region_kw), _text(y=0.56)])
         assert_media_first(list(InstagramCarouselCreative.model_validate({**_carousel_output_with_layouts(), "slides": slides}).slides), available_subjects={"source"}, unsuitable_subjects=set())
+    # capability contract (2026-09-25): ui_frame draws only an empty window chrome - it is valid ONLY around a real listed UI image
+    slides = _ok_slides()
+    slides[1] = _slide_dict("evidence", "Шаги", "graphic", [_r("graphic", 0.08, 0.12, 0.84, 0.36, graphic_type="ui_frame", tone="accent"), _text(y=0.56)])
+    assert "empty window frame" in _fails(slides)
+    slides[1] = _slide_dict("evidence", "Шаги", "source", [_r("graphic", 0.08, 0.12, 0.84, 0.36, graphic_type="ui_frame", tone="accent"),
+                                                          _media("source", 0.1, 0.16, 0.8, 0.3), _text(y=0.56)], subject="source")
+    assert_media_first(list(InstagramCarouselCreative.model_validate({**_carousel_output_with_layouts(), "slides": slides}).slides), available_subjects={"source"}, unsuitable_subjects=set())
     slides = _ok_slides()
     slides[0] = {**slides[0], "generation_brief": "коротко"}
     assert "concrete generation_brief" in _fails(slides)

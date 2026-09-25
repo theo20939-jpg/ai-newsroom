@@ -191,6 +191,11 @@ class CreativeFactSafetyError(Exception):
     creative text - the draft is REJECTED, never silently sanitized."""
 
 
+class EditorialDecisionContractError(CreativeFactSafetyError):
+    """A Phase A structured output that does not satisfy the decision schema: a captured pipeline failure (the raw output is kept by
+    the diagnostic sink), never an uncaught pydantic ValidationError."""
+
+
 class RecapCoverageContractError(CreativeFactSafetyError):
     """Phase A's WEEKLY_RECAP coverage plan does not carry every selected story exactly once (a recap collapsed into one story,
     a dropped / duplicated / invented story)."""
@@ -232,6 +237,8 @@ class InstagramEditorialDecisionInput:
     # for a WEEKLY_RECAP every selected story (story_key, premise, category, evidence_quality, source_image)
     planned_format: str = ""
     recap_stories: list = field(default_factory=list)
+    # exact evidence text -> the recap story it belongs to (shown as a group header, never glued onto the quotable text)
+    evidence_story_keys: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -290,6 +297,8 @@ class CreativeDirectorInput:
     planned_format: str = ""
     planned_archetype: str = ""
     recap_required_subjects: list[str] = field(default_factory=list)
+    # exact evidence text -> recap story key (a structural attribution; the evidence text itself stays exact)
+    evidence_story_keys: dict = field(default_factory=dict)
     # the runtime capability boundary: False when this run cannot produce generated images (instagram_image_generation_mode != "live")
     generated_media_available: bool = True
     kage_voice_context: str = ""
@@ -346,7 +355,9 @@ def _effective_restricted_claims(director_input: CreativeDirectorInput) -> list[
 
 def _build_user_text(director_input: CreativeDirectorInput, *, evidence_handles: bool = False) -> str:
     if evidence_handles:
-        evidence_block = "\n".join(f"{handle}: {item}" for handle, item in evidence_handle_map(director_input.allowed_evidence).items()) or "(no evidence provided)"
+        evidence_block = "\n".join(
+            f"{handle}{' [' + director_input.evidence_story_keys[item] + ']' if item in director_input.evidence_story_keys else ''}: {item}"
+            for handle, item in evidence_handle_map(director_input.allowed_evidence).items()) or "(no evidence provided)"
         evidence_heading = "EVIDENCE (use ONLY these for any factual claim; cite the handle, e.g. E2, in evidence_used and source_evidence)"
     else:
         evidence_block = "\n".join(f"- {item}" for item in director_input.allowed_evidence) or "(no evidence provided)"
@@ -403,8 +414,22 @@ def _recap_coverage_text(director_input: CreativeDirectorInput) -> str:
             + ", ".join(director_input.recap_required_subjects) + ("\n" + "\n".join(lines) if lines else ""))
 
 
+def _grouped_evidence(items: list[str], story_keys: dict) -> str:
+    """Evidence bullets grouped under their recap story key: the key is a header, the bullet is the exact quotable source text."""
+    lines: list[str] = []
+    current = None
+    for item in items:
+        key = story_keys.get(item)
+        if key != current:
+            lines.append(f"{key}:" if key else "(post):")
+            current = key
+        lines.append(f"- {item}")
+    return "\n".join(lines)
+
+
 def _build_decision_user_text(decision_input: InstagramEditorialDecisionInput) -> str:
-    evidence = "\n".join(f"- {item}" for item in decision_input.allowed_evidence) or "(none)"
+    evidence = ((_grouped_evidence(decision_input.allowed_evidence, decision_input.evidence_story_keys)
+                 if decision_input.evidence_story_keys else "\n".join(f"- {item}" for item in decision_input.allowed_evidence)) or "(none)")
     return (
         f"SOURCE TYPE: {decision_input.source_type}\n"
         f"SOURCE SUMMARY: {decision_input.source_summary}\n"
@@ -560,7 +585,14 @@ async def generate_editorial_decision(
         raise CreativeDirectorUnavailableError(f"editorial decision truncated at max_tokens={_EDITORIAL_DECISION_MAX_TOKENS}")
     if outcome.response is None or outcome.response.structured_output is None:
         raise CreativeDirectorUnavailableError("no structured output returned")
-    decision = InstagramEditorialDecision.model_validate(outcome.response.structured_output)
+    _emit_diagnostic("phase_a_raw_output", {"planned_format": decision_input.planned_format, "prompt_version": version,
+                                             "structured_output": outcome.response.structured_output})
+    try:
+        decision = InstagramEditorialDecision.model_validate(
+            outcome.response.structured_output,
+            context={"planned_format": decision_input.planned_format} if decision_input.planned_format else None)
+    except ValidationError as exc:
+        raise EditorialDecisionContractError(f"Phase A output does not satisfy the decision schema: {exc.errors()[:3]}") from exc
     assert_evidence_grounded(decision.evidence_used, decision_input.allowed_evidence)
     if decision_input.planned_format == WEEKLY_RECAP:
         assert_recap_coverage(decision, [str(s["story_key"]) for s in decision_input.recap_stories])
@@ -682,7 +714,7 @@ def derive_content_archetype(
     return "news_insight"
 
 
-def _parse_editorial_decision(raw: str) -> InstagramEditorialDecision | None:
+def _parse_editorial_decision(raw: str, planned_format: str = "") -> InstagramEditorialDecision | None:
     if not raw:
         return None
     try:
@@ -692,7 +724,8 @@ def _parse_editorial_decision(raw: str) -> InstagramEditorialDecision | None:
         if not isinstance(data, dict):
             return None
         known = InstagramEditorialDecision.model_fields
-        return InstagramEditorialDecision.model_validate({k: v for k, v in data.items() if k in known})
+        return InstagramEditorialDecision.model_validate({k: v for k, v in data.items() if k in known},
+                                                         context={"planned_format": planned_format} if planned_format else None)
     except Exception:
         return None  # best-effort context only - never blocks generation over a parse failure
 
@@ -703,7 +736,7 @@ async def generate_carousel_creative(
 ) -> CreativeGenerationOutcome:
     # The archetype is derived from the real upstream decision BEFORE generation so the model plans
     # for it; the derived value still overrides whatever the model echoes back afterwards.
-    decision = _parse_editorial_decision(director_input.editorial_decision)
+    decision = _parse_editorial_decision(director_input.editorial_decision, director_input.planned_format)
     # the planned product format is authoritative; only an unplanned (legacy / product-lane) call derives it from the decision
     archetype = director_input.planned_archetype or derive_content_archetype(
         decision, is_recap_bundle=is_recap_bundle or director_input.is_recap_bundle,

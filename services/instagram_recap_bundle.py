@@ -42,6 +42,17 @@ class RecapStory:
     premise: str = ""
     category: str = ""
     evidence_quality: str = ""
+    evidence_sources: tuple[str, ...] = ()  # provenance per evidence item (parallel to `evidence`): title / news_analysis / source URL
+
+
+@dataclass(frozen=True)
+class RecapEvidence:
+    """One recap evidence item: the story it belongs to and its provenance are metadata; `exact_text` is the only grounding string."""
+
+    story_key: str
+    source: str
+    exact_text: str
+    display_preview: str = ""
 
 
 @dataclass(frozen=True)
@@ -53,8 +64,26 @@ class InstagramRecapBundle:
         return [story.key for story in self.stories]
 
     @property
+    def evidence_items(self) -> list[RecapEvidence]:
+        items, seen = [], set()
+        for story in self.stories:
+            for i, text in enumerate(story.evidence):
+                if text in seen:  # one exact text belongs to the first story that carries it
+                    continue
+                seen.add(text)
+                source = story.evidence_sources[i] if i < len(story.evidence_sources) else ""
+                items.append(RecapEvidence(story_key=story.key, source=source, exact_text=text,
+                                           display_preview=text if len(text) <= 160 else text[:159].rstrip() + "…"))
+        return items
+
+    @property
     def evidence(self) -> list[str]:
-        return [line for story in self.stories for line in story.evidence]
+        """The EXACT evidence texts (the grounding set) - story identity is `evidence_story_keys`, never a label on the text."""
+        return [item.exact_text for item in self.evidence_items]
+
+    @property
+    def evidence_story_keys(self) -> dict[str, str]:
+        return {item.exact_text: item.story_key for item in self.evidence_items}
 
     @property
     def available_assets(self) -> dict[str, bytes]:
@@ -161,7 +190,9 @@ async def build_instagram_recap_bundle(
             )
             .order_by(EditorialTask.updated_at.desc()).limit(1)
         )
-        evidence = [f"[{key}] {event.title}"] + [f"[{key}] {fact}" for fact in _research_facts(task.workflow if task else None)]
+        research = _research_facts(task.workflow if task else None)
+        evidence = [event.title] + list(research)
+        sources = ["event_title"] + ["news_analysis"] * len(research)
         # KAGE evidence package: a few verbatim lines from the story's own bodies, only those about its premise (never polluted bodies)
         from services.instagram_evidence_package import RECAP_EXCERPTS_PER_STORY, build_recap_story_package
 
@@ -171,12 +202,14 @@ async def build_instagram_recap_bundle(
             logger.warning("instagram_recap_story_bodies_unavailable", extra={"story_id": str(candidate.story_id)})
             headlines, bodies = [event.title or ""], []
         package = await build_recap_story_package(post_id=key, premise=event.title or "", headlines=headlines, bodies=bodies)
-        evidence += [f"[{key}] {item.text}" for item in package.facts[:RECAP_EXCERPTS_PER_STORY]]
+        excerpts = package.facts[:RECAP_EXCERPTS_PER_STORY]
+        evidence += [item.exact_text for item in excerpts]
+        sources += [item.source_url or item.source_type for item in excerpts]
         premise = str(getattr(candidate, "reason", "") or "").split(" - ", 1)[0].strip() or (event.title or "")
         tier = str(getattr(candidate, "relevance_tier", "") or "")
         stories.append(RecapStory(
             key=key, story_id=str(candidate.story_id), event_id=str(event.id), title=event.title,
-            evidence=evidence, image_bytes=data, source_ref=ref, premise=premise,
+            evidence=evidence, evidence_sources=tuple(sources), image_bytes=data, source_ref=ref, premise=premise,
             category=tier.removeprefix("INSTAGRAM_WEEKLY_") if tier.startswith("INSTAGRAM_WEEKLY_") else "",
             evidence_quality=package.quality,
         ))

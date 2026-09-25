@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, model_validator
 
 INSTAGRAM_CREATIVE_SCHEMA_VERSION = "v1"
 
@@ -67,10 +67,13 @@ class InstagramEditorialDecision(BaseModel):
     coverage_plan: list[RecapCoverageItem] | None = None
 
     @model_validator(mode="after")
-    def validate_intersections(self) -> InstagramEditorialDecision:
+    def validate_intersections(self, info: ValidationInfo) -> InstagramEditorialDecision:
+        # KAGE Phase A v2 (the planned-format path, context planned_format): the SOURCE origin (NEWS) and the planned PRODUCT
+        # (TREND) are independent, so a NEWS-origin decision may carry a trend_rationale for its planned TREND post. v1 keeps its rule.
+        planned = bool((info.context or {}).get("planned_format")) if info is not None else False
         if self.opportunity_type in ("NEWS_X_TREND", "PRODUCT_X_TREND") and not self.trend_rationale:
             raise ValueError("a trend intersection requires an explicit trend_rationale")
-        if self.opportunity_type not in ("NEWS_X_TREND", "PRODUCT_X_TREND") and self.trend_rationale:
+        if self.opportunity_type not in ("NEWS_X_TREND", "PRODUCT_X_TREND") and self.trend_rationale and not planned:
             raise ValueError("trend_rationale is only valid for a real trend intersection")
         if self.opportunity_type in ("PRODUCT", "PRODUCT_X_TREND") and not self.product_connection:
             raise ValueError("a product opportunity requires a concrete product_connection")

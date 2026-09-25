@@ -276,14 +276,15 @@ def _compile_slide_scene_prompt(
     )
 
 
-def _evidence_for_slide(evidence: list[str], slide: Any | None) -> list[str]:
+def _evidence_for_slide(evidence: list[str], slide: Any | None, story_keys: dict | None = None) -> list[str]:
     """Phase B.6/B.7: a slide's generated image is grounded ONLY in the evidence that belongs to it - never the whole post's
     evidence blob. NEWS_RECAP: that story's own bullets ('[story_N] ...' lines, via media_subject). Any other slide: exactly
     the one sentence its own `source_evidence` handle resolved to (services.instagram_creative_director resolves this before
     media execution runs). The full list is a last-resort fallback only for a caller/slide that supplies neither."""
     key = _slide_value(slide, "media_subject") if slide is not None else ""
     prefix = f"[{key}]"
-    own = [line for line in evidence if key and line.startswith(prefix)]
+    own = [line for line in evidence if key and (story_keys or {}).get(line) == key] or [
+        line for line in evidence if key and line.startswith(prefix)]
     if own:
         return own
     single = _slide_value(slide, "source_evidence") if slide is not None else ""
@@ -464,6 +465,7 @@ async def execute_instagram_creative_media(
     opportunity_id: str,
     mode: str | None = None,
     slide_assets: dict[int, ResolvedSlideAsset] | None = None,
+    evidence_story_keys: dict | None = None,
 ) -> InstagramCreativeMediaResult:
     """Execute explicit SOURCE/GENERATED/GRAPHIC/TYPOGRAPHIC assets, per slide when applicable."""
     plan = _execution_plan(creative)
@@ -496,7 +498,7 @@ async def execute_instagram_creative_media(
         )
         if media_mode is InstagramMediaMode.GENERATED and _slide_value(slide, "media_source") == "generated":
             assets.append(await _execute_generated_asset(
-                asset_key=asset_key, slide=slide, plan=plan, opportunity_summary=opportunity_summary, evidence=_evidence_for_slide(evidence, slide),
+                asset_key=asset_key, slide=slide, plan=plan, opportunity_summary=opportunity_summary, evidence=_evidence_for_slide(evidence, slide, evidence_story_keys),
                 content_format=content_format, creative_id=creative_id, opportunity_id=opportunity_id, effective_mode=effective_mode,
             ))
         elif slide_assets is not None:
