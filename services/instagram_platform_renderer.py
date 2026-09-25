@@ -301,6 +301,7 @@ def render_instagram_carousel(
                 recap=package.media_plan.get("content_archetype") == "news_recap",
                 editorial_fallback=bool(package.media_plan.get("media_first")),
                 ui_paths=package.media_plan.get("content_archetype") == "ai_hack",
+                previous_variant=(results[-1].evidence.notes.get("editorial_variant") if results else None),
                 subject_assets=(
                     {k: v for k, v in this_slide_assets.items() if k != "source"}
                     if this_slide_assets and slide.get("media_function") in ("ui_screenshot", "result", "before_after", "concept")

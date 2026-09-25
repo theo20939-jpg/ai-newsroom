@@ -167,7 +167,7 @@ def meaningful_fact_graphic(labels: list[str], slide_text: str, *, ui_paths: boo
 
 
 _STEP = re.compile(r"^\s*(?:шаг|step)\s*\d{1,2}", re.IGNORECASE)
-DESIGNED_TYPOGRAPHIC = ("statement", "step_numeral")  # the editorial variants that carry no picture: the art gate reads the variant name
+DESIGNED_TYPOGRAPHIC = ("statement", "step_numeral", "data_point", "negative_space", "split")  # the picture-less editorial variants
 
 
 def _weak_graphic(regions: list[dict[str, Any]], slide_text: str, *, ui_paths: bool) -> bool:
@@ -179,7 +179,7 @@ def _weak_graphic(regions: list[dict[str, Any]], slide_text: str, *, ui_paths: b
 
 
 def editorial_fallback_layout(layout: dict[str, Any] | None, *, role: str, slide_text: str, headline: str, photo: str | None,
-                              ui_paths: bool = False) -> tuple[dict[str, Any], str] | None:
+                              ui_paths: bool = False, previous: str | None = None) -> tuple[dict[str, Any], str] | None:
     """(layout, variant) for a slide whose only visual is a WEAK fact diagram - topic labels in cells - else None (the plan is kept).
     The slide becomes a designed EDITORIAL beat instead, chosen by what it is, never by chance:
       'ambient'      - any photo of the story, suitable or not, as a quiet softened layer under display type (a hook, a recap story);
@@ -199,14 +199,60 @@ def editorial_fallback_layout(layout: dict[str, Any] | None, *, role: str, slide
             {**_text("copy", 0.3, 0.27, "DISPLAY", 4, "primary"), "on_media": True},
             {**_text("body", 0.6, 0.14, "BODY", 4, "primary"), "on_media": True, "w": 0.74},
         ]}, "ambient"
+    return _typographic_beat(base, surface, role=role, headline=headline, previous=previous)
+
+
+# One art direction, distinct beats (founder rule): the treatment follows the slide's purpose and content; the same composition never
+# runs twice in a row. Nothing is invented - every variant only sets the slide's OWN copy (headline / its number / body) differently.
+_BEAT_BY_ROLE = {
+    "hook": "statement", "context": "negative_space", "comparison": "negative_space", "result": "negative_space",
+    "evidence": "split", "step": "split", "story": "split", "takeaway": "statement", "closing": "statement", "cta": "statement",
+}
+_BEAT_ORDER = ("statement", "negative_space", "split")
+def _leading_figure(headline: str) -> bool:
+    """The headline starts with a figure and reads intact without it ('70+ | инструментов Adobe ...'); a figure in mid-sentence never
+    becomes the big numeral (removing it would leave 'Рост на за неделю')."""
+    from services.instagram_layout_validation import copy_parts
+
+    parts, text = copy_parts(headline), headline.strip()
+    number = parts["number"].strip()
+    return bool(number) and text.startswith(number) and parts["copy_no_number"].strip() == text[len(number):].strip(" .,:;—-").strip()
+
+
+def _typographic_beat(base: dict[str, Any], surface: list[dict[str, Any]], *, role: str, headline: str,
+                      previous: str | None) -> tuple[dict[str, Any], str]:
     if _STEP.match(headline):
-        return {**base, "media_dominance": "NONE", "visual_weight": "TEXT", "regions": [
+        variant = "step_numeral"          # a numbered how-to step: its number set large
+    elif _leading_figure(headline):
+        variant = "data_point"            # the headline OPENS with its own figure ('70+ инструментов ...'): that figure as the one data point
+    else:
+        variant = _BEAT_BY_ROLE.get(role, "statement")
+    if variant == previous:
+        variant = next(v for v in _BEAT_ORDER[_BEAT_ORDER.index(variant) + 1:] + _BEAT_ORDER if v != previous) \
+            if variant in _BEAT_ORDER else next(v for v in _BEAT_ORDER if v != previous)
+    text = {**base, "media_dominance": "NONE", "visual_weight": "TEXT"}
+    if variant in ("step_numeral", "data_point"):
+        return {**text, "regions": [
             *surface,
-            {**_text("number", 0.07, 0.07, "MEGA", 1, "accent"), "w": 0.5, "h": 0.3},
+            {**_text("number", 0.07, 0.07, "MEGA", 1, "accent"), "w": 0.62 if variant == "data_point" else 0.5, "h": 0.3},
             _text("copy_no_number", 0.4, 0.2, "HEADLINE_XL", 3, "primary"),
             {**_text("body", 0.63, 0.18, "BODY", 5, "muted"), "w": 0.72},
-        ]}, "step_numeral"
-    return {**base, "media_dominance": "NONE", "visual_weight": "TEXT", "regions": [
+        ]}, variant
+    if variant == "negative_space":      # a quiet centred beat: a short accent rule, the headline centred, its line under it
+        return {**text, "regions": [
+            *surface,
+            {"kind": "accent", "x": 0.43, "y": 0.27, "w": 0.14, "h": 0.012, "z": 2, "accent_type": "rule_h", "tone": "accent"},
+            {**_text("copy", 0.31, 0.3, "HEADLINE_XL", 4, "primary"), "x": 0.1, "w": 0.8, "align": "center"},
+            {**_text("body", 0.64, 0.16, "BODY", 4, "muted"), "x": 0.16, "w": 0.68, "align": "center"},
+        ]}, variant
+    if variant == "split":                # the headline over the slide's ground, its explanation on a KAGE violet panel below
+        return {**text, "regions": [
+            *surface,
+            {"kind": "surface", "x": 0.0, "y": 0.56, "w": 1.0, "h": 0.44, "z": 1, "surface": "accent"},
+            {**_text("copy", 0.1, 0.38, "DISPLAY", 4, "primary"), "x": 0.07, "w": 0.86},
+            {**_text("body", 0.62, 0.2, "BODY", 5, "primary"), "x": 0.07, "w": 0.74},
+        ]}, variant
+    return {**text, "regions": [
         *surface,
         {"kind": "accent", "x": 0.07, "y": 0.16, "w": 0.016, "h": 0.4, "z": 2, "accent_type": "rule_v", "tone": "accent"},
         {**_text("copy", 0.16, 0.34, "DISPLAY", 4, "primary"), "x": 0.12, "w": 0.81},
@@ -248,8 +294,8 @@ def hero_story_layout(layout: dict[str, Any] | None, *, role: str, index: int, a
         return None
     photo = next((r.get("content_ref") for r in sorted(regions, key=lambda r: -(r.get("w", 0) * r.get("h", 0)))
                   if r.get("kind") == "media" and r.get("content_ref")), None)
-    if photo is None:
-        return None
+    if photo is None or any(r.get("kind") == "media" and r.get("tone") == "muted" for r in regions):
+        return None  # no photo - or an unsuitable one already demoted to the background layer: it never becomes the hero again
     media = {**_tile(photo, 0.0, 0.0, 1.0, 1.0, 1)}
     if zone == "top":
         texts = [{**_text("copy", 0.06, 0.2, "HEADLINE_XL", 3, "primary"), "on_media": True},

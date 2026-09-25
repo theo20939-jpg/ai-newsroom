@@ -60,6 +60,7 @@ from services.instagram_media_first import (
     assert_hook_is_short,
     assert_information_density,
     assert_media_first,
+    demote_unsuitable_heroes,
     assert_no_unsupported_clickbait,
     visual_repetition_report,
     weak_hook_patterns,
@@ -566,6 +567,22 @@ _UNSUPPORTED_PLATFORM_TREND_CLAIM_RE = re.compile(
 )
 
 
+# Polarity of a trend mention, judged inside its own clause (never across a sentence): a plain negation before it ("это НЕ вирусный
+# Reels-тренд", "НЕТ признаков тренда", "БЕЗ опоры на Instagram-формат") or a denial after it ("... тренд НЕ ПОДТВЕРЖДАЕТСЯ") is a
+# disclaimer, not a claim. Intensifiers that ASSERT the trend ("не только", "не просто", "не менее") stay positive. Real launch canary:
+# "Это не Instagram-native тренд и не вирусный формат" and "это не подача через вирусный Reels-тренд" were rejected as claims.
+_CLAUSE_END = re.compile(r"[.!?;]")
+_NEGATION_BEFORE = re.compile(r"(?i)(?<![\w-])(?:не(?!\s+(?:только|просто|менее|меньше|хуже))|нет|ни|без|no|not)(?![\w-])")
+_DENIAL_AFTER = re.compile(r"(?i)(?:не\s+подтвержда|не\s+доказан|не\s+является|не\s+относится|не\s+наблюда|нет\s+подтвержд|отсутству)")
+
+
+def _trend_mention_negated(text: str, start: int, end: int) -> bool:
+    clause_start = max((m.end() for m in _CLAUSE_END.finditer(text, 0, start)), default=0)
+    after = _CLAUSE_END.search(text, end)
+    clause_end = after.start() if after else len(text)
+    return bool(_NEGATION_BEFORE.search(text[max(clause_start, start - 60):end]) or _DENIAL_AFTER.search(text[start:clause_end]))
+
+
 def assert_trend_rationale_grounded(
     rationale: str | None, *, signal_type: str | None, provenance: str | None,
     is_platform_native: bool,
@@ -580,7 +597,7 @@ def assert_trend_rationale_grounded(
             r"не\s+(?:подтверждает|доказывает|является|означает))[^.!?]{0,40}$",
             prefix,
         )
-        if explicitly_disclaimed is None:
+        if explicitly_disclaimed is None and not _trend_mention_negated(rationale, match.start(), match.end()):
             unsupported.append(match.group(0))
     if unsupported:
         raise UngroundedTrendClaimError(
@@ -999,6 +1016,13 @@ def _validate_carousel_output(
     weak_hooks: tuple = ()
     repetition: dict | None = None
     if director_input.media_first and _CAROUSEL_PROMPT_VERSION in _MEDIA_FIRST_CAROUSEL_VERSIONS:
+        # launch canary: a vision-unsuitable image planned as a hero is DEMOTED to the accepted background-layer treatment (or dropped from
+        # a multi-story frame) before the contract - suitability varies between runs, and either verdict must still produce a creative
+        demoted_slides, demotions = demote_unsuitable_heroes(list(creative.slides), set(director_input.unsuitable_media_subjects),
+                                                             tuple(director_input.available_media_subjects))
+        if demotions:
+            creative = creative.model_copy(update={"slides": demoted_slides})
+            _emit_diagnostic("unsuitable_hero_demoted", {"demotions": demotions})
         # Phase B.6: every slide must carry a meaningful visual idea (deterministic, no OCR / model call); the hook is one strong line; bold framing needs literal support.
         assert_media_first(
             list(creative.slides), available_subjects=set(director_input.available_media_subjects),

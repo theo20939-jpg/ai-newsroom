@@ -1,0 +1,124 @@
+{
+ "pre_render": "PASS",
+ "unsuitable": [
+  "story_2",
+  "story_3"
+ ],
+ "demotions": [
+  {
+   "event": "unsuitable_hero_demoted",
+   "demotions": [
+    {
+     "slide": 1,
+     "demoted": [
+      "story_2"
+     ],
+     "treatment": "background_layer"
+    },
+    {
+     "slide": 8,
+     "demoted": [
+      "story_2",
+      "story_3"
+     ],
+     "treatment": "replaced_in_frame",
+     "replacements": {
+      "story_2": "story_1",
+      "story_3": "story_4"
+     }
+    }
+   ]
+  }
+ ],
+ "slides": 9,
+ "art_passed": true,
+ "art_blocking": [],
+ "per_slide": [
+  {
+   "role": "hook",
+   "media_subject": null,
+   "media": [
+    "story_1",
+    "story_4",
+    "story_6",
+    "story_7"
+   ],
+   "editorial_variant": null,
+   "hero_zone_used": true
+  },
+  {
+   "role": "story",
+   "media_subject": "story_2",
+   "media": [
+    "story_2"
+   ],
+   "editorial_variant": null,
+   "hero_zone_used": false
+  },
+  {
+   "role": "story",
+   "media_subject": "story_5",
+   "media": [
+    "story_5"
+   ],
+   "editorial_variant": null,
+   "hero_zone_used": true
+  },
+  {
+   "role": "story",
+   "media_subject": "story_3",
+   "media": [
+    "story_3"
+   ],
+   "editorial_variant": "ambient",
+   "hero_zone_used": false
+  },
+  {
+   "role": "story",
+   "media_subject": "story_1",
+   "media": [
+    "story_1"
+   ],
+   "editorial_variant": null,
+   "hero_zone_used": true
+  },
+  {
+   "role": "story",
+   "media_subject": "story_4",
+   "media": [
+    "story_4"
+   ],
+   "editorial_variant": null,
+   "hero_zone_used": true
+  },
+  {
+   "role": "story",
+   "media_subject": "story_6",
+   "media": [
+    "story_6"
+   ],
+   "editorial_variant": null,
+   "hero_zone_used": true
+  },
+  {
+   "role": "story",
+   "media_subject": "story_7",
+   "media": [
+    "story_7"
+   ],
+   "editorial_variant": null,
+   "hero_zone_used": true
+  },
+  {
+   "role": "closing",
+   "media_subject": null,
+   "media": [
+    "story_4",
+    "story_5",
+    "story_1"
+   ],
+   "editorial_variant": null,
+   "hero_zone_used": true
+  }
+ ]
+}

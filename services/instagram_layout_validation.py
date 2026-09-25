@@ -113,7 +113,8 @@ def copy_parts(slide_copy: str) -> dict[str, str]:
 def _headline_parts(slide_copy: str) -> dict[str, str]:
     text = slide_copy.strip()
     # the currency travels WITH its amount: "От $149." must never leave "От $." behind once the numeral is set in type
-    number_match = re.search(rf"[{_CURRENCY}]?(?:\d[\d\s.,]*\d|\d)%?(?:\s?[{_CURRENCY}])?", text)
+    # "70+" / "10%" travel whole: a set numeral never leaves "+ инструментов" behind (real launch canary, Adobe hook)
+    number_match = re.search(rf"[{_CURRENCY}]?(?:\d[\d\s.,]*\d|\d)[%+]?(?:\s?[{_CURRENCY}])?", text)
     number = number_match.group(0).strip() if number_match else ""
     step = re.match(r"^\s*(?:шаг|step)\s*\d{1,2}\s*[.:—\-]?\s*", text, re.IGNORECASE)
     if step:  # "Шаг 2. ..." -> the numeral is shown separately; drop the whole label, never leave "Шаг ."

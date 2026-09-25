@@ -790,7 +790,7 @@ def render_carousel_slide(
     media_subject: str | None = None, must_match_story: bool = False,
     media_asset_identity: str | None = None,
     layout_plan: dict | None = None, subject_assets: dict | None = None, slide_body: str | None = None,
-    recap: bool = False, editorial_fallback: bool = False, ui_paths: bool = False,
+    recap: bool = False, editorial_fallback: bool = False, ui_paths: bool = False, previous_variant: str | None = None,
 ) -> LayoutResult:
     body_placement = None
     recap_frame = None
@@ -831,7 +831,7 @@ def render_carousel_slide(
         photo = photo or (media_subject if media_subject in (subject_assets or {}) else None) or (
             "source" if "source" in (subject_assets or {}) and not recap else None)
         fallback = editorial_fallback_layout(layout_plan, role=role.strip().lower(), slide_text=f"{slide_copy} {slide_body or ''}",
-                                             headline=slide_copy, photo=photo, ui_paths=ui_paths)
+                                             headline=slide_copy, photo=photo, ui_paths=ui_paths, previous=previous_variant)
         if fallback is not None:
             layout_plan, editorial_variant = fallback
             recap_frame = layout_plan
@@ -901,7 +901,9 @@ def render_carousel_slide(
         result.notes["body_placement"] = body_placement
         result.notes["recap_frame"] = recap_frame is not None
         result.notes["editorial_variant"] = editorial_variant
-        if editorial_variant in ("statement", "step_numeral"):
+        from services.instagram_recap_frames import DESIGNED_TYPOGRAPHIC
+
+        if editorial_variant in DESIGNED_TYPOGRAPHIC:
             # a designed typographic beat counts as the slide's visual only when its display type actually rendered at display size
             result.notes["designed_typographic"] = _headline_px(result) >= 0.06 * spec.width
         media_regions = result.notes.get("media_regions") or []

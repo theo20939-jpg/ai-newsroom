@@ -58,7 +58,7 @@ def test_v10_makes_generated_media_first_class_and_v91_is_untouched() -> None:
     assert v10["version"] == "10" and "generated_media is not available" not in text
     assert "GENERATED media is FIRST-CLASS" in text and "There is no typographic-only slide" in text
     assert "generation_brief" in text and "content_ref is `generated`" in text
-    assert cd.CAROUSEL_PROMPT_VERSION == "10.9" and "10" in cd.MEDIA_FIRST_CAROUSEL_VERSIONS and "10.1" in cd.MEDIA_FIRST_CAROUSEL_VERSIONS and "10.1" in cd._EVIDENCE_HANDLE_CAROUSEL_VERSIONS
+    assert cd.CAROUSEL_PROMPT_VERSION == "10.11" and "10" in cd.MEDIA_FIRST_CAROUSEL_VERSIONS and "10.1" in cd.MEDIA_FIRST_CAROUSEL_VERSIONS and "10.1" in cd._EVIDENCE_HANDLE_CAROUSEL_VERSIONS
 
 
 def test_v10_schema_requires_a_visual_source_on_every_slide_and_never_typographic() -> None:
@@ -479,10 +479,12 @@ async def test_v10_generation_rejects_typographic_only_unsuitable_source_and_uns
     bad[1] = _slide_dict("evidence", "Пустая карточка", "graphic", [_r("accent", 0.08, 0.5, 0.2, 0.01, accent_type="rule_h"), _text(y=0.56)])
     with pytest.raises(MediaFirstContractError):
         await generate_carousel_creative(_Gateway(_v10_output(bad)), repo, director_input=_v10_input())
-    with pytest.raises(MediaFirstContractError, match="not suitable"):
-        card = _ok_slides()
-        card[2] = _slide_dict("takeaway", "Выбирай модель", "source", [_media("source", 0.05, 0.1, 0.9, 0.5), _text(0.08, 0.7, 0.8, 0.2)], subject="source")
-        await generate_carousel_creative(_Gateway(_v10_output(card)), repo, director_input=_v10_input(unsuitable_media_subjects=("source",)))
+    # launch canary: an unsuitable source planned as a hero is no longer a dead plan - it is demoted to the softened background layer
+    card = _ok_slides()
+    card[2] = _slide_dict("takeaway", "Выбирай модель", "source", [_media("source", 0.05, 0.1, 0.9, 0.5), _text(0.08, 0.7, 0.8, 0.2)], subject="source")
+    demoted = await generate_carousel_creative(_Gateway(_v10_output(card)), repo, director_input=_v10_input(unsuitable_media_subjects=("source",)))
+    layer = next(r for r in demoted.carousel.slides[2].layout.regions if r.kind == "media")
+    assert (layer.content_ref, layer.tone, layer.w, layer.h) == ("source", "muted", 1.0, 1.0)
     with pytest.raises(UnsupportedClickbaitError):
         loud = _ok_slides()
         loud[0]["slide_copy"] = "Интернет умер, все делают неправильно"
@@ -561,7 +563,7 @@ async def test_live_trigger_runs_the_media_first_pipeline_end_to_end(db_session,
     assert "SOURCE_SUITABLE_FOR_FINAL_VISUAL: yes" in request_text and "GENERATED media is a first-class option" in request_text
     assert len(calls) == 1 and calls[0]["max_attempts"] == 1  # exactly the ONE generated slide; no retries
     obs = captured["package"].media_plan["b4_observability"]
-    assert obs["prompt_version"] == "10.9" and obs["text_only_slides"] == [] and obs["typographic_final_media_slides"] == []
+    assert obs["prompt_version"] == "10.11" and obs["text_only_slides"] == [] and obs["typographic_final_media_slides"] == []
     assert [s["media_source"] for s in obs["slides"]] == ["generated", "graphic", "source"]
     assert obs["overlay_operations_executed_total"] == 0 and obs["art_validation_passed"] is True, obs["art_blocking_issues"]
     plan = captured["package"].media_plan

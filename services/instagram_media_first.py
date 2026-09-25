@@ -82,6 +82,73 @@ def has_substantive_graphic(slide: Any) -> bool:
     return False
 
 
+def _background_layer_only(slide: Any, ref: str) -> bool:
+    """Every region of `ref` is the full-canvas, softened BACKGROUND layer (tone 'muted'): the image is context under the type, not the
+    slide's visual hero (services.instagram_focal_crop.frame_ambient draws it blurred and darkened)."""
+    regions = [r for r in _regions(slide) if _get(r, "kind") == "media" and _get(r, "content_ref") == ref]
+    return bool(regions) and all(_get(r, "tone") == "muted" and float(_get(r, "w")) * float(_get(r, "h")) >= 0.9 for r in regions)
+
+
+def demote_unsuitable_heroes(slides: list[Any], unsuitable_subjects: set[str],
+                             available_subjects: tuple[str, ...] = ()) -> tuple[list[Any], list[dict[str, Any]]]:
+    """A vision-UNSUITABLE image never stays a slide's visual hero - and never kills the plan either (suitability varies between runs):
+      - on a cover / closer that also shows other stories, its tiles are dropped (the other stories carry the frame);
+      - otherwise the slide becomes the accepted editorial treatment: the image as a softened full-canvas background layer, display type
+        over it (the same form the renderer's editorial fallback draws).
+    A small collage fragment is left as it is. Returns (slides, one note per demotion) - deterministic, no model call."""
+    out, notes = [], []
+    suitable = [key for key in available_subjects if key not in unsuitable_subjects]
+    for index, slide in enumerate(slides):
+        layout = _get(slide, "layout")
+        regions = list(_get(layout, "regions") or []) if layout is not None else []
+        frame_refs = {_get(r, "content_ref") for r in regions if _get(r, "kind") == "media" and _get(r, "content_ref")}
+        if _get(slide, "role") in ("hook", "closing") and len(frame_refs) >= 2 and frame_refs & unsuitable_subjects:
+            # a multi-story cover / closer is re-framed by the renderer (grid / print stack) - any tile there can grow, so an unsuitable
+            # image is swapped for another story's suitable photo that is not on the slide yet, or dropped when there is none
+            spare = [key for key in suitable if key not in frame_refs]
+            swapped, kept = {}, []
+            for r in regions:
+                ref = _get(r, "content_ref")
+                if _get(r, "kind") == "media" and ref in unsuitable_subjects:
+                    if ref not in swapped:
+                        swapped[ref] = spare.pop(0) if spare else None
+                    if swapped[ref] is None:
+                        continue
+                    r = r.model_copy(update={"content_ref": swapped[ref]})
+                kept.append(r)
+            out.append(slide.model_copy(update={"layout": layout.model_copy(update={"regions": kept})}))
+            notes.append({"slide": index, "demoted": sorted(swapped), "treatment": "replaced_in_frame", "replacements": swapped})
+            continue
+        bad = sorted({str(_get(r, "content_ref")) for r in regions if _get(r, "kind") == "media" and _get(r, "content_ref") in unsuitable_subjects
+                      and not _only_small_fragment(slide, _get(r, "content_ref")) and not _background_layer_only(slide, _get(r, "content_ref"))})
+        if not bad:
+            out.append(slide)
+            continue
+        others = {_get(r, "content_ref") for r in regions if _get(r, "kind") == "media" and _get(r, "content_ref") not in unsuitable_subjects}
+        if _get(slide, "role") in ("hook", "closing") and others:
+            kept = [r for r in regions if not (_get(r, "kind") == "media" and _get(r, "content_ref") in bad)]
+            out.append(slide.model_copy(update={"layout": layout.model_copy(update={"regions": kept})}))
+            notes.append({"slide": index, "demoted": bad, "treatment": "dropped_from_frame"})
+            continue
+        from schemas.instagram_creative import InstagramSlideLayout
+
+        ref = bad[0]
+        ambient = InstagramSlideLayout.model_validate({
+            "background": "ink", "palette": _get(layout, "palette") or "brand", "logo_position": "BOTTOM_RIGHT", "arrangement": "standard",
+            "density": "MEDIUM", "media_dominance": "SUPPORTING", "visual_weight": "TEXT", "show_progress": False,
+            "regions": [
+                {"kind": "media", "x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0, "z": 1, "content_ref": ref, "crop_mode": "cover", "frame": "none",
+                 "tone": "muted", "on_media": False},
+                {"kind": "text", "x": 0.07, "y": 0.3, "w": 0.86, "h": 0.27, "z": 5, "content_ref": "copy", "scale_token": "DISPLAY",
+                 "align": "left", "valign": "top", "max_lines": 4, "tone": "primary", "on_media": True},
+                {"kind": "text", "x": 0.07, "y": 0.6, "w": 0.74, "h": 0.14, "z": 5, "content_ref": "body", "scale_token": "BODY",
+                 "align": "left", "valign": "top", "max_lines": 4, "tone": "primary", "on_media": True},
+            ]})
+        out.append(slide.model_copy(update={"layout": ambient, "media_source": "source", "media_subject": _get(slide, "media_subject") or ref}))
+        notes.append({"slide": index, "demoted": bad, "treatment": "background_layer"})
+    return out, notes
+
+
 def _only_small_fragment(slide: Any, ref: str) -> bool:
     layout = _get(slide, "layout")
     arrangement = _get(layout, "arrangement") if layout is not None else None
@@ -176,7 +243,7 @@ def assert_media_first(
             if not real:
                 raise MediaFirstContractError(f"{where}: a source slide's layout must use a listed real subject key")
             for ref in real:
-                if ref in unsuitable_subjects and not _only_small_fragment(slide, ref):
+                if ref in unsuitable_subjects and not _only_small_fragment(slide, ref) and not _background_layer_only(slide, ref):
                     raise MediaFirstContractError(
                         f"{where}: '{ref}' is not suitable as a final visual (flat article / text card); generate a contextual visual, "
                         "or use it only as a small collage fragment"
