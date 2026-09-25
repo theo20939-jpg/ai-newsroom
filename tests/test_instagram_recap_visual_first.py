@@ -455,3 +455,45 @@ def test_ordinary_english_left_in_russian_recap_copy_is_sent_back_and_names_are_
     with pytest.raises(cd.RecapLanguageLeakError, match="deceptive"):
         cd.assert_recap_copy_is_russian(slides)
     assert issubclass(cd.RecapLanguageLeakError, cd.MediaFirstContractError)  # the Director's one contract retry applies
+
+
+# --- subject occlusion safeguard: copy never sits on the protected subject, the join never fades it ------------------------------------
+
+_REAL = Path(__file__).resolve().parent.parent / "artifacts/instagram_feed_product/e2e_week_2026-08-05_11/recap_final2_run/weekly_recap/story_media"
+
+
+def _real(key: str) -> Image.Image:
+    image = Image.open(io.BytesIO((_REAL / f"{key}.img").read_bytes()))
+    image.load()
+    return image
+
+
+@pytest.mark.parametrize("key", ["story_2", "story_5", "story_3", "story_6", "story_7"])  # Assistant, ChatGPT, Meta, Ive, GTA
+def test_the_chosen_copy_end_leaves_every_real_subject_clear(key):
+    from services.instagram_focal_crop import MAX_SUBJECT_COVERED, _plan, hero_copy_zone, subject_covered
+
+    zone = hero_copy_zone(_real(key))
+    assert zone is not None and subject_covered(_plan(_real(key), zone)) <= MAX_SUBJECT_COVERED
+
+
+def test_gta_heads_are_protected_and_not_faded_into_the_join():
+    from services.instagram_focal_crop import COPY_BOXES, _plan, frame_hero, hero_copy_zone, protected_box
+
+    gta = _real("story_7")
+    assert protected_box(gta)[1] < 0.2  # the heads (skin) are part of the protected subject, not only the torsos
+    zone = hero_copy_zone(gta)
+    plan = _plan(gta, zone)
+    assert zone == "top" and plan.subject[1] > COPY_BOXES["top"][3]  # the copy ends above the characters' heads
+    tile = frame_hero(gta, 1080, 1350, zone).convert("RGB")
+    head_row = tile.crop((0, round(plan.subject[1] * 1350) + 10, 1080, round(plan.subject[1] * 1350) + 40))
+    photo_row = _plan(gta, zone)  # the same rows of the undarkened photo band
+    band = gta.convert("RGB").crop((round(photo_row.window[0] * gta.width), 0, round(photo_row.window[2] * gta.width), gta.height))
+    luma = lambda im: sum(im.convert("L").getdata()) / (im.width * im.height)  # noqa: E731
+    assert luma(head_row) > 0.6 * luma(band)  # the heads are shown, not sunk into the dark gradient
+
+
+def test_a_subject_the_copy_would_cover_moves_the_copy_to_the_other_end():
+    from services.instagram_focal_crop import _plan, hero_copy_zone, subject_covered
+
+    portrait = _real("story_6")  # Jony Ive: the face fills the upper picture
+    assert subject_covered(_plan(portrait, "top")) > 0.1 and hero_copy_zone(portrait) == "bottom"
