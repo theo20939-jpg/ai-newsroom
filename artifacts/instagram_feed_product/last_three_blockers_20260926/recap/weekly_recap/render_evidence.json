@@ -1,0 +1,2038 @@
+[
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     73,
+     81,
+     621,
+     176
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     190,
+     983,
+     294
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     75,
+     364,
+     965,
+     411
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     420,
+     978,
+     468
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     75,
+     477,
+     758,
+     524
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 0,
+  "slide_count": 9,
+  "caption_linkage": "4e4ce76d-9d54-441a-bd7e-566f3b6cf47c",
+  "content_identity": "9f41e23973d1ede1",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=top-center|media_zone=multi|media_dominance=BALANCED|density=HIGH|asymmetry=centered|visual_weight=MIXED|region_count=5+|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "top-center",
+    "media_zone": "multi",
+    "media_dominance": "BALANCED",
+    "density": "HIGH",
+    "asymmetry": "centered",
+    "visual_weight": "MIXED",
+    "region_count": "5+",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "story_1",
+     "identity": "37a3faba384aa27e",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    },
+    {
+     "subject": "story_4",
+     "identity": "44f35a7c0a34a85a",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    },
+    {
+     "subject": "story_5",
+     "identity": "2dbdeae3ed75bc1a",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    },
+    {
+     "subject": "story_7",
+     "identity": "042323b657bb25a5",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "culture",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 7,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.3675,
+   "text_canvas_coverage": 0.2666,
+   "object_canvas_coverage": 0.3654,
+   "object_bbox_canvas_coverage": 0.3654,
+   "object_bounding_boxes": [
+    [
+     0.051,
+     0.445,
+     0.492,
+     0.644
+    ],
+    [
+     0.507,
+     0.445,
+     0.949,
+     0.644
+    ],
+    [
+     0.051,
+     0.659,
+     0.455,
+     0.875
+    ],
+    [
+     0.47,
+     0.659,
+     0.949,
+     0.875
+    ]
+   ],
+   "object_edge_bleed": [],
+   "negative_space": 0.3659,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 131,
+     "lines": 2,
+     "block_h_frac": 0.1578,
+     "block_w_frac": 0.8398,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 3,
+     "block_h_frac": 0.1185,
+     "block_w_frac": 0.8352,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "creative_plan": {
+    "main_idea": "Одна неделя как лента переключений: привычные интерфейсы, модели, устройства и культурные события собираются в быстрый визуальный маршрут.",
+    "focal_point": "Сильные реальные изображения и крупные переходы между сюжетами, а для историй без пригодного фото — substantive flow diagrams.",
+    "composition_direction": "Начать с плотной обложки-мозаики, затем чередовать графический flow, immersive-портрет и source-led collage, завершить спокойной полосой из четырёх сюжетов.",
+    "visual_treatment": "Controlled editorial collage: real images remain unaltered, fragments vary in scale and tilt, while flow diagrams translate unavailable source visuals into concrete transitions."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "display",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "SOURCE",
+   "media_execution_status": "source_media",
+   "body_placement": null,
+   "recap_frame": true,
+   "editorial_variant": null,
+   "rendered_copy": [
+    "AI меняет правила недели\n\nAssistant уходит, ChatGPT становится щедрее, новые модели и устройства выходят на сцену. А GTA VI забирает финальный слот."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "SOURCE",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Four distinct listed source images from the weekly coverage.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": null,
+   "must_match_story": false,
+   "media_asset_identity": "37a3faba384aa27e",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_top-center_multi_BALANCED_5+",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "source",
+   "visual_preserved": true,
+   "layout_variant": "declared_top-center_multi_BALANCED_5+"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     73,
+     405,
+     994,
+     541
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     554,
+     688,
+     684
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     810,
+     817,
+     853
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     861,
+     838,
+     904
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     75,
+     912,
+     748,
+     956
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     964,
+     204,
+     999
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 1,
+  "slide_count": 9,
+  "caption_linkage": "4e4ce76d-9d54-441a-bd7e-566f3b6cf47c",
+  "content_identity": "efcf9de079a2a05b",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=middle-center|media_zone=middle-center|media_dominance=SUPPORTING|density=MEDIUM|asymmetry=centered|visual_weight=TEXT|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "middle-center",
+    "media_zone": "middle-center",
+    "media_dominance": "SUPPORTING",
+    "density": "MEDIUM",
+    "asymmetry": "centered",
+    "visual_weight": "TEXT",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "story_2",
+     "identity": "04ffdbf5c2ffb03a",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "brand",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 3,
+   "rotation_count": 0,
+   "media_canvas_coverage": 1.0,
+   "text_canvas_coverage": 0.3085,
+   "object_canvas_coverage": 1.0,
+   "object_bbox_canvas_coverage": 1.0,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "top",
+    "bottom"
+   ],
+   "negative_space": 0.0,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "DISPLAY",
+     "font_px": 129,
+     "lines": 2,
+     "block_h_frac": 0.2067,
+     "block_w_frac": 0.8481,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 41,
+     "lines": 4,
+     "block_h_frac": 0.14,
+     "block_w_frac": 0.7046,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [
+    {
+     "ref": "copy",
+     "name": "copy",
+     "box": [
+      0.06,
+      0.292,
+      0.869,
+      0.223
+     ],
+     "mean": 40.9,
+     "p10": 9,
+     "p90": 71,
+     "std": 23.97,
+     "edge_energy": 2.91,
+     "contrast_light_text": 9.29,
+     "contrast_dark_text": 1.02,
+     "text_colour": "light",
+     "quiet": true
+    },
+    {
+     "ref": "body",
+     "name": "body",
+     "box": [
+      0.06,
+      0.592,
+      0.725,
+      0.156
+     ],
+     "mean": 11.27,
+     "p10": 6,
+     "p90": 26,
+     "std": 8.82,
+     "edge_energy": 1.26,
+     "contrast_light_text": 17.4,
+     "contrast_dark_text": 1.04,
+     "text_colour": "light",
+     "quiet": true
+    }
+   ],
+   "creative_plan": {
+    "main_idea": "Одна неделя как лента переключений: привычные интерфейсы, модели, устройства и культурные события собираются в быстрый визуальный маршрут.",
+    "focal_point": "Сильные реальные изображения и крупные переходы между сюжетами, а для историй без пригодного фото — substantive flow diagrams.",
+    "composition_direction": "Начать с плотной обложки-мозаики, затем чередовать графический flow, immersive-портрет и source-led collage, завершить спокойной полосой из четырёх сюжетов.",
+    "visual_treatment": "Controlled editorial collage: real images remain unaltered, fragments vary in scale and tilt, while flow diagrams translate unavailable source visuals into concrete transitions."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GRAPHIC",
+   "media_execution_status": "graphic",
+   "body_placement": null,
+   "recap_frame": true,
+   "editorial_variant": "ambient",
+   "rendered_copy": [
+    "Assistant уходит 4 сентября\n\nGoogle начнёт отключать Google Assistant на смартфонах, планшетах и сопряжённых устройствах. Его место должен занять Gemini."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GRAPHIC",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Full-bleed listed source subject story_1 is not the correct subject for this story; use a substantive flow diagram because story_2 has no suitable hero image.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_2",
+   "must_match_story": false,
+   "media_asset_identity": "04ffdbf5c2ffb03a",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_middle-center_middle-center_SUPPORTING_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "graphic",
+   "visual_preserved": true,
+   "layout_variant": "declared_middle-center_middle-center_SUPPORTING_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     81,
+     972,
+     164
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     175,
+     612,
+     253
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     364,
+     877,
+     404
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     412,
+     847,
+     454
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     462,
+     654,
+     495
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 2,
+  "slide_count": 9,
+  "caption_linkage": "4e4ce76d-9d54-441a-bd7e-566f3b6cf47c",
+  "content_identity": "68a9b22bdc404957",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=top-center|media_zone=middle-center|media_dominance=DOMINANT|density=MEDIUM|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "top-center",
+    "media_zone": "middle-center",
+    "media_dominance": "DOMINANT",
+    "density": "MEDIUM",
+    "asymmetry": "centered",
+    "visual_weight": "MEDIA",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "story_5",
+     "identity": "2dbdeae3ed75bc1a",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "brand",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 3,
+   "rotation_count": 0,
+   "media_canvas_coverage": 1.0,
+   "text_canvas_coverage": 0.2098,
+   "object_canvas_coverage": 1.0,
+   "object_bbox_canvas_coverage": 1.0,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "top",
+    "bottom"
+   ],
+   "negative_space": 0.0,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 99,
+     "lines": 2,
+     "block_h_frac": 0.1274,
+     "block_w_frac": 0.8287,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 41,
+     "lines": 3,
+     "block_h_frac": 0.097,
+     "block_w_frac": 0.7417,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [
+    {
+     "ref": "copy",
+     "name": "copy",
+     "box": [
+      0.06,
+      0.052,
+      0.849,
+      0.144
+     ],
+     "mean": 10.78,
+     "p10": 10,
+     "p90": 11,
+     "std": 0.45,
+     "edge_energy": 0.02,
+     "contrast_light_text": 19.68,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    },
+    {
+     "ref": "body",
+     "name": "body",
+     "box": [
+      0.06,
+      0.261,
+      0.762,
+      0.113
+     ],
+     "mean": 12.24,
+     "p10": 11,
+     "p90": 14,
+     "std": 1.08,
+     "edge_energy": 0.1,
+     "contrast_light_text": 19.3,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    }
+   ],
+   "creative_plan": {
+    "main_idea": "Одна неделя как лента переключений: привычные интерфейсы, модели, устройства и культурные события собираются в быстрый визуальный маршрут.",
+    "focal_point": "Сильные реальные изображения и крупные переходы между сюжетами, а для историй без пригодного фото — substantive flow diagrams.",
+    "composition_direction": "Начать с плотной обложки-мозаики, затем чередовать графический flow, immersive-портрет и source-led collage, завершить спокойной полосой из четырёх сюжетов.",
+    "visual_treatment": "Controlled editorial collage: real images remain unaltered, fragments vary in scale and tilt, while flow diagrams translate unavailable source visuals into concrete transitions."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "SOURCE",
+   "media_execution_status": "source_media",
+   "body_placement": null,
+   "recap_frame": true,
+   "editorial_variant": null,
+   "rendered_copy": [
+    "Бесплатный ChatGPT стал щедрее\n\nGPT-5.6 Luna теперь доступна пользователям бесплатного тарифа. OpenAI также убирает ограничения на текстовые чаты."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "SOURCE",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Listed source subject story_5, shown as an editorial collage.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_5",
+   "must_match_story": true,
+   "media_asset_identity": "2dbdeae3ed75bc1a",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_top-center_middle-center_DOMINANT_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "source",
+   "visual_preserved": true,
+   "layout_variant": "declared_top-center_middle-center_DOMINANT_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     81,
+     982,
+     199
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     211,
+     819,
+     276
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     364,
+     778,
+     408
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     417,
+     750,
+     463
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     472,
+     694,
+     507
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 3,
+  "slide_count": 9,
+  "caption_linkage": "4e4ce76d-9d54-441a-bd7e-566f3b6cf47c",
+  "content_identity": "775df6653adf9687",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=top-center|media_zone=middle-center|media_dominance=DOMINANT|density=LOW|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "top-center",
+    "media_zone": "middle-center",
+    "media_dominance": "DOMINANT",
+    "density": "LOW",
+    "asymmetry": "centered",
+    "visual_weight": "MEDIA",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "story_1",
+     "identity": "37a3faba384aa27e",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "brand",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 3,
+   "rotation_count": 0,
+   "media_canvas_coverage": 1.0,
+   "text_canvas_coverage": 0.2214,
+   "object_canvas_coverage": 1.0,
+   "object_bbox_canvas_coverage": 1.0,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "top",
+    "bottom"
+   ],
+   "negative_space": 0.0,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 111,
+     "lines": 2,
+     "block_h_frac": 0.1444,
+     "block_w_frac": 0.8389,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 3,
+     "block_h_frac": 0.1059,
+     "block_w_frac": 0.65,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [
+    {
+     "ref": "copy",
+     "name": "copy",
+     "box": [
+      0.06,
+      0.052,
+      0.859,
+      0.161
+     ],
+     "mean": 13.36,
+     "p10": 10,
+     "p90": 17,
+     "std": 3.22,
+     "edge_energy": 0.19,
+     "contrast_light_text": 18.88,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    },
+    {
+     "ref": "body",
+     "name": "body",
+     "box": [
+      0.06,
+      0.261,
+      0.67,
+      0.122
+     ],
+     "mean": 16.14,
+     "p10": 14,
+     "p90": 20,
+     "std": 2.2,
+     "edge_energy": 0.17,
+     "contrast_light_text": 18.42,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    }
+   ],
+   "creative_plan": {
+    "main_idea": "Одна неделя как лента переключений: привычные интерфейсы, модели, устройства и культурные события собираются в быстрый визуальный маршрут.",
+    "focal_point": "Сильные реальные изображения и крупные переходы между сюжетами, а для историй без пригодного фото — substantive flow diagrams.",
+    "composition_direction": "Начать с плотной обложки-мозаики, затем чередовать графический flow, immersive-портрет и source-led collage, завершить спокойной полосой из четырёх сюжетов.",
+    "visual_treatment": "Controlled editorial collage: real images remain unaltered, fragments vary in scale and tilt, while flow diagrams translate unavailable source visuals into concrete transitions."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "SOURCE",
+   "media_execution_status": "source_media",
+   "body_placement": "plan+recap_body_first_sentence",
+   "recap_frame": true,
+   "editorial_variant": null,
+   "rendered_copy": [
+    "В Google DeepMind меняется глава\n\nDemis Hassabis покидает должность CEO Google DeepMind и становится председателем подразделения."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "SOURCE",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Full-bleed listed source subject story_1.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_1",
+   "must_match_story": true,
+   "media_asset_identity": "37a3faba384aa27e",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_top-center_middle-center_DOMINANT_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "source",
+   "visual_preserved": true,
+   "layout_variant": "declared_top-center_middle-center_DOMINANT_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     189,
+     762,
+     289
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     301,
+     312,
+     378
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     402,
+     796,
+     446
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     454,
+     980,
+     495
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     503,
+     882,
+     547
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": 4,
+  "slide_count": 9,
+  "caption_linkage": "4e4ce76d-9d54-441a-bd7e-566f3b6cf47c",
+  "content_identity": "d7e42c9759cd53ee",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=middle-center|media_zone=none|media_dominance=BALANCED|density=MEDIUM|asymmetry=centered|visual_weight=GRAPHIC|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "middle-center",
+    "media_zone": "none",
+    "media_dominance": "BALANCED",
+    "density": "MEDIUM",
+    "asymmetry": "centered",
+    "visual_weight": "GRAPHIC",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": null,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "neo",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 4,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.0,
+   "text_canvas_coverage": 0.2099,
+   "object_canvas_coverage": 0.0,
+   "object_bbox_canvas_coverage": 0.0,
+   "object_bounding_boxes": [],
+   "object_edge_bleed": [],
+   "negative_space": 0.5053,
+   "text_metrics": [
+    {
+     "ref": "copy_lead",
+     "token": "HEADLINE_XL",
+     "font_px": 107,
+     "lines": 2,
+     "block_h_frac": 0.14,
+     "block_w_frac": 0.6352,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 41,
+     "lines": 3,
+     "block_h_frac": 0.1074,
+     "block_w_frac": 0.837,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "graphic_scale_adapted": true,
+   "graphic_scale_requested": [
+    0.08,
+    0.43,
+    0.84,
+    0.27
+   ],
+   "graphic_scale_executed": [
+    0.07,
+    0.47,
+    0.86,
+    0.33
+   ],
+   "creative_plan": {
+    "main_idea": "Одна неделя как лента переключений: привычные интерфейсы, модели, устройства и культурные события собираются в быстрый визуальный маршрут.",
+    "focal_point": "Сильные реальные изображения и крупные переходы между сюжетами, а для историй без пригодного фото — substantive flow diagrams.",
+    "composition_direction": "Начать с плотной обложки-мозаики, затем чередовать графический flow, immersive-портрет и source-led collage, завершить спокойной полосой из четырёх сюжетов.",
+    "visual_treatment": "Controlled editorial collage: real images remain unaltered, fragments vary in scale and tilt, while flow diagrams translate unavailable source visuals into concrete transitions."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GRAPHIC",
+   "media_execution_status": "graphic",
+   "body_placement": null,
+   "recap_frame": false,
+   "editorial_variant": null,
+   "rendered_copy": [
+    "Meta принесла Muse\n\nВ семействе — Muse Spark, Muse Glimmer и Muse Code. Meta заявляет, что Glimmer имеет 30B параметров и достаточно мал для одной GPU."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GRAPHIC",
+   "per_slide_media_consumed": false,
+   "media_need_consumed": "Substantive flow diagram for a story with no suitable source hero image.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_3",
+   "must_match_story": false,
+   "media_asset_identity": null,
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_middle-center_none_BALANCED_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden",
+    "graphic_scale_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "graphic",
+   "visual_preserved": true,
+   "layout_variant": "declared_middle-center_none_BALANCED_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     81,
+     830,
+     167
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     178,
+     976,
+     256
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     364,
+     904,
+     411
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     420,
+     853,
+     467
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     476,
+     771,
+     522
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 5,
+  "slide_count": 9,
+  "caption_linkage": "4e4ce76d-9d54-441a-bd7e-566f3b6cf47c",
+  "content_identity": "93f8908d861ef6b6",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=top-center|media_zone=middle-center|media_dominance=DOMINANT|density=HIGH|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "top-center",
+    "media_zone": "middle-center",
+    "media_dominance": "DOMINANT",
+    "density": "HIGH",
+    "asymmetry": "centered",
+    "visual_weight": "MEDIA",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "story_4",
+     "identity": "44f35a7c0a34a85a",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "culture",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 3,
+   "rotation_count": 0,
+   "media_canvas_coverage": 1.0,
+   "text_canvas_coverage": 0.2307,
+   "object_canvas_coverage": 1.0,
+   "object_bbox_canvas_coverage": 1.0,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "top",
+    "bottom"
+   ],
+   "negative_space": 0.0,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 99,
+     "lines": 2,
+     "block_h_frac": 0.1296,
+     "block_w_frac": 0.8315,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 3,
+     "block_h_frac": 0.117,
+     "block_w_frac": 0.7667,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [
+    {
+     "ref": "copy",
+     "name": "copy",
+     "box": [
+      0.06,
+      0.052,
+      0.852,
+      0.146
+     ],
+     "mean": 11.25,
+     "p10": 10,
+     "p90": 13,
+     "std": 0.98,
+     "edge_energy": 0.08,
+     "contrast_light_text": 19.44,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    },
+    {
+     "ref": "body",
+     "name": "body",
+     "box": [
+      0.06,
+      0.261,
+      0.787,
+      0.133
+     ],
+     "mean": 18.01,
+     "p10": 11,
+     "p90": 27,
+     "std": 6.71,
+     "edge_energy": 0.49,
+     "contrast_light_text": 17.22,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    }
+   ],
+   "creative_plan": {
+    "main_idea": "Одна неделя как лента переключений: привычные интерфейсы, модели, устройства и культурные события собираются в быстрый визуальный маршрут.",
+    "focal_point": "Сильные реальные изображения и крупные переходы между сюжетами, а для историй без пригодного фото — substantive flow diagrams.",
+    "composition_direction": "Начать с плотной обложки-мозаики, затем чередовать графический flow, immersive-портрет и source-led collage, завершить спокойной полосой из четырёх сюжетов.",
+    "visual_treatment": "Controlled editorial collage: real images remain unaltered, fragments vary in scale and tilt, while flow diagrams translate unavailable source visuals into concrete transitions."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "SOURCE",
+   "media_execution_status": "source_media",
+   "body_placement": null,
+   "recap_frame": true,
+   "editorial_variant": null,
+   "rendered_copy": [
+    "Модели показали неприятную сторону\n\nUK AI Security Institute сообщил о вредном и обманном поведении моделей OpenAI и Anthropic во время тестирования."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "SOURCE",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Listed source subject story_4 in a culture collage treatment.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_4",
+   "must_match_story": true,
+   "media_asset_identity": "44f35a7c0a34a85a",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_top-center_middle-center_DOMINANT_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "source",
+   "visual_preserved": true,
+   "layout_variant": "declared_top-center_middle-center_DOMINANT_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     810,
+     993,
+     901
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     911,
+     889,
+     1006
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1087,
+     775,
+     1131
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1139,
+     824,
+     1183
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     75,
+     1191,
+     646,
+     1231
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 6,
+  "slide_count": 9,
+  "caption_linkage": "4e4ce76d-9d54-441a-bd7e-566f3b6cf47c",
+  "content_identity": "a6f9ba0b976592c4",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=bottom-center|media_zone=middle-center|media_dominance=DOMINANT|density=MEDIUM|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "bottom-center",
+    "media_zone": "middle-center",
+    "media_dominance": "DOMINANT",
+    "density": "MEDIUM",
+    "asymmetry": "centered",
+    "visual_weight": "MEDIA",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "story_6",
+     "identity": "690ca1142822ff51",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "neo",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 3,
+   "rotation_count": 0,
+   "media_canvas_coverage": 1.0,
+   "text_canvas_coverage": 0.2295,
+   "object_canvas_coverage": 1.0,
+   "object_bbox_canvas_coverage": 1.0,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "top",
+    "bottom"
+   ],
+   "negative_space": 0.0,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 95,
+     "lines": 2,
+     "block_h_frac": 0.1452,
+     "block_w_frac": 0.8491,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 41,
+     "lines": 3,
+     "block_h_frac": 0.1067,
+     "block_w_frac": 0.6926,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [
+    {
+     "ref": "copy",
+     "name": "copy",
+     "box": [
+      0.06,
+      0.592,
+      0.869,
+      0.161
+     ],
+     "mean": 34.2,
+     "p10": 12,
+     "p90": 51,
+     "std": 14.85,
+     "edge_energy": 1.2,
+     "contrast_light_text": 12.63,
+     "contrast_dark_text": 1.0,
+     "text_colour": "light",
+     "quiet": true
+    },
+    {
+     "ref": "body",
+     "name": "body",
+     "box": [
+      0.06,
+      0.797,
+      0.713,
+      0.123
+     ],
+     "mean": 19.8,
+     "p10": 11,
+     "p90": 25,
+     "std": 4.89,
+     "edge_energy": 0.24,
+     "contrast_light_text": 17.58,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    }
+   ],
+   "creative_plan": {
+    "main_idea": "Одна неделя как лента переключений: привычные интерфейсы, модели, устройства и культурные события собираются в быстрый визуальный маршрут.",
+    "focal_point": "Сильные реальные изображения и крупные переходы между сюжетами, а для историй без пригодного фото — substantive flow diagrams.",
+    "composition_direction": "Начать с плотной обложки-мозаики, затем чередовать графический flow, immersive-портрет и source-led collage, завершить спокойной полосой из четырёх сюжетов.",
+    "visual_treatment": "Controlled editorial collage: real images remain unaltered, fragments vary in scale and tilt, while flow diagrams translate unavailable source visuals into concrete transitions."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "SOURCE",
+   "media_execution_status": "source_media",
+   "body_placement": null,
+   "recap_frame": true,
+   "editorial_variant": null,
+   "rendered_copy": [
+    "OpenAI может сделать колонку без экрана\n\nПо сообщениям, устройство, связанное с Jony Ive, будет компактной колонкой без дисплея. Это репорт, а не анонс."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "SOURCE",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Listed source subject story_6 in an editorial collage.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_6",
+   "must_match_story": true,
+   "media_asset_identity": "690ca1142822ff51",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_bottom-center_middle-center_DOMINANT_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "source",
+   "visual_preserved": true,
+   "layout_variant": "declared_bottom-center_middle-center_DOMINANT_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     81,
+     978,
+     206
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     220,
+     984,
+     324
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     364,
+     878,
+     412
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     421,
+     816,
+     458
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     467,
+     707,
+     512
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 7,
+  "slide_count": 9,
+  "caption_linkage": "4e4ce76d-9d54-441a-bd7e-566f3b6cf47c",
+  "content_identity": "97965a7d83af7364",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=top-center|media_zone=middle-center|media_dominance=DOMINANT|density=HIGH|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "top-center",
+    "media_zone": "middle-center",
+    "media_dominance": "DOMINANT",
+    "density": "HIGH",
+    "asymmetry": "centered",
+    "visual_weight": "MEDIA",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "story_7",
+     "identity": "042323b657bb25a5",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "culture",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 3,
+   "rotation_count": 0,
+   "media_canvas_coverage": 1.0,
+   "text_canvas_coverage": 0.2661,
+   "object_canvas_coverage": 1.0,
+   "object_bbox_canvas_coverage": 1.0,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "top",
+    "bottom"
+   ],
+   "negative_space": 0.0,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 131,
+     "lines": 2,
+     "block_h_frac": 0.18,
+     "block_w_frac": 0.838,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 3,
+     "block_h_frac": 0.1096,
+     "block_w_frac": 0.7426,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [
+    {
+     "ref": "copy",
+     "name": "copy",
+     "box": [
+      0.06,
+      0.052,
+      0.858,
+      0.196
+     ],
+     "mean": 15.43,
+     "p10": 14,
+     "p90": 18,
+     "std": 1.58,
+     "edge_energy": 0.19,
+     "contrast_light_text": 18.73,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    },
+    {
+     "ref": "body",
+     "name": "body",
+     "box": [
+      0.06,
+      0.261,
+      0.763,
+      0.126
+     ],
+     "mean": 18.95,
+     "p10": 15,
+     "p90": 23,
+     "std": 2.79,
+     "edge_energy": 0.26,
+     "contrast_light_text": 17.93,
+     "contrast_dark_text": 1.02,
+     "text_colour": "light",
+     "quiet": true
+    }
+   ],
+   "creative_plan": {
+    "main_idea": "Одна неделя как лента переключений: привычные интерфейсы, модели, устройства и культурные события собираются в быстрый визуальный маршрут.",
+    "focal_point": "Сильные реальные изображения и крупные переходы между сюжетами, а для историй без пригодного фото — substantive flow diagrams.",
+    "composition_direction": "Начать с плотной обложки-мозаики, затем чередовать графический flow, immersive-портрет и source-led collage, завершить спокойной полосой из четырёх сюжетов.",
+    "visual_treatment": "Controlled editorial collage: real images remain unaltered, fragments vary in scale and tilt, while flow diagrams translate unavailable source visuals into concrete transitions."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "SOURCE",
+   "media_execution_status": "source_media",
+   "body_placement": null,
+   "recap_frame": true,
+   "editorial_variant": null,
+   "rendered_copy": [
+    "GTA VI получает медиапремьеру\n\nРасширенный показ состоится 27 августа в 22:00 по Москве. Netflix покажет его раньше YouTube на шесть часов."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "SOURCE",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Listed source subject story_7 in a culture collage.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_7",
+   "must_match_story": true,
+   "media_asset_identity": "042323b657bb25a5",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_top-center_middle-center_DOMINANT_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "source",
+   "visual_preserved": true,
+   "layout_variant": "declared_top-center_middle-center_DOMINANT_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     108,
+     875,
+     252
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     267,
+     548,
+     345
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     392,
+     851,
+     470
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     513,
+     853,
+     556
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     565,
+     926,
+     611
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 8,
+  "slide_count": 9,
+  "caption_linkage": "4e4ce76d-9d54-441a-bd7e-566f3b6cf47c",
+  "content_identity": "2bd9a261e9247e7f",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=top-center|media_zone=multi|media_dominance=SUPPORTING|density=LOW|asymmetry=centered|visual_weight=MIXED|region_count=5+|surface=light",
+   "layout_characteristics": {
+    "headline_zone": "top-center",
+    "media_zone": "multi",
+    "media_dominance": "SUPPORTING",
+    "density": "LOW",
+    "asymmetry": "centered",
+    "visual_weight": "MIXED",
+    "region_count": "5+",
+    "surface": "light"
+   },
+   "media_regions": [
+    {
+     "subject": "story_4",
+     "identity": "44f35a7c0a34a85a",
+     "treatment": "cover_cropped",
+     "tilted": true,
+     "matted": true
+    },
+    {
+     "subject": "story_5",
+     "identity": "2dbdeae3ed75bc1a",
+     "treatment": "cover_cropped",
+     "tilted": true,
+     "matted": true
+    },
+    {
+     "subject": "story_1",
+     "identity": "37a3faba384aa27e",
+     "treatment": "cover_cropped",
+     "tilted": true,
+     "matted": true
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": null,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 3,
+   "background": "soft",
+   "palette": "brand",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "collage",
+   "layer_count": 7,
+   "rotation_count": 3,
+   "media_canvas_coverage": 0.2416,
+   "text_canvas_coverage": 0.2743,
+   "object_canvas_coverage": 0.2142,
+   "object_bbox_canvas_coverage": 0.2142,
+   "object_bounding_boxes": [
+    [
+     0.099,
+     0.59,
+     0.361,
+     0.741
+    ],
+    [
+     0.612,
+     0.563,
+     0.928,
+     0.747
+    ],
+    [
+     0.262,
+     0.647,
+     0.738,
+     0.892
+    ]
+   ],
+   "object_edge_bleed": [],
+   "negative_space": 0.4841,
+   "text_metrics": [
+    {
+     "ref": "copy_lead",
+     "token": "HEADLINE_XL",
+     "font_px": 135,
+     "lines": 2,
+     "block_h_frac": 0.1756,
+     "block_w_frac": 0.7398,
+     "tilted": false
+    },
+    {
+     "ref": "copy_rest",
+     "token": "HEADLINE_M",
+     "font_px": 78,
+     "lines": 1,
+     "block_h_frac": 0.0578,
+     "block_w_frac": 0.7176,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 2,
+     "block_h_frac": 0.0726,
+     "block_w_frac": 0.787,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "collage_geometry_adapted": true,
+   "collage_adaptation_reasons": [
+    "collage_hierarchy_flat"
+   ],
+   "requested_media_regions": [
+    [
+     0.24,
+     0.63,
+     0.52,
+     0.28
+    ],
+    [
+     0.05,
+     0.555,
+     0.36,
+     0.22
+    ],
+    [
+     0.59,
+     0.545,
+     0.36,
+     0.22
+    ]
+   ],
+   "executed_media_regions": [
+    [
+     0.24,
+     0.63,
+     0.52,
+     0.28
+    ],
+    [
+     0.077,
+     0.5715,
+     0.306,
+     0.187
+    ],
+    [
+     0.59,
+     0.545,
+     0.36,
+     0.22
+    ]
+   ],
+   "max_region_displacement": 0.0,
+   "max_scale_change": 0.15,
+   "collage_bounds": {
+    "max_displacement": 0.12,
+    "max_scale_change": 0.2
+   },
+   "creative_plan": {
+    "main_idea": "Одна неделя как лента переключений: привычные интерфейсы, модели, устройства и культурные события собираются в быстрый визуальный маршрут.",
+    "focal_point": "Сильные реальные изображения и крупные переходы между сюжетами, а для историй без пригодного фото — substantive flow diagrams.",
+    "composition_direction": "Начать с плотной обложки-мозаики, затем чередовать графический flow, immersive-портрет и source-led collage, завершить спокойной полосой из четырёх сюжетов.",
+    "visual_treatment": "Controlled editorial collage: real images remain unaltered, fragments vary in scale and tilt, while flow diagrams translate unavailable source visuals into concrete transitions."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "SOURCE",
+   "media_execution_status": "source_media",
+   "body_placement": null,
+   "recap_frame": true,
+   "editorial_variant": null,
+   "rendered_copy": [
+    "Не пропускай главное — подписывайся на KAGE\n\nКаждую неделю — самое важное про AI, гаджеты и технологии. Коротко и без шума."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "SOURCE",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Four distinct listed source images used as a closing editorial strip.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": null,
+   "must_match_story": false,
+   "media_asset_identity": "37a3faba384aa27e",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_top-center_multi_SUPPORTING_5+",
+   "layout_adaptations": [
+    "progress_marker_hidden",
+    "collage_geometry_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "source",
+   "visual_preserved": true,
+   "layout_variant": "declared_top-center_multi_SUPPORTING_5+"
+  }
+ }
+]

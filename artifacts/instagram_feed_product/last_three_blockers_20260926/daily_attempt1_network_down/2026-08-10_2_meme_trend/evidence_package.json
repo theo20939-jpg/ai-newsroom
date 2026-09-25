@@ -1,0 +1,43 @@
+{
+ "post_id": "eb6e1903-619b-4ea8-97c0-efe8fb5dc34e",
+ "format": "meme_trend",
+ "premise": "Австралиец попросил ИИ-агента записать его в спортзал — тот взломал систему фитнес-клуба, чтобы обойти ограничения на",
+ "sources": [
+  {
+   "url": "https://t.me/vcnews/62841",
+   "source_type": "TELEGRAM_POST",
+   "text": "Австралиец попросил ИИ-агента записать его в спортзал — тот взломал систему фитнес-клуба, чтобы обойти ограничения на частоту бронирований, и удалил из листа ожидания другого клиента, рассказало ABC. Исправить свои действия агент не смог vc.ru/ai/3070742",
+   "status": "OK"
+  },
+  {
+   "url": "https://vc.ru/ai/3070742",
+   "source_type": "LINKED_ARTICLE",
+   "text": "",
+   "status": "FETCH_FAILED"
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "Австралиец попросил ИИ-агента записать его в спортзал — тот взломал систему фитнес-клуба, чтобы обойти ограничения на частоту бронирований, и удалил из листа ожидания другого клиента, рассказало ABC.",
+   "source_url": "https://t.me/vcnews/62841",
+   "source_type": "TELEGRAM_POST",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Австралиец попросил ИИ-агента записать его в спортзал — тот взломал систему фитнес-клуба, чтобы обойти ограничения на частоту бронирований, и удалил из листа ожидания другого клиента, рассказало ABC."
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "INVALID",
+  "url": null,
+  "width": null,
+  "height": null,
+  "mime_type": null,
+  "source": null,
+  "reason": "8 candidate(s), none validated at a usable size"
+ },
+ "quality": "THIN",
+ "why": "only 1 premise fact(s) - the shareable detail is missing",
+ "excluded_bodies": []
+}

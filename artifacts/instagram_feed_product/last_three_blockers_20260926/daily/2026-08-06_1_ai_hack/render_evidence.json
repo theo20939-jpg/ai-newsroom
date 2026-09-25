@@ -1,0 +1,1136 @@
+[
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     405,
+     990,
+     514
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     73,
+     526,
+     921,
+     637
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     649,
+     306,
+     717
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     75,
+     810,
+     783,
+     855
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     864,
+     738,
+     910
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     919,
+     368,
+     964
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 0,
+  "slide_count": 6,
+  "caption_linkage": "3de31ea2-98fe-44d8-a51e-b7ba87d1ccce",
+  "content_identity": "c3bf2e5599001fd8",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=middle-center|media_zone=middle-center|media_dominance=SUPPORTING|density=LOW|asymmetry=centered|visual_weight=TEXT|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "middle-center",
+    "media_zone": "middle-center",
+    "media_dominance": "SUPPORTING",
+    "density": "LOW",
+    "asymmetry": "centered",
+    "visual_weight": "TEXT",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "source",
+     "identity": "0e8163166af8a3ed",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "neo",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 3,
+   "rotation_count": 0,
+   "media_canvas_coverage": 1.0,
+   "text_canvas_coverage": 0.3039,
+   "object_canvas_coverage": 1.0,
+   "object_bbox_canvas_coverage": 1.0,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "top",
+    "bottom"
+   ],
+   "negative_space": 0.0,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "DISPLAY",
+     "font_px": 117,
+     "lines": 3,
+     "block_h_frac": 0.2311,
+     "block_w_frac": 0.8463,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 3,
+     "block_h_frac": 0.1141,
+     "block_w_frac": 0.6546,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [
+    {
+     "ref": "copy",
+     "name": "copy",
+     "box": [
+      0.06,
+      0.292,
+      0.867,
+      0.247
+     ],
+     "mean": 100.69,
+     "p10": 98,
+     "p90": 103,
+     "std": 3.67,
+     "edge_energy": 0.43,
+     "contrast_light_text": 5.66,
+     "contrast_dark_text": 3.21,
+     "text_colour": "light",
+     "quiet": true
+    },
+    {
+     "ref": "body",
+     "name": "body",
+     "box": [
+      0.06,
+      0.592,
+      0.675,
+      0.13
+     ],
+     "mean": 98.81,
+     "p10": 94,
+     "p90": 102,
+     "std": 3.65,
+     "edge_energy": 0.66,
+     "contrast_light_text": 5.74,
+     "contrast_dark_text": 3.02,
+     "text_colour": "light",
+     "quiet": true
+    }
+   ],
+   "creative_plan": {
+    "main_idea": "Один чат как рабочий стол: задача входит слева, нужные Adobe-инструменты собираются справа.",
+    "focal_point": "Контраст между 70+ инструментами и одним разговором, затем понятный путь подключения.",
+    "composition_direction": "Чередовать тёмные интерфейсные схемы с одной светлой utility-карточкой; крупный заголовок слева, графический маршрут или набор сценариев справа/внизу.",
+    "visual_treatment": "Чистые узлы, стрелочные маршруты, option cards и крупные короткие заголовки; каждый графический элемент объясняет конкретный шаг или сценарий."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "display",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GRAPHIC",
+   "media_execution_status": "graphic",
+   "body_placement": null,
+   "recap_frame": true,
+   "editorial_variant": "ambient",
+   "rendered_copy": [
+    "70+ инструментов Adobe — в одном чате\n\nAdobe собрал творческие и рабочие сценарии внутри ChatGPT. Вот как быстро начать."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GRAPHIC",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Substantive workflow diagram showing many Adobe tools converging into one ChatGPT conversation.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": null,
+   "must_match_story": false,
+   "media_asset_identity": "0e8163166af8a3ed",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_middle-center_middle-center_SUPPORTING_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "graphic",
+   "visual_preserved": true,
+   "layout_variant": "declared_middle-center_middle-center_SUPPORTING_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     189,
+     984,
+     286
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     402,
+     930,
+     449
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     75,
+     458,
+     205,
+     494
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": 1,
+  "slide_count": 6,
+  "caption_linkage": "3de31ea2-98fe-44d8-a51e-b7ba87d1ccce",
+  "content_identity": "4399d79716b94024",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=middle-center|media_zone=none|media_dominance=BALANCED|density=MEDIUM|asymmetry=centered|visual_weight=GRAPHIC|region_count=5+|surface=light",
+   "layout_characteristics": {
+    "headline_zone": "middle-center",
+    "media_zone": "none",
+    "media_dominance": "BALANCED",
+    "density": "MEDIUM",
+    "asymmetry": "centered",
+    "visual_weight": "GRAPHIC",
+    "region_count": "5+",
+    "surface": "light"
+   },
+   "media_regions": [],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": null,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "paper",
+   "palette": "brand",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 5,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.0,
+   "text_canvas_coverage": 0.1458,
+   "object_canvas_coverage": 0.0,
+   "object_bbox_canvas_coverage": 0.0,
+   "object_bounding_boxes": [],
+   "object_edge_bleed": [],
+   "negative_space": 0.5677,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 103,
+     "lines": 1,
+     "block_h_frac": 0.0719,
+     "block_w_frac": 0.8407,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 2,
+     "block_h_frac": 0.0681,
+     "block_w_frac": 0.7907,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "graphic_scale_adapted": true,
+   "graphic_scale_requested": [
+    0.53,
+    0.2,
+    0.39,
+    0.43
+   ],
+   "graphic_scale_executed": [
+    0.07,
+    0.47,
+    0.86,
+    0.33
+   ],
+   "creative_plan": {
+    "main_idea": "Один чат как рабочий стол: задача входит слева, нужные Adobe-инструменты собираются справа.",
+    "focal_point": "Контраст между 70+ инструментами и одним разговором, затем понятный путь подключения.",
+    "composition_direction": "Чередовать тёмные интерфейсные схемы с одной светлой utility-карточкой; крупный заголовок слева, графический маршрут или набор сценариев справа/внизу.",
+    "visual_treatment": "Чистые узлы, стрелочные маршруты, option cards и крупные короткие заголовки; каждый графический элемент объясняет конкретный шаг или сценарий."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GRAPHIC",
+   "media_execution_status": "graphic",
+   "body_placement": null,
+   "recap_frame": false,
+   "editorial_variant": null,
+   "rendered_copy": [
+    "Шаг 1. Добавь Adobe\n\nОткрой ChatGPT, зайди в «Plugins» и добавь Adobe."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GRAPHIC",
+   "per_slide_media_consumed": false,
+   "media_need_consumed": "Substantive menu-path diagram for adding Adobe inside ChatGPT.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": null,
+   "must_match_story": false,
+   "media_asset_identity": null,
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_middle-center_none_BALANCED_5+",
+   "layout_adaptations": [
+    "progress_marker_hidden",
+    "graphic_scale_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "graphic",
+   "visual_preserved": true,
+   "layout_variant": "declared_middle-center_none_BALANCED_5+"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     189,
+     804,
+     274
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     73,
+     287,
+     737,
+     381
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     402,
+     958,
+     449
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     75,
+     458,
+     986,
+     503
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     512,
+     760,
+     560
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": 2,
+  "slide_count": 6,
+  "caption_linkage": "3de31ea2-98fe-44d8-a51e-b7ba87d1ccce",
+  "content_identity": "5b458d7d6588a37f",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=middle-center|media_zone=none|media_dominance=BALANCED|density=HIGH|asymmetry=centered|visual_weight=GRAPHIC|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "middle-center",
+    "media_zone": "none",
+    "media_dominance": "BALANCED",
+    "density": "HIGH",
+    "asymmetry": "centered",
+    "visual_weight": "GRAPHIC",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": null,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "graphite",
+   "palette": "neo",
+   "logo_position": "BOTTOM_LEFT",
+   "arrangement": "standard",
+   "layer_count": 4,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.0,
+   "text_canvas_coverage": 0.2255,
+   "object_canvas_coverage": 0.0,
+   "object_bbox_canvas_coverage": 0.0,
+   "object_bounding_boxes": [],
+   "object_edge_bleed": [],
+   "negative_space": 0.4896,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 119,
+     "lines": 2,
+     "block_h_frac": 0.1422,
+     "block_w_frac": 0.6741,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 3,
+     "block_h_frac": 0.117,
+     "block_w_frac": 0.8426,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "graphic_scale_adapted": true,
+   "graphic_scale_requested": [
+    0.54,
+    0.17,
+    0.37,
+    0.52
+   ],
+   "graphic_scale_executed": [
+    0.07,
+    0.47,
+    0.86,
+    0.33
+   ],
+   "creative_plan": {
+    "main_idea": "Один чат как рабочий стол: задача входит слева, нужные Adobe-инструменты собираются справа.",
+    "focal_point": "Контраст между 70+ инструментами и одним разговором, затем понятный путь подключения.",
+    "composition_direction": "Чередовать тёмные интерфейсные схемы с одной светлой utility-карточкой; крупный заголовок слева, графический маршрут или набор сценариев справа/внизу.",
+    "visual_treatment": "Чистые узлы, стрелочные маршруты, option cards и крупные короткие заголовки; каждый графический элемент объясняет конкретный шаг или сценарий."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GRAPHIC",
+   "media_execution_status": "graphic",
+   "body_placement": null,
+   "recap_frame": false,
+   "editorial_variant": null,
+   "rendered_copy": [
+    "Шаг 2. Вызови Adobe в чате\n\nНачни новый чат и введи «@Adobe». Выбери Adobe в меню или нажми «+», чтобы найти его среди установленных расширений."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GRAPHIC",
+   "per_slide_media_consumed": false,
+   "media_need_consumed": "Substantive command-and-choice flow diagram showing «@Adobe» and «+».",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": null,
+   "must_match_story": false,
+   "media_asset_identity": null,
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_middle-center_none_BALANCED_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden",
+    "graphic_scale_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "graphic",
+   "visual_preserved": true,
+   "layout_variant": "declared_middle-center_none_BALANCED_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     71,
+     95,
+     202,
+     282
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     540,
+     922,
+     676
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     850,
+     674,
+     892
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     901,
+     682,
+     949
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     958,
+     775,
+     1004
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1013,
+     403,
+     1049
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": 3,
+  "slide_count": 6,
+  "caption_linkage": "3de31ea2-98fe-44d8-a51e-b7ba87d1ccce",
+  "content_identity": "e8cee94f6d6a1187",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=bottom-center|media_zone=none|media_dominance=NONE|density=MEDIUM|asymmetry=centered|visual_weight=TEXT|region_count=3-4|surface=light",
+   "layout_characteristics": {
+    "headline_zone": "bottom-center",
+    "media_zone": "none",
+    "media_dominance": "NONE",
+    "density": "MEDIUM",
+    "asymmetry": "centered",
+    "visual_weight": "TEXT",
+    "region_count": "3-4",
+    "surface": "light"
+   },
+   "media_regions": [],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": null,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "paper",
+   "palette": "brand",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 4,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.0,
+   "text_canvas_coverage": 0.2262,
+   "object_canvas_coverage": 0.0,
+   "object_bbox_canvas_coverage": 0.0,
+   "object_bounding_boxes": [],
+   "object_edge_bleed": [],
+   "negative_space": 0.7738,
+   "text_metrics": [
+    {
+     "ref": "number",
+     "token": "MEGA",
+     "font_px": 259,
+     "lines": 1,
+     "block_h_frac": 0.1385,
+     "block_w_frac": 0.1167,
+     "tilted": false
+    },
+    {
+     "ref": "copy_no_number",
+     "token": "HEADLINE_XL",
+     "font_px": 135,
+     "lines": 1,
+     "block_h_frac": 0.1007,
+     "block_w_frac": 0.7833,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 4,
+     "block_h_frac": 0.1474,
+     "block_w_frac": 0.6472,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "creative_plan": {
+    "main_idea": "Один чат как рабочий стол: задача входит слева, нужные Adobe-инструменты собираются справа.",
+    "focal_point": "Контраст между 70+ инструментами и одним разговором, затем понятный путь подключения.",
+    "composition_direction": "Чередовать тёмные интерфейсные схемы с одной светлой utility-карточкой; крупный заголовок слева, графический маршрут или набор сценариев справа/внизу.",
+    "visual_treatment": "Чистые узлы, стрелочные маршруты, option cards и крупные короткие заголовки; каждый графический элемент объясняет конкретный шаг или сценарий."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GRAPHIC",
+   "media_execution_status": "graphic",
+   "body_placement": null,
+   "recap_frame": true,
+   "editorial_variant": "step_numeral",
+   "designed_typographic": true,
+   "rendered_copy": [
+    "Шаг 3. Войди в Adobe\n\nВход открывает генеративные возможности, доступ к файлам Creative Cloud и сохранение работы между сессиями."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GRAPHIC",
+   "per_slide_media_consumed": false,
+   "media_need_consumed": "Substantive flow diagram connecting Adobe sign-in to the three supported benefits.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": null,
+   "must_match_story": false,
+   "media_asset_identity": null,
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_bottom-center_none_NONE_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "graphic",
+   "visual_preserved": true,
+   "layout_variant": "declared_bottom-center_none_NONE_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     189,
+     958,
+     282
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     294,
+     488,
+     378
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     402,
+     989,
+     449
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     75,
+     458,
+     864,
+     505
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     514,
+     872,
+     561
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": 4,
+  "slide_count": 6,
+  "caption_linkage": "3de31ea2-98fe-44d8-a51e-b7ba87d1ccce",
+  "content_identity": "3ef54248ac858fd7",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=middle-center|media_zone=none|media_dominance=BALANCED|density=HIGH|asymmetry=centered|visual_weight=GRAPHIC|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "middle-center",
+    "media_zone": "none",
+    "media_dominance": "BALANCED",
+    "density": "HIGH",
+    "asymmetry": "centered",
+    "visual_weight": "GRAPHIC",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": null,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "neo",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 4,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.0,
+   "text_canvas_coverage": 0.2483,
+   "object_canvas_coverage": 0.0,
+   "object_bbox_canvas_coverage": 0.0,
+   "object_bounding_boxes": [],
+   "object_edge_bleed": [],
+   "negative_space": 0.4669,
+   "text_metrics": [
+    {
+     "ref": "copy_lead",
+     "token": "HEADLINE_XL",
+     "font_px": 107,
+     "lines": 2,
+     "block_h_frac": 0.14,
+     "block_w_frac": 0.8157,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 3,
+     "block_h_frac": 0.1178,
+     "block_w_frac": 0.8454,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "graphic_scale_adapted": true,
+   "graphic_scale_requested": [
+    0.07,
+    0.28,
+    0.82,
+    0.38
+   ],
+   "graphic_scale_executed": [
+    0.07,
+    0.47,
+    0.86,
+    0.33
+   ],
+   "creative_plan": {
+    "main_idea": "Один чат как рабочий стол: задача входит слева, нужные Adobe-инструменты собираются справа.",
+    "focal_point": "Контраст между 70+ инструментами и одним разговором, затем понятный путь подключения.",
+    "composition_direction": "Чередовать тёмные интерфейсные схемы с одной светлой utility-карточкой; крупный заголовок слева, графический маршрут или набор сценариев справа/внизу.",
+    "visual_treatment": "Чистые узлы, стрелочные маршруты, option cards и крупные короткие заголовки; каждый графический элемент объясняет конкретный шаг или сценарий."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GRAPHIC",
+   "media_execution_status": "graphic",
+   "body_placement": null,
+   "recap_frame": false,
+   "editorial_variant": null,
+   "rendered_copy": [
+    "Что можно сделать в Adobe? Фото | Видео | Дизайн | Данные\n\nОт обработки кампейн-фотографий и роликов до дизайна, PDF и работы с таблицами — сценарий начинается с описания задачи."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GRAPHIC",
+   "per_slide_media_consumed": false,
+   "media_need_consumed": "Substantive option-card graphic with four supported Adobe workflow categories.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": null,
+   "must_match_story": false,
+   "media_asset_identity": null,
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_middle-center_none_BALANCED_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden",
+    "graphic_scale_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "graphic",
+   "visual_preserved": true,
+   "layout_variant": "declared_middle-center_none_BALANCED_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     130,
+     216,
+     915,
+     320
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     130,
+     332,
+     1000,
+     425
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     130,
+     810,
+     788,
+     849
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     130,
+     857,
+     688,
+     900
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     130,
+     908,
+     733,
+     950
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     130,
+     958,
+     656,
+     1000
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     130,
+     1008,
+     471,
+     1032
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": 5,
+  "slide_count": 6,
+  "caption_linkage": "3de31ea2-98fe-44d8-a51e-b7ba87d1ccce",
+  "content_identity": "468b7812b0729609",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=top-center|media_zone=none|media_dominance=NONE|density=LOW|asymmetry=centered|visual_weight=TEXT|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "top-center",
+    "media_zone": "none",
+    "media_dominance": "NONE",
+    "density": "LOW",
+    "asymmetry": "centered",
+    "visual_weight": "TEXT",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": null,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "graphite",
+   "palette": "neo",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 4,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.0,
+   "text_canvas_coverage": 0.2565,
+   "object_canvas_coverage": 0.0,
+   "object_bbox_canvas_coverage": 0.0,
+   "object_bounding_boxes": [],
+   "object_edge_bleed": [],
+   "negative_space": 0.7368,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "DISPLAY",
+     "font_px": 117,
+     "lines": 2,
+     "block_h_frac": 0.1548,
+     "block_w_frac": 0.8056,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 41,
+     "lines": 5,
+     "block_h_frac": 0.1644,
+     "block_w_frac": 0.6093,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "creative_plan": {
+    "main_idea": "Один чат как рабочий стол: задача входит слева, нужные Adobe-инструменты собираются справа.",
+    "focal_point": "Контраст между 70+ инструментами и одним разговором, затем понятный путь подключения.",
+    "composition_direction": "Чередовать тёмные интерфейсные схемы с одной светлой utility-карточкой; крупный заголовок слева, графический маршрут или набор сценариев справа/внизу.",
+    "visual_treatment": "Чистые узлы, стрелочные маршруты, option cards и крупные короткие заголовки; каждый графический элемент объясняет конкретный шаг или сценарий."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "display",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GRAPHIC",
+   "media_execution_status": "graphic",
+   "body_placement": null,
+   "recap_frame": true,
+   "editorial_variant": "statement",
+   "designed_typographic": true,
+   "rendered_copy": [
+    "Начни с задачи, не с инструмента\n\nНапиши, что хочешь создать, и Adobe подберёт нужные инструменты за кулисами. Важно: у бесплатных аккаунтов будут ограничения по использованию."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GRAPHIC",
+   "per_slide_media_consumed": false,
+   "media_need_consumed": "Substantive workflow diagram showing task description leading to Adobe tools, with a separate usage-limits note.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": null,
+   "must_match_story": false,
+   "media_asset_identity": null,
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_top-center_none_NONE_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "graphic",
+   "visual_preserved": true,
+   "layout_variant": "declared_top-center_none_NONE_3-4"
+  }
+ }
+]

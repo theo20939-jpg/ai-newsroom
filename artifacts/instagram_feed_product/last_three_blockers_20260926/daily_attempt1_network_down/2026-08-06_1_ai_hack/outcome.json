@@ -1,0 +1,18 @@
+{
+ "key": "2026-08-06_1_ai_hack",
+ "day": "2026-08-06",
+ "slot": 1,
+ "format": "ai_hack",
+ "title": "You can use 70+ Adobe tools without leaving ChatGPT now - here's how",
+ "source": "ZDNET",
+ "evidence": "STRONG",
+ "evidence_why": "10 verbatim steps incl. a concrete location / command",
+ "source_media": "AVAILABLE",
+ "reason": "editorial_decision_failed:CreativeDirectorUnavailableError",
+ "stage": "PHASE A",
+ "gate": null,
+ "delivery": null,
+ "calls": [],
+ "slides": 0,
+ "spent_so_far": "0"
+}

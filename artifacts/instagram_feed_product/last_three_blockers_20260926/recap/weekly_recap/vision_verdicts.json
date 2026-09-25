@@ -1,0 +1,58 @@
+[
+ {
+  "subject_key": "story_1",
+  "suitable": true,
+  "image_kind": "photograph",
+  "baked_in_text_prominent": false,
+  "reason": "A real event-stage photograph shows a person standing before a large presentation backdrop with colorful bands and a name displayed on the stage.",
+  "error": null
+ },
+ {
+  "subject_key": "story_2",
+  "suitable": false,
+  "image_kind": "photograph",
+  "baked_in_text_prominent": true,
+  "reason": "A photograph shows a hand holding a smartphone with app icons and an assistant screen visible, plus a prominent watermark at the bottom right.",
+  "error": null
+ },
+ {
+  "subject_key": "story_3",
+  "suitable": false,
+  "image_kind": "photograph",
+  "baked_in_text_prominent": true,
+  "reason": "A photographed smartphone prominently displays the Meta AI logo and wordmark against a purple-lit background.",
+  "error": null
+ },
+ {
+  "subject_key": "story_4",
+  "suitable": true,
+  "image_kind": "photograph",
+  "baked_in_text_prominent": false,
+  "reason": "A close-up photograph shows a smartphone screen with several AI app icons and their labels.",
+  "error": null
+ },
+ {
+  "subject_key": "story_5",
+  "suitable": true,
+  "image_kind": "photograph",
+  "baked_in_text_prominent": false,
+  "reason": "A real camera photo shows hands typing on a laptop displaying a dark-mode ChatGPT webpage.",
+  "error": null
+ },
+ {
+  "subject_key": "story_6",
+  "suitable": true,
+  "image_kind": "photograph",
+  "baked_in_text_prominent": false,
+  "reason": "A candid photograph shows a smiling bald man wearing glasses and a white shirt seated in a red chair against a dark background.",
+  "error": null
+ },
+ {
+  "subject_key": "story_7",
+  "suitable": true,
+  "image_kind": "illustration_or_artwork",
+  "baked_in_text_prominent": false,
+  "reason": "Stylized digital artwork shows two masked people walking through a tropical roadside scene with cars and buildings.",
+  "error": null
+ }
+]

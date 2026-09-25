@@ -1,0 +1,15 @@
+2026-08-05_2_meme_trend                  STRONG     OK             submitted                                                    slides=1 spent=$0.0185
+2026-08-06_1_ai_hack                     STRONG     OK             submitted                                                    slides=6 spent=$0.1324
+C:\Users\Theodor\AppData\Local\Programs\Python\Python313\Lib\site-packages\PIL\Image.py:1136: UserWarning: Palette images with Transparency expressed in bytes should be converted to RGBA images
+  warnings.warn(
+2026-08-10_2_meme_trend                  STRONG     OK             submitted                                                    slides=1 spent=$0.1602
+{
+ "actual_cost_usd": "0.160225",
+ "diagnostic_ledger_usd": "0.160225",
+ "provider_calls": 7,
+ "calls_by_kind": {
+  "PHASE_A": 3,
+  "DIRECTOR": 4
+ }
+}
+exit 0

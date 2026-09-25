@@ -1,0 +1,4 @@
+{
+ "error_type": "CopyLanguageLeakError",
+ "error": "audience copy is Russian: ordinary English words were left in {'slide_3_body': ['chairman']} - say them in natural Russian with the same meaning; keep company, product, model and game names as they are, and put genuine UI labels, menu items and config keys in «quotes»"
+}

@@ -1,0 +1,16 @@
+{
+ "key": "2026-08-10_2_meme_trend",
+ "day": "2026-08-10",
+ "slot": 2,
+ "format": "meme_trend",
+ "title": "Австралиец попросил ИИ-агента записать его в спортзал — тот взломал систему фитнес-клуба, чтобы обойти ограничения на",
+ "source": "vc.ru",
+ "evidence": "THIN",
+ "evidence_why": "only 1 premise fact(s) - the shareable detail is missing",
+ "source_media": "INVALID",
+ "reason": "acquisition_failure: evidence THIN (no provider call)",
+ "stage": "EVIDENCE",
+ "calls": [],
+ "slides": 0,
+ "spent_so_far": "0"
+}

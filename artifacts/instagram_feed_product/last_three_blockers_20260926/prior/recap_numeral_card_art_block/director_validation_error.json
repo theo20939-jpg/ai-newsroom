@@ -1,0 +1,4 @@
+{
+ "error_type": "MediaFirstContractError",
+ "error": "slide 8: 'story_2' is not suitable as a final visual (flat article / text card); generate a contextual visual, or use it only as a small collage fragment"
+}

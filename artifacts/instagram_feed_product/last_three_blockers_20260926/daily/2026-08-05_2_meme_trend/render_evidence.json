@@ -1,0 +1,75 @@
+[
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "single",
+  "profile": "portrait_feed",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     178,
+     547,
+     994,
+     622
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     178,
+     643,
+     898,
+     732
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     178,
+     754,
+     747,
+     836
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": null,
+  "slide_count": null,
+  "caption_linkage": "0687fa8f-ba37-4540-abab-04fe325333fd",
+  "content_identity": "722938259acf934e",
+  "source_media_candidate_id": null,
+  "notes": {
+   "visual_coverage_fraction": 0.82,
+   "creative_plan": {
+    "main_idea": "Сделать из новости мгновенно считываемый мем-контраст: масштаб автономных действий — «460», результат — «0».",
+    "focal_point": "Типографическая связка «460 → 0»; исходное изображение используется как поддерживающий фон, а не как носитель подробностей.",
+    "composition_direction": "Разместить «460» слева крупным блоком, стрелку — в центре, «0» — справа с максимальным контрастом. Короткую фразу поставить вторым уровнем, не перегружая изображение.",
+    "visual_treatment": "Минималистичный техно-редакционный стиль, контрастная типографика, абстрактные элементы Telegram/terminal-мотива, отсутствие реального интерфейса и атакующих инструкций."
+   },
+   "render_interpretation": "typographic_focal",
+   "used_primitives": [
+    "field_background",
+    "background_typography",
+    "display_copy",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "none",
+   "typography_treatment": "display_symbol_plus_supporting_copy",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "rendered_copy": [
+    "460 → 0\nАвтономный агент попробовал. Не получилось"
+   ],
+   "internal_labels_rendered": [],
+   "source_coverage_fraction": 0.0,
+   "layout_variant": "news_typographic_focal"
+  }
+ }
+]
