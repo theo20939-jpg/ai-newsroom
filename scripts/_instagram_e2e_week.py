@@ -282,6 +282,9 @@ async def main() -> None:
         for slot, post in enumerate(day["enriched"]["posts"], 1):
             e = by_title[(post["title"], post["source"])]
             key = f"{day['day']}_{slot}_{post['format']}"
+            only = os.environ.get("KAGE_E2E_ONLY")  # a targeted canary: only these daily posts (the recap always runs)
+            if only and key not in only.split(","):
+                continue
             STATE["post"], STATE["post_dir"] = key, out / key
             (out / key).mkdir(parents=True, exist_ok=True)
             verdicts: list = []
