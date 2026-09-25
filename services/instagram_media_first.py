@@ -22,7 +22,11 @@ EXECUTABLE_VISUAL_PRIMITIVES = (
     "text: headline, body, a big step number, code or config quoted as text",
     "ui_frame ONLY around a listed real UI screenshot subject placed inside it - never an empty frame",
 )
-GENERIC_PRIMITIVE_MAX_SHARE = 0.6  # near-total repetition: one generic graphic on 5+ slides AND over 60% of a 5+ slide carousel
+# Visual repetition (2026-09-25): a supported primitive used on many slides is a DESIGN-QUALITY question for founder review, never by itself
+# an invalid render plan (the fixed 60% share hard-rejected both 7/7-covered recap plans of the micro-canary). Only a mechanically
+# duplicated composition - the same layout, primitive, asset and graphic content - on almost every slide is still rejected.
+REPETITION_WARNING_SHARE = 0.6  # diagnostic only: one generic primitive on 5+ slides AND over this share of the carousel
+DEGENERATE_MIN_SLIDES = 5
 GENERIC_PRIMITIVES = frozenset({"flow_diagram", "poll_cards"})
 MAX_GENERATED_SLIDES_PER_POST = 6
 MIN_GENERATION_BRIEF_CHARS = 24
@@ -130,7 +134,6 @@ def assert_media_first(
     `evidence` (the whole post's evidence) is accepted for caller-signature compatibility but no longer consulted (Phase B.7):
     a generated slide's grounding is now checked against its OWN resolved `source_evidence` handle, not the post-wide blob."""
     generated = 0
-    generic_use: dict[str, int] = {}
     for index, slide in enumerate(slides):
         regions = _regions(slide)
         media_refs_on_slide = {_get(r, "content_ref") for r in regions if _get(r, "kind") == "media"}
@@ -139,10 +142,6 @@ def assert_media_first(
             raise MediaFirstContractError(
                 f"slide {index}: ui_frame renders only an empty window frame and this slide has no real UI image inside it - use "
                 "flow_diagram (2-4 flow_steps), poll_cards (2-4 options in the copy), a listed source subject, or text")
-        main_generic = next((_get(r, "graphic_type") for r in regions
-                             if _get(r, "kind") == "graphic" and _get(r, "graphic_type") in GENERIC_PRIMITIVES), None)
-        if main_generic and not media_refs_on_slide:
-            generic_use[main_generic] = generic_use.get(main_generic, 0) + 1
         source = _get(slide, "media_source")
         where = f"slide {index}"
         if source not in ("source", "generated", "graphic"):
@@ -187,14 +186,74 @@ def assert_media_first(
         stray = [r for r in refs if r != GENERATED_SUBJECT_KEY and r not in available_subjects]
         if stray:
             raise MediaFirstContractError(f"{where}: media region uses an unlisted subject {stray}")
-    if len(slides) >= 5:
-        for primitive, count in generic_use.items():
-            if count >= 5 and count > GENERIC_PRIMITIVE_MAX_SHARE * len(slides):
-                raise MediaFirstContractError(
-                    f"{primitive} carries {count} of {len(slides)} slides - vary the executable treatment: poll_cards for a list or config, "
-                    "flow_diagram for a sequence, a big step number or quoted code as text, a listed source subject")
     if generated > MAX_GENERATED_SLIDES_PER_POST:
         raise MediaFirstContractError(f"{generated} generated slides exceed the per-post bound {MAX_GENERATED_SLIDES_PER_POST}")
+    degenerate = visual_repetition_report(slides)["degenerate_composition"]
+    if degenerate:
+        raise MediaFirstContractError(
+            f"slides {degenerate['slides']} repeat one identical composition (same layout, primitive, asset and graphic content) - "
+            "each slide must show its own content")
+
+
+def _main_generic(slide: Any) -> str | None:
+    regions = _regions(slide)
+    if any(_get(r, "kind") == "media" for r in regions):
+        return None
+    return next((_get(r, "graphic_type") for r in regions if _get(r, "kind") == "graphic" and _get(r, "graphic_type") in GENERIC_PRIMITIVES), None)
+
+
+def _layout_signature(slide: Any) -> tuple:
+    """Geometry + region kinds + primitive + asset: what the eye sees as 'the same layout', ignoring the words on it."""
+    return tuple(sorted(
+        (str(_get(r, "kind")), str(_get(r, "graphic_type")), str(_get(r, "content_ref")),
+         *(round(float(_get(r, k) or 0), 2) for k in ("x", "y", "w", "h")))
+        for r in _regions(slide)))
+
+
+def _composition_signature(slide: Any) -> tuple:
+    """The layout signature plus the graphic's own content (flow steps; a poll's options live in the slide copy)."""
+    steps = tuple(tuple(_get(r, "flow_steps") or ()) for r in _regions(slide) if _get(r, "flow_steps"))
+    poll_copy = str(_get(slide, "slide_copy") or "").strip() if _main_generic(slide) == "poll_cards" else ""
+    return (_layout_signature(slide), steps, poll_copy)
+
+
+def visual_repetition_report(slides: list[Any]) -> dict[str, Any]:
+    """Deterministic repetition diagnostics for founder review: primitive distribution, source-asset reuse (across slides and within one
+    slide), layout-signature repetition and the one degenerate case the contract still rejects. Advisory except `degenerate_composition`."""
+    n = len(slides)
+    primitives: dict[str, int] = {}
+    asset_slides: dict[str, list[int]] = {}
+    asset_within_slide: list[dict[str, Any]] = []
+    layouts: dict[tuple, list[int]] = {}
+    compositions: dict[tuple, list[int]] = {}
+    for index, slide in enumerate(slides):
+        main = _main_generic(slide) or ("source_media" if media_refs(slide) else str(_get(slide, "media_source") or "text"))
+        primitives[main] = primitives.get(main, 0) + 1
+        refs = [r for r in media_refs(slide) if r != GENERATED_SUBJECT_KEY]
+        for ref in sorted(set(refs)):
+            asset_slides.setdefault(ref, []).append(index)
+            if refs.count(ref) > 1:
+                asset_within_slide.append({"slide": index, "asset": ref, "uses": refs.count(ref)})
+        layouts.setdefault(_layout_signature(slide), []).append(index)
+        compositions.setdefault(_composition_signature(slide), []).append(index)
+    dominant = max(primitives.items(), key=lambda kv: kv[1]) if primitives else (None, 0)
+    repeated_layouts = sorted((v for v in layouts.values() if len(v) > 1), key=len, reverse=True)
+    most_composition = max(compositions.values(), key=len) if compositions else []
+    degenerate = (n >= DEGENERATE_MIN_SLIDES and len(most_composition) >= max(DEGENERATE_MIN_SLIDES, n - 1))
+    warnings = []
+    if dominant[0] in GENERIC_PRIMITIVES and dominant[1] >= 5 and dominant[1] > REPETITION_WARNING_SHARE * n:
+        warnings.append(f"{dominant[0]} carries {dominant[1]} of {n} slides")
+    if repeated_layouts and len(repeated_layouts[0]) >= max(3, n // 2 + 1):
+        warnings.append(f"one layout signature on slides {repeated_layouts[0]}")
+    warnings += [f"asset '{a}' reused on slides {s}" for a, s in asset_slides.items() if len(s) >= 3]
+    warnings += [f"asset '{w['asset']}' used {w['uses']}x on slide {w['slide']}" for w in asset_within_slide]
+    return {
+        "slide_count": n, "primitive_distribution": primitives,
+        "source_asset_reuse": {a: s for a, s in asset_slides.items()}, "asset_reuse_within_slide": asset_within_slide,
+        "layout_signature_repetition": [v for v in repeated_layouts],
+        "design_repetition_warning": bool(warnings), "warnings": warnings,
+        "degenerate_composition": {"slides": most_composition} if degenerate else None,
+    }
 
 
 def slide_has_visual(*, notes: dict[str, Any], planned_slide: dict[str, Any] | None, source_image_treatment: str | None = None) -> bool:

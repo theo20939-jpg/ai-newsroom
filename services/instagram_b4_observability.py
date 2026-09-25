@@ -14,7 +14,7 @@ def build_b4_observability(
     *, carousel: Any, prompt_version: str, renders: Sequence[Any], art: Any,
     slide_identities: dict[int, str], deliberate_fallback_subjects: Sequence[str] = (),
     model_emitted_archetype: str | None = None, archetype_correction_required: bool = False,
-    weak_hook_patterns: Sequence[str] = (),
+    weak_hook_patterns: Sequence[str] = (), visual_repetition: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     slides = []
     for index, (slide, render) in enumerate(zip(carousel.slides, renders)):
@@ -89,6 +89,7 @@ def build_b4_observability(
         "text_only_slides": [s["index"] for s in slides if s["text_only_slide"]],
         "typographic_final_media_slides": [s["index"] for s in slides if s["media_source"] not in ("source", "generated", "graphic")],
         "weak_hook_patterns": list(weak_hook_patterns),
+        "visual_repetition": visual_repetition,  # founder-review diagnostics: primitive / asset / layout reuse
         "deliberate_fallback_subjects": list(deliberate_fallback_subjects),
         "art_validation_passed": bool(art.passed),
         "art_blocking_issues": list(getattr(art, "blocking_issues", []) or []),

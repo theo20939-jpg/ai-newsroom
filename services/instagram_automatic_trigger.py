@@ -1119,6 +1119,7 @@ async def evaluate_and_submit_instagram_opportunity(
             model_emitted_archetype=creative_outcome.model_emitted_archetype,
             archetype_correction_required=creative_outcome.archetype_correction_required,
             weak_hook_patterns=list(creative_outcome.weak_hook_patterns),
+            visual_repetition=creative_outcome.visual_repetition,
         )
         pkg = replace(pkg, media_plan={**pkg.media_plan, "b4_observability": observability})
         logger.info("instagram_b4_carousel_observability", extra={

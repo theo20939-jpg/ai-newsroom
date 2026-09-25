@@ -1,0 +1,113 @@
+{
+ "adobe": {
+  "saved_phase_a_grounding": "PASS",
+  "quotes": 9,
+  "grounded_by_whole_item_equality": 8,
+  "grounded_only_as_contiguous_source_span": [
+   "Drawing on more than 70 tools across Adobe’s creative and productivity suites, the Adobe plugin in ChatGPT supports a wide range of workflows, from editing photos and creating campaign videos to designing marketing assets and generating polished PDFs — all through rich, interactive experiences right in the flow of the conversation, Adobe said in the release."
+  ],
+  "material_change_probes": {
+   "number changed (70 -> 80)": "FAIL: Creative Director cited evidence not in the allowed set (possible invented fact): ['Drawing on more than 80 tools across Adobe’s creative and productivity suites, the Adobe plugin in ChatGPT supports ",
+   "qualifier removed (more than 70 -> 70)": "FAIL: Creative Director cited evidence not in the allowed set (possible invented fact): ['Drawing on 70 tools across Adobe’s creative and productivity suites, the Adobe plugin in ChatGPT supports a wide ran",
+   "qualifier cut off the front": "FAIL: Creative Director cited evidence not in the allowed set (possible invented fact): ['70 tools across Adobe’s creative and productivity suites, the Adobe plugin in ChatGPT supports a wide range of workf",
+   "two non-contiguous spans joined": "FAIL: Creative Director cited evidence not in the allowed set (possible invented fact): ['Drawing on more than 70 tools across Adobe’s creative and productivity suites, Adobe said in the release.']"
+  }
+ },
+ "recap_media_offered": {
+  "available": [
+   "story_4",
+   "story_6"
+  ],
+  "unsuitable": [
+   "story_4"
+  ]
+ },
+ "recap": {
+  "attempt_1": {
+   "slides": 9,
+   "EXECUTABLE": "YES",
+   "DESIGN_REPETITION_WARNING": "YES",
+   "OTHER_HARD_FAILURE": "NONE",
+   "full_post_director_validation": "PASS",
+   "repetition": {
+    "slide_count": 9,
+    "primitive_distribution": {
+     "flow_diagram": 8,
+     "source_media": 1
+    },
+    "source_asset_reuse": {
+     "story_6": [
+      6
+     ]
+    },
+    "asset_reuse_within_slide": [
+     {
+      "slide": 6,
+      "asset": "story_6",
+      "uses": 3
+     }
+    ],
+    "layout_signature_repetition": [],
+    "design_repetition_warning": true,
+    "warnings": [
+     "flow_diagram carries 8 of 9 slides",
+     "asset 'story_6' used 3x on slide 6"
+    ],
+    "degenerate_composition": null
+   },
+   "story_coverage": [
+    "story_1",
+    "story_2",
+    "story_3",
+    "story_4",
+    "story_5",
+    "story_6",
+    "story_7"
+   ]
+  },
+  "attempt_2": {
+   "slides": 8,
+   "EXECUTABLE": "YES",
+   "DESIGN_REPETITION_WARNING": "YES",
+   "OTHER_HARD_FAILURE": "NONE",
+   "full_post_director_validation": "PASS",
+   "repetition": {
+    "slide_count": 8,
+    "primitive_distribution": {
+     "flow_diagram": 5,
+     "poll_cards": 2,
+     "source_media": 1
+    },
+    "source_asset_reuse": {
+     "story_6": [
+      5
+     ]
+    },
+    "asset_reuse_within_slide": [
+     {
+      "slide": 5,
+      "asset": "story_6",
+      "uses": 3
+     }
+    ],
+    "layout_signature_repetition": [],
+    "design_repetition_warning": true,
+    "warnings": [
+     "flow_diagram carries 5 of 8 slides",
+     "asset 'story_6' used 3x on slide 5"
+    ],
+    "degenerate_composition": null
+   },
+   "story_coverage": [
+    "story_1",
+    "story_2",
+    "story_3",
+    "story_4",
+    "story_5",
+    "story_6",
+    "story_7"
+   ]
+  }
+ },
+ "note": "executability only - how the carousel looks needs a real render"
+}

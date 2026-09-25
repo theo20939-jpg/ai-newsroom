@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -60,6 +61,7 @@ from services.instagram_media_first import (
     assert_information_density,
     assert_media_first,
     assert_no_unsupported_clickbait,
+    visual_repetition_report,
     weak_hook_patterns,
 )
 from services.instagram_meta_language_guard import assert_no_meta_language
@@ -328,6 +330,8 @@ class CreativeGenerationOutcome:
     archetype_correction_required: bool = False
     # Phase B.6: advisory KAGE hook-policy flags (generic openers) for review; never a hard failure.
     weak_hook_patterns: tuple = ()
+    # 2026-09-25: advisory visual-repetition diagnostics for founder review (primitive / asset / layout reuse); never a hard failure itself.
+    visual_repetition: dict | None = None
 
 
 def _without_prompt_bullet(value: str) -> str:
@@ -335,10 +339,83 @@ def _without_prompt_bullet(value: str) -> str:
     return value.removeprefix("- ")
 
 
+# Source-span grounding (2026-09-25): a quote is grounded when, after SAFE textual normalization only, the whole quote is ONE contiguous
+# span of ONE supplied evidence item that starts and ends on a source boundary. Normalization never touches words, numbers, units,
+# negation, qualifiers, names or dates: Unicode NFKC, typographic vs straight quotation marks and apostrophes, and whitespace (repeated
+# spaces, line breaks, non-breaking spaces). Double quotation marks are reported-speech punctuation, not content, and are dropped on both
+# sides (the real Adobe quote dropped the “...,” around a press-release sentence). No embeddings, no similarity, no token dropping.
+# The boundaries keep a span from silently cutting a material qualifier off either end ("Up to 70% ..." quoted as "70% ..."): a span
+# starts at the item start, after a sentence terminator + space, after a quotation mark or after a line break, and ends at the item end,
+# on a sentence terminator, or before a quotation mark or a line break.
+_SINGLE_QUOTES = dict.fromkeys(map(ord, "‘’‚‛′`´"), "'")
+_DOUBLE_QUOTES = dict.fromkeys(map(ord, "“”„‟«»″〝〞＂"), '"')
+_SENTENCE_TERMINATORS = ".!?…"
+
+
+def _normalized_chars(text: str) -> str:
+    text = unicodedata.normalize("NFKC", text).translate(_SINGLE_QUOTES).translate(_DOUBLE_QUOTES)
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _span_index(text: str) -> tuple[str, set[int], set[int]]:
+    """(normalized text without double quotes, allowed span starts, allowed span ends)."""
+    out: list[str] = []
+    starts: set[int] = set()
+    ends: set[int] = set()
+    pending_start, after_terminator = True, False
+
+    def _end_here() -> int:
+        return len(out) - 1 if out and out[-1] == " " else len(out)
+
+    for ch in _normalized_chars(text):
+        if ch == '"' or ch == "\n":
+            ends.add(_end_here())
+            pending_start, after_terminator = True, False
+            if ch == "\n" and out and out[-1] != " ":
+                out.append(" ")
+            continue
+        if ch.isspace():
+            if out and out[-1] != " ":
+                out.append(" ")
+            if after_terminator:
+                pending_start = True
+            after_terminator = False
+            continue
+        if pending_start:
+            starts.add(len(out))
+            pending_start = False
+        out.append(ch)
+        after_terminator = ch in _SENTENCE_TERMINATORS
+        if after_terminator:
+            ends.add(len(out))
+    normalized = "".join(out).rstrip(" ")
+    ends.add(len(normalized))
+    return normalized, starts, ends
+
+
+def _normalized_quote(quote: str) -> str:
+    return re.sub(r"\s+", " ", _normalized_chars(_without_prompt_bullet(quote)).replace('"', "")).strip()
+
+
+def quote_is_source_span(quote: str, source: str) -> bool:
+    """True when the normalized quote is one contiguous, boundary-aligned span of the normalized source item."""
+    needle = _normalized_quote(quote)
+    if not needle:
+        return False
+    haystack, starts, ends = _span_index(source)
+    at = haystack.find(needle)
+    while at != -1:
+        if at in starts and at + len(needle) in ends:
+            return True
+        at = haystack.find(needle, at + 1)
+    return False
+
+
 def assert_evidence_grounded(claimed_evidence: list[str], allowed_evidence: list[str]) -> None:
     ungrounded = [
         claim for claim in claimed_evidence
         if _without_prompt_bullet(claim) not in allowed_evidence
+        and not any(quote_is_source_span(claim, item) for item in allowed_evidence)
     ]
     if ungrounded:
         raise UngroundedEvidenceError(
@@ -811,6 +888,7 @@ def _validate_carousel_output(
         allowed_context=[*director_input.allowed_evidence, director_input.opportunity_summary],
     )
     weak_hooks: tuple = ()
+    repetition: dict | None = None
     if director_input.media_first and _CAROUSEL_PROMPT_VERSION in _MEDIA_FIRST_CAROUSEL_VERSIONS:
         # Phase B.6: every slide must carry a meaningful visual idea (deterministic, no OCR / model call); the hook is one strong line; bold framing needs literal support.
         assert_media_first(
@@ -819,6 +897,8 @@ def _validate_carousel_output(
             evidence=[*director_input.allowed_evidence, director_input.opportunity_summary],
             generated_media_available=director_input.generated_media_available,
         )
+        repetition = visual_repetition_report(list(creative.slides))
+        _emit_diagnostic("visual_repetition", repetition)
         assert_hook_contract(list(creative.slides), require_mechanic=_CAROUSEL_PROMPT_VERSION in HOOK_MECHANIC_CAROUSEL_VERSIONS)
         assert_hook_is_short(creative.slides[0].slide_copy)
         assert_no_unsupported_clickbait(
@@ -838,7 +918,8 @@ def _validate_carousel_output(
             assert_editorial_quality(list(creative.slides), list(director_input.allowed_evidence), archetype=creative.content_archetype,
                                      caption=creative.final_caption or "")
     return CreativeGenerationOutcome(carousel=creative, call=call, model_emitted_archetype=emitted_archetype,
-                                     archetype_correction_required=correction_required, weak_hook_patterns=weak_hooks)
+                                     archetype_correction_required=correction_required, weak_hook_patterns=weak_hooks,
+                                     visual_repetition=repetition)
 
 
 async def generate_reel_creative(

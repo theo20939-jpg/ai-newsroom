@@ -145,9 +145,10 @@ def test_a_ui_frame_around_a_real_listed_ui_image_is_executable():
     assert_media_first(_carousel(slides), available_subjects={"source"}, unsuitable_subjects=set(), generated_media_available=False)
 
 
-def test_one_generic_primitive_cannot_carry_most_of_the_carousel():
+def test_one_mechanically_duplicated_composition_cannot_carry_the_carousel():
+    # 2026-09-25: the 60% share is now a design diagnostic; the same layout + the same flow steps on 6 of 7 slides is still degenerate
     same = [_flow("hook", "Как это работает")] + [_flow("step", f"Шаг {i}") for i in range(1, 6)] + [_poll("takeaway", "Итог: A | B")]
-    with pytest.raises(MediaFirstContractError, match="flow_diagram carries 6 of 7"):
+    with pytest.raises(MediaFirstContractError, match="identical composition"):
         assert_media_first(_carousel(same), available_subjects=set(), unsuitable_subjects=set(), generated_media_available=False)
     varied = [_flow("hook", "Как это работает"), _flow("step", "Шаг 1"), _poll("step", "Шаг 2: A | B"), _flow("step", "Шаг 3"),
               _poll("step", "Шаг 4: A | B"), _flow("step", "Шаг 5"), _poll("takeaway", "Итог: A | B")]
