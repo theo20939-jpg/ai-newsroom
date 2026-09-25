@@ -58,6 +58,7 @@ class SafeStop(RuntimeError):
 
 
 STATE: dict = {"spent": Decimal(0), "calls": [], "post": None, "post_dir": None}
+_NATURAL_FORMATS = None  # the trigger's own _executable_formats, restored for every post without a format canary
 
 
 def _jsonable(value):
@@ -152,15 +153,29 @@ def _install_capture():
     from services.instagram_editorial_gate import InstagramGateDecision
 
     real_render, real_snapshot = trigger.render_instagram_carousel, trigger.build_package_snapshot
+    real_single, real_reel = trigger.render_instagram_feed_image, trigger.render_instagram_reel_cover
 
-    def spy_render(pkg, **kw):
-        renders = real_render(pkg, **kw)
+    def _save(renders):
         for i, r in enumerate(renders, 1):
             path = STATE["post_dir"] / "slides" / f"slide_{i:02d}.png"
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(r.image_bytes)
         _write(STATE["post_dir"] / "render_evidence.json", [r.evidence for r in renders])
+
+    def spy_render(pkg, **kw):
+        renders = real_render(pkg, **kw)
+        _save(renders)
         return renders
+
+    def spy_single(pkg, **kw):
+        render = real_single(pkg, **kw)
+        _save([render])
+        return render
+
+    def spy_reel(pkg, **kw):
+        render = real_reel(pkg, **kw)
+        _save([render])
+        return render
 
     def spy_snapshot(**kw):
         _write(STATE["post_dir"] / "package.json", kw.get("package"))
@@ -188,6 +203,8 @@ def _install_capture():
         _write(STATE["post_dir"] / f"director_{event}.json", payload)
 
     trigger.render_instagram_carousel = spy_render
+    trigger.render_instagram_feed_image = spy_single
+    trigger.render_instagram_reel_cover = spy_reel
     trigger.build_package_snapshot = spy_snapshot
     trigger.deliver_instagram_package = record_delivery
     cd.set_raw_output_sink(raw_sink)
@@ -271,6 +288,10 @@ async def main() -> None:
     tracker = RedisCostTracker(diag, pricing, ledger_namespace=NAMESPACE)
     _install_provider_guard(pricing, CostEstimator(pricing), models, tracker)
     suit = _install_capture()
+    global _NATURAL_FORMATS
+    import services.instagram_automatic_trigger as _trigger
+
+    _NATURAL_FORMATS = _trigger._executable_formats
 
     engine = create_async_engine(settings.database_url)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -290,6 +311,11 @@ async def main() -> None:
                 continue
             STATE["post"], STATE["post_dir"] = key, out / key
             (out / key).mkdir(parents=True, exist_ok=True)
+            import services.instagram_automatic_trigger as trigger_module
+
+            forced = dict(item.split("=", 1) for item in os.environ.get("KAGE_E2E_FORMAT", "").split(",") if "=" in item).get(key)
+            trigger_module._executable_formats = (lambda planned, _f=forced: [_f]) if forced else _NATURAL_FORMATS
+            settings.instagram_reel_execution_enabled = forced == "reel"
             verdicts: list = []
             suit.set_verdict_sink(verdicts)
             row = {"key": key, "day": day["day"], "slot": slot, "format": post["format"], "title": post["title"], "source": post["source"]}
@@ -341,6 +367,12 @@ async def main() -> None:
                   f"spent=${STATE['spent']:.4f}", flush=True)
 
     # --- weekly recap: the accepted 7 v2 picks through the actual downstream path ---------------------------------------------------
+    import services.instagram_automatic_trigger as _trigger_after
+
+    _trigger_after._executable_formats = _NATURAL_FORMATS
+    settings.instagram_reel_execution_enabled = False
+    if os.environ.get("KAGE_E2E_SKIP_RECAP") == "1":  # a daily-only canary run (the recap runs in its own invocation)
+        return await _finish(out, results, diag, engine)
     key = "weekly_recap"
     STATE["post"], STATE["post_dir"] = key, out / key
     (out / key).mkdir(parents=True, exist_ok=True)
@@ -431,6 +463,10 @@ async def main() -> None:
     results.append(row)
     print(f"{key:40} {'-':10} {row.get('stage', '-'):14} {row.get('reason', '')[:60]:60} slides={row['slides']} spent=${STATE['spent']:.4f}")
 
+    await _finish(out, results, diag, engine)
+
+
+async def _finish(out, results, diag, engine) -> None:
     ledger = await diag.get(f"phase7:cost_ledger:{NAMESPACE}")
     kinds: dict = {}
     for c in STATE["calls"]:

@@ -1,0 +1,229 @@
+{
+ "cap_usd": "0.85",
+ "actual_cost_usd": "0.142774",
+ "diagnostic_ledger_usd": "0.142774",
+ "provider_calls": 6,
+ "calls_by_kind": {
+  "PHASE_A": 3,
+  "VISION": 1,
+  "DIRECTOR": 2
+ },
+ "image_generation_mode": "off",
+ "posts": [
+  {
+   "key": "2026-08-05_2_meme_trend",
+   "day": "2026-08-05",
+   "slot": 2,
+   "format": "meme_trend",
+   "title": "460 целей, ноль автономных взломов: как Telegram-бот на DeepSeek подставил хозяина",
+   "source": "Habr: Artificial Intelligence",
+   "evidence": "STRONG",
+   "evidence_why": "6 premise facts from 1 fetched source(s)",
+   "source_media": "AVAILABLE",
+   "reason": "editorial_decision_failed:UngroundedEvidenceError",
+   "stage": "PHASE A",
+   "gate": null,
+   "delivery": null,
+   "calls": [
+    {
+     "post": "2026-08-05_2_meme_trend",
+     "kind": "PHASE_A",
+     "model": "gpt-5.6-luna",
+     "max_tokens": 8000,
+     "worst_case_usd": "0.05032200",
+     "status": "OK",
+     "finish_reason": "stop",
+     "input_tokens": 2358,
+     "output_tokens": 1249,
+     "reasoning_tokens": 457,
+     "cost_usd": "0.009852"
+    }
+   ],
+   "slides": 0,
+   "spent_so_far": "0.009852"
+  },
+  {
+   "key": "2026-08-06_1_ai_hack",
+   "day": "2026-08-06",
+   "slot": 1,
+   "format": "ai_hack",
+   "title": "You can use 70+ Adobe tools without leaving ChatGPT now - here's how",
+   "source": "ZDNET",
+   "evidence": "STRONG",
+   "evidence_why": "10 verbatim steps incl. a concrete location / command",
+   "source_media": "AVAILABLE",
+   "reason": "submitted",
+   "stage": "OK",
+   "gate": "ready_for_editor",
+   "delivery": "recorded_ready_for_editor_no_telegram",
+   "calls": [
+    {
+     "post": "2026-08-06_1_ai_hack",
+     "kind": "PHASE_A",
+     "model": "gpt-5.6-luna",
+     "max_tokens": 8000,
+     "worst_case_usd": "0.05075300",
+     "status": "OK",
+     "finish_reason": "stop",
+     "input_tokens": 2604,
+     "output_tokens": 897,
+     "reasoning_tokens": 208,
+     "cost_usd": "0.007986"
+    },
+    {
+     "post": "2026-08-06_1_ai_hack",
+     "kind": "VISION",
+     "model": "gpt-5.6-luna",
+     "max_tokens": 400,
+     "worst_case_usd": "0.00281800",
+     "status": "OK",
+     "finish_reason": "stop",
+     "input_tokens": 985,
+     "output_tokens": 160,
+     "reasoning_tokens": 99,
+     "cost_usd": "0.001945"
+    },
+    {
+     "post": "2026-08-06_1_ai_hack",
+     "kind": "DIRECTOR",
+     "model": "gpt-5.6-luna",
+     "max_tokens": 16000,
+     "worst_case_usd": "0.10858600",
+     "status": "OK",
+     "finish_reason": "stop",
+     "input_tokens": 12467,
+     "output_tokens": 7329,
+     "reasoning_tokens": 1169,
+     "cost_usd": "0.056441"
+    },
+    {
+     "post": "2026-08-06_1_ai_hack",
+     "kind": "DIRECTOR",
+     "model": "gpt-5.6-luna",
+     "max_tokens": 16000,
+     "worst_case_usd": "0.10874200",
+     "status": "OK",
+     "finish_reason": "stop",
+     "input_tokens": 12624,
+     "output_tokens": 7456,
+     "reasoning_tokens": 1539,
+     "cost_usd": "0.05736"
+    }
+   ],
+   "slides": 7,
+   "spent_so_far": "0.133584"
+  },
+  {
+   "key": "2026-08-10_2_meme_trend",
+   "day": "2026-08-10",
+   "slot": 2,
+   "format": "meme_trend",
+   "title": "Австралиец попросил ИИ-агента записать его в спортзал — тот взломал систему фитнес-клуба, чтобы обойти ограничения на",
+   "source": "vc.ru",
+   "evidence": "STRONG",
+   "evidence_why": "6 premise facts from 2 fetched source(s)",
+   "source_media": "AVAILABLE",
+   "reason": "editorial_decision_failed:UngroundedEvidenceError",
+   "stage": "PHASE A",
+   "gate": null,
+   "delivery": null,
+   "calls": [
+    {
+     "post": "2026-08-10_2_meme_trend",
+     "kind": "PHASE_A",
+     "model": "gpt-5.6-luna",
+     "max_tokens": 8000,
+     "worst_case_usd": "0.05038100",
+     "status": "OK",
+     "finish_reason": "stop",
+     "input_tokens": 2410,
+     "output_tokens": 1130,
+     "reasoning_tokens": 516,
+     "cost_usd": "0.00919"
+    }
+   ],
+   "slides": 0,
+   "spent_so_far": "0.142774"
+  }
+ ],
+ "calls": [
+  {
+   "post": "2026-08-05_2_meme_trend",
+   "kind": "PHASE_A",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 8000,
+   "worst_case_usd": "0.05032200",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 2358,
+   "output_tokens": 1249,
+   "reasoning_tokens": 457,
+   "cost_usd": "0.009852"
+  },
+  {
+   "post": "2026-08-06_1_ai_hack",
+   "kind": "PHASE_A",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 8000,
+   "worst_case_usd": "0.05075300",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 2604,
+   "output_tokens": 897,
+   "reasoning_tokens": 208,
+   "cost_usd": "0.007986"
+  },
+  {
+   "post": "2026-08-06_1_ai_hack",
+   "kind": "VISION",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 400,
+   "worst_case_usd": "0.00281800",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 985,
+   "output_tokens": 160,
+   "reasoning_tokens": 99,
+   "cost_usd": "0.001945"
+  },
+  {
+   "post": "2026-08-06_1_ai_hack",
+   "kind": "DIRECTOR",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 16000,
+   "worst_case_usd": "0.10858600",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 12467,
+   "output_tokens": 7329,
+   "reasoning_tokens": 1169,
+   "cost_usd": "0.056441"
+  },
+  {
+   "post": "2026-08-06_1_ai_hack",
+   "kind": "DIRECTOR",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 16000,
+   "worst_case_usd": "0.10874200",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 12624,
+   "output_tokens": 7456,
+   "reasoning_tokens": 1539,
+   "cost_usd": "0.05736"
+  },
+  {
+   "post": "2026-08-10_2_meme_trend",
+   "kind": "PHASE_A",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 8000,
+   "worst_case_usd": "0.05038100",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 2410,
+   "output_tokens": 1130,
+   "reasoning_tokens": 516,
+   "cost_usd": "0.00919"
+  }
+ ]
+}

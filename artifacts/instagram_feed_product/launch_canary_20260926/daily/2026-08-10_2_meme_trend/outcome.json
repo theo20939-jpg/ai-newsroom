@@ -1,0 +1,32 @@
+{
+ "key": "2026-08-10_2_meme_trend",
+ "day": "2026-08-10",
+ "slot": 2,
+ "format": "meme_trend",
+ "title": "Австралиец попросил ИИ-агента записать его в спортзал — тот взломал систему фитнес-клуба, чтобы обойти ограничения на",
+ "source": "vc.ru",
+ "evidence": "STRONG",
+ "evidence_why": "6 premise facts from 2 fetched source(s)",
+ "source_media": "AVAILABLE",
+ "reason": "editorial_decision_failed:UngroundedEvidenceError",
+ "stage": "PHASE A",
+ "gate": null,
+ "delivery": null,
+ "calls": [
+  {
+   "post": "2026-08-10_2_meme_trend",
+   "kind": "PHASE_A",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 8000,
+   "worst_case_usd": "0.05038100",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 2410,
+   "output_tokens": 1130,
+   "reasoning_tokens": 516,
+   "cost_usd": "0.00919"
+  }
+ ],
+ "slides": 0,
+ "spent_so_far": "0.142774"
+}

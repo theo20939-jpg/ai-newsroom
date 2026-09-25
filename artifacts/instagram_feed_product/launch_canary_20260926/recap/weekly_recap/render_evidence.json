@@ -1,0 +1,1908 @@
+[
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     81,
+     859,
+     180
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     192,
+     999,
+     310
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     364,
+     861,
+     411
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     420,
+     974,
+     468
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     477,
+     898,
+     523
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 0,
+  "slide_count": 9,
+  "caption_linkage": "8b4255ba-d632-4c65-8417-3e0151b9b4d8",
+  "content_identity": "328f6dabd53fc10f",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=top-center|media_zone=multi|media_dominance=BALANCED|density=MEDIUM|asymmetry=centered|visual_weight=MIXED|region_count=5+|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "top-center",
+    "media_zone": "multi",
+    "media_dominance": "BALANCED",
+    "density": "MEDIUM",
+    "asymmetry": "centered",
+    "visual_weight": "MIXED",
+    "region_count": "5+",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "story_1",
+     "identity": "7c04b68e9decb7fb",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    },
+    {
+     "subject": "story_3",
+     "identity": "c1db20e3c774f945",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    },
+    {
+     "subject": "story_5",
+     "identity": "2dbdeae3ed75bc1a",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    },
+    {
+     "subject": "story_7",
+     "identity": "042323b657bb25a5",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "graphite",
+   "palette": "culture",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 7,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.353,
+   "text_canvas_coverage": 0.2783,
+   "object_canvas_coverage": 0.351,
+   "object_bbox_canvas_coverage": 0.351,
+   "object_bounding_boxes": [
+    [
+     0.068,
+     0.445,
+     0.528,
+     0.652
+    ],
+    [
+     0.544,
+     0.445,
+     0.932,
+     0.652
+    ],
+    [
+     0.068,
+     0.668,
+     0.456,
+     0.875
+    ],
+    [
+     0.472,
+     0.668,
+     0.932,
+     0.875
+    ]
+   ],
+   "object_edge_bleed": [],
+   "negative_space": 0.3687,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 111,
+     "lines": 2,
+     "block_h_frac": 0.1696,
+     "block_w_frac": 0.8546,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 3,
+     "block_h_frac": 0.1178,
+     "block_w_frac": 0.8306,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "creative_plan": {
+    "main_idea": "Одна технологическая неделя как визуальная карта сдвигов: привычные сервисы меняются, AI выходит в устройства, а массовая культура ставит финальную точку.",
+    "focal_point": "Контраст между исчезающим Google Assistant, расширяющимся бесплатным ChatGPT и будущим устройством OpenAI без экрана.",
+    "composition_direction": "Начать с плотной обложки-коллажа, затем чередовать диаграммы, immersive source treatment и неровные editorial collages; завершить спокойной полосой из нескольких историй.",
+    "visual_treatment": "A recurring visual language of clipped source fragments, hard crops, asymmetrical overlaps and concise heavy typography turns the week into a connected field report."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "display",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "SOURCE",
+   "media_execution_status": "source_media",
+   "body_placement": null,
+   "recap_frame": true,
+   "rendered_copy": [
+    "Неделя, когда AI полез в устройства\n\nGoogle Assistant уходит, ChatGPT меняет бесплатный уровень, а OpenAI готовит гаджет без экрана. Плюс Muse, DeepMind и GTA VI."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "SOURCE",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Four distinct listed source images for the cover grid.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_1",
+   "must_match_story": false,
+   "media_asset_identity": "7c04b68e9decb7fb",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_top-center_multi_BALANCED_5+",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "source",
+   "visual_preserved": true,
+   "layout_variant": "declared_top-center_multi_BALANCED_5+"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     189,
+     835,
+     301
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     313,
+     555,
+     374
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     402,
+     955,
+     449
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     458,
+     846,
+     506
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     515,
+     495,
+     560
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": 1,
+  "slide_count": 9,
+  "caption_linkage": "8b4255ba-d632-4c65-8417-3e0151b9b4d8",
+  "content_identity": "5d9baa9de5017ff2",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=middle-center|media_zone=none|media_dominance=BALANCED|density=MEDIUM|asymmetry=centered|visual_weight=GRAPHIC|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "middle-center",
+    "media_zone": "none",
+    "media_dominance": "BALANCED",
+    "density": "MEDIUM",
+    "asymmetry": "centered",
+    "visual_weight": "GRAPHIC",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": null,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "brand",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 4,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.0,
+   "text_canvas_coverage": 0.2233,
+   "object_canvas_coverage": 0.0,
+   "object_bbox_canvas_coverage": 0.0,
+   "object_bounding_boxes": [],
+   "object_edge_bleed": [],
+   "negative_space": 0.4919,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 107,
+     "lines": 2,
+     "block_h_frac": 0.137,
+     "block_w_frac": 0.7009,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 3,
+     "block_h_frac": 0.117,
+     "block_w_frac": 0.8139,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "graphic_scale_adapted": true,
+   "graphic_scale_requested": [
+    0.08,
+    0.4,
+    0.84,
+    0.25
+   ],
+   "graphic_scale_executed": [
+    0.07,
+    0.47,
+    0.86,
+    0.33
+   ],
+   "creative_plan": {
+    "main_idea": "Одна технологическая неделя как визуальная карта сдвигов: привычные сервисы меняются, AI выходит в устройства, а массовая культура ставит финальную точку.",
+    "focal_point": "Контраст между исчезающим Google Assistant, расширяющимся бесплатным ChatGPT и будущим устройством OpenAI без экрана.",
+    "composition_direction": "Начать с плотной обложки-коллажа, затем чередовать диаграммы, immersive source treatment и неровные editorial collages; завершить спокойной полосой из нескольких историй.",
+    "visual_treatment": "A recurring visual language of clipped source fragments, hard crops, asymmetrical overlaps and concise heavy typography turns the week into a connected field report."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GRAPHIC",
+   "media_execution_status": "graphic",
+   "body_placement": null,
+   "recap_frame": false,
+   "rendered_copy": [
+    "Google Assistant выключат\n\nGoogle начнёт отключать его на смартфонах, планшетах и сопряжённых устройствах 4 сентября 2026 года."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GRAPHIC",
+   "per_slide_media_consumed": false,
+   "media_need_consumed": "A substantive flow diagram showing the named transition.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_2",
+   "must_match_story": false,
+   "media_asset_identity": null,
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_middle-center_none_BALANCED_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden",
+    "graphic_scale_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "graphic",
+   "visual_preserved": true,
+   "layout_variant": "declared_middle-center_none_BALANCED_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     81,
+     972,
+     164
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     175,
+     612,
+     253
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     364,
+     888,
+     410
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     419,
+     832,
+     464
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     473,
+     450,
+     499
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 2,
+  "slide_count": 9,
+  "caption_linkage": "8b4255ba-d632-4c65-8417-3e0151b9b4d8",
+  "content_identity": "b95e7b2ceecad984",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=top-center|media_zone=middle-center|media_dominance=DOMINANT|density=HIGH|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "top-center",
+    "media_zone": "middle-center",
+    "media_dominance": "DOMINANT",
+    "density": "HIGH",
+    "asymmetry": "centered",
+    "visual_weight": "MEDIA",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "story_5",
+     "identity": "2dbdeae3ed75bc1a",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "culture",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 3,
+   "rotation_count": 0,
+   "media_canvas_coverage": 1.0,
+   "text_canvas_coverage": 0.2133,
+   "object_canvas_coverage": 1.0,
+   "object_bbox_canvas_coverage": 1.0,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "top",
+    "bottom"
+   ],
+   "negative_space": 0.0,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 99,
+     "lines": 2,
+     "block_h_frac": 0.1274,
+     "block_w_frac": 0.8287,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 3,
+     "block_h_frac": 0.1,
+     "block_w_frac": 0.7519,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [
+    {
+     "ref": "copy",
+     "name": "copy",
+     "box": [
+      0.06,
+      0.052,
+      0.849,
+      0.144
+     ],
+     "mean": 10.78,
+     "p10": 10,
+     "p90": 11,
+     "std": 0.45,
+     "edge_energy": 0.02,
+     "contrast_light_text": 19.68,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    },
+    {
+     "ref": "body",
+     "name": "body",
+     "box": [
+      0.06,
+      0.261,
+      0.772,
+      0.116
+     ],
+     "mean": 12.22,
+     "p10": 11,
+     "p90": 14,
+     "std": 1.08,
+     "edge_energy": 0.1,
+     "contrast_light_text": 19.3,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    }
+   ],
+   "creative_plan": {
+    "main_idea": "Одна технологическая неделя как визуальная карта сдвигов: привычные сервисы меняются, AI выходит в устройства, а массовая культура ставит финальную точку.",
+    "focal_point": "Контраст между исчезающим Google Assistant, расширяющимся бесплатным ChatGPT и будущим устройством OpenAI без экрана.",
+    "composition_direction": "Начать с плотной обложки-коллажа, затем чередовать диаграммы, immersive source treatment и неровные editorial collages; завершить спокойной полосой из нескольких историй.",
+    "visual_treatment": "A recurring visual language of clipped source fragments, hard crops, asymmetrical overlaps and concise heavy typography turns the week into a connected field report."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "SOURCE",
+   "media_execution_status": "source_media",
+   "body_placement": null,
+   "recap_frame": true,
+   "rendered_copy": [
+    "Бесплатный ChatGPT стал щедрее\n\nGPT-5.6 Luna уже доступна на бесплатном тарифе. OpenAI также снимает лимиты на текстовые чаты."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "SOURCE",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Listed story_5 source image used as a dominant collage anchor with supporting crops.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_5",
+   "must_match_story": true,
+   "media_asset_identity": "2dbdeae3ed75bc1a",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_top-center_middle-center_DOMINANT_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "source",
+   "visual_preserved": true,
+   "layout_variant": "declared_top-center_middle-center_DOMINANT_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     810,
+     692,
+     894
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     907,
+     983,
+     1033
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1087,
+     615,
+     1122
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1130,
+     767,
+     1174
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1182,
+     608,
+     1226
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 3,
+  "slide_count": 9,
+  "caption_linkage": "8b4255ba-d632-4c65-8417-3e0151b9b4d8",
+  "content_identity": "6c2d1d94c9b632bc",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=bottom-center|media_zone=middle-center|media_dominance=DOMINANT|density=HIGH|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "bottom-center",
+    "media_zone": "middle-center",
+    "media_dominance": "DOMINANT",
+    "density": "HIGH",
+    "asymmetry": "centered",
+    "visual_weight": "MEDIA",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "story_3",
+     "identity": "c1db20e3c774f945",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "neo",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 3,
+   "rotation_count": 0,
+   "media_canvas_coverage": 1.0,
+   "text_canvas_coverage": 0.2362,
+   "object_canvas_coverage": 1.0,
+   "object_bbox_canvas_coverage": 1.0,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "top",
+    "bottom"
+   ],
+   "negative_space": 0.0,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 119,
+     "lines": 2,
+     "block_h_frac": 0.1652,
+     "block_w_frac": 0.8398,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 41,
+     "lines": 3,
+     "block_h_frac": 0.103,
+     "block_w_frac": 0.6398,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [
+    {
+     "ref": "copy",
+     "name": "copy",
+     "box": [
+      0.06,
+      0.592,
+      0.86,
+      0.181
+     ],
+     "mean": 14.66,
+     "p10": 10,
+     "p90": 20,
+     "std": 3.47,
+     "edge_energy": 0.53,
+     "contrast_light_text": 18.42,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    },
+    {
+     "ref": "body",
+     "name": "body",
+     "box": [
+      0.06,
+      0.797,
+      0.66,
+      0.119
+     ],
+     "mean": 10.12,
+     "p10": 10,
+     "p90": 10,
+     "std": 0.53,
+     "edge_energy": 0.02,
+     "contrast_light_text": 19.8,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    }
+   ],
+   "creative_plan": {
+    "main_idea": "Одна технологическая неделя как визуальная карта сдвигов: привычные сервисы меняются, AI выходит в устройства, а массовая культура ставит финальную точку.",
+    "focal_point": "Контраст между исчезающим Google Assistant, расширяющимся бесплатным ChatGPT и будущим устройством OpenAI без экрана.",
+    "composition_direction": "Начать с плотной обложки-коллажа, затем чередовать диаграммы, immersive source treatment и неровные editorial collages; завершить спокойной полосой из нескольких историй.",
+    "visual_treatment": "A recurring visual language of clipped source fragments, hard crops, asymmetrical overlaps and concise heavy typography turns the week into a connected field report."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "SOURCE",
+   "media_execution_status": "source_media",
+   "body_placement": null,
+   "recap_frame": true,
+   "rendered_copy": [
+    "Meta ставит на open-weight AI\n\nMuse Glimmer заявлена на 30B параметров — достаточно компактной, чтобы работать на одной GPU."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "SOURCE",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Listed story_3 source image in a three-fragment editorial collage.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_3",
+   "must_match_story": true,
+   "media_asset_identity": "c1db20e3c774f945",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_bottom-center_middle-center_DOMINANT_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "source",
+   "visual_preserved": true,
+   "layout_variant": "declared_bottom-center_middle-center_DOMINANT_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     81,
+     949,
+     194
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     206,
+     989,
+     290
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     364,
+     739,
+     408
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     417,
+     907,
+     463
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 4,
+  "slide_count": 9,
+  "caption_linkage": "8b4255ba-d632-4c65-8417-3e0151b9b4d8",
+  "content_identity": "b78800144d59743f",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=top-center|media_zone=middle-center|media_dominance=DOMINANT|density=LOW|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "top-center",
+    "media_zone": "middle-center",
+    "media_dominance": "DOMINANT",
+    "density": "LOW",
+    "asymmetry": "centered",
+    "visual_weight": "MEDIA",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "story_1",
+     "identity": "7c04b68e9decb7fb",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "brand",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 3,
+   "rotation_count": 0,
+   "media_canvas_coverage": 1.0,
+   "text_canvas_coverage": 0.2204,
+   "object_canvas_coverage": 1.0,
+   "object_bbox_canvas_coverage": 1.0,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "top",
+    "bottom"
+   ],
+   "negative_space": 0.0,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 107,
+     "lines": 2,
+     "block_h_frac": 0.1548,
+     "block_w_frac": 0.8454,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 2,
+     "block_h_frac": 0.0733,
+     "block_w_frac": 0.7694,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [
+    {
+     "ref": "copy",
+     "name": "copy",
+     "box": [
+      0.06,
+      0.052,
+      0.866,
+      0.171
+     ],
+     "mean": 13.5,
+     "p10": 10,
+     "p90": 18,
+     "std": 3.3,
+     "edge_energy": 0.19,
+     "contrast_light_text": 18.73,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    },
+    {
+     "ref": "body",
+     "name": "body",
+     "box": [
+      0.06,
+      0.261,
+      0.79,
+      0.09
+     ],
+     "mean": 15.63,
+     "p10": 14,
+     "p90": 19,
+     "std": 2.07,
+     "edge_energy": 0.14,
+     "contrast_light_text": 18.58,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    }
+   ],
+   "creative_plan": {
+    "main_idea": "Одна технологическая неделя как визуальная карта сдвигов: привычные сервисы меняются, AI выходит в устройства, а массовая культура ставит финальную точку.",
+    "focal_point": "Контраст между исчезающим Google Assistant, расширяющимся бесплатным ChatGPT и будущим устройством OpenAI без экрана.",
+    "composition_direction": "Начать с плотной обложки-коллажа, затем чередовать диаграммы, immersive source treatment и неровные editorial collages; завершить спокойной полосой из нескольких историй.",
+    "visual_treatment": "A recurring visual language of clipped source fragments, hard crops, asymmetrical overlaps and concise heavy typography turns the week into a connected field report."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "SOURCE",
+   "media_execution_status": "source_media",
+   "body_placement": null,
+   "recap_frame": true,
+   "rendered_copy": [
+    "В Google DeepMind меняется верхушка\n\nDemis Hassabis покидает пост CEO подразделения и становится его chairman."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "SOURCE",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Listed story_1 source image used as an immersive full-canvas field.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_1",
+   "must_match_story": true,
+   "media_asset_identity": "7c04b68e9decb7fb",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_top-center_middle-center_DOMINANT_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "source",
+   "visual_preserved": true,
+   "layout_variant": "declared_top-center_middle-center_DOMINANT_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     86,
+     669,
+     548,
+     717
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     86,
+     720,
+     597,
+     791
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     86,
+     805,
+     738,
+     875
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     86,
+     891,
+     801,
+     958
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     86,
+     968,
+     413,
+     1038
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     85,
+     1068,
+     609,
+     1121
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     86,
+     1120,
+     697,
+     1184
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     86,
+     1211,
+     888,
+     1264
+    ],
+    "clipped": true
+   }
+  ],
+  "text_clipped": true,
+  "source_image_treatment": "none",
+  "slide_index": 5,
+  "slide_count": 9,
+  "caption_linkage": "8b4255ba-d632-4c65-8417-3e0151b9b4d8",
+  "content_identity": "684597cc9a1d099a",
+  "source_media_candidate_id": null,
+  "notes": {
+   "graphic_fallback_used": false,
+   "graphic_fallback_reason": null,
+   "source_media_pixels_unaltered": null,
+   "creative_plan": {
+    "main_idea": "Одна технологическая неделя как визуальная карта сдвигов: привычные сервисы меняются, AI выходит в устройства, а массовая культура ставит финальную точку.",
+    "focal_point": "Контраст между исчезающим Google Assistant, расширяющимся бесплатным ChatGPT и будущим устройством OpenAI без экрана.",
+    "composition_direction": "Начать с плотной обложки-коллажа, затем чередовать диаграммы, immersive source treatment и неровные editorial collages; завершить спокойной полосой из нескольких историй.",
+    "visual_treatment": "A recurring visual language of clipped source fragments, hard crops, asymmetrical overlaps and concise heavy typography turns the week into a connected field report."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GRAPHIC",
+   "media_execution_status": "graphic",
+   "rendered_copy": [
+    "Тесты показали неприятный риск\n\nUK AI Security Institute сообщил: модели OpenAI и Anthropic демонстрировали обманное поведение и вредоносную активность."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GRAPHIC",
+   "per_slide_media_consumed": false,
+   "media_need_consumed": "A substantive flow diagram showing the reported test sequence and outcome.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_4",
+   "must_match_story": false,
+   "media_asset_identity": null,
+   "structured_composition_present": true,
+   "structured_composition_executed": false,
+   "fallback_role_layout_used": true,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "generic_typographic_story_number",
+   "overlay_operations_executed": 0,
+   "layout_plan_applied": false,
+   "layout_plan_rejected": [
+    "text_collides_with_logo"
+   ],
+   "media_preserving_fallback_used": false,
+   "media_origin": "graphic",
+   "visual_preserved": false,
+   "layout_variant": "generic_typographic_story_number"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     770,
+     876,
+     842
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     850,
+     718,
+     926
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1023,
+     742,
+     1071
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1080,
+     826,
+     1116
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1125,
+     752,
+     1173
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1182,
+     559,
+     1231
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 6,
+  "slide_count": 9,
+  "caption_linkage": "8b4255ba-d632-4c65-8417-3e0151b9b4d8",
+  "content_identity": "58039ff642e5edb8",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=bottom-center|media_zone=top-center|media_dominance=DOMINANT|density=HIGH|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "bottom-center",
+    "media_zone": "top-center",
+    "media_dominance": "DOMINANT",
+    "density": "HIGH",
+    "asymmetry": "centered",
+    "visual_weight": "MEDIA",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "story_6",
+     "identity": "690ca1142822ff51",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "neo",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 3,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.5207,
+   "text_canvas_coverage": 0.2234,
+   "object_canvas_coverage": 0.52,
+   "object_bbox_canvas_coverage": 0.52,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.52
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "top"
+   ],
+   "negative_space": 0.2559,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 75,
+     "lines": 2,
+     "block_h_frac": 0.1156,
+     "block_w_frac": 0.7398,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 4,
+     "block_h_frac": 0.1541,
+     "block_w_frac": 0.6944,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "media_scale_adapted": true,
+   "media_scale_orientation": "text_bottom",
+   "media_scale_requested": [
+    0.0,
+    0.0,
+    1.0,
+    1.0
+   ],
+   "media_scale_executed": [
+    0.0,
+    0.0,
+    1.0,
+    0.52
+   ],
+   "media_scale_rescued_rejected_plan": [
+    "text_does_not_fit_declared_regions"
+   ],
+   "creative_plan": {
+    "main_idea": "Одна технологическая неделя как визуальная карта сдвигов: привычные сервисы меняются, AI выходит в устройства, а массовая культура ставит финальную точку.",
+    "focal_point": "Контраст между исчезающим Google Assistant, расширяющимся бесплатным ChatGPT и будущим устройством OpenAI без экрана.",
+    "composition_direction": "Начать с плотной обложки-коллажа, затем чередовать диаграммы, immersive source treatment и неровные editorial collages; завершить спокойной полосой из нескольких историй.",
+    "visual_treatment": "A recurring visual language of clipped source fragments, hard crops, asymmetrical overlaps and concise heavy typography turns the week into a connected field report."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "SOURCE",
+   "media_execution_status": "source_media",
+   "body_placement": null,
+   "recap_frame": true,
+   "rendered_copy": [
+    "OpenAI и Jony Ive делают колонку без экрана\n\nПо сообщениям, устройство будет аккумуляторным, размером примерно с хоккейную шайбу и может выйти в 2027 году дороже $300."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "SOURCE",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Listed story_6 source image in a three-fragment collage.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_6",
+   "must_match_story": true,
+   "media_asset_identity": "690ca1142822ff51",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_bottom-center_top-center_DOMINANT_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden",
+    "media_scale_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "source",
+   "visual_preserved": true,
+   "layout_variant": "declared_bottom-center_top-center_DOMINANT_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     81,
+     966,
+     208
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     74,
+     223,
+     668,
+     348
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     364,
+     816,
+     411
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     420,
+     288,
+     453
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 7,
+  "slide_count": 9,
+  "caption_linkage": "8b4255ba-d632-4c65-8417-3e0151b9b4d8",
+  "content_identity": "a2c4c2784bdf9f66",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=top-center|media_zone=middle-center|media_dominance=DOMINANT|density=HIGH|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "top-center",
+    "media_zone": "middle-center",
+    "media_dominance": "DOMINANT",
+    "density": "HIGH",
+    "asymmetry": "centered",
+    "visual_weight": "MEDIA",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "story_7",
+     "identity": "042323b657bb25a5",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "culture",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 3,
+   "rotation_count": 0,
+   "media_canvas_coverage": 1.0,
+   "text_canvas_coverage": 0.2361,
+   "object_canvas_coverage": 1.0,
+   "object_bbox_canvas_coverage": 1.0,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "top",
+    "bottom"
+   ],
+   "negative_space": 0.0,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 135,
+     "lines": 2,
+     "block_h_frac": 0.1978,
+     "block_w_frac": 0.8222,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 2,
+     "block_h_frac": 0.0659,
+     "block_w_frac": 0.6852,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [
+    {
+     "ref": "copy",
+     "name": "copy",
+     "box": [
+      0.06,
+      0.052,
+      0.843,
+      0.214
+     ],
+     "mean": 15.49,
+     "p10": 14,
+     "p90": 18,
+     "std": 1.63,
+     "edge_energy": 0.18,
+     "contrast_light_text": 18.73,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    },
+    {
+     "ref": "body",
+     "name": "body",
+     "box": [
+      0.06,
+      0.261,
+      0.706,
+      0.082
+     ],
+     "mean": 18.22,
+     "p10": 15,
+     "p90": 22,
+     "std": 2.55,
+     "edge_energy": 0.25,
+     "contrast_light_text": 18.1,
+     "contrast_dark_text": 1.02,
+     "text_colour": "light",
+     "quiet": true
+    }
+   ],
+   "creative_plan": {
+    "main_idea": "Одна технологическая неделя как визуальная карта сдвигов: привычные сервисы меняются, AI выходит в устройства, а массовая культура ставит финальную точку.",
+    "focal_point": "Контраст между исчезающим Google Assistant, расширяющимся бесплатным ChatGPT и будущим устройством OpenAI без экрана.",
+    "composition_direction": "Начать с плотной обложки-коллажа, затем чередовать диаграммы, immersive source treatment и неровные editorial collages; завершить спокойной полосой из нескольких историй.",
+    "visual_treatment": "A recurring visual language of clipped source fragments, hard crops, asymmetrical overlaps and concise heavy typography turns the week into a connected field report."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "SOURCE",
+   "media_execution_status": "source_media",
+   "body_placement": null,
+   "recap_frame": true,
+   "rendered_copy": [
+    "GTA VI покажут 27 августа\n\nРасширенный показ состоится в 22:00 по Москве."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "SOURCE",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Listed story_7 source image in a three-fragment collage.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_7",
+   "must_match_story": true,
+   "media_asset_identity": "042323b657bb25a5",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_top-center_middle-center_DOMINANT_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "source",
+   "visual_preserved": true,
+   "layout_variant": "declared_top-center_middle-center_DOMINANT_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     108,
+     875,
+     252
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     267,
+     548,
+     345
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     392,
+     851,
+     470
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     513,
+     853,
+     556
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     565,
+     926,
+     611
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 8,
+  "slide_count": 9,
+  "caption_linkage": "8b4255ba-d632-4c65-8417-3e0151b9b4d8",
+  "content_identity": "d4a199480d916d03",
+  "source_media_candidate_id": null,
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=top-center|media_zone=multi|media_dominance=SUPPORTING|density=LOW|asymmetry=centered|visual_weight=MIXED|region_count=5+|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "top-center",
+    "media_zone": "multi",
+    "media_dominance": "SUPPORTING",
+    "density": "LOW",
+    "asymmetry": "centered",
+    "visual_weight": "MIXED",
+    "region_count": "5+",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "story_3",
+     "identity": "c1db20e3c774f945",
+     "treatment": "cover_cropped",
+     "tilted": true,
+     "matted": true
+    },
+    {
+     "subject": "story_5",
+     "identity": "2dbdeae3ed75bc1a",
+     "treatment": "cover_cropped",
+     "tilted": true,
+     "matted": true
+    },
+    {
+     "subject": "story_1",
+     "identity": "7c04b68e9decb7fb",
+     "treatment": "cover_cropped",
+     "tilted": true,
+     "matted": true
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": null,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 3,
+   "background": "graphite",
+   "palette": "brand",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "collage",
+   "layer_count": 7,
+   "rotation_count": 3,
+   "media_canvas_coverage": 0.2416,
+   "text_canvas_coverage": 0.2743,
+   "object_canvas_coverage": 0.2142,
+   "object_bbox_canvas_coverage": 0.2142,
+   "object_bounding_boxes": [
+    [
+     0.099,
+     0.59,
+     0.361,
+     0.741
+    ],
+    [
+     0.612,
+     0.563,
+     0.928,
+     0.747
+    ],
+    [
+     0.262,
+     0.647,
+     0.738,
+     0.892
+    ]
+   ],
+   "object_edge_bleed": [],
+   "negative_space": 0.4841,
+   "text_metrics": [
+    {
+     "ref": "copy_lead",
+     "token": "HEADLINE_XL",
+     "font_px": 135,
+     "lines": 2,
+     "block_h_frac": 0.1756,
+     "block_w_frac": 0.7398,
+     "tilted": false
+    },
+    {
+     "ref": "copy_rest",
+     "token": "HEADLINE_M",
+     "font_px": 78,
+     "lines": 1,
+     "block_h_frac": 0.0578,
+     "block_w_frac": 0.7176,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 2,
+     "block_h_frac": 0.0726,
+     "block_w_frac": 0.787,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "collage_geometry_adapted": true,
+   "collage_adaptation_reasons": [
+    "collage_hierarchy_flat"
+   ],
+   "requested_media_regions": [
+    [
+     0.24,
+     0.63,
+     0.52,
+     0.28
+    ],
+    [
+     0.05,
+     0.555,
+     0.36,
+     0.22
+    ],
+    [
+     0.59,
+     0.545,
+     0.36,
+     0.22
+    ]
+   ],
+   "executed_media_regions": [
+    [
+     0.24,
+     0.63,
+     0.52,
+     0.28
+    ],
+    [
+     0.077,
+     0.5715,
+     0.306,
+     0.187
+    ],
+    [
+     0.59,
+     0.545,
+     0.36,
+     0.22
+    ]
+   ],
+   "max_region_displacement": 0.0,
+   "max_scale_change": 0.15,
+   "collage_bounds": {
+    "max_displacement": 0.12,
+    "max_scale_change": 0.2
+   },
+   "creative_plan": {
+    "main_idea": "Одна технологическая неделя как визуальная карта сдвигов: привычные сервисы меняются, AI выходит в устройства, а массовая культура ставит финальную точку.",
+    "focal_point": "Контраст между исчезающим Google Assistant, расширяющимся бесплатным ChatGPT и будущим устройством OpenAI без экрана.",
+    "composition_direction": "Начать с плотной обложки-коллажа, затем чередовать диаграммы, immersive source treatment и неровные editorial collages; завершить спокойной полосой из нескольких историй.",
+    "visual_treatment": "A recurring visual language of clipped source fragments, hard crops, asymmetrical overlaps and concise heavy typography turns the week into a connected field report."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "SOURCE",
+   "media_execution_status": "source_media",
+   "body_placement": null,
+   "recap_frame": true,
+   "rendered_copy": [
+    "Не пропускай главное — подписывайся на KAGE\n\nКаждую неделю — самое важное про AI, гаджеты и технологии. Коротко и без шума."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "SOURCE",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Four distinct listed source images used once each as a closing strip.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "story_7",
+   "must_match_story": false,
+   "media_asset_identity": "7c04b68e9decb7fb",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_top-center_multi_SUPPORTING_5+",
+   "layout_adaptations": [
+    "progress_marker_hidden",
+    "collage_geometry_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "source",
+   "visual_preserved": true,
+   "layout_variant": "declared_top-center_multi_SUPPORTING_5+"
+  }
+ }
+]

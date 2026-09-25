@@ -497,3 +497,12 @@ def test_a_subject_the_copy_would_cover_moves_the_copy_to_the_other_end():
 
     portrait = _real("story_6")  # Jony Ive: the face fills the upper picture
     assert subject_covered(_plan(portrait, "top")) > 0.1 and hero_copy_zone(portrait) == "bottom"
+
+
+def test_every_russian_format_sends_ordinary_english_back_and_keeps_names_and_quoted_ui():
+    with pytest.raises(cd.CopyLanguageLeakError, match="plugin"):
+        cd.assert_copy_is_russian_prose({"slide_0_copy": "Adobe plugin теперь в ChatGPT"}, locale="ru")
+    cd.assert_copy_is_russian_prose({"slide_0_copy": "Плагин Adobe теперь в ChatGPT: открой «Plugins» и выбери «@Adobe»",
+                                     "cta": "Подписывайся на KAGE", "hook": "GTA VI покажут 27 августа"}, locale="ru")
+    cd.assert_copy_is_russian_prose({"on_image_copy": "Just leveled up"}, locale="")  # no Russian locale: not this rule's business
+    assert issubclass(cd.RecapLanguageLeakError, cd.CopyLanguageLeakError)

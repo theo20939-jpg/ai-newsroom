@@ -624,9 +624,13 @@ def assert_russian_final_text(text_fields: list[str], *, locale: str = "ru") -> 
 _LOWERCASE_LATIN_WORD = re.compile(r"(?<![\w@#./-])[a-z]{3,}(?![\w/.@-])")
 
 
-class RecapLanguageLeakError(MediaFirstContractError):
-    """Ordinary English words left in the Russian copy of a weekly recap. A recoverable miss: the Director gets its one contract retry,
-    told exactly which phrases to write in Russian (names, products and quoted UI / technical literals stay as they are)."""
+class CopyLanguageLeakError(MediaFirstContractError):
+    """Ordinary English words left in Russian audience copy (any Instagram format). A recoverable miss: the Director gets its one
+    contract retry, told exactly which phrases to write in Russian (names, products and quoted UI / technical literals stay as they are)."""
+
+
+class RecapLanguageLeakError(CopyLanguageLeakError):
+    """The weekly recap's case of CopyLanguageLeakError (kept as its own name for the recap contract)."""
 
 
 def english_descriptive_leaks(text: str) -> list[str]:
@@ -634,6 +638,19 @@ def english_descriptive_leaks(text: str) -> list[str]:
     products are capitalised or camel-cased (OpenAI, Anthropic, ChatGPT, iPhone, GTA VI) and quoted UI / code / URLs are stripped
     first, so only ordinary descriptive English remains."""
     return _LOWERCASE_LATIN_WORD.findall(strip_technical_literals(str(text or "")))
+
+
+def assert_copy_is_russian_prose(fields: dict[str, str], *, locale: str = "ru") -> None:
+    """Every audience-facing field of a Russian post (on-image copy, caption, CTA, hook, on-screen text): no ordinary English words."""
+    if locale.lower() not in ("ru", "ru-ru"):
+        return
+    leaks = {name: english_descriptive_leaks(text) for name, text in fields.items() if text}
+    leaks = {name: words for name, words in leaks.items() if words}
+    if leaks:
+        raise CopyLanguageLeakError(
+            "audience copy is Russian: ordinary English words were left in "
+            f"{ {name: sorted(set(words)) for name, words in leaks.items()} } - say them in natural Russian with the same meaning; keep "
+            "company, product, model and game names as they are, and put genuine UI labels, menu items and config keys in «quotes»")
 
 
 def assert_recap_copy_is_russian(slides: list, *, caption: str = "") -> None:
@@ -791,6 +808,8 @@ async def generate_single_creative(
         [creative.on_image_copy, creative.final_caption or "", creative.cta or ""],
         locale=director_input.locale,
     )
+    assert_copy_is_russian_prose({"on_image_copy": creative.on_image_copy, "final_caption": creative.final_caption or "",
+                                  "cta": creative.cta or ""}, locale=director_input.locale)
     return CreativeGenerationOutcome(single=creative, call=call)
 
 
@@ -989,6 +1008,10 @@ def _validate_carousel_output(
 
             assert_editorial_quality(list(creative.slides), list(director_input.allowed_evidence), archetype=creative.content_archetype,
                                      caption=creative.final_caption or "")
+    assert_copy_is_russian_prose({**{f"slide_{i}_copy": slide.slide_copy for i, slide in enumerate(creative.slides)},
+                                  **{f"slide_{i}_body": slide.slide_body or "" for i, slide in enumerate(creative.slides)},
+                                  "final_caption": creative.final_caption or "", "final_cta": creative.final_cta or ""},
+                                 locale=director_input.locale)
     return CreativeGenerationOutcome(carousel=creative, call=call, model_emitted_archetype=emitted_archetype,
                                      archetype_correction_required=correction_required, weak_hook_patterns=weak_hooks,
                                      visual_repetition=repetition)
@@ -1022,4 +1045,8 @@ async def generate_reel_creative(
         ],
         locale=director_input.locale,
     )
+    assert_copy_is_russian_prose({"hook": creative.hook, "voiceover_script": creative.voiceover_script or "", "cta": creative.cta or "",
+                                  "final_caption": creative.final_caption or "",
+                                  **{f"on_screen_text_{i}": t for i, t in enumerate(creative.on_screen_text)}},
+                                 locale=director_input.locale)
     return CreativeGenerationOutcome(reel=creative, call=call)
