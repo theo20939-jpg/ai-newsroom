@@ -59,6 +59,7 @@ _MIN_BODY_FONT_FRAC = 0.037  # ~40px body copy on a 1080px canvas (real v10.7 va
 # the renderer asks for a readable body first; only when no layout (declared or rebuilt) can hold it does the caller relax this, never
 # dropping the paid image or the body itself
 FOCAL_FRAMING: ContextVar[bool] = ContextVar("FOCAL_FRAMING", default=False)  # recap: subject-aware photo framing
+HERO_ZONE: ContextVar[str | None] = ContextVar("HERO_ZONE", default=None)  # recap hero: the copy end of the photo ("top" / "bottom")
 BODY_MIN_FONT_FRAC: ContextVar[float] = ContextVar("instagram_body_min_font_frac", default=_MIN_BODY_FONT_FRAC)
 _MIN_FONT_FRAC = 0.03  # minimum readable size (about 32px on a 1080px canvas)
 GRAPHITE = kage.GRAPHITE
@@ -602,6 +603,12 @@ def _render_declared_once(
             elif mode == "contain":
                 bg = canvas.getpixel((min(W - 1, max(0, x0 + 2)), min(H - 1, max(0, y0 + 2))))[:3]
                 tile = fit_image_contain(image, width=iw, height=ih, bg=bg).image
+            elif FOCAL_FRAMING.get() and mode == "cover" and region.w * region.h >= 0.9 and (HERO_ZONE.get() or region.tone == "muted"):
+                # weekly recap: a full-canvas photo - the hero canvas with a gradient at its copy end, or (tone 'muted') a weak photo
+                # as a softened, darkened layer under typography
+                from services.instagram_focal_crop import frame_ambient, frame_hero
+
+                tile = frame_ambient(image, iw, ih) if region.tone == "muted" else frame_hero(image, iw, ih, HERO_ZONE.get())
             elif FOCAL_FRAMING.get() and mode == "cover":
                 # weekly recap: framed around the photo's own subject; a crop that would cut the subject shows the whole photo instead
                 from services.instagram_focal_crop import frame_photo

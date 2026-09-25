@@ -179,16 +179,14 @@ def editorial_story_layout(layout: dict[str, Any] | None, *, role: str, slide_te
     photo = next((r.get("content_ref") for r in regions if r.get("kind") == "media" and r.get("content_ref")), None)
     if photo is None:
         return None
-    surface = [r for r in regions if r.get("kind") == "surface"]
-    # headline and its line read as one block at the top; the supporting photo sits below it, on the side away from the brand mark
-    photo_x = 0.34 if layout.get("logo_position", "BOTTOM_RIGHT") == "BOTTOM_LEFT" else 0.08
-    return {**layout, "arrangement": "standard", "media_dominance": "SUPPORTING", "visual_weight": "MIXED", "regions": [
-        *surface,
-        _text("copy", 0.09, 0.2, "HEADLINE_XL", 3, "primary"),
-        _text("body", 0.3, 0.13, "BODY", 4, "muted"),
-        # the supporting photo keeps its own shape (a 16:9 stage shot is not squeezed into a squarer slot)
-        {**_tile(photo, photo_x, 0.5, 0.58, min(0.36, max(0.2, 0.58 * CANVAS_ASPECT / (aspects or {}).get(photo, 1.6))), 1), "frame": "paper"},
-    ]}
+    # typography leads; the weak photo is a quiet contextual layer under it (softened and darkened, tone 'muted') - never a thumbnail
+    del aspects
+    return {**layout, "arrangement": "standard", "background": "ink", "media_dominance": "SUPPORTING", "visual_weight": "TEXT",
+            "logo_position": "BOTTOM_RIGHT", "show_progress": False, "regions": [
+                {**_tile(photo, 0.0, 0.0, 1.0, 1.0, 1), "tone": "muted"},
+                {**_text("copy", 0.3, 0.27, "DISPLAY", 4, "primary"), "on_media": True},
+                {**_text("body", 0.6, 0.14, "BODY", 4, "primary"), "on_media": True, "w": 0.74},
+            ]}
 
 
 def with_recap_cta(carousel: Any) -> Any:
@@ -200,15 +198,14 @@ def with_recap_cta(carousel: Any) -> Any:
     return carousel.model_copy(update={"slides": slides})
 
 
-HERO_PHOTO_SHARE = 0.6    # a strong recap photo takes about 60% of the slide, full width - it IS the slide, not a card on it
-
-
-def hero_story_layout(layout: dict[str, Any] | None, *, role: str, index: int, aspects: dict[str, float] | None = None) -> dict[str, Any] | None:
-    """A recap story slide whose visual is a real photo (no fact graphic) is IMAGE-LED: the photo spans the full width, anchored to the
-    top or bottom edge, about 60% of the canvas, with the headline and its line on a solid panel (founder direction: a large
-    subject-aware crop beats a timid inset - a square portrait too: the focal crop keeps the face). Consecutive slides alternate
-    photo-top / photo-bottom. None when the slide has no photo or carries a fact graphic (editorial slides stay)."""
-    if not layout or role != "story":
+def hero_story_layout(layout: dict[str, Any] | None, *, role: str, index: int, aspects: dict[str, float] | None = None,
+                      zone: str | None = None) -> dict[str, Any] | None:
+    """A recap story slide whose visual is a real photo (no fact graphic) is IMAGE-LED: the photo IS the canvas (full bleed), and the
+    headline + its line sit over the photo's own calmer end (`zone`, chosen from the picture - services.instagram_focal_crop.
+    hero_copy_zone) on a soft gradient. No text panel, no horizontal divider: the variation comes from each photograph.
+    None when the slide has no photo or carries a fact graphic (editorial slides stay)."""
+    del index, aspects  # the composition follows the photograph, not the slide's position
+    if not layout or role != "story" or zone not in ("top", "bottom"):
         return None
     regions = list(layout.get("regions") or [])
     if any(r.get("kind") == "graphic" and r.get("graphic_type") in ("flow_diagram", "poll_cards", "ui_frame") for r in regions):
@@ -217,15 +214,12 @@ def hero_story_layout(layout: dict[str, Any] | None, *, role: str, index: int, a
                   if r.get("kind") == "media" and r.get("content_ref")), None)
     if photo is None:
         return None
-    surface = [r for r in regions if r.get("kind") == "surface"]
-    share = HERO_PHOTO_SHARE
-    if index % 2 == 0:  # photo on top, bleeding off three edges; text panel below, clear of the brand mark
-        media, texts = _tile(photo, 0.0, 0.0, 1.0, share, 1), [
-            _text("copy", share + 0.025, 0.18, "HEADLINE_XL", 2, "primary"),
-            {**_text("body", share + 0.215, 0.13, "BODY", 3, "muted"), "w": 0.64}]
-    else:  # text panel on top, photo bleeding off the bottom
-        media, texts = _tile(photo, 0.0, 1.0 - share, 1.0, share, 1), [
-            _text("copy", 0.05, 0.18, "HEADLINE_XL", 2, "primary"), _text("body", 0.24, 0.13, "BODY", 3, "muted")]
-    # the brand mark sits bottom-right on every hero slide: clear of the text panel (photo-top) or on the photo itself (photo-bottom)
-    return {**layout, "arrangement": "standard", "media_dominance": "DOMINANT", "visual_weight": "MEDIA", "logo_position": "BOTTOM_RIGHT",
-            "show_progress": False, "regions": [*surface, media, *texts]}  # no progress marker over a top headline
+    media = {**_tile(photo, 0.0, 0.0, 1.0, 1.0, 1)}
+    if zone == "top":
+        texts = [{**_text("copy", 0.06, 0.2, "HEADLINE_XL", 3, "primary"), "on_media": True},
+                 {**_text("body", 0.27, 0.13, "BODY", 3, "primary"), "on_media": True, "w": 0.8}]
+    else:  # the copy on the bottom gradient, clear of the brand mark
+        texts = [{**_text("copy", 0.6, 0.2, "HEADLINE_XL", 3, "primary"), "on_media": True},
+                 {**_text("body", 0.805, 0.11, "BODY", 3, "primary"), "on_media": True, "w": 0.7}]
+    return {**layout, "arrangement": "standard", "background": "ink", "media_dominance": "DOMINANT", "visual_weight": "MEDIA",
+            "logo_position": "BOTTOM_RIGHT", "show_progress": False, "regions": [media, *texts]}

@@ -117,7 +117,8 @@ rules:
   that story''s news; never box minor details (a time, a platform, a delay). The last slide is a real recap CLOSER, not another story card: one line
   on what connects the week, an invitation to save, and three or four different stories'' images (one media region per story key - the renderer
   lays them out as the closing strip). Never one story''s image for
-  another and never a shared filler. trend_generative: the most visual archetype - generated, collage, culture-native or immersive media carry the idea; the topic is expressed visually from the facts, and a text-heavy
+  another and never a shared filler. All recap copy is natural Russian: company, product and model names stay as they are, but source
+  phrasing is never left in English (''deceptive behavior'' -> ''обманное поведение''). trend_generative: the most visual archetype - generated, collage, culture-native or immersive media carry the idea; the topic is expressed visually from the facts, and a text-heavy
   source card is never the centrepiece.'
 - 'Audience-facing fields (slide_copy, final_cta, final_caption) are finished Russian copy for readers. They must NEVER mention or paraphrase implementation or design instructions: the visual reference, the visual DNA, families, layouts, renderers,
   archetypes, roles, captions, placeholders, quiet zones, overlays, or what NOT to do (for example never ''не подпись и не кадры референса''). Put design reasoning only in visual_direction and visual_family_reason, never in slide_copy.'

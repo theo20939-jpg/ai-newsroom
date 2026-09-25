@@ -273,6 +273,11 @@ def render_instagram_carousel(
         framing = FOCAL_FRAMING.set(recap)  # recap photos framed on their subject
         subject = (subject_assets or {}).get(str(slide.get("media_subject") or ""))
         band = BAND_MEDIA_ASPECT.set(subject[0].width / max(1, subject[0].height) if recap and subject is not None else None)
+        from services.instagram_declarative_layout import HERO_ZONE
+        from services.instagram_focal_crop import hero_copy_zone
+
+        # a recap story photo: where its copy goes (the calmer end of the picture) - the layout and the gradient read the same value
+        zone = HERO_ZONE.set(hero_copy_zone(subject[0]) if recap and subject is not None and role == "story" else None)
         try:
             layout = render_carousel_slide(
                 spec=profile_spec(InstagramRenderProfile.CAROUSEL_SLIDE), role=role, index=index, total=total,
@@ -303,6 +308,7 @@ def render_instagram_carousel(
         finally:
             FOCAL_FRAMING.reset(framing)
             BAND_MEDIA_ASPECT.reset(band)
+            HERO_ZONE.reset(zone)
         results.append(_result_from_layout(layout, package, profile=InstagramRenderProfile.CAROUSEL_SLIDE, slide_index=index, slide_count=total))
     return results
 

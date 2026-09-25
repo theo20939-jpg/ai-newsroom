@@ -112,3 +112,77 @@ def frame_photo(image: Image.Image, width: int, height: int, *, min_kept: float 
     whole = ImageOps.contain(src, (width, height), Image.Resampling.LANCZOS)
     backdrop.paste(whole, ((width - whole.width) // 2, (height - whole.height) // 2))
     return backdrop.convert("RGBA"), "whole_on_blurred_extension"
+
+
+# --- hero canvas (founder direction: a strong photo IS the canvas, the copy is composed over it) -------------------------------------
+
+HERO_CANVAS = (1080, 1350)
+_ZONE_SHARE = 0.42  # the copy zone: the top or the bottom ~42% of the canvas (also where the gradient reaches full strength)
+
+
+def _canvas_crop(image: Image.Image, width: int, height: int) -> Image.Image:
+    src = image.convert("RGB")
+    window = cover_window(src.size, (width, height), focus_of(image))
+    sw, sh = src.size
+    box = (round(window[0] * sw), round(window[1] * sh), round(window[2] * sw), round(window[3] * sh))
+    return src.crop(box).resize((width, height), Image.Resampling.LANCZOS)
+
+
+def hero_copy_zone(image: Image.Image) -> str:
+    """'top' or 'bottom': the copy goes past the photo's CALMER end (GTA's sky, the dark base of a phone shot), so the photo's own
+    negative space carries the type and the busy subject stays clear."""
+    sal, w, h = _saliency(image)
+    rows = [sum(sal[y * w:(y + 1) * w]) for y in range(h)]
+    band = max(1, round(h * 0.3))
+    return "top" if sum(rows[:band]) < 0.85 * sum(rows[-band:]) else "bottom"
+
+
+HERO_MIN_ASPECT, HERO_MAX_ASPECT = 0.9, 1.5  # the photo's own shape on the hero canvas, cropped no further than this
+_FEATHER = 0.1                               # the soft join between the photo and its extension (share of the canvas height)
+
+
+def _gradient(size: tuple[int, int], zone: str, *, copy_at: float = 0.4, strength: float = 0.93) -> Image.Image:
+    """An L mask over the copy end: a soft ramp across the ~18% of the picture before the copy (0 -> 0.8), then deepening to
+    `strength` at the edge - the type always sits on a darkened, calm part of the photo, and there is no hard edge anywhere."""
+    width, height = size
+    column = Image.new("L", (1, height), 0)
+    for y in range(height):
+        d = (1.0 - y / height) if zone == "top" else y / height  # distance into the copy end (0 at the far edge, 1 at the copy edge)
+        ramp_start, copy_edge = (1.0 - copy_at) - 0.18, 1.0 - copy_at
+        if d <= ramp_start:
+            a = 0.0
+        elif d <= copy_edge:
+            a = 0.8 * ((d - ramp_start) / 0.18) ** 1.6
+        else:
+            a = 0.8 + (strength - 0.8) * (d - copy_edge) / max(1e-6, copy_at)
+        column.putpixel((0, y), round(255 * a))
+    return column.resize((width, height))
+
+
+def frame_hero(image: Image.Image, width: int, height: int, zone: str) -> Image.Image:
+    """The hero canvas: the photo keeps a strong shape of its own (a subject-centred crop to HERO_MIN..MAX_ASPECT, never a full 4:5
+    zoom that turns a phone shot into a close-up of its screen), anchored to the edge away from the copy, and the rest of the canvas
+    continues the SAME photo - softened and darkened - through a feathered join. The copy end then deepens into a gradient. No panel,
+    no hard horizontal line."""
+    src = image.convert("RGB")
+    aspect = min(HERO_MAX_ASPECT, max(HERO_MIN_ASPECT, src.width / src.height))
+    band_h = min(height, round(width / aspect))
+    window = cover_window(src.size, (width, band_h), focus_of(image))
+    crop = src.crop((round(window[0] * src.width), round(window[1] * src.height), round(window[2] * src.width), round(window[3] * src.height)))
+    photo = crop.resize((width, band_h), Image.Resampling.LANCZOS)
+    canvas = ImageOps.fit(src, (width, height), Image.Resampling.LANCZOS).filter(ImageFilter.GaussianBlur(max(10, width // 40)))
+    canvas = Image.blend(canvas, Image.new("RGB", canvas.size, (10, 10, 12)), 0.45)
+    y = 0 if zone == "bottom" else height - band_h  # copy at the bottom -> the photo is anchored to the top, and the other way round
+    feather = max(1, round(height * _FEATHER))
+    mask = Image.new("L", (1, band_h), 255)
+    for i in range(min(feather, band_h)):  # fade the photo's inner edge into its own extension
+        mask.putpixel((0, band_h - 1 - i if zone == "bottom" else i), round(255 * (i / feather) ** 1.2))
+    canvas.paste(photo, (0, y), mask.resize((width, band_h)))
+    dark = Image.new("RGB", canvas.size, (10, 10, 12))
+    return Image.composite(dark, canvas, _gradient(canvas.size, zone, copy_at=_ZONE_SHARE)).convert("RGBA")
+
+
+def frame_ambient(image: Image.Image, width: int, height: int) -> Image.Image:
+    """A weak photo as a quiet contextual LAYER under typography: oversized, softened and darkened - never an attached thumbnail."""
+    photo = _canvas_crop(image, width, height).filter(ImageFilter.GaussianBlur(max(6, width // 90)))
+    return Image.blend(photo, Image.new("RGB", photo.size, (10, 10, 12)), 0.62).convert("RGBA")

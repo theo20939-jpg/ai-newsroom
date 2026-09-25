@@ -621,6 +621,32 @@ def assert_russian_final_text(text_fields: list[str], *, locale: str = "ru") -> 
         raise CreativeLanguageError("clearly English final output for locale=ru")
 
 
+_LOWERCASE_LATIN_WORD = re.compile(r"(?<![\w@#./-])[a-z]{3,}(?![\w/.@-])")
+
+
+class RecapLanguageLeakError(MediaFirstContractError):
+    """Ordinary English words left in the Russian copy of a weekly recap. A recoverable miss: the Director gets its one contract retry,
+    told exactly which phrases to write in Russian (names, products and quoted UI / technical literals stay as they are)."""
+
+
+def english_descriptive_leaks(text: str) -> list[str]:
+    """Lowercase English words in otherwise Russian audience copy ('deceptive behavior', 'harmful activity'). Proper names and
+    products are capitalised or camel-cased (OpenAI, Anthropic, ChatGPT, iPhone, GTA VI) and quoted UI / code / URLs are stripped
+    first, so only ordinary descriptive English remains."""
+    return _LOWERCASE_LATIN_WORD.findall(strip_technical_literals(str(text or "")))
+
+
+def assert_recap_copy_is_russian(slides: list, *, caption: str = "") -> None:
+    leaks = [(i, word) for i, slide in enumerate(slides)
+             for word in english_descriptive_leaks(f"{getattr(slide, 'slide_copy', '') or ''} {getattr(slide, 'slide_body', '') or ''}")]
+    leaks += [("caption", word) for word in english_descriptive_leaks(caption)]
+    if leaks:
+        raise RecapLanguageLeakError(
+            "weekly recap copy is Russian: ordinary English words were left in the audience copy "
+            f"{sorted({w for _, w in leaks})} (slides {sorted({str(i) for i, _ in leaks})}) - say them in natural Russian with the same "
+            "meaning (e.g. 'deceptive behavior' -> 'обманное поведение'); keep company, product and model names and quoted UI text as they are")
+
+
 def assert_audience_facing_copy(text_fields: list[str]) -> None:
     for text in text_fields:
         if text and _VISIBLE_SERVICE_LABEL_RE.search(text):
@@ -866,6 +892,7 @@ async def generate_carousel_creative(
             hook = outcome.carousel.slides[0] if outcome.carousel.slides else None
             cover_stories = {r.content_ref for r in (hook.layout.regions if hook is not None and getattr(hook, "layout", None) else [])
                              if r.kind == "media" and r.content_ref in photo_stories}
+            assert_recap_copy_is_russian(list(outcome.carousel.slides), caption=getattr(outcome.carousel, "final_caption", "") or "")
             repeated = _cover_repeats_a_story(outcome.carousel.slides)
             if repeated is not None:
                 # the weekly cover's headline is about the WEEK; one story's headline belongs to that story's own slide

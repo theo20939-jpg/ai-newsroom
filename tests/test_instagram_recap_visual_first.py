@@ -283,18 +283,15 @@ def test_topic_labels_roles_and_truncated_words_are_not_fact_cells_but_real_numb
     assert meaningful_fact_graphic(["30B параметров", "1 GPU", "Muse Glimmer"], "Muse Glimmer: 30B параметров, 1 GPU.")
 
 
-def test_a_weak_fact_cell_story_becomes_an_editorial_slide_with_its_photo_away_from_the_logo():
+def test_a_weak_fact_cell_story_becomes_an_editorial_slide():
     from services.instagram_recap_frames import editorial_story_layout
 
     plan = _plan(["story_4"])
-    plan["logo_position"] = "BOTTOM_LEFT"
     plan["regions"].append({"kind": "graphic", "x": 0.07, "y": 0.6, "w": 0.86, "h": 0.25, "z": 3, "graphic_type": "flow_diagram",
                             "flow_steps": ["Тестирование", "Поведение моделей", "Риск выявлен"]})
     editorial = editorial_story_layout(plan, role="story", slide_text="Модели пошли вразнос. Институт сообщил о тестировании.")
     kinds = [r["kind"] for r in editorial["regions"]]
     assert "graphic" not in kinds and kinds.count("media") == 1 and {"copy", "body"} <= {r.get("content_ref") for r in editorial["regions"]}
-    photo = next(r for r in editorial["regions"] if r["kind"] == "media")
-    assert photo["x"] > 0.3  # the logo sits bottom-left: the photo takes the right side
     data = _plan(["story_3"])
     data["regions"].append({"kind": "graphic", "x": 0.07, "y": 0.6, "w": 0.86, "h": 0.25, "z": 3, "graphic_type": "flow_diagram",
                             "flow_steps": ["30B параметров", "1 GPU"]})
@@ -381,16 +378,18 @@ def test_a_photo_band_takes_the_photos_shape_within_bounds():
 
 # --- story-slide photo treatment: a strong photo IS the slide ------------------------------------------------------------------------
 
-def test_a_strong_photo_story_slide_becomes_image_led_and_alternates():
-    from services.instagram_recap_frames import HERO_PHOTO_SHARE, hero_story_layout
+def test_a_strong_photo_story_slide_is_the_photo_canvas_with_copy_at_its_calm_end():
+    from services.instagram_recap_frames import hero_story_layout
 
-    top = hero_story_layout(_plan(["story_6"]), role="story", index=6, aspects={"story_6": 1.0})
-    bottom = hero_story_layout(_plan(["story_7"]), role="story", index=7, aspects={"story_7": 1.78})
-    for layout, edge in ((top, "top"), (bottom, "bottom")):
+    for zone in ("top", "bottom"):
+        layout = hero_story_layout(_plan(["story_7"]), role="story", index=7, zone=zone)
         photo = next(r for r in layout["regions"] if r["kind"] == "media")
-        assert (photo["x"], photo["w"], photo["h"]) == (0.0, 1.0, HERO_PHOTO_SHARE)  # full width, the dominant surface
-        assert (photo["y"] == 0.0) if edge == "top" else (photo["y"] + photo["h"] == pytest.approx(1.0))  # anchored to an edge
+        assert (photo["x"], photo["y"], photo["w"], photo["h"]) == (0.0, 0.0, 1.0, 1.0)  # the photo IS the canvas
+        texts = [r for r in layout["regions"] if r["kind"] == "text"]
+        assert all(r["on_media"] for r in texts) and not any(r["kind"] == "surface" for r in layout["regions"])  # no text panel
+        assert (max(r["y"] + r["h"] for r in texts) <= 0.42) if zone == "top" else (min(r["y"] for r in texts) >= 0.58)
         assert layout["logo_position"] == "BOTTOM_RIGHT" and layout["show_progress"] is False
+    assert hero_story_layout(_plan(["story_7"]), role="story", index=7) is None  # no measured zone: the plan is kept
 
 
 def test_fact_graphic_or_photo_less_slides_are_not_forced_into_a_hero():
@@ -399,23 +398,60 @@ def test_fact_graphic_or_photo_less_slides_are_not_forced_into_a_hero():
     graphic = _plan(["story_1"])
     graphic["regions"].append({"kind": "graphic", "x": 0.07, "y": 0.6, "w": 0.86, "h": 0.25, "z": 3, "graphic_type": "flow_diagram",
                                "flow_steps": ["CEO", "Chairman"]})
-    assert hero_story_layout(graphic, role="story", index=4) is None
-    assert hero_story_layout(_plan([]), role="story", index=4) is None
-    assert hero_story_layout(_plan(["story_2"]), role="hook", index=0) is None
+    assert hero_story_layout(graphic, role="story", index=4, zone="top") is None
+    assert hero_story_layout(_plan([]), role="story", index=4, zone="top") is None
+    assert hero_story_layout(_plan(["story_2"]), role="hook", index=0, zone="top") is None
 
 
-def test_the_rendered_hero_slide_keeps_its_plan_and_a_large_crop():
+def test_the_rendered_hero_slide_is_drawn_as_planned_over_the_whole_canvas():
     from services.instagram_carousel_layouts import render_carousel_slide
-    from services.instagram_declarative_layout import FOCAL_FRAMING
+    from services.instagram_declarative_layout import FOCAL_FRAMING, HERO_ZONE
     from services.instagram_platform_renderer import InstagramRenderProfile, profile_spec
 
-    token = FOCAL_FRAMING.set(True)
+    tokens = FOCAL_FRAMING.set(True), HERO_ZONE.set("bottom")
     try:
         result = render_carousel_slide(spec=profile_spec(InstagramRenderProfile.CAROUSEL_SLIDE), role="story", index=3, total=9,
                                        slide_copy="Meta ставит на Muse", slide_body="Muse Glimmer получила 30B параметров.",
                                        source_evidence=None, package_identity="p", media_mode="SOURCE", layout_plan=_plan(["story_3"]),
                                        subject_assets={"story_3": (Image.open(io.BytesIO(_photo(3, size=(1500, 1000)))), "id3")}, recap=True)
     finally:
-        FOCAL_FRAMING.reset(token)
+        HERO_ZONE.reset(tokens[1])
+        FOCAL_FRAMING.reset(tokens[0])
     assert result.notes.get("recap_frame") is True and not result.notes.get("media_scale_rescued_rejected_plan")
-    assert result.notes["media_canvas_coverage"] >= 0.55
+    assert result.notes["media_canvas_coverage"] >= 0.99
+
+
+def test_the_hero_canvas_keeps_the_photos_shape_and_extends_it_softly():
+    from services.instagram_focal_crop import frame_ambient, frame_hero, hero_copy_zone
+
+    wide = _subject_photo()  # a 2:1 photo, its subject on the left
+    tile = frame_hero(wide, 540, 675, "bottom").convert("RGB")
+    assert tile.size == (540, 675)
+    top, bottom = tile.crop((0, 0, 540, 200)), tile.crop((0, 540, 540, 675))
+    luma = lambda im: sum(im.convert("L").getdata()) / (im.width * im.height)  # noqa: E731
+    assert luma(bottom) < luma(top)  # the copy end is darkened for the type, the photo end is not
+    assert hero_copy_zone(wide) in ("top", "bottom")
+    ambient = frame_ambient(wide, 540, 675).convert("RGB")
+    assert luma(ambient) < luma(wide.resize((540, 675)).convert("RGB"))  # a quiet, darkened layer under typography
+
+
+def test_a_weak_photo_slide_is_typography_over_a_quiet_photo_layer_not_a_thumbnail():
+    from services.instagram_recap_frames import editorial_story_layout
+
+    plan = _plan(["story_4"])
+    plan["regions"].append({"kind": "graphic", "x": 0.07, "y": 0.6, "w": 0.86, "h": 0.25, "z": 3, "graphic_type": "flow_diagram",
+                            "flow_steps": ["Тестирование", "Поведение моделей", "Риск выявлен"]})
+    layout = editorial_story_layout(plan, role="story", slide_text="Модели пошли вразнос. Институт сообщил о тестировании.")
+    photo = next(r for r in layout["regions"] if r["kind"] == "media")
+    assert (photo["w"], photo["h"], photo["tone"]) == (1.0, 1.0, "muted") and "frame" not in photo or photo.get("frame") == "none"
+
+
+def test_ordinary_english_left_in_russian_recap_copy_is_sent_back_and_names_are_not():
+    leaks = cd.english_descriptive_leaks("Британский AI Security Institute сообщил о deceptive behavior и harmful activity во время тестирования.")
+    assert leaks == ["deceptive", "behavior", "harmful", "activity"]
+    for fine in ("Модели OpenAI и Anthropic", "GPT-5.6 Luna для ChatGPT", "Введи «@Adobe» в чате", "iPhone и Gemini", "GTA VI покажут 27 августа"):
+        assert cd.english_descriptive_leaks(fine) == [], fine
+    slides = [SimpleNamespace(slide_copy="Модели пошли вразнос", slide_body="Институт сообщил о deceptive behavior.")]
+    with pytest.raises(cd.RecapLanguageLeakError, match="deceptive"):
+        cd.assert_recap_copy_is_russian(slides)
+    assert issubclass(cd.RecapLanguageLeakError, cd.MediaFirstContractError)  # the Director's one contract retry applies

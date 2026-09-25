@@ -801,7 +801,9 @@ def render_carousel_slide(
         recap_frame = recap_frame_layout(layout_plan, role=role.strip().lower(), aspects=aspects, slide_text=slide_copy) or editorial_story_layout(
             layout_plan, role=role.strip().lower(), slide_text=f"{slide_copy} {slide_body or ''}", aspects=aspects)
         if recap_frame is None:  # a strong photo leads its story slide
-            recap_frame = hero_story_layout(layout_plan, role=role.strip().lower(), index=index, aspects=aspects)
+            from services.instagram_declarative_layout import HERO_ZONE
+
+            recap_frame = hero_story_layout(layout_plan, role=role.strip().lower(), index=index, aspects=aspects, zone=HERO_ZONE.get())
         single = None if recap_frame is not None else single_photo_story_layout(layout_plan, role=role.strip().lower())
         if single is not None:
             # one photo instead of several crops of it - only when that plan is itself drawable; otherwise the planned one is kept

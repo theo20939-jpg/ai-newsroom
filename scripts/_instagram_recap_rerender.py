@@ -1,6 +1,8 @@
 """Zero-cost re-render of a SAVED weekly-recap run: the saved package (the Creative Director's exact plan) + the saved per-story source
 images -> the CURRENT renderer and art validator. No provider call, no network, no DB. Used to judge renderer changes on real output.
-Usage: python scripts/_instagram_recap_rerender.py <run dir>/weekly_recap <out dir>
+Usage: python scripts/_instagram_recap_rerender.py <run dir>/weekly_recap <out dir> [--preview-body N=<text> ...]
+--preview-body replaces slide N's body for this OFFLINE PREVIEW only (e.g. copy the live pipeline would send back to the Director);
+every override is printed and written to rerender.json - it is never presented as Director output.
 """
 from __future__ import annotations
 
@@ -23,6 +25,12 @@ from services.instagram_platform_renderer import render_instagram_carousel  # no
 
 def main() -> None:
     run, out = Path(sys.argv[1]), Path(sys.argv[2])
+    overrides = {}
+    args = sys.argv[3:]
+    for flag, value in zip(args[::2], args[1::2]):
+        if flag == "--preview-body":
+            index, text = value.split("=", 1)
+            overrides[int(index)] = text
     out.mkdir(parents=True, exist_ok=True)
     data = json.loads((run / "package.json").read_text(encoding="utf-8"))
     fields = {f.name for f in dataclasses.fields(InstagramContentPackage)}
@@ -34,6 +42,9 @@ def main() -> None:
         from services.instagram_recap_frames import RECAP_CTA_BODY, RECAP_CTA_HEADLINE
 
         slides[-1] = {**slides[-1], "text": RECAP_CTA_HEADLINE, "body": RECAP_CTA_BODY}
+    for index, text in overrides.items():
+        print(f"PREVIEW OVERRIDE slide {index} body: {slides[index].get('body')!r} -> {text!r}")
+        slides[index] = {**slides[index], "body": text}
     pkg = InstagramContentPackage(**data)
     vision = {v["subject_key"]: v for v in json.loads((run / "vision_verdicts.json").read_text(encoding="utf-8"))}
     subject_assets = {}
@@ -48,7 +59,7 @@ def main() -> None:
     notes = [{k: r.evidence.notes.get(k) for k in ("arrangement", "media_scale_orientation", "media_scale_rescued_rejected_plan",
                                                    "recap_frame", "body_placement", "layout_variant")} | {"media": [m.get("subject") for m in r.evidence.notes.get("media_regions") or []]}
              for r in renders]
-    summary = {"art_passed": art.passed, "blocking": list(art.blocking_issues), "warnings": list(art.warnings), "slides": notes,
+    summary = {"preview_body_overrides": {str(k): v for k, v in overrides.items()}, "art_passed": art.passed, "blocking": list(art.blocking_issues), "warnings": list(art.warnings), "slides": notes,
                "unsuitable_for_vision": [k for k, v in vision.items() if not v["suitable"]]}
     (out / "rerender.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
     ims = [Image.open(BytesIO(r.image_bytes)).convert("RGB") for r in renders]
