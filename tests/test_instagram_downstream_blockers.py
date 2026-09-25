@@ -97,7 +97,8 @@ async def test_phase_a_sees_story_headers_and_its_exact_quotes_ground(db_session
     outcome, gateway = await _run(db_session, monkeypatch, _decision(coverage_plan=plan, evidence_used=quotes), recap_bundle=bundle)
     assert outcome.reason.startswith("creative_director_failed"), outcome.reason  # grounding passed: the Director was reached
     phase_a = _user(gateway.phase_a_request())
-    assert "story_2:\n- Story 2 headline\n- Exact fact number 2 from the source." in phase_a  # the key is a header, not a label
+    # the key is a header, not a label; Phase A v3 lists each item with its handle (the model cites the handle, never retypes the text)
+    assert "story_2:\nE3: Story 2 headline\nE4: Exact fact number 2 from the source." in phase_a
     director = _user(gateway.director_request())
     assert "[story_2]: Exact fact number 2 from the source." in director and "RECAP COVERAGE PLAN" in director
 

@@ -108,7 +108,7 @@ def test_the_recap_contract_overflow_is_blocked_and_the_bound_is_now_stated():
 def test_v10_8_is_active_and_is_exactly_what_its_generator_builds():
     import scripts._instagram_make_prompt_v10_8 as gen
 
-    assert cd.CAROUSEL_PROMPT_VERSION == "10.9" and "10.8" in cd.EDITORIAL_CRITIC_CAROUSEL_VERSIONS and "10.8" in cd.BODY_COPY_CAROUSEL_VERSIONS
+    assert cd.CAROUSEL_PROMPT_VERSION == "10.11" and "10.8" in cd.EDITORIAL_CRITIC_CAROUSEL_VERSIONS and "10.8" in cd.BODY_COPY_CAROUSEL_VERSIONS
     committed = yaml.safe_load((ROOT / "prompts" / "instagram_creative_director_carousel" / "v10.8.yaml").read_text(encoding="utf-8"))
     assert committed == gen.build()
     schema = committed["output_schema"]

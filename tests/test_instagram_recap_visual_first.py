@@ -1,8 +1,7 @@
 """Weekly recap product pass (2026-09-26): a recap is VISUAL-FIRST.
   - each story's picture may come from any of its OWN premise-relevant events (a real photo beats the representative's flat text card),
     never from a polluted Story member and never from another story;
-  - a news_recap carousel is planned with prompt 10.10 (weekly-roundup cover, image-led story beats, fact blocks only as a fallback);
-    every other archetype keeps 10.9;
+  - a news_recap carousel is planned with prompt 10.12 (= 10.10 recap direction + KAGE palette); every other archetype 10.11;
   - every story needs a slide of its OWN: the week's cover and the closer never stand in for a story.
 No provider, no network."""
 from __future__ import annotations
@@ -114,14 +113,14 @@ async def test_recap_uses_prompt_10_10_and_other_archetypes_keep_10_9(monkeypatc
     await cd.generate_carousel_creative(object(), PROMPTS, director_input=recap)
     hack = cd.CreativeDirectorInput(objective="o", format="carousel", opportunity_summary="s", planned_format="AI_HACK", planned_archetype="ai_hack")
     await cd.generate_carousel_creative(object(), PROMPTS, director_input=hack)
-    assert seen == ["10.10", "10.9"]
-    text = PROMPTS.resolve(cd.CAROUSEL_PROMPT_NAME, "10.10").rules
+    assert seen == ["10.12", "10.11"]
+    text = PROMPTS.resolve(cd.CAROUSEL_PROMPT_NAME, "10.12").rules
     assert any("WEEKLY ROUNDUP" in r and "WEEK''S COVER".replace("''", "'") in r for r in text)
 
 
 def test_prompt_10_10_changes_only_the_news_recap_direction():
-    old = PROMPTS.resolve(cd.CAROUSEL_PROMPT_NAME, "10.9")
-    new = PROMPTS.resolve(cd.CAROUSEL_PROMPT_NAME, "10.10")
+    old = PROMPTS.resolve(cd.CAROUSEL_PROMPT_NAME, "10.11")
+    new = PROMPTS.resolve(cd.CAROUSEL_PROMPT_NAME, "10.12")
     assert old.system == new.system and old.output_schema == new.output_schema and len(old.rules) == len(new.rules)
     changed = [i for i, (a, b) in enumerate(zip(old.rules, new.rules)) if a != b]
     assert len(changed) == 1 and "news_recap" in new.rules[changed[0]]

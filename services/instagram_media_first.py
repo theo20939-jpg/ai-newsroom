@@ -260,6 +260,8 @@ def slide_has_visual(*, notes: dict[str, Any], planned_slide: dict[str, Any] | N
     """True when the RENDERED slide carries an executed non-text visual: a real media region, a legacy media treatment, or a substantive graphic in an executed declarative plan."""
     if notes.get("media_regions"):
         return True
+    if notes.get("designed_typographic"):  # a deterministic editorial typographic beat whose display type rendered at display size
+        return True
     if source_image_treatment and source_image_treatment != "none":
         return True
     if notes.get("layout_plan_applied") and planned_slide is not None and has_substantive_graphic(planned_slide):

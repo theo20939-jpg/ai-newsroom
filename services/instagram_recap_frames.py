@@ -151,42 +151,78 @@ def _truncated(label: str, text: str) -> bool:
     return any(w.lower() not in words and any(full.startswith(w.lower()) for full in words) for w in _WORD.findall(label))
 
 
-def meaningful_fact_graphic(labels: list[str], slide_text: str) -> bool:
-    """A recap fact graphic earns its cells only with real data - most labels carry a number or a date ('30B', '1 GPU', '27 августа') -
-    and no label is a truncated word. Topic labels, roles and categories ('Тестирование', 'Риск выявлен') are not facts."""
+_UI_MARKERS = re.compile(r"[«»@→/]|->")
+
+
+def meaningful_fact_graphic(labels: list[str], slide_text: str, *, ui_paths: bool = False) -> bool:
+    """A fact graphic earns its cells only with real content: most labels carry a number or a date ('30B', '1 GPU', '27 августа') or,
+    for a how-to (`ui_paths`), an exact UI path the reader follows («Plugins», «@Adobe», A → B) - and no label is a truncated word.
+    Topic labels, roles and categories ('Тестирование', 'Риск выявлен', 'Твоя задача') are not facts."""
     labels = [label for label in labels if label.strip()]
     if not labels or any(_truncated(label, slide_text) for label in labels):
         return False
-    return sum(1 for label in labels if _DIGIT.search(label)) * 2 > len(labels)
+    with_data = sum(1 for label in labels if _DIGIT.search(label))
+    with_ui = sum(1 for label in labels if _UI_MARKERS.search(label))
+    return with_data * 2 > len(labels) or (ui_paths and with_ui >= 1)  # a how-to path names at least one exact UI element
+
+
+_STEP = re.compile(r"^\s*(?:шаг|step)\s*\d{1,2}", re.IGNORECASE)
+DESIGNED_TYPOGRAPHIC = ("statement", "step_numeral")  # the editorial variants that carry no picture: the art gate reads the variant name
+
+
+def _weak_graphic(regions: list[dict[str, Any]], slide_text: str, *, ui_paths: bool) -> bool:
+    graphics = [r for r in regions if r.get("kind") == "graphic" and r.get("graphic_type") in ("flow_diagram", "poll_cards")]
+    if not graphics or graphics[0].get("graphic_type") == "poll_cards":  # a poll's options are the slide's own choices - kept
+        return False
+    labels = [label for g in graphics for label in (g.get("flow_steps") or [])]
+    return not meaningful_fact_graphic(labels, slide_text, ui_paths=ui_paths)
+
+
+def editorial_fallback_layout(layout: dict[str, Any] | None, *, role: str, slide_text: str, headline: str, photo: str | None,
+                              ui_paths: bool = False) -> tuple[dict[str, Any], str] | None:
+    """(layout, variant) for a slide whose only visual is a WEAK fact diagram - topic labels in cells - else None (the plan is kept).
+    The slide becomes a designed EDITORIAL beat instead, chosen by what it is, never by chance:
+      'ambient'      - any photo of the story, suitable or not, as a quiet softened layer under display type (a hook, a recap story);
+      'step_numeral' - a how-to step ('Шаг 3. ...'): the step number set large, its instruction and one line;
+      'statement'    - otherwise: a display headline, its line, a KAGE violet accent bar - typography as the composition.
+    No photo is a normal state: it never becomes cells, a giant stray numeral or an empty card."""
+    if not layout:
+        return None
+    regions = list(layout.get("regions") or [])
+    if not _weak_graphic(regions, slide_text, ui_paths=ui_paths):
+        return None
+    base = {**layout, "arrangement": "standard", "logo_position": "BOTTOM_RIGHT", "show_progress": False}
+    surface = [r for r in regions if r.get("kind") == "surface"]
+    if photo is not None and (role in ("hook", "story") or not ui_paths):
+        return {**base, "background": "ink", "media_dominance": "SUPPORTING", "visual_weight": "TEXT", "regions": [
+            {**_tile(photo, 0.0, 0.0, 1.0, 1.0, 1), "tone": "muted"},
+            {**_text("copy", 0.3, 0.27, "DISPLAY", 4, "primary"), "on_media": True},
+            {**_text("body", 0.6, 0.14, "BODY", 4, "primary"), "on_media": True, "w": 0.74},
+        ]}, "ambient"
+    if _STEP.match(headline):
+        return {**base, "media_dominance": "NONE", "visual_weight": "TEXT", "regions": [
+            *surface,
+            {**_text("number", 0.07, 0.07, "MEGA", 1, "accent"), "w": 0.5, "h": 0.3},
+            _text("copy_no_number", 0.4, 0.2, "HEADLINE_XL", 3, "primary"),
+            {**_text("body", 0.63, 0.18, "BODY", 5, "muted"), "w": 0.72},
+        ]}, "step_numeral"
+    return {**base, "media_dominance": "NONE", "visual_weight": "TEXT", "regions": [
+        *surface,
+        {"kind": "accent", "x": 0.07, "y": 0.16, "w": 0.016, "h": 0.4, "z": 2, "accent_type": "rule_v", "tone": "accent"},
+        {**_text("copy", 0.16, 0.34, "DISPLAY", 4, "primary"), "x": 0.12, "w": 0.81},
+        {**_text("body", 0.6, 0.18, "BODY", 5, "muted"), "x": 0.12, "w": 0.7},
+    ]}, "statement"
 
 
 def editorial_story_layout(layout: dict[str, Any] | None, *, role: str, slide_text: str,
                            aspects: dict[str, float] | None = None) -> dict[str, Any] | None:
-    """A recap story slide whose only graphic is a set of weak fact cells becomes an EDITORIAL slide instead: a large headline, its line
-    of context and - when the plan carries one - the story's own photo as a modest supporting picture (never a forced hero). None when
-    the slide has no such graphic or its cells hold real data. Without any photo the planned graphic is kept (a slide needs a visual)."""
+    """Kept for the recap's earlier callers: the recap story case of editorial_fallback_layout with the plan's own photo region."""
+    del aspects
     if not layout or role != "story":
         return None
-    regions = list(layout.get("regions") or [])
-    graphics = [r for r in regions if r.get("kind") == "graphic" and r.get("graphic_type") in ("flow_diagram", "poll_cards")]
-    if not graphics:
-        return None
-    labels = [label for g in graphics for label in (g.get("flow_steps") or [])]
-    if graphics[0].get("graphic_type") == "poll_cards":
-        labels = [part.strip() for part in re.split(r"[|/,;]", slide_text.split(":", 1)[-1]) if part.strip()]
-    if meaningful_fact_graphic(labels, slide_text):
-        return None
-    photo = next((r.get("content_ref") for r in regions if r.get("kind") == "media" and r.get("content_ref")), None)
-    if photo is None:
-        return None
-    # typography leads; the weak photo is a quiet contextual layer under it (softened and darkened, tone 'muted') - never a thumbnail
-    del aspects
-    return {**layout, "arrangement": "standard", "background": "ink", "media_dominance": "SUPPORTING", "visual_weight": "TEXT",
-            "logo_position": "BOTTOM_RIGHT", "show_progress": False, "regions": [
-                {**_tile(photo, 0.0, 0.0, 1.0, 1.0, 1), "tone": "muted"},
-                {**_text("copy", 0.3, 0.27, "DISPLAY", 4, "primary"), "on_media": True},
-                {**_text("body", 0.6, 0.14, "BODY", 4, "primary"), "on_media": True, "w": 0.74},
-            ]}
+    photo = next((r.get("content_ref") for r in layout.get("regions") or [] if r.get("kind") == "media" and r.get("content_ref")), None)
+    out = editorial_fallback_layout(layout, role=role, slide_text=slide_text, headline=slide_text, photo=photo)
+    return out[0] if out is not None and out[1] == "ambient" else None
 
 
 def with_recap_cta(carousel: Any) -> Any:

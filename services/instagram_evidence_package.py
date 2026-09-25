@@ -194,6 +194,7 @@ def plain_text(value: str) -> str:
 def _blocks(text: str) -> list[str]:
     """Extracted text breaks inline links into separate lines: rejoin a paragraph, keep list items, UI paths and code apart."""
     blocks: list[str] = []
+    prev_line: str | None = None
     for raw in text.splitlines():
         line = raw.strip()
         if not line:
@@ -204,12 +205,17 @@ def _blocks(text: str) -> list[str]:
                       or _COMMAND_RX.search(line) is not None or (len(line) >= 25 and _STEP_RX.match(line) is not None)
                       # a sentence line after an unpunctuated heading / attribution (it ends on a label-like word, not mid-phrase) is its
                       # own item, so it can be quoted exactly; a sentence an inline link broke ("...previously released") continues
-                      or (len(line.split()) >= 6 and line[:1].isupper() and re.search(r"[a-zа-яё,;(]$", blocks[-1].rstrip()) is None))
+                      or (len(line.split()) >= 6 and line[:1].isupper() and re.search(r"[a-zа-яё,;(]$", blocks[-1].rstrip()) is None)
+                      # nor after a SHORT unpunctuated line (<= 3 words): that is page metadata - a byline, a category, a date
+                      # ("Артур Томилко" / "AI" / "10 авг") - not a sentence an inline link broke (its continuation starts in lower case)
+                      or (line[:1].isupper() and prev_line is not None and len(prev_line.split()) <= 3 and prev_line.rstrip()[-1:] not in ".!?:;…"
+                          and (len(line.split()) >= 6 or (len(line.split()) >= 4 and line.rstrip()[-1:] in ".!?…"))))
         if starts_new:
             blocks.append(line)
         else:
             joiner = "" if line[:1] in ".,;:)!?»”" or blocks[-1].endswith(("(", "«", "“")) else " "
             blocks[-1] = blocks[-1] + joiner + line
+        prev_line = line
     return blocks
 
 
@@ -478,8 +484,9 @@ async def build_daily_evidence_package(
     telegram = str(source_type).upper().endswith("TELEGRAM")
     sources: list[EvidenceSource] = []
     if stored_body:
-        sources.append(EvidenceSource(url=None if not telegram else url, source_type=TELEGRAM_POST if telegram else STORED_BODY,
-                                      text=plain_text(stored_body)))
+        # one source per paragraph of the stored HTML (the recap evidence cut): an unpunctuated standfirst never glues onto the lede
+        sources.extend(EvidenceSource(url=None if not telegram else url, source_type=TELEGRAM_POST if telegram else STORED_BODY, text=paragraph)
+                       for paragraph in recap_paragraphs(stored_body))
     article_url = telegram_outbound_link(stored_body or "") if telegram else url
     if article_url and acquisition_enabled:
         try:

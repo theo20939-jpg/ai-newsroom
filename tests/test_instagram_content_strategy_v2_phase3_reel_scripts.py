@@ -54,7 +54,7 @@ _SP = ShadowPlanResult(
 def _prompt_repository() -> FakePromptRepository:
     repository = FakePromptRepository()
     repository.register(RenderedPrompt(
-        name=REEL_PROMPT_NAME, version="7", system="you are the creative director", rules=["never invent facts"],
+        name=REEL_PROMPT_NAME, version="8", system="you are the creative director", rules=["never invent facts"],
         output_schema={"type": "object", "properties": {}, "required": []},
     ))
     return repository

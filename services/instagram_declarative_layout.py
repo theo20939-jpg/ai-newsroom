@@ -603,7 +603,7 @@ def _render_declared_once(
             elif mode == "contain":
                 bg = canvas.getpixel((min(W - 1, max(0, x0 + 2)), min(H - 1, max(0, y0 + 2))))[:3]
                 tile = fit_image_contain(image, width=iw, height=ih, bg=bg).image
-            elif FOCAL_FRAMING.get() and mode == "cover" and region.w * region.h >= 0.9 and (HERO_ZONE.get() or region.tone == "muted"):
+            elif mode == "cover" and region.w * region.h >= 0.9 and ((FOCAL_FRAMING.get() and HERO_ZONE.get()) or region.tone == "muted"):
                 # weekly recap: a full-canvas photo - the hero canvas with a gradient at its copy end, or (tone 'muted') a weak photo
                 # as a softened, darkened layer under typography
                 from services.instagram_focal_crop import frame_ambient, frame_hero

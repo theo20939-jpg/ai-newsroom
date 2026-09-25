@@ -26,11 +26,14 @@ from services.instagram_platform_renderer import render_instagram_carousel  # no
 def main() -> None:
     run, out = Path(sys.argv[1]), Path(sys.argv[2])
     overrides = {}
+    source_path = None
     args = sys.argv[3:]
     for flag, value in zip(args[::2], args[1::2]):
         if flag == "--preview-body":
             index, text = value.split("=", 1)
             overrides[int(index)] = text
+        elif flag == "--source":  # a daily post's single source image (daily runs do not save story_media)
+            source_path = Path(value)
     out.mkdir(parents=True, exist_ok=True)
     data = json.loads((run / "package.json").read_text(encoding="utf-8"))
     fields = {f.name for f in dataclasses.fields(InstagramContentPackage)}
@@ -48,6 +51,10 @@ def main() -> None:
     pkg = InstagramContentPackage(**data)
     vision = {v["subject_key"]: v for v in json.loads((run / "vision_verdicts.json").read_text(encoding="utf-8"))}
     subject_assets = {}
+    if source_path is not None:
+        image = Image.open(BytesIO(source_path.read_bytes()))
+        image.load()
+        subject_assets["source"] = (image, derive_image_identity(image))
     for path in sorted((run / "story_media").glob("*.img")):
         image = Image.open(BytesIO(path.read_bytes()))
         image.load()

@@ -299,6 +299,8 @@ def render_instagram_carousel(
                 # Phase B.5: declarative layout + the resolver's subject->asset map (never a shared hero).
                 layout_plan=slide.get("layout"),
                 recap=package.media_plan.get("content_archetype") == "news_recap",
+                editorial_fallback=bool(package.media_plan.get("media_first")),
+                ui_paths=package.media_plan.get("content_archetype") == "ai_hack",
                 subject_assets=(
                     {k: v for k, v in this_slide_assets.items() if k != "source"}
                     if this_slide_assets and slide.get("media_function") in ("ui_screenshot", "result", "before_after", "concept")

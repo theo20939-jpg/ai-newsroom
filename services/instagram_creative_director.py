@@ -101,19 +101,19 @@ EDITORIAL_DECISION_PROMPT_NAME = "instagram_editorial_decision"
 # Each version bump is its own independently-versioned, schema-shape-only fix; every previous
 # version file is left untouched/unused, matching this codebase's own established "never edit a
 # shipped prompt version in place" convention.
-_SINGLE_PROMPT_VERSION = "6"
+_SINGLE_PROMPT_VERSION = "7"  # v7: KAGE identity
 _CREATIVE_DIRECTOR_MAX_TOKENS = 16_000  # upper safety bound (not a target): keeps the gateway worst-case estimate from pricing a model-maximum completion
-_CAROUSEL_PROMPT_VERSION = "10.9"  # judgment reset: editor-first system text, scoped product rule, editorial_decision first, 22 rules removed; 10.8 = compared angles + critic; 10.7 = content pass: headline + slide_body, editorial_angle, information density; Phase B.5.1.2: v9.1 = v9 + evidence-reference contract (E1..En handles); v9 = Visual DNA v2 families, bounded roles, meta-language guard
+_CAROUSEL_PROMPT_VERSION = "10.11"  # 10.11 = 10.9 + KAGE palette identity; 10.9 = judgment reset: editor-first system text, scoped product rule, editorial_decision first, 22 rules removed; 10.8 = compared angles + critic; 10.7 = content pass: headline + slide_body, editorial_angle, information density; Phase B.5.1.2: v9.1 = v9 + evidence-reference contract (E1..En handles); v9 = Visual DNA v2 families, bounded roles, meta-language guard
 CAROUSEL_PROMPT_VERSION = _CAROUSEL_PROMPT_VERSION
 # weekly recap product pass: a news_recap carousel is planned with 10.10 (v10.9 + the visual-first weekly-roundup direction); every
 # other archetype keeps 10.9 byte-identical
-_RECAP_CAROUSEL_PROMPT_VERSION = "10.10"
+_RECAP_CAROUSEL_PROMPT_VERSION = "10.12"  # 10.12 = 10.10 + KAGE palette identity
 RECAP_COVER_MIN_STORIES = 3  # a weekly recap cover shows at least this many different stories when that many have a suitable photo
-_EVIDENCE_HANDLE_CAROUSEL_VERSIONS = frozenset({"9.1", "10", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8", "10.9", "10.10"})  # prompt versions whose input lists evidence as handles (E1, E2, ...)
-MEDIA_FIRST_CAROUSEL_VERSIONS = frozenset({"10", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8", "10.9", "10.10"})  # Phase B.6: prompt versions under the media-first + KAGE-voice contract
-HOOK_MECHANIC_CAROUSEL_VERSIONS = frozenset({"10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8", "10.9", "10.10"})  # Phase B.6.2: prompt versions whose schema carries hook_mechanic
-BODY_COPY_CAROUSEL_VERSIONS = frozenset({"10.7", "10.8", "10.9", "10.10"})  # content pass: headline + explanatory slide_body, editorial_angle, information-density contract
-EDITORIAL_CRITIC_CAROUSEL_VERSIONS = frozenset({"10.8", "10.9", "10.10"})  # editorial judgment reset: angle_candidates + deterministic editorial critic
+_EVIDENCE_HANDLE_CAROUSEL_VERSIONS = frozenset({"9.1", "10", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8", "10.9", "10.10", "10.11", "10.12"})  # prompt versions whose input lists evidence as handles (E1, E2, ...)
+MEDIA_FIRST_CAROUSEL_VERSIONS = frozenset({"10", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8", "10.9", "10.10", "10.11", "10.12"})  # Phase B.6: prompt versions under the media-first + KAGE-voice contract
+HOOK_MECHANIC_CAROUSEL_VERSIONS = frozenset({"10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8", "10.9", "10.10", "10.11", "10.12"})  # Phase B.6.2: prompt versions whose schema carries hook_mechanic
+BODY_COPY_CAROUSEL_VERSIONS = frozenset({"10.7", "10.8", "10.9", "10.10", "10.11", "10.12"})  # content pass: headline + explanatory slide_body, editorial_angle, information-density contract
+EDITORIAL_CRITIC_CAROUSEL_VERSIONS = frozenset({"10.8", "10.9", "10.10", "10.11", "10.12"})  # editorial judgment reset: angle_candidates + deterministic editorial critic
 _MEDIA_FIRST_CAROUSEL_VERSIONS = MEDIA_FIRST_CAROUSEL_VERSIONS
 _EVIDENCE_HANDLE_RE = re.compile(r"^E([1-9]\d*)$")
 
@@ -167,11 +167,11 @@ def resolve_evidence_references(claimed: list[str], allowed_evidence: list[str])
             f"Creative Director cited evidence that is neither a supplied handle nor an exact supplied evidence string (possible invented fact): {ungrounded!r}"
         )
     return resolved
-_REEL_PROMPT_VERSION = "7"
+_REEL_PROMPT_VERSION = "8"  # v8: KAGE identity
 _EDITORIAL_DECISION_PROMPT_VERSION = "1"
 # KAGE downstream format contract: a post whose product format the frozen feed planner already fixed (AI_HACK / TREND / WEEKLY_RECAP)
 # is decided with v2 - the angle INSIDE the planned product, plus the recap coverage plan. Every other caller keeps v1 unchanged.
-_EDITORIAL_DECISION_PLANNED_PROMPT_VERSION = "2"
+_EDITORIAL_DECISION_PLANNED_PROMPT_VERSION = "3"  # v3: KAGE identity + evidence cited by handle
 WEEKLY_RECAP = "WEEKLY_RECAP"
 # Phase A output bound (2026-09-25): it used to send none, so the gateway priced the model's full 128k output (~$0.77 a call). Sized from
 # the schema, not from a budget: 15 strings capped at 3,800 characters in total + `evidence_used` quoting a whole evidence package (the
@@ -495,7 +495,7 @@ def _recap_coverage_text(director_input: CreativeDirectorInput) -> str:
             + ", ".join(director_input.recap_required_subjects) + ("\n" + "\n".join(lines) if lines else ""))
 
 
-def _grouped_evidence(items: list[str], story_keys: dict) -> str:
+def _grouped_evidence(items: list[str], story_keys: dict, labels: dict | None = None) -> str:
     """Evidence bullets grouped under their recap story key: the key is a header, the bullet is the exact quotable source text."""
     lines: list[str] = []
     current = None
@@ -504,13 +504,22 @@ def _grouped_evidence(items: list[str], story_keys: dict) -> str:
         if key != current:
             lines.append(f"{key}:" if key else "(post):")
             current = key
-        lines.append(f"- {item}")
+        lines.append(labels[item] if labels else f"- {item}")
     return "\n".join(lines)
 
 
-def _build_decision_user_text(decision_input: InstagramEditorialDecisionInput) -> str:
-    evidence = ((_grouped_evidence(decision_input.allowed_evidence, decision_input.evidence_story_keys)
-                 if decision_input.evidence_story_keys else "\n".join(f"- {item}" for item in decision_input.allowed_evidence)) or "(none)")
+_HANDLE_DECISION_VERSIONS = frozenset({"3"})  # Phase A prompt versions whose evidence is listed and cited by handle (E1, E2, ...)
+
+
+def _build_decision_user_text(decision_input: InstagramEditorialDecisionInput, *, handles: bool = False) -> str:
+    items = decision_input.allowed_evidence
+    if handles:  # "E3: <exact text>" - the model cites the handle; the exact text is resolved deterministically afterwards
+        labelled = {item: f"E{i}: {item}" for i, item in enumerate(items, start=1)}
+        evidence = (_grouped_evidence(items, decision_input.evidence_story_keys, labels=labelled)
+                    if decision_input.evidence_story_keys else "\n".join(labelled[item] for item in items)) or "(none)"
+    else:
+        evidence = ((_grouped_evidence(items, decision_input.evidence_story_keys)
+                     if decision_input.evidence_story_keys else "\n".join(f"- {item}" for item in items)) or "(none)")
     return (
         f"SOURCE TYPE: {decision_input.source_type}\n"
         f"SOURCE SUMMARY: {decision_input.source_summary}\n"
@@ -621,7 +630,9 @@ def assert_russian_final_text(text_fields: list[str], *, locale: str = "ru") -> 
         raise CreativeLanguageError("clearly English final output for locale=ru")
 
 
-_LOWERCASE_LATIN_WORD = re.compile(r"(?<![\w@#./-])[a-z]{3,}(?![\w/.@-])")
+# an ordinary lowercase English word or hyphenated compound ("chairman.", "open-weight"): sentence punctuation may follow it; a domain
+# ("chatgpt.com"), a handle ("@adobe"), a hashtag, a path or the tail of an uppercase compound ("AI-агент", "GPT-5") is not prose
+_LOWERCASE_LATIN_WORD = re.compile(r"(?<![\w@#/.\-])[a-z]{2,}(?:-[a-z]{2,})*(?![\w@/\-]|\.[a-z])")
 
 
 class CopyLanguageLeakError(MediaFirstContractError):
@@ -637,7 +648,8 @@ def english_descriptive_leaks(text: str) -> list[str]:
     """Lowercase English words in otherwise Russian audience copy ('deceptive behavior', 'harmful activity'). Proper names and
     products are capitalised or camel-cased (OpenAI, Anthropic, ChatGPT, iPhone, GTA VI) and quoted UI / code / URLs are stripped
     first, so only ordinary descriptive English remains."""
-    return _LOWERCASE_LATIN_WORD.findall(strip_technical_literals(str(text or "")))
+    return [word for word in _LOWERCASE_LATIN_WORD.findall(strip_technical_literals(str(text or "")))
+            if len(word) >= 3 or "-" in word]
 
 
 def assert_copy_is_russian_prose(fields: dict[str, str], *, locale: str = "ru") -> None:
@@ -689,7 +701,8 @@ async def generate_editorial_decision(
                 role="system",
                 content=[ContentPart(type="text", text=prompt.system + "\n\nRULES:\n" + "\n".join(f"- {r}" for r in prompt.rules))],
             ),
-            Message(role="user", content=[ContentPart(type="text", text=_build_decision_user_text(decision_input))]),
+            Message(role="user", content=[ContentPart(type="text", text=_build_decision_user_text(
+                decision_input, handles=version in _HANDLE_DECISION_VERSIONS))]),
         ],
         response_mode="json_schema",
         response_schema=prompt.output_schema,
@@ -717,6 +730,11 @@ async def generate_editorial_decision(
             context={"planned_format": decision_input.planned_format} if decision_input.planned_format else None)
     except ValidationError as exc:
         raise EditorialDecisionContractError(f"Phase A output does not satisfy the decision schema: {exc.errors()[:3]}") from exc
+    if version in _HANDLE_DECISION_VERSIONS:
+        # a cited handle IS the exact source text; anything the model typed itself still has to pass the unchanged strict check below
+        handles = evidence_handle_map(decision_input.allowed_evidence)
+        decision = decision.model_copy(update={"evidence_used": [
+            handles.get(_without_prompt_bullet(str(claim)).strip(), claim) for claim in decision.evidence_used]})
     assert_evidence_grounded(decision.evidence_used, decision_input.allowed_evidence)
     if decision_input.planned_format == WEEKLY_RECAP:
         assert_recap_coverage(decision, [str(s["story_key"]) for s in decision_input.recap_stories])

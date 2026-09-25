@@ -790,17 +790,16 @@ def render_carousel_slide(
     media_subject: str | None = None, must_match_story: bool = False,
     media_asset_identity: str | None = None,
     layout_plan: dict | None = None, subject_assets: dict | None = None, slide_body: str | None = None,
-    recap: bool = False,
+    recap: bool = False, editorial_fallback: bool = False, ui_paths: bool = False,
 ) -> LayoutResult:
     body_placement = None
     recap_frame = None
     if recap:
-        from services.instagram_recap_frames import editorial_story_layout, hero_story_layout, recap_frame_layout, single_photo_story_layout
+        from services.instagram_recap_frames import hero_story_layout, recap_frame_layout, single_photo_story_layout
 
         aspects = {key: image.width / max(1, image.height) for key, (image, _identity) in (subject_assets or {}).items()}
-        recap_frame = recap_frame_layout(layout_plan, role=role.strip().lower(), aspects=aspects, slide_text=slide_copy) or editorial_story_layout(
-            layout_plan, role=role.strip().lower(), slide_text=f"{slide_copy} {slide_body or ''}", aspects=aspects)
-        if recap_frame is None:  # a strong photo leads its story slide
+        recap_frame = recap_frame_layout(layout_plan, role=role.strip().lower(), aspects=aspects, slide_text=slide_copy)
+        if recap_frame is None and recap:  # a strong photo leads its story slide
             from services.instagram_declarative_layout import HERO_ZONE
 
             recap_frame = hero_story_layout(layout_plan, role=role.strip().lower(), index=index, aspects=aspects, zone=HERO_ZONE.get())
@@ -821,6 +820,21 @@ def render_carousel_slide(
                     break
         if recap_frame is not None:
             layout_plan = recap_frame
+    editorial_variant = None
+    if (recap or editorial_fallback) and recap_frame is None and layout_plan:
+        # a slide whose only visual is a weak fact diagram (topic labels in cells) becomes a designed editorial beat - with the story's
+        # own photo as a quiet layer when one exists (suitable or not), else typography as the composition (services.instagram_recap_frames)
+        from services.instagram_recap_frames import editorial_fallback_layout
+
+        photo = next((r.get("content_ref") for r in layout_plan.get("regions") or [] if r.get("kind") == "media" and r.get("content_ref")
+                      and r.get("content_ref") in (subject_assets or {})), None)
+        photo = photo or (media_subject if media_subject in (subject_assets or {}) else None) or (
+            "source" if "source" in (subject_assets or {}) and not recap else None)
+        fallback = editorial_fallback_layout(layout_plan, role=role.strip().lower(), slide_text=f"{slide_copy} {slide_body or ''}",
+                                             headline=slide_copy, photo=photo, ui_paths=ui_paths)
+        if fallback is not None:
+            layout_plan, editorial_variant = fallback
+            recap_frame = layout_plan
     original_plan, headline_only = layout_plan, slide_copy
     if slide_body and slide_body.strip():
         # content pass v10.7: the headline and its explanatory body travel as one string through every render path (copy_parts splits
@@ -886,6 +900,10 @@ def render_carousel_slide(
         result.notes.update(render_plan or {})
         result.notes["body_placement"] = body_placement
         result.notes["recap_frame"] = recap_frame is not None
+        result.notes["editorial_variant"] = editorial_variant
+        if editorial_variant in ("statement", "step_numeral"):
+            # a designed typographic beat counts as the slide's visual only when its display type actually rendered at display size
+            result.notes["designed_typographic"] = _headline_px(result) >= 0.06 * spec.width
         media_regions = result.notes.get("media_regions") or []
         identity = media_asset_identity or (media_regions[0]["identity"] if media_regions else None)
         result.notes.update({
