@@ -1016,6 +1016,13 @@ async def evaluate_and_submit_instagram_opportunity(
         )
         creative = carousel
         creative_outcome = replace(creative_outcome, carousel=carousel)
+    if carousel is not None and recap_bundle is not None:
+        # the weekly recap ends on the subscription end card (brand copy, the same every week) instead of a Director-written closer
+        from services.instagram_recap_frames import with_recap_cta
+
+        carousel = with_recap_cta(carousel)
+        creative = carousel
+        creative_outcome = replace(creative_outcome, carousel=carousel)
     try:
         creative_media = await execute_instagram_creative_media(
             slide_assets=slide_assets,

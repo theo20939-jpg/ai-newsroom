@@ -20,6 +20,7 @@ from PIL import Image, ImageDraw
 import services.instagram_creative_director as cd
 import services.instagram_recap_bundle as bundle_module
 from integrations.prompts.file_repository import FilePromptRepository
+from tests.test_instagram_downstream_blockers import _carousel, _flow, _poll
 
 PROMPTS = FilePromptRepository(Path(__file__).resolve().parent.parent / "prompts")
 
@@ -328,3 +329,51 @@ def test_focal_framing_is_on_for_the_recap_only():
     from services.instagram_declarative_layout import FOCAL_FRAMING
 
     assert FOCAL_FRAMING.get() is False
+
+
+# --- final cropping + closing-slide polish: photo-shaped framing, subscription end card -----------------------------------------------
+
+def test_the_cover_mosaic_gives_each_photo_a_tile_of_its_own_shape():
+    from services.instagram_recap_frames import CANVAS_ASPECT, recap_frame_layout
+
+    aspects = {"story_2": 2.0, "story_5": 1.5, "story_3": 1.5, "story_7": 1.78}
+    framed = recap_frame_layout(_plan(list(aspects)), role="hook", aspects=aspects)
+    for tile in (r for r in framed["regions"] if r["kind"] == "media"):
+        tile_aspect = tile["w"] / tile["h"] * CANVAS_ASPECT
+        assert tile_aspect == pytest.approx(aspects[tile["content_ref"]], rel=0.02)  # nothing cut to fit an identical box
+        assert 0.04 - 1e-6 <= tile["x"] and tile["x"] + tile["w"] <= 0.96 + 1e-6 and tile["y"] + tile["h"] <= 0.875 + 1e-6
+
+
+def test_the_recap_ends_on_the_subscription_end_card():
+    from services.instagram_recap_frames import RECAP_CTA_BODY, RECAP_CTA_HEADLINE, recap_frame_layout, with_recap_cta
+
+    slides = [_carousel([_flow("hook", "Неделя в AI"), _poll("story", "История: A | B"), _flow("takeaway", "Итог")])[0]]
+    closing_slide = slides[0].model_copy(update={"role": "closing", "slide_copy": "Сохрани карту недели"})
+    carousel = SimpleNamespace(slides=[*slides, closing_slide], model_copy=lambda update: SimpleNamespace(slides=update["slides"]))
+    closing = with_recap_cta(carousel).slides[-1]
+    assert (closing.slide_copy, closing.slide_body) == (RECAP_CTA_HEADLINE, RECAP_CTA_BODY)
+    card = recap_frame_layout(_plan(["story_2", "story_5", "story_3"]), role="closing", slide_text=RECAP_CTA_HEADLINE)
+    refs = [r["content_ref"] for r in card["regions"] if r["kind"] == "media"]
+    lead = max((r for r in card["regions"] if r["kind"] == "media"), key=lambda r: r["w"] * r["h"])
+    assert lead["content_ref"] == "story_2" and len(refs) == 3  # the week's lead story is the front print
+    assert {"copy_lead", "copy_rest", "body"} <= {r.get("content_ref") for r in card["regions"] if r["kind"] == "text"}
+
+
+def test_the_end_card_renders_with_its_prints_and_passes_the_layout_validator():
+    from services.instagram_carousel_layouts import render_carousel_slide
+    from services.instagram_platform_renderer import InstagramRenderProfile, profile_spec
+    from services.instagram_recap_frames import RECAP_CTA_BODY, RECAP_CTA_HEADLINE
+
+    assets = {f"story_{i}": (Image.open(io.BytesIO(_photo(i))), f"id{i}") for i in range(1, 4)}
+    result = render_carousel_slide(spec=profile_spec(InstagramRenderProfile.CAROUSEL_SLIDE), role="closing", index=8, total=9,
+                                   slide_copy=RECAP_CTA_HEADLINE, slide_body=RECAP_CTA_BODY, source_evidence=None, package_identity="p",
+                                   media_mode="SOURCE", layout_plan=_plan(["story_1", "story_2", "story_3"]), subject_assets=assets, recap=True)
+    assert result.notes.get("recap_frame") is True and len(result.notes["media_regions"]) == 3
+
+
+def test_a_photo_band_takes_the_photos_shape_within_bounds():
+    from services.instagram_media_scale_adapter import _band_height
+
+    assert _band_height(2.0) == pytest.approx(0.4)   # a 2:1 phone shot: a 40% band holds it uncropped
+    assert _band_height(3.5) == 0.36                  # a panorama never becomes a sliver
+    assert _band_height(1.0) == 0.52                  # a square portrait keeps the proven slot (focal crop keeps the face)

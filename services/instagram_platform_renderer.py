@@ -267,7 +267,12 @@ def render_instagram_carousel(
         this_slide_assets = {**(subject_assets or {}), **((slide_subject_assets or {}).get(index) or {})} or None
         from services.instagram_declarative_layout import FOCAL_FRAMING
 
-        framing = FOCAL_FRAMING.set(package.media_plan.get("content_archetype") == "news_recap")  # recap photos framed on their subject
+        from services.instagram_media_scale_adapter import BAND_MEDIA_ASPECT
+
+        recap = package.media_plan.get("content_archetype") == "news_recap"
+        framing = FOCAL_FRAMING.set(recap)  # recap photos framed on their subject
+        subject = (subject_assets or {}).get(str(slide.get("media_subject") or ""))
+        band = BAND_MEDIA_ASPECT.set(subject[0].width / max(1, subject[0].height) if recap and subject is not None else None)
         try:
             layout = render_carousel_slide(
                 spec=profile_spec(InstagramRenderProfile.CAROUSEL_SLIDE), role=role, index=index, total=total,
@@ -297,6 +302,7 @@ def render_instagram_carousel(
             )
         finally:
             FOCAL_FRAMING.reset(framing)
+            BAND_MEDIA_ASPECT.reset(band)
         results.append(_result_from_layout(layout, package, profile=InstagramRenderProfile.CAROUSEL_SLIDE, slide_index=index, slide_count=total))
     return results
 

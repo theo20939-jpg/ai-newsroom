@@ -9,12 +9,24 @@ The result is re-validated by the unchanged layout validator; a caller keeps the
 Collage/stage arrangements, graphic compositions and on-media (immersive) text are never touched."""
 from __future__ import annotations
 
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 from schemas.instagram_creative import InstagramSlideLayout, LayoutRegion
 from services.instagram_layout_validation import copy_parts
 
 MIN_MEDIA_AREA = 0.50
+# weekly recap (set per slide by the platform renderer): the slide photo's own width / height, so a full-width band can take the photo's
+# shape instead of a fixed slot that crops a wide phone shot or a laptop to fit
+BAND_MEDIA_ASPECT: ContextVar[float | None] = ContextVar("BAND_MEDIA_ASPECT", default=None)
+_BAND_MIN, _BAND_MAX = 0.36, 0.52  # never taller than the default slot: a square portrait keeps its proven focal band
+
+
+def _band_height(aspect: float) -> float:
+    """Canvas-height share of a full-width band holding a photo of this aspect uncropped, kept between _BAND_MIN and _BAND_MAX."""
+    return min(_BAND_MAX, max(_BAND_MIN, (1080 / 1350) / max(0.2, aspect)))
+
+
 SHORT_COPY_CHARS = 34
 SIDE_PANEL_MAX_BODY_CHARS = 70
 ORIENTATIONS = ("side_right", "side_left", "text_top", "text_bottom", "mixed_bands")
@@ -151,10 +163,17 @@ def adapt_media_scale(layout: InstagramSlideLayout, *, slide_copy: str, force: b
         mbox = (0.0, 0.52, 1.0, 0.48) if body else (0.0, 0.45, 1.0, 0.55)
         band = (0.07, 0.14, 0.86, 0.35) if body else (0.07, 0.15, 0.86, 0.27)
         rule_at = (0.07, 0.105 if body else 0.115)
+        if BAND_MEDIA_ASPECT.get():  # weekly recap: the photo band takes the photo's own shape - the slide is composed around it
+            mh = _band_height(BAND_MEDIA_ASPECT.get())
+            mbox, band = (0.0, 1.0 - mh, 1.0, mh), (0.07, 0.12, 0.86, 1.0 - mh - 0.16)
     else:
         mbox = (0.0, 0.0, 1.0, 0.50) if body else (0.0, 0.0, 1.0, 0.56)
         band = (0.07, 0.565, 0.75 if logo_right else 0.86, 0.365) if body else (0.07, 0.63, 0.75 if logo_right else 0.86, 0.29)
         rule_at = (0.07, 0.53 if body else 0.595)
+        if BAND_MEDIA_ASPECT.get():
+            mh = _band_height(BAND_MEDIA_ASPECT.get())
+            mbox, band = (0.0, 0.0, 1.0, mh), (0.07, mh + 0.05, 0.75 if logo_right else 0.86, 0.93 - mh - 0.05)
+            rule_at = (0.07, mh + 0.03)
 
     regions: list[LayoutRegion] = [r for r in layout.regions if r.kind == "surface" and r.w >= 0.99 and r.h >= 0.99 and r.surface != "media_ground"]
     new_media = media.model_copy(update={

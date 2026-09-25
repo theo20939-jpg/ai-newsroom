@@ -4,7 +4,7 @@ The Creative Director chooses WHICH stories frame the week (the media regions' s
 multi-image collage is geometry it cannot place reliably (real recap v2: fragments over the headline and the logo, tiny closer crops, and a
 cover that collapsed to one story's photo). For a news_recap cover (role `hook`) or closer (role `closing`) that shows three or more
 different stories, the geometry is fixed here: headline and body on top, the stories as a clean photo grid (the cover's under the headline, the
-closer's under the save line).
+closer's a subscription end card over a small stack of the week's prints).
 Only x / y / w / h, frame and tilt of the media and the text boxes change - never a story key, the copy, the background or the palette."""
 from __future__ import annotations
 
@@ -48,23 +48,68 @@ def _grid(refs: list[str], x0: float, y0: float, x1: float, y1: float) -> list[d
     return [_tile(ref, x0 + (i % 2) * (tw + _GAP), y0 + (i // 2) * (th + _GAP), tw, th, 1) for i, ref in enumerate(refs)]
 
 
-def recap_frame_layout(layout: dict[str, Any] | None, *, role: str) -> dict[str, Any] | None:
-    """The framed layout for a recap cover / closer that shows >= MIN_FRAME_STORIES different stories, else None (the plan is kept)."""
+CANVAS_ASPECT = 1080 / 1350  # canvas width / height: a width fraction times this is the same length as a height fraction
+
+
+def _justified(refs: list[str], aspects: dict[str, float], x0: float, y0: float, x1: float, y1: float) -> list[dict[str, Any]]:
+    """An art-directed mosaic: two rows whose tiles take the SHAPE of their own photos (a justified layout), so a wide phone shot stays
+    wide and a squarer portrait stays squarer - each picture is framed as itself instead of being clipped into identical boxes. A row
+    taller than its share of the area is scaled down and centred; the focal crop then trims only what is left over."""
+    rows = [refs[:2], refs[2:4]] if len(refs) >= 4 else [refs[:1], refs[1:3]]
+    avail_h = y1 - y0 - _GAP
+    heights = []
+    for row in rows:
+        widths = sum(min(2.2, max(0.9, aspects.get(ref, 1.6))) for ref in row)
+        heights.append(((x1 - x0 - _GAP * (len(row) - 1)) / widths) * CANVAS_ASPECT)  # the row height its photos' shapes ask for
+    scale = min(1.0, avail_h / sum(heights))
+    tiles, y = [], y0 + (avail_h - sum(h * scale for h in heights)) / 2
+    for row, h in zip(rows, heights):
+        h *= scale
+        widths = [min(2.2, max(0.9, aspects.get(ref, 1.6))) * h / CANVAS_ASPECT for ref in row]
+        x = x0 + ((x1 - x0) - sum(widths) - _GAP * (len(row) - 1)) / 2
+        for ref, w in zip(row, widths):
+            tiles.append(_tile(ref, x, y, w, h, 1))
+            x += w + _GAP
+        y += h + _GAP
+    return tiles
+
+
+# The weekly recap ends on a subscription end card (founder direction): brand copy, not a story fact - the same on every recap.
+RECAP_CTA_HEADLINE = "Не пропускай главное — подписывайся на KAGE"
+RECAP_CTA_BODY = "Каждую неделю — самое важное про AI, гаджеты и технологии. Коротко и без шума."
+
+
+def _cta_stack(refs: list[str]) -> list[dict[str, Any]]:
+    """The week's pictures as a small fanned stack of prints - 'every week, stories like these' - under the call to subscribe."""
+    # one lead print in front (the collage's clear primary) and two smaller ones fanned out behind it
+    # the week's lead story is the front print; the next two fan out behind it, far enough to stay recognisable
+    spots = ((0.24, 0.63, 0.52, 0.28, -1.5, 3), (0.05, 0.555, 0.36, 0.22, -7.0, 1), (0.59, 0.545, 0.36, 0.22, 6.0, 2))
+    return [{**_tile(ref, x, y, w, h, z), "frame": "paper", "tilt_deg": tilt} for ref, (x, y, w, h, tilt, z) in zip(refs[:3], spots)]
+
+
+def recap_frame_layout(layout: dict[str, Any] | None, *, role: str, aspects: dict[str, float] | None = None,
+                       slide_text: str = "") -> dict[str, Any] | None:
+    """The framed layout for a recap cover (a justified mosaic of the week's stories under the copy) or closer (the subscription end
+    card over a small stack of the week's prints), when the plan shows >= MIN_FRAME_STORIES different stories; else None (plan kept)."""
     if not layout or role not in ("hook", "closing"):
         return None
     refs = _story_refs(layout)
     if len(refs) < MIN_FRAME_STORIES:
         return None
+    aspects = aspects or {}
     regions = [r for r in layout.get("regions") or [] if r.get("kind") == "surface"]
     if role == "hook":
         regions += [_text("copy", 0.06, 0.2, "HEADLINE_XL", 3, "primary"), _text("body", 0.27, 0.13, "BODY", 3, "muted")]
-        regions += _grid(refs, 0.04, 0.445, 0.96, 0.875)  # breathing room under the copy, clear of the brand mark
-    else:
+        regions += _justified(refs, aspects, 0.04, 0.445, 0.96, 0.875) if aspects else _grid(refs, 0.04, 0.445, 0.96, 0.875)
+        return {**layout, "arrangement": "standard", "regions": regions}
+    if not slide_text.strip().startswith(RECAP_CTA_HEADLINE):  # a closer without the end-card copy keeps a plain mosaic under its text
         regions += [_text("copy", 0.07, 0.2, "HEADLINE_XL", 2, "primary"), _text("body", 0.29, 0.16, "BODY", 4, "muted")]
-        # landscape tiles: news photos are wide - a strip of narrow portrait slots cut every picture down to an unrecognisable sliver
-        regions += _grid(refs, 0.07, 0.48, 0.93, 0.87)
-    return {**layout, "arrangement": "standard", "regions": regions}
-
+        regions += _justified(refs, aspects, 0.07, 0.48, 0.93, 0.87) if aspects else _grid(refs, 0.07, 0.48, 0.93, 0.87)
+        return {**layout, "arrangement": "standard", "regions": regions}
+    regions += [_text("copy_lead", 0.08, 0.2, "HEADLINE_XL", 2, "primary"), _text("copy_rest", 0.29, 0.07, "HEADLINE_M", 1, "accent"),
+                _text("body", 0.38, 0.12, "BODY", 3, "muted")]
+    regions += _cta_stack(refs)
+    return {**layout, "arrangement": "collage", "media_dominance": "SUPPORTING", "regions": regions}
 
 def single_photo_story_layout(layout: dict[str, Any] | None, *, role: str) -> dict[str, Any] | None:
     """A recap STORY slide shows its photo once: several crops of the same image read as a cheap duplicate in a roundup (real recap v2:
@@ -115,7 +160,8 @@ def meaningful_fact_graphic(labels: list[str], slide_text: str) -> bool:
     return sum(1 for label in labels if _DIGIT.search(label)) * 2 > len(labels)
 
 
-def editorial_story_layout(layout: dict[str, Any] | None, *, role: str, slide_text: str) -> dict[str, Any] | None:
+def editorial_story_layout(layout: dict[str, Any] | None, *, role: str, slide_text: str,
+                           aspects: dict[str, float] | None = None) -> dict[str, Any] | None:
     """A recap story slide whose only graphic is a set of weak fact cells becomes an EDITORIAL slide instead: a large headline, its line
     of context and - when the plan carries one - the story's own photo as a modest supporting picture (never a forced hero). None when
     the slide has no such graphic or its cells hold real data. Without any photo the planned graphic is kept (a slide needs a visual)."""
@@ -140,5 +186,15 @@ def editorial_story_layout(layout: dict[str, Any] | None, *, role: str, slide_te
         *surface,
         _text("copy", 0.09, 0.2, "HEADLINE_XL", 3, "primary"),
         _text("body", 0.3, 0.13, "BODY", 4, "muted"),
-        {**_tile(photo, photo_x, 0.5, 0.58, 0.33, 1), "frame": "paper"},
+        # the supporting photo keeps its own shape (a 16:9 stage shot is not squeezed into a squarer slot)
+        {**_tile(photo, photo_x, 0.5, 0.58, min(0.36, max(0.2, 0.58 * CANVAS_ASPECT / (aspects or {}).get(photo, 1.6))), 1), "frame": "paper"},
     ]}
+
+
+def with_recap_cta(carousel: Any) -> Any:
+    """The recap's closing slide carries the subscription end-card copy (brand copy - no story fact, so nothing to ground)."""
+    slides = list(carousel.slides)
+    if not slides or slides[-1].role != "closing":
+        return carousel
+    slides[-1] = slides[-1].model_copy(update={"slide_copy": RECAP_CTA_HEADLINE, "slide_body": RECAP_CTA_BODY})
+    return carousel.model_copy(update={"slides": slides})

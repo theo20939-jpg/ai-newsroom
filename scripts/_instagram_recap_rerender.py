@@ -28,6 +28,12 @@ def main() -> None:
     fields = {f.name for f in dataclasses.fields(InstagramContentPackage)}
     data = {k: v for k, v in data.items() if k in fields}
     data["content_format"] = ContentFormat(data["content_format"])
+    slides = data["media_plan"].get("slides") or []
+    if data["media_plan"].get("content_archetype") == "news_recap" and slides and slides[-1].get("role") == "closing":
+        # what the pipeline now does before packaging (services.instagram_recap_frames.with_recap_cta): the subscription end card
+        from services.instagram_recap_frames import RECAP_CTA_BODY, RECAP_CTA_HEADLINE
+
+        slides[-1] = {**slides[-1], "text": RECAP_CTA_HEADLINE, "body": RECAP_CTA_BODY}
     pkg = InstagramContentPackage(**data)
     vision = {v["subject_key"]: v for v in json.loads((run / "vision_verdicts.json").read_text(encoding="utf-8"))}
     subject_assets = {}
