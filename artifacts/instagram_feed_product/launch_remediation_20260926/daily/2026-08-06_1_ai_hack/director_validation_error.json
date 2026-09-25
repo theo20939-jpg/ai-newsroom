@@ -1,0 +1,4 @@
+{
+ "error_type": "CopyLanguageLeakError",
+ "error": "audience copy is Russian: ordinary English words were left in {'slide_3_copy': ['account'], 'slide_0_body': ['plugin'], 'slide_1_body': ['plugin'], 'slide_2_body': ['plugins'], 'slide_3_body': ['capabilities', 'files', 'generative'], 'slide_4_body': ['assets', 'campaign', 'marketing', 'photos', 'plugin', 'polished', 'social', 'video'], 'slide_5_body': ['campaign', 'photos'], 'slide_6_body': ['limits', 'usage'], 'final_caption': ['account', 'capabilities', 'files', 'generative', 'plugin']} - say them in natural Russian with the same meaning; keep company, product, model and game names as they are, and put genuine UI labels, menu items and config keys in «quotes»"
+}

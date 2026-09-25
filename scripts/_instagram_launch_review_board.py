@@ -25,6 +25,9 @@ def _load(path: Path):
 
 def main() -> None:
     root = Path(sys.argv[1])
+    global SECTIONS
+    if len(sys.argv) > 2:  # a run with its own layout: [[name, relative dir, story], ...]
+        SECTIONS = tuple(tuple(x) for x in json.loads(Path(sys.argv[2]).read_text(encoding="utf-8")))
     blocks, sheet_rows = [], []
     for name, rel, story in SECTIONS:
         d = root / rel
@@ -57,7 +60,7 @@ def main() -> None:
             "th{text-align:left;padding:4px 12px 4px 0;vertical-align:top;white-space:nowrap}td{padding:4px 0}.slides{display:flex;flex-wrap:wrap;gap:10px}"
             ".slides img{width:216px;border:1px solid #ccc}pre{white-space:pre-wrap;background:#f3f3f3;padding:10px;border-radius:6px}"
             ".none{color:#a00;font-weight:600}@media (prefers-color-scheme:dark){body{background:#111;color:#eee}section{background:#1b1b1b;border-color:#333}"
-            "pre{background:#222}}</style></head><body><h1>KAGE Instagram — final launch E2E canary</h1>"
+            "pre{background:#222}}</style></head><body><h1>KAGE Instagram — launch canary</h1>"
             "<p>Real stories, live providers, image generation off. Slides are the actual rendered files (click for full resolution). "
             "Art gate PASS is not product acceptance.</p>" + "".join(blocks) + "</body></html>")
     (root / "review.html").write_text(page, encoding="utf-8")

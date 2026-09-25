@@ -1,0 +1,11 @@
+instagram_editorial_decision_failed
+2026-08-05_2_meme_trend                  STRONG     PHASE A        editorial_decision_failed:UngroundedTrendClaimError          slides=0 spent=$0.0066
+{
+ "actual_cost_usd": "0.006574",
+ "diagnostic_ledger_usd": "0.006574",
+ "provider_calls": 1,
+ "calls_by_kind": {
+  "PHASE_A": 1
+ }
+}
+exit 0

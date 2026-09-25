@@ -1,0 +1,38 @@
+{
+ "planned_format": "AI_HACK",
+ "prompt_version": "3",
+ "structured_output": {
+  "source_summary": "Adobe запустила plugin в ChatGPT: более 70 инструментов Adobe доступны внутри одного диалога — от обработки фото и создания видео до дизайна и работы с документами.",
+  "opportunity_type": "NEWS",
+  "why_now": "Это практичный апдейт на стыке AI и креативной работы: пользователь может перейти от идеи к созданию контента, не покидая ChatGPT. Формат AI_HACK позволяет превратить новость в сохраняемую инструкцию, а не в пересказ анонса.",
+  "audience_value": "Аудитория получает конкретный сценарий запуска Adobe plugin и примеры задач, которые можно решать через диалог: креативы, видео, дизайн, PDF и работа с данными.",
+  "angle": "Как начать пользоваться Adobe plugin в ChatGPT и какие задачи можно делегировать ему в одном чате.",
+  "angle_intent": "HOW_TO",
+  "topic": "Adobe plugin в ChatGPT: быстрый старт и сценарии для создания контента",
+  "purpose": "VALUE",
+  "origin": "NEWS",
+  "recommended_format": "carousel",
+  "format_reason": "Нужно последовательно показать запуск plugin, команды и несколько сценариев использования. Карусель лучше одиночного поста передаёт пошаговую инструкцию и подходит для сохранений.",
+  "creative_direction": "Карусель в формате «от идеи до готового результата»: 1) хук про 70+ инструментов Adobe внутри ChatGPT; 2) откройте ChatGPT и перейдите в Plugins; 3) добавьте Adobe plugin; 4) начните новый чат и введите “@Adobe” или выберите Adobe через “+”; 5) войдите в Adobe account для доступа к generative capabilities и Creative Cloud files; 6) примеры задач — campaign photos, social video, design, spreadsheet",
+  "product_connection": null,
+  "trend_rationale": null,
+  "supplementary_story_idea": "Короткая Story-демонстрация с экранным маршрутом: Plugins → Adobe → “@Adobe” / “+”.",
+  "evidence_used": [
+   "E1",
+   "E2",
+   "E3",
+   "E4",
+   "E5",
+   "E6",
+   "E7",
+   "E8",
+   "E9",
+   "E10",
+   "E11",
+   "E13",
+   "E16",
+   "E19"
+  ],
+  "coverage_plan": null
+ }
+}

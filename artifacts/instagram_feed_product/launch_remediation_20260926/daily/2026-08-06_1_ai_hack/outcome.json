@@ -1,0 +1,71 @@
+{
+ "key": "2026-08-06_1_ai_hack",
+ "day": "2026-08-06",
+ "slot": 1,
+ "format": "ai_hack",
+ "title": "You can use 70+ Adobe tools without leaving ChatGPT now - here's how",
+ "source": "ZDNET",
+ "evidence": "STRONG",
+ "evidence_why": "10 verbatim steps incl. a concrete location / command",
+ "source_media": "AVAILABLE",
+ "reason": "submitted",
+ "stage": "OK",
+ "gate": "ready_for_editor",
+ "delivery": "recorded_ready_for_editor_no_telegram",
+ "calls": [
+  {
+   "post": "2026-08-06_1_ai_hack",
+   "kind": "PHASE_A",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 8000,
+   "worst_case_usd": "0.05086900",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 2773,
+   "output_tokens": 758,
+   "reasoning_tokens": 278,
+   "cost_usd": "0.007321"
+  },
+  {
+   "post": "2026-08-06_1_ai_hack",
+   "kind": "VISION",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 400,
+   "worst_case_usd": "0.00281800",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 985,
+   "output_tokens": 189,
+   "reasoning_tokens": 132,
+   "cost_usd": "0.002119"
+  },
+  {
+   "post": "2026-08-06_1_ai_hack",
+   "kind": "DIRECTOR",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 16000,
+   "worst_case_usd": "0.10872900",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 12609,
+   "output_tokens": 7415,
+   "reasoning_tokens": 1399,
+   "cost_usd": "0.057099"
+  },
+  {
+   "post": "2026-08-06_1_ai_hack",
+   "kind": "DIRECTOR",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 16000,
+   "worst_case_usd": "0.10892300",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 12812,
+   "output_tokens": 6838,
+   "reasoning_tokens": 985,
+   "cost_usd": "0.05384"
+  }
+ ],
+ "slides": 7,
+ "spent_so_far": "0.170922"
+}
