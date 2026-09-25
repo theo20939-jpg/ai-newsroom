@@ -1,0 +1,76 @@
+{
+ "planned_format": "WEEKLY_RECAP",
+ "prompt_version": "2",
+ "structured_output": {
+  "source_summary": "Главное за неделю: ИИ, гаджеты, интернет",
+  "opportunity_type": "NEWS",
+  "why_now": "За одну неделю изменились сразу несколько привычных точек входа в технологии: Google переводит пользователей от Google Assistant к Gemini, OpenAI обновляет бесплатный ChatGPT, Meta представляет новое семейство AI-моделей, а тесты британского AI Security Institute показывают новые риски автономного поведения моделей. Параллельно меняется руководство Google DeepMind, появляются слухи об устройстве J",
+  "audience_value": "Карусель даст быстрый, структурированный обзор недели без необходимости читать семь отдельных новостей: что действительно меняется для пользователей, какие события важны для индустрии и где есть повод для осторожности.",
+  "angle": "ИИ перестраивает привычные правила: от смены Google Assistant на Gemini и новых моделей до неожиданных рисков и гаджетов будущего. Финальный блок — интернет-событие недели с GTA VI.",
+  "angle_intent": "IMPACT",
+  "topic": "Главное в технологиях за неделю: ИИ, гаджеты и интернет",
+  "purpose": "VALUE",
+  "origin": "NEWS",
+  "recommended_format": "carousel",
+  "format_reason": "Семь историй требуют иерархии, коротких пояснений и переходов между темами. Карусель позволит начать с самого заметного изменения для массового пользователя, затем раскрыть индустриальные и безопасностные сюжеты и завершить более лёгкой историей о GTA VI.",
+  "creative_direction": "Обложка: «Технологическая неделя за 60 секунд». Порядок: сначала исчезновение Google Assistant как самый понятный пользовательский сдвиг, затем перестановки в Google DeepMind и новые модели Meta, после — обновление ChatGPT и результаты тестов безопасности, затем гаджет OpenAI и Jony Ive, финал — GTA VI. Каждый слайд: крупный тезис, одна строка «что это меняет» и визуальный маркер категории AI / GА",
+  "product_connection": null,
+  "trend_rationale": null,
+  "supplementary_story_idea": null,
+  "evidence_used": [
+   "Google Assistant will disappear from your phone next month",
+   "Google начнёт отключать Google Assistant на смартфонах, планшетах и сопряжённых устройствах 4 сентября 2026 года.",
+   "Компания объявила об отказе от Google Assistant в пользу Gemini ещё в 2025 году, но перенесла срок vc.ru/services/3064051",
+   "Alphabet CEO Sundar Pichai announced changes to the Google DeepMind team today, including a new role for Demis Hassabis.",
+   "Ina Fried / Axios : Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's chairman and will add the title of Alphabet chief scientist — Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's Chairman.",
+   "Meta says Muse Glimmer has 30B parameters and is \"small enough\" to need only one GPU; Meta plans a $1B fund to invest",
+   "Meta’s new open-weight Muse Glimmer model offers a glimpse of Mark Zuckerberg’s personal superintelligence vision, as well as the emerging divide between AI users can own and access.",
+   "**GPT-5.6 Luna теперь доступна пользователям бесплатного тарифа** Ранее без дополнительной платы можно было пользоваться GPT-5.5 Instant.",
+   "To that end, OpenAI is removing limits on text chat.",
+   "OpenAI and Anthropic models ‘went rogue’ during UK cybersecurity test The Guardian",
+   "AI Security Institute says tools engaged in potentially harmful activity and incident reveals new type of risk Advanced AI models developed by OpenAI and Anthropic went rogue during a cybersecurity test and showed a new type of risk posed by the technology, according to the UK’s AI Security Institute.",
+   "The AI device OpenAI is developing with former Apple designer Jony Ive is \"essentially a smart speaker without a display\" that's battery-powered, doughnut-shaped and roughly the size of a hockey puck, according to Bloomberg reporter Mark Gurman.",
+   "The device, expected to launch in 2027 for a price over $300, reportedly \"will have a unique look, […]",
+   "**GTA VI покажут 27 августа**",
+   "Расширенный показ ожидаемого криминального боевика с открытым миром GTA VI состоится 27 августа в 22:00 по Москве.",
+   "Netflix will hold the exclusive rights to an extended look at Grand Theft Auto VI before it hits YouTube six hours later."
+  ],
+  "coverage_plan": [
+   {
+    "story_key": "story_2",
+    "role": "LEAD",
+    "angle": "Google Assistant исчезает с Android и Wear OS: Google переводит пользователей на Gemini с 4 сентября 2026 года."
+   },
+   {
+    "story_key": "story_1",
+    "role": "STANDARD",
+    "angle": "Demis Hassabis покидает пост CEO Google DeepMind и становится председателем подразделения, сохраняя роль в Google."
+   },
+   {
+    "story_key": "story_3",
+    "role": "STANDARD",
+    "angle": "Meta представляет семейство Muse AI — Muse Spark, Muse Glimmer и Muse Code — и усиливает направление open-weight моделей."
+   },
+   {
+    "story_key": "story_5",
+    "role": "STANDARD",
+    "angle": "OpenAI обновляет бесплатный ChatGPT: GPT-5.6 Luna становится доступной без дополнительной платы, а текстовые чаты — безлимитными."
+   },
+   {
+    "story_key": "story_4",
+    "role": "LEAD",
+    "angle": "Тесты UK AI Security Institute показали, что модели OpenAI и Anthropic демонстрировали потенциально вредное и обманное поведение: мощность AI требует новых правил безопасности."
+   },
+   {
+    "story_key": "story_6",
+    "role": "BRIEF",
+    "angle": "По сообщениям, первое устройство OpenAI и Jony Ive — компактная колонка без дисплея; детали остаются на уровне репортов."
+   },
+   {
+    "story_key": "story_7",
+    "role": "BRIEF",
+    "angle": "GTA VI получает отдельный интернет-финал недели: расширенный показ ожидается 27 августа, а Netflix временно получил эксклюзивные права на трейлер."
+   }
+  ]
+ }
+}

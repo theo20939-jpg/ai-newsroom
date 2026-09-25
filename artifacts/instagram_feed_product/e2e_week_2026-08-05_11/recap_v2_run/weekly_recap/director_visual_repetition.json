@@ -1,0 +1,75 @@
+{
+ "slide_count": 9,
+ "primitive_distribution": {
+  "source_media": 8,
+  "flow_diagram": 1
+ },
+ "source_asset_reuse": {
+  "story_2": [
+   0,
+   1,
+   8
+  ],
+  "story_3": [
+   0,
+   3,
+   8
+  ],
+  "story_5": [
+   0,
+   4
+  ],
+  "story_7": [
+   0,
+   7,
+   8
+  ],
+  "story_4": [
+   5,
+   8
+  ],
+  "story_6": [
+   6
+  ]
+ },
+ "asset_reuse_within_slide": [
+  {
+   "slide": 3,
+   "asset": "story_3",
+   "uses": 3
+  },
+  {
+   "slide": 4,
+   "asset": "story_5",
+   "uses": 3
+  },
+  {
+   "slide": 5,
+   "asset": "story_4",
+   "uses": 3
+  },
+  {
+   "slide": 6,
+   "asset": "story_6",
+   "uses": 3
+  },
+  {
+   "slide": 7,
+   "asset": "story_7",
+   "uses": 3
+  }
+ ],
+ "layout_signature_repetition": [],
+ "design_repetition_warning": true,
+ "warnings": [
+  "asset 'story_2' reused on slides [0, 1, 8]",
+  "asset 'story_3' reused on slides [0, 3, 8]",
+  "asset 'story_7' reused on slides [0, 7, 8]",
+  "asset 'story_3' used 3x on slide 3",
+  "asset 'story_5' used 3x on slide 4",
+  "asset 'story_4' used 3x on slide 5",
+  "asset 'story_6' used 3x on slide 6",
+  "asset 'story_7' used 3x on slide 7"
+ ],
+ "degenerate_composition": null
+}

@@ -1,0 +1,58 @@
+[
+ {
+  "subject_key": "story_1",
+  "suitable": false,
+  "image_kind": "photograph",
+  "baked_in_text_prominent": true,
+  "reason": "A photographed person stands on a colorful event stage with large name text displayed on the backdrop.",
+  "error": null
+ },
+ {
+  "subject_key": "story_2",
+  "suitable": true,
+  "image_kind": "photograph",
+  "baked_in_text_prominent": false,
+  "reason": "A close-up photograph shows a hand holding a smartphone with app icons and a voice-assistant screen visible.",
+  "error": null
+ },
+ {
+  "subject_key": "story_3",
+  "suitable": true,
+  "image_kind": "photograph",
+  "baked_in_text_prominent": false,
+  "reason": "A photographed smartphone displays the Meta AI logo and name against a blurred purple-lit background.",
+  "error": null
+ },
+ {
+  "subject_key": "story_4",
+  "suitable": true,
+  "image_kind": "photograph",
+  "baked_in_text_prominent": false,
+  "reason": "A close-up photograph shows a device screen with several AI app icons and their physical interface labels.",
+  "error": null
+ },
+ {
+  "subject_key": "story_5",
+  "suitable": true,
+  "image_kind": "photograph",
+  "baked_in_text_prominent": false,
+  "reason": "A real photograph shows hands using a laptop displaying the ChatGPT interface.",
+  "error": null
+ },
+ {
+  "subject_key": "story_6",
+  "suitable": true,
+  "image_kind": "photograph",
+  "baked_in_text_prominent": false,
+  "reason": "A close-up photograph shows a smiling bald man wearing glasses and a white shirt seated against a dark background.",
+  "error": null
+ },
+ {
+  "subject_key": "story_7",
+  "suitable": true,
+  "image_kind": "illustration_or_artwork",
+  "baked_in_text_prominent": false,
+  "reason": "Stylized digital artwork shows two masked people walking through a palm-lined urban scene beside a car.",
+  "error": null
+ }
+]

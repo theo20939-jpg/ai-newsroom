@@ -1,0 +1,50 @@
+{
+ "record": {
+  "post": "weekly_recap",
+  "kind": "VISION",
+  "model": "gpt-5.6-luna",
+  "max_tokens": 400,
+  "worst_case_usd": "0.00281800",
+  "status": "OK",
+  "finish_reason": "stop",
+  "input_tokens": 927,
+  "output_tokens": 51,
+  "reasoning_tokens": 0,
+  "cost_usd": "0.001233"
+ },
+ "request": [
+  {
+   "role": "system",
+   "text": [
+    "You look at one real image that a news post could use as its main full-slide Instagram visual. Answer only about what is visibly in the image. You never judge the story's facts, never describe people's identity, and never invent detail you cannot see.\n\nRULES:\n- image_kind is exactly one of: photograph (a real camera photo of a scene, person, place or object), product_render (a clean studio shot or render of a physical product), illustration_or_artwork (a drawing, painting, 3D art, or a historical artefact, document or manuscript photographed as an object), article_or_news_card (a headline/preview card, a text-dominated social or news graphic), promo_or_press_graphic (a marketing / announcement / press-kit graphic built around a logo, app icon, wordmark or slogan), screenshot_or_interface (a screen capture, app UI, web page, chat or code), chart_or_diagram, logo_or_wordmark.\n- baked_in_text_prominent is about text ADDED ON TOP of the image - a wordmark, logo text, a headline, a caption, a slogan or UI labels laid over the picture. It is NOT true for writing that is part of the physical thing being photographed: a manuscript, a book page, an inscription, a painting, a screen or a sign that is itself the subject. Ancient or handwritten text on a photographed document is the subject, not added text.\n- primary_media_suitable is true only when the image can carry a whole Instagram slide as strong editorial imagery on its own - a real scene, object or artwork - and false for cards, promo graphics, screenshots, logos, diagrams or images whose main content is text.\n- reason is one short English sentence naming what is visible."
+   ]
+  },
+  {
+   "role": "user",
+   "text": [
+    "Classify the attached image."
+   ]
+  }
+ ],
+ "response": {
+  "text": "{\"image_kind\":\"photograph\",\"baked_in_text_prominent\":false,\"primary_media_suitable\":true,\"reason\":\"A photographed smartphone displays the Meta AI logo and name against a blurred purple-lit background.\"}",
+  "structured_output": {
+   "image_kind": "photograph",
+   "baked_in_text_prominent": false,
+   "primary_media_suitable": true,
+   "reason": "A photographed smartphone displays the Meta AI logo and name against a blurred purple-lit background."
+  },
+  "tool_calls": null,
+  "artifacts": null,
+  "finish_reason": "stop",
+  "model_used": "gpt-5.6-luna",
+  "usage": {
+   "input_tokens": 927,
+   "output_tokens": 51,
+   "units": null,
+   "unit_type": null,
+   "cached_input_tokens": 0,
+   "reasoning_tokens": 0
+  }
+ }
+}

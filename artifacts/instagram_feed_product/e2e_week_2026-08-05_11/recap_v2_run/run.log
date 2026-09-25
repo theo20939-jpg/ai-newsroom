@@ -1,0 +1,29 @@
+image_preview_storage_read_os_error
+image_preview_storage_read_os_error
+image_preview_storage_read_os_error
+C:\Users\Theodor\AppData\Local\Programs\Python\Python313\Lib\site-packages\PIL\Image.py:1136: UserWarning: Palette images with Transparency expressed in bytes should be converted to RGBA images
+  warnings.warn(
+image_preview_storage_read_os_error
+image_preview_storage_read_os_error
+image_preview_storage_read_os_error
+image_preview_storage_read_os_error
+image_preview_storage_read_os_error
+image_preview_storage_read_os_error
+image_preview_storage_read_os_error
+image_preview_storage_read_os_error
+image_preview_storage_read_os_error
+image_preview_storage_read_os_error
+image_preview_storage_read_os_error
+image_preview_storage_read_os_error
+weekly_recap                             -          OK             submitted                                                    slides=9 spent=$0.1035
+{
+ "actual_cost_usd": "0.103524",
+ "diagnostic_ledger_usd": "0.103524",
+ "provider_calls": 9,
+ "calls_by_kind": {
+  "PHASE_A": 1,
+  "VISION": 7,
+  "DIRECTOR": 1
+ }
+}
+exit 0

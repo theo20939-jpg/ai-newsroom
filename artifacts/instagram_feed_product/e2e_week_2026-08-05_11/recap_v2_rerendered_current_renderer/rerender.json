@@ -1,0 +1,123 @@
+{
+ "art_passed": true,
+ "blocking": [],
+ "warnings": [
+  "source_image_ref_recorded_but_not_applied: package.source_image_ref='f0eb1eefe2674e22b26cc96e8f90d0803a56024e40f57454395748306d913756' but this render's source_image_treatment is 'none' (slide_index=2)"
+ ],
+ "slides": [
+  {
+   "arrangement": "standard",
+   "media_scale_orientation": null,
+   "media_scale_rescued_rejected_plan": null,
+   "recap_frame": true,
+   "body_placement": "plan+body_min_relaxed",
+   "layout_variant": "declared_top-center_multi_BALANCED_5+",
+   "media": [
+    "story_2",
+    "story_3",
+    "story_5",
+    "story_7"
+   ]
+  },
+  {
+   "arrangement": "standard",
+   "media_scale_orientation": "text_top",
+   "media_scale_rescued_rejected_plan": [
+    "text_does_not_fit_declared_regions"
+   ],
+   "recap_frame": false,
+   "body_placement": null,
+   "layout_variant": "declared_middle-center_bottom-center_DOMINANT_3-4",
+   "media": [
+    "story_2"
+   ]
+  },
+  {
+   "arrangement": "standard",
+   "media_scale_orientation": null,
+   "media_scale_rescued_rejected_plan": null,
+   "recap_frame": false,
+   "body_placement": null,
+   "layout_variant": "declared_middle-center_none_BALANCED_3-4",
+   "media": []
+  },
+  {
+   "arrangement": "standard",
+   "media_scale_orientation": "side_right",
+   "media_scale_rescued_rejected_plan": null,
+   "recap_frame": false,
+   "body_placement": "plan+recap_body_first_sentence",
+   "layout_variant": "declared_bottom-left_middle-right_DOMINANT_3-4",
+   "media": [
+    "story_3"
+   ]
+  },
+  {
+   "arrangement": "standard",
+   "media_scale_orientation": "text_bottom",
+   "media_scale_rescued_rejected_plan": null,
+   "recap_frame": true,
+   "body_placement": null,
+   "layout_variant": "declared_bottom-center_top-center_DOMINANT_5+",
+   "media": [
+    "story_5"
+   ]
+  },
+  {
+   "arrangement": "standard",
+   "media_scale_orientation": "text_bottom",
+   "media_scale_rescued_rejected_plan": [
+    "text_over_media"
+   ],
+   "recap_frame": false,
+   "body_placement": null,
+   "layout_variant": "declared_bottom-center_top-center_DOMINANT_3-4",
+   "media": [
+    "story_4"
+   ]
+  },
+  {
+   "arrangement": "standard",
+   "media_scale_orientation": "text_top",
+   "media_scale_rescued_rejected_plan": [
+    "text_over_media"
+   ],
+   "recap_frame": true,
+   "body_placement": null,
+   "layout_variant": "declared_middle-center_bottom-center_DOMINANT_3-4",
+   "media": [
+    "story_6"
+   ]
+  },
+  {
+   "arrangement": "collage",
+   "media_scale_orientation": null,
+   "media_scale_rescued_rejected_plan": null,
+   "recap_frame": false,
+   "body_placement": "plan+recap_body_first_sentence",
+   "layout_variant": "declared_middle-left_multi_DOMINANT_5+",
+   "media": [
+    "story_7",
+    "story_7",
+    "story_7"
+   ]
+  },
+  {
+   "arrangement": "standard",
+   "media_scale_orientation": null,
+   "media_scale_rescued_rejected_plan": null,
+   "recap_frame": true,
+   "body_placement": null,
+   "layout_variant": "declared_middle-center_multi_SUPPORTING_5+",
+   "media": [
+    "story_2",
+    "story_3",
+    "story_4",
+    "story_7"
+   ]
+  }
+ ],
+ "unsuitable_for_vision": [
+  "story_1"
+ ]
+}

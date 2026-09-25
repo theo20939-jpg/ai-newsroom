@@ -1,0 +1,292 @@
+{
+ "post_id": "b307c11a-2cda-4fd1-b704-749fcd3ed18b",
+ "format": "weekly_recap_story",
+ "premise": "Meta launched the Muse AI family, including Muse Spark, Muse Glimmer and Muse Code, alongside renewed open-AI messaging.",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "With coding as a key capability for AI companies, Meta throws its hat into the ring.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Muse Code and Muse Spark 1.2",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Meta’s new open-weight Muse Glimmer model offers a glimpse of Mark Zuckerberg’s personal superintelligence vision, as well as the emerging divide between AI users can own and access.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "The terminal-based coding tool is powered by a new AI model, Muse Spark 1.2.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Meta expanded its AI coding offerings with a new agent that, it promises, can handle complex tasks with complex software.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Meta is entering the AI coding-agent race with Muse Code, a new terminal-based tool now available in beta for macOS and Linux.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Wall Street Journal : Meta is offering a cheaper Muse Spark 1.2 “contributor” tier priced at $0.10/1M input and $0.20/1M output tokens in exchange for using user prompts for training — The company, pressed by investors to generate revenue from AI, says its offering will cost less than popular alternatives",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Jonathan Vanian / CNBC : Meta releases Muse Code in beta, a terminal coding agent powered by Muse Spark 1.2, a coding-focused model priced at $1.25/1M input and $4.25/1M output tokens — Meta is rolling out its first coding agent called Muse Code as the company tries to challenge leading AI labs Anthropic and OpenAI.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Meta* представила ИИ-агент Muse Code для конкуренции с OpenAI Финансы Mail",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Meta launches Muse Code for complex software work with persistent AI agents InfoWorld",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Meta запускает инструмент Muse Code на фоне разоблачений взломов ИИ Euronews.com",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Artificial Analysis : Meta's Muse Spark 1.2 scores 54 on the Artificial Analysis Intelligence Index, putting Meta next to SpaceXAI in a tie for third place amongst US labs — Muse Spark 1.2 (xhigh) lands at 54, up 3 points from Muse Spark 1.1 (51) and 11 points from Muse Spark 1.0 (43, April).",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Meta has launched Muse Code, an artificial intelligence agent dedicated to programming, to compete with solutions from Anthropic and OpenAI. Informat.ro",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "M**a объявила о запуске бета-версии ИИ-агента Muse Code для macOS и Linux. Новый инструмент работает через терминал, использует модель Muse Spark 1.2 и предназначен для выполнения сложных задач по разработке программного обеспечения в крупных проектах. Источник изображения: AI",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Запрещённая в России Meta представила бета-версию ИИ-агента Muse Code для macOS и Linux. Он работает на базе новой модели Muse Spark 1.2 и предназначен для сложных задач по разработке ПО. Muse Code умеет писать код, проверять себя и управлять ИИ-агентами vc.ru/ai/3065245",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Meta* впервые стала иметь вес в направлении кодинга, выпустив сразу два продукта: - Muse Spark 1.2 — представителя нового поколения reasoning-моделей, заточенного под программирование; - Muse Code — кодинг-агента, который предназначен для написания программ и разработки ПО и работающего поверх Muse Spark 1.2. Ниже разберем, насколько честны бенчмарки новой модели, почему Meta* умалчивает об успехах китайских конкурентов и как их новая стратегия монетизации может изменить рынок ИИ-разработки. Читать далее",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Meta выпустила собственного ИИ-агента Muse Code для программирования на macOS и Linux 3DNews",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Meta's new open-weight model targets local agentic AI",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Meta* впервые стала иметь вес в направлении кодинга, выпустив сразу два продукта: - Muse Spark 1.2 — представителя нового поколения reasoning-моделей, заточенного под программирование; - Muse Code — кодинг-агента, который предназначен для написания программ и разработки ПО и работающего поверх Muse Spark 1.2. Ниже разберем, насколько честны бенчмарки новой модели, почему Meta* умалчивает об успехах китайских конкурентов и как их новая стратегия монетизации может изменить рынок ИИ-разработки. Читать далее",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Mark Zuckerberg doesn’t understand how to live theverge.com",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Опять новые ИИ-помощники? Разбираемся, стоит ли тратить время на Muse Code и Muse Spark Хабр",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Meta CEO Mark Zuckerberg has a lot to say about the idealized future he now envisions for humanity co-existing with artificial intelligence - his latest essay spans more than 6,500 words on the matter. The lengthy manifesto Zuckerberg published on Monday, titled \"The Future is for Everyone,\" broadly lays out his beliefs about how the […]",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Mark Zuckerberg / Meta : Mark Zuckerberg proposes a positive AI philosophy centered on individual empowerment, predicts personal superintelligence could increase employment, and more — We are fortunate to live at an incredible moment in history. In the next few years, people will be able to use superintelligence …",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Zuckerberg manifesto pushes an open-source approach on AI as Meta releases its latest model Audacy",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Jamie John / Financial Times : Mark Zuckerberg criticizes “closed” AI model makers, says AI labs are espousing a “discourse ... so filled with doom”, and defends distillation as a principle — Meta's founder casts OpenAI and Anthropic as foils in his pitch for powerful AI to become more freely available",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Mark Zuckerberg attacks 'closed' AI rivals as Meta returns to open models",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "\"The future is for everyone,\" Zuckerberg says, describing future that is primarily good for Meta.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Zuckerberg manifesto pushes an open-source approach on AI as Meta releases its latest model ABC News - Breaking News, Latest News and Videos",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Zuckerberg manifesto pushes an open-source approach on AI as Meta releases its latest model Audacy",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Zuckerberg manifesto pushes an open-source approach on AI as Meta releases its latest model NBC Bay Area",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Meta* выпустила новую модель искусственного интеллекта для ПК Финансы Mail",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "On Monday, Mark Zuckerberg published a 6,500 word manifesto about personal AI, largely about the possibilities for the \"personal superintelligence\" systems Meta AI is building.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "M.G. Siegler / Spyglass : With his long essay, Zuckerberg returns to his “open” AI arguments at an opportune time, as Chinese open models narrow the performance gap at much lower cost — Zuck returns to his “open” AI arguments at an opportune time... I'm old enough to remember the last time Mark Zuckerberg …",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Mark Zuckerberg’s latest manifesto promises to save America with AI The Washington Post",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Mark Zuckerberg says AI needs to be regulated globally KOMO",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Mark Zuckerberg says AI needs to be regulated globally KSNV",
+   "status": "OK"
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "With coding as a key capability for AI companies, Meta throws its hat into the ring.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "With coding as a key capability for AI companies, Meta throws its hat into the ring."
+  },
+  {
+   "kind": "FACT",
+   "text": "Meta’s new open-weight Muse Glimmer model offers a glimpse of Mark Zuckerberg’s personal superintelligence vision, as well as the emerging divide between AI users can own and access.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Meta’s new open-weight Muse Glimmer model offers a glimpse of Mark Zuckerberg’s personal superintelligence vision, as well as the emerging divide between AI users can own and access."
+  },
+  {
+   "kind": "FACT",
+   "text": "The terminal-based coding tool is powered by a new AI model, Muse Spark 1.2.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "The terminal-based coding tool is powered by a new AI model, Muse Spark 1.2."
+  },
+  {
+   "kind": "FACT",
+   "text": "Meta expanded its AI coding offerings with a new agent that, it promises, can handle complex tasks with complex software.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Meta expanded its AI coding offerings with a new agent that, it promises, can handle complex tasks with complex software."
+  },
+  {
+   "kind": "FACT",
+   "text": "Meta is entering the AI coding-agent race with Muse Code, a new terminal-based tool now available in beta for macOS and Linux.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Meta is entering the AI coding-agent race with Muse Code, a new terminal-based tool now available in beta for macOS and Linux."
+  },
+  {
+   "kind": "FACT",
+   "text": "Wall Street Journal : Meta is offering a cheaper Muse Spark 1.2 “contributor” tier priced at $0.10/1M input and $0.20/1M output tokens in exchange for using user prompts for training — The company, pressed by investors to generate revenue from AI, says its offering will cost less than popular alternatives",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Wall Street Journal : Meta is offering a cheaper Muse Spark 1.2 “contributor” tier priced at $0.10/1M input and $0.20/1M output tokens in exchange for using user prompts for training — The company, pressed by investors to generate revenue from AI, says its offering will cost less than popular alter…"
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "NOT_AVAILABLE",
+  "url": null,
+  "width": null,
+  "height": null,
+  "mime_type": null,
+  "source": null,
+  "reason": "recap media is resolved per story by the recap bundle"
+ },
+ "quality": "SUFFICIENT",
+ "why": "6 premise facts",
+ "excluded_bodies": [
+  "event:93f72090-10d6-4e5c-8fb9-845202e87d8f:body",
+  "event:869a6e47-a10b-43e4-82be-64df9f7f31ca:body",
+  "event:b3bccb2b-4a25-48e2-a018-285bff36f12e:body",
+  "event:44baa97d-d20c-40d8-b2a7-9acad8fc2576:body"
+ ]
+}

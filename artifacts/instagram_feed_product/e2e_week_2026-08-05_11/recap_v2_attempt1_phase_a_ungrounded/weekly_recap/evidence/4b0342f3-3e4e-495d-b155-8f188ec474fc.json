@@ -1,0 +1,129 @@
+{
+ "post_id": "4b0342f3-3e4e-495d-b155-8f188ec474fc",
+ "format": "weekly_recap_story",
+ "premise": "Google said it will remove Google Assistant from Android and Wear OS from September 4, replacing it with Gemini.",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "As expected , Google Assistant is going away in 2026, and the company just provided a September 4 date for Android.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Google начнёт отключать Google Assistant на смартфонах, планшетах и сопряжённых устройствах 4 сентября 2026 года. Процесс займёт «несколько недель». Компания объявила об отказе от Google Assistant в пользу Gemini ещё в 2025 году, но перенесла срок vc.ru/services/3064051",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Google Assistant's days have been numbered ever since Gemini arrived on the scene, and its time is now up. Google has announced that it will be removing access to Assistant on Android phones and tablets, along with paired devices like smartwatches or headphones, from September 4th. The announcement came in an email apparently sent to […]",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Abner Li / 9to5Google : Google says it will begin removing Google Assistant from Android and Wear OS devices on September 4, replaced by Gemini; Assistant remains on connected cars — As expected, Google Assistant is going away in 2026, and the company just provided a September 4 date for Android.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Как и ожидалось, «Google Ассистент» в этом году начнёт изыматься из экосистемы Google. Процесс удаления устаревшего сервиса компания запустит 4 сентября — об этом она сообщила в письме, которое разослала пользователям. Источник изображения: Rubaitul Azad / unsplash.com",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Samsung, возможно, ведёт разработку смарт-часов, которые займут промежуточное положение между фитнес-браслетами Galaxy Fit и устройствами под управлением Google Wear OS, узнал ресурс SamMobile. В приложении Samsung Galaxy Wearable обнаружилось упоминание устройства Galaxy Aero, которое ещё не было анонсировано — его сопровождает пометка «galaxy_rtos_watch». Это значит, что вместо энергоёмкой Google Wear OS, которая используется в старшей серии Galaxy Watch, умные часы Aero будут работать на легковесной RTOS (Real-Time Operating System), как и гаджеты линейки Galaxy Fit.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Google Assistant is going away on Mobile Devices",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Google Assistant has an official end-of-life date – September 4. While many have already made the jump to Gemini, a number of Android users are still holding on to Google Assistant. Why are you?",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Google усиливает Gemini в Chrome и выключает Google Assistant на Android Хабр",
+   "status": "OK"
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "As expected , Google Assistant is going away in 2026, and the company just provided a September 4 date for Android.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "As expected , Google Assistant is going away in 2026, and the company just provided a September 4 date for Android."
+  },
+  {
+   "kind": "FACT",
+   "text": "Google начнёт отключать Google Assistant на смартфонах, планшетах и сопряжённых устройствах 4 сентября 2026 года.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Google начнёт отключать Google Assistant на смартфонах, планшетах и сопряжённых устройствах 4 сентября 2026 года."
+  },
+  {
+   "kind": "FACT",
+   "text": "Компания объявила об отказе от Google Assistant в пользу Gemini ещё в 2025 году, но перенесла срок vc.ru/services/3064051",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Компания объявила об отказе от Google Assistant в пользу Gemini ещё в 2025 году, но перенесла срок vc.ru/services/3064051"
+  },
+  {
+   "kind": "FACT",
+   "text": "Google Assistant's days have been numbered ever since Gemini arrived on the scene, and its time is now up.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Google Assistant's days have been numbered ever since Gemini arrived on the scene, and its time is now up."
+  },
+  {
+   "kind": "FACT",
+   "text": "Google has announced that it will be removing access to Assistant on Android phones and tablets, along with paired devices like smartwatches or headphones, from September 4th.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Google has announced that it will be removing access to Assistant on Android phones and tablets, along with paired devices like smartwatches or headphones, from September 4th."
+  },
+  {
+   "kind": "FACT",
+   "text": "Abner Li / 9to5Google : Google says it will begin removing Google Assistant from Android and Wear OS devices on September 4, replaced by Gemini; Assistant remains on connected cars — As expected, Google Assistant is going away in 2026, and the company just provided a September 4 date for Android.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Abner Li / 9to5Google : Google says it will begin removing Google Assistant from Android and Wear OS devices on September 4, replaced by Gemini; Assistant remains on connected cars — As expected, Google Assistant is going away in 2026, and the company just provided a September 4 date for Android."
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "NOT_AVAILABLE",
+  "url": null,
+  "width": null,
+  "height": null,
+  "mime_type": null,
+  "source": null,
+  "reason": "recap media is resolved per story by the recap bundle"
+ },
+ "quality": "SUFFICIENT",
+ "why": "6 premise facts",
+ "excluded_bodies": [
+  "event:52261ca9-6ccf-4750-ad96-50b6770cf0ce:body",
+  "event:c8601b07-9f77-412c-9488-9aec0e1bb3d6:body",
+  "event:522b08b4-12e1-4cc3-8633-228985743837:body"
+ ]
+}

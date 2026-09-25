@@ -651,6 +651,12 @@ def _render_scaled_up(*, spec, layout, slide_copy, index, total, subject_assets,
     return best
 
 
+def _multi_story(layout) -> bool:
+    """A collage of several DIFFERENT subjects (a weekly recap cover / closer): rebuilding it around one edge-to-edge image would drop
+    every other story, so it is never 'rescued' that way - its text is relaxed or shortened instead (render_carousel_slide)."""
+    return len({r.content_ref for r in layout.regions if r.kind == "media" and r.content_ref}) >= 2
+
+
 def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets, visual_direction, media_mode=None):
     """Phase B.5: render a DECLARATIVE layout when the slide carries one. Returns None when the slide
     has no layout; (result, adaptations) when it rendered; (None, rejection_codes) when the plan was
@@ -677,7 +683,7 @@ def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets
         adapted = adapt_collage(layout, slide_copy=slide_copy, resolvable_subjects=set(subject_assets))
         if adapted is None:
             rescued = None
-            if media_mode in ("SOURCE", "GENERATED"):
+            if media_mode in ("SOURCE", "GENERATED") and not _multi_story(layout):
                 # a media-first plan rejected for its geometry: rebuild it edge to edge before the smaller media-preserving fallback
                 rescued = _render_scaled_up(spec=spec, layout=layout, slide_copy=slide_copy, index=index, total=total,
                                             subject_assets=subject_assets, visual_direction=visual_direction, force=True)
@@ -713,7 +719,7 @@ def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets
             # the plan passed validation but could not be DRAWN (unreadable on-media text, clipped copy): a media-first slide is
             # rebuilt edge to edge before the smaller media-preserving fallback, exactly like a validator rejection above
             rescued = None
-            if media_mode in ("SOURCE", "GENERATED"):
+            if media_mode in ("SOURCE", "GENERATED") and not _multi_story(validated.layout):
                 rescued = _render_scaled_up(spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
                                             subject_assets=subject_assets, visual_direction=visual_direction, force=True)
             if rescued is None:
@@ -728,7 +734,11 @@ def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets
             # the same rule the scale adapter applies to its own side panels: a narrow column is kept only at the hook's display size
             # (real iteration-6r NEWS_RECAP: three declared side columns at 67-75px passed the plain floor and read as captions)
             floor = max(floor, HOOK_HEADLINE_FLOOR_FRAC * spec.width)
-        if media_mode in ("SOURCE", "GENERATED") and _headline_px(result) < floor:
+        if _multi_story(validated.layout):
+            # a collage of several different stories (a weekly recap cover / closer) is the point of the slide: a rebuild around ONE
+            # edge-to-edge image would silently drop the other stories, so its own composition is kept
+            pass
+        elif media_mode in ("SOURCE", "GENERATED") and _headline_px(result) < floor:
             # the plan's own headline box (or a busy image's only quiet corner) shrank the main line below display size;
             # give it a solid band next to the still edge-to-edge image, but only when that is genuinely larger
             bigger = _render_scaled_up(spec=spec, layout=validated.layout, slide_copy=slide_copy, index=index, total=total,
@@ -763,6 +773,14 @@ def _try_declared(*, spec, layout_plan, slide_copy, index, total, subject_assets
     return result, adaptations
 
 
+_SENTENCE_END = re.compile(r"(?<=[.!?…])\s+(?=[A-ZА-ЯЁ«\"0-9])")
+
+
+def _first_sentence(body: str) -> str:
+    """The body's first sentence (a sentence ends at . ! ? or … followed by a capitalised start) - never a cut inside a sentence."""
+    return _SENTENCE_END.split(body.strip(), maxsplit=1)[0].strip()
+
+
 def render_carousel_slide(
     *, spec: ProfileSpec, role: str, index: int, total: int, slide_copy: str, source_evidence: str | None,
     package_identity: str, hero_image: Image.Image | None = None, visual_direction: str | None = None,
@@ -772,8 +790,28 @@ def render_carousel_slide(
     media_subject: str | None = None, must_match_story: bool = False,
     media_asset_identity: str | None = None,
     layout_plan: dict | None = None, subject_assets: dict | None = None, slide_body: str | None = None,
+    recap: bool = False,
 ) -> LayoutResult:
     body_placement = None
+    recap_frame = None
+    if recap:
+        from services.instagram_recap_frames import recap_frame_layout, single_photo_story_layout
+
+        recap_frame = recap_frame_layout(layout_plan, role=role.strip().lower())
+        single = None if recap_frame is not None else single_photo_story_layout(layout_plan, role=role.strip().lower())
+        if single is not None:
+            # one photo instead of several crops of it - only when that plan is itself drawable; otherwise the planned one is kept
+            from services.instagram_body_copy import attach_body_region
+            from services.instagram_layout_validation import compose_slide_text
+
+            probe_copy = compose_slide_text(slide_copy, slide_body) if slide_body and slide_body.strip() else slide_copy
+            probe = _try_declared(spec=spec, layout_plan=attach_body_region(single, probe_copy)[0], slide_copy=probe_copy, index=index,
+                                  total=total, subject_assets=subject_assets or {}, visual_direction=visual_direction, media_mode=media_mode)
+            if probe is not None and probe[0] is not None:
+                recap_frame = single
+        if recap_frame is not None:
+            layout_plan = recap_frame
+    original_plan, headline_only = layout_plan, slide_copy
     if slide_body and slide_body.strip():
         # content pass v10.7: the headline and its explanatory body travel as one string through every render path (copy_parts splits
         # them); a plan that does not place the body itself gets a deterministic body region under its headline
@@ -805,10 +843,28 @@ def render_carousel_slide(
         if relaxed is not None and relaxed[0] is not None:
             declared = relaxed
             body_placement = f"{body_placement or 'plan'}+body_min_relaxed"
+    if recap and slide_body and _first_sentence(slide_body) != slide_body.strip() and (
+            declared is None or declared[0] is None or declared[0].notes.get("media_scale_rescued_rejected_plan")):
+        # weekly recap (visual-first): the Director's OWN composition with one sentence of context beats the generic photo band / text
+        # band rebuild of a plan whose two-sentence body did not fit its text boxes. Dropping a sentence adds no fact.
+        from services.instagram_body_copy import attach_body_region, widen_headline_into_free_space
+        from services.instagram_layout_validation import compose_slide_text
+
+        brief_copy = compose_slide_text(headline_only, _first_sentence(slide_body))
+        brief_plan, brief_placement = attach_body_region(original_plan, brief_copy)
+        brief_plan, _ = widen_headline_into_free_space(brief_plan)
+        brief = _try_declared(
+            spec=spec, layout_plan=brief_plan, slide_copy=brief_copy, index=index, total=total,
+            subject_assets=subject_assets or {}, visual_direction=visual_direction, media_mode=media_mode,
+        )
+        if brief is not None and brief[0] is not None and not brief[0].notes.get("media_scale_rescued_rejected_plan"):
+            declared, slide_copy, layout_plan = brief, brief_copy, brief_plan
+            body_placement = f"{brief_placement or 'plan'}+recap_body_first_sentence"
     if declared is not None and declared[0] is not None:
         result, adaptations = declared
         result.notes.update(render_plan or {})
         result.notes["body_placement"] = body_placement
+        result.notes["recap_frame"] = recap_frame is not None
         media_regions = result.notes.get("media_regions") or []
         identity = media_asset_identity or (media_regions[0]["identity"] if media_regions else None)
         result.notes.update({

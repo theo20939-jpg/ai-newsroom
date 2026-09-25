@@ -1,0 +1,1066 @@
+[
+ {
+  "key": "story_1",
+  "title": "Demis Hassabis is leaving his role as CEO of Google DeepMind",
+  "events_probed": 8,
+  "candidates": 6,
+  "suitable": 4,
+  "rows": [
+   {
+    "event": "7fc22b67-2f2a-4ba0-907a-8bd06197fa29",
+    "source": "Techmeme",
+    "title": "Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's ch",
+    "size": [
+     134,
+     76
+    ],
+    "rank": 1,
+    "relationship": "native_same_item",
+    "suitable": true,
+    "thumb": "story_1_00.jpg"
+   },
+   {
+    "event": "a29d5170-3065-4c70-b0b4-e7ab9a70d95b",
+    "source": "9to5Google",
+    "title": "Demis Hassabis drops DeepMind CEO role to become Chair and focus on AGI",
+    "size": [
+     1920,
+     1080
+    ],
+    "rank": 1,
+    "relationship": "same_article",
+    "suitable": true,
+    "thumb": "story_1_01.jpg"
+   },
+   {
+    "event": "a29d5170-3065-4c70-b0b4-e7ab9a70d95b",
+    "source": "9to5Google",
+    "title": "Demis Hassabis drops DeepMind CEO role to become Chair and focus on AGI",
+    "size": [
+     676,
+     213
+    ],
+    "rank": 2,
+    "relationship": "same_article",
+    "suitable": false,
+    "thumb": "story_1_02.jpg"
+   },
+   {
+    "event": "a29d5170-3065-4c70-b0b4-e7ab9a70d95b",
+    "source": "9to5Google",
+    "title": "Demis Hassabis drops DeepMind CEO role to become Chair and focus on AGI",
+    "size": [
+     96,
+     96
+    ],
+    "rank": 3,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_1_03.jpg"
+   },
+   {
+    "event": "6a09e2a6-0c79-4a1c-93d2-f25ecca030d8",
+    "source": "Engadget",
+    "title": "Google DeepMind CEO Demis Hassabis is stepping down, but will remain with the co",
+    "size": [
+     1600,
+     898
+    ],
+    "rank": 1,
+    "relationship": "same_article",
+    "suitable": false,
+    "thumb": "story_1_04.jpg"
+   },
+   {
+    "event": "10b1e436-6bb3-4602-9b5f-a46f2c301da0",
+    "source": "Techmeme",
+    "title": "Sources: Demis Hassabis had been drifting away from day-to-day duties as Google ",
+    "size": [
+     139,
+     74
+    ],
+    "rank": 1,
+    "relationship": "native_same_item",
+    "suitable": true,
+    "thumb": "story_1_05.jpg"
+   }
+  ]
+ },
+ {
+  "key": "story_2",
+  "title": "Google Assistant will disappear from your phone next month",
+  "events_probed": 8,
+  "candidates": 15,
+  "suitable": 10,
+  "rows": [
+   {
+    "event": "4b0342f3-3e4e-495d-b155-8f188ec474fc",
+    "source": "The Verge AI",
+    "title": "Google Assistant will disappear from your phone next month",
+    "size": [
+     1820,
+     946
+    ],
+    "rank": 1,
+    "relationship": "same_domain",
+    "suitable": false,
+    "thumb": "story_2_00.jpg"
+   },
+   {
+    "event": "4b0342f3-3e4e-495d-b155-8f188ec474fc",
+    "source": "The Verge AI",
+    "title": "Google Assistant will disappear from your phone next month",
+    "size": [
+     1802,
+     1213
+    ],
+    "rank": 2,
+    "relationship": "same_domain",
+    "suitable": false,
+    "thumb": "story_2_01.jpg"
+   },
+   {
+    "event": "4b0342f3-3e4e-495d-b155-8f188ec474fc",
+    "source": "The Verge AI",
+    "title": "Google Assistant will disappear from your phone next month",
+    "size": [
+     1201,
+     1213
+    ],
+    "rank": 3,
+    "relationship": "same_domain",
+    "suitable": false,
+    "thumb": "story_2_02.jpg"
+   },
+   {
+    "event": "2046fec5-1aec-40ed-b9f9-8792553e4f96",
+    "source": "3DNews",
+    "title": "Google назвала дату отключения «Ассистента» на Android и Wear OS",
+    "size": [
+     800,
+     533
+    ],
+    "rank": 1,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_2_03.jpg"
+   },
+   {
+    "event": "63f177e5-800e-401b-97fd-bd3f752a98f4",
+    "source": "3DNews",
+    "title": "Samsung готовит недорогие смарт-часы Galaxy Aero без Wear OS, но это не точно",
+    "size": [
+     800,
+     534
+    ],
+    "rank": 1,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_2_04.jpg"
+   },
+   {
+    "event": "086618a7-9ca6-4e68-b44b-a4fd53e05df6",
+    "source": "Techmeme",
+    "title": "Google says it will begin removing Google Assistant from Android and Wear OS dev",
+    "size": [
+     140,
+     74
+    ],
+    "rank": 1,
+    "relationship": "native_same_item",
+    "suitable": true,
+    "thumb": "story_2_05.jpg"
+   },
+   {
+    "event": "313376cb-ad26-4728-be35-8cc31cd499a6",
+    "source": "9to5Google",
+    "title": "Google Assistant shutting down on Android and Wear OS in September",
+    "size": [
+     2000,
+     1000
+    ],
+    "rank": 1,
+    "relationship": "same_article",
+    "suitable": true,
+    "thumb": "story_2_06.jpg"
+   },
+   {
+    "event": "313376cb-ad26-4728-be35-8cc31cd499a6",
+    "source": "9to5Google",
+    "title": "Google Assistant shutting down on Android and Wear OS in September",
+    "size": [
+     676,
+     213
+    ],
+    "rank": 2,
+    "relationship": "same_article",
+    "suitable": false,
+    "thumb": "story_2_07.jpg"
+   },
+   {
+    "event": "313376cb-ad26-4728-be35-8cc31cd499a6",
+    "source": "9to5Google",
+    "title": "Google Assistant shutting down on Android and Wear OS in September",
+    "size": [
+     96,
+     96
+    ],
+    "rank": 3,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_2_08.jpg"
+   },
+   {
+    "event": "52261ca9-6ccf-4750-ad96-50b6770cf0ce",
+    "source": "vc.ru AI",
+    "title": "Google начнёт отключать Google Assistant на смартфонах 4 сентября 2026 года — ег",
+    "size": [
+     1300,
+     667
+    ],
+    "rank": 1,
+    "relationship": "native_same_item",
+    "suitable": true,
+    "thumb": "story_2_09.jpg"
+   },
+   {
+    "event": "52261ca9-6ccf-4750-ad96-50b6770cf0ce",
+    "source": "vc.ru AI",
+    "title": "Google начнёт отключать Google Assistant на смартфонах 4 сентября 2026 года — ег",
+    "size": [
+     1200,
+     630
+    ],
+    "rank": 2,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_2_10.jpg"
+   },
+   {
+    "event": "52261ca9-6ccf-4750-ad96-50b6770cf0ce",
+    "source": "vc.ru AI",
+    "title": "Google начнёт отключать Google Assistant на смартфонах 4 сентября 2026 года — ег",
+    "size": [
+     72,
+     72
+    ],
+    "rank": 3,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_2_11.jpg"
+   },
+   {
+    "event": "9b976edc-f974-40c6-b1e0-fdd08313aee1",
+    "source": "9to5Google",
+    "title": "Why are you still using Google Assistant on Android? [Poll]",
+    "size": [
+     2000,
+     1125
+    ],
+    "rank": 1,
+    "relationship": "same_article",
+    "suitable": true,
+    "thumb": "story_2_12.jpg"
+   },
+   {
+    "event": "9b976edc-f974-40c6-b1e0-fdd08313aee1",
+    "source": "9to5Google",
+    "title": "Why are you still using Google Assistant on Android? [Poll]",
+    "size": [
+     676,
+     213
+    ],
+    "rank": 2,
+    "relationship": "same_article",
+    "suitable": false,
+    "thumb": "story_2_13.jpg"
+   },
+   {
+    "event": "9b976edc-f974-40c6-b1e0-fdd08313aee1",
+    "source": "9to5Google",
+    "title": "Why are you still using Google Assistant on Android? [Poll]",
+    "size": [
+     96,
+     96
+    ],
+    "rank": 3,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_2_14.jpg"
+   }
+  ]
+ },
+ {
+  "key": "story_3",
+  "title": "Meta says Muse Glimmer has 30B parameters and is \"small enou",
+  "events_probed": 8,
+  "candidates": 11,
+  "suitable": 6,
+  "rows": [
+   {
+    "event": "b307c11a-2cda-4fd1-b704-749fcd3ed18b",
+    "source": "Techmeme",
+    "title": "Meta says Muse Glimmer has 30B parameters and is \"small enough\" to need only one",
+    "size": [
+     123,
+     84
+    ],
+    "rank": 1,
+    "relationship": "native_same_item",
+    "suitable": true,
+    "thumb": "story_3_00.jpg"
+   },
+   {
+    "event": "96ace5b9-63cf-4565-ba6d-dd57eff14dc9",
+    "source": "Hacker News Front Page",
+    "title": "Meta's new open-weight model targets local agentic AI",
+    "size": [
+     400,
+     400
+    ],
+    "rank": 1,
+    "relationship": "unrelated_or_conflicting",
+    "suitable": false,
+    "thumb": "story_3_01.jpg"
+   },
+   {
+    "event": "6e83c0eb-7a96-419c-a28e-355e625a1392",
+    "source": "3DNews",
+    "title": "M**a выпустила собственного ИИ-агента Muse Code для программирования на macOS и ",
+    "size": [
+     800,
+     450
+    ],
+    "rank": 1,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_3_02.jpg"
+   },
+   {
+    "event": "b8add1fe-4cab-4988-b93f-4d4061564a10",
+    "source": "TechCrunch AI",
+    "title": "Meta launches Muse Code, an AI agent for large code bases",
+    "size": [
+     1200,
+     800
+    ],
+    "rank": 1,
+    "relationship": "same_article",
+    "suitable": true,
+    "thumb": "story_3_03.jpg"
+   },
+   {
+    "event": "b8add1fe-4cab-4988-b93f-4d4061564a10",
+    "source": "TechCrunch AI",
+    "title": "Meta launches Muse Code, an AI agent for large code bases",
+    "size": [
+     150,
+     150
+    ],
+    "rank": 2,
+    "relationship": "same_article",
+    "suitable": true,
+    "thumb": "story_3_04.jpg"
+   },
+   {
+    "event": "63761302-62a5-49e6-9372-d8d000813e99",
+    "source": "9to5Mac",
+    "title": "Meta launches Muse Code AI coding agent for macOS and Linux",
+    "size": [
+     1200,
+     628
+    ],
+    "rank": 1,
+    "relationship": "same_article",
+    "suitable": false,
+    "thumb": "story_3_05.jpg"
+   },
+   {
+    "event": "63761302-62a5-49e6-9372-d8d000813e99",
+    "source": "9to5Mac",
+    "title": "Meta launches Muse Code AI coding agent for macOS and Linux",
+    "size": [
+     1600,
+     800
+    ],
+    "rank": 2,
+    "relationship": "native_same_item",
+    "suitable": false,
+    "thumb": "story_3_06.jpg"
+   },
+   {
+    "event": "63761302-62a5-49e6-9372-d8d000813e99",
+    "source": "9to5Mac",
+    "title": "Meta launches Muse Code AI coding agent for macOS and Linux",
+    "size": [
+     676,
+     213
+    ],
+    "rank": 3,
+    "relationship": "same_article",
+    "suitable": false,
+    "thumb": "story_3_07.jpg"
+   },
+   {
+    "event": "63761302-62a5-49e6-9372-d8d000813e99",
+    "source": "9to5Mac",
+    "title": "Meta launches Muse Code AI coding agent for macOS and Linux",
+    "size": [
+     676,
+     213
+    ],
+    "rank": 4,
+    "relationship": "same_article",
+    "suitable": false,
+    "thumb": "story_3_08.jpg"
+   },
+   {
+    "event": "63761302-62a5-49e6-9372-d8d000813e99",
+    "source": "9to5Mac",
+    "title": "Meta launches Muse Code AI coding agent for macOS and Linux",
+    "size": [
+     96,
+     96
+    ],
+    "rank": 5,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_3_09.jpg"
+   },
+   {
+    "event": "01c2f775-7c68-434d-9a47-ceba66bde5ef",
+    "source": "Techmeme",
+    "title": "Meta releases Muse Code in beta, a terminal coding agent powered by Muse Spark 1",
+    "size": [
+     135,
+     77
+    ],
+    "rank": 1,
+    "relationship": "native_same_item",
+    "suitable": true,
+    "thumb": "story_3_10.jpg"
+   }
+  ]
+ },
+ {
+  "key": "story_4",
+  "title": "OpenAI and Anthropic models went on a hacking spree when tes",
+  "events_probed": 8,
+  "candidates": 23,
+  "suitable": 20,
+  "rows": [
+   {
+    "event": "53146da6-59f2-4e08-bb3a-ed493b0b50df",
+    "source": "Engadget",
+    "title": "OpenAI and Anthropic models went on a hacking spree when tested by the UK's AI r",
+    "size": [
+     1600,
+     899
+    ],
+    "rank": 1,
+    "relationship": "same_article",
+    "suitable": true,
+    "thumb": "story_4_00.jpg"
+   },
+   {
+    "event": "c4ce7080-50b9-4103-a9c5-e8cfa07f9681",
+    "source": "GamesIndustry.biz",
+    "title": "Microsoft confirms increased Xbox prices in the UK and Europe",
+    "size": [
+     1200,
+     900
+    ],
+    "rank": 1,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_01.jpg"
+   },
+   {
+    "event": "c4ce7080-50b9-4103-a9c5-e8cfa07f9681",
+    "source": "GamesIndustry.biz",
+    "title": "Microsoft confirms increased Xbox prices in the UK and Europe",
+    "size": [
+     1200,
+     1200
+    ],
+    "rank": 2,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_02.jpg"
+   },
+   {
+    "event": "c4ce7080-50b9-4103-a9c5-e8cfa07f9681",
+    "source": "GamesIndustry.biz",
+    "title": "Microsoft confirms increased Xbox prices in the UK and Europe",
+    "size": [
+     1200,
+     630
+    ],
+    "rank": 3,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_03.jpg"
+   },
+   {
+    "event": "c4ce7080-50b9-4103-a9c5-e8cfa07f9681",
+    "source": "GamesIndustry.biz",
+    "title": "Microsoft confirms increased Xbox prices in the UK and Europe",
+    "size": [
+     1600,
+     900
+    ],
+    "rank": 4,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_04.jpg"
+   },
+   {
+    "event": "7bdc268b-c85c-47f8-96e3-f82ea1c5e2eb",
+    "source": "BBC Technology",
+    "title": "Apple issues new challenge against UK order for access to private user data",
+    "size": [
+     1200,
+     675
+    ],
+    "rank": 1,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_4_05.jpg"
+   },
+   {
+    "event": "7bdc268b-c85c-47f8-96e3-f82ea1c5e2eb",
+    "source": "BBC Technology",
+    "title": "Apple issues new challenge against UK order for access to private user data",
+    "size": [
+     976,
+     549
+    ],
+    "rank": 2,
+    "relationship": "same_domain",
+    "suitable": false,
+    "thumb": "story_4_06.jpg"
+   },
+   {
+    "event": "7bdc268b-c85c-47f8-96e3-f82ea1c5e2eb",
+    "source": "BBC Technology",
+    "title": "Apple issues new challenge against UK order for access to private user data",
+    "size": [
+     976,
+     548
+    ],
+    "rank": 3,
+    "relationship": "same_domain",
+    "suitable": false,
+    "thumb": "story_4_07.jpg"
+   },
+   {
+    "event": "7bdc268b-c85c-47f8-96e3-f82ea1c5e2eb",
+    "source": "BBC Technology",
+    "title": "Apple issues new challenge against UK order for access to private user data",
+    "size": [
+     976,
+     160
+    ],
+    "rank": 4,
+    "relationship": "same_domain",
+    "suitable": false,
+    "thumb": "story_4_08.jpg"
+   },
+   {
+    "event": "7788be05-a120-4bfc-a52c-6805d343e467",
+    "source": "The Guardian Technology",
+    "title": "Palantir paid just £2m corporation tax in UK in 2024 despite lucrative public se",
+    "size": [
+     1200,
+     630
+    ],
+    "rank": 1,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_09.jpg"
+   },
+   {
+    "event": "7788be05-a120-4bfc-a52c-6805d343e467",
+    "source": "The Guardian Technology",
+    "title": "Palantir paid just £2m corporation tax in UK in 2024 despite lucrative public se",
+    "size": [
+     1200,
+     1200
+    ],
+    "rank": 2,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_10.jpg"
+   },
+   {
+    "event": "7788be05-a120-4bfc-a52c-6805d343e467",
+    "source": "The Guardian Technology",
+    "title": "Palantir paid just £2m corporation tax in UK in 2024 despite lucrative public se",
+    "size": [
+     1200,
+     961
+    ],
+    "rank": 3,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_11.jpg"
+   },
+   {
+    "event": "e77aa3d1-4cb6-43a0-af33-1b3dd4fd294b",
+    "source": "The Guardian Technology",
+    "title": "The best microwaves in the UK for every kitchen and budget – tested",
+    "size": [
+     1200,
+     630
+    ],
+    "rank": 1,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_12.jpg"
+   },
+   {
+    "event": "e77aa3d1-4cb6-43a0-af33-1b3dd4fd294b",
+    "source": "The Guardian Technology",
+    "title": "The best microwaves in the UK for every kitchen and budget – tested",
+    "size": [
+     1200,
+     1200
+    ],
+    "rank": 2,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_13.jpg"
+   },
+   {
+    "event": "e77aa3d1-4cb6-43a0-af33-1b3dd4fd294b",
+    "source": "The Guardian Technology",
+    "title": "The best microwaves in the UK for every kitchen and budget – tested",
+    "size": [
+     1200,
+     960
+    ],
+    "rank": 3,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_14.jpg"
+   },
+   {
+    "event": "09a24f87-f34c-4d19-889d-9a211b20a555",
+    "source": "The Guardian Technology",
+    "title": "OpenAI and Anthropic models ‘went rogue’ during UK cybersecurity test",
+    "size": [
+     1200,
+     630
+    ],
+    "rank": 1,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_15.jpg"
+   },
+   {
+    "event": "09a24f87-f34c-4d19-889d-9a211b20a555",
+    "source": "The Guardian Technology",
+    "title": "OpenAI and Anthropic models ‘went rogue’ during UK cybersecurity test",
+    "size": [
+     1200,
+     1200
+    ],
+    "rank": 2,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_16.jpg"
+   },
+   {
+    "event": "09a24f87-f34c-4d19-889d-9a211b20a555",
+    "source": "The Guardian Technology",
+    "title": "OpenAI and Anthropic models ‘went rogue’ during UK cybersecurity test",
+    "size": [
+     1200,
+     900
+    ],
+    "rank": 3,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_17.jpg"
+   },
+   {
+    "event": "09a24f87-f34c-4d19-889d-9a211b20a555",
+    "source": "The Guardian Technology",
+    "title": "OpenAI and Anthropic models ‘went rogue’ during UK cybersecurity test",
+    "size": [
+     1200,
+     960
+    ],
+    "rank": 4,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_18.jpg"
+   },
+   {
+    "event": "a57c4554-07cb-4fe1-a4d0-c23e272ce37a",
+    "source": "Lobsters",
+    "title": "AI models shock UK testers by using fake identities to try to trick developers",
+    "size": [
+     1200,
+     630
+    ],
+    "rank": 1,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_19.jpg"
+   },
+   {
+    "event": "a57c4554-07cb-4fe1-a4d0-c23e272ce37a",
+    "source": "Lobsters",
+    "title": "AI models shock UK testers by using fake identities to try to trick developers",
+    "size": [
+     1200,
+     1200
+    ],
+    "rank": 2,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_20.jpg"
+   },
+   {
+    "event": "a57c4554-07cb-4fe1-a4d0-c23e272ce37a",
+    "source": "Lobsters",
+    "title": "AI models shock UK testers by using fake identities to try to trick developers",
+    "size": [
+     1200,
+     900
+    ],
+    "rank": 3,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_21.jpg"
+   },
+   {
+    "event": "a57c4554-07cb-4fe1-a4d0-c23e272ce37a",
+    "source": "Lobsters",
+    "title": "AI models shock UK testers by using fake identities to try to trick developers",
+    "size": [
+     1200,
+     960
+    ],
+    "rank": 4,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_4_22.jpg"
+   }
+  ]
+ },
+ {
+  "key": "story_5",
+  "title": "OpenAI updates the default model for free users to GPT-5.6 L",
+  "events_probed": 4,
+  "candidates": 8,
+  "suitable": 2,
+  "rows": [
+   {
+    "event": "ffacf3ff-06c0-444e-a16f-1bf64cbba48a",
+    "source": "Techmeme",
+    "title": "OpenAI updates the default model for free users to GPT-5.6 Luna, adds unlimited ",
+    "size": [
+     134,
+     76
+    ],
+    "rank": 1,
+    "relationship": "native_same_item",
+    "suitable": false,
+    "thumb": "story_5_00.jpg"
+   },
+   {
+    "event": "173d9ac4-e5fc-479d-8a86-10d8d26a898a",
+    "source": "3DNews",
+    "title": "ChatGPT стал безлимитным: OpenAI отменила ограничения на текстовые чаты и переве",
+    "size": [
+     800,
+     533
+    ],
+    "rank": 1,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_5_01.jpg"
+   },
+   {
+    "event": "173d9ac4-e5fc-479d-8a86-10d8d26a898a",
+    "source": "3DNews",
+    "title": "ChatGPT стал безлимитным: OpenAI отменила ограничения на текстовые чаты и переве",
+    "size": [
+     800,
+     449
+    ],
+    "rank": 2,
+    "relationship": "same_domain",
+    "suitable": false,
+    "thumb": "story_5_02.jpg"
+   },
+   {
+    "event": "173d9ac4-e5fc-479d-8a86-10d8d26a898a",
+    "source": "3DNews",
+    "title": "ChatGPT стал безлимитным: OpenAI отменила ограничения на текстовые чаты и переве",
+    "size": [
+     668,
+     668
+    ],
+    "rank": 3,
+    "relationship": "same_domain",
+    "suitable": false,
+    "thumb": "story_5_03.jpg"
+   },
+   {
+    "event": "ad3d6b31-8e92-4ef5-b642-8ba49eec57d4",
+    "source": "9to5Mac",
+    "title": "OpenAI updating ChatGPT with a smarter GPT-5.6 Sol and unlimited free chats",
+    "size": [
+     1600,
+     800
+    ],
+    "rank": 1,
+    "relationship": "native_same_item",
+    "suitable": false,
+    "thumb": "story_5_04.jpg"
+   },
+   {
+    "event": "ad3d6b31-8e92-4ef5-b642-8ba49eec57d4",
+    "source": "9to5Mac",
+    "title": "OpenAI updating ChatGPT with a smarter GPT-5.6 Sol and unlimited free chats",
+    "size": [
+     676,
+     213
+    ],
+    "rank": 2,
+    "relationship": "same_article",
+    "suitable": false,
+    "thumb": "story_5_05.jpg"
+   },
+   {
+    "event": "ad3d6b31-8e92-4ef5-b642-8ba49eec57d4",
+    "source": "9to5Mac",
+    "title": "OpenAI updating ChatGPT with a smarter GPT-5.6 Sol and unlimited free chats",
+    "size": [
+     676,
+     213
+    ],
+    "rank": 3,
+    "relationship": "same_article",
+    "suitable": false,
+    "thumb": "story_5_06.jpg"
+   },
+   {
+    "event": "ad3d6b31-8e92-4ef5-b642-8ba49eec57d4",
+    "source": "9to5Mac",
+    "title": "OpenAI updating ChatGPT with a smarter GPT-5.6 Sol and unlimited free chats",
+    "size": [
+     96,
+     96
+    ],
+    "rank": 4,
+    "relationship": "source_cdn_or_related",
+    "suitable": true,
+    "thumb": "story_5_07.jpg"
+   }
+  ]
+ },
+ {
+  "key": "story_6",
+  "title": "Jony Ive’s first OpenAI gadget is reportedly a hockey puck-s",
+  "events_probed": 2,
+  "candidates": 4,
+  "suitable": 4,
+  "rows": [
+   {
+    "event": "5ae86b7f-e5ab-4af3-912b-e4372c0ad0d5",
+    "source": "The Verge AI",
+    "title": "Jony Ive’s first OpenAI gadget is reportedly a hockey puck-sized smart speaker",
+    "size": [
+     2160,
+     2159
+    ],
+    "rank": 1,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_6_00.jpg"
+   },
+   {
+    "event": "5ae86b7f-e5ab-4af3-912b-e4372c0ad0d5",
+    "source": "The Verge AI",
+    "title": "Jony Ive’s first OpenAI gadget is reportedly a hockey puck-sized smart speaker",
+    "size": [
+     3120,
+     1626
+    ],
+    "rank": 2,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_6_01.jpg"
+   },
+   {
+    "event": "5ae86b7f-e5ab-4af3-912b-e4372c0ad0d5",
+    "source": "The Verge AI",
+    "title": "Jony Ive’s first OpenAI gadget is reportedly a hockey puck-sized smart speaker",
+    "size": [
+     3120,
+     2079
+    ],
+    "rank": 3,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_6_02.jpg"
+   },
+   {
+    "event": "f4899ee2-8743-4510-8943-844d915131d8",
+    "source": "Engadget",
+    "title": "OpenAI's ring-shaped smart speaker will reportedly cost between $300 and $400",
+    "size": [
+     1600,
+     898
+    ],
+    "rank": 1,
+    "relationship": "same_article",
+    "suitable": true,
+    "thumb": "story_6_03.jpg"
+   }
+  ]
+ },
+ {
+  "key": "story_7",
+  "title": "**GTA VI покажут 27 августа**",
+  "events_probed": 6,
+  "candidates": 10,
+  "suitable": 10,
+  "rows": [
+   {
+    "event": "3f3408c8-4454-482d-bdde-3d7dfe8cb6f3",
+    "source": "Engadget",
+    "title": "Netflix bags an exclusive GTA VI trailer... for all of six hours",
+    "size": [
+     1600,
+     899
+    ],
+    "rank": 1,
+    "relationship": "same_article",
+    "suitable": true,
+    "thumb": "story_7_00.jpg"
+   },
+   {
+    "event": "25a63f3b-4d15-4eec-8630-d44290694eca",
+    "source": "3DNews",
+    "title": "Расширенный показ GTA VI пройдёт 27 августа в онлайн-кинотеатре Netflix",
+    "size": [
+     800,
+     450
+    ],
+    "rank": 1,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_7_01.jpg"
+   },
+   {
+    "event": "9b0b703f-3df4-4270-af41-3c32e812571e",
+    "source": "3DNews",
+    "title": "«Я просто хотел попасть в игру»: актёр озвучки GTA V пробовался более чем на 60 ",
+    "size": [
+     800,
+     450
+    ],
+    "rank": 1,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_7_02.jpg"
+   },
+   {
+    "event": "9b0b703f-3df4-4270-af41-3c32e812571e",
+    "source": "3DNews",
+    "title": "«Я просто хотел попасть в игру»: актёр озвучки GTA V пробовался более чем на 60 ",
+    "size": [
+     800,
+     450
+    ],
+    "rank": 2,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_7_03.jpg"
+   },
+   {
+    "event": "9b0b703f-3df4-4270-af41-3c32e812571e",
+    "source": "3DNews",
+    "title": "«Я просто хотел попасть в игру»: актёр озвучки GTA V пробовался более чем на 60 ",
+    "size": [
+     800,
+     450
+    ],
+    "rank": 3,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_7_04.jpg"
+   },
+   {
+    "event": "e51f27f9-eee4-4035-9c57-3e74e9817f78",
+    "source": "3DNews",
+    "title": "«Вершина высокомерия Rockstar»: фанаты жёстко раскритиковали решение сделать нов",
+    "size": [
+     800,
+     450
+    ],
+    "rank": 1,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_7_05.jpg"
+   },
+   {
+    "event": "e51f27f9-eee4-4035-9c57-3e74e9817f78",
+    "source": "3DNews",
+    "title": "«Вершина высокомерия Rockstar»: фанаты жёстко раскритиковали решение сделать нов",
+    "size": [
+     800,
+     450
+    ],
+    "rank": 2,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_7_06.jpg"
+   },
+   {
+    "event": "e51f27f9-eee4-4035-9c57-3e74e9817f78",
+    "source": "3DNews",
+    "title": "«Вершина высокомерия Rockstar»: фанаты жёстко раскритиковали решение сделать нов",
+    "size": [
+     800,
+     450
+    ],
+    "rank": 3,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_7_07.jpg"
+   },
+   {
+    "event": "15a5ff78-8f52-4ca6-97b0-bd99ad5a0f42",
+    "source": "3DNews",
+    "title": "«Беспрецедентные» предзаказы GTA VI подорвали продажи GTA V — меньше миллиона ко",
+    "size": [
+     800,
+     450
+    ],
+    "rank": 1,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_7_08.jpg"
+   },
+   {
+    "event": "15a5ff78-8f52-4ca6-97b0-bd99ad5a0f42",
+    "source": "3DNews",
+    "title": "«Беспрецедентные» предзаказы GTA VI подорвали продажи GTA V — меньше миллиона ко",
+    "size": [
+     800,
+     450
+    ],
+    "rank": 2,
+    "relationship": "same_domain",
+    "suitable": true,
+    "thumb": "story_7_09.jpg"
+   }
+  ]
+ }
+]

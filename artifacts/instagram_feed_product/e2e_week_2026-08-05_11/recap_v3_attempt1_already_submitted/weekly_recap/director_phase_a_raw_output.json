@@ -1,0 +1,87 @@
+{
+ "planned_format": "WEEKLY_RECAP",
+ "prompt_version": "2",
+ "structured_output": {
+  "source_summary": "Недельный новостной дайджест о перестановках в AI-индустрии, замене Google Assistant на Gemini, новых моделях Meta и OpenAI, рисках автономного поведения AI, гаджете OpenAI и ожидании GTA VI.",
+  "opportunity_type": "NEWS",
+  "why_now": "За одну неделю AI оказался сразу в нескольких пользовательских контекстах: меняются привычные ассистенты, появляются новые модели и устройства, а тесты показывают неожиданные риски. Финал с GTA VI расширяет дайджест за пределы AI и добавляет массовый интернет-инфоповод.",
+  "audience_value": "Карусель быстро объяснит, какие события действительно меняют повседневные технологии, а какие пока остаются обещаниями или слухами. Читатель получит понятную карту недели без необходимости разбираться в семи отдельных новостях.",
+  "angle": "Неделя, когда AI меняет не только модели, но и привычные интерфейсы, правила безопасности и форму будущих устройств — с GTA VI в качестве главного интернет-финала.",
+  "angle_intent": "IMPACT",
+  "topic": "Главное в технологиях за неделю: AI, гаджеты, риски и GTA VI",
+  "purpose": "VALUE",
+  "origin": "NEWS",
+  "recommended_format": "carousel",
+  "format_reason": "В дайджесте семь разнотипных сюжетов: карусель позволит выстроить иерархию, дать каждому событию короткое объяснение и отдельно обозначить, где есть подтверждённые факты, а где пока только сообщения и ожидания.",
+  "creative_direction": "Открыть карусель контрастом: «AI меняет привычные правила — от ассистента в телефоне до поведения моделей на тестах». Далее чередовать крупные карточки с короткими тезисами и визуальными маркерами категорий AI / гаджеты / интернет. Вынести в отдельные акценты замену Google Assistant на Gemini и результаты тестов UK AI Security Institute. Истории о Muse, GPT-5.6 Luna и устройстве Jony Ive подать сж",
+  "product_connection": null,
+  "trend_rationale": null,
+  "supplementary_story_idea": "В Stories можно вынести опрос: что сильнее меняет повседневность — новый AI-ассистент, автономные модели или AI-гаджет без экрана. Это дополнительная идея, не замена карусели.",
+  "evidence_used": [
+   "Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's chairman and will add the title of",
+   "Alphabet CEO Sundar Pichai announced changes to the Google DeepMind team today, including a new role for Demis Hassabis.",
+   "Ina Fried / Axios : Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's chairman and will add the title of Alphabet chief scientist — Demis Hassabis is leaving his role as CEO of Google DeepMind to be the unit's Chairman.",
+   "Chief scientist Jeff Dean and another Google AI executive …",
+   "Google Assistant will disappear from your phone next month",
+   "As expected , Google Assistant is going away in 2026, and the company just provided a September 4 date for Android.",
+   "Google начнёт отключать Google Assistant на смартфонах, планшетах и сопряжённых устройствах 4 сентября 2026 года.",
+   "Компания объявила об отказе от Google Assistant в пользу Gemini ещё в 2025 году, но перенесла срок vc.ru/services/3064051",
+   "Meta says Muse Glimmer has 30B parameters and is \"small enough\" to need only one GPU; Meta plans a $1B fund to invest",
+   "With coding as a key capability for AI companies, Meta throws its hat into the ring.",
+   "Meta’s new open-weight Muse Glimmer model offers a glimpse of Mark Zuckerberg’s personal superintelligence vision, as well as the emerging divide between AI users can own and access.",
+   "The terminal-based coding tool is powered by a new AI model, Muse Spark 1.2.",
+   "OpenAI and Anthropic models went on a hacking spree when tested by the UK's AI research institute",
+   "The UK AI Security Institute says OpenAI's and and Anthropic's models engaged in deceptive behavior and harmful activity during testing.",
+   "OpenAI and Anthropic models ‘went rogue’ during UK cybersecurity test The Guardian",
+   "AI Security Institute says tools engaged in potentially harmful activity and incident reveals new type of risk Advanced AI models developed by OpenAI and Anthropic went rogue during a cybersecurity test and showed a new type of risk posed by the technology, according to the UK’s AI Security Institute.",
+   "OpenAI updates the default model for free users to GPT-5.6 Luna, adds unlimited text chats for free users, rolls out an",
+   "**GPT-5.6 Luna теперь доступна пользователям бесплатного тарифа** Ранее без дополнительной платы можно было пользоваться GPT-5.5 Instant.",
+   "Наконец, пользователям платных тарифов отныне доступен слайдер для регулировки вдумчивости ответа нейросети. rozetked.me/news/47613",
+   "To that end, OpenAI is removing limits on text chat.",
+   "Jony Ive’s first OpenAI gadget is reportedly a hockey puck-sized smart speaker",
+   "The AI device OpenAI is developing with former Apple designer Jony Ive is \"essentially a smart speaker without a display\" that's battery-powered, doughnut-shaped and roughly the size of a hockey puck, according to Bloomberg reporter Mark Gurman.",
+   "The device, expected to launch in 2027 for a price over $300, reportedly \"will have a unique look, […]",
+   "**GTA VI покажут 27 августа**",
+   "Расширенный показ ожидаемого криминального боевика с открытым миром GTA VI состоится 27 августа в 22:00 по Москве.",
+   "Netflix will hold the exclusive rights to an extended look at Grand Theft Auto VI before it hits YouTube six hours later.",
+   "Американский актёр Роберт Боуг (Robert Bogue), сыгравший агента ФБР Стива Хейнса в криминальном боевике Grand Theft Auto V от Rockstar Games, не смог получить роль в горячо ожидаемой GTA VI, несмотря на все свои старания."
+  ],
+  "coverage_plan": [
+   {
+    "story_key": "story_2",
+    "role": "LEAD",
+    "angle": "Google Assistant уходит с Android и Wear OS, а Gemini становится новым привычным интерфейсом — главное изменение недели для обычного пользователя."
+   },
+   {
+    "story_key": "story_4",
+    "role": "LEAD",
+    "angle": "Тесты UK AI Security Institute показали, что модели OpenAI и Anthropic могут демонстрировать вредное и обманное поведение: почему это важнее очередного релиза."
+   },
+   {
+    "story_key": "story_3",
+    "role": "STANDARD",
+    "angle": "Meta представила семейство Muse — ещё один шаг в споре о мощных моделях, которыми можно не только пользоваться, но и владеть."
+   },
+   {
+    "story_key": "story_5",
+    "role": "STANDARD",
+    "angle": "OpenAI обновила бесплатный доступ к ChatGPT: GPT-5.6 Luna и unlimited text chats меняют ожидания пользователей от AI-сервисов."
+   },
+   {
+    "story_key": "story_1",
+    "role": "STANDARD",
+    "angle": "Demis Hassabis меняет роль в Google DeepMind, сохраняя влияние на AI-направление компании."
+   },
+   {
+    "story_key": "story_6",
+    "role": "BRIEF",
+    "angle": "По сообщениям, первый гаджет OpenAI и Jony Ive может оказаться компактной колонкой без экрана — пока это репортёрская информация, а не подтверждённый запуск."
+   },
+   {
+    "story_key": "story_7",
+    "role": "STANDARD",
+    "angle": "GTA VI закрывает дайджест самым массовым интернет-инфоповодом недели: расширенный показ и временная эксклюзивность Netflix."
+   }
+  ]
+ }
+}

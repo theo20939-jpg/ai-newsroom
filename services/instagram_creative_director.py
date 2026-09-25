@@ -105,11 +105,15 @@ _SINGLE_PROMPT_VERSION = "6"
 _CREATIVE_DIRECTOR_MAX_TOKENS = 16_000  # upper safety bound (not a target): keeps the gateway worst-case estimate from pricing a model-maximum completion
 _CAROUSEL_PROMPT_VERSION = "10.9"  # judgment reset: editor-first system text, scoped product rule, editorial_decision first, 22 rules removed; 10.8 = compared angles + critic; 10.7 = content pass: headline + slide_body, editorial_angle, information density; Phase B.5.1.2: v9.1 = v9 + evidence-reference contract (E1..En handles); v9 = Visual DNA v2 families, bounded roles, meta-language guard
 CAROUSEL_PROMPT_VERSION = _CAROUSEL_PROMPT_VERSION
-_EVIDENCE_HANDLE_CAROUSEL_VERSIONS = frozenset({"9.1", "10", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8", "10.9"})  # prompt versions whose input lists evidence as handles (E1, E2, ...)
-MEDIA_FIRST_CAROUSEL_VERSIONS = frozenset({"10", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8", "10.9"})  # Phase B.6: prompt versions under the media-first + KAGE-voice contract
-HOOK_MECHANIC_CAROUSEL_VERSIONS = frozenset({"10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8", "10.9"})  # Phase B.6.2: prompt versions whose schema carries hook_mechanic
-BODY_COPY_CAROUSEL_VERSIONS = frozenset({"10.7", "10.8", "10.9"})  # content pass: headline + explanatory slide_body, editorial_angle, information-density contract
-EDITORIAL_CRITIC_CAROUSEL_VERSIONS = frozenset({"10.8", "10.9"})  # editorial judgment reset: angle_candidates + deterministic editorial critic
+# weekly recap product pass: a news_recap carousel is planned with 10.10 (v10.9 + the visual-first weekly-roundup direction); every
+# other archetype keeps 10.9 byte-identical
+_RECAP_CAROUSEL_PROMPT_VERSION = "10.10"
+RECAP_COVER_MIN_STORIES = 3  # a weekly recap cover shows at least this many different stories when that many have a suitable photo
+_EVIDENCE_HANDLE_CAROUSEL_VERSIONS = frozenset({"9.1", "10", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8", "10.9", "10.10"})  # prompt versions whose input lists evidence as handles (E1, E2, ...)
+MEDIA_FIRST_CAROUSEL_VERSIONS = frozenset({"10", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8", "10.9", "10.10"})  # Phase B.6: prompt versions under the media-first + KAGE-voice contract
+HOOK_MECHANIC_CAROUSEL_VERSIONS = frozenset({"10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8", "10.9", "10.10"})  # Phase B.6.2: prompt versions whose schema carries hook_mechanic
+BODY_COPY_CAROUSEL_VERSIONS = frozenset({"10.7", "10.8", "10.9", "10.10"})  # content pass: headline + explanatory slide_body, editorial_angle, information-density contract
+EDITORIAL_CRITIC_CAROUSEL_VERSIONS = frozenset({"10.8", "10.9", "10.10"})  # editorial judgment reset: angle_candidates + deterministic editorial critic
 _MEDIA_FIRST_CAROUSEL_VERSIONS = MEDIA_FIRST_CAROUSEL_VERSIONS
 _EVIDENCE_HANDLE_RE = re.compile(r"^E([1-9]\d*)$")
 
@@ -822,16 +826,27 @@ async def generate_carousel_creative(
         director_input = replace(director_input, content_archetype=archetype)
     output, call = await _call_creative_director(
         gateway, prompt_repository, prompt_name=CAROUSEL_PROMPT_NAME, director_input=director_input,
-        prompt_version=_CAROUSEL_PROMPT_VERSION,
+        prompt_version=_RECAP_CAROUSEL_PROMPT_VERSION if archetype == "news_recap" else _CAROUSEL_PROMPT_VERSION,
     )
     try:
         outcome = _validate_carousel_output(output, call, director_input=director_input, archetype=archetype)
         if director_input.recap_required_subjects:
-            covered = {slide.media_subject for slide in outcome.carousel.slides}
+            # a story is covered by a slide of its OWN - the week's cover and the closer frame the week, they never stand in for a story
+            covered = {slide.media_subject for slide in outcome.carousel.slides if getattr(slide, "role", None) not in ("hook", "closing")}
             missing = [key for key in director_input.recap_required_subjects if key not in covered]
             if missing:  # a recap collapsed into fewer stories: the existing single contract retry gets this exact note
                 raise MediaFirstContractError(f"weekly recap coverage: stories {missing} have no slide of their own - every selected "
                                               "story must be covered by at least one slide with its key as media_subject")
+            photo_stories = [k for k in director_input.recap_required_subjects
+                             if k in set(director_input.available_media_subjects) - set(director_input.unsuitable_media_subjects)]
+            hook = outcome.carousel.slides[0] if outcome.carousel.slides else None
+            cover_stories = {r.content_ref for r in (hook.layout.regions if hook is not None and getattr(hook, "layout", None) else [])
+                             if r.kind == "media" and r.content_ref in photo_stories}
+            if hook is not None and len(photo_stories) >= RECAP_COVER_MIN_STORIES and len(cover_stories) < RECAP_COVER_MIN_STORIES:
+                # the weekly cover frames the WEEK: it shows several stories, never one story's card
+                raise MediaFirstContractError(f"weekly recap cover: slide 1 shows {len(cover_stories)} stories' images - the cover must show "
+                                              f"{RECAP_COVER_MIN_STORIES} or more different stories (one media region per story key, e.g. "
+                                              f"{photo_stories[:4]}) and a headline about the week, not about one story")
         return outcome
     except Exception as exc:
         _emit_diagnostic("validation_error", {"error_type": type(exc).__name__, "error": str(exc)[:1500]})

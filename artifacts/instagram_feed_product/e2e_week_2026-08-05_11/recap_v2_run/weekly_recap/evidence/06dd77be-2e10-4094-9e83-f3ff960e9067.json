@@ -1,0 +1,107 @@
+{
+ "post_id": "06dd77be-2e10-4094-9e83-f3ff960e9067",
+ "format": "weekly_recap_story",
+ "premise": "Netflix briefly secured an exclusive GTA VI trailer, while reports pointed to an August 27 reveal.",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Расширенный показ ожидаемого криминального боевика с открытым миром GTA VI состоится 27 августа в 22:00 по Москве. Rockstar Games сообщила об этом в своём официальном микроблоге. Источник изображения: Rockstar Games",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Netflix will hold the exclusive rights to an extended look at Grand Theft Auto VI before it hits YouTube six hours later.",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Американский актёр Роберт Боуг (Robert Bogue), сыгравший агента ФБР Стива Хейнса в криминальном боевике Grand Theft Auto V от Rockstar Games, не смог получить роль в горячо ожидаемой GTA VI, несмотря на все свои старания. Источник изображений: Rockstar Games",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "**GTA VI покажут 27 августа** Об этом сообщила Rockstar, пообещав «расширенный взгляд» на игру. Возможно, наконец покажут геймплей. Трансляция пройдёт на Netflix, но посмотреть запись можно будет и на YouTube с задержкой в шесть часов. Стрим начнётся в 22:00 по МСК. 💼 [Rozetked | Подписаться]",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Анонсированный накануне расширенный показ амбициозного криминального боевика с открытым миром GTA VI от Rockstar Games вызвал бурную реакцию среди игроков, и дело не только в большом ажиотаже вокруг проекта. Источник изображений: Rockstar Games",
+   "status": "OK"
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Американский холдинг Take-Two Interactive Software в рамках отчёта за первый квартал 2027 фискального года рассказал не только о «беспрецедентном» уровне предзаказов GTA VI, но и об актуальных продажах уже вышедших игр. Источник изображений: Rockstar Games",
+   "status": "OK"
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "Расширенный показ ожидаемого криминального боевика с открытым миром GTA VI состоится 27 августа в 22:00 по Москве.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Расширенный показ ожидаемого криминального боевика с открытым миром GTA VI состоится 27 августа в 22:00 по Москве."
+  },
+  {
+   "kind": "FACT",
+   "text": "Netflix will hold the exclusive rights to an extended look at Grand Theft Auto VI before it hits YouTube six hours later.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Netflix will hold the exclusive rights to an extended look at Grand Theft Auto VI before it hits YouTube six hours later."
+  },
+  {
+   "kind": "FACT",
+   "text": "Американский актёр Роберт Боуг (Robert Bogue), сыгравший агента ФБР Стива Хейнса в криминальном боевике Grand Theft Auto V от Rockstar Games, не смог получить роль в горячо ожидаемой GTA VI, несмотря на все свои старания.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Американский актёр Роберт Боуг (Robert Bogue), сыгравший агента ФБР Стива Хейнса в криминальном боевике Grand Theft Auto V от Rockstar Games, не смог получить роль в горячо ожидаемой GTA VI, несмотря на все свои старания."
+  },
+  {
+   "kind": "FACT",
+   "text": "**GTA VI покажут 27 августа** Об этом сообщила Rockstar, пообещав «расширенный взгляд» на игру.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "**GTA VI покажут 27 августа** Об этом сообщила Rockstar, пообещав «расширенный взгляд» на игру."
+  },
+  {
+   "kind": "FACT",
+   "text": "Трансляция пройдёт на Netflix, но посмотреть запись можно будет и на YouTube с задержкой в шесть часов.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Трансляция пройдёт на Netflix, но посмотреть запись можно будет и на YouTube с задержкой в шесть часов."
+  },
+  {
+   "kind": "FACT",
+   "text": "Анонсированный накануне расширенный показ амбициозного криминального боевика с открытым миром GTA VI от Rockstar Games вызвал бурную реакцию среди игроков, и дело не только в большом ажиотаже вокруг проекта.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Анонсированный накануне расширенный показ амбициозного криминального боевика с открытым миром GTA VI от Rockstar Games вызвал бурную реакцию среди игроков, и дело не только в большом ажиотаже вокруг проекта."
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "NOT_AVAILABLE",
+  "url": null,
+  "width": null,
+  "height": null,
+  "mime_type": null,
+  "source": null,
+  "reason": "recap media is resolved per story by the recap bundle"
+ },
+ "quality": "SUFFICIENT",
+ "why": "6 premise facts",
+ "excluded_bodies": []
+}

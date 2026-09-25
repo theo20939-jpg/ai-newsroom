@@ -405,6 +405,10 @@ async def main() -> None:
             if bundle is None:
                 row.update(reason="recap_bundle_none", stage="OTHER")
             else:
+                for story in bundle.stories:  # the source media decision per story, as pixels
+                    if story.image_bytes:
+                        (out / key / "story_media").mkdir(parents=True, exist_ok=True)
+                        (out / key / "story_media" / f"{story.key}.img").write_bytes(story.image_bytes)
                 _write(out / key / "bundle.json", {"subjects": bundle.subjects, "evidence": bundle.evidence,
                                                    "stories": [{"key": s.key, "title": s.title, "has_image": bool(s.image_bytes)} for s in bundle.stories]})
                 opportunity = ContentOpportunity(
