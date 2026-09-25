@@ -1,0 +1,117 @@
+{
+ "art_passed": true,
+ "blocking": [],
+ "warnings": [],
+ "slides": [
+  {
+   "arrangement": "standard",
+   "media_scale_orientation": null,
+   "media_scale_rescued_rejected_plan": null,
+   "recap_frame": true,
+   "body_placement": null,
+   "layout_variant": "declared_top-center_multi_BALANCED_5+",
+   "media": [
+    "story_2",
+    "story_5",
+    "story_3",
+    "story_7"
+   ]
+  },
+  {
+   "arrangement": "standard",
+   "media_scale_orientation": null,
+   "media_scale_rescued_rejected_plan": null,
+   "recap_frame": true,
+   "body_placement": "plan+recap_body_first_sentence",
+   "layout_variant": "declared_top-center_bottom-center_DOMINANT_3-4",
+   "media": [
+    "story_2"
+   ]
+  },
+  {
+   "arrangement": "standard",
+   "media_scale_orientation": null,
+   "media_scale_rescued_rejected_plan": null,
+   "recap_frame": true,
+   "body_placement": null,
+   "layout_variant": "declared_bottom-left_top-center_DOMINANT_3-4",
+   "media": [
+    "story_5"
+   ]
+  },
+  {
+   "arrangement": "standard",
+   "media_scale_orientation": null,
+   "media_scale_rescued_rejected_plan": null,
+   "recap_frame": true,
+   "body_placement": null,
+   "layout_variant": "declared_top-center_bottom-center_DOMINANT_3-4",
+   "media": [
+    "story_3"
+   ]
+  },
+  {
+   "arrangement": "standard",
+   "media_scale_orientation": null,
+   "media_scale_rescued_rejected_plan": null,
+   "recap_frame": true,
+   "body_placement": null,
+   "layout_variant": "declared_middle-center_middle-left_SUPPORTING_3-4",
+   "media": [
+    "story_1"
+   ]
+  },
+  {
+   "arrangement": "standard",
+   "media_scale_orientation": null,
+   "media_scale_rescued_rejected_plan": null,
+   "recap_frame": true,
+   "body_placement": null,
+   "layout_variant": "declared_middle-center_middle-right_SUPPORTING_3-4",
+   "media": [
+    "story_4"
+   ]
+  },
+  {
+   "arrangement": "standard",
+   "media_scale_orientation": "text_bottom",
+   "media_scale_rescued_rejected_plan": [
+    "text_does_not_fit_declared_regions"
+   ],
+   "recap_frame": true,
+   "body_placement": null,
+   "layout_variant": "declared_bottom-center_top-center_DOMINANT_3-4",
+   "media": [
+    "story_6"
+   ]
+  },
+  {
+   "arrangement": "standard",
+   "media_scale_orientation": null,
+   "media_scale_rescued_rejected_plan": null,
+   "recap_frame": true,
+   "body_placement": null,
+   "layout_variant": "declared_top-center_bottom-center_DOMINANT_3-4",
+   "media": [
+    "story_7"
+   ]
+  },
+  {
+   "arrangement": "collage",
+   "media_scale_orientation": null,
+   "media_scale_rescued_rejected_plan": null,
+   "recap_frame": true,
+   "body_placement": null,
+   "layout_variant": "declared_top-center_multi_SUPPORTING_5+",
+   "media": [
+    "story_5",
+    "story_3",
+    "story_2"
+   ]
+  }
+ ],
+ "unsuitable_for_vision": [
+  "story_1",
+  "story_4"
+ ]
+}

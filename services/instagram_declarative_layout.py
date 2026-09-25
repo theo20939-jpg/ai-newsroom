@@ -606,7 +606,8 @@ def _render_declared_once(
                 # weekly recap: framed around the photo's own subject; a crop that would cut the subject shows the whole photo instead
                 from services.instagram_focal_crop import frame_photo
 
-                tile, framing = frame_photo(image, iw, ih)
+                # a hero region (a large share of the slide) takes a bold subject-aware crop; a small tile keeps the whole subject
+                tile, framing = frame_photo(image, iw, ih, min_kept=0.5 if region.w * region.h >= 0.4 else 0.82)
                 if framing != "focal_cover":
                     mode = "contain"
             else:

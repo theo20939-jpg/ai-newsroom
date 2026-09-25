@@ -97,12 +97,13 @@ def subject_kept(window: tuple[float, float, float, float], box: tuple[float, fl
     return ix * iy / area
 
 
-def frame_photo(image: Image.Image, width: int, height: int) -> tuple[Image.Image, str]:
-    """(tile, treatment): a focal cover crop when it keeps the subject, else the whole photo on a blurred extension of itself."""
+def frame_photo(image: Image.Image, width: int, height: int, *, min_kept: float = MIN_SUBJECT_KEPT) -> tuple[Image.Image, str]:
+    """(tile, treatment): a focal cover crop when it keeps enough of the subject (`min_kept`), else the whole photo on a blurred
+    extension of itself."""
     src = image.convert("RGB")
     focus = focus_of(image)
     window = cover_window(src.size, (width, height), focus)
-    if subject_kept(window, focus.box) >= MIN_SUBJECT_KEPT:
+    if subject_kept(window, focus.box) >= min_kept:
         sw, sh = src.size
         crop = src.crop((round(window[0] * sw), round(window[1] * sh), round(window[2] * sw), round(window[3] * sh)))
         return crop.resize((width, height), Image.Resampling.LANCZOS).convert("RGBA"), "focal_cover"

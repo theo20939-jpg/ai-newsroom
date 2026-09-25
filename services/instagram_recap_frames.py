@@ -198,3 +198,34 @@ def with_recap_cta(carousel: Any) -> Any:
         return carousel
     slides[-1] = slides[-1].model_copy(update={"slide_copy": RECAP_CTA_HEADLINE, "slide_body": RECAP_CTA_BODY})
     return carousel.model_copy(update={"slides": slides})
+
+
+HERO_PHOTO_SHARE = 0.6    # a strong recap photo takes about 60% of the slide, full width - it IS the slide, not a card on it
+
+
+def hero_story_layout(layout: dict[str, Any] | None, *, role: str, index: int, aspects: dict[str, float] | None = None) -> dict[str, Any] | None:
+    """A recap story slide whose visual is a real photo (no fact graphic) is IMAGE-LED: the photo spans the full width, anchored to the
+    top or bottom edge, about 60% of the canvas, with the headline and its line on a solid panel (founder direction: a large
+    subject-aware crop beats a timid inset - a square portrait too: the focal crop keeps the face). Consecutive slides alternate
+    photo-top / photo-bottom. None when the slide has no photo or carries a fact graphic (editorial slides stay)."""
+    if not layout or role != "story":
+        return None
+    regions = list(layout.get("regions") or [])
+    if any(r.get("kind") == "graphic" and r.get("graphic_type") in ("flow_diagram", "poll_cards", "ui_frame") for r in regions):
+        return None
+    photo = next((r.get("content_ref") for r in sorted(regions, key=lambda r: -(r.get("w", 0) * r.get("h", 0)))
+                  if r.get("kind") == "media" and r.get("content_ref")), None)
+    if photo is None:
+        return None
+    surface = [r for r in regions if r.get("kind") == "surface"]
+    share = HERO_PHOTO_SHARE
+    if index % 2 == 0:  # photo on top, bleeding off three edges; text panel below, clear of the brand mark
+        media, texts = _tile(photo, 0.0, 0.0, 1.0, share, 1), [
+            _text("copy", share + 0.025, 0.18, "HEADLINE_XL", 2, "primary"),
+            {**_text("body", share + 0.215, 0.13, "BODY", 3, "muted"), "w": 0.64}]
+    else:  # text panel on top, photo bleeding off the bottom
+        media, texts = _tile(photo, 0.0, 1.0 - share, 1.0, share, 1), [
+            _text("copy", 0.05, 0.18, "HEADLINE_XL", 2, "primary"), _text("body", 0.24, 0.13, "BODY", 3, "muted")]
+    # the brand mark sits bottom-right on every hero slide: clear of the text panel (photo-top) or on the photo itself (photo-bottom)
+    return {**layout, "arrangement": "standard", "media_dominance": "DOMINANT", "visual_weight": "MEDIA", "logo_position": "BOTTOM_RIGHT",
+            "show_progress": False, "regions": [*surface, media, *texts]}  # no progress marker over a top headline

@@ -377,3 +377,45 @@ def test_a_photo_band_takes_the_photos_shape_within_bounds():
     assert _band_height(2.0) == pytest.approx(0.4)   # a 2:1 phone shot: a 40% band holds it uncropped
     assert _band_height(3.5) == 0.36                  # a panorama never becomes a sliver
     assert _band_height(1.0) == 0.52                  # a square portrait keeps the proven slot (focal crop keeps the face)
+
+
+# --- story-slide photo treatment: a strong photo IS the slide ------------------------------------------------------------------------
+
+def test_a_strong_photo_story_slide_becomes_image_led_and_alternates():
+    from services.instagram_recap_frames import HERO_PHOTO_SHARE, hero_story_layout
+
+    top = hero_story_layout(_plan(["story_6"]), role="story", index=6, aspects={"story_6": 1.0})
+    bottom = hero_story_layout(_plan(["story_7"]), role="story", index=7, aspects={"story_7": 1.78})
+    for layout, edge in ((top, "top"), (bottom, "bottom")):
+        photo = next(r for r in layout["regions"] if r["kind"] == "media")
+        assert (photo["x"], photo["w"], photo["h"]) == (0.0, 1.0, HERO_PHOTO_SHARE)  # full width, the dominant surface
+        assert (photo["y"] == 0.0) if edge == "top" else (photo["y"] + photo["h"] == pytest.approx(1.0))  # anchored to an edge
+        assert layout["logo_position"] == "BOTTOM_RIGHT" and layout["show_progress"] is False
+
+
+def test_fact_graphic_or_photo_less_slides_are_not_forced_into_a_hero():
+    from services.instagram_recap_frames import hero_story_layout
+
+    graphic = _plan(["story_1"])
+    graphic["regions"].append({"kind": "graphic", "x": 0.07, "y": 0.6, "w": 0.86, "h": 0.25, "z": 3, "graphic_type": "flow_diagram",
+                               "flow_steps": ["CEO", "Chairman"]})
+    assert hero_story_layout(graphic, role="story", index=4) is None
+    assert hero_story_layout(_plan([]), role="story", index=4) is None
+    assert hero_story_layout(_plan(["story_2"]), role="hook", index=0) is None
+
+
+def test_the_rendered_hero_slide_keeps_its_plan_and_a_large_crop():
+    from services.instagram_carousel_layouts import render_carousel_slide
+    from services.instagram_declarative_layout import FOCAL_FRAMING
+    from services.instagram_platform_renderer import InstagramRenderProfile, profile_spec
+
+    token = FOCAL_FRAMING.set(True)
+    try:
+        result = render_carousel_slide(spec=profile_spec(InstagramRenderProfile.CAROUSEL_SLIDE), role="story", index=3, total=9,
+                                       slide_copy="Meta ставит на Muse", slide_body="Muse Glimmer получила 30B параметров.",
+                                       source_evidence=None, package_identity="p", media_mode="SOURCE", layout_plan=_plan(["story_3"]),
+                                       subject_assets={"story_3": (Image.open(io.BytesIO(_photo(3, size=(1500, 1000)))), "id3")}, recap=True)
+    finally:
+        FOCAL_FRAMING.reset(token)
+    assert result.notes.get("recap_frame") is True and not result.notes.get("media_scale_rescued_rejected_plan")
+    assert result.notes["media_canvas_coverage"] >= 0.55
