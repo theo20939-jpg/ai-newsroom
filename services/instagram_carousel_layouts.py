@@ -795,9 +795,10 @@ def render_carousel_slide(
     body_placement = None
     recap_frame = None
     if recap:
-        from services.instagram_recap_frames import recap_frame_layout, single_photo_story_layout
+        from services.instagram_recap_frames import editorial_story_layout, recap_frame_layout, single_photo_story_layout
 
-        recap_frame = recap_frame_layout(layout_plan, role=role.strip().lower())
+        recap_frame = recap_frame_layout(layout_plan, role=role.strip().lower()) or editorial_story_layout(
+            layout_plan, role=role.strip().lower(), slide_text=f"{slide_copy} {slide_body or ''}")
         single = None if recap_frame is not None else single_photo_story_layout(layout_plan, role=role.strip().lower())
         if single is not None:
             # one photo instead of several crops of it - only when that plan is itself drawable; otherwise the planned one is kept

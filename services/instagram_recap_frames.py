@@ -3,10 +3,12 @@
 The Creative Director chooses WHICH stories frame the week (the media regions' story keys, in its order) and writes the copy; a free-form
 multi-image collage is geometry it cannot place reliably (real recap v2: fragments over the headline and the logo, tiny closer crops, and a
 cover that collapsed to one story's photo). For a news_recap cover (role `hook`) or closer (role `closing`) that shows three or more
-different stories, the geometry is fixed here: headline and body on top, the stories as a clean photo grid (cover) or strip (closer).
+different stories, the geometry is fixed here: headline and body on top, the stories as a clean photo grid (the cover's under the headline, the
+closer's under the save line).
 Only x / y / w / h, frame and tilt of the media and the text boxes change - never a story key, the copy, the background or the palette."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 MIN_FRAME_STORIES = 3
@@ -46,11 +48,6 @@ def _grid(refs: list[str], x0: float, y0: float, x1: float, y1: float) -> list[d
     return [_tile(ref, x0 + (i % 2) * (tw + _GAP), y0 + (i // 2) * (th + _GAP), tw, th, 1) for i, ref in enumerate(refs)]
 
 
-def _strip(refs: list[str], x0: float, y0: float, x1: float, h: float) -> list[dict[str, Any]]:
-    tw = (x1 - x0 - _GAP * (len(refs) - 1)) / len(refs)
-    return [_tile(ref, x0 + i * (tw + _GAP), y0, tw, h, 1) for i, ref in enumerate(refs)]
-
-
 def recap_frame_layout(layout: dict[str, Any] | None, *, role: str) -> dict[str, Any] | None:
     """The framed layout for a recap cover / closer that shows >= MIN_FRAME_STORIES different stories, else None (the plan is kept)."""
     if not layout or role not in ("hook", "closing"):
@@ -61,10 +58,11 @@ def recap_frame_layout(layout: dict[str, Any] | None, *, role: str) -> dict[str,
     regions = [r for r in layout.get("regions") or [] if r.get("kind") == "surface"]
     if role == "hook":
         regions += [_text("copy", 0.06, 0.2, "HEADLINE_XL", 3, "primary"), _text("body", 0.27, 0.13, "BODY", 3, "muted")]
-        regions += _grid(refs, 0.04, 0.42, 0.96, 0.87)  # clear of the brand mark in the bottom corner
+        regions += _grid(refs, 0.04, 0.445, 0.96, 0.875)  # breathing room under the copy, clear of the brand mark
     else:
         regions += [_text("copy", 0.07, 0.2, "HEADLINE_XL", 2, "primary"), _text("body", 0.29, 0.16, "BODY", 4, "muted")]
-        regions += _strip(refs, 0.07, 0.5, 0.93, 0.3)
+        # landscape tiles: news photos are wide - a strip of narrow portrait slots cut every picture down to an unrecognisable sliver
+        regions += _grid(refs, 0.07, 0.48, 0.93, 0.87)
     return {**layout, "arrangement": "standard", "regions": regions}
 
 
@@ -96,3 +94,51 @@ def single_photo_story_layout(layout: dict[str, Any] | None, *, role: str) -> di
     kept = [{**r, "x": 0.07, "w": 0.86} if r.get("kind") == "text" and clear_of_photos(0.07, r["y"], 0.86, r["h"]) else r for r in kept]
     media = sum(1 for r in kept if r.get("kind") == "media")
     return {**layout, "regions": kept, "arrangement": "standard" if media < 2 else layout.get("arrangement", "standard")}
+
+
+_DIGIT = re.compile(r"\d")
+_WORD = re.compile(r"[^\W\d_]{4,}")
+
+
+def _truncated(label: str, text: str) -> bool:
+    """A label word that is only the START of a word in the slide's own text ('подраздел' of 'подразделения') was cut to a length cap."""
+    words = {w.lower() for w in _WORD.findall(text)}
+    return any(w.lower() not in words and any(full.startswith(w.lower()) for full in words) for w in _WORD.findall(label))
+
+
+def meaningful_fact_graphic(labels: list[str], slide_text: str) -> bool:
+    """A recap fact graphic earns its cells only with real data - most labels carry a number or a date ('30B', '1 GPU', '27 августа') -
+    and no label is a truncated word. Topic labels, roles and categories ('Тестирование', 'Риск выявлен') are not facts."""
+    labels = [label for label in labels if label.strip()]
+    if not labels or any(_truncated(label, slide_text) for label in labels):
+        return False
+    return sum(1 for label in labels if _DIGIT.search(label)) * 2 > len(labels)
+
+
+def editorial_story_layout(layout: dict[str, Any] | None, *, role: str, slide_text: str) -> dict[str, Any] | None:
+    """A recap story slide whose only graphic is a set of weak fact cells becomes an EDITORIAL slide instead: a large headline, its line
+    of context and - when the plan carries one - the story's own photo as a modest supporting picture (never a forced hero). None when
+    the slide has no such graphic or its cells hold real data. Without any photo the planned graphic is kept (a slide needs a visual)."""
+    if not layout or role != "story":
+        return None
+    regions = list(layout.get("regions") or [])
+    graphics = [r for r in regions if r.get("kind") == "graphic" and r.get("graphic_type") in ("flow_diagram", "poll_cards")]
+    if not graphics:
+        return None
+    labels = [label for g in graphics for label in (g.get("flow_steps") or [])]
+    if graphics[0].get("graphic_type") == "poll_cards":
+        labels = [part.strip() for part in re.split(r"[|/,;]", slide_text.split(":", 1)[-1]) if part.strip()]
+    if meaningful_fact_graphic(labels, slide_text):
+        return None
+    photo = next((r.get("content_ref") for r in regions if r.get("kind") == "media" and r.get("content_ref")), None)
+    if photo is None:
+        return None
+    surface = [r for r in regions if r.get("kind") == "surface"]
+    # headline and its line read as one block at the top; the supporting photo sits below it, on the side away from the brand mark
+    photo_x = 0.34 if layout.get("logo_position", "BOTTOM_RIGHT") == "BOTTOM_LEFT" else 0.08
+    return {**layout, "arrangement": "standard", "media_dominance": "SUPPORTING", "visual_weight": "MIXED", "regions": [
+        *surface,
+        _text("copy", 0.09, 0.2, "HEADLINE_XL", 3, "primary"),
+        _text("body", 0.3, 0.13, "BODY", 4, "muted"),
+        {**_tile(photo, photo_x, 0.5, 0.58, 0.33, 1), "frame": "paper"},
+    ]}

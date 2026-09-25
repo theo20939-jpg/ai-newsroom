@@ -58,6 +58,7 @@ _LEADING = {"MEGA": 0.06, "NUMERAL": 0.06, "DISPLAY": 0.10, "HEADLINE_XL": 0.11,
 _MIN_BODY_FONT_FRAC = 0.037  # ~40px body copy on a 1080px canvas (real v10.7 validation: a 37px body read as fine print)
 # the renderer asks for a readable body first; only when no layout (declared or rebuilt) can hold it does the caller relax this, never
 # dropping the paid image or the body itself
+FOCAL_FRAMING: ContextVar[bool] = ContextVar("FOCAL_FRAMING", default=False)  # recap: subject-aware photo framing
 BODY_MIN_FONT_FRAC: ContextVar[float] = ContextVar("instagram_body_min_font_frac", default=_MIN_BODY_FONT_FRAC)
 _MIN_FONT_FRAC = 0.03  # minimum readable size (about 32px on a 1080px canvas)
 GRAPHITE = kage.GRAPHITE
@@ -601,6 +602,13 @@ def _render_declared_once(
             elif mode == "contain":
                 bg = canvas.getpixel((min(W - 1, max(0, x0 + 2)), min(H - 1, max(0, y0 + 2))))[:3]
                 tile = fit_image_contain(image, width=iw, height=ih, bg=bg).image
+            elif FOCAL_FRAMING.get() and mode == "cover":
+                # weekly recap: framed around the photo's own subject; a crop that would cut the subject shows the whole photo instead
+                from services.instagram_focal_crop import frame_photo
+
+                tile, framing = frame_photo(image, iw, ih)
+                if framing != "focal_cover":
+                    mode = "contain"
             else:
                 tile = fit_image_cover(image, width=iw, height=ih, focus_x=fx, focus_y=fy).image
             # the treatment LABEL is derived from the shared vocabulary (services.instagram_editorial_layouts), never hand-typed here

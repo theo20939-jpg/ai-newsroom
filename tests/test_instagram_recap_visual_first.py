@@ -166,11 +166,11 @@ def test_a_recap_cover_showing_several_stories_becomes_a_clean_grid_under_the_co
                 assert a["x"] + a["w"] <= b["x"] + 1e-9 or b["x"] + b["w"] <= a["x"] + 1e-9 or a["y"] + a["h"] <= b["y"] + 1e-9 or b["y"] + b["h"] <= a["y"] + 1e-9
 
 
-def test_the_closer_gets_a_strip_and_fewer_than_three_stories_or_a_story_slide_keep_their_plan():
+def test_the_closer_gets_landscape_tiles_and_fewer_than_three_stories_or_a_story_slide_keep_their_plan():
     from services.instagram_recap_frames import recap_frame_layout
 
-    strip = [r for r in recap_frame_layout(_plan(["story_1", "story_4", "story_6"]), role="closing")["regions"] if r["kind"] == "media"]
-    assert len({round(r["y"], 4) for r in strip}) == 1 and len(strip) == 3
+    tiles = [r for r in recap_frame_layout(_plan(["story_1", "story_4", "story_6", "story_7"]), role="closing")["regions"] if r["kind"] == "media"]
+    assert len(tiles) == 4 and all(r["w"] * 1080 > r["h"] * 1350 for r in tiles)  # wide tiles for wide news photos, never slivers
     assert recap_frame_layout(_plan(["story_1", "story_4"]), role="hook") is None
     assert recap_frame_layout(_plan(["story_1", "story_4", "story_6"]), role="story") is None
 
@@ -267,3 +267,64 @@ def test_a_side_panel_headline_sits_right_above_its_body():
     assert texts["copy"].valign == "bottom" and texts["body"].valign == "top"
     banded = adapt_media_scale(layout, slide_copy="Meta делает Muse\n\nВ семействе — Muse Spark.", force=True, orientation="text_top")
     assert all(r.valign == "top" for r in banded.layout.regions if r.kind == "text")  # bands are unchanged
+
+
+
+# --- final visual remediation: no meaningless fact cells, no truncated words, subject-aware framing ------------------------------------
+
+def test_topic_labels_roles_and_truncated_words_are_not_fact_cells_but_real_numbers_are():
+    from services.instagram_recap_frames import meaningful_fact_graphic
+
+    safety = "Модели OpenAI и Anthropic пошли вразнос. Британский AI Security Institute сообщил о harmful activity во время тестирования."
+    assert not meaningful_fact_graphic(["Тестирование", "Поведение моделей", "Риск выявлен"], safety)
+    hassabis = "У Demis Hassabis новая роль. Он оставляет должность CEO Google DeepMind и становится председателем подразделения."
+    assert not meaningful_fact_graphic(["CEO Google DeepMind", "Председатель подраздел"], hassabis)  # 'подраздел' is a cut word
+    assert meaningful_fact_graphic(["30B параметров", "1 GPU", "Muse Glimmer"], "Muse Glimmer: 30B параметров, 1 GPU.")
+
+
+def test_a_weak_fact_cell_story_becomes_an_editorial_slide_with_its_photo_away_from_the_logo():
+    from services.instagram_recap_frames import editorial_story_layout
+
+    plan = _plan(["story_4"])
+    plan["logo_position"] = "BOTTOM_LEFT"
+    plan["regions"].append({"kind": "graphic", "x": 0.07, "y": 0.6, "w": 0.86, "h": 0.25, "z": 3, "graphic_type": "flow_diagram",
+                            "flow_steps": ["Тестирование", "Поведение моделей", "Риск выявлен"]})
+    editorial = editorial_story_layout(plan, role="story", slide_text="Модели пошли вразнос. Институт сообщил о тестировании.")
+    kinds = [r["kind"] for r in editorial["regions"]]
+    assert "graphic" not in kinds and kinds.count("media") == 1 and {"copy", "body"} <= {r.get("content_ref") for r in editorial["regions"]}
+    photo = next(r for r in editorial["regions"] if r["kind"] == "media")
+    assert photo["x"] > 0.3  # the logo sits bottom-left: the photo takes the right side
+    data = _plan(["story_3"])
+    data["regions"].append({"kind": "graphic", "x": 0.07, "y": 0.6, "w": 0.86, "h": 0.25, "z": 3, "graphic_type": "flow_diagram",
+                            "flow_steps": ["30B параметров", "1 GPU"]})
+    assert editorial_story_layout(data, role="story", slide_text="30B параметров, 1 GPU.") is None  # real data keeps its graphic
+
+
+def _subject_photo(size=(2000, 1000), box=(200, 250, 700, 950)) -> Image.Image:
+    img = Image.new("RGB", size, (40, 40, 44))
+    draw = ImageDraw.Draw(img)
+    rnd = random.Random(7)
+    for _ in range(300):  # a busy, colourful subject on the LEFT of a flat wide frame
+        x, y = rnd.randrange(box[0], box[2]), rnd.randrange(box[1], box[3])
+        draw.ellipse([x, y, x + 60, y + 60], fill=(rnd.randrange(256), rnd.randrange(256), rnd.randrange(256)))
+    return img
+
+
+def test_a_photo_is_framed_on_its_subject_not_on_the_rectangle_centre():
+    from services.instagram_focal_crop import cover_window, focus_of, frame_photo
+
+    img = _subject_photo()
+    focus = focus_of(img)
+    assert focus.x < 0.4 and focus.box[2] <= 0.45  # the subject is found on the left
+    window = cover_window(img.size, (500, 500), focus)
+    assert window[0] <= focus.box[0] + 0.02 and window[2] >= focus.box[2] - 0.02  # the square crop keeps it, a centre crop would not
+    _tile, treatment = frame_photo(img, 500, 500)
+    assert treatment == "focal_cover"
+    _tile, treatment = frame_photo(_subject_photo(box=(100, 250, 1900, 950)), 200, 600)  # a wide subject in a tall slot
+    assert treatment == "whole_on_blurred_extension"  # never a sliver of the subject
+
+
+def test_focal_framing_is_on_for_the_recap_only():
+    from services.instagram_declarative_layout import FOCAL_FRAMING
+
+    assert FOCAL_FRAMING.get() is False

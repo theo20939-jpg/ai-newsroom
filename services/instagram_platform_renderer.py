@@ -265,32 +265,38 @@ def render_instagram_carousel(
         explicit_image = slide_images.get(index) if slide_images is not None else None
         # Phase B.6: a slide's OWN generated image (reserved subject key) is visible to that slide only - never to another slide.
         this_slide_assets = {**(subject_assets or {}), **((slide_subject_assets or {}).get(index) or {})} or None
-        layout = render_carousel_slide(
-            spec=profile_spec(InstagramRenderProfile.CAROUSEL_SLIDE), role=role, index=index, total=total,
-            slide_copy=slide_copy, slide_body=slide.get("body"), source_evidence=slide.get("source_evidence"), package_identity=package.package_id,
-            hero_image=(hero_image if slide_images is None else None),
-            media_image=explicit_image, media_mode=execution.get("media_mode"),
-            media_need=slide.get("media_need"),
-            focal_point=(render_plan.get("creative_plan") or {}).get("focal_point"),
-            visual_direction=slide.get("visual_direction"), render_plan=render_plan,
-            # Phase B.4: explicit structured art direction, when a slide supplies it. None on
-            # every field for a pre-B.4 slide, so render_carousel_slide's existing B.3 dispatch
-            # fires exactly as before.
-            composition=slide.get("composition"), media_position=slide.get("media_position"),
-            media_scale=slide.get("media_scale"),
-            media_subject=slide.get("media_subject"), must_match_story=bool(slide.get("must_match_story") or False),
-            # Phase B.4.1: resolver-supplied, never plan-supplied - see this function's own
-            # docstring.
-            media_asset_identity=(asset_identities.get(index) if asset_identities is not None else None),
-            # Phase B.5: declarative layout + the resolver's subject->asset map (never a shared hero).
-            layout_plan=slide.get("layout"),
-            recap=package.media_plan.get("content_archetype") == "news_recap",
-            subject_assets=(
-                {k: v for k, v in this_slide_assets.items() if k != "source"}
-                if this_slide_assets and slide.get("media_function") in ("ui_screenshot", "result", "before_after", "concept")
-                else this_slide_assets
-            ),
-        )
+        from services.instagram_declarative_layout import FOCAL_FRAMING
+
+        framing = FOCAL_FRAMING.set(package.media_plan.get("content_archetype") == "news_recap")  # recap photos framed on their subject
+        try:
+            layout = render_carousel_slide(
+                spec=profile_spec(InstagramRenderProfile.CAROUSEL_SLIDE), role=role, index=index, total=total,
+                slide_copy=slide_copy, slide_body=slide.get("body"), source_evidence=slide.get("source_evidence"), package_identity=package.package_id,
+                hero_image=(hero_image if slide_images is None else None),
+                media_image=explicit_image, media_mode=execution.get("media_mode"),
+                media_need=slide.get("media_need"),
+                focal_point=(render_plan.get("creative_plan") or {}).get("focal_point"),
+                visual_direction=slide.get("visual_direction"), render_plan=render_plan,
+                # Phase B.4: explicit structured art direction, when a slide supplies it. None on
+                # every field for a pre-B.4 slide, so render_carousel_slide's existing B.3 dispatch
+                # fires exactly as before.
+                composition=slide.get("composition"), media_position=slide.get("media_position"),
+                media_scale=slide.get("media_scale"),
+                media_subject=slide.get("media_subject"), must_match_story=bool(slide.get("must_match_story") or False),
+                # Phase B.4.1: resolver-supplied, never plan-supplied - see this function's own
+                # docstring.
+                media_asset_identity=(asset_identities.get(index) if asset_identities is not None else None),
+                # Phase B.5: declarative layout + the resolver's subject->asset map (never a shared hero).
+                layout_plan=slide.get("layout"),
+                recap=package.media_plan.get("content_archetype") == "news_recap",
+                subject_assets=(
+                    {k: v for k, v in this_slide_assets.items() if k != "source"}
+                    if this_slide_assets and slide.get("media_function") in ("ui_screenshot", "result", "before_after", "concept")
+                    else this_slide_assets
+                ),
+            )
+        finally:
+            FOCAL_FRAMING.reset(framing)
         results.append(_result_from_layout(layout, package, profile=InstagramRenderProfile.CAROUSEL_SLIDE, slide_index=index, slide_count=total))
     return results
 
