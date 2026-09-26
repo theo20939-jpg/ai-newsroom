@@ -5,7 +5,7 @@ this module only calls the gateway and records the result for the worker.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Mapping
@@ -31,6 +31,7 @@ class WorkerGateResult:
     factual_block: bool
     guard_block: bool
     record: dict[str, Any]
+    audit_payload: dict[str, Any] = field(default_factory=dict)
 
 
 async def evaluate_worker_publication_gate(
@@ -54,6 +55,12 @@ async def evaluate_worker_publication_gate(
     }
     stage = "evidence"
     gate_input = None
+    audit_payload: dict[str, Any] = {
+        "gate_version": "1", "event_id": str(event_id), "draft_id": str(draft_id),
+        "generation_task_id": str(task_id), "attempt_id": str(task_id),
+        "evaluated_at": None, "model": GATE_MODEL, "execution_id": None,
+        "gate_input": None, "structured_result": None,
+    }
     guard_issues: list[str] = []
     try:
         if draft is None or research is None or intelligence is None:
@@ -79,10 +86,13 @@ async def evaluate_worker_publication_gate(
                          "capability_execution_id": f"{task_id}:publication_factual_gate:1",
                          "request_id": str(uuid4())},
         })
+        audit_payload["execution_id"] = request.metadata["request_id"]
+        audit_payload["gate_input"] = gate_input
         stage = "provider"
         started = datetime.now(timezone.utc)
         response = await gateway.generate(request)
         finished = datetime.now(timezone.utc)
+        audit_payload["evaluated_at"] = finished.isoformat()
         stage = "response"
         if response is None:
             raise ValueError("publication gate response missing")
@@ -110,6 +120,7 @@ async def evaluate_worker_publication_gate(
             raise ValueError("publication gate response incomplete")
         if response.structured_output is None:
             raise ValueError("publication gate structured output missing")
+        audit_payload["structured_result"] = response.structured_output
         validate_gate_output(response.structured_output, gate_input)
         record["structured_output_valid"] = True
         record["factual_safety"] = response.structured_output["FACTUAL_SAFETY"]
@@ -123,9 +134,13 @@ async def evaluate_worker_publication_gate(
         factual_block = "FACTUAL_SAFETY_FAIL" in decision["reasons"]
         guard_block = bool(guard_issues)
         record["final_publication_block"] = decision["PUBLICATION_BLOCK"]
-        return WorkerGateResult(decision["PUBLICATION_BLOCK"], False, factual_block, guard_block, record)
+        return WorkerGateResult(
+            decision["PUBLICATION_BLOCK"], False, factual_block, guard_block, record, audit_payload,
+        )
     except Exception as exc:
         # No provider/transport/parser/contract exception may authorize delivery.
         record["technical_error"] = f"{stage}:{type(exc).__name__}"
         record["final_publication_block"] = True
-        return WorkerGateResult(True, True, False, bool(guard_issues), record)
+        audit_payload["evaluated_at"] = datetime.now(timezone.utc).isoformat()
+        audit_payload["technical_error"] = record["technical_error"]
+        return WorkerGateResult(True, True, False, bool(guard_issues), record, audit_payload)

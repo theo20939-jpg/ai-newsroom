@@ -18,6 +18,7 @@ from database.models.editorial_task import EditorialTask
 from database.models.content_draft import ContentDraft
 from database.models.news_event import NewsEvent
 from database.models.story_telegram_delivery import DeliveryStatus, StoryTelegramDelivery
+from services.kage_content_lineage_audit import update_attempt_audit
 
 TerminalStatus = Literal[
     "DELIVERED", "BLOCKED_FACTUAL_GATE", "BLOCKED_LOCAL_GUARD", "BLOCKED_BOTH",
@@ -92,6 +93,9 @@ async def record_terminal_outcome(
         return existing
     candidate["observed_at"] = datetime.now(timezone.utc).isoformat()
     task.workflow = {**workflow, "publication_outcome": candidate}
+    await update_attempt_audit(
+        session, task_id=task_id, section="publication_outcome", value=candidate,
+    )
     return candidate
 
 

@@ -109,6 +109,7 @@ from services.telegram_channel_director_shadow import run_channel_director_shado
 from services.telegram_notifier import send_editorial_card, to_editorial_card
 from services.telegram_radar_evidence import evaluate_origin_before_generation
 from services.kage_publication_worker_gate import evaluate_worker_publication_gate
+from services.kage_content_lineage_audit import update_attempt_audit
 from services.kage_delivery_truth import (
     TerminalStatus, mark_publication_started, record_terminal_outcome,
 )
@@ -1732,6 +1733,10 @@ async def _run_content_cycle_impl(
                 # Reuse the existing blocked-draft status; retain the original text for
                 # review, never substitute or send an unverified fallback.
                 async with session_factory() as blocked_session:
+                    await update_attempt_audit(
+                        blocked_session, task_id=outcome.task_id,
+                        section="publication_factual_gate", value=gate_result.audit_payload,
+                    )
                     await blocked_session.execute(
                         update(ContentDraft).where(ContentDraft.id == outcome.content_draft.id)
                         .values(status="draft_blocked_fact_safety")
@@ -1748,6 +1753,12 @@ async def _run_content_cycle_impl(
                     await blocked_session.commit()
                 _kage_active_attempt.set(None)
                 continue
+            async with session_factory() as gate_audit_session:
+                await update_attempt_audit(
+                    gate_audit_session, task_id=outcome.task_id,
+                    section="publication_factual_gate", value=gate_result.audit_payload,
+                )
+                await gate_audit_session.commit()
             result.final_publication_pass += 1
             logger.info("kage_publication_passed", extra=gate_result.record)
 

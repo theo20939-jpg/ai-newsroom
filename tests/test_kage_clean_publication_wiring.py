@@ -15,6 +15,7 @@ from core.config import Settings, settings
 from database.models.content_draft import ContentDraft, ContentType
 from database.models.content_draft_story_link import ContentDraftStoryLink
 from database.models.editorial_task import EditorialTask, TaskPriority
+from database.models.kage_content_lineage_audit import KageContentLineageAudit
 from database.models.story import Story
 from database.models.story_telegram_delivery import StoryTelegramDelivery
 from schemas.content_draft import ContentDraftRead
@@ -22,6 +23,7 @@ from schemas.editorial_task import EditorialTaskCreate
 from schemas.workflow import WorkflowType
 from services.kage_publication_worker_gate import WorkerGateResult, evaluate_worker_publication_gate
 from services.kage_delivery_truth import count_terminal_outcomes, record_terminal_outcome
+from services.kage_content_lineage_audit import create_attempt_audit
 from services.content_draft_service import _draft_status_for
 from services import workflow_service
 from services.telegram_notifier import NotificationOutcome
@@ -131,6 +133,9 @@ async def test_real_content_cycle_send_boundary(
             session, EditorialTaskCreate(event_id=event.id, workflow_type=WorkflowType.CONTENT_GENERATION,
                                          priority=TaskPriority.B),
         )
+        await create_attempt_audit(
+            session, task_id=task.id, event_id=event.id, story_id=None, source_snapshot={},
+        )
         draft_id = uuid4()
         session.add(ContentDraft(id=draft_id, task_id=task.id, type=ContentType.POST,
                                  title="Проверка", body="Проверочный текст.",
@@ -158,6 +163,12 @@ async def test_real_content_cycle_send_boundary(
     gate_result = WorkerGateResult(
         blocked, technical, factual, guard,
         {"event_id": str(event.id), "draft_id": str(draft_id), "final_publication_block": blocked},
+        {"gate_version": "1", "event_id": str(event.id), "draft_id": str(draft_id),
+         "generation_task_id": str(task_id), "execution_id": "fixture-gate-call",
+         "evaluated_at": datetime.now(timezone.utc).isoformat(), "gate_input": {"fact_ids": [1]},
+         "structured_result": {"FACTUAL_SAFETY": "FAIL" if factual else "PASS",
+                               "HEADLINE_SAFETY": "FAIL" if factual else "PASS",
+                               "BODY_SAFETY": "PASS", "UNSUPPORTED_CLAIMS": []}},
     )
     notify = AsyncMock(return_value=NotificationOutcome(
         chat_id=1, rendered_html="<b>ok</b>", sent=scenario != "send_failure",
@@ -192,6 +203,16 @@ async def test_real_content_cycle_send_boundary(
             "BLOCKED_LOCAL_GUARD" if guard else
             "DELIVERY_FAILED" if scenario == "send_failure" else "DELIVERED"
         )
+        lineage_row = await session.get(KageContentLineageAudit, task_id)
+        assert lineage_row is not None
+        assert lineage_row.audit["publication_factual_gate"]["execution_id"] == "fixture-gate-call"
+        assert lineage_row.audit["publication_outcome"]["status"] == expected_terminal
+        if expected_terminal != "DELIVERED":
+            blocked_receipts = await session.scalar(
+                select(func.count()).select_from(StoryTelegramDelivery)
+                .where(StoryTelegramDelivery.content_draft_id == draft_id)
+            )
+            assert blocked_receipts == 0
         assert terminal["status"] == expected_terminal
         assert terminal["message_id"] == (23 if expected_terminal == "DELIVERED" else None)
 
@@ -397,6 +418,9 @@ async def test_kage_real_boundary_persists_story_receipt_and_skips_duplicate(
             session, EditorialTaskCreate(event_id=event.id, workflow_type=WorkflowType.CONTENT_GENERATION,
                                          priority=TaskPriority.B),
         )
+        await create_attempt_audit(
+            session, task_id=task.id, event_id=event.id, story_id=None, source_snapshot={},
+        )
         story = Story(title=event.title, category=event.category, topic_bucket="test",
                       first_event_id=event.id, event_count=1)
         session.add(story)
@@ -417,7 +441,14 @@ async def test_kage_real_boundary_persists_story_receipt_and_skips_duplicate(
                                                   "ending": None}, research_output={"facts": []},
                               intelligence_output={}, quality_output={"passed": True},
                               fact_safety_status="pass")
-    gate = WorkerGateResult(False, False, False, False, {"final_publication_block": False})
+    gate = WorkerGateResult(
+        False, False, False, False, {"final_publication_block": False},
+        {"gate_version": "1", "event_id": str(event.id), "draft_id": str(draft_id),
+         "generation_task_id": str(task.id), "execution_id": "fixture-pass-gate",
+         "evaluated_at": datetime.now(timezone.utc).isoformat(), "gate_input": {"fact_ids": [1]},
+         "structured_result": {"FACTUAL_SAFETY": "PASS", "HEADLINE_SAFETY": "PASS",
+                               "BODY_SAFETY": "PASS", "UNSUPPORTED_CLAIMS": []}},
+    )
     notify = AsyncMock(return_value=NotificationOutcome(chat_id=1, rendered_html="ok",
                                                          sent=True, message_id=927))
     with (
@@ -441,6 +472,12 @@ async def test_kage_real_boundary_persists_story_receipt_and_skips_duplicate(
         )).scalars().all()
         assert len(receipts) == 1
         assert receipts[0].telegram_message_id == 927
+        lineage_row = await session.get(KageContentLineageAudit, task.id)
+        assert lineage_row is not None
+        assert lineage_row.audit["publication_factual_gate"]["execution_id"] == "fixture-pass-gate"
+        assert lineage_row.audit["publication_outcome"]["status"] == "DELIVERED"
+        assert lineage_row.audit["identity"]["telegram_message_id"] == 927
+        assert lineage_row.audit["identity"]["delivery_receipt_id"] == str(receipts[0].id)
         counts = await count_terminal_outcomes(
             session, window_start=event.collected_at - timedelta(seconds=1),
             window_end=event.collected_at + timedelta(seconds=1),

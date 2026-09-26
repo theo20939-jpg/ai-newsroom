@@ -78,6 +78,7 @@ from services.fact_safety_calibration import calibrate_fact_safety
 from services.image_intelligence import run_shadow_discovery
 from services.kage_editorial_contract import draft_issues as kage_draft_issues, pre_copy_issues as kage_pre_copy_issues
 from services.kage_draft_recovery import remove_unsupported_absence_sentence
+from services.kage_content_lineage_audit import update_attempt_audit
 from services.news_editorial_relevance import classify_product_quality
 from services.meme_opportunity import apply_meme_opportunity_shadow
 from services.meme_safety import apply_meme_safety_originality_shadow
@@ -570,6 +571,7 @@ class CapabilityExecutor:
         # would defeat the retry's own purpose). Falls back to a real call (unchanged behavior)
         # whenever no valid prior result exists - never blocks, never raises.
         reused_output = await self._try_reuse(task, step, attempt)
+        capability_result = None
         if reused_output is not None:
             logger.info(
                 "capability_result_reused_from_news_analysis",
@@ -602,6 +604,7 @@ class CapabilityExecutor:
                 )
 
             structured_output = result.structured_output or {}
+            capability_result = result
             await self._record_cost(task, step, result.calls)
 
         if kage_product_loop and step.capability == "intelligence":
@@ -759,6 +762,38 @@ class CapabilityExecutor:
         # Never blocks, never mutates the concept itself.
         if step.capability == "meme_concept" and settings.meme_safety_gate_mode == "shadow":
             structured_output = self._attach_meme_safety_originality(news_event, context, structured_output)
+
+        if (
+            state_for_bundle.workflow_name == WorkflowType.CONTENT_GENERATION
+            and settings.copywriting_prompt_version == "11.10"
+            and step.capability in {"research", "intelligence", "copywriting", "quality"}
+            and capability_result is not None
+        ):
+            call = capability_result.calls[0] if capability_result.calls else None
+            research_facts = (
+                capability_result.structured_output.get("facts", [])
+                if step.capability == "research" and capability_result.structured_output
+                else context.business.workflow_state.step_results.get("research", {}).get("facts", [])
+            )
+            await update_attempt_audit(
+                self._session, task_id=self._task_id, section="stage", required=True,
+                value={
+                    "name": step.capability,
+                    "attempt": attempt,
+                    "started_at": capability_result.started_at.isoformat(),
+                    "finished_at": capability_result.finished_at.isoformat(),
+                    "prompt_name": capability_result.metadata.get("prompt_name"),
+                    "prompt_version": capability_result.metadata.get("prompt_version"),
+                    "execution_id": str(call.call_id) if call else f"{self._task_id}:{step.capability}:{attempt}",
+                    "provider": call.provider if call else None,
+                    "model": call.model_used if call else None,
+                    "available_fact_ids": list(range(1, len(research_facts) + 1))
+                    if isinstance(research_facts, list) else [],
+                    "input": capability_result.metadata,
+                    "provider_output": capability_result.structured_output,
+                    "effective_output": structured_output,
+                },
+            )
 
         return structured_output
 

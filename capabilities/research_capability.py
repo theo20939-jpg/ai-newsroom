@@ -47,6 +47,7 @@ from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, LLMG
 from integrations.prompts.protocol import PromptRepository, RenderedPrompt
 from schemas.capability import CapabilityContext, CapabilityResult
 from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
+from services.kage_content_lineage_audit import kage_content_generation_input_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -249,4 +250,7 @@ class ResearchCapability:
             started_at=started_at,
             finished_at=finished_at,
             duration_seconds=(finished_at - started_at).total_seconds(),
+            metadata=kage_content_generation_input_metadata(
+                context, request, prompt_name=CAPABILITY_NAME, prompt_version=prompt.version,
+            ),
         )

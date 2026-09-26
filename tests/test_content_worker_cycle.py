@@ -235,6 +235,20 @@ async def test_source(factory: async_sessionmaker[AsyncSession]) -> AsyncIterato
                         delete(RecoveryJobRow).where(RecoveryJobRow.content_draft_id.in_(content_draft_ids))
                     )
 
+                # KAGE factual-lineage audit rows intentionally RESTRICT task deletion so that
+                # forensic history cannot disappear through an incidental task cleanup. Test
+                # teardown explicitly removes only rows belonging to this fixture's events.
+                if await _table_exists(session, "kage_content_lineage_audits"):
+                    from database.models.kage_content_lineage_audit import KageContentLineageAudit
+
+                    await session.execute(
+                        delete(KageContentLineageAudit).where(
+                            KageContentLineageAudit.task_id.in_(
+                                select(EditorialTask.id).where(EditorialTask.event_id.in_(event_ids))
+                            )
+                        )
+                    )
+
                 await session.execute(delete(ContentDraft).where(ContentDraft.id.in_(content_draft_ids)))
                 await session.execute(delete(EditorialTask).where(EditorialTask.event_id.in_(event_ids)))
 
