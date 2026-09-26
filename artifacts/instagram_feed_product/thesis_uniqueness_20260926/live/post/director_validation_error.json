@@ -1,0 +1,4 @@
+{
+ "error_type": "EditorialCorrectionRequired",
+ "error": "editorial correction required: CreativeLanguageError: clearly English audience-facing field for locale=ru; slide 3 body is a list of product names, not Russian prose: 'Nvidia DLSS 4, AMD FSR 3, DLAA и HDR.' - say it as a sentence"
+}

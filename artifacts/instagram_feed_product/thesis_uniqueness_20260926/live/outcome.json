@@ -1,0 +1,120 @@
+{
+ "event_id": "30740b23-d278-4d96-b2d1-d47bda2bd400",
+ "title": "Больше никаких «лесенок»: спустя 18 лет моддер реализовал в GTA IV полноценное сглаживание",
+ "source": "3DNews",
+ "url": "https://3dnews.ru/1149023",
+ "published_at": "2026-09-25 07:30:03+00:00",
+ "ingested_at": "2026-09-25 07:39:38.502367+00:00",
+ "planner_read": {
+  "format": "meme_trend",
+  "strong": true,
+  "kinds": [
+   "oddity"
+  ],
+  "reason": "a strange / funny event whose technology is central (KAGE core: software_platform_security_gaming)"
+ },
+ "treatment": {
+  "treatment": "BRIEF",
+  "reason": "no Intelligence significance available - conservative default, never MAJOR/STANDARD blind"
+ },
+ "evidence": "STRONG",
+ "evidence_why": "6 premise facts from 1 fetched source(s)",
+ "source_media": "AVAILABLE",
+ "reason": "submitted",
+ "gate": "ready_for_editor",
+ "delivery": "recorded_ready_for_editor_no_telegram",
+ "chosen_format": "carousel",
+ "vision_verdicts": [
+  {
+   "subject_key": "source",
+   "suitable": true,
+   "image_kind": "illustration_or_artwork",
+   "baked_in_text_prominent": false,
+   "reason": "A stylized video-game character in a suit stands indoors with his arms outstretched.",
+   "error": null
+  }
+ ],
+ "generated": [
+  {
+   "asset_key": "0",
+   "status": "generated_media",
+   "accounted_usd": "0.02263250",
+   "reserved_usd": "0.08100",
+   "provider_request_id": "req_526f0e709ab248b28af3788cb6fc7f03",
+   "prompt": "VISUAL PROFILE VERSION\ninstagram-reference-board-text-profile-v1\n\nSTORY\nБольше никаких «лесенок»: спустя 18 лет моддер реализовал в GTA IV полноценное сглаживание\nSupported facts only:\n- Больше никаких «лесенок»: спустя 18 лет моддер реализовал в GTA IV полноценное сглаживание\n\nSPECIFIC SCENE TO DEPICT (approved plan for this slide)\nPortrait editorial image of a dark PC gaming desk, an anonymous hand placing a blank patch-shaped object beside a monitor showing a text-free open-world urban game scene. No logos, letters, interface text or watermarks; keep the left side visually calm.\nSTORY-SPECIFIC ANCHOR (what makes this picture belong to THIS story)\nA modder adds a long-awaited technical fix to GTA IV after [the numeral the application sets in type over the picture - not part of the picture] years.\nWHAT MUST BE PHYSICALLY VISIBLE, AND WHY (the finished slide: every number, price or word it mentions is typography the application adds on top - draw only the scene)\nA generated portrait editorial scene shows a dark PC gaming setup with an anonymous hand placing a clean, blank patch-shaped object beside a monitor displaying a recognisable but text-free open-world urban game scene. The image makes the relationship visible: a community-made fix arriving long after the original game, with calm dark space on the left for the headline.\nSlide purpose: Сразу дать самый сильный факт и зафиксировать парадокс: решение пришло от моддера.. Media function: hero.\n\nOVERALL IDEA\nПоказать 18-летнюю техническую задержку как физический путь от неровного игрового изображения к аккуратно собранному моддерскому исправлению.\nVisual genre: Тёмная игровая палитра, физические метафоры патча и слоёв изображения, controlled collage marks только там, где они помогают чтению..\n\nCOMPOSITION FOR THIS SLIDE\none decisive focal subject with depth and intentional negative space for a headline. Portrait 4:5 editorial framing, one decisive focal point, believable depth and material detail.\n\nSPECIFICITY\nDepict THIS story's concrete idea so the picture communicates the story before the reader reads the text. The picture must not be reusable unchanged for ten unrelated AI posts. Do NOT produce a glowing cube, floating spheres or random geometry, a generic AI brain, an anonymous robot, a hologram, a cyberpunk city, an abstract monolith, neon circuitry or corporate technology stock art unless this story is literally about it.\n\nCOLOR / MOOD\nDerive colour from the idea; contemporary, specific, cinematic or editorial, never generic.\n\nNEGATIVE CONSTRAINTS\nNO LOGOS. NO WORDMARKS. NO WATERMARKS. NO LARGE TEXT. NO READABLE TEXT OR LETTERING OF ANY KIND. NO FAKE UI. NO RANDOM INTERFACES. NO UNSUPPORTED PRODUCTS, FACTS, NUMBERS OR THIRD-PARTY BRANDING. No shape, colour set or icon that imitates a company's logo or brand symbol (no brand-coloured dots, no sparkle or star icons, no app-icon tiles, no product silhouettes standing in for a named company). Never depict, imitate or re-create a specific real person named in the story, or anyone resembling them, and never stage the reported incident as if it were footage or a photograph of it. Any people are anonymous and unidentifiable (hands, backs, silhouettes, out of focus); prefer objects, places and a visual metaphor. Paper, pages, cards, screens and objects are BLANK: no handwriting, no scribbled lines imitating writing, no marks, stamps or engravings. Anything the story leaves unnamed (which places, people, companies or products) stays abstract and unidentifiable: no recognisable map or state outlines, faces or product designs. Do not bake any headline into the image; the application adds the exact Russian copy and the canonical logo after generation."
+  },
+  {
+   "asset_key": "2",
+   "status": "generated_media",
+   "accounted_usd": "0.02271250",
+   "reserved_usd": "0.08100",
+   "provider_request_id": "req_0004362c1fd243d99857e18e055cc394",
+   "prompt": "VISUAL PROFILE VERSION\ninstagram-reference-board-text-profile-v1\n\nSTORY\nБольше никаких «лесенок»: спустя 18 лет моддер реализовал в GTA IV полноценное сглаживание\nSupported facts only:\n- Обзор смартфона Google Pixel 11 Pro: когда надо выпустить хоть что-то Источник изображений: Rockstar Games Как подметил портал Rock Paper Shotgun, моддер ChunkLeChuck недавно снабдил GTA IV поддержкой технологий интеллектуального масштабирования (Nvidia DLSS 4, AMD FSR 3) и сглаживания (DLAA), а также HDR.\n\nSPECIFIC SCENE TO DEPICT (approved plan for this slide)\nPortrait image of four blank, transparent image layers showing the same text-free open-world game frame at different stages, physically aligning into one sharper final frame on a PC monitor. No writing, logos, fake interface or watermarks; the right side carries the visual action.\nSTORY-SPECIFIC ANCHOR (what makes this picture belong to THIS story)\nDLSS 4, FSR 3, DLAA and HDR are added to GTA IV by the mod.\nWHAT MUST BE PHYSICALLY VISIBLE, AND WHY (the finished slide: every number, price or word it mentions is typography the application adds on top - draw only the scene)\nA generated portrait visual shows four distinct clean passes of the same blank, text-free game frame being aligned into one sharper final frame, like physical transparent sheets converging over a PC monitor. The four-part visual metaphor maps directly to the four named technologies without inventing interface details or logos.\nSlide purpose: Дать конкретное техническое содержание мода вместо общего «улучшили графику».. Media function: detail.\n\nOVERALL IDEA\nПоказать 18-летнюю техническую задержку как физический путь от неровного игрового изображения к аккуратно собранному моддерскому исправлению.\nVisual genre: Тёмная игровая палитра, физические метафоры патча и слоёв изображения, controlled collage marks только там, где они помогают чтению..\n\nCOMPOSITION FOR THIS SLIDE\none decisive focal subject with depth and intentional negative space for a headline. Portrait 4:5 editorial framing, one decisive focal point, believable depth and material detail.\n\nSPECIFICITY\nDepict THIS story's concrete idea so the picture communicates the story before the reader reads the text. The picture must not be reusable unchanged for ten unrelated AI posts. Do NOT produce a glowing cube, floating spheres or random geometry, a generic AI brain, an anonymous robot, a hologram, a cyberpunk city, an abstract monolith, neon circuitry or corporate technology stock art unless this story is literally about it.\n\nCOLOR / MOOD\nDerive colour from the idea; contemporary, specific, cinematic or editorial, never generic.\n\nNEGATIVE CONSTRAINTS\nNO LOGOS. NO WORDMARKS. NO WATERMARKS. NO LARGE TEXT. NO READABLE TEXT OR LETTERING OF ANY KIND. NO FAKE UI. NO RANDOM INTERFACES. NO UNSUPPORTED PRODUCTS, FACTS, NUMBERS OR THIRD-PARTY BRANDING. No shape, colour set or icon that imitates a company's logo or brand symbol (no brand-coloured dots, no sparkle or star icons, no app-icon tiles, no product silhouettes standing in for a named company). Never depict, imitate or re-create a specific real person named in the story, or anyone resembling them, and never stage the reported incident as if it were footage or a photograph of it. Any people are anonymous and unidentifiable (hands, backs, silhouettes, out of focus); prefer objects, places and a visual metaphor. Paper, pages, cards, screens and objects are BLANK: no handwriting, no scribbled lines imitating writing, no marks, stamps or engravings. Anything the story leaves unnamed (which places, people, companies or products) stays abstract and unidentifiable: no recognisable map or state outlines, faces or product designs. Do not bake any headline into the image; the application adds the exact Russian copy and the canonical logo after generation."
+  },
+  {
+   "asset_key": "3",
+   "status": "generated_media",
+   "accounted_usd": "0.02261750",
+   "reserved_usd": "0.08100",
+   "provider_request_id": "req_eca7645e56c64cc18b8e0e3af066bd80",
+   "prompt": "VISUAL PROFILE VERSION\ninstagram-reference-board-text-profile-v1\n\nSTORY\nБольше никаких «лесенок»: спустя 18 лет моддер реализовал в GTA IV полноценное сглаживание\nSupported facts only:\n- Мод от ChunkLeChuck называется DLSS-IV и доступен для скачивания на площадке Nexus Mods.\n\nSPECIFIC SCENE TO DEPICT (approved plan for this slide)\nPortrait editorial image of an anonymous player at a PC, with a blank patch-shaped mod package placed beside the keyboard and a text-free open-world urban game scene on the monitor. No platform interface, letters, logos or watermarks; keep the left side quiet for the closing copy.\nSTORY-SPECIFIC ANCHOR (what makes this picture belong to THIS story)\nThe DLSS-IV mod by ChunkLeChuck is available to download on Nexus Mods.\nWHAT MUST BE PHYSICALLY VISIBLE, AND WHY (the finished slide: every number, price or word it mentions is typography the application adds on top - draw only the scene)\nA generated closing image shows an anonymous player at a PC with a blank downloadable mod package being placed beside the keyboard, while the monitor carries only a text-free GTA IV-like urban scene. The composition leaves a quiet left column for the final factual payoff and makes the mod feel tangible without depicting a real platform interface.\nSlide purpose: Закрыть историю конкретным названием, автором и точкой доступа к моду.. Media function: result.\n\nOVERALL IDEA\nПоказать 18-летнюю техническую задержку как физический путь от неровного игрового изображения к аккуратно собранному моддерскому исправлению.\nVisual genre: Тёмная игровая палитра, физические метафоры патча и слоёв изображения, controlled collage marks только там, где они помогают чтению..\n\nCOMPOSITION FOR THIS SLIDE\nONE single object, whole and centred with generous margin, on a plain uniform studio ground (flat light grey or flat near-black); no clutter, no scene. Portrait 4:5 editorial framing, one decisive focal point, believable depth and material detail.\n\nSPECIFICITY\nDepict THIS story's concrete idea so the picture communicates the story before the reader reads the text. The picture must not be reusable unchanged for ten unrelated AI posts. Do NOT produce a glowing cube, floating spheres or random geometry, a generic AI brain, an anonymous robot, a hologram, a cyberpunk city, an abstract monolith, neon circuitry or corporate technology stock art unless this story is literally about it.\n\nCOLOR / MOOD\nDerive colour from the idea; contemporary, specific, cinematic or editorial, never generic.\n\nNEGATIVE CONSTRAINTS\nNO LOGOS. NO WORDMARKS. NO WATERMARKS. NO LARGE TEXT. NO READABLE TEXT OR LETTERING OF ANY KIND. NO FAKE UI. NO RANDOM INTERFACES. NO UNSUPPORTED PRODUCTS, FACTS, NUMBERS OR THIRD-PARTY BRANDING. No shape, colour set or icon that imitates a company's logo or brand symbol (no brand-coloured dots, no sparkle or star icons, no app-icon tiles, no product silhouettes standing in for a named company). Never depict, imitate or re-create a specific real person named in the story, or anyone resembling them, and never stage the reported incident as if it were footage or a photograph of it. Any people are anonymous and unidentifiable (hands, backs, silhouettes, out of focus); prefer objects, places and a visual metaphor. Paper, pages, cards, screens and objects are BLANK: no handwriting, no scribbled lines imitating writing, no marks, stamps or engravings. Anything the story leaves unnamed (which places, people, companies or products) stays abstract and unidentifiable: no recognisable map or state outlines, faces or product designs. Do not bake any headline into the image; the application adds the exact Russian copy and the canonical logo after generation."
+  }
+ ],
+ "llm_calls": [
+  {
+   "post": "post",
+   "kind": "PHASE_A",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 8000,
+   "worst_case_usd": "0.05039100",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 2445,
+   "output_tokens": 1021,
+   "reasoning_tokens": 499,
+   "cost_usd": "0.008571"
+  },
+  {
+   "post": "post",
+   "kind": "VISION",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 400,
+   "worst_case_usd": "0.00281800",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 870,
+   "output_tokens": 55,
+   "reasoning_tokens": 0,
+   "cost_usd": "0.0012"
+  },
+  {
+   "post": "post",
+   "kind": "DIRECTOR",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 10737,
+   "worst_case_usd": "0.07731500",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 12929,
+   "output_tokens": 6318,
+   "reasoning_tokens": 1657,
+   "cost_usd": "0.050837"
+  },
+  {
+   "post": "post",
+   "kind": "DIRECTOR",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 10737,
+   "worst_case_usd": "0.07750200",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 13106,
+   "output_tokens": 6286,
+   "reasoning_tokens": 1866,
+   "cost_usd": "0.050822"
+  }
+ ],
+ "llm_spent_usd": "0.111430",
+ "llm_ledger_usd": "0.11143",
+ "image_ledger_usd": "0.0679625"
+}
