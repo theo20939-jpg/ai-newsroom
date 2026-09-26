@@ -126,12 +126,14 @@ from services.instagram_feed_planner import (
     load_feed_evidence,
     load_feed_usage,
     load_recent_event_ids,
+    load_recent_headlines,
     mark_tried,
     open_slots,
     select_weekly_recap_candidates,
     weekly_recap_identity,
 )
-from services.instagram_feed_product import DAILY_MAX_POSTS, read_candidate, stage_one_shortlist
+from services.instagram_feed_product import DAILY_MAX_POSTS, DAILY_SHORTLIST_PER_FORMAT, FeedFormat, read_candidate, stage_one_shortlist
+from services.instagram_viral_nomination import chronology_fact, nominate_viral_events, viral_evidence_preflight
 from services.instagram_recap_bundle import build_instagram_recap_bundle
 from services.director_execution_service import run_instagram_growth_strategist
 
@@ -1107,6 +1109,49 @@ async def _select_eligible_events(
 _INSTAGRAM_TRIGGER_MAX_PER_CYCLE = 3
 
 
+# a nominated viral event's copies tried for BODY evidence before it is skipped: acquisition only (the existing path), never a model call
+_VIRAL_EVIDENCE_COPIES = 4
+
+
+async def _feed_evidence_package(session: AsyncSession, event_id: UUID, event_row: Any, slot_format: Any) -> Any:
+    """KAGE evidence package (services/instagram_evidence_package.py) for one selected event, through the existing acquisition / image
+    paths under their existing modes."""
+    source_row = await session.get(NewsSource, event_row.source_id)
+    return await build_daily_evidence_package(
+        post_id=str(event_id), fmt=slot_format.value, title=event_row.title or "", url=event_row.url,
+        source_type=getattr(getattr(source_row, "type", None), "value", "RSS"), source_name=getattr(source_row, "name", None),
+        stored_body=event_row.content or event_row.summary, event=event_row, event_id=event_id, session=session,
+        acquisition_enabled=settings.article_acquisition_mode != "off", media_mode=settings.image_intelligence_mode,
+    )
+
+
+async def _viral_evidence_copy(session: AsyncSession, viral_event: Any, event_id: UUID, event_row: Any, *, slot_format: Any,
+                               now: datetime) -> tuple[UUID, Any, Any, Any]:
+    """The first copy of a nominated viral event whose ACQUIRED body passes the evidence preflight (services/instagram_viral_nomination
+    .viral_evidence_preflight) - the planned copy first, then up to _VIRAL_EVIDENCE_COPIES - 1 other copies of the SAME event. Returns
+    (event id, row, package, preflight) of the passing copy, or of the last one tried (then status PENDING / FAIL). Copies with a direct
+    publisher URL go before aggregator redirect shells (a Google News shell often cannot be resolved to its article)."""
+    from services.text_normalization import is_google_news_redirect_host
+
+    rows = {event_id: event_row}
+    for cid in (viral_event.candidate_ids if viral_event is not None else ()):
+        if cid != str(event_id) and (row := await session.get(NewsEvent, UUID(cid))) is not None:
+            rows[UUID(cid)] = row
+    others = sorted((cid for cid in rows if cid != event_id), key=lambda cid: is_google_news_redirect_host(rows[cid].url or ""))
+    result = None
+    for copy_id in [event_id, *others][:_VIRAL_EVIDENCE_COPIES]:
+        row = rows[copy_id]
+        package = await _feed_evidence_package(session, copy_id, row, slot_format)
+        preflight = viral_evidence_preflight(
+            viral_event, title=row.title or "", published_at=getattr(row, "published_at", None), now=now,
+            body_lines=[item.exact_text for item in (*package.steps, *package.facts, *package.limitations)])
+        result = (copy_id, row, package, preflight)
+        if preflight.status == "PASS":
+            break
+    assert result is not None  # the planned row itself always exists here
+    return result
+
+
 async def _run_instagram_automatic_trigger(
     session_factory: async_sessionmaker[AsyncSession], bot: Bot, event_ids: list[UUID], *,
     gate_gateway: object | None, gate_prompt_repository: object | None,
@@ -1149,21 +1194,25 @@ async def _run_instagram_automatic_trigger(
             usage = await load_feed_usage(session, now=now)
             pool = list(dict.fromkeys([*event_ids, *await load_recent_event_ids(session, now=now)]))
             feed_candidates = await load_feed_candidates(session, pool)
-            # stage 2: only the cheap-screen shortlist loads its strongest STORED source material (no fetch, no model call)
+            headlines = await load_recent_headlines(session, now=now)
+            # stage 2: only the cheap-screen shortlist - and the evidence copies of the nominated viral events (the viral slot is nominated
+            # from the WHOLE pool, services/instagram_viral_nomination.py) - load their strongest STORED source material (no fetch, no model)
             shortlist = stage_one_shortlist([(c, read_candidate(c)) for c in feed_candidates])
-            evidence = await load_feed_evidence(session, [UUID(c.id) for c, _ in shortlist])
+            nominated = nominate_viral_events(feed_candidates, headlines=headlines, now=now).eligible[:DAILY_SHORTLIST_PER_FORMAT]
+            evidence_ids = dict.fromkeys([*(c.id for c, _ in shortlist), *(cid for e in nominated for cid in e.candidate_ids[:3])])
+            evidence = await load_feed_evidence(session, [UUID(cid) for cid in evidence_ids])
     except Exception:
         logger.exception("instagram_feed_planning_failed")
         return report
-    _reads, slots = open_slots(feed_candidates, usage, day_key=day_key, evidence=evidence)
-    attempts = [(slot.format, UUID(candidate.id)) for slot in slots for candidate, _ in slot.shortlist][:_INSTAGRAM_TRIGGER_MAX_PER_CYCLE]
+    _reads, slots = open_slots(feed_candidates, usage, day_key=day_key, evidence=evidence, headlines=headlines, now=now)
+    attempts = [(slot.format, UUID(candidate.id), read) for slot in slots for candidate, read in slot.shortlist][:_INSTAGRAM_TRIGGER_MAX_PER_CYCLE]
     filled: set[Any] = set()
     if not attempts:
         logger.info("instagram_feed_no_open_slot_or_candidate", extra={
             "published_today": usage.today_total, "fresh_events": len(event_ids), "open_slots": [s.format.value for s in slots],
         })
 
-    for slot_format, event_id in attempts:
+    for slot_format, event_id, slot_read in attempts:
         if slot_format in filled:
             continue
         mark_tried(day_key, str(event_id))
@@ -1173,6 +1222,24 @@ async def _run_instagram_automatic_trigger(
                 event_row = await session.get(NewsEvent, event_id)
                 if event_row is None:
                     continue
+                viral_event = getattr(slot_read, "viral_event", None) if slot_format is FeedFormat.MEME_TREND else None
+                preflight = None
+                if slot_format is FeedFormat.MEME_TREND:
+                    # VIRAL EVIDENCE PREFLIGHT - after acquisition, BEFORE Phase A / the Creative Director / images / render: the
+                    # nominated event's hook (actor, action, targets, numbers, chronology, loaded claims such as 'went rogue') must be
+                    # in the acquired BODY evidence of one of its copies. PENDING (no body) and FAIL never reach the creative pipeline.
+                    planned_id = event_id
+                    event_id, event_row, package, preflight = await _viral_evidence_copy(
+                        session, viral_event, event_id, event_row, slot_format=slot_format, now=now)
+                    await session.commit()  # the acquisition rows the existing path persisted
+                    if preflight.status != "PASS":
+                        logger.info("instagram_viral_evidence_preflight_blocked", extra={
+                            "event_id": str(event_id), "status": preflight.status, "reason": preflight.reason[:300],
+                            "checks": preflight.checks})
+                        continue
+                    if event_id != planned_id:
+                        mark_tried(day_key, str(event_id))
+                        treatment = await _classify_event_for_router_treatment(session, event_id)  # the copy that carries the evidence
                 na_task = await session.scalar(
                     select(EditorialTask)
                     .where(
@@ -1188,14 +1255,9 @@ async def _run_instagram_automatic_trigger(
                 # paths, under their existing modes. The Director reads verbatim, provenance-tagged lines; a post whose evidence would
                 # have to be invented (an AI_HACK with no step, a story with nothing beyond its headline) never reaches the Director.
                 # Stored NEWS_ANALYSIS facts, when they exist, are supporting evidence only - never required.
-                source_row = await session.get(NewsSource, event_row.source_id)
-                package = await build_daily_evidence_package(
-                    post_id=str(event_id), fmt=slot_format.value, title=event_row.title or "", url=event_row.url,
-                    source_type=getattr(getattr(source_row, "type", None), "value", "RSS"), source_name=getattr(source_row, "name", None),
-                    stored_body=event_row.content or event_row.summary, event=event_row, event_id=event_id, session=session,
-                    acquisition_enabled=settings.article_acquisition_mode != "off", media_mode=settings.image_intelligence_mode,
-                )
-                await session.commit()  # the acquisition / image rows the existing paths persisted
+                if preflight is None:
+                    package = await _feed_evidence_package(session, event_id, event_row, slot_format)
+                    await session.commit()  # the acquisition / image rows the existing paths persisted
                 if package.quality == EVIDENCE_BLOCKING:
                     logger.info("instagram_evidence_blocking", extra={
                         "event_id": str(event_id), "format": slot_format.value, "why": package.why})
@@ -1203,6 +1265,9 @@ async def _run_instagram_automatic_trigger(
                 facts = package.director_evidence() + [
                     fact[:800] for fact in _extract_research_facts(na_task.workflow if na_task is not None else None) if fact
                 ]
+                chronology = chronology_fact(viral_event)
+                if chronology:  # a new disclosure of an older event must never be flattened into 'it happened today'
+                    facts.append(chronology)
 
                 outcome = await evaluate_and_submit_instagram_candidate(
                     session, bot, event_id=str(event_id), event_title=event_row.title or "", treatment=treatment,

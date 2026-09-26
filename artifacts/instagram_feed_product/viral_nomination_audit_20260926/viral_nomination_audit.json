@@ -1,0 +1,2578 @@
+{
+ "provider_calls": 0,
+ "database_writes": 0,
+ "now": "2026-09-26T16:45:27.786507+00:00",
+ "window_hours": 24,
+ "events_in_pull": 2279,
+ "fresh_kage_candidates": 486,
+ "distinct_events": 364,
+ "audited_events": 25,
+ "acquisition_dry_run": true,
+ "strong_viral_nominations": [
+  {
+   "event": "OpenAI's agents targeted and infiltrated US government websites",
+   "copies_in_pool": 17,
+   "articles_72h": 17,
+   "representative_sources": [
+    "3d",
+    "bbc.com",
+    "bfm.ru",
+    "cbc",
+    "cbs",
+    "engadget",
+    "hacker",
+    "ixbt"
+   ],
+   "strongest_hook_source": "Engadget",
+   "newest_article_age_hours": 2.1,
+   "first_seen": "2026-09-25T23:16:40+00:00",
+   "earliest_pool_article": "2026-09-25T23:16:40+00:00",
+   "actuality_type": "CURRENT_DISCLOSURE",
+   "actuality_reason": "text: the behaviour is dated 'this summer'; the disclosure ('Researchers:') is new - first covered 2026-09-25 23:16 UTC",
+   "underlying_time": "this summer",
+   "disclosed_at": "2026-09-25T23:16:40+00:00",
+   "newly_disclosed": [
+    "commerce department",
+    "education department",
+    "sec"
+   ],
+   "kage_relevance": "ai, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "STRONG",
+   "mechanisms": [
+    "unexpected_ai_behaviour",
+    "security_surprise"
+   ],
+   "momentum_band": "STRONG",
+   "momentum_evidence": [
+    "17 independent outlets carried this same event in the last 72 hours",
+    "17 articles on it in the last 24 hours",
+    "on the Hacker News front page"
+   ],
+   "strongest_factual_hook_candidate": "OpenAI's agents targeted and infiltrated US government websites",
+   "hook_chronology": "the disclosure is new, the behaviour is not (this summer): the hook must say it was revealed / disclosed / reported and must not imply the action happened today",
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 1723,
+   "evidence_preflight_stored": "FAIL",
+   "stored_checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "quantity": "NOT_USED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "evidence_preflight_acquired": "PASS",
+   "acquisition": {
+    "status": "PASS",
+    "attempts": [
+     {
+      "source": "3DNews",
+      "headline": "ИИ-агенты OpenAI массово атаковали базы данных онлайн в поисках малоизвестных сведений",
+      "url_host": "3dnews.ru",
+      "acquisition_status": "FULL_TEXT",
+      "body_chars": 1453,
+      "package_quality": "STRONG",
+      "preflight": "FAIL",
+      "checks": {
+       "actor": "SUPPORTED",
+       "action": "SUPPORTED",
+       "target": "SUPPORTED",
+       "quantity": "NOT_USED",
+       "chronology": "UNSUPPORTED",
+       "claim:rogue": "NOT_USED",
+       "claim:without_knowledge": "NOT_USED",
+       "claim:tried_to_hack": "NOT_USED",
+       "claim:secret": "NOT_USED",
+       "claim:deliberate": "NOT_USED"
+      },
+      "reason": "the body evidence does not support: chronology"
+     },
+     {
+      "source": "Engadget",
+      "headline": "OpenAI's agents targeted and infiltrated US government websites",
+      "url_host": "www.engadget.com",
+      "acquisition_status": "FULL_TEXT",
+      "body_chars": 817,
+      "package_quality": "STRONG",
+      "preflight": "FAIL",
+      "checks": {
+       "actor": "SUPPORTED",
+       "action": "SUPPORTED",
+       "target": "SUPPORTED",
+       "quantity": "NOT_USED",
+       "chronology": "UNSUPPORTED",
+       "claim:rogue": "NOT_USED",
+       "claim:without_knowledge": "NOT_USED",
+       "claim:tried_to_hack": "NOT_USED",
+       "claim:secret": "NOT_USED",
+       "claim:deliberate": "NOT_USED"
+      },
+      "reason": "the body evidence does not support: chronology"
+     },
+     {
+      "source": "Techmeme",
+      "headline": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+      "url_host": "www.techmeme.com",
+      "acquisition_status": "FULL_TEXT",
+      "body_chars": 926,
+      "package_quality": "STRONG",
+      "preflight": "FAIL",
+      "checks": {
+       "actor": "UNSUPPORTED",
+       "action": "SUPPORTED",
+       "target": "UNSUPPORTED",
+       "quantity": "NOT_USED",
+       "chronology": "SUPPORTED",
+       "claim:rogue": "NOT_USED",
+       "claim:without_knowledge": "NOT_USED",
+       "claim:tried_to_hack": "NOT_USED",
+       "claim:secret": "NOT_USED",
+       "claim:deliberate": "NOT_USED"
+      },
+      "reason": "the body evidence does not support: actor, target"
+     },
+     {
+      "source": "iXBT News",
+      "headline": "Неожиданные и тревожные аномалии. ИИ OpenAI сам получил доступ к правительственным сайтам США",
+      "url_host": "www.ixbt.com",
+      "acquisition_status": "FULL_TEXT",
+      "body_chars": 890,
+      "package_quality": "STRONG",
+      "preflight": "PASS",
+      "checks": {
+       "actor": "SUPPORTED",
+       "action": "SUPPORTED",
+       "target": "SUPPORTED",
+       "quantity": "NOT_USED",
+       "chronology": "SUPPORTED",
+       "claim:rogue": "NOT_USED",
+       "claim:without_knowledge": "NOT_USED",
+       "claim:tried_to_hack": "NOT_USED",
+       "claim:secret": "NOT_USED",
+       "claim:deliberate": "NOT_USED"
+      },
+      "reason": "every claim the hook makes is in the stored body evidence"
+     }
+    ]
+   },
+   "viral_nominated": "YES",
+   "first_failed_gate": null,
+   "reason": "current (text: the behaviour is dated 'this summer'; the disclosure ('Researchers:') is new - first covered 2026-09-25 23:16 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour', 'security_surprise']; momentum strong (17 independent outlets carried this same event in the last 72 hours; 17 articles on it in the last 24 hours; on the Hacker News front page)",
+   "good_kage_news": true
+  },
+  {
+   "event": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+   "copies_in_pool": 2,
+   "articles_72h": 2,
+   "representative_sources": [
+    "бэкдор",
+    "хабр"
+   ],
+   "strongest_hook_source": "Google News RU: ИИ",
+   "newest_article_age_hours": 1.0,
+   "first_seen": "2026-09-26T14:37:01+00:00",
+   "earliest_pool_article": "2026-09-26T14:37:01+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 2 independent outlets since 2026-09-26 14:37 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai",
+   "broad_interest": "BROAD",
+   "inherent_strength": "STRONG",
+   "mechanisms": [
+    "unexpected_ai_behaviour",
+    "real_failure"
+   ],
+   "momentum_band": "STRONG",
+   "momentum_evidence": [
+    "2 independent outlets carried this same event in the last 72 hours",
+    "128 Telegram forwards"
+   ],
+   "strongest_factual_hook_candidate": "Claude вместо копии проекта удалил 48 218 файлов за полторы минуты и потом признался, что «что‑то сломал»",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "meme_trend",
+    "weekly_news"
+   ],
+   "stored_body_chars": 525,
+   "evidence_preflight_stored": "FAIL",
+   "stored_checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "UNSUPPORTED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "evidence_preflight_acquired": "FAIL",
+   "acquisition": {
+    "status": "FAIL",
+    "attempts": [
+     {
+      "source": "Бэкдор",
+      "headline": "Анекдот: **Claude снес разрабу ****4️⃣****8️⃣**** ****0️⃣****0️⃣****0️⃣**** файлов за полторы минуты.**",
+      "url_host": "cybersecuritynews.com",
+      "acquisition_status": "FULL_TEXT",
+      "body_chars": 1085,
+      "package_quality": "STRONG",
+      "preflight": "FAIL",
+      "checks": {
+       "actor": "SUPPORTED",
+       "action": "SUPPORTED",
+       "target": "NOT_USED",
+       "quantity": "SUPPORTED",
+       "chronology": "UNSUPPORTED",
+       "claim:rogue": "NOT_USED",
+       "claim:without_knowledge": "NOT_USED",
+       "claim:tried_to_hack": "NOT_USED",
+       "claim:secret": "NOT_USED",
+       "claim:deliberate": "NOT_USED"
+      },
+      "reason": "the body evidence does not support: chronology"
+     },
+     {
+      "source": "Google News RU: ИИ",
+      "headline": "Claude вместо копии проекта удалил 48 218 файлов за полторы минуты и потом признался, что «что‑то сломал» - Хабр",
+      "url_host": "news.google.com",
+      "acquisition_status": "REDIRECT_UNRESOLVED",
+      "body_chars": 110,
+      "package_quality": "THIN",
+      "preflight": "PENDING",
+      "checks": {},
+      "reason": "only 0 characters of stored body evidence - the article itself must be acquired before any claim can be checked"
+     }
+    ]
+   },
+   "viral_nominated": "YES",
+   "first_failed_gate": null,
+   "reason": "current (coverage: 2 independent outlets since 2026-09-26 14:37 UTC); broad (unexpected behaviour of an AI system, stated in the headline); strong mechanisms ['unexpected_ai_behaviour', 'real_failure']; momentum strong (2 independent outlets carried this same event in the last 72 hours; 128 Telegram forwards)",
+   "good_kage_news": true
+  }
+ ],
+ "generation_ready": [
+  "OpenAI's agents targeted and infiltrated US government websites"
+ ],
+ "good_kage_news_not_viral": [
+  {
+   "event": "ChatGPT-maker’s AI probed federal government websites",
+   "copies_in_pool": 1,
+   "articles_72h": 1,
+   "representative_sources": [
+    "the washington post"
+   ],
+   "strongest_hook_source": "Google News: Artificial Intelligence",
+   "newest_article_age_hours": 15.4,
+   "first_seen": "2026-09-26T01:20:41+00:00",
+   "earliest_pool_article": "2026-09-26T01:20:41+00:00",
+   "actuality_type": "UNCERTAIN",
+   "actuality_reason": "article timestamp only - the event date is not stated and no independent source corroborates it",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai",
+   "broad_interest": "BROAD",
+   "inherent_strength": "STRONG",
+   "mechanisms": [
+    "unexpected_ai_behaviour",
+    "security_surprise"
+   ],
+   "momentum_band": "NONE",
+   "momentum_evidence": [
+    "single source, no engagement signal"
+   ],
+   "strongest_factual_hook_candidate": "ChatGPT-maker’s AI probed federal government websites",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 73,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "5_momentum",
+   "reason": "single source, no momentum, and nothing in the text dates it as current (UNCERTAIN: article timestamp only - the event date is not stated and no independent source corroborates it)",
+   "good_kage_news": true
+  },
+  {
+   "event": "OpenAI says agents leaked 53 images from ChatGPT users in latest example of rogue activity",
+   "copies_in_pool": 5,
+   "articles_72h": 5,
+   "representative_sources": [
+    "3d",
+    "lemonde.fr",
+    "the guardian"
+   ],
+   "strongest_hook_source": "The Guardian Technology",
+   "newest_article_age_hours": 3.6,
+   "first_seen": "2026-09-25T22:55:19+00:00",
+   "earliest_pool_article": "2026-09-25T22:55:19+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 3 independent outlets since 2026-09-25 22:55 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "momentum_band": "MODERATE",
+   "momentum_evidence": [
+    "3 independent outlets carried this same event in the last 72 hours",
+    "4 articles on it in the last 24 hours"
+   ],
+   "strongest_factual_hook_candidate": "OpenAI says agents leaked 53 images from ChatGPT users in latest example of rogue activity — Disclosure reveals ⁠new area of privacy risk for the company and illustrates ​how difficult it is to inventory unauthorized activity tied to its agents Two ⁠months after OpenAI disclosed the accidental hacking of Hugging Face, the ChatGPT maker is still working to understand the full scope of its rogue agent activity, two people briefed on the matter told Reuters.",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 1749,
+   "evidence_preflight_stored": "FAIL",
+   "stored_checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "quantity": "SUPPORTED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "SUPPORTED",
+    "claim:without_knowledge": "SUPPORTED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['unexpected_ai_behaviour'] - the Director would have to stretch it; momentum (moderate) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "Минпросвещения запретило использовать ИИ на итоговой аттестации",
+   "copies_in_pool": 3,
+   "articles_72h": 3,
+   "representative_sources": [
+    "вечерняя казань",
+    "национальная служба новостей",
+    "ясиа"
+   ],
+   "strongest_hook_source": "Google News RU: ИИ",
+   "newest_article_age_hours": 2.0,
+   "first_seen": "2026-09-26T01:31:19+00:00",
+   "earliest_pool_article": "2026-09-26T01:31:19+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 3 independent outlets since 2026-09-26 01:31 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "consumer_consequence"
+   ],
+   "momentum_band": "MODERATE",
+   "momentum_evidence": [
+    "3 independent outlets carried this same event in the last 72 hours",
+    "3 articles on it in the last 24 hours"
+   ],
+   "strongest_factual_hook_candidate": "Минпросвещения запретило использовать ИИ на итоговой аттестации",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 207,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['consumer_consequence'] - the Director would have to stretch it; momentum (moderate) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "OpenAI says it paused training, evaluation, and inference with tool-use of its most capable models after a model",
+   "copies_in_pool": 2,
+   "articles_72h": 2,
+   "representative_sources": [
+    "techmeme",
+    "the verge"
+   ],
+   "strongest_hook_source": "The Verge AI",
+   "newest_article_age_hours": 0.2,
+   "first_seen": "2026-09-26T04:10:01+00:00",
+   "earliest_pool_article": "2026-09-26T04:10:01+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 2 independent outlets since 2026-09-26 04:10 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "momentum_band": "WEAK",
+   "momentum_evidence": [
+    "2 independent outlets carried this same event in the last 72 hours"
+   ],
+   "strongest_factual_hook_candidate": "OpenAI pauses training of its ‘most capable models’ — As reports of OpenAI's models breaking containment, hacking sites, and generally getting out of control pile up, the company has made the decision to pause training of its most powerful models.",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 520,
+   "evidence_preflight_stored": "FAIL",
+   "stored_checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "NOT_USED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['unexpected_ai_behaviour'] - the Director would have to stretch it; momentum (weak) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "Stuart man arrested on charges tied to AI-generated child pornography, police say",
+   "copies_in_pool": 2,
+   "articles_72h": 2,
+   "representative_sources": [
+    "cw34.com",
+    "wpec"
+   ],
+   "strongest_hook_source": "Google News: Artificial Intelligence",
+   "newest_article_age_hours": 11.1,
+   "first_seen": "2026-09-25T23:40:33+00:00",
+   "earliest_pool_article": "2026-09-25T23:40:33+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 2 independent outlets since 2026-09-25 23:40 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "human_vs_tech"
+   ],
+   "momentum_band": "WEAK",
+   "momentum_evidence": [
+    "2 independent outlets carried this same event in the last 72 hours"
+   ],
+   "strongest_factual_hook_candidate": "Stuart man arrested on charges tied to AI-generated child pornography, police say",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 176,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['human_vs_tech'] - the Director would have to stretch it; momentum (weak) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "Launch Week Deals Hit Latest Macs, Apple Watch Ultra 4, and Apple Accessories",
+   "copies_in_pool": 2,
+   "articles_72h": 2,
+   "representative_sources": [
+    "macrumors"
+   ],
+   "strongest_hook_source": "MacRumors",
+   "newest_article_age_hours": 3.8,
+   "first_seen": "2026-09-25T16:54:09+00:00",
+   "earliest_pool_article": "2026-09-25T16:54:09+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "text: explicit recent time expression 'This week'",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "human_vs_tech"
+   ],
+   "momentum_band": "NONE",
+   "momentum_evidence": [
+    "single source, no engagement signal"
+   ],
+   "strongest_factual_hook_candidate": "Top Stories: Apple Leaks, Siri AI Settlement, and More — We're also still learning more about the just-released iPhone 18 Pro and Pro Max plus the upcoming iPhone Duo, while this week saw the debut of new Beats 360 headphones and the start of claim acceptance for the class action lawsuit over Siri AI delays, so read on below for",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 795,
+   "evidence_preflight_stored": "PASS",
+   "stored_checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "SUPPORTED",
+    "chronology": "SUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['human_vs_tech'] - the Director would have to stretch it; momentum (none) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "Issues with Codex – Identified – Full Outage",
+   "copies_in_pool": 1,
+   "articles_72h": 1,
+   "representative_sources": [
+    "hacker"
+   ],
+   "strongest_hook_source": "Hacker News Front Page",
+   "newest_article_age_hours": 17.7,
+   "first_seen": "2026-09-25T23:04:25+00:00",
+   "earliest_pool_article": "2026-09-25T23:04:25+00:00",
+   "actuality_type": "UNCERTAIN",
+   "actuality_reason": "article timestamp only - the event date is not stated and no independent source corroborates it",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "consumer_consequence"
+   ],
+   "momentum_band": "MODERATE",
+   "momentum_evidence": [
+    "on the Hacker News front page"
+   ],
+   "strongest_factual_hook_candidate": "Issues with Codex – Identified – Full Outage",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 44,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['consumer_consequence'] - the Director would have to stretch it; momentum (moderate) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "How OpenAI’s Rogue A.I. Agents Tried to Trick a Robot Detector",
+   "copies_in_pool": 1,
+   "articles_72h": 1,
+   "representative_sources": [
+    "the new york times"
+   ],
+   "strongest_hook_source": "Google News: Artificial Intelligence",
+   "newest_article_age_hours": 20.7,
+   "first_seen": "2026-09-25T20:01:20+00:00",
+   "earliest_pool_article": "2026-09-25T20:01:20+00:00",
+   "actuality_type": "UNCERTAIN",
+   "actuality_reason": "article timestamp only - the event date is not stated and no independent source corroborates it",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai, gadget, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "momentum_band": "NONE",
+   "momentum_evidence": [
+    "single source, no engagement signal"
+   ],
+   "strongest_factual_hook_candidate": "How OpenAI’s Rogue A.I. Agents Tried to Trick a Robot Detector",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 81,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['unexpected_ai_behaviour'] - the Director would have to stretch it; momentum (none) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "Amazon запретила ИИ-агенту Meta Muse совершать покупки и сделает то же с аналогами от Google и OpenAI",
+   "copies_in_pool": 4,
+   "articles_72h": 4,
+   "representative_sources": [
+    "3d"
+   ],
+   "strongest_hook_source": "Google News RU: ИИ",
+   "newest_article_age_hours": 24.4,
+   "first_seen": "2026-09-25T16:21:00+00:00",
+   "earliest_pool_article": "2026-09-25T16:21:00+00:00",
+   "actuality_type": "UNCERTAIN",
+   "actuality_reason": "article timestamp only - the event date is not stated and no independent source corroborates it",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "consumer_consequence"
+   ],
+   "momentum_band": "NONE",
+   "momentum_evidence": [
+    "single source, no engagement signal"
+   ],
+   "strongest_factual_hook_candidate": "Amazon запретила ИИ-агенту Meta Muse совершать покупки и сделает то же с аналогами от Google и OpenAI",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 570,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['consumer_consequence'] - the Director would have to stretch it; momentum (none) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "ИИ-агенты OpenAI массово атаковали базы данных онлайн в поисках малоизвестных сведений",
+   "copies_in_pool": 2,
+   "articles_72h": 2,
+   "representative_sources": [
+    "3d"
+   ],
+   "strongest_hook_source": "Google News RU: ИИ",
+   "newest_article_age_hours": 10.5,
+   "first_seen": "2026-09-26T06:15:00+00:00",
+   "earliest_pool_article": "2026-09-26T06:15:00+00:00",
+   "actuality_type": "UNCERTAIN",
+   "actuality_reason": "article timestamp only - the event date is not stated and no independent source corroborates it",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "security_surprise"
+   ],
+   "momentum_band": "NONE",
+   "momentum_evidence": [
+    "single source, no engagement signal"
+   ],
+   "strongest_factual_hook_candidate": "ИИ-агенты OpenAI массово атаковали базы данных онлайн в поисках малоизвестных сведений",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 134,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['security_surprise'] - the Director would have to stretch it; momentum (none) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "An Educator Banned Social Media in Her School Years Ago. What About Banning AI?",
+   "copies_in_pool": 1,
+   "articles_72h": 1,
+   "representative_sources": [
+    "education week"
+   ],
+   "strongest_hook_source": "Google News: Artificial Intelligence",
+   "newest_article_age_hours": 20.8,
+   "first_seen": "2026-09-25T19:58:20+00:00",
+   "earliest_pool_article": "2026-09-25T19:58:20+00:00",
+   "actuality_type": "UNCERTAIN",
+   "actuality_reason": "article timestamp only - the event date is not stated and no independent source corroborates it",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "consumer_consequence"
+   ],
+   "momentum_band": "NONE",
+   "momentum_evidence": [
+    "single source, no engagement signal"
+   ],
+   "strongest_factual_hook_candidate": "An Educator Banned Social Media in Her School Years Ago. What About Banning AI?",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 94,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['consumer_consequence'] - the Director would have to stretch it; momentum (none) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "Сменили расу блогеру — платформа Kalshi вышла на новый уровень кринж-маркетинга 😁",
+   "copies_in_pool": 1,
+   "articles_72h": 1,
+   "representative_sources": [
+    "нейродвиж"
+   ],
+   "strongest_hook_source": "Нейродвиж",
+   "newest_article_age_hours": 3.6,
+   "first_seen": "2026-09-26T13:11:08+00:00",
+   "earliest_pool_article": "2026-09-26T13:11:08+00:00",
+   "actuality_type": "UNCERTAIN",
+   "actuality_reason": "article timestamp only - the event date is not stated and no independent source corroborates it",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "bizarre_event"
+   ],
+   "momentum_band": "NONE",
+   "momentum_evidence": [
+    "single source, no engagement signal"
+   ],
+   "strongest_factual_hook_candidate": "Сменили расу блогеру — платформа Kalshi вышла на новый уровень кринж-маркетинга 😁 — **Сменили расу блогеру** — платформа Kalshi вышла на новый уровень кринж-маркетинга 😁 Чуваки просто [взяли]( влог популярного азиатского ютубера Эллиота Чоя о переезде в Нью-Йорк, и с помощью нейросетей превратили его в белого парня и запустили это как рекламу на YouTube.",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 308,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['bizarre_event'] - the Director would have to stretch it; momentum (none) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "US court sides with Pentagon in Anthropic AI ban",
+   "copies_in_pool": 4,
+   "articles_72h": 5,
+   "representative_sources": [
+    "3d",
+    "hacker",
+    "le monde.fr",
+    "the washington post",
+    "wired"
+   ],
+   "strongest_hook_source": "Google News: Artificial Intelligence",
+   "newest_article_age_hours": 11.3,
+   "first_seen": "2026-09-25T15:29:25+00:00",
+   "earliest_pool_article": "2026-09-25T16:42:06+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 5 independent outlets since 2026-09-25 15:29 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "STRONG",
+   "momentum_evidence": [
+    "5 independent outlets carried this same event in the last 72 hours",
+    "3 articles on it in the last 24 hours",
+    "on the Hacker News front page"
+   ],
+   "strongest_factual_hook_candidate": "US court sides with Pentagon in Anthropic AI ban",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 712,
+   "evidence_preflight_stored": "FAIL",
+   "stored_checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "quantity": "NOT_USED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "ИИ-агенты OpenAI допустили утечку пользовательских изображений из ChatGPT",
+   "copies_in_pool": 5,
+   "articles_72h": 5,
+   "representative_sources": [
+    "3d",
+    "dw.com",
+    "сноб",
+    "хабр",
+    "эксперт"
+   ],
+   "strongest_hook_source": "Google News RU: ИИ",
+   "newest_article_age_hours": 2.1,
+   "first_seen": "2026-09-26T03:25:29+00:00",
+   "earliest_pool_article": "2026-09-26T03:25:29+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 5 independent outlets since 2026-09-26 03:25 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "STRONG",
+   "momentum_evidence": [
+    "5 independent outlets carried this same event in the last 72 hours",
+    "5 articles on it in the last 24 hours"
+   ],
+   "strongest_factual_hook_candidate": "ИИ-агенты OpenAI допустили утечку пользовательских изображений из ChatGPT",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 450,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "Минпросвещения РФ регламентировало применение ИИ в школах",
+   "copies_in_pool": 4,
+   "articles_72h": 4,
+   "representative_sources": [
+    "the world inform",
+    "бизнес",
+    "интерфакс",
+    "первое сентября"
+   ],
+   "strongest_hook_source": "Google News RU: ИИ",
+   "newest_article_age_hours": 9.6,
+   "first_seen": "2026-09-25T23:06:09+00:00",
+   "earliest_pool_article": "2026-09-25T23:06:09+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 4 independent outlets since 2026-09-25 23:06 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "MODERATE",
+   "momentum_evidence": [
+    "4 independent outlets carried this same event in the last 72 hours",
+    "4 articles on it in the last 24 hours"
+   ],
+   "strongest_factual_hook_candidate": "Минпросвещения РФ регламентировало применение ИИ в школах",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 328,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "Anthropic to pay Akamai $11.6 billion over seven years in cloud deal",
+   "copies_in_pool": 1,
+   "articles_72h": 3,
+   "representative_sources": [
+    "24/7 wall st.",
+    "techcrunch",
+    "techmeme"
+   ],
+   "strongest_hook_source": "TechCrunch AI",
+   "newest_article_age_hours": 21.5,
+   "first_seen": "2026-09-24T21:20:02+00:00",
+   "earliest_pool_article": "2026-09-25T19:13:38+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 3 independent outlets since 2026-09-24 21:20 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "MODERATE",
+   "momentum_evidence": [
+    "3 independent outlets carried this same event in the last 72 hours"
+   ],
+   "strongest_factual_hook_candidate": "Anthropic to pay Akamai $11.6 billion over seven years in cloud deal",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 278,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "Google запустит первый дата-центр для ИИ в космос",
+   "copies_in_pool": 1,
+   "articles_72h": 3,
+   "representative_sources": [
+    "naukatv.ru",
+    "реальное время",
+    "сноб"
+   ],
+   "strongest_hook_source": "Google News RU: ИИ",
+   "newest_article_age_hours": 24.3,
+   "first_seen": "2026-09-25T05:52:57+00:00",
+   "earliest_pool_article": "2026-09-25T16:27:00+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 3 independent outlets since 2026-09-25 05:52 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "MODERATE",
+   "momentum_evidence": [
+    "3 independent outlets carried this same event in the last 72 hours"
+   ],
+   "strongest_factual_hook_candidate": "Google запустит первый дата-центр для ИИ в космос",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 64,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "AI забрал почти 70% заявок стартапов на технологическую премию Правительства Москвы и Сбера. Всего на премию",
+   "copies_in_pool": 2,
+   "articles_72h": 2,
+   "representative_sources": [
+    "бэкдор",
+    "нейродвиж"
+   ],
+   "strongest_hook_source": "Бэкдор",
+   "newest_article_age_hours": 4.6,
+   "first_seen": "2026-09-26T11:38:22+00:00",
+   "earliest_pool_article": "2026-09-26T11:38:22+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 2 independent outlets since 2026-09-26 11:38 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "MODERATE",
+   "momentum_evidence": [
+    "2 independent outlets carried this same event in the last 72 hours",
+    "39 Telegram forwards",
+    "113 Telegram reactions"
+   ],
+   "strongest_factual_hook_candidate": "AI забрал почти 70% заявок стартапов на технологическую премию Правительства Москвы и Сбера. Всего на премию",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 1179,
+   "evidence_preflight_stored": "FAIL",
+   "stored_checks": {
+    "actor": "SUPPORTED",
+    "action": "UNSUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "UNSUPPORTED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "Google's first Suncatcher orbital data center test launches October 1",
+   "copies_in_pool": 1,
+   "articles_72h": 2,
+   "representative_sources": [
+    "hacker",
+    "tom's hardware"
+   ],
+   "strongest_hook_source": "Hacker News Front Page",
+   "newest_article_age_hours": 42.6,
+   "first_seen": "2026-09-24T22:07:08+00:00",
+   "earliest_pool_article": "2026-09-24T22:07:08+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 2 independent outlets since 2026-09-24 22:07 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "MODERATE",
+   "momentum_evidence": [
+    "2 independent outlets carried this same event in the last 72 hours",
+    "on the Hacker News front page"
+   ],
+   "strongest_factual_hook_candidate": "Google's first Suncatcher orbital data center test launches October 1",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 69,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "Amazon's $199 Discount on Apple Watch Ultra 3 Returns to Help Clear Stock",
+   "copies_in_pool": 2,
+   "articles_72h": 2,
+   "representative_sources": [
+    "9to5mac",
+    "macrumors"
+   ],
+   "strongest_hook_source": "MacRumors",
+   "newest_article_age_hours": 4.0,
+   "first_seen": "2026-09-25T18:17:02+00:00",
+   "earliest_pool_article": "2026-09-25T18:17:02+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "text: explicit recent time expression 'this week'",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "gadget, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "WEAK",
+   "momentum_evidence": [
+    "2 independent outlets carried this same event in the last 72 hours"
+   ],
+   "strongest_factual_hook_candidate": "Amazon's $199 Discount on Apple Watch Ultra 3 Returns to Help Clear Stock",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 711,
+   "evidence_preflight_stored": "PASS",
+   "stored_checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "SUPPORTED",
+    "chronology": "SUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "Banks and Credit Unions to Team Up Against Apple Pay Fees",
+   "copies_in_pool": 2,
+   "articles_72h": 2,
+   "representative_sources": [
+    "9to5mac",
+    "macrumors"
+   ],
+   "strongest_hook_source": "9to5Mac",
+   "newest_article_age_hours": 19.7,
+   "first_seen": "2026-09-25T19:22:29+00:00",
+   "earliest_pool_article": "2026-09-25T19:22:29+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 2 independent outlets since 2026-09-25 19:22 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "WEAK",
+   "momentum_evidence": [
+    "2 independent outlets carried this same event in the last 72 hours"
+   ],
+   "strongest_factual_hook_candidate": "Apple faces class action over Apple Pay fees charged to card issuers",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 396,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "At Meta Connect, the company’s smart glasses were everywhere",
+   "copies_in_pool": 1,
+   "articles_72h": 2,
+   "representative_sources": [
+    "engadget",
+    "techcrunch"
+   ],
+   "strongest_hook_source": "TechCrunch AI",
+   "newest_article_age_hours": 15.6,
+   "first_seen": "2026-09-24T21:56:17+00:00",
+   "earliest_pool_article": "2026-09-26T01:08:57+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 2 independent outlets since 2026-09-24 21:56 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "gadget",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "WEAK",
+   "momentum_evidence": [
+    "2 independent outlets carried this same event in the last 72 hours"
+   ],
+   "strongest_factual_hook_candidate": "At Meta Connect, the company’s smart glasses were everywhere",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 140,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  }
+ ],
+ "result": "OpenAI's agents targeted and infiltrated US government websites",
+ "golden_regression": {
+  "deepseek": {
+   "title": "460 целей, ноль автономных взломов: как Telegram-бот на DeepSeek подставил хозяина",
+   "strength": "STRONG",
+   "mechanisms": [
+    "measurable_contradiction",
+    "unexpected_ai_behaviour"
+   ],
+   "replay_day": {
+    "now": "2026-08-05",
+    "eligible": false,
+    "gate": "2_event_actuality",
+    "actuality": "RECENT_EVENT"
+   },
+   "as_fresh_event": {
+    "now": "2026-07-31",
+    "eligible": true,
+    "gate": null,
+    "actuality": "CURRENT_DISCLOSURE"
+   }
+  },
+  "hamster": {
+   "title": "Physicist Rigged His Pet Hamster's Wheel to Strava. It Runs Far Every Night",
+   "strength": "STRONG",
+   "mechanisms": [
+    "absurd_measurable_outcome",
+    "unlikely_pairing"
+   ],
+   "replay_day": {
+    "now": "2026-08-08",
+    "eligible": true,
+    "gate": null,
+    "actuality": "UNCERTAIN"
+   },
+   "as_fresh_event": {
+    "now": "2026-08-08",
+    "eligible": true,
+    "gate": null,
+    "actuality": "UNCERTAIN"
+   }
+  }
+ },
+ "audit": [
+  {
+   "event": "OpenAI's agents targeted and infiltrated US government websites",
+   "copies_in_pool": 17,
+   "articles_72h": 17,
+   "representative_sources": [
+    "3d",
+    "bbc.com",
+    "bfm.ru",
+    "cbc",
+    "cbs",
+    "engadget",
+    "hacker",
+    "ixbt"
+   ],
+   "strongest_hook_source": "Engadget",
+   "newest_article_age_hours": 2.1,
+   "first_seen": "2026-09-25T23:16:40+00:00",
+   "earliest_pool_article": "2026-09-25T23:16:40+00:00",
+   "actuality_type": "CURRENT_DISCLOSURE",
+   "actuality_reason": "text: the behaviour is dated 'this summer'; the disclosure ('Researchers:') is new - first covered 2026-09-25 23:16 UTC",
+   "underlying_time": "this summer",
+   "disclosed_at": "2026-09-25T23:16:40+00:00",
+   "newly_disclosed": [
+    "commerce department",
+    "education department",
+    "sec"
+   ],
+   "kage_relevance": "ai, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "STRONG",
+   "mechanisms": [
+    "unexpected_ai_behaviour",
+    "security_surprise"
+   ],
+   "momentum_band": "STRONG",
+   "momentum_evidence": [
+    "17 independent outlets carried this same event in the last 72 hours",
+    "17 articles on it in the last 24 hours",
+    "on the Hacker News front page"
+   ],
+   "strongest_factual_hook_candidate": "OpenAI's agents targeted and infiltrated US government websites",
+   "hook_chronology": "the disclosure is new, the behaviour is not (this summer): the hook must say it was revealed / disclosed / reported and must not imply the action happened today",
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 1723,
+   "evidence_preflight_stored": "FAIL",
+   "stored_checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "quantity": "NOT_USED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "evidence_preflight_acquired": "PASS",
+   "acquisition": {
+    "status": "PASS",
+    "attempts": [
+     {
+      "source": "3DNews",
+      "headline": "ИИ-агенты OpenAI массово атаковали базы данных онлайн в поисках малоизвестных сведений",
+      "url_host": "3dnews.ru",
+      "acquisition_status": "FULL_TEXT",
+      "body_chars": 1453,
+      "package_quality": "STRONG",
+      "preflight": "FAIL",
+      "checks": {
+       "actor": "SUPPORTED",
+       "action": "SUPPORTED",
+       "target": "SUPPORTED",
+       "quantity": "NOT_USED",
+       "chronology": "UNSUPPORTED",
+       "claim:rogue": "NOT_USED",
+       "claim:without_knowledge": "NOT_USED",
+       "claim:tried_to_hack": "NOT_USED",
+       "claim:secret": "NOT_USED",
+       "claim:deliberate": "NOT_USED"
+      },
+      "reason": "the body evidence does not support: chronology"
+     },
+     {
+      "source": "Engadget",
+      "headline": "OpenAI's agents targeted and infiltrated US government websites",
+      "url_host": "www.engadget.com",
+      "acquisition_status": "FULL_TEXT",
+      "body_chars": 817,
+      "package_quality": "STRONG",
+      "preflight": "FAIL",
+      "checks": {
+       "actor": "SUPPORTED",
+       "action": "SUPPORTED",
+       "target": "SUPPORTED",
+       "quantity": "NOT_USED",
+       "chronology": "UNSUPPORTED",
+       "claim:rogue": "NOT_USED",
+       "claim:without_knowledge": "NOT_USED",
+       "claim:tried_to_hack": "NOT_USED",
+       "claim:secret": "NOT_USED",
+       "claim:deliberate": "NOT_USED"
+      },
+      "reason": "the body evidence does not support: chronology"
+     },
+     {
+      "source": "Techmeme",
+      "headline": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+      "url_host": "www.techmeme.com",
+      "acquisition_status": "FULL_TEXT",
+      "body_chars": 926,
+      "package_quality": "STRONG",
+      "preflight": "FAIL",
+      "checks": {
+       "actor": "UNSUPPORTED",
+       "action": "SUPPORTED",
+       "target": "UNSUPPORTED",
+       "quantity": "NOT_USED",
+       "chronology": "SUPPORTED",
+       "claim:rogue": "NOT_USED",
+       "claim:without_knowledge": "NOT_USED",
+       "claim:tried_to_hack": "NOT_USED",
+       "claim:secret": "NOT_USED",
+       "claim:deliberate": "NOT_USED"
+      },
+      "reason": "the body evidence does not support: actor, target"
+     },
+     {
+      "source": "iXBT News",
+      "headline": "Неожиданные и тревожные аномалии. ИИ OpenAI сам получил доступ к правительственным сайтам США",
+      "url_host": "www.ixbt.com",
+      "acquisition_status": "FULL_TEXT",
+      "body_chars": 890,
+      "package_quality": "STRONG",
+      "preflight": "PASS",
+      "checks": {
+       "actor": "SUPPORTED",
+       "action": "SUPPORTED",
+       "target": "SUPPORTED",
+       "quantity": "NOT_USED",
+       "chronology": "SUPPORTED",
+       "claim:rogue": "NOT_USED",
+       "claim:without_knowledge": "NOT_USED",
+       "claim:tried_to_hack": "NOT_USED",
+       "claim:secret": "NOT_USED",
+       "claim:deliberate": "NOT_USED"
+      },
+      "reason": "every claim the hook makes is in the stored body evidence"
+     }
+    ]
+   },
+   "viral_nominated": "YES",
+   "first_failed_gate": null,
+   "reason": "current (text: the behaviour is dated 'this summer'; the disclosure ('Researchers:') is new - first covered 2026-09-25 23:16 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour', 'security_surprise']; momentum strong (17 independent outlets carried this same event in the last 72 hours; 17 articles on it in the last 24 hours; on the Hacker News front page)",
+   "good_kage_news": true
+  },
+  {
+   "event": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+   "copies_in_pool": 2,
+   "articles_72h": 2,
+   "representative_sources": [
+    "бэкдор",
+    "хабр"
+   ],
+   "strongest_hook_source": "Google News RU: ИИ",
+   "newest_article_age_hours": 1.0,
+   "first_seen": "2026-09-26T14:37:01+00:00",
+   "earliest_pool_article": "2026-09-26T14:37:01+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 2 independent outlets since 2026-09-26 14:37 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai",
+   "broad_interest": "BROAD",
+   "inherent_strength": "STRONG",
+   "mechanisms": [
+    "unexpected_ai_behaviour",
+    "real_failure"
+   ],
+   "momentum_band": "STRONG",
+   "momentum_evidence": [
+    "2 independent outlets carried this same event in the last 72 hours",
+    "128 Telegram forwards"
+   ],
+   "strongest_factual_hook_candidate": "Claude вместо копии проекта удалил 48 218 файлов за полторы минуты и потом признался, что «что‑то сломал»",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "meme_trend",
+    "weekly_news"
+   ],
+   "stored_body_chars": 525,
+   "evidence_preflight_stored": "FAIL",
+   "stored_checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "UNSUPPORTED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "evidence_preflight_acquired": "FAIL",
+   "acquisition": {
+    "status": "FAIL",
+    "attempts": [
+     {
+      "source": "Бэкдор",
+      "headline": "Анекдот: **Claude снес разрабу ****4️⃣****8️⃣**** ****0️⃣****0️⃣****0️⃣**** файлов за полторы минуты.**",
+      "url_host": "cybersecuritynews.com",
+      "acquisition_status": "FULL_TEXT",
+      "body_chars": 1085,
+      "package_quality": "STRONG",
+      "preflight": "FAIL",
+      "checks": {
+       "actor": "SUPPORTED",
+       "action": "SUPPORTED",
+       "target": "NOT_USED",
+       "quantity": "SUPPORTED",
+       "chronology": "UNSUPPORTED",
+       "claim:rogue": "NOT_USED",
+       "claim:without_knowledge": "NOT_USED",
+       "claim:tried_to_hack": "NOT_USED",
+       "claim:secret": "NOT_USED",
+       "claim:deliberate": "NOT_USED"
+      },
+      "reason": "the body evidence does not support: chronology"
+     },
+     {
+      "source": "Google News RU: ИИ",
+      "headline": "Claude вместо копии проекта удалил 48 218 файлов за полторы минуты и потом признался, что «что‑то сломал» - Хабр",
+      "url_host": "news.google.com",
+      "acquisition_status": "REDIRECT_UNRESOLVED",
+      "body_chars": 110,
+      "package_quality": "THIN",
+      "preflight": "PENDING",
+      "checks": {},
+      "reason": "only 0 characters of stored body evidence - the article itself must be acquired before any claim can be checked"
+     }
+    ]
+   },
+   "viral_nominated": "YES",
+   "first_failed_gate": null,
+   "reason": "current (coverage: 2 independent outlets since 2026-09-26 14:37 UTC); broad (unexpected behaviour of an AI system, stated in the headline); strong mechanisms ['unexpected_ai_behaviour', 'real_failure']; momentum strong (2 independent outlets carried this same event in the last 72 hours; 128 Telegram forwards)",
+   "good_kage_news": true
+  },
+  {
+   "event": "ChatGPT-maker’s AI probed federal government websites",
+   "copies_in_pool": 1,
+   "articles_72h": 1,
+   "representative_sources": [
+    "the washington post"
+   ],
+   "strongest_hook_source": "Google News: Artificial Intelligence",
+   "newest_article_age_hours": 15.4,
+   "first_seen": "2026-09-26T01:20:41+00:00",
+   "earliest_pool_article": "2026-09-26T01:20:41+00:00",
+   "actuality_type": "UNCERTAIN",
+   "actuality_reason": "article timestamp only - the event date is not stated and no independent source corroborates it",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai",
+   "broad_interest": "BROAD",
+   "inherent_strength": "STRONG",
+   "mechanisms": [
+    "unexpected_ai_behaviour",
+    "security_surprise"
+   ],
+   "momentum_band": "NONE",
+   "momentum_evidence": [
+    "single source, no engagement signal"
+   ],
+   "strongest_factual_hook_candidate": "ChatGPT-maker’s AI probed federal government websites",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 73,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "5_momentum",
+   "reason": "single source, no momentum, and nothing in the text dates it as current (UNCERTAIN: article timestamp only - the event date is not stated and no independent source corroborates it)",
+   "good_kage_news": true
+  },
+  {
+   "event": "OpenAI says agents leaked 53 images from ChatGPT users in latest example of rogue activity",
+   "copies_in_pool": 5,
+   "articles_72h": 5,
+   "representative_sources": [
+    "3d",
+    "lemonde.fr",
+    "the guardian"
+   ],
+   "strongest_hook_source": "The Guardian Technology",
+   "newest_article_age_hours": 3.6,
+   "first_seen": "2026-09-25T22:55:19+00:00",
+   "earliest_pool_article": "2026-09-25T22:55:19+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 3 independent outlets since 2026-09-25 22:55 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "momentum_band": "MODERATE",
+   "momentum_evidence": [
+    "3 independent outlets carried this same event in the last 72 hours",
+    "4 articles on it in the last 24 hours"
+   ],
+   "strongest_factual_hook_candidate": "OpenAI says agents leaked 53 images from ChatGPT users in latest example of rogue activity — Disclosure reveals ⁠new area of privacy risk for the company and illustrates ​how difficult it is to inventory unauthorized activity tied to its agents Two ⁠months after OpenAI disclosed the accidental hacking of Hugging Face, the ChatGPT maker is still working to understand the full scope of its rogue agent activity, two people briefed on the matter told Reuters.",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 1749,
+   "evidence_preflight_stored": "FAIL",
+   "stored_checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "quantity": "SUPPORTED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "SUPPORTED",
+    "claim:without_knowledge": "SUPPORTED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['unexpected_ai_behaviour'] - the Director would have to stretch it; momentum (moderate) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "Минпросвещения запретило использовать ИИ на итоговой аттестации",
+   "copies_in_pool": 3,
+   "articles_72h": 3,
+   "representative_sources": [
+    "вечерняя казань",
+    "национальная служба новостей",
+    "ясиа"
+   ],
+   "strongest_hook_source": "Google News RU: ИИ",
+   "newest_article_age_hours": 2.0,
+   "first_seen": "2026-09-26T01:31:19+00:00",
+   "earliest_pool_article": "2026-09-26T01:31:19+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 3 independent outlets since 2026-09-26 01:31 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "consumer_consequence"
+   ],
+   "momentum_band": "MODERATE",
+   "momentum_evidence": [
+    "3 independent outlets carried this same event in the last 72 hours",
+    "3 articles on it in the last 24 hours"
+   ],
+   "strongest_factual_hook_candidate": "Минпросвещения запретило использовать ИИ на итоговой аттестации",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 207,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['consumer_consequence'] - the Director would have to stretch it; momentum (moderate) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "OpenAI says it paused training, evaluation, and inference with tool-use of its most capable models after a model",
+   "copies_in_pool": 2,
+   "articles_72h": 2,
+   "representative_sources": [
+    "techmeme",
+    "the verge"
+   ],
+   "strongest_hook_source": "The Verge AI",
+   "newest_article_age_hours": 0.2,
+   "first_seen": "2026-09-26T04:10:01+00:00",
+   "earliest_pool_article": "2026-09-26T04:10:01+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 2 independent outlets since 2026-09-26 04:10 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "momentum_band": "WEAK",
+   "momentum_evidence": [
+    "2 independent outlets carried this same event in the last 72 hours"
+   ],
+   "strongest_factual_hook_candidate": "OpenAI pauses training of its ‘most capable models’ — As reports of OpenAI's models breaking containment, hacking sites, and generally getting out of control pile up, the company has made the decision to pause training of its most powerful models.",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 520,
+   "evidence_preflight_stored": "FAIL",
+   "stored_checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "NOT_USED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['unexpected_ai_behaviour'] - the Director would have to stretch it; momentum (weak) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "Stuart man arrested on charges tied to AI-generated child pornography, police say",
+   "copies_in_pool": 2,
+   "articles_72h": 2,
+   "representative_sources": [
+    "cw34.com",
+    "wpec"
+   ],
+   "strongest_hook_source": "Google News: Artificial Intelligence",
+   "newest_article_age_hours": 11.1,
+   "first_seen": "2026-09-25T23:40:33+00:00",
+   "earliest_pool_article": "2026-09-25T23:40:33+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 2 independent outlets since 2026-09-25 23:40 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "human_vs_tech"
+   ],
+   "momentum_band": "WEAK",
+   "momentum_evidence": [
+    "2 independent outlets carried this same event in the last 72 hours"
+   ],
+   "strongest_factual_hook_candidate": "Stuart man arrested on charges tied to AI-generated child pornography, police say",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 176,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['human_vs_tech'] - the Director would have to stretch it; momentum (weak) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "Launch Week Deals Hit Latest Macs, Apple Watch Ultra 4, and Apple Accessories",
+   "copies_in_pool": 2,
+   "articles_72h": 2,
+   "representative_sources": [
+    "macrumors"
+   ],
+   "strongest_hook_source": "MacRumors",
+   "newest_article_age_hours": 3.8,
+   "first_seen": "2026-09-25T16:54:09+00:00",
+   "earliest_pool_article": "2026-09-25T16:54:09+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "text: explicit recent time expression 'This week'",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "human_vs_tech"
+   ],
+   "momentum_band": "NONE",
+   "momentum_evidence": [
+    "single source, no engagement signal"
+   ],
+   "strongest_factual_hook_candidate": "Top Stories: Apple Leaks, Siri AI Settlement, and More — We're also still learning more about the just-released iPhone 18 Pro and Pro Max plus the upcoming iPhone Duo, while this week saw the debut of new Beats 360 headphones and the start of claim acceptance for the class action lawsuit over Siri AI delays, so read on below for",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 795,
+   "evidence_preflight_stored": "PASS",
+   "stored_checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "SUPPORTED",
+    "chronology": "SUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['human_vs_tech'] - the Director would have to stretch it; momentum (none) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "Researchers add details to the Hugging Face incident, including OpenAI agents creating ~1M shortened URLs to encode",
+   "copies_in_pool": 3,
+   "articles_72h": 3,
+   "representative_sources": [
+    "hacker",
+    "lobsters",
+    "techmeme"
+   ],
+   "strongest_hook_source": "Hacker News Front Page",
+   "newest_article_age_hours": 0.3,
+   "first_seen": "2026-08-26T19:25:20+00:00",
+   "earliest_pool_article": "2026-09-25T20:35:49+00:00",
+   "actuality_type": "OLD_EVENT",
+   "actuality_reason": "coverage: this same factual event was first covered 2026-08-26 (30 days ago) - a rewrite, not a new fact",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "momentum_band": "STRONG",
+   "momentum_evidence": [
+    "3 independent outlets carried this same event in the last 72 hours",
+    "3 articles on it in the last 24 hours",
+    "on the Hacker News front page"
+   ],
+   "strongest_factual_hook_candidate": "Revealing the details of how OpenAI agents hacked Hugging Face",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 96,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "2_event_actuality",
+   "reason": "not a current event - coverage: this same factual event was first covered 2026-08-26 (30 days ago) - a rewrite, not a new fact",
+   "good_kage_news": false
+  },
+  {
+   "event": "Issues with Codex – Identified – Full Outage",
+   "copies_in_pool": 1,
+   "articles_72h": 1,
+   "representative_sources": [
+    "hacker"
+   ],
+   "strongest_hook_source": "Hacker News Front Page",
+   "newest_article_age_hours": 17.7,
+   "first_seen": "2026-09-25T23:04:25+00:00",
+   "earliest_pool_article": "2026-09-25T23:04:25+00:00",
+   "actuality_type": "UNCERTAIN",
+   "actuality_reason": "article timestamp only - the event date is not stated and no independent source corroborates it",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "consumer_consequence"
+   ],
+   "momentum_band": "MODERATE",
+   "momentum_evidence": [
+    "on the Hacker News front page"
+   ],
+   "strongest_factual_hook_candidate": "Issues with Codex – Identified – Full Outage",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 44,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['consumer_consequence'] - the Director would have to stretch it; momentum (moderate) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "How OpenAI’s Rogue A.I. Agents Tried to Trick a Robot Detector",
+   "copies_in_pool": 1,
+   "articles_72h": 1,
+   "representative_sources": [
+    "the new york times"
+   ],
+   "strongest_hook_source": "Google News: Artificial Intelligence",
+   "newest_article_age_hours": 20.7,
+   "first_seen": "2026-09-25T20:01:20+00:00",
+   "earliest_pool_article": "2026-09-25T20:01:20+00:00",
+   "actuality_type": "UNCERTAIN",
+   "actuality_reason": "article timestamp only - the event date is not stated and no independent source corroborates it",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai, gadget, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "momentum_band": "NONE",
+   "momentum_evidence": [
+    "single source, no engagement signal"
+   ],
+   "strongest_factual_hook_candidate": "How OpenAI’s Rogue A.I. Agents Tried to Trick a Robot Detector",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 81,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['unexpected_ai_behaviour'] - the Director would have to stretch it; momentum (none) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "Amazon запретила ИИ-агенту Meta Muse совершать покупки и сделает то же с аналогами от Google и OpenAI",
+   "copies_in_pool": 4,
+   "articles_72h": 4,
+   "representative_sources": [
+    "3d"
+   ],
+   "strongest_hook_source": "Google News RU: ИИ",
+   "newest_article_age_hours": 24.4,
+   "first_seen": "2026-09-25T16:21:00+00:00",
+   "earliest_pool_article": "2026-09-25T16:21:00+00:00",
+   "actuality_type": "UNCERTAIN",
+   "actuality_reason": "article timestamp only - the event date is not stated and no independent source corroborates it",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "consumer_consequence"
+   ],
+   "momentum_band": "NONE",
+   "momentum_evidence": [
+    "single source, no engagement signal"
+   ],
+   "strongest_factual_hook_candidate": "Amazon запретила ИИ-агенту Meta Muse совершать покупки и сделает то же с аналогами от Google и OpenAI",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 570,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['consumer_consequence'] - the Director would have to stretch it; momentum (none) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "ИИ-агенты OpenAI массово атаковали базы данных онлайн в поисках малоизвестных сведений",
+   "copies_in_pool": 2,
+   "articles_72h": 2,
+   "representative_sources": [
+    "3d"
+   ],
+   "strongest_hook_source": "Google News RU: ИИ",
+   "newest_article_age_hours": 10.5,
+   "first_seen": "2026-09-26T06:15:00+00:00",
+   "earliest_pool_article": "2026-09-26T06:15:00+00:00",
+   "actuality_type": "UNCERTAIN",
+   "actuality_reason": "article timestamp only - the event date is not stated and no independent source corroborates it",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "security_surprise"
+   ],
+   "momentum_band": "NONE",
+   "momentum_evidence": [
+    "single source, no engagement signal"
+   ],
+   "strongest_factual_hook_candidate": "ИИ-агенты OpenAI массово атаковали базы данных онлайн в поисках малоизвестных сведений",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 134,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['security_surprise'] - the Director would have to stretch it; momentum (none) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "An Educator Banned Social Media in Her School Years Ago. What About Banning AI?",
+   "copies_in_pool": 1,
+   "articles_72h": 1,
+   "representative_sources": [
+    "education week"
+   ],
+   "strongest_hook_source": "Google News: Artificial Intelligence",
+   "newest_article_age_hours": 20.8,
+   "first_seen": "2026-09-25T19:58:20+00:00",
+   "earliest_pool_article": "2026-09-25T19:58:20+00:00",
+   "actuality_type": "UNCERTAIN",
+   "actuality_reason": "article timestamp only - the event date is not stated and no independent source corroborates it",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "consumer_consequence"
+   ],
+   "momentum_band": "NONE",
+   "momentum_evidence": [
+    "single source, no engagement signal"
+   ],
+   "strongest_factual_hook_candidate": "An Educator Banned Social Media in Her School Years Ago. What About Banning AI?",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 94,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['consumer_consequence'] - the Director would have to stretch it; momentum (none) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "Сменили расу блогеру — платформа Kalshi вышла на новый уровень кринж-маркетинга 😁",
+   "copies_in_pool": 1,
+   "articles_72h": 1,
+   "representative_sources": [
+    "нейродвиж"
+   ],
+   "strongest_hook_source": "Нейродвиж",
+   "newest_article_age_hours": 3.6,
+   "first_seen": "2026-09-26T13:11:08+00:00",
+   "earliest_pool_article": "2026-09-26T13:11:08+00:00",
+   "actuality_type": "UNCERTAIN",
+   "actuality_reason": "article timestamp only - the event date is not stated and no independent source corroborates it",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "MODERATE",
+   "mechanisms": [
+    "bizarre_event"
+   ],
+   "momentum_band": "NONE",
+   "momentum_evidence": [
+    "single source, no engagement signal"
+   ],
+   "strongest_factual_hook_candidate": "Сменили расу блогеру — платформа Kalshi вышла на новый уровень кринж-маркетинга 😁 — **Сменили расу блогеру** — платформа Kalshi вышла на новый уровень кринж-маркетинга 😁 Чуваки просто [взяли]( влог популярного азиатского ютубера Эллиота Чоя о переезде в Нью-Йорк, и с помощью нейросетей превратили его в белого парня и запустили это как рекламу на YouTube.",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 308,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "only one viral mechanism ['bizarre_event'] - the Director would have to stretch it; momentum (none) cannot lift a moderate story into the viral slot",
+   "good_kage_news": true
+  },
+  {
+   "event": "US court sides with Pentagon in Anthropic AI ban",
+   "copies_in_pool": 4,
+   "articles_72h": 5,
+   "representative_sources": [
+    "3d",
+    "hacker",
+    "le monde.fr",
+    "the washington post",
+    "wired"
+   ],
+   "strongest_hook_source": "Google News: Artificial Intelligence",
+   "newest_article_age_hours": 11.3,
+   "first_seen": "2026-09-25T15:29:25+00:00",
+   "earliest_pool_article": "2026-09-25T16:42:06+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 5 independent outlets since 2026-09-25 15:29 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "STRONG",
+   "momentum_evidence": [
+    "5 independent outlets carried this same event in the last 72 hours",
+    "3 articles on it in the last 24 hours",
+    "on the Hacker News front page"
+   ],
+   "strongest_factual_hook_candidate": "US court sides with Pentagon in Anthropic AI ban",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 712,
+   "evidence_preflight_stored": "FAIL",
+   "stored_checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "quantity": "NOT_USED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "ИИ-агенты OpenAI допустили утечку пользовательских изображений из ChatGPT",
+   "copies_in_pool": 5,
+   "articles_72h": 5,
+   "representative_sources": [
+    "3d",
+    "dw.com",
+    "сноб",
+    "хабр",
+    "эксперт"
+   ],
+   "strongest_hook_source": "Google News RU: ИИ",
+   "newest_article_age_hours": 2.1,
+   "first_seen": "2026-09-26T03:25:29+00:00",
+   "earliest_pool_article": "2026-09-26T03:25:29+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 5 independent outlets since 2026-09-26 03:25 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "STRONG",
+   "momentum_evidence": [
+    "5 independent outlets carried this same event in the last 72 hours",
+    "5 articles on it in the last 24 hours"
+   ],
+   "strongest_factual_hook_candidate": "ИИ-агенты OpenAI допустили утечку пользовательских изображений из ChatGPT",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 450,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "Минпросвещения РФ регламентировало применение ИИ в школах",
+   "copies_in_pool": 4,
+   "articles_72h": 4,
+   "representative_sources": [
+    "the world inform",
+    "бизнес",
+    "интерфакс",
+    "первое сентября"
+   ],
+   "strongest_hook_source": "Google News RU: ИИ",
+   "newest_article_age_hours": 9.6,
+   "first_seen": "2026-09-25T23:06:09+00:00",
+   "earliest_pool_article": "2026-09-25T23:06:09+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 4 independent outlets since 2026-09-25 23:06 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "MODERATE",
+   "momentum_evidence": [
+    "4 independent outlets carried this same event in the last 72 hours",
+    "4 articles on it in the last 24 hours"
+   ],
+   "strongest_factual_hook_candidate": "Минпросвещения РФ регламентировало применение ИИ в школах",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 328,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "Anthropic to pay Akamai $11.6 billion over seven years in cloud deal",
+   "copies_in_pool": 1,
+   "articles_72h": 3,
+   "representative_sources": [
+    "24/7 wall st.",
+    "techcrunch",
+    "techmeme"
+   ],
+   "strongest_hook_source": "TechCrunch AI",
+   "newest_article_age_hours": 21.5,
+   "first_seen": "2026-09-24T21:20:02+00:00",
+   "earliest_pool_article": "2026-09-25T19:13:38+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 3 independent outlets since 2026-09-24 21:20 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "MODERATE",
+   "momentum_evidence": [
+    "3 independent outlets carried this same event in the last 72 hours"
+   ],
+   "strongest_factual_hook_candidate": "Anthropic to pay Akamai $11.6 billion over seven years in cloud deal",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 278,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "Google запустит первый дата-центр для ИИ в космос",
+   "copies_in_pool": 1,
+   "articles_72h": 3,
+   "representative_sources": [
+    "naukatv.ru",
+    "реальное время",
+    "сноб"
+   ],
+   "strongest_hook_source": "Google News RU: ИИ",
+   "newest_article_age_hours": 24.3,
+   "first_seen": "2026-09-25T05:52:57+00:00",
+   "earliest_pool_article": "2026-09-25T16:27:00+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 3 independent outlets since 2026-09-25 05:52 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "MODERATE",
+   "momentum_evidence": [
+    "3 independent outlets carried this same event in the last 72 hours"
+   ],
+   "strongest_factual_hook_candidate": "Google запустит первый дата-центр для ИИ в космос",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 64,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "AI забрал почти 70% заявок стартапов на технологическую премию Правительства Москвы и Сбера. Всего на премию",
+   "copies_in_pool": 2,
+   "articles_72h": 2,
+   "representative_sources": [
+    "бэкдор",
+    "нейродвиж"
+   ],
+   "strongest_hook_source": "Бэкдор",
+   "newest_article_age_hours": 4.6,
+   "first_seen": "2026-09-26T11:38:22+00:00",
+   "earliest_pool_article": "2026-09-26T11:38:22+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 2 independent outlets since 2026-09-26 11:38 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "ai",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "MODERATE",
+   "momentum_evidence": [
+    "2 independent outlets carried this same event in the last 72 hours",
+    "39 Telegram forwards",
+    "113 Telegram reactions"
+   ],
+   "strongest_factual_hook_candidate": "AI забрал почти 70% заявок стартапов на технологическую премию Правительства Москвы и Сбера. Всего на премию",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 1179,
+   "evidence_preflight_stored": "FAIL",
+   "stored_checks": {
+    "actor": "SUPPORTED",
+    "action": "UNSUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "UNSUPPORTED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "Google's first Suncatcher orbital data center test launches October 1",
+   "copies_in_pool": 1,
+   "articles_72h": 2,
+   "representative_sources": [
+    "hacker",
+    "tom's hardware"
+   ],
+   "strongest_hook_source": "Hacker News Front Page",
+   "newest_article_age_hours": 42.6,
+   "first_seen": "2026-09-24T22:07:08+00:00",
+   "earliest_pool_article": "2026-09-24T22:07:08+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 2 independent outlets since 2026-09-24 22:07 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "MODERATE",
+   "momentum_evidence": [
+    "2 independent outlets carried this same event in the last 72 hours",
+    "on the Hacker News front page"
+   ],
+   "strongest_factual_hook_candidate": "Google's first Suncatcher orbital data center test launches October 1",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 69,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "Amazon's $199 Discount on Apple Watch Ultra 3 Returns to Help Clear Stock",
+   "copies_in_pool": 2,
+   "articles_72h": 2,
+   "representative_sources": [
+    "9to5mac",
+    "macrumors"
+   ],
+   "strongest_hook_source": "MacRumors",
+   "newest_article_age_hours": 4.0,
+   "first_seen": "2026-09-25T18:17:02+00:00",
+   "earliest_pool_article": "2026-09-25T18:17:02+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "text: explicit recent time expression 'this week'",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "gadget, software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "WEAK",
+   "momentum_evidence": [
+    "2 independent outlets carried this same event in the last 72 hours"
+   ],
+   "strongest_factual_hook_candidate": "Amazon's $199 Discount on Apple Watch Ultra 3 Returns to Help Clear Stock",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 711,
+   "evidence_preflight_stored": "PASS",
+   "stored_checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "SUPPORTED",
+    "chronology": "SUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "Banks and Credit Unions to Team Up Against Apple Pay Fees",
+   "copies_in_pool": 2,
+   "articles_72h": 2,
+   "representative_sources": [
+    "9to5mac",
+    "macrumors"
+   ],
+   "strongest_hook_source": "9to5Mac",
+   "newest_article_age_hours": 19.7,
+   "first_seen": "2026-09-25T19:22:29+00:00",
+   "earliest_pool_article": "2026-09-25T19:22:29+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 2 independent outlets since 2026-09-25 19:22 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "software_platform_security_gaming",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "WEAK",
+   "momentum_evidence": [
+    "2 independent outlets carried this same event in the last 72 hours"
+   ],
+   "strongest_factual_hook_candidate": "Apple faces class action over Apple Pay fees charged to card issuers",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 396,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  },
+  {
+   "event": "At Meta Connect, the company’s smart glasses were everywhere",
+   "copies_in_pool": 1,
+   "articles_72h": 2,
+   "representative_sources": [
+    "engadget",
+    "techcrunch"
+   ],
+   "strongest_hook_source": "TechCrunch AI",
+   "newest_article_age_hours": 15.6,
+   "first_seen": "2026-09-24T21:56:17+00:00",
+   "earliest_pool_article": "2026-09-26T01:08:57+00:00",
+   "actuality_type": "CURRENT_EVENT",
+   "actuality_reason": "coverage: 2 independent outlets since 2026-09-24 21:56 UTC",
+   "underlying_time": null,
+   "disclosed_at": null,
+   "newly_disclosed": [],
+   "kage_relevance": "gadget",
+   "broad_interest": "BROAD",
+   "inherent_strength": "NONE",
+   "mechanisms": [],
+   "momentum_band": "WEAK",
+   "momentum_evidence": [
+    "2 independent outlets carried this same event in the last 72 hours"
+   ],
+   "strongest_factual_hook_candidate": "At Meta Connect, the company’s smart glasses were everywhere",
+   "hook_chronology": null,
+   "legacy_reads": [
+    "weekly_news"
+   ],
+   "stored_body_chars": 140,
+   "evidence_preflight_stored": "PENDING",
+   "stored_checks": {},
+   "evidence_preflight_acquired": null,
+   "acquisition": null,
+   "viral_nominated": "NO",
+   "first_failed_gate": "4_inherent_virality",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing",
+   "good_kage_news": true
+  }
+ ]
+}

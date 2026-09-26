@@ -61,6 +61,7 @@ def _feed_pool(monkeypatch: pytest.MonkeyPatch, ids, titles) -> None:
         FeedCandidate(id=str(i), title=t, source_name="Engadget") for i, t in zip(ids, titles)
     ]))
     monkeypatch.setattr(cc, "load_feed_evidence", AsyncMock(return_value={}))  # stage 2: no stored evidence in these fakes
+    monkeypatch.setattr(cc, "load_recent_headlines", AsyncMock(return_value=[]))  # viral-nomination momentum input
     monkeypatch.setattr(cc, "mark_tried", lambda day, cid: None)
     # the downstream evidence package (post-selection article / media acquisition) - no network in these tests
     monkeypatch.setattr(cc, "build_daily_evidence_package", AsyncMock(return_value=SimpleNamespace(

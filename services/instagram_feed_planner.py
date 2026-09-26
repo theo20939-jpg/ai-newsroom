@@ -30,6 +30,7 @@ from database.models.story import Story
 from database.models.story_link import NewsEventStoryLink
 from services.instagram_feed_product import (
     ARCHETYPE_BY_FORMAT,
+    DAILY_SHORTLIST_PER_FORMAT,
     FORMAT_BY_ARCHETYPE,
     FeedCandidate,
     FeedFormat,
@@ -39,6 +40,7 @@ from services.instagram_feed_product import (
     read_with_evidence,
     stage_one_shortlist,
 )
+from services.instagram_viral_nomination import nominate_viral_events, nominated_reads
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +191,7 @@ async def load_feed_candidates(session: Any, event_ids: list[UUID]) -> list[Feed
             independent_sources=cluster.get("independent_sources", 1), story_events_24h=cluster.get("story_events_24h", 1),
             on_hacker_news=bool(cluster.get("on_hacker_news")) or (source_name or "").lower().startswith("hacker news"),
             forwards=event.forwards_count, reactions=event.reactions_count,
+            story_history=tuple(members.get(story_id, [])) if confirmed else (),
         ))
     return candidates
 
@@ -251,9 +254,14 @@ async def load_feed_evidence(session: Any, event_ids: list[UUID]) -> dict[str, s
     return out
 
 
-def open_slots(candidates: list[FeedCandidate], usage: FeedUsage, *, day_key: str, evidence: dict[str, str] | None = None):
+def open_slots(candidates: list[FeedCandidate], usage: FeedUsage, *, day_key: str, evidence: dict[str, str] | None = None,
+               headlines: list | None = None, now: datetime | None = None):
     """Pure planning step over loaded candidates: today's open slots with their shortlists (already-tried candidates excluded).
-    With `evidence` (stage 2), only the cheap-screen shortlist is planned, each read again with its stored source material."""
+    With `evidence` (stage 2), only the cheap-screen shortlist is planned, each read again with its stored source material.
+
+    The VIRAL slot is nominated from the WHOLE candidate pool (services.instagram_viral_nomination): distinct factual events that clear
+    every viral gate, strongest first - whatever the legacy read called them (weekly_news included). No eligible event = an empty
+    viral slot; the legacy MEME_TREND read is never a fallback. `headlines` (every title of the last 72 hours) only feed momentum."""
     reads: list[tuple[FeedCandidate, FeedRead]] = [(c, read_candidate(c)) for c in candidates]
     if evidence is not None:
         reads = [(c, read_with_evidence(c, r, evidence.get(c.id, ""))) for c, r in stage_one_shortlist(reads)]
@@ -262,17 +270,13 @@ def open_slots(candidates: list[FeedCandidate], usage: FeedUsage, *, day_key: st
     unknown = max(0, usage.today_total - sum(usage_counts.values()))
     if unknown:
         usage_counts[FeedFormat.NEWS_INSIGHT] = usage_counts.get(FeedFormat.NEWS_INSIGHT, 0) + unknown
-    from services.instagram_viral_story_gate import assess_viral_story
-
-    def viral_gate(candidate: FeedCandidate) -> bool:  # the viral slot: a strong, current story - never the best of a weak batch
-        verdict = assess_viral_story(candidate, (evidence or {}).get(candidate.id, ""))
-        if not verdict.eligible:
-            logger.info("instagram_feed_viral_gate_rejected", extra={"event_id": candidate.id, "gate": verdict.failed_gate,
-                                                                      "reason": verdict.reason[:200]})
-        return verdict.eligible
-
+    nomination = nominate_viral_events(candidates, headlines=headlines, evidence=evidence, now=now)
+    logger.info("instagram_feed_viral_nomination", extra={
+        "distinct_events": len(nomination.events), "eligible": [e.key[:120] for e in nomination.eligible][:5],
+        "viral_slot": "EMPTY" if nomination.best is None else "NOMINATED"})
     return reads, plan_daily_slots(reads, published_today=usage_counts, news_insight_this_week=usage.news_insight_this_week,
-                                   exclude_ids=_TRIED.get(day_key, set()), viral_gate=viral_gate)
+                                   exclude_ids=_TRIED.get(day_key, set()),
+                                   viral_nominations=nominated_reads(nomination, DAILY_SHORTLIST_PER_FORMAT))
 
 
 def mark_tried(day_key: str, candidate_id: str) -> None:

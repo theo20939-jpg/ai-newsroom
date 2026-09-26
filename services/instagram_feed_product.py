@@ -20,10 +20,11 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 
 class FeedFormat(StrEnum):
@@ -63,6 +64,9 @@ class FeedCandidate:
     on_hacker_news: bool = False  # a confirmed member came from the Hacker News front page
     forwards: int | None = None  # Telegram sources only
     reactions: int | None = None  # Telegram sources only
+    # the confirmed Story Memory members of its story (services.instagram_viral_story_gate.ClusterMember): the viral nomination keeps
+    # only those that are the SAME factual event - a rewrite of an old incident is OLD, a related earlier incident is not this one
+    story_history: tuple[Any, ...] = ()
 
 
 OUTSIDE_WORLD_REASON = "outside the account's world (not AI / tech / gadgets / internet culture)"
@@ -75,6 +79,9 @@ class FeedRead:
     kinds: tuple[str, ...]
     reason: str
     rank: float
+    # a viral-slot entry nominated by services.instagram_viral_nomination: its ViralEvent (hook, event-level actuality incl. the
+    # disclosure chronology, momentum) - the content cycle's evidence preflight checks the acquired body against exactly this
+    viral_event: Any = None
 
 
 def _rx(*parts: str) -> re.Pattern[str]:
@@ -391,22 +398,25 @@ class SlotPlan:
 def plan_daily_slots(
     reads: Iterable[tuple[FeedCandidate, FeedRead]], *, published_today: Mapping[FeedFormat, int] | None = None,
     news_insight_this_week: int = 0, exclude_ids: Iterable[str] = (),
-    viral_gate: Callable[[FeedCandidate], bool] | None = None,
+    viral_nominations: Sequence[tuple[FeedCandidate, FeedRead]] | None = None,
 ) -> list[SlotPlan]:
     """Open slots for today, AI_HACK first. Only STRONG reads are eligible - no filler. A day never exceeds DAILY_MAX_POSTS.
 
-    `viral_gate` (services.instagram_viral_story_gate): a MEME_TREND read enters the viral slot only when the story itself is strong and
-    current enough. A strong read that fails it stays good KAGE news (weekly recap material) - and when no story clears the bar the viral
-    slot stays EMPTY: the schedule never lowers the bar to fill itself."""
+    `viral_nominations` (services.instagram_viral_nomination.nominated_reads - the production path always passes it): the viral slot is
+    fed ONLY by distinct events nominated from the whole fresh KAGE pool that cleared every viral gate. The legacy MEME_TREND read is
+    then neither required nor used as a fallback; an empty nomination leaves the viral slot EMPTY - the schedule never lowers the bar
+    to fill itself. Without it (None) the legacy read-based pool applies (pure-planning callers only)."""
     published = {fmt: int((published_today or {}).get(fmt, 0)) for fmt in DAILY_FORMATS}
     remaining = DAILY_MAX_POSTS - sum(published.values())
     excluded = set(exclude_ids)
     pool: dict[FeedFormat, list[tuple[FeedCandidate, FeedRead]]] = {fmt: [] for fmt in DAILY_FORMATS}
     for candidate, read in reads:
         if read.strong and read.format in pool and candidate.id not in excluded:
-            if read.format is FeedFormat.MEME_TREND and viral_gate is not None and not viral_gate(candidate):
-                continue
+            if read.format is FeedFormat.MEME_TREND and viral_nominations is not None:
+                continue  # the viral slot takes nominated events only
             pool[read.format].append((candidate, read))
+    if viral_nominations is not None:
+        pool[FeedFormat.MEME_TREND] = [(c, r) for c, r in viral_nominations if c.id not in excluded]
     plans: list[SlotPlan] = []
     for fmt in DAILY_FORMATS:  # priority order: AI_HACK, MEME_TREND, then a rare NEWS_INSIGHT
         if remaining <= 0:

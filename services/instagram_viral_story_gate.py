@@ -7,12 +7,21 @@ it never manufactures virality for a weak one.
 Six criteria, read IN ORDER; the first failure decides, and a later criterion never rescues an earlier one (visual potential is recorded,
 never a gate):
   1. KAGE CORE RELEVANCE     - the accepted KAGE-first rule (services.instagram_feed_product.kage_core), unchanged;
-  2. EVENT ACTUALITY         - the age of the EVENT, not of the article. OLD (rejected): a retrospective / resurfacing cue, the latest
-                               date the text states older than 7 days, or this same event already covered more than 7 days ago in our
-                               own data. CURRENT: a stated date or an explicit time expression within 72 hours, or independent
-                               corroboration inside 72 hours. RECENT (3-7 days) is not current: it fails the viral slot here (still good
-                               KAGE news) and momentum cannot lift it back. UNCERTAIN (no date stated) is recorded - the article
-                               timestamp is never assumed to be the event's - and must be resolved by corroboration at the momentum step;
+  2. EVENT ACTUALITY         - the age of the EVENT, not of the article (actuality_type):
+                               CURRENT_EVENT      - it happened now: a stated date / explicit time expression within 72 hours, or
+                                                    independent corroboration inside 72 hours;
+                               CURRENT_DISCLOSURE - the behaviour happened earlier ('this summer', 'in May') but a disclosure of it is
+                                                    new: a disclosure verb, the stated behaviour date is not the disclosure's own date,
+                                                    and nothing covered this same FACTUAL event before. Any hook must keep the
+                                                    chronology (it was revealed now - it did not happen now);
+                               RECENT_EVENT       - 3-7 days old: not current, fails the viral slot (still good KAGE news) and momentum
+                                                    cannot lift it back;
+                               OLD_EVENT          - a retrospective / resurfacing cue, a stated date older than 7 days with no new
+                                                    disclosure, or this same factual event already covered more than 7 days ago (a
+                                                    rewrite of an old incident; a related EARLIER incident is not this one -
+                                                    services.instagram_viral_nomination groups by factual identity);
+                               UNCERTAIN          - no date stated: the article timestamp is never assumed to be the event's; it must be
+                                                    resolved by corroboration at the momentum step;
   3. BROAD INTEREST          - understandable from one sentence without following a niche: specialist / niche markers (mods, patches,
                                repositories, APIs, rendering techniques, ...) need a real-world consequence; otherwise the story needs an
                                everyday-life, mass-product or security/AI-behaviour anchor;
@@ -21,13 +30,15 @@ never a gate):
                                unexpected AI behaviour, real failure, consumer consequence, surprising security incident, bizarre
                                product behaviour, human-vs-technology conflict, controversy. Words that only name an actor (modder,
                                enthusiast) or say how a story spread are never a mechanism;
-  5. CURRENT MOMENTUM        - only signals that exist in production data (cluster_signals): distinct sources covering this same event
+  5. CURRENT MOMENTUM        - a band (NONE / WEAK / MODERATE / STRONG) from signals that exist in production data only: distinct outlets
+                               of this same factual event (services.instagram_viral_nomination; cluster_signals for a lone candidate)
                                in the last 72 hours, its growth in the last 24 hours, Hacker News front-page presence, Telegram forwards
                                / reactions (Telegram sources only). A long-lived Story Memory topic's age and old sources are not this
                                event's. Momentum SUPPORTS and never rescues a failed gate 1-4 (a MODERATE, one-mechanism story stays
-                               ordinary news however many outlets carry it). A strong story with no momentum still qualifies when the
-                               event is explicitly CURRENT; with an UNCERTAIN date it needs corroboration - a single undated article can
-                               be delayed coverage of an old event;
+                               ordinary news however many outlets carry it); no outlet count is a threshold. A strong story with no
+                               momentum still qualifies when its TEXT dates it as current (an event, or a disclosure dated in the
+                               text); an UNCERTAIN date, or a disclosure whose novelty rests only on one outlet's publication time,
+                               needs at least one corroborating outlet - a single article can be delayed coverage;
   6. VISUAL / CREATIVE POTENTIAL - recorded for ordering only.
 When nothing clears the bar, the viral slot stays EMPTY (no best-of-a-weak-batch)."""
 from __future__ import annotations
@@ -117,41 +128,86 @@ def stated_event_dates(text: str, *, now: datetime) -> list[tuple[datetime, str]
         add(int(m.group(3)) if m.group(3) else None, _month_of(m.group(1)), int(m.group(2)), m.group(0))
     for m in _IN_MONTH.finditer(text):
         add(int(m.group(2)) if m.group(2) else None, _month_of(m.group(1)), None, m.group(0))
+    for m in _SEASON.finditer(text):  # 'this summer': at the latest the season's last month (only once that month has begun)
+        month = _SEASON_END[(m.group(1) or m.group(2)).lower()]
+        if month <= now.month:
+            add(now.year, month, None, m.group(0))
     return found
+
+
+_STATUS_BY_TYPE = {"CURRENT_EVENT": "CURRENT", "CURRENT_DISCLOSURE": "CURRENT", "RECENT_EVENT": "RECENT", "OLD_EVENT": "OLD",
+                   "UNCERTAIN": "UNCERTAIN"}
 
 
 @dataclass(frozen=True)
 class Actuality:
-    status: str  # CURRENT / RECENT (3-7 days) / UNCERTAIN (no date) / OLD
+    type: str  # CURRENT_EVENT / CURRENT_DISCLOSURE / RECENT_EVENT (3-7 days) / OLD_EVENT / UNCERTAIN (no date)
     date_source: str
+    underlying_time: str | None = None  # CURRENT_DISCLOSURE: when the disclosed behaviour happened, as the text states it
+    disclosed_at: datetime | None = None  # CURRENT_DISCLOSURE: the disclosure's first coverage (or its stated date)
+    newly_disclosed: tuple[str, ...] = ()  # CURRENT_DISCLOSURE: targets / scope no earlier related coverage carried (nomination layer)
+    stated: bool = False  # the TEXT dates the event (or its disclosure) as current - not an article timestamp or coverage timing
+
+    @property
+    def status(self) -> str:  # the coarse reading the gate decides on: CURRENT / RECENT / OLD / UNCERTAIN
+        return _STATUS_BY_TYPE[self.type]
+
+
+# a disclosure: the news is that something became PUBLIC (a report, an admission, researchers' findings), not that it happened now
+_DISCLOSURE = _rx(
+    r"\breveal\w*", r"\bdisclos\w*", r"\bsays? (its|it|that)\b", r"\badmit\w*", r"\bconfirm(s|ed)\b", r"\breports? (that|finds|found)\b",
+    r"\bresearchers?\s*(:|say|said|found|discovered|showed)", r"\bnew (disclosure|report|details)\b",
+    r"\bpublish(es|ed)? (a |an |its |the )?(official |technical )?(report|research|analysis|findings)\b", r"\bраскры\w*", r"\bпризнал\w*",
+    r"\bвыяснил\w*", r"\bстало известно\b", r"\bопубликовал\w* (отч|исслед|анализ)\w*", r"\bисследовател\w*",
+)
+_SEASON = re.compile(r"\b(?:this|earlier this) (summer|spring|winter)\b|\b(?:этим )?(летом|весной|зимой)(?: этого года)?\b", re.IGNORECASE)
+_SEASON_END = {"summer": 8, "летом": 8, "spring": 5, "весной": 5, "winter": 2, "зимой": 2}
+
+
+def _sentence_with(text: str, fragment: str) -> str:
+    return next((s for s in _SENTENCE.split(text) if fragment in s), text)
 
 
 def assess_actuality(title: str, text: str, *, published_at: datetime | None, story_first_seen: datetime | None,
                      independent_sources: int, now: datetime) -> Actuality:
-    """The age of the EVENT (article recency is not event recency). The event date is the LATEST date the text states: a disclosure is
-    the news even when what it discloses happened earlier ('an attack in May, the analysis published on 30 July')."""
-    head = f"{title} {text[:1500]}"
+    """The age of the EVENT (article recency is not event recency). `story_first_seen` is the first coverage of this same FACTUAL event
+    (never of a long-lived topic or of a related earlier incident). A disclosure is news when it is new, even when what it discloses
+    happened earlier ('in May ... the analysis published on 30 July'); when the latest stated date is the disclosure's OWN date, that
+    date is the disclosure's age."""
+    head = f"{title}. {text[:1500]}"
     cue = _OLD_CUES.search(head)
     if cue:
-        return Actuality("OLD", f"text: retrospective / resurfacing cue {cue.group(0)!r}")
+        return Actuality("OLD_EVENT", f"text: retrospective / resurfacing cue {cue.group(0)!r}")
     if story_first_seen is not None and now - story_first_seen > OLD_CLUSTER_AGE:
-        return Actuality("OLD", f"cluster: this same event was first covered {story_first_seen:%Y-%m-%d} ({(now - story_first_seen).days} days ago)")
+        return Actuality("OLD_EVENT", f"coverage: this same factual event was first covered {story_first_seen:%Y-%m-%d} "
+                                      f"({(now - story_first_seen).days} days ago) - a rewrite, not a new fact")
     if published_at is not None and now - published_at > CURRENT_WINDOW:
-        return Actuality("OLD", f"article: published {published_at:%Y-%m-%d %H:%M} UTC, older than 72 hours")
+        return Actuality("OLD_EVENT", f"article: published {published_at:%Y-%m-%d %H:%M} UTC, older than 72 hours")
+    disclosure = _DISCLOSURE.search(head)
     dates = stated_event_dates(head, now=now)
     if dates:
         latest, raw = max(dates)
+        earliest, earliest_raw = min(dates)
+        if now - latest <= CURRENT_WINDOW:
+            if disclosure and now - earliest > CURRENT_WINDOW:
+                return Actuality("CURRENT_DISCLOSURE", f"text: a disclosure dated {raw!r} of an earlier event ({earliest_raw!r})",
+                                 underlying_time=earliest_raw, disclosed_at=latest, stated=True)
+            return Actuality("CURRENT_EVENT", f"text: the event is dated {raw!r}", stated=True)
+        disclosed_at = story_first_seen or published_at
+        if disclosure and not _DISCLOSURE.search(_sentence_with(head, raw)) and disclosed_at is not None:
+            # the stated date belongs to the behaviour, the disclosure verb to now - and nothing covered this same fact before
+            return Actuality("CURRENT_DISCLOSURE", f"text: the behaviour is dated {raw!r}; the disclosure ({disclosure.group(0)!r}) is new - "
+                                                   f"first covered {disclosed_at:%Y-%m-%d %H:%M} UTC",
+                             underlying_time=raw, disclosed_at=disclosed_at)
         age = now - latest
         if age > OLD_CLUSTER_AGE:
-            return Actuality("OLD", f"text: the latest date the text gives for the event is {raw!r} ({age.days} days ago)")
-        if age > CURRENT_WINDOW:
-            return Actuality("RECENT", f"text: the latest stated date is {raw!r} ({age.days} days ago) - recent, not current")
-        return Actuality("CURRENT", f"text: the event is dated {raw!r}")
+            return Actuality("OLD_EVENT", f"text: the latest date the text gives for the event is {raw!r} ({age.days} days ago)")
+        return Actuality("RECENT_EVENT", f"text: the latest stated date is {raw!r} ({age.days} days ago) - recent, not current")
     recent = _RECENT_CUES.search(head)
     if recent:
-        return Actuality("CURRENT", f"text: explicit recent time expression {recent.group(0)!r}")
+        return Actuality("CURRENT_EVENT", f"text: explicit recent time expression {recent.group(0)!r}", stated=True)
     if independent_sources >= 2 and story_first_seen is not None and now - story_first_seen <= CURRENT_WINDOW:
-        return Actuality("CURRENT", f"cluster: {independent_sources} independent sources since {story_first_seen:%Y-%m-%d %H:%M} UTC")
+        return Actuality("CURRENT_EVENT", f"coverage: {independent_sources} independent outlets since {story_first_seen:%Y-%m-%d %H:%M} UTC")
     return Actuality("UNCERTAIN", "article timestamp only - the event date is not stated and no independent source corroborates it")
 
 
@@ -330,20 +386,28 @@ def cluster_signals(event_title: str, members: list[ClusterMember], *, now: date
 
 def assess_momentum(*, independent_sources: int, story_events_24h: int, on_hacker_news: bool, forwards: int | None,
                     reactions: int | None) -> tuple[str, list[str]]:
-    """STRONG / MODERATE / NONE from signals that exist in production data only."""
+    """A band - NONE / WEAK / MODERATE / STRONG - from signals that exist in production data only. Supporting evidence, never a
+    threshold: grouping is imperfect, so 10 vs 13 outlets changes nothing; only NONE vs corroborated matters to the gate."""
     signals = []
     if independent_sources >= 2:
         signals.append(f"{independent_sources} independent outlets carried this same event in the last 72 hours")
     if story_events_24h >= 3:
-        signals.append(f"{story_events_24h} cluster events in the last 24 hours")
+        signals.append(f"{story_events_24h} articles on it in the last 24 hours")
     if on_hacker_news:
         signals.append("on the Hacker News front page")
     if forwards and forwards >= 20:
         signals.append(f"{forwards} Telegram forwards")
     if reactions and reactions >= 100:
         signals.append(f"{reactions} Telegram reactions")
-    strong = independent_sources >= 3 or (on_hacker_news and independent_sources >= 2) or (forwards or 0) >= 100
-    return ("STRONG" if strong else "MODERATE" if signals else "NONE"), signals or ["single source, no engagement signal"]
+    if independent_sources >= 5 or (on_hacker_news and independent_sources >= 3) or (forwards or 0) >= 100:
+        band = "STRONG"
+    elif independent_sources >= 3 or on_hacker_news or (forwards or 0) >= 20 or (reactions or 0) >= 100:
+        band = "MODERATE"
+    elif independent_sources >= 2:
+        band = "WEAK"
+    else:
+        band = "NONE"
+    return band, signals or ["single source, no engagement signal"]
 
 
 # --- 6. visual potential (recorded, never a gate) ------------------------------------------------------------------------------------
@@ -372,18 +436,22 @@ class ViralVerdict:
 
     @property
     def score(self) -> tuple[int, int, int]:
-        order = {"STRONG": 2, "MODERATE": 1, "NONE": 0}
-        return order[self.strength], order[self.momentum], 1 if self.visual_potential == "HIGH" else 0
+        strength = {"STRONG": 2, "MODERATE": 1, "NONE": 0}
+        momentum = {"STRONG": 3, "MODERATE": 2, "WEAK": 1, "NONE": 0}
+        return strength[self.strength], momentum[self.momentum], 1 if self.visual_potential == "HIGH" else 0
 
 
-def assess_viral_story(candidate: Any, evidence: str = "", *, now: datetime | None = None) -> ViralVerdict:
-    """The six criteria in order for one FeedCandidate (its momentum fields come from the story cluster)."""
+def assess_viral_story(candidate: Any, evidence: str = "", *, now: datetime | None = None,
+                       actuality: Actuality | None = None) -> ViralVerdict:
+    """The six criteria in order for one FeedCandidate (its momentum fields come from its factual event group). `actuality` - the
+    EVENT-level reading from services.instagram_viral_nomination (all copies of the event read together) - replaces the single-article
+    reading when given."""
     now = now or datetime.now(UTC)
     source = (candidate.source_name or "").lower()
     title = _clean_title(candidate.title or "", source)
     lead = plain_text(f"{candidate.summary or ''} {(evidence or '')[:1500]}")
     core = tuple(kage_core(title))
-    actuality = assess_actuality(title, lead, published_at=getattr(candidate, "published_at", None),
+    actuality = actuality or assess_actuality(title, lead, published_at=getattr(candidate, "published_at", None),
                                  story_first_seen=getattr(candidate, "story_first_seen", None),
                                  independent_sources=int(getattr(candidate, "independent_sources", 1) or 1), now=now)
     broad, broad_reason = assess_broad_interest(title, lead)
@@ -398,7 +466,11 @@ def assess_viral_story(candidate: Any, evidence: str = "", *, now: datetime | No
         return ViralVerdict(eligible=failed is None, failed_gate=failed, reason=reason, kage_core=core, actuality=actuality,
                             broad_interest=broad, broad_reason=broad_reason, strength=strength, mechanisms=tuple(mechanisms), hook=hook,
                             momentum=momentum, momentum_signals=tuple(signals), visual_potential=visual,
-                            good_kage_news=bool(core) and actuality.status != "OLD")  # RECENT is still usable news
+                            good_kage_news=bool(core) and actuality.status != "OLD",  # RECENT is still usable news
+                            details={"actuality_type": actuality.type, "underlying_time": actuality.underlying_time,
+                                     "disclosed_at": actuality.disclosed_at.isoformat() if actuality.disclosed_at else None,
+                                     "newly_disclosed": list(actuality.newly_disclosed),
+                                     "hook_chronology": chronology_requirement(actuality)})
 
     if not core:
         return verdict("1_kage_relevance", "technology is not central to the event (KAGE-first rule)")
@@ -412,12 +484,22 @@ def assess_viral_story(candidate: Any, evidence: str = "", *, now: datetime | No
         # if the story has to be MADE viral it is not strong enough: one mechanism is good news, and momentum never lifts it (gate 5 supports)
         return verdict("4_inherent_virality", f"only one viral mechanism {mechanisms} - the Director would have to stretch it; momentum "
                                               f"({momentum.lower()}) cannot lift a moderate story into the viral slot")
-    if momentum == "NONE" and actuality.status != "CURRENT":
-        # one uncorroborated source may carry an exceptionally strong event, but only when the event is explicitly current: an undated
-        # single article can be delayed coverage of something that happened long before (the article date is not the event date)
-        return verdict("5_momentum", "single source, no momentum, and the event date is uncertain - nothing shows the event itself is current")
+    if momentum == "NONE" and not (actuality.status == "CURRENT" and actuality.stated):
+        # one uncorroborated source may carry an exceptionally strong event, but only when its TEXT dates the event (or the disclosure)
+        # as current: an undated article - or a disclosure whose novelty rests only on when one outlet published it - can be delayed
+        # coverage (the article date is not the event date)
+        return verdict("5_momentum", f"single source, no momentum, and nothing in the text dates it as current ({actuality.type}: "
+                                     f"{actuality.date_source})")
     return verdict(None, f"current ({actuality.date_source}); broad ({broad_reason}); {strength.lower()} mechanisms {mechanisms}; "
                          f"momentum {momentum.lower()} ({'; '.join(signals)})")
+
+
+def chronology_requirement(actuality: Actuality) -> str | None:
+    """What any hook for this event must keep true about time. A CURRENT_DISCLOSURE was REVEALED now - it did not HAPPEN now."""
+    if actuality.type != "CURRENT_DISCLOSURE":
+        return None
+    return (f"the disclosure is new, the behaviour is not ({actuality.underlying_time or 'earlier, date unstated'}): the hook must say it "
+            "was revealed / disclosed / reported and must not imply the action happened today")
 
 
 def best_viral_story(verdicts: list[tuple[Any, ViralVerdict]]) -> tuple[Any, ViralVerdict] | None:

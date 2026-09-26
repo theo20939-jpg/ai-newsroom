@@ -6,6 +6,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from services.instagram_feed_product import FeedCandidate, FeedFormat, FeedRead, plan_daily_slots
+from services.instagram_viral_nomination import nominate_viral_events, nominated_reads
 from services.instagram_viral_story_gate import (
     ClusterMember,
     assess_actuality,
@@ -150,10 +151,12 @@ def test_empty_viral_slot_is_valid():
     weak = [_candidate("Codex suffers a full outage", "Developers could not use the service today.", id="a"), GTA_LIKE]
     assert best_viral_story([(c, assess_viral_story(c, now=NOW)) for c in weak]) is None
     read = FeedRead(format=FeedFormat.MEME_TREND, strong=True, kinds=("oddity",), reason="", rank=1.0)
-    plans = plan_daily_slots([(c, read) for c in weak], viral_gate=lambda c: assess_viral_story(c, now=NOW).eligible)
-    assert all(plan.format is not FeedFormat.MEME_TREND for plan in plans)  # no best-of-a-weak-batch
-    plans = plan_daily_slots([(HAMSTER_LIKE, read), *[(c, read) for c in weak]],
-                             viral_gate=lambda c: assess_viral_story(c, now=NOW).eligible)
+    # a strong legacy MEME_TREND read is no fallback: only nominated events feed the viral slot
+    nominated = nominated_reads(nominate_viral_events(weak, now=NOW), 3)
+    plans = plan_daily_slots([(c, read) for c in weak], viral_nominations=nominated)
+    assert nominated == [] and all(plan.format is not FeedFormat.MEME_TREND for plan in plans)  # no best-of-a-weak-batch
+    nominated = nominated_reads(nominate_viral_events([HAMSTER_LIKE, *weak], now=NOW), 3)
+    plans = plan_daily_slots([(c, read) for c in weak], viral_nominations=nominated)
     [viral] = [plan for plan in plans if plan.format is FeedFormat.MEME_TREND]
     assert [c.id for c, _r in viral.shortlist] == ["hamster"]
 

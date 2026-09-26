@@ -59,6 +59,7 @@ async def test_master_on_preserves_existing_news_lane_reachability(monkeypatch) 
         FeedCandidate(id=str(candidate_id), title="How to use Claude voice mode", source_name="Engadget")
     ]))
     monkeypatch.setattr(cc, "load_feed_evidence", AsyncMock(return_value={}))
+    monkeypatch.setattr(cc, "load_recent_headlines", AsyncMock(return_value=[]))  # viral-nomination momentum input
     monkeypatch.setattr(cc, "mark_tried", lambda day, cid: None)
     # the downstream evidence package (post-selection article / media acquisition) - no network in these tests
     monkeypatch.setattr(cc, "build_daily_evidence_package", AsyncMock(return_value=SimpleNamespace(
