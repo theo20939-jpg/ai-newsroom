@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from core.config import Settings, settings
 from database.models.content_draft import ContentDraft, ContentType
@@ -30,6 +30,7 @@ from services.editorial_treatment import STANDARD
 from worker.content_cycle import run_content_cycle
 from worker import content_main
 from services.news_telegram_presentation import render_v8_news_card_html
+from scripts.run_content_generation import ContentGenerationOutcome
 from services.nnj_master_news_mark import rasterize_kage_watermark
 from services.brand_renderer import load_brand_mark
 from bot.keyboards.image_preview import build_source_only_keyboard
@@ -193,6 +194,72 @@ async def test_real_content_cycle_send_boundary(
         )
         assert terminal["status"] == expected_terminal
         assert terminal["message_id"] == (23 if expected_terminal == "DELIVERED" else None)
+
+
+@pytest.mark.asyncio
+async def test_predispatch_rejection_is_persisted_as_generation_failure_without_send(
+    factory, test_source, monkeypatch,
+):
+    monkeypatch.setattr(settings, "copywriting_prompt_version", "11.10")
+    monkeypatch.setattr(settings, "editorial_delivery_mode", "legacy")
+    monkeypatch.setattr(settings, "unified_editorial_pipeline_enabled", False)
+    monkeypatch.setattr(settings, "content_generation_dry_run", False)
+    async with factory() as session:
+        event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
+        task = await workflow_service.create_task(
+            session, EditorialTaskCreate(
+                event_id=event.id, workflow_type=WorkflowType.CONTENT_GENERATION,
+                priority=TaskPriority.B,
+            ),
+        )
+        task_id, event_id = task.id, event.id
+        task_record = await session.get(EditorialTask, task_id)
+        assert task_record is not None
+        task_record.status = "FAILED"
+        task_record.workflow = {
+            **task_record.workflow,
+            "failure": {
+                "error_type": "PRE_DISPATCH_SAFETY_REJECTION",
+                "message": "telegram canary: output cap mismatch",
+            },
+        }
+        await session.commit()
+
+    notify = AsyncMock()
+    outcome = ContentGenerationOutcome(
+        task_id=task_id, workflow_status="FAILED", content_draft=None,
+    )
+    with (
+        patch("worker.content_cycle.evaluate_origin_before_generation", new=AsyncMock(
+            return_value=SimpleNamespace(applies=False, allowed=True),
+        )),
+        patch("worker.content_cycle.check_update_would_fail_closed", new=AsyncMock(
+            return_value=SimpleNamespace(would_fail_closed=False),
+        )),
+        patch("worker.content_cycle.run_pre_generation_gate", new=AsyncMock(return_value=None)),
+        patch("worker.content_cycle.send_editorial_card", new=notify),
+        patch("worker.content_cycle.run_unified_telegram_delivery", new=notify),
+    ):
+        result = await run_content_cycle(
+            AsyncMock(), AsyncMock(), session_factory=factory,
+            event_ids_override=[event_id], precomputed_outcomes={event_id: outcome},
+        )
+
+    assert result.failed == 1
+    assert notify.await_count == 0
+    async with factory() as session:
+        persisted = await session.get(EditorialTask, task_id)
+        assert persisted is not None
+        terminal = persisted.workflow["publication_outcome"]
+        assert terminal["status"] == "GENERATION_FAILED"
+        assert terminal["reason"] == "pre_dispatch_safety_rejection"
+        assert terminal["message_id"] is None
+        receipt_count = await session.scalar(
+            select(func.count()).select_from(StoryTelegramDelivery).where(
+                StoryTelegramDelivery.source_event_id == event_id,
+            )
+        )
+        assert receipt_count == 0
 
 
 @pytest.mark.asyncio

@@ -139,6 +139,27 @@ _REASONING_EFFORT_BY_CAPABILITY: dict[str, Literal["none", "low", "medium", "hig
     "final_post_authoring": "medium",
 }
 
+# The frozen KAGE 11.10 CONTENT_GENERATION request contract. Kept in the same
+# module that constructs ExecutionContext so safety envelopes can validate
+# against the actual request values instead of maintaining stale copies.
+KAGE_11_10_CONTENT_OUTPUT_TOKENS: dict[str, int] = {
+    "research": 1400,
+    "intelligence": _MAX_OUTPUT_TOKENS_BY_CAPABILITY["intelligence"],
+    "copywriting": 900,
+    "quality": 700,
+}
+
+
+def content_generation_output_token_contract(*, kage_11_10: bool) -> dict[str, int]:
+    """Return output limits used by CONTENT_GENERATION request construction."""
+    contract = {
+        name: _MAX_OUTPUT_TOKENS_BY_CAPABILITY[name]
+        for name in ("research", "intelligence", "copywriting", "quality")
+    }
+    if kage_11_10:
+        contract.update(KAGE_11_10_CONTENT_OUTPUT_TOKENS)
+    return contract
+
 # TELEGRAPH Checkpoint 3: reasoned starting points for the "deep_research" step only (see
 # _build_context()'s own comment on why this can't live in the two dicts above, which are keyed
 # by capability name and shared with NEWS_ANALYSIS/CONTENT_GENERATION's own "research" step).
@@ -1424,20 +1445,10 @@ class CapabilityExecutor:
                 # only fires when telegraph_research_bundle_text is not None.
                 max_tokens=(
                     _TELEGRAPH_DEEP_RESEARCH_MAX_OUTPUT_TOKENS if is_telegraph_deep_research
-                    else 1400 if (
+                    else KAGE_11_10_CONTENT_OUTPUT_TOKENS[step.capability] if (
                         settings.copywriting_prompt_version == "11.10"
                         and state.workflow_name == WorkflowType.CONTENT_GENERATION
-                        and step.capability == "research"
-                    )
-                    else 700 if (
-                        settings.copywriting_prompt_version == "11.10"
-                        and state.workflow_name == WorkflowType.CONTENT_GENERATION
-                        and step.capability == "quality"
-                    )
-                    else 900 if (
-                        settings.copywriting_prompt_version == "11.10"
-                        and state.workflow_name == WorkflowType.CONTENT_GENERATION
-                        and step.capability == "copywriting"
+                        and step.capability in KAGE_11_10_CONTENT_OUTPUT_TOKENS
                     )
                     else _MAX_OUTPUT_TOKENS_BY_CAPABILITY.get(step.capability)
                 ),

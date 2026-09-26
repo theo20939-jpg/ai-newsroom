@@ -1648,9 +1648,15 @@ async def _run_content_cycle_impl(
         if outcome.content_draft is None:
             result.failed += 1
             if settings.copywriting_prompt_version == "11.10":
+                failure_reason = "generation_produced_no_draft"
+                async with session_factory() as failure_session:
+                    failed_task = await failure_session.get(EditorialTask, outcome.task_id)
+                    failure = (failed_task.workflow or {}).get("failure") if failed_task is not None else None
+                    if isinstance(failure, dict) and failure.get("error_type") == "PRE_DISPATCH_SAFETY_REJECTION":
+                        failure_reason = "pre_dispatch_safety_rejection"
                 await _persist_kage_terminal(
                     session_factory, task_id=outcome.task_id, status="GENERATION_FAILED",
-                    reason="generation_produced_no_draft",
+                    reason=failure_reason,
                 )
             continue
         result.completed += 1

@@ -205,8 +205,9 @@ class FallbackPolicy:
             }
         )
 
-        from services.kage_telegram_canary_envelope import current_telegram_canary_envelope
-        from services.kage_telegram_canary_envelope import stage_for_request
+        from services.kage_telegram_canary_envelope import (
+            CanaryPreDispatchSafetyRejection, current_telegram_canary_envelope, stage_for_request,
+        )
 
         envelope = current_telegram_canary_envelope()
         retry_limit = envelope.same_model_retries() if envelope is not None else self._max_same_candidate_retries
@@ -236,6 +237,10 @@ class FallbackPolicy:
                 await self._health_store.mark_runtime_unavailable(provider_id, model_id)
                 raise  # §5.4: MUST NOT continue the loop at all for a moderation block
             except ProviderPermanentIncompatibleError as exc:
+                if isinstance(exc, CanaryPreDispatchSafetyRejection):
+                    # A canary guard rejection happened before adapter.generate(); it is
+                    # not provider health evidence and must remain visible to WorkflowRunner.
+                    raise
                 await self._health_store.mark_runtime_unavailable(provider_id, model_id)
                 return _AttemptOutcome(
                     success=False,

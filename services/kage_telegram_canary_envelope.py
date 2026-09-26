@@ -39,15 +39,45 @@ CANARY_STAGE_INPUT_TOKEN_CAPS: dict[str, int] = {
 }
 CANARY_STAGE_OUTPUT_TOKEN_CAPS: dict[str, int] = {
     "director_editorial_gate": 350,
-    "research": 1_000,
+    "research": 1_400,
     "intelligence": 500,
-    "copywriting": 600,
-    "quality": 400,
+    "copywriting": 900,
+    "quality": 700,
     "publication_factual_gate": 1_655,
 }
 CANARY_STAGE_ORDER = tuple(CANARY_STAGE_INPUT_TOKEN_CAPS)
 CANARY_MAX_PROVIDER_DISPATCHES = len(CANARY_STAGE_ORDER) * CANARY_MAX_DISPATCHES_PER_STAGE
 _INPUT_FRAMING_RESERVE_TOKENS = 256
+
+
+class CanaryPreDispatchSafetyRejection(ProviderPermanentIncompatibleError, UnknownModelPricingError):
+    """Deterministic canary guard rejection raised before provider dispatch."""
+
+
+def validate_request_envelope_contracts() -> dict[str, tuple[int, int]]:
+    """Fail before arming if any frozen request can exceed its canary bound."""
+    from capabilities.executor import content_generation_output_token_contract
+    from services.director_editorial_gate_llm import GATE_MAX_OUTPUT_TOKENS
+    from services.kage_publication_worker_gate import GATE_MAX_OUTPUT_TOKENS as PUBLICATION_GATE_MAX
+
+    contracts = content_generation_output_token_contract(kage_11_10=True)
+    contracts.update({
+        "director_editorial_gate": GATE_MAX_OUTPUT_TOKENS,
+        "publication_factual_gate": PUBLICATION_GATE_MAX,
+    })
+    mismatches = {
+        stage: (request_cap, CANARY_STAGE_OUTPUT_TOKEN_CAPS.get(stage, 0))
+        for stage, request_cap in contracts.items()
+        if request_cap > CANARY_STAGE_OUTPUT_TOKEN_CAPS.get(stage, 0)
+    }
+    if set(contracts) != set(CANARY_STAGE_OUTPUT_TOKEN_CAPS) or mismatches:
+        raise CanaryPreDispatchSafetyRejection(
+            f"telegram canary: request/envelope output contract mismatch: {mismatches or 'stage set mismatch'}"
+        )
+    return {
+        stage: (request_cap, CANARY_STAGE_OUTPUT_TOKEN_CAPS[stage])
+        for stage, request_cap in contracts.items()
+    }
 
 
 def stage_for_request(request: GenerateRequest) -> str:
@@ -61,7 +91,7 @@ def stage_for_request(request: GenerateRequest) -> str:
             if len(parts) == 3 and parts[2].isdigit():
                 stage = parts[1]
     if not isinstance(stage, str) or stage not in CANARY_STAGE_INPUT_TOKEN_CAPS:
-        raise ProviderPermanentIncompatibleError("telegram canary: unknown provider stage")
+        raise CanaryPreDispatchSafetyRejection("telegram canary: unknown provider stage")
     return stage
 
 
@@ -96,7 +126,9 @@ def _per_dispatch_cost(stage: str, model: ModelDescriptor) -> Decimal:
     output_cap = CANARY_STAGE_OUTPUT_TOKEN_CAPS[stage]
     tier = next((tier for tier in model.pricing_tiers if tier.condition == "standard"), None)
     if tier is None or model.pricing_currency != "USD":
-        raise UnknownModelPricingError(f"telegram canary: missing USD standard pricing for {model.model_id}")
+        raise CanaryPreDispatchSafetyRejection(
+            f"telegram canary: missing USD standard pricing for {model.model_id}"
+        )
     input_tokens = CANARY_STAGE_INPUT_TOKEN_CAPS[stage]
     million = Decimal(1_000_000)
     return (
@@ -109,7 +141,7 @@ def maximum_canary_cost(models: tuple[ModelDescriptor, ...] = (GPT_5_6_LUNA, GPT
     """All six stages once; each eligible model at most once per stage."""
     by_id = {model.model_id: model for model in models}
     if set(by_id) != set(CANARY_MODEL_ROUTE):
-        raise UnknownModelPricingError("telegram canary: model route is incomplete or unexpected")
+        raise CanaryPreDispatchSafetyRejection("telegram canary: model route is incomplete or unexpected")
     return sum(
         (_per_dispatch_cost(stage, by_id[model_id]) for stage in CANARY_STAGE_ORDER for model_id in CANARY_MODEL_ROUTE),
         Decimal("0"),
@@ -131,7 +163,7 @@ class TelegramCanaryEnvelope:
     def __post_init__(self) -> None:
         self.max_cost_usd = maximum_canary_cost()
         if self.max_cost_usd > self.hard_cap_usd:
-            raise ProviderPermanentIncompatibleError(
+            raise CanaryPreDispatchSafetyRejection(
                 f"telegram canary: computed maximum ${self.max_cost_usd} exceeds hard cap ${self.hard_cap_usd}"
             )
         self._used_models = {stage: set() for stage in CANARY_STAGE_ORDER}
@@ -141,7 +173,7 @@ class TelegramCanaryEnvelope:
         stage = stage_for_request(request)
         index = CANARY_STAGE_ORDER.index(stage)
         if index <= self._active_index:
-            raise ProviderPermanentIncompatibleError("telegram canary: duplicate or out-of-order stage")
+            raise CanaryPreDispatchSafetyRejection("telegram canary: duplicate or out-of-order stage")
         self._active_stage = stage
         self._active_index = index
         self._validate_request(stage, request)
@@ -149,7 +181,7 @@ class TelegramCanaryEnvelope:
 
     def end_stage(self, stage: str) -> None:
         if self._active_stage != stage:
-            raise ProviderPermanentIncompatibleError("telegram canary: stage state mismatch")
+            raise CanaryPreDispatchSafetyRejection("telegram canary: stage state mismatch")
         self._active_stage = None
 
     def allowed_models(self, ranked: list[ModelDescriptor]) -> list[ModelDescriptor]:
@@ -166,16 +198,16 @@ class TelegramCanaryEnvelope:
         stage = stage_for_request(request)
         self._validate_request(stage, request)
         if self._active_stage != stage or self._used_models is None:
-            raise ProviderPermanentIncompatibleError("telegram canary: no active stage")
+            raise CanaryPreDispatchSafetyRejection("telegram canary: no active stage")
         if model.model_id not in CANARY_MODEL_ROUTE:
-            raise ProviderPermanentIncompatibleError("telegram canary: model is outside bounded route")
+            raise CanaryPreDispatchSafetyRejection("telegram canary: model is outside bounded route")
         if model.model_id in self._used_models[stage]:
-            raise ProviderPermanentIncompatibleError("telegram canary: repeated provider dispatch denied")
+            raise CanaryPreDispatchSafetyRejection("telegram canary: repeated provider dispatch denied")
 
         current_cost = _per_dispatch_cost(stage, model)
         pending = self._pending_maximum(stage, model.model_id)
         if self._spent_reserved + current_cost + pending > self.hard_cap_usd:
-            raise ProviderPermanentIncompatibleError("telegram canary: remaining hard envelope is insufficient")
+            raise CanaryPreDispatchSafetyRejection("telegram canary: remaining hard envelope is insufficient")
         self._used_models[stage].add(model.model_id)
         self._spent_reserved += current_cost
         assert self.dispatch_records is not None
@@ -209,7 +241,9 @@ class TelegramCanaryEnvelope:
             raise ProviderPermanentIncompatibleError("telegram canary: provider usage exceeded request bounds")
         tier = next((tier for tier in model.pricing_tiers if tier.condition == "standard"), None)
         if tier is None or model.pricing_currency != "USD":
-            raise UnknownModelPricingError(f"telegram canary: missing USD standard pricing for {model.model_id}")
+            raise UnknownModelPricingError(
+                f"telegram canary: missing USD standard pricing for {model.model_id}"
+            )
         actual_cost = (
             Decimal(input_tokens) * tier.input_price_per_million
             + Decimal(output_tokens) * tier.output_price_per_million
@@ -235,12 +269,12 @@ class TelegramCanaryEnvelope:
         output_cap = CANARY_STAGE_OUTPUT_TOKEN_CAPS.get(stage)
         input_cap = CANARY_STAGE_INPUT_TOKEN_CAPS.get(stage)
         if output_cap is None or input_cap is None:
-            raise ProviderPermanentIncompatibleError("telegram canary: missing stage bound")
+            raise CanaryPreDispatchSafetyRejection("telegram canary: missing stage bound")
         if request.max_tokens is None or request.max_tokens <= 0 or request.max_tokens > output_cap:
-            raise ProviderPermanentIncompatibleError("telegram canary: missing or excessive output cap")
+            raise CanaryPreDispatchSafetyRejection("telegram canary: missing or excessive output cap")
         input_upper = serialized_input_token_upper_bound(request)
         if input_upper > input_cap:
-            raise ProviderPermanentIncompatibleError(
+            raise CanaryPreDispatchSafetyRejection(
                 f"telegram canary: serialized input upper bound {input_upper} exceeds stage cap {input_cap}"
             )
 
