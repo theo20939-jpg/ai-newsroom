@@ -1,0 +1,5 @@
+{
+ "findings": [
+  "Phase A audience_value: 'Помогает отделить подтверждённые факты от неподтверждённых формулировок и не воспринимать историю как доказанный «взлом» всех трёх ведомств.' - (action) is not in evidence: 'взлом' is a stronger action than the evidence states (no intrusion / attack / 'rogue' wording in the evidence)"
+ ]
+}
