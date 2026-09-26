@@ -248,7 +248,11 @@ class WorkflowRunner:
         beyond the first - never touches iteration_count, which belongs to
         the caller.
         """
-        for attempt in range(1, step.max_attempts + 1):
+        from services.kage_telegram_canary_envelope import current_telegram_canary_envelope
+
+        envelope = current_telegram_canary_envelope()
+        max_attempts = envelope.workflow_step_attempts() if envelope is not None else step.max_attempts
+        for attempt in range(1, max_attempts + 1):
             if attempt > 1:
                 task.retry_count += 1
 
@@ -276,7 +280,7 @@ class WorkflowRunner:
                         started_at=started_at, finished_at=datetime.now(timezone.utc), error=str(error),
                     )
                 )
-                if attempt == step.max_attempts:
+                if attempt == max_attempts:
                     return "FAILED"
                 continue
             else:

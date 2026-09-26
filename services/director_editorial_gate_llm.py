@@ -23,6 +23,7 @@ from services.director_editorial_gate import EditorialGateInput, GateOutcome
 
 GATE_PROMPT_NAME = "director_editorial_gate"
 GATE_PROMPT_VERSION = "1"
+GATE_MAX_OUTPUT_TOKENS = 350
 
 # Spec §4's own required escalation triggers - ambiguous/high-value/campaign-relevant/breaking/
 # feed-gap candidates only, never every story.
@@ -73,6 +74,7 @@ async def llm_escalate_gate(
             Message(role="system", content=[ContentPart(type="text", text=system_text)]),
             Message(role="user", content=[ContentPart(type="text", text=_build_task_text(gate_input))]),
         ],
+        max_tokens=GATE_MAX_OUTPUT_TOKENS,
         response_mode="json_schema", response_schema=prompt.output_schema,
     )
     runtime = RuntimeContext(

@@ -205,9 +205,27 @@ class FallbackPolicy:
             }
         )
 
-        for attempt_index in range(self._max_same_candidate_retries + 1):
+        from services.kage_telegram_canary_envelope import current_telegram_canary_envelope
+        from services.kage_telegram_canary_envelope import stage_for_request
+
+        envelope = current_telegram_canary_envelope()
+        retry_limit = envelope.same_model_retries() if envelope is not None else self._max_same_candidate_retries
+        for attempt_index in range(retry_limit + 1):
             try:
-                response = await adapter.generate(resolved_request)
+                if envelope is not None:
+                    envelope.authorize_dispatch(request, candidate)
+                try:
+                    response = await adapter.generate(resolved_request)
+                except Exception as exc:
+                    if envelope is not None:
+                        envelope.record_failure(
+                            stage_for_request(request), candidate, type(exc).__name__
+                        )
+                    raise
+                if envelope is not None:
+                    envelope.record_response(
+                        stage_for_request(request), candidate, response.usage
+                    )
                 # Phase 15 runtime reliability fix: a real, observed successful call is
                 # unambiguous proof this candidate is healthy right now - clear any stale
                 # unhealthy/runtime_unavailable state immediately, rather than waiting out
@@ -236,7 +254,7 @@ class FallbackPolicy:
                     failure_detail=str(exc),
                 )
             except ProviderTransientError as exc:
-                if attempt_index < self._max_same_candidate_retries:
+                if attempt_index < retry_limit:
                     backoff_seconds = _backoff_delay_seconds(attempt_index)
                     logger.info(
                         "retry",
