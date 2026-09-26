@@ -1,0 +1,31 @@
+{
+ "provider_calls": 0,
+ "deepseek": {
+  "before_validation_now": "PASS",
+  "after_validation": "PASS",
+  "after_critic_advisory": [],
+  "art_passed": true,
+  "art_blocking": [],
+  "same_pictures": [
+   0,
+   1,
+   2,
+   3,
+   4
+  ]
+ },
+ "hamster": {
+  "before_validation_now": "PASS",
+  "after_validation": "PASS",
+  "after_critic_advisory": [],
+  "art_passed": true,
+  "art_blocking": [],
+  "same_pictures": [
+   0,
+   1,
+   2,
+   3,
+   4
+  ]
+ }
+}

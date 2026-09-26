@@ -71,7 +71,7 @@ def test_the_director_receives_the_beat_retelling_note_only_when_set():
     from dataclasses import replace
 
     text = _build_user_text(replace(base, viral_carousel_note=VIRAL_CAROUSEL_NOTE))
-    assert "VIRAL STORY - SWIPEABLE RETELLING" in text and "never as fact boxes" in text and "ONLY from the evidence" in text
+    assert "VIRAL STORY - A RETELLING IN BEATS" in text and "never as fact boxes" in text and "ONLY from the evidence" in text
 
 
 def test_viral_generated_pictures_become_full_bleed_heroes_and_real_photos_are_untouched():

@@ -1057,6 +1057,11 @@ def _validate_carousel_output(
                                   **{f"slide_{i}_body": slide.slide_body or "" for i, slide in enumerate(creative.slides)},
                                   "final_caption": creative.final_caption or "", "final_cta": creative.final_cta or ""},
                                  locale=director_input.locale)
+    if director_input.viral_carousel_note:
+        # founder copy review 2026-09-26: a viral retelling carries no invented quote and no slide without new information
+        from services.instagram_viral_format import assert_viral_copy_quality
+
+        assert_viral_copy_quality(list(creative.slides), list(director_input.allowed_evidence), caption=creative.final_caption or "")
     return CreativeGenerationOutcome(carousel=creative, call=call, model_emitted_archetype=emitted_archetype,
                                      archetype_correction_required=correction_required, weak_hook_patterns=weak_hooks,
                                      visual_repetition=repetition)
