@@ -1069,8 +1069,25 @@ async def _validate_viral_carousel(
     Founder task 2026-09-27: after the grounding checks and BEFORE the judge, the TARGET STATUS gate (services.instagram_factual_status) -
     HARD - and, for the corrected version, FACTUAL NON-REGRESSION against the version it corrected: a correction that fixes style by
     drifting facts is rejected (the original stays in the diagnostics). The EditorialCorrectionRequired carries the ledger and this
-    version's factual invariants to the correction."""
-    from services.instagram_factual_status import build_status_ledger, factual_invariants, ledger_lines, non_regression_findings, status_violations
+    version's factual invariants to the correction.
+    Founder decision 2026-09-27 (orchestration): a FIRST version whose only factual problems are REPAIRABLE status wording (the evidence
+    supports the actor, action and targets) gets the ONE existing correction - with each failing claim, its ledger status, evidence ids,
+    permitted strength, the chronology invariants and the strongest permitted verb - instead of a terminal stop; the judge does not run on
+    it. A non-repairable finding (missing evidence, an unsupported target) stays terminal. The CORRECTED version must pass the same hard
+    gate: any violation there is terminal before the judge - there is never a second correction.
+    Decision order for a corrected version: grounding / fact safety (_validate_carousel_output, raises) -> target-status gate (incl. 'today'
+    chronology) -> factual non-regression (chronology markers, action strength, new violations) -> copied wording / deterministic thesis
+    checks (collected by _validate_carousel_output, acted on only now) -> semantic judge -> remaining editorial findings."""
+    from services.instagram_factual_status import (
+        build_status_ledger,
+        classify_repairability,
+        factual_invariants,
+        ledger_lines,
+        non_regression_findings,
+        repair_contract,
+        status_violations,
+        unsupported_target_violations,
+    )
     from services.instagram_viral_editorial_judge import judge_viral_copy
     from services.instagram_viral_format import EditorialCorrectionRequired
 
@@ -1087,13 +1104,25 @@ async def _validate_viral_carousel(
         except EditorialCorrectionRequired as exc:
             deterministic = list(exc.findings)
         ledger = build_status_ledger(evidence)
-        violations = status_violations(slides, caption, ledger, evidence)
+        violations = [*status_violations(slides, caption, ledger, evidence), *unsupported_target_violations(slides, caption, evidence)]
         regression = non_regression_findings(director_input.factual_invariants, slides, caption, ledger, evidence) if correcting else []
+        repairability = classify_repairability(violations, evidence) if violations else None
         _emit_diagnostic("factual_status_correction" if correcting else "factual_status_initial",
                          {"ledger": ledger_lines(ledger), "violations": [v.render() for v in violations], "non_regression": regression,
+                          "repairability": None if repairability is None else {"repairable": repairability.repairable,
+                                                                               "reason": repairability.reason, "kinds": list(repairability.kinds)},
                           "baseline_invariants": director_input.factual_invariants})
-        if violations or regression:
-            raise TargetStatusSafetyError([*(v.render() for v in violations), *regression])
+        if correcting and (violations or regression):
+            raise TargetStatusSafetyError([*(v.render() for v in violations), *regression])  # the corrected version: terminal, before the judge
+        if violations:
+            assert repairability is not None
+            if not repairability.repairable:
+                raise TargetStatusSafetyError([f"non-repairable: {repairability.reason}", *(v.render() for v in violations)])
+            invariants = factual_invariants(slides, caption, ledger, evidence)
+            # the ONE correction repairs the status wording (plus the editorial findings already collected); the judge waits for a factual PASS
+            raise EditorialCorrectionRequired(
+                list(dict.fromkeys([*(v.render() for v in violations), *deterministic])), factual_contract=ledger_lines(ledger),
+                factual_invariants=invariants, factual_repair=repair_contract(violations, ledger, evidence, invariants))
         verdict = await judge_viral_copy(gateway, prompt_repository, slides=slides, caption=caption, allowed_evidence=evidence)
         semantic = verdict.findings()
         _emit_diagnostic("semantic_judge_correction" if correcting else "semantic_judge_initial",

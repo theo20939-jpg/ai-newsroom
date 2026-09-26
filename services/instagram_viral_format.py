@@ -67,17 +67,27 @@ class EditorialCorrectionRequired(MediaFirstContractError):
     filler, anglicisms, ...) are collected - never fail-fast on the first - and sent back as ONE structured correction to the trigger's one
     existing correction retry. A MediaFirstContractError, so exactly that retry path applies; a second failure is terminal."""
 
-    def __init__(self, findings: list[str], *, factual_contract: list[str] | None = None, factual_invariants: dict | None = None):
+    def __init__(self, findings: list[str], *, factual_contract: list[str] | None = None, factual_invariants: dict | None = None,
+                 factual_repair: list[str] | None = None):
         self.findings = list(findings)
         # founder task 2026-09-27: what the version sent to the correction got right factually - the correction may not lose it
         self.factual_contract = list(factual_contract or [])
         self.factual_invariants = dict(factual_invariants or {})
+        # founder decision 2026-09-27: REPAIRABLE target-status findings of the first version (services.instagram_factual_status
+        # .repair_contract) - the corrected version must pass the same hard gate, or the post stops
+        self.factual_repair = list(factual_repair or [])
         super().__init__("editorial correction required: " + "; ".join(self.findings))
 
     @property
     def correction_note(self) -> str:
         lines = "\n".join(f"{i}. {finding}" for i, finding in enumerate(self.findings, 1))
         ledger = ("\nTARGET STATUS (from the evidence, keep exactly): " + "; ".join(self.factual_contract)) if self.factual_contract else ""
+        if self.factual_repair:
+            ledger += ("\nFACTUAL STATUS REPAIR (the previous version stated a target's status wrongly; the corrected version is checked by the "
+                       "same hard status gate and stops if any claim below is still wrong). Fix ONLY these claims plus the editorial findings "
+                       "listed after them: do not introduce new facts, do not merge targets, do not strengthen verbs, do not remove the "
+                       "chronology, do not paraphrase precise status language merely for stylistic uniqueness.\n"
+                       + "\n".join(f"- {line}" for line in self.factual_repair))
         return ("EDITORIAL CORRECTION (your one correction attempt). The previous version was rejected by the editorial review. Rewrite the "
                 "copy so that EVERY finding below is fixed - and change ONLY what the findings name. You may merge, reorder or drop slides to "
                 "remove repetition (4-7 slides, each a distinct grounded beat) - never keep a slide only to preserve the count. Keep product and "

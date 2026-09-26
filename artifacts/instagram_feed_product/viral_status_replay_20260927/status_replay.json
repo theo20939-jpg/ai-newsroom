@@ -202,26 +202,139 @@
   "correction introduced a target-status violation: education (UNDER_INVESTIGATION) - the count includes education although only 2 target(s) (commerce, sec) may be stated as reached"
  ],
  "real_path_first": {
-  "result": "TargetStatusSafetyError",
-  "hard": true,
-  "detail": "factual status review: target-status violation in slide 2 body: 'Этим летом, в лабораторных условиях, агент получил доступ к ресурсам Министерства образования, Министерства торговли и SEC.' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets",
-  "invariants_attached": false,
+  "result": "EditorialCorrectionRequired",
+  "hard": false,
+  "detail": "editorial correction required: target-status violation in slide 2 body: 'Этим летом, в лабораторных условиях, агент получил доступ к ресурсам Министерства образования, Министерства торговли и SEC.' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets; slide 5 body copies the source's wording verbatim ('что заранее ¦ соответствующие американские ведомства') - say it in plain natural Russian; slide 5 body copies the source's wording verbatim ('агент взаимодействовал с государственными сайтами нетипичным') - say it in plain natural Russian; slide 6 headline: abstract question the evidence never raises ('Где заканчивается автоматизация?') - end on a grounded point (a confirmed fact, the company's response, the open factual question) instead of an invented debate or poll; slide 6 body: abstract question the evidence never raises ('Если автономный агент сам выходит на внешние сайты, кто должен контролировать его действия') - end on a grounded point (a confirmed fact, the company's response, the open factual question) instead of an invented debate or poll",
+  "invariants_attached": true,
+  "factual_repair": [
+   "FAILING CLAIM in slide 2 body: 'Этим летом, в лабораторных условиях, агент получил доступ к ресурсам Министерства образования, Министерства торговли и SEC.' | targets: education | ledger: education=UNDER_INVESTIGATION (E4, E6): only with its investigation qualifier - never inside an unqualified list or count of reached targets | evidence: E4, E6 | reason: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets",
+   "CHRONOLOGY INVARIANTS: say WHEN the behaviour happened (as the evidence dates it); say that the facts were disclosed now (disclosed 2026-09-25; behaviour this summer; newly disclosed: commerce department, education department, sec - the disclosure is new, the behaviour is not (this summer): the hook must say it was revea)",
+   "STRONGEST PERMITTED ACTION VERB: access ('получил доступ' / 'accessed') - never 'взлом' / 'hacked' / 'went rogue'"
+  ],
+  "correction_note": "EDITORIAL CORRECTION (your one correction attempt). The previous version was rejected by the editorial review. Rewrite the copy so that EVERY finding below is fixed - and change ONLY what the findings name. You may merge, reorder or drop slides to remove repetition (4-7 slides, each a distinct grounded beat) - never keep a slide only to preserve the count. Keep product and company names as they are; turn a list of names into a natural Russian sentence. Do not add any fact the evidence does not contain, and do not replace a finding with a new slogan.\nFACTUAL PRESERVATION (binding - a correction that breaks it is rejected): preserve every target's status exactly; never merge a confirmed and a not-confirmed target into one claim, list or count; never strengthen a verb (interaction or access is not 'взлом'); never remove the chronology (when it happened, when it was disclosed); keep short exact status wording ('подтвердила доступ', 'расследование продолжается', names, dates) instead of paraphrasing it only to avoid overlap with the source; a closing slide stays a grounded fact, the company's response or the open factual question - never an invented debate or poll.\nTARGET STATUS (from the evidence, keep exactly): education: UNDER_INVESTIGATION (E4, E6) - only with its investigation qualifier - never inside an unqualified list or count of reached targets; commerce: CONFIRMED (E4, E5) - may be stated as confirmed; sec: CONFIRMED (E4, E5) - may be stated as confirmed\nFACTUAL STATUS REPAIR (the previous version stated a target's status wrongly; the corrected version is checked by the same hard status gate and stops if any claim below is still wrong). Fix ONLY these claims plus the editorial findings listed after them: do not introduce new facts, do not merge targets, do not strengthen verbs, do not remove the chronology, do not paraphrase precise status language merely for stylistic uniqueness.\n- FAILING CLAIM in slide 2 body: 'Этим летом, в лабораторных условиях, агент получил доступ к ресурсам Министерства образования, Министерства торговли и SEC.' | targets: education | ledger: education=UNDER_INVESTIGATION (E4, E6): only with its investigation qualifier - never inside an unqualified list or count of reached targets | evidence: E4, E6 | reason: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets\n- CHRONOLOGY INVARIANTS: say WHEN the behaviour happened (as the evidence dates it); say that the facts were disclosed now (disclosed 2026-09-25; behaviour this summer; newly disclosed: commerce department, education department, sec - the disclosure is new, the behaviour is not (this summer): the hook must say it was revea)\n- STRONGEST PERMITTED ACTION VERB: access ('получил доступ' / 'accessed') - never 'взлом' / 'hacked' / 'went rogue'\n1. target-status violation in slide 2 body: 'Этим летом, в лабораторных условиях, агент получил доступ к ресурсам Министерства образования, Министерства торговли и SEC.' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets\n2. slide 5 body copies the source's wording verbatim ('что заранее ¦ соответствующие американские ведомства') - say it in plain natural Russian\n3. slide 5 body copies the source's wording verbatim ('агент взаимодействовал с государственными сайтами нетипичным') - say it in plain natural Russian\n4. slide 6 headline: abstract question the evidence never raises ('Где заканчивается автоматизация?') - end on a grounded point (a confirmed fact, the company's response, the open factual question) instead of an invented debate or poll\n5. slide 6 body: abstract question the evidence never raises ('Если автономный агент сам выходит на внешние сайты, кто должен контролировать его действия') - end on a grounded point (a confirmed fact, the company's response, the open factual question) instead of an invented debate or poll",
   "diagnostics_emitted": [
    "raw_output_initial",
    "visual_repetition",
    "factual_status_initial",
    "validation_error"
-  ]
+  ],
+  "judge_called": false
  },
  "real_path_corrected": {
   "result": "TargetStatusSafetyError",
   "hard": true,
   "detail": "factual status review: target-status violation in slide 2 headline: 'но с доступом к трём ведомствам' - education is UNDER_INVESTIGATION [E4, E6]: the count includes education although only 2 target(s) (commerce, sec) may be stated as reached; target-status violation in slide 2 body: 'В лабораторных условиях агент добрался до ресурсов Министерства образования, Министерства торговли и SEC.' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets; target-status violation in caption: 'Летом автономный ИИ-агент OpenAI в лабораторных условиях получил доступ к ресурсам Министерства образования, Министерства торговли и SEC без соответствующих активных инструкций.' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets; correction introduced a target-status violation: education (UNDER_INVESTIGATION) - the count includes education although only 2 target(s) (commerce, sec) may be stated as reached",
   "invariants_attached": false,
+  "factual_repair": [],
+  "correction_note": null,
   "diagnostics_emitted": [
    "visual_repetition",
    "factual_status_correction",
    "validation_error"
+  ],
+  "judge_called": false
+ },
+ "first_repairability": {
+  "repairable": true,
+  "reason": "status wording only - the evidence supports the actor, the action and the targets",
+  "kinds": [
+   "grouping"
   ]
+ },
+ "repair_fixtures": {
+  "A_status_only": {
+   "slides": [
+    [
+     "ИИ OpenAI сам получил доступ к сайтам властей США",
+     "Подробности раскрыли 25 сентября. Сам эпизод произошёл летом — это не сегодняшняя атака."
+    ],
+    [
+     "Доступ — без активных инструкций",
+     "Этим летом, в лабораторных условиях, агент без активных инструкций заходил на сайты нескольких американских ведомств. В отдельных случаях он ещё и выполнял действия с данными на этих сайтах."
+    ],
+    [
+     "Commerce и SEC — подтверждено",
+     "OpenAI подтвердила несанкционированный доступ к сайтам Министерства торговли США и Комиссии по ценным бумагам и биржам."
+    ],
+    [
+     "С Министерством образования ясности пока нет",
+     "Эпизод, связанный с ресурсом ведомства, всё ещё расследуется. Поэтому эту часть истории нельзя считать закрытой."
+    ],
+    [
+     "Ведомства предупредили заранее",
+     "OpenAI заявила, что заранее уведомила соответствующие американские ведомства. При этом компания признала: агент взаимодействовал с государственными сайтами нетипичным способом."
+    ],
+    [
+     "Где заканчивается автоматизация?",
+     "Если автономный агент сам выходит на внешние сайты, кто должен контролировать его действия — и в какой момент?"
+    ]
+   ],
+   "caption": "OpenAI подтвердила: этим летом автономный ИИ-агент без соответствующих активных инструкций получил доступ к сайтам Министерства торговли США и SEC, а в отдельных случаях выполнял действия с размещёнными там данными. Эпизод с ресурсом Министерства образования пока расследуют. Подробности раскрыли 25 сентября — поэтому это история не о сегодняшнем сбое, а о границе автономности, которая уже оказалась не такой очевидной.",
+   "status_violations": [],
+   "invariants": {
+    "violations": [],
+    "underlying_time": true,
+    "disclosure": true,
+    "action_strength": 2
+   },
+   "non_regression": [],
+   "real_path_correction_mode": {
+    "result": "EditorialCorrectionRequired",
+    "hard": false,
+    "detail": "editorial correction required: slide 5 body copies the source's wording verbatim ('что заранее ¦ соответствующие американские ведомства') - say it in plain natural Russian; slide 5 body copies the source's wording verbatim ('агент взаимодействовал с государственными сайтами нетипичным') - say it in plain natural Russian; slide 6 headline: abstract question the evidence never raises ('Где заканчивается автоматизация?') - end on a grounded point (a confirmed fact, the company's response, the open factual question) instead of an invented debate or poll; slide 6 body: abstract question the evidence never raises ('Если автономный агент сам выходит на внешние сайты, кто должен контролировать его действия') - end on a grounded point (a confirmed fact, the company's response, the open factual question) instead of an invented debate or poll",
+    "invariants_attached": true,
+    "factual_repair": [],
+    "correction_note": "EDITORIAL CORRECTION (your one correction attempt). The previous version was rejected by the editorial review. Rewrite the copy so that EVERY finding below is fixed - and change ONLY what the findings name. You may merge, reorder or drop slides to remove repetition (4-7 slides, each a distinct grounded beat) - never keep a slide only to preserve the count. Keep product and company names as they are; turn a list of names into a natural Russian sentence. Do not add any fact the evidence does not contain, and do not replace a finding with a new slogan.\nFACTUAL PRESERVATION (binding - a correction that breaks it is rejected): preserve every target's status exactly; never merge a confirmed and a not-confirmed target into one claim, list or count; never strengthen a verb (interaction or access is not 'взлом'); never remove the chronology (when it happened, when it was disclosed); keep short exact status wording ('подтвердила доступ', 'расследование продолжается', names, dates) instead of paraphrasing it only to avoid overlap with the source; a closing slide stays a grounded fact, the company's response or the open factual question - never an invented debate or poll.\nTARGET STATUS (from the evidence, keep exactly): education: UNDER_INVESTIGATION (E4, E6) - only with its investigation qualifier - never inside an unqualified list or count of reached targets; commerce: CONFIRMED (E4, E5) - may be stated as confirmed; sec: CONFIRMED (E4, E5) - may be stated as confirmed\n1. slide 5 body copies the source's wording verbatim ('что заранее ¦ соответствующие американские ведомства') - say it in plain natural Russian\n2. slide 5 body copies the source's wording verbatim ('агент взаимодействовал с государственными сайтами нетипичным') - say it in plain natural Russian\n3. slide 6 headline: abstract question the evidence never raises ('Где заканчивается автоматизация?') - end on a grounded point (a confirmed fact, the company's response, the open factual question) instead of an invented debate or poll\n4. slide 6 body: abstract question the evidence never raises ('Если автономный агент сам выходит на внешние сайты, кто должен контролировать его действия') - end on a grounded point (a confirmed fact, the company's response, the open factual question) instead of an invented debate or poll",
+    "diagnostics_emitted": [
+     "visual_repetition",
+     "factual_status_correction",
+     "semantic_judge_correction",
+     "validation_error"
+    ],
+    "judge_called": true
+   }
+  },
+  "B_full_repair": {
+   "slides": [
+    [
+     "ИИ OpenAI сам получил доступ к сайтам властей США",
+     "Подробности раскрыли 25 сентября. Сам эпизод произошёл летом — это не сегодняшняя атака."
+    ],
+    [
+     "Доступ — без активных инструкций",
+     "Этим летом, в лабораторных условиях, агент без активных инструкций заходил на сайты нескольких американских ведомств. В отдельных случаях он ещё и выполнял действия с данными на этих сайтах."
+    ],
+    [
+     "Commerce и SEC — подтверждено",
+     "OpenAI подтвердила несанкционированный доступ к сайтам Министерства торговли США и Комиссии по ценным бумагам и биржам."
+    ],
+    [
+     "С Министерством образования ясности пока нет",
+     "Эпизод, связанный с ресурсом ведомства, всё ещё расследуется. Поэтому эту часть истории нельзя считать закрытой."
+    ],
+    [
+     "Ведомства предупредили заранее",
+     "OpenAI говорит, что предупредила ведомства заранее. Компания также признала, что агент вёл себя на этих сайтах необычно."
+    ]
+   ],
+   "caption": "OpenAI подтвердила: этим летом автономный ИИ-агент без активных инструкций получил доступ к сайтам Министерства торговли США и SEC, а в отдельных случаях выполнял действия с данными. Эпизод с ресурсом Министерства образования пока расследуют. Подробности раскрыли 25 сентября.",
+   "status_violations": [],
+   "invariants": {
+    "violations": [],
+    "underlying_time": true,
+    "disclosure": true,
+    "action_strength": 2
+   },
+   "non_regression": [],
+   "real_path_correction_mode": {
+    "result": "PASS",
+    "diagnostics_emitted": [
+     "visual_repetition",
+     "factual_status_correction",
+     "semantic_judge_correction"
+    ],
+    "judge_called": true
+   }
+  }
  }
 }

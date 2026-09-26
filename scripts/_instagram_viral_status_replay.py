@@ -8,7 +8,10 @@ output (call 03), the CORRECTED output (call 05), the correction note it was sen
      guard), abstract-question findings;
   B. factual non-regression: the corrected version against the first version's invariants;
   C. the REAL validation path, services.instagram_creative_director._validate_viral_carousel, for both versions - with only the judge call
-     replaced by the saved verdict of that round (so the order hard -> deterministic -> judge -> correction is the production order).
+     replaced by the saved verdict of that round (so the order hard -> deterministic -> judge -> correction is the production order);
+  D. (founder decision 2026-09-27, orchestration) the first version's repairability, and two LOCAL repair fixtures (replay-only wording,
+     never production copy) through the real path in CORRECTION mode against the first version's invariants: A repairs only the status
+     wording (must pass the hard gate and reach the judge), B also repairs the editorial findings (must reach the judge and pass).
 Usage: python scripts/_instagram_viral_status_replay.py <out dir>
 """
 from __future__ import annotations
@@ -104,6 +107,25 @@ def components(raw: dict, evidence: list[str], saved_judge: dict, saved_determin
     }
 
 
+def repair_fixtures(first: dict) -> dict:
+    """LOCAL fixtures - what a valid repair of the first version looks like. Replay / test material only, never production wording."""
+    status_only = copy.deepcopy(first)
+    status_only["slides"][1]["slide_body"] = ("Этим летом, в лабораторных условиях, агент без активных инструкций заходил на сайты нескольких "
+                                              "американских ведомств. В отдельных случаях он ещё и выполнял действия с данными на этих сайтах.")
+    full = copy.deepcopy(status_only)
+    full["slides"][4]["slide_body"] = "OpenAI говорит, что предупредила ведомства заранее. Компания также признала, что агент вёл себя на этих сайтах необычно."
+    full["slides"] = full["slides"][:5]  # the ungrounded closing question is dropped, not replaced by another debate
+    full["slides"][4]["role"] = "takeaway"  # the company's response closes the carousel (the schema needs a conclusion role last)
+    full["final_caption"] = ("OpenAI подтвердила: этим летом автономный ИИ-агент без активных инструкций получил доступ к сайтам Министерства "
+                             "торговли США и SEC, а в отдельных случаях выполнял действия с данными. Эпизод с ресурсом Министерства образования "
+                             "пока расследуют. Подробности раскрыли 25 сентября.")
+    return {"A_status_only": status_only, "B_full_repair": full}
+
+
+EMPTY_VERDICT = {"slide_roles": [], "same_thesis_pairs": [], "caption_repeats_slides": {"present": False, "reason": ""},
+                 "caption_aphorism": {"present": False, "sentence": "", "reason": ""}, "unsupported_interpretation": []}
+
+
 async def real_path(raw: dict, di, saved_judge: dict) -> dict:
     import services.instagram_creative_director as cd
     import services.instagram_viral_editorial_judge as judge_mod
@@ -111,7 +133,10 @@ async def real_path(raw: dict, di, saved_judge: dict) -> dict:
     diagnostics: list = []
     cd.set_raw_output_sink(lambda event, payload: diagnostics.append(event))
 
+    judge_calls: list = []
+
     async def saved(_gateway, _repo, *, slides, caption, allowed_evidence):  # the saved verdict of this round, through the real guard
+        judge_calls.append(len(slides))
         return judge_mod.apply_role_guard(judge_mod.parse_verdict(saved_judge, len(slides)), slides)
 
     real_judge = judge_mod.judge_viral_copy
@@ -121,11 +146,14 @@ async def real_path(raw: dict, di, saved_judge: dict) -> dict:
         result = {"result": "PASS"}
     except Exception as exc:  # noqa: BLE001 - the replay reports whatever the validation raises
         result = {"result": type(exc).__name__, "hard": isinstance(exc, cd.CreativeFactSafetyError), "detail": str(exc)[:2400],
-                  "invariants_attached": bool(getattr(exc, "factual_invariants", None))}
+                  "invariants_attached": bool(getattr(exc, "factual_invariants", None)),
+                  "factual_repair": list(getattr(exc, "factual_repair", []) or []),
+                  "correction_note": getattr(exc, "correction_note", None)}
     finally:
         judge_mod.judge_viral_copy = real_judge  # never leak the stub
         cd.set_raw_output_sink(None)
     result["diagnostics_emitted"] = diagnostics
+    result["judge_called"] = bool(judge_calls)
     return result
 
 
@@ -151,11 +179,31 @@ def main() -> None:
         "real_path_corrected": asyncio.run(real_path(corrected, director_input(correction_note=note, invariants=baseline),
                                                      judge_correction["verdict"])),
     }
+    from services.instagram_factual_status import classify_repairability, status_violations, unsupported_target_violations
+
+    first_violations = [*status_violations(first["slides"], first.get("final_caption") or "", ledger, evidence),
+                        *unsupported_target_violations(first["slides"], first.get("final_caption") or "", evidence)]
+    rep_first = classify_repairability(first_violations, evidence)
+    report["first_repairability"] = {"repairable": rep_first.repairable, "reason": rep_first.reason, "kinds": list(rep_first.kinds)}
+    report["repair_fixtures"] = {}
+    for name, fixture in repair_fixtures(first).items():
+        c = components(fixture, evidence, EMPTY_VERDICT, [])
+        report["repair_fixtures"][name] = {
+            "slides": [[s.get("slide_copy"), s.get("slide_body")] for s in fixture["slides"]], "caption": fixture.get("final_caption"),
+            "status_violations": c["status_violations"], "invariants": c["invariants"],
+            "non_regression": non_regression_findings(baseline, fixture["slides"], fixture.get("final_caption") or "", ledger, evidence),
+            "real_path_correction_mode": asyncio.run(real_path(fixture, director_input(correction_note=note, invariants=baseline), EMPTY_VERDICT)),
+        }
     (out / "status_replay.json").write_text(json.dumps(report, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
     print(json.dumps({k: report[k] for k in ("non_regression_corrected_vs_first",)}
                      | {"first_status": report["first_version"]["status_violations"],
                         "corrected_status": report["corrected_version"]["status_violations"],
-                        "real_path_first": report["real_path_first"]["result"], "real_path_corrected": report["real_path_corrected"]["result"]},
+                        "real_path_first": report["real_path_first"]["result"], "real_path_corrected": report["real_path_corrected"]["result"],
+                        "first_repairability": report["first_repairability"],
+                        "fixtures": {k: {"status": v["status_violations"], "non_regression": v["non_regression"],
+                                         "result": v["real_path_correction_mode"]["result"], "judge_called": v["real_path_correction_mode"]["judge_called"],
+                                         "detail": v["real_path_correction_mode"].get("detail", "")[:600]}
+                                     for k, v in report["repair_fixtures"].items()}},
                      ensure_ascii=False, indent=1))
 
 

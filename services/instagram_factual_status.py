@@ -209,6 +209,13 @@ def ledger_note(ledger: list[TargetStatus]) -> str:
 
 
 # --- the gate ------------------------------------------------------------------------------------------------------------------------
+# founder decision 2026-09-27: a violation the ONE editorial correction may repair (the evidence supports the actor, action and targets;
+# only the STATUS wording is wrong) vs one that stays terminal (the claim itself has no support)
+REPAIRABLE_KINDS = frozenset({"grouping", "missing_qualifier", "count", "promoted_confirmed", "attempt_completed", "failure_success",
+                              "stronger_verb", "chronology_today"})
+NON_REPAIRABLE_KINDS = frozenset({"unsupported_target", "missing_evidence"})
+
+
 @dataclass(frozen=True)
 class StatusViolation:
     target: str
@@ -217,6 +224,7 @@ class StatusViolation:
     evidence_status: str
     reason: str
     evidence_ids: tuple[str, ...] = ()
+    kind: str = ""  # REPAIRABLE_KINDS / NON_REPAIRABLE_KINDS
 
     def render(self) -> str:
         ids = f" [{', '.join(self.evidence_ids)}]" if self.evidence_ids else ""
@@ -255,14 +263,21 @@ def status_violations(slides: list[Any], caption: str, ledger: list[TargetStatus
                     others = [o.target for o in targets if o.status in _ASSERTABLE]
                     reason = (f"grouped with {', '.join(others)} in one unqualified claim of reaching them - "
                               if others else "stated as reached without its qualifier - ")
-                    found.append(StatusViolation(t.target, where, clause, t.status, reason + t.allowed_assertion_strength, t.evidence_ids))
+                    # the label names the most specific shape (the gate itself is the same for every label)
+                    kind = ("grouping" if others else "promoted_confirmed" if asserts_confirmed and t.status != "CONFIRMED"
+                            else "attempt_completed" if t.status == "ATTEMPTED" else "failure_success" if t.status == "FAILED_ATTEMPT"
+                            else "missing_qualifier")
+                    found.append(StatusViolation(t.target, where, clause, t.status, reason + t.allowed_assertion_strength, t.evidence_ids,
+                                                 kind=kind))
                 elif asserts_confirmed and t.status != "CONFIRMED" and not _qualified(clause, t.status):
                     found.append(StatusViolation(t.target, where, clause, t.status, "promoted to 'confirmed' - " + t.allowed_assertion_strength,
-                                                 t.evidence_ids))
+                                                 t.evidence_ids, kind="promoted_confirmed"))
                 elif t.status == "ATTEMPTED" and completes:
-                    found.append(StatusViolation(t.target, where, clause, t.status, "an attempt stated as completed", t.evidence_ids))
+                    found.append(StatusViolation(t.target, where, clause, t.status, "an attempt stated as completed", t.evidence_ids,
+                                                 kind="attempt_completed"))
                 elif t.status == "FAILED_ATTEMPT" and bool(_ACCESS.search(clause)) and not _FAILED.search(clause):
-                    found.append(StatusViolation(t.target, where, clause, t.status, "a failed attempt stated as a success", t.evidence_ids))
+                    found.append(StatusViolation(t.target, where, clause, t.status, "a failed attempt stated as a success", t.evidence_ids,
+                                                 kind="failure_success"))
             # a COUNT that hides a qualified target: 'доступ к трём ведомствам' when fewer are assertable
             count = _COUNT.search(clause)
             all_of = _ALL_OF.search(clause)
@@ -276,15 +291,85 @@ def status_violations(slides: list[Any], caption: str, ledger: list[TargetStatus
                     found.append(StatusViolation(names, where, clause, "/".join(sorted({q.status for q in qualified})),
                                                  f"the count includes {names} although only {len(assertable)} target(s) "
                                                  f"({', '.join(t.target for t in assertable) or 'none'}) may be stated as reached",
-                                                 tuple(dict.fromkeys(i for q in qualified for i in q.evidence_ids))))
+                                                 tuple(dict.fromkeys(i for q in qualified for i in q.evidence_ids)), kind="count"))
             if _INTRUSION.search(clause) and not _INTRUSION.search(corpus):
                 found.append(StatusViolation("(action)", where, clause, "not in evidence",
                                              f"'{_INTRUSION.search(clause).group(0)}' is a stronger action than the evidence states "  # type: ignore[union-attr]
-                                             "(no intrusion / attack / 'rogue' wording in the evidence)"))
+                                             "(no intrusion / attack / 'rogue' wording in the evidence)", kind="stronger_verb"))
             if dated_earlier and _TODAY.search(clause) and (_ACCESS.search(clause) or _INTERACTION.search(clause)):
                 found.append(StatusViolation("(chronology)", where, clause, "earlier behaviour, new disclosure",
-                                             f"'{_TODAY.search(clause).group(0)}' places the behaviour now - only the disclosure is new"))  # type: ignore[union-attr]
+                                             f"'{_TODAY.search(clause).group(0)}' places the behaviour now - only the disclosure is new",  # type: ignore[union-attr]
+                                             kind="chronology_today"))
     return list({(v.target, v.where, v.generated_claim): v for v in found}.values())
+
+
+def _substantive(evidence: list[str]) -> list[str]:
+    return [e for e in evidence if len((e or "").strip()) >= 40 and not re.match(r"(?i)^\s*(source media|chronology|target status)\s*:", e)]
+
+
+def unsupported_target_violations(slides: list[Any], caption: str, evidence: list[str]) -> list[StatusViolation]:
+    """A target the copy names that the evidence never mentions: the claim itself is unsupported (NON-REPAIRABLE - the correction cannot
+    ground it from the same evidence)."""
+    known = set(mentioned_targets(" ".join(_substantive(evidence))))
+    found = []
+    for where, text in _field_texts(slides, caption):
+        for clause in _clauses(text):
+            for target in mentioned_targets(clause):
+                if target not in known:
+                    found.append(StatusViolation(target, where, clause, "not in evidence", "the evidence never mentions this target",
+                                                 kind="unsupported_target"))
+    return found
+
+
+@dataclass(frozen=True)
+class Repairability:
+    repairable: bool
+    reason: str
+    kinds: tuple[str, ...]
+
+
+def classify_repairability(violations: list[StatusViolation], evidence: list[str]) -> Repairability:
+    """REPAIRABLE only when the evidence exists and every violation is status wording about supported targets (collapse, missing qualifier,
+    promotion, attempt -> done, failure -> success, a stronger verb, an unsafe count, 'today'). Missing evidence or any unsupported target
+    stays terminal - this is never a general factual rewrite."""
+    kinds = tuple(dict.fromkeys(v.kind or "unknown" for v in violations))
+    if not _substantive(evidence):
+        return Repairability(False, "missing evidence: no substantive evidence line supports any claim", kinds)
+    blocking = [k for k in kinds if k not in REPAIRABLE_KINDS]
+    if blocking:
+        return Repairability(False, f"non-repairable finding(s): {', '.join(blocking)}", kinds)
+    return Repairability(True, "status wording only - the evidence supports the actor, the action and the targets", kinds)
+
+
+def strongest_permitted_verb(evidence: list[str]) -> str:
+    corpus = " ".join(_substantive(evidence))
+    if _INTRUSION.search(corpus):
+        return "intrusion (the evidence itself uses intrusion / attack wording)"
+    if _ACCESS.search(corpus):
+        return "access ('получил доступ' / 'accessed') - never 'взлом' / 'hacked' / 'went rogue'"
+    return "interaction ('взаимодействовал' / 'заходил') - never 'доступ' as a completed fact, never 'взлом'"
+
+
+def repair_contract(violations: list[StatusViolation], ledger: list[TargetStatus], evidence: list[str], invariants: dict) -> list[str]:
+    """What the ONE correction receives for each repairable violation: the failing claim, its targets, their ledger status, evidence ids,
+    the permitted assertion strength and the reason - plus the chronology invariants and the strongest permitted action verb."""
+    by_target = {t.target: t for t in ledger}
+    lines = []
+    for v in violations:
+        targets = [by_target[k] for k in re.split(r",\s*", v.target) if k in by_target]
+        status = "; ".join(f"{t.target}={t.status} ({', '.join(t.evidence_ids)}): {t.allowed_assertion_strength}" for t in targets) or v.evidence_status
+        lines.append(f"FAILING CLAIM in {v.where}: '{v.generated_claim}' | targets: {v.target} | ledger: {status} | evidence: "
+                     f"{', '.join(v.evidence_ids) or '-'} | reason: {v.reason}")
+    chronology = [e for e in evidence if re.match(r"(?i)^\s*chronology\s*:", e or "")]
+    keep = []
+    if invariants.get("underlying_time"):
+        keep.append("say WHEN the behaviour happened (as the evidence dates it)")
+    if invariants.get("disclosure"):
+        keep.append("say that the facts were disclosed now")
+    lines.append("CHRONOLOGY INVARIANTS: " + ("; ".join(keep) or "do not place the behaviour today")
+                 + (f" ({chronology[0].split(':', 1)[1].strip()[:200]})" if chronology else ""))
+    lines.append(f"STRONGEST PERMITTED ACTION VERB: {strongest_permitted_verb(evidence)}")
+    return lines
 
 
 # --- correction non-regression -------------------------------------------------------------------------------------------------------

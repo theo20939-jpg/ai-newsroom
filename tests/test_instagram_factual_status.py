@@ -173,7 +173,7 @@ def test_14_the_canary_correction_with_a_new_factual_violation_is_rejected_on_th
     assert "correction introduced a target-status violation" in result["detail"] and "трём ведомствам" in result["detail"]
 
 
-def test_15_the_original_version_stays_available_for_diagnosis_and_the_gate_is_hard_and_before_the_judge(monkeypatch):
+def test_15_the_original_version_stays_available_for_diagnosis_and_the_judge_waits_for_a_factual_pass(monkeypatch):
     import json
 
     import services.instagram_creative_director as cd
@@ -183,10 +183,11 @@ def test_15_the_original_version_stays_available_for_diagnosis_and_the_gate_is_h
     captured: list = []
     monkeypatch.setattr(cd, "_emit_diagnostic", lambda event, payload: captured.append((event, payload)))
     result = asyncio.run(replay.real_path(first, replay.director_input(), saved))
-    assert result["result"] == "TargetStatusSafetyError" and result["hard"]  # never laundered into the editorial correction
+    # founder decision 2026-09-27: the first version's status wording is REPAIRABLE -> the ONE correction, never a silent pass
+    assert result["result"] == "EditorialCorrectionRequired" and not result["hard"] and result["factual_repair"]
     events = [e for e, _p in captured]
     assert events[0] == "raw_output_initial" and captured[0][1]["structured_output"]["slides"] == first["slides"]
-    assert "semantic_judge_initial" not in events  # the judge never runs after a hard failure
+    assert "semantic_judge_initial" not in events and not result["judge_called"]  # the judge waits for a factual PASS
 
 
 def test_the_correction_note_and_the_director_prompt_carry_the_status_contract():
