@@ -167,14 +167,10 @@ def test_russian_headline_text_is_not_clipped_on_the_approved_cover(tmp_path: Pa
         sys.argv = old_argv
 
     manifest = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
-    # this test is about RENDERING (no clipped Russian headline). The diagnostic fixture is a REACTION-angle carousel, so since the founder
-    # review of 2026-09-26 the gate also reads it as viral copy - and correctly finds that slides 3 and 4 make one point from one evidence
-    # sentence. That editorial finding is expected here; no rendering issue may block.
-    render_blocking = [i for i in manifest["art_validation"]["blocking_issues"] if not i.startswith("viral_copy_quality:")]
-    assert render_blocking == []
-    assert manifest["art_validation"]["blocking_issues"] == [
-        "viral_copy_quality: slides 3 and 4 make the same point (both rest on the same evidence item and the second adds no new concrete "
-        "detail) - merge them or give the second a new fact"]
+    # this test is about RENDERING (no clipped Russian headline). The diagnostic fixture is a REACTION-angle carousel, so the gate also
+    # reads it as viral copy. Its slides 3 and 4 share one evidence item, but slide 4 adds a consequence (a cheaper, faster model is
+    # enough) - under the thesis-level rule (2026-09-26, never evidence-id overlap alone) that is a new beat, so nothing blocks.
+    assert manifest["art_validation"]["blocking_issues"] == []
     assert all(not slide["text_clipped"] for slide in manifest["slides"])
 
 

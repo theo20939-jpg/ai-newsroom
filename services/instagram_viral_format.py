@@ -27,13 +27,17 @@ VIRAL_PRODUCTS = frozenset({"TREND"})
 # NATURAL RUSSIAN + CONCRETE FACT + OPTIONAL DRY PUNCH - never FACT + MANDATORY MEME LINE.
 VIRAL_CAROUSEL_NOTE = (
     "VIRAL STORY - A RETELLING IN BEATS: this story is a carousel because it is unusual, funny, absurd or highly discussable - not because it "
-    "has many facts. Use as many slides as there are DISTINCT grounded beats (at least 4, at most 7) - never stretch one fact over several "
+    "has many facts. Before finalising, assign ONE distinct factual beat to each slide; if one slide is only the generic or the specific "
+    "version of another (a claim, then the same claim with names or numbers), merge them - a new detail is not a new beat. "
+    "Use as many slides as there are DISTINCT grounded beats (at least 4, at most 7) - never stretch one fact over several "
     "slides, and never let two slides make the same point. Typical beats: the surprising concrete hook, how it started, what actually happened, "
     "the strongest extra detail, the result or one dry payoff. HOOK: slide 1 states the STRANGEST CONCRETE FACT of the event itself (the event "
     "and its surprising result), never how the story spread - no 'became a meme', 'went viral', 'the internet is discussing'; if the words meme / "
     "viral / internet were removed, the hook must still be interesting; it is a complete natural Russian phrase, never telegraphic fragments "
     "glued with colons and dashes. Product and company names stay as they are, but a list of names is never a slide's copy - say it as a "
-    "Russian sentence; prefer a Russian word to an anglicism (обновление, not апгрейд). HUMOUR: find the joke already present in the facts (factual absurdity, "
+    "Russian sentence; prefer a Russian word to an anglicism (обновление, not апгрейд). The CAPTION summarises the story in natural Russian "
+    "and adds context the slides do not already give; it never re-lists the slides' names or features and carries no second joke or slogan. "
+    "HUMOUR: find the joke already present in the facts (factual absurdity, "
     "factual contrast, concise dry wording) - do not write jokes onto the story; no slogans, no 'the internet decided', no aphorisms about the "
     "internet, no 'plot twist', no claim the evidence does not make (e.g. that something happened 'again'). VOICE: write like a sharp human tech "
     "editor who is amused by the facts, in natural contemporary Russian - short, "
@@ -79,7 +83,7 @@ class ViralCopyQualityError(MediaFirstContractError):
 _QUOTED = re.compile("[\u00ab\"\u201c]([^\u00bb\"\u201d]+)[\u00bb\"\u201d]")
 _NORMALISE = re.compile(r"[^\w]+")
 # the editorial critic's own findings that, for a viral retelling, mean a slide carries no new information
-_VIRAL_BLOCKING = frozenset({"body_repeats_headline", "body_restates_headline_claim", "card_adds_no_new_information"})
+_VIRAL_BLOCKING = frozenset({"body_repeats_headline", "body_restates_headline_claim", "card_adds_no_new_information", "label_headline"})
 
 
 def _norm(text: str) -> str:
@@ -166,6 +170,81 @@ def generic_filler(sentence: str) -> bool:
     return bool(_ABSTRACT_SUBJECT.search(sentence)) and not anchors(sentence) and not re.search(r"\d", sentence)
 
 
+def thesis_relation(prev: Any, cur: Any, *, earlier_slides: list[Any]) -> str | None:
+    """Founder rule 2026-09-26: EVERY SLIDE ADDS A NEW IDEA, NOT MORE SPECIFIC WORDS FOR THE PREVIOUS IDEA. A slide's claim is its body (its
+    headline too when that carries a name or a number, or when the body is too short to state one). Compared with the previous slide - never by
+    evidence ids, never by a term list:
+      - REPETITION: the claim brings no new content word and no new concrete detail;
+      - SUBSUMPTION: the claim's content words all already appear in the previous slide and it only adds names / numbers - it enumerates or
+        specifies the previous claim (a new detail, not a new beat: no new event, actor, consequence, result, limitation or mechanism);
+      - RESTATED THESIS: it shares several content words with the previous claim and brings no new concrete fact at all.
+    Returns the explanation, or None when the slide is a new beat."""
+    from services.instagram_editorial_critic import anchors, content_stems
+
+    head = _copy(cur)
+    body = _body(cur)
+    # the headline joins the claim when it carries a name / number, or when the body alone is too short to state a thesis
+    claim = body + (f" {head}" if anchors(head) or re.search(r"\d", head) or len(content_stems(body)) < 2 else "")
+    prev_text = f"{_copy(prev)} {_body(prev)}"
+    claim_words = content_stems(claim)
+    prev_words = content_stems(prev_text)
+    if len(claim_words) < 2:
+        return None  # too little Russian text to judge a thesis
+    new_words = claim_words - prev_words
+    shared = claim_words & prev_words
+    new_vs_prev = anchors(claim) - anchors(prev_text)
+    new_vs_all = anchors(claim) - set().union(*(anchors(f"{_copy(s)} {_body(s)}") for s in earlier_slides))
+    if len(new_words) <= 1 and shared and not new_vs_all:
+        return "the second slide repeats the first slide's point (no new content word, no new concrete detail)"
+    if not new_words and shared and new_vs_prev:
+        return (f"the second slide only specifies the first slide's claim ({', '.join(sorted(shared))}) by naming "
+                f"{', '.join(sorted(new_vs_prev))} - it adds specificity, not a new beat (no new event, actor, consequence, result, "
+                "limitation or mechanism)")
+    if len(shared) >= 2 and len(new_words) <= len(shared) and not new_vs_all:
+        return (f"the second slide restates the first slide's thesis ({', '.join(sorted(shared))}) without a new concrete fact")
+    return None
+
+
+_WORD_RE = re.compile(r"[A-Za-zА-Яа-яЁё0-9\-]+")
+
+
+def lifted_wording(text: str, evidence: list[str], *, run: int = 6) -> str | None:
+    """A sentence that copies a long run of the SOURCE's own wording ('требуется глобальная техническая модификация ...') instead of saying it
+    in natural words: `run` or more consecutive words identical to an evidence item, at least 3 of them long Russian words (a copied run
+    of product names or numbers is not wording; a short plain sentence in the same words is not source register). Returns the run."""
+    words = [w.lower() for w in _WORD_RE.findall(text or "")]
+    for item in evidence:
+        source = [w.lower() for w in _WORD_RE.findall(item or "")]
+        grams = {tuple(source[i:i + run]) for i in range(len(source) - run + 1)}
+        for i in range(len(words) - run + 1):
+            gram = tuple(words[i:i + run])
+            # a run of names / numbers is not lifted WORDING (product names stay allowed), and a short plain sentence retold in the same
+            # words is fine: the copied run must carry the source's formal register - at least 3 long (8+ letter) Russian words
+            if gram in grams and sum(1 for w in gram if re.fullmatch(r"[а-яё\-]{8,}", w)) >= 3:
+                return " ".join(gram)
+    return None
+
+
+def caption_findings(caption: str, slides: list[Any]) -> list[str]:
+    """The caption is audience-facing copy too: never a product-name list, a re-list of what the slides already say, or abstract filler."""
+    from services.instagram_editorial_critic import anchors
+
+    slide_text = " ".join(f"{_copy(s)} {_body(s)}" for s in slides)
+    slide_anchors = anchors(slide_text)
+    problems = []
+    for sentence in re.split(r"(?<=[.!?…])\s+", caption or ""):
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        names = anchors(sentence)
+        if product_list(sentence) or (len(re.findall(r"[А-Яа-яЁё]{3,}", sentence)) <= 2 and len(names) >= 3):
+            repeated = " - it repeats the slides' list" if names and names <= slide_anchors else ""
+            problems.append(f"caption sentence is a list of names, not a sentence that adds context: {sentence!r}{repeated}")
+        elif generic_filler(sentence):
+            problems.append(f"caption: generic filler with no new fact: {sentence!r}")
+    return problems
+
+
 def named_people(evidence: list[str]) -> set[str]:
     """Real people the evidence NAMES (a proper name next to a person role: 'streamer and YouTuber IShowSpeed', 'NHL player Cole Caufield',
     'Thijs de Buck, an MRI physicist'). Organisations after a preposition ('researchers from Unit 42') are not people."""
@@ -221,12 +300,19 @@ def viral_copy_findings(slides: list[Any], evidence: list[str], *, caption: str 
                 if sentence.strip() and generic_filler(sentence):
                     problems.append(f"slide {index} {field}: generic filler with no new fact: {sentence.strip()!r} - end on the real fact or "
                                     "its plain irony")
+    problems += caption_findings(caption, slides)
+    for index, slide in enumerate(slides, 1):
+        for sentence in re.split(r"(?<=[.!?…])\s+", _body(slide)):
+            copied = lifted_wording(sentence, evidence)
+            if copied:
+                problems.append(f"slide {index} body copies the source's wording verbatim ('{copied}') - say it in plain natural Russian")
     for text in texts:
         for match in _ANGLICISM.finditer(text or ""):
             word = match.group(1).lower()
             problems.append(f"anglicism '{match.group(0)}' where Russian has a natural word ({_ANGLICISMS[word]}): {text.strip()[:80]!r}")
-    problems += [f.render() + " - a viral slide's body must add a new grounded fact" for f in critique(slides, evidence, caption=caption)
-                 if f.code in _VIRAL_BLOCKING]
+    problems += [f.render() + (" - state the slide's own fact instead of a teaser" if f.code == "label_headline"
+                                else " - a viral slide's body must add a new grounded fact")
+                 for f in critique(slides, evidence, caption=caption) if f.code in _VIRAL_BLOCKING]
     if slides and (meta := _DISTRIBUTION_META.search(_copy(slides[0]))):
         problems.append(f"hook describes how the story spread ('{meta.group(0)}'), not the event - lead with its strangest concrete fact")
     corpus = " ".join(evidence)
@@ -243,15 +329,11 @@ def viral_copy_findings(slides: list[Any], evidence: list[str], *, caption: str 
     problems += [f"incomplete line (ends on a preposition / conjunction): {line!r}" for line in (_copy(s) for s in slides) if _DANGLING_END.search(line)]
     for index in range(1, len(slides)):
         prev, cur = slides[index - 1], slides[index]
-        prev_ref, cur_ref = str(_get(prev, "source_evidence") or "").strip(), str(_get(cur, "source_evidence") or "").strip()
-        if prev_ref and prev_ref == cur_ref:
-            # the same evidence item twice in a row: the second slide must bring a concrete detail NO earlier slide has shown
-            earlier = set().union(*(anchors(f"{_copy(s)} {_body(s)}") for s in slides[:index]))
-            new = anchors(f"{_copy(cur)} {_body(cur)}") - earlier
-            if not new:
-                problems.append(f"slides {index} and {index + 1} make the same point (both rest on the same evidence item and the second adds "
-                                "no new concrete detail) - merge them or give the second a new fact")
-                continue
+        beat = thesis_relation(prev, cur, earlier_slides=slides[:index])
+        if beat:
+            problems.append(f"slides {index} and {index + 1}: {beat} - merge them into one slide, then use the freed slide for another "
+                            "distinct grounded fact or make the carousel shorter")
+            continue
         prev_text, cur_text = f"{_copy(prev)} {_body(prev)}", f"{_copy(cur)} {_body(cur)}"
         shared_names = {a for a in anchors(prev_text) & anchors(cur_text) if not re.search(r"\d", a)}
         shared_words = content_stems(prev_text) & content_stems(cur_text)

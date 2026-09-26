@@ -1,0 +1,52 @@
+{
+ "provider_calls": 0,
+ "images_regenerated": 0,
+ "fixture": "artifacts/instagram_feed_product/director_stability_20260926/live/post/calls/04_director.json",
+ "checks": {
+  "1_slides_2_3_subsumption_detected": true,
+  "2_explanation_says_specificity_not_new_beat": true,
+  "3_caption_list_repetition_detected": true,
+  "4_teaser_label_surfaced": true,
+  "5_deepseek_passes": true,
+  "6_hamster_passes": true,
+  "7_same_evidence_item_different_facts_pass": true,
+  "8_different_evidence_ids_same_thesis_fail": true,
+  "9_no_story_specific_terms_in_rule_code": true,
+  "10_only_one_editorial_correction": true
+ },
+ "all_pass": true,
+ "gta_final_output": {
+  "result": "EditorialCorrectionRequired (correctable -> the ONE correction retry)",
+  "findings": [
+   "caption sentence is a list of names, not a sentence that adds context: 'В наборе — Nvidia DLSS 4, AMD FSR 3, DLAA и HDR.' - it repeats the slides' list",
+   "slide 5 body copies the source's wording verbatim ('требуется глобальная техническая модификация fusion fix') - say it in plain natural Russian",
+   "[advisory] label_headline (card 3): a teaser label, not information: 'Вот что приехало в игру' - state the slide's own fact instead of a teaser",
+   "slides 2 and 3: the second slide only specifies the first slide's claim (доба, подд) by naming 3, 4, amd, dlaa, dlss, fsr, nvidia - it adds specificity, not a new beat (no new event, actor, consequence, result, limitation or mechanism) - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter"
+  ],
+  "correction_note": "EDITORIAL CORRECTION (your one correction attempt). The previous version was rejected by the editorial review. Rewrite the copy so that EVERY finding below is fixed. You may merge, reorder or drop slides to remove repetition (4-7 slides, each a distinct grounded beat) - never keep a slide only to preserve the count. Keep product and company names as they are; turn a list of names into a natural Russian sentence. Do not add any fact the evidence does not contain, and do not replace a finding with a new slogan.\n1. caption sentence is a list of names, not a sentence that adds context: 'В наборе — Nvidia DLSS 4, AMD FSR 3, DLAA и HDR.' - it repeats the slides' list\n2. slide 5 body copies the source's wording verbatim ('требуется глобальная техническая модификация fusion fix') - say it in plain natural Russian\n3. [advisory] label_headline (card 3): a teaser label, not information: 'Вот что приехало в игру' - state the slide's own fact instead of a teaser\n4. slides 2 and 3: the second slide only specifies the first slide's claim (доба, подд) by naming 3, 4, amd, dlaa, dlss, fsr, nvidia - it adds specificity, not a new beat (no new event, actor, consequence, result, limitation or mechanism) - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter"
+ },
+ "golden": {
+  "deepseek": {
+   "result": "PASS"
+  },
+  "hamster": {
+   "result": "PASS"
+  }
+ },
+ "fixture_7_findings": [],
+ "fixture_8_findings": [
+  "slides 1 and 2: the second slide restates the first slide's thesis (влад, квар, пыле) without a new concrete fact - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter"
+ ],
+ "rule_code_story_terms": {
+  "services/instagram_viral_format.py": [],
+  "services/instagram_editorial_critic.py": []
+ },
+ "one_correction_tests": {
+  "nodes": [
+   "tests/test_instagram_director_correction.py::test_a_correctable_failure_gets_exactly_one_structured_retry_and_a_second_failure_is_terminal",
+   "tests/test_instagram_director_stability.py::test_the_director_is_never_called_more_than_three_times",
+   "tests/test_instagram_director_stability.py::test_malformed_then_valid_but_bad_may_still_use_the_editorial_correction"
+  ],
+  "result": "6 passed in 10.18s"
+ }
+}

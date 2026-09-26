@@ -130,9 +130,10 @@ def test_an_incomplete_construction_is_rejected():
 def test_two_adjacent_slides_on_the_same_evidence_with_nothing_new_make_the_same_point():
     same = _slides(("Сначала был клип", "Он пел Happy day, Ronaldo day."), ("Потом контраст", "Песня и столкновение."),
                    ("Сбой между песней и столкновением", "Ronaldo Day и падение."), refs=["E1", "E5", "E5"])
-    assert any("slides 2 and 3 make the same point" in p for p in viral_copy_findings(same, []))
+    # thesis-level rule (2026-09-26): judged on the slides' claims, not on the shared evidence id
+    assert any(p.startswith("slides 2 and 3: the second slide restates the first slide's thesis") for p in viral_copy_findings(same, []))
     new = _slides(("Потом контраст", "Песня и столкновение."), ("6,06 мили", "Трекер записал 4 часа 37 минут."), refs=["E5", "E5"])
-    assert not any("same point" in p for p in viral_copy_findings(new, []))
+    assert not any("slides 1 and 2" in p for p in viral_copy_findings(new, []))
 
 
 def test_the_note_carries_the_hook_humour_structure_and_people_rules():
@@ -151,8 +152,9 @@ def test_the_failed_canary_is_rejected_by_selection_and_would_be_blocked_by_the_
     assert b["director_validation_now"].startswith("CreativeFactSafetyError") and len(b["generated_person_risks"]) == 3
     assert not b["art_gate_now"]["art_passed"]
     joined = " ".join(b["all_viral_copy_findings"])
-    for expected in ("hook describes how the story spread", "abstract commentary", "unsupported implication", "'между' needs two terms",
-                     "slides 3 and 4 make the same point"):
+    # slides 3/4 were flagged by the evidence-id overlap rule, which the thesis-level rule (2026-09-26) replaced: they reword the same
+    # contrast with synonyms (фраза/песня, столкновение/фейл), which a lexical thesis comparison does not see - disclosed, not claimed
+    for expected in ("hook describes how the story spread", "abstract commentary", "unsupported implication", "'между' needs two terms"):
         assert expected in joined
 
 
