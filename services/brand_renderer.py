@@ -1,4 +1,7 @@
-"""NINJA PULSE Visual System v1 - programmatic Brand Renderer.
+"""KAGE Telegram publication renderer over the historic NNJ/NINJA visual system.
+
+Current Telegram watermark paths use the supplied `assets/brand/kage_watermark.png`; NNJ asset
+notes below are implementation history, not current output identity.
 
 NOT an image-generation model - Pillow only (already an installed project dependency; no
 cairosvg/svglib/reportlab added, per the checkpoint's own "prefer existing installed library, no
@@ -54,7 +57,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFont, ImageStat
 from core.config import settings
 from services import nnj_board_metrics as _bm
 from services.data_source_classification import DataPresentationMode
-from services.nnj_master_news_mark import rasterize_nnj_mark
+from services.nnj_master_news_mark import rasterize_kage_watermark
 from services.nnj_master_news_overlay import (
     BoundingBox,
     ComponentPlacement,
@@ -93,7 +96,7 @@ _TEMPLATE_BY_PRESENTATION_TYPE = {
 _BRAND_ASSET_DIR = Path("assets/brand")
 _LOGO_SVG_PATH = _BRAND_ASSET_DIR / "nnj_logo.svg"
 _LOGO_RED_SVG_PATH = _BRAND_ASSET_DIR / "nnj_logo_red.svg"
-_LOGO_PNG_PATH = _BRAND_ASSET_DIR / "nnj_logo.png"
+_LOGO_PNG_PATH = _BRAND_ASSET_DIR / "kage_watermark.png"
 
 # FOUNDER-VISUAL-POLISH-2 §4: a source that exactly matches one of our KNOWN internal NNJ-branded
 # templates already carries a canonical NNJ mark, so the renderer must add none of its own
@@ -315,10 +318,9 @@ def _load_logo_png() -> Image.Image:
 
 
 def load_brand_mark() -> Image.Image:
-    """Returns the official NNJ mark exactly as shipped in `assets/brand/nnj_logo.png` (480x480
-    RGBA, 1:1 - never stretched, never re-geometried, never recolored). See module docstring for
-    why this module has no separate white/red mark variant."""
-    return _load_logo_png()
+    """Returns the canonical KAGE watermark with its original RGBA pixels and proportions."""
+    from services.nnj_master_news_mark import _load_kage_watermark
+    return _load_kage_watermark().copy()
 
 
 def _paste_logo(canvas: Image.Image, *, target_width: int, margin: int) -> None:
@@ -341,7 +343,7 @@ def _paste_svg_mark(canvas: Image.Image, *, target_width: int, margin: int) -> N
     method is unified, never each type's own existing layout choice. `render_news_hero()` (dead/
     unreachable from the real send path - see its own call-site audit) is left on `_paste_logo()`
     unchanged; it is out of scope for this migration."""
-    mark = rasterize_nnj_mark(target_width=target_width, red=True)
+    mark = rasterize_kage_watermark(target_width=target_width)
     x = canvas.width - mark.width - margin
     y = canvas.height - mark.height - margin
     canvas.alpha_composite(mark, (x, y))
@@ -516,7 +518,7 @@ def _draw_breaking_watermark(photo: Image.Image, *, media_w: int, media_h: int) 
     canonical `rasterize_nnj_mark()` geometry, recoloured to grey + low alpha."""
     m = _bm.BREAKING
     target_w = max(48, round(m.watermark_width_frac * media_w))
-    glyph = rasterize_nnj_mark(target_width=target_w, red=False)  # white geometry -> we tint it
+    glyph = rasterize_kage_watermark(target_width=target_w)
     gw, gh = glyph.size
     right_inset = round(m.watermark_right_inset_frac * media_w)
     bottom_inset = round(m.watermark_bottom_inset_frac * media_h)
@@ -526,8 +528,10 @@ def _draw_breaking_watermark(photo: Image.Image, *, media_w: int, media_h: int) 
     region = photo.convert("RGB").crop((max(0, x), max(0, y), min(media_w, x + gw), min(media_h, y + gh)))
     local_luma = sum(ImageStat.Stat(region).mean) / 3 if region.width and region.height else 0
     tint = m.watermark_grey_on_light if local_luma > 140 else m.watermark_grey_on_dark
+    # The existing deterministic luminance-adaptive grey treatment is retained; the supplied
+    # KAGE asset provides the exact shape and transparency mask.
     layer = Image.new("RGBA", glyph.size, (*tint, 0))
-    layer.putalpha(glyph.getchannel("A").point(lambda v: round(v * m.watermark_opacity)))
+    layer.putalpha(glyph.getchannel("A").point(lambda value: round(value * m.watermark_opacity)))
     photo.alpha_composite(layer, (max(0, x), max(0, y)))
 
 
@@ -915,7 +919,7 @@ def _data_signature_geometry(
     line_thick = max(1, round(_LOWER_LINE_THICKNESS_FRAC * h))
     mark_w = max(1, round(_LOWER_MARK_W_FRAC * w))
     gap = max(1, round(_GAP_FRAC * w))
-    mark_h = rasterize_nnj_mark(target_width=mark_w).height  # identical for red/white (same SVG geometry)
+    mark_h = rasterize_kage_watermark(target_width=mark_w).height
     y = h - inset
 
     if placement is ComponentPlacement.LOWER_RIGHT:
@@ -1077,7 +1081,7 @@ def _build_data_signature_fallback(canvas_size: tuple[int, int], *, inset: int) 
     `_select_data_block_placement()`'s `avoid_box` exactly like the scored signature's own box."""
     w, h = canvas_size
     mark_w = max(1, round(_LOWER_MARK_W_FRAC * w))
-    mark = rasterize_nnj_mark(target_width=mark_w, red=False)
+    mark = rasterize_kage_watermark(target_width=mark_w)
     padding = max(1, round(_SIGNATURE_FALLBACK_SCRIM_PADDING_FRAC * w))
 
     x1, y1 = w - inset, h - inset
@@ -1110,7 +1114,7 @@ def _build_data_lower_signature_image(
     pulse_w, pulse_h = max(1, round(_LOWER_PULSE_W_FRAC * w)), max(1, round(_LOWER_PULSE_H_FRAC * h))
     line_thick = max(1, round(_LOWER_LINE_THICKNESS_FRAC * h))
     mark_w = max(1, round(_LOWER_MARK_W_FRAC * w))
-    mark = rasterize_nnj_mark(target_width=mark_w, red=red)
+    mark = rasterize_kage_watermark(target_width=mark_w)
 
     mark_box, pulse_box, line_box = _data_signature_geometry(canvas_size, placement, inset, line_len)
     mark_x, mark_y = mark_box[0], mark_box[1]
@@ -1472,7 +1476,7 @@ def render_data_hero_card(data_candidate: DataCandidate, *, source_image_bytes: 
 
     # §18: one very restrained NNJ mark (the board DATA media shows none - kept for the prior
     # one-mark decision, flagged for Founder review). Small, low opacity, must not compete.
-    mark = rasterize_nnj_mark(target_width=max(30, round(_HERO_MARK_W_FRAC * _HERO_CW)), red=True)
+    mark = rasterize_kage_watermark(target_width=max(30, round(_HERO_MARK_W_FRAC * _HERO_CW)))
     if _HERO_MARK_OPACITY < 1.0:
         a = mark.getchannel("A").point(lambda v: round(v * _HERO_MARK_OPACITY))
         mark.putalpha(a)
@@ -1500,7 +1504,7 @@ def _place_source_watermark(canvas: Image.Image) -> bool:
     w, h = canvas.size
     inset = max(8, round(0.028 * w))
     wm_w = max(28, round(_SOURCE_WM_W_FRAC * w))
-    glyph = rasterize_nnj_mark(target_width=wm_w, red=False)
+    glyph = rasterize_kage_watermark(target_width=wm_w, opacity=0.22)
     gw, gh = glyph.size
     rgb = canvas.convert("RGB")
     corners = (
@@ -1967,7 +1971,7 @@ def render_recap_fallback_card(subject: str, *, category: str | None = None) -> 
         draw = ImageDraw.Draw(canvas)
         margin = 64
 
-        draw.text((margin, margin), "NINJA PULSE / RECAP", font=_font(26), fill=_OFFICIAL_NNJ_RED)
+        draw.text((margin, margin), "KAGE / RECAP", font=_font(26), fill=_OFFICIAL_NNJ_RED)
         if category:
             draw.text((margin, margin + 38), category.upper(), font=_font(18), fill=_OFFICIAL_NNJ_WHITE)
 

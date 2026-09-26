@@ -419,7 +419,7 @@ def run_presentation_case(case: dict[str, Any]) -> dict[str, Any]:
     if "include_ninja_pulse_footer" in input_:
         output = {"title": "T", "main_body": input_["main_body"], "ending": None, "quote": None}
         html = render_v81_news_card_html(output, treatment="standard", include_ninja_pulse_footer=True)
-        footer_count = html.count("NINJA PULSE. Подписаться 🥷")
+        footer_count = html.count("KAGE")
         return {
             "footer_present_exactly_once": footer_count == 1,
             "link_preview_disabled": True,  # send_to_editorial_destination() applies this unconditionally

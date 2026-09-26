@@ -64,6 +64,7 @@ services:
     environment:
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
+      COPYWRITING_PROMPT_VERSION: "11.10"
     command: ["python", "-m", "worker.content_main"]
     depends_on:
       postgres:

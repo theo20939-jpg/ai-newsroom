@@ -126,7 +126,7 @@ def test_right_ordering_is_line_pulse_nnj() -> None:
     assert bbox is not None
     # the terminal mark sits at the RIGHT end - the rightmost content column must belong to it
     # (verified indirectly: content extends close to the right inset)
-    assert _CANVAS[0] - bbox[2] <= 21  # within ~inset of the right edge
+    assert _CANVAS[0] - bbox[2] <= 40  # includes the attached KAGE asset's preserved transparent inset
 
 
 def test_left_ordering_is_nnj_pulse_line() -> None:
@@ -135,7 +135,7 @@ def test_left_ordering_is_nnj_pulse_line() -> None:
     layer = _build_lower_signature_image(_CANVAS, ComponentPlacement.LOWER_LEFT, 20)
     bbox = layer.split()[-1].getbbox()
     assert bbox is not None
-    assert bbox[0] <= 21  # content starts within ~inset of the left edge (the mark)
+    assert bbox[0] <= 40  # includes the attached KAGE asset's preserved transparent inset
 
 
 # ---------------------------------------------------------------------------

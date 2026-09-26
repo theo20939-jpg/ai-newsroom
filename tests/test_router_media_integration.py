@@ -874,15 +874,16 @@ async def test_ninja_pulse_cta_present_once_in_photo_caption_with_source_only_ke
     fake_bot.send_photo.assert_called_once()
     _, kwargs = fake_bot.send_photo.call_args
     caption = kwargs["caption"]
-    assert caption.count("NINJA PULSE. Подписаться 🥷") == 1
-    assert '<a href="https://t.me/ninja_pulse">NINJA PULSE. Подписаться 🥷</a>' in caption
+    assert caption.count("KAGE") == 1
+    assert '<a href="https://t.me/kage_journal">KAGE</a>' in caption
     # Source button (a completely separate mechanism - the inline keyboard) must be unaffected.
     keyboard = kwargs["reply_markup"]
     assert keyboard is not None
-    assert len(keyboard.inline_keyboard) == 1
-    assert len(keyboard.inline_keyboard[0]) == 1
-    assert keyboard.inline_keyboard[0][0].url == source_url
-    assert keyboard.inline_keyboard[0][0].text == "🔗 Источник"
+    buttons = [button for row in keyboard.inline_keyboard for button in row]
+    source_buttons = [button for button in buttons if button.url == source_url]
+    assert len(source_buttons) == 1
+    assert source_buttons[0].text == "🔗 Источник"
+    assert all(button.url != "https://t.me/kage_journal" for button in buttons)
     assert result.notified == 1
 
 
@@ -927,8 +928,8 @@ async def test_ninja_pulse_cta_present_once_in_the_no_image_card_text(
 
     assert len(captured_html) == 1
     sent_text = captured_html[0]
-    assert sent_text.count("NINJA PULSE. Подписаться 🥷") == 1
-    assert '<a href="https://t.me/ninja_pulse">NINJA PULSE. Подписаться 🥷</a>' in sent_text
+    assert sent_text.count("KAGE") == 1
+    assert '<a href="https://t.me/kage_journal">KAGE</a>' in sent_text
 
     # The card text above was never actually sent as a finished post - per the Founder
     # invariant, no visual resolved means HOLD, not silent text completion.
@@ -1034,7 +1035,7 @@ async def test_ninja_pulse_footer_survives_caption_overflow_fallback_to_text(
     fake_bot.send_message.assert_called_once()
     sent_text = fake_bot.send_message.call_args.args[1]
     assert "…" not in sent_text  # no truncation marker - the existing "never truncate" guarantee holds
-    assert sent_text.count("NINJA PULSE. Подписаться 🥷") == 1
+    assert sent_text.count("KAGE") == 1
     assert result.notified == 1
 
 
@@ -1265,8 +1266,8 @@ async def test_media_group_caption_includes_quote_and_footer_but_no_inline_sourc
     first_item_caption = kwargs["media"][0].caption
     assert "<blockquote>We built this because reasoning matters more than raw speed.</blockquote>" in first_item_caption
     # Quote (above) must render before the footer (below) in the caption.
-    assert first_item_caption.index("<blockquote>") < first_item_caption.index("NINJA PULSE. Подписаться 🥷")
-    assert first_item_caption.count("NINJA PULSE. Подписаться 🥷") == 1
+    assert first_item_caption.index("<blockquote>") < first_item_caption.index("KAGE")
+    assert first_item_caption.count("KAGE") == 1
     assert "Источник" not in first_item_caption  # no in-caption source-link fallback anymore
     assert source_url not in first_item_caption
     # Only the first media-group item carries the caption (Telegram's own real behavior).

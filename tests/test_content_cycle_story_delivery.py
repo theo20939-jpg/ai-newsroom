@@ -575,8 +575,8 @@ async def test_router_mode_story_update_with_existing_root_replies_to_it(
     # never about which renderer built the HTML - both use the identical render_v81_news_card_
     # html() output).
     sent_text = fake_bot.send_photo.call_args.kwargs["caption"]
-    assert sent_text.count("NINJA PULSE. Подписаться 🥷") == 1
-    assert '<a href="https://t.me/ninja_pulse">NINJA PULSE. Подписаться 🥷</a>' in sent_text
+    assert sent_text.count("KAGE") == 1
+    assert '<a href="https://t.me/kage_journal">KAGE</a>' in sent_text
 
     async with factory() as session:
         delivery = (
@@ -647,8 +647,8 @@ async def test_router_mode_verified_quote_renders_in_the_v8_family_card(
     assert "OpenAI released a new flagship model" in sent_text
     # Phase V2.12I: Phase 23.1Q's footer is the restored, approved contract - present here too,
     # quote or no quote, strictly after the quote block (headline -> body -> quote -> footer).
-    assert sent_text.count("NINJA PULSE. Подписаться 🥷") == 1
-    assert sent_text.index("</blockquote>") < sent_text.index("NINJA PULSE. Подписаться 🥷")
+    assert sent_text.count("KAGE") == 1
+    assert sent_text.index("</blockquote>") < sent_text.index("KAGE")
 
 
 @pytest.mark.asyncio

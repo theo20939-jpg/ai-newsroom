@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
@@ -28,6 +29,11 @@ from tests.test_content_worker_cycle import _make_event, factory, test_source  #
 from services.editorial_treatment import STANDARD
 from worker.content_cycle import run_content_cycle
 from worker import content_main
+from services.news_telegram_presentation import render_v8_news_card_html
+from services.nnj_master_news_mark import rasterize_kage_watermark
+from services.brand_renderer import load_brand_mark
+from bot.keyboards.image_preview import build_source_only_keyboard
+from PIL import Image, ImageChops
 
 
 def test_content_worker_default_and_explicit_override(monkeypatch):
@@ -40,6 +46,37 @@ def test_content_worker_default_and_explicit_override(monkeypatch):
     monkeypatch.setattr(content_main, "settings", explicit)
     with pytest.raises(RuntimeError, match="11.10"):
         content_main._configure_telegram_copywriting_default()
+
+
+def test_kage_publication_cta_and_source_button_remain_separate():
+    rendered = render_v8_news_card_html({"title": "Заголовок", "main_body": "Текст", "ending": None})
+    assert '<a href="https://t.me/kage_journal">KAGE</a>' in rendered
+    source = build_source_only_keyboard("https://news.example/story", label="🔗 Источник")
+    button = source.inline_keyboard[0][0]
+    assert (button.text, button.url) == ("🔗 Источник", "https://news.example/story")
+    assert "news.example" not in rendered
+
+
+def test_kage_watermark_is_the_supplied_transparent_asset_and_scales_proportionally():
+    path = Path("assets/brand/kage_watermark.png")
+    with Image.open(path) as opened:
+        source = opened.convert("RGBA")
+    rendered = rasterize_kage_watermark(target_width=627)
+    assert rendered.size == (627, 627)
+    assert source.getchannel("A").getbbox() is not None
+    assert source.getchannel("A").getextrema()[0] == 0
+    assert rendered.getchannel("A").getbbox() is not None
+    assert ImageChops.difference(source, load_brand_mark()).getbbox() is None
+
+
+def test_brand_asset_defaults_point_to_canonical_kage_watermark():
+    brand_path = "assets/brand/kage_watermark.png"
+    configured = Settings(_env_file=None)
+    assert configured.brand_asset_path == brand_path
+    assert configured.brand_red_asset_path == brand_path
+    assert configured.brand_raster_fallback_path == brand_path
+    compose = __import__("yaml").safe_load(Path("docker-compose.yml").read_text(encoding="utf-8"))
+    assert compose["services"]["content_worker"]["environment"]["COPYWRITING_PROMPT_VERSION"] == "11.10"
 
 
 def test_kage_legacy_fact_safety_is_history_not_publication_authority(monkeypatch):

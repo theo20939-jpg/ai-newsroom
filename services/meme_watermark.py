@@ -1,5 +1,6 @@
-"""MEME PRODUCTION PIPELINE (overnight phase; MEME-PROD-2.1 brand-source fix): mandatory,
-deterministic NNJ watermark compositor for every successfully generated meme image.
+"""MEME PRODUCTION PIPELINE (overnight phase): mandatory, deterministic KAGE watermark compositor
+for every successfully generated Telegram meme image. Historical MEME-PROD-2.1 notes below refer
+to the superseded NNJ artwork source.
 
 MEME-PROD-2.1: reuses `services/nnj_master_news_mark.py::rasterize_nnj_mark()` - the SAME
 official-SVG rasterizer `services/brand_renderer.py`'s own DATA-card bottom signature and MASTER
@@ -42,7 +43,7 @@ import logging
 from PIL import Image, ImageStat, UnidentifiedImageError
 
 from schemas.meme_copy import MemeCopy
-from services.nnj_master_news_mark import rasterize_nnj_mark
+from services.nnj_master_news_mark import rasterize_kage_watermark
 
 logger = logging.getLogger(__name__)
 
@@ -99,10 +100,10 @@ def apply_nnj_watermark(image_bytes: bytes, *, copy: MemeCopy | None = None) -> 
         target_width = max(_MIN_WATERMARK_WIDTH_PX, round(short_side * _WATERMARK_WIDTH_FRACTION))
         margin = max(_MIN_MARGIN_PX, round(short_side * _MARGIN_FRACTION))
 
-        # Both variants share identical geometry (only the fill color differs), so a single
-        # rasterization is enough to determine placement before deciding red vs. white.
-        red_mark = rasterize_nnj_mark(target_width=target_width, red=True)
-        target_height = red_mark.height
+        # Preserve the canonical KAGE asset's aspect ratio/transparency; existing luminance-based
+        # red/white contrast treatment is applied to its alpha mask below.
+        watermark = rasterize_kage_watermark(target_width=target_width)
+        target_height = watermark.height
 
         bottom_band_in_use = copy is not None and bool(copy.bottom_text)
         x = canvas.width - target_width - margin
@@ -114,7 +115,9 @@ def apply_nnj_watermark(image_bytes: bytes, *, copy: MemeCopy | None = None) -> 
         )
         luminance = _region_luminance(canvas, box)
         use_red = luminance is None or luminance >= _LUMINANCE_RED_THRESHOLD
-        mark = red_mark if use_red else rasterize_nnj_mark(target_width=target_width, red=False)
+        tint = (237, 28, 36) if use_red else (255, 255, 255)
+        mark = Image.new("RGBA", watermark.size, (*tint, 0))
+        mark.putalpha(watermark.getchannel("A"))
 
         canvas.alpha_composite(mark, (x, y))
 

@@ -2,7 +2,7 @@
 identity. Forensic finding (this phase's own research pass): there is no separate outward-facing
 "channel" in this codebase today - real publication (services/final_post_publication.py) targets
 `settings.newsroom_telegram_chat_id`, the same internal NINJA NEWSROOM supergroup used for
-editorial review. `ninja_pulse` (https://t.me/ninja_pulse) is only a hardcoded CTA footer link string in
+editorial review. The KAGE public URL (https://t.me/kage_journal) is only a CTA footer link in
 captions (services/news_telegram_presentation.py) - never a configured chat_id anywhere, so it is
 NOT NNJ's identity for capability/collection purposes.
 

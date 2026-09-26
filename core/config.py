@@ -909,9 +909,9 @@ class Settings(BaseSettings):
     # NOT exercised by any live call in that phase - a separate, explicitly-authorized canary
     # phase is required before this is ever set to "live" outside a test.
     editorial_recomposition_mode: Literal["off", "dry_run", "live"] = "off"
-    brand_asset_path: str = "assets/brand/nnj_logo.svg"
-    brand_red_asset_path: str = "assets/brand/nnj_logo_red.svg"
-    brand_raster_fallback_path: str = "assets/brand/nnj_logo.png"
+    brand_asset_path: str = "assets/brand/kage_watermark.png"
+    brand_red_asset_path: str = "assets/brand/kage_watermark.png"
+    brand_raster_fallback_path: str = "assets/brand/kage_watermark.png"
     brand_template_version: str = "v1"
     # Unset by default - see services/brand_renderer.py's own module docstring for the OS-font
     # resolution fallback chain this drives (no font file is ever downloaded or shipped).

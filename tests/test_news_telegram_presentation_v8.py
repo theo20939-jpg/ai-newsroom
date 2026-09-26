@@ -176,14 +176,14 @@ def test_case_n_useful_ending_is_included() -> None:
 
 def test_case_o_footer_exact_text_and_link() -> None:
     footer = build_ninja_pulse_footer_html()
-    assert footer == '<a href="https://t.me/ninja_pulse">NINJA PULSE. Подписаться 🥷</a>'
+    assert footer == '<a href="https://t.me/kage_journal">KAGE</a>'
 
 
 def test_case_p_footer_appears_exactly_once() -> None:
     output = _v8(ending="A useful ending.", expandable_details="Some expandable detail.")
     html = render_v8_news_card_html(output, treatment=STANDARD)
-    assert html.count("NINJA PULSE") == 1
-    assert html.count('href="https://t.me/ninja_pulse"') == 1
+    assert html.count("KAGE") == 1
+    assert html.count('href="https://t.me/kage_journal"') == 1
 
 
 # ---------------------------------------------------------------------------
@@ -208,14 +208,13 @@ def test_case_r_render_function_has_no_source_url_parameter_at_all() -> None:
     assert "url" not in " ".join(sig.parameters.keys()).lower()
 
 
-def test_case_s_ninja_pulse_url_is_never_shown_as_plain_visible_text() -> None:
-    """The raw https://t.me/ninja_pulse string only ever appears inside the href attribute value -
-    never as the anchor's own visible text (which must be exactly "NINJA PULSE. Подписаться 🥷")."""
+def test_case_s_kage_url_is_never_shown_as_plain_visible_text() -> None:
+    """The KAGE URL appears only as the anchor target, with concise visible publication identity."""
     footer = build_ninja_pulse_footer_html()
-    assert footer.startswith('<a href="https://t.me/ninja_pulse">')
+    assert footer.startswith('<a href="https://t.me/kage_journal">')
     visible_text = footer.split(">", 1)[1].rsplit("<", 1)[0]
-    assert visible_text == "NINJA PULSE. Подписаться 🥷"
-    assert "https://t.me/ninja_pulse" not in visible_text
+    assert visible_text == "KAGE"
+    assert "https://t.me/kage_journal" not in visible_text
 
 
 # ---------------------------------------------------------------------------

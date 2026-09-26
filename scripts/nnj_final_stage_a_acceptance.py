@@ -49,8 +49,8 @@ from scripts.run_content_generation import ContentGenerationOutcome, run_content
 from services.editorial_recomposition import RecompositionResult, maybe_recompose
 from services.image_persistence import EditorialImageCandidate, get_editorial_image_candidates, read_candidate_bytes
 from services.news_telegram_presentation import (
-    _NINJA_PULSE_TEXT,
-    _NINJA_PULSE_URL,
+    _KAGE_PUBLIC_TEXT,
+    _KAGE_PUBLIC_URL,
     is_v8_family_output,
     render_v81_news_card_html,
 )
@@ -315,25 +315,25 @@ def validate_final_package_contract(
     touched here. This is a completely separate concern: the FINAL, fully-composed NEWS package
     (text/HTML/keyboard/destination) either matches the approved contract or it does not, and a
     violation here must never be reported as acceptance success. Reuses the real, single-source
-    constants (`_NINJA_PULSE_TEXT`/`_NINJA_PULSE_URL` from services.news_telegram_presentation,
+    constants (`_KAGE_PUBLIC_TEXT`/`_KAGE_PUBLIC_URL` from services.news_telegram_presentation,
     `_NEWS_SOURCE_BUTTON_LABEL` from worker.content_cycle, `EXPECTED_CHAT_ID`/`EXPECTED_TOPIC_ID`
     from this module) rather than re-declaring the forbidden strings a second time.
 
     Phase V2.12I: V2.12G's CTA-forbidding gate is itself superseded - the approved contract
-    restores Phase 23.1Q's requirement that the NINJA PULSE footer (text + link) appear exactly
+    restores the publication footer (text + link) requirement: KAGE appears exactly
     once in the final HTML. `plain_text` is `ast_strip_html_tags(html)`'s output, which strips the
     `<a href="...">` tag along with every other tag - the URL itself is never visible there (real
     Telegram anchor-text rendering), so only the CTA TEXT, not the URL, is checked in plain_text."""
-    if html.count(_NINJA_PULSE_TEXT) != 1:
+    if html.count(_KAGE_PUBLIC_TEXT) != 1:
         raise StageAContractError(
-            f"expected the NINJA PULSE CTA text exactly once in final HTML, found {html.count(_NINJA_PULSE_TEXT)}"
+            f"expected the KAGE CTA text exactly once in final HTML, found {html.count(_KAGE_PUBLIC_TEXT)}"
         )
-    if f'<a href="{_NINJA_PULSE_URL}">{_NINJA_PULSE_TEXT}</a>' not in html:
-        raise StageAContractError(f"expected the NINJA PULSE CTA anchor linking to {_NINJA_PULSE_URL} in final HTML")
-    if plain_text.count(_NINJA_PULSE_TEXT) != 1:
+    if f'<a href="{_KAGE_PUBLIC_URL}">{_KAGE_PUBLIC_TEXT}</a>' not in html:
+        raise StageAContractError(f"expected the KAGE CTA anchor linking to {_KAGE_PUBLIC_URL} in final HTML")
+    if plain_text.count(_KAGE_PUBLIC_TEXT) != 1:
         raise StageAContractError(
-            f"expected the NINJA PULSE CTA text exactly once in final plain text, "
-            f"found {plain_text.count(_NINJA_PULSE_TEXT)}"
+            f"expected the KAGE CTA text exactly once in final plain text, "
+            f"found {plain_text.count(_KAGE_PUBLIC_TEXT)}"
         )
 
     if keyboard is None:

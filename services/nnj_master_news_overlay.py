@@ -1,4 +1,7 @@
-"""Phase V2.10H - the locked MASTER NEWS visual contract (Phase V2.10E-G design recovery ->
+"""Current KAGE cutover: active Telegram mark composition below uses the supplied canonical KAGE
+watermark; NNJ terms in the historical visual contract describe pre-cutover decisions.
+
+Phase V2.10H - the locked MASTER NEWS visual contract (Phase V2.10E-G design recovery ->
 user-approved production selection: MASTER_BALANCED lower signature + MEDIUM upper mark) wired as
 a real, automatic, deterministic placement system. Supersedes Candidate C
 (services/nnj_adaptive_overlay.py) as the normal NEWS branding path - that module and its locked
@@ -73,7 +76,7 @@ from enum import Enum
 
 from PIL import Image, ImageFilter, ImageStat
 
-from services.nnj_master_news_mark import NNJ_RED_FILL, rasterize_nnj_mark
+from services.nnj_master_news_mark import NNJ_RED_FILL, rasterize_kage_watermark
 
 BoundingBox = tuple[int, int, int, int]
 
@@ -365,7 +368,7 @@ def _evaluate_placements(
 def _build_upper_mark_image(canvas_size: tuple[int, int], placement: ComponentPlacement, inset: int) -> Image.Image:
     w, h = canvas_size
     mark_w = max(1, round(_UPPER_MARK_W_FRAC * w))
-    mark = rasterize_nnj_mark(target_width=mark_w, red=True)
+    mark = rasterize_kage_watermark(target_width=mark_w)
     canvas = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
     x = inset if placement is ComponentPlacement.UPPER_LEFT else w - inset - mark.width
     canvas.alpha_composite(mark, (x, inset))
@@ -380,7 +383,7 @@ def _build_corner_mark_image(canvas_size: tuple[int, int], placement: ComponentP
     never mirrored."""
     w, h = canvas_size
     mark_w = max(1, round(_UPPER_MARK_W_FRAC * w))
-    mark = rasterize_nnj_mark(target_width=mark_w, red=True)
+    mark = rasterize_kage_watermark(target_width=mark_w)
     canvas = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
     x = inset if placement in (ComponentPlacement.UPPER_LEFT, ComponentPlacement.LOWER_LEFT) else w - inset - mark.width
     y = inset if placement in (ComponentPlacement.UPPER_LEFT, ComponentPlacement.UPPER_RIGHT) else h - inset - mark.height
@@ -405,7 +408,7 @@ def _build_lower_signature_image(canvas_size: tuple[int, int], placement: Compon
     line_thick = max(1, round(_LOWER_LINE_THICKNESS_FRAC * h))
     mark_w = max(1, round(_LOWER_MARK_W_FRAC * w))
     gap = max(1, round(_GAP_FRAC * w))
-    mark = rasterize_nnj_mark(target_width=mark_w, red=True)
+    mark = rasterize_kage_watermark(target_width=mark_w)
     line_len = max(10, total_w - pulse_w - mark.width - gap)
 
     canvas = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
@@ -481,7 +484,7 @@ def select_master_news_branding(
         # single-brand-mark / degradation-mode bookkeeping is unchanged (it is still "the one
         # branding unit"), and the upper-mark slot stays OMITTED (mutual exclusion holds).
         mark_w = max(1, round(_UPPER_MARK_W_FRAC * canvas_size[0]))
-        mark_h = rasterize_nnj_mark(target_width=mark_w).height
+        mark_h = rasterize_kage_watermark(target_width=mark_w).height
         mark_placement, _mbox, mark_attempts = _evaluate_placements(
             photo, component_size=(mark_w, mark_h),
             candidates=(ComponentPlacement.LOWER_RIGHT, ComponentPlacement.LOWER_LEFT,
@@ -512,7 +515,7 @@ def select_master_news_branding(
         lower_pulse_h = max(1, round(_LOWER_PULSE_H_FRAC * canvas_size[1]))
         lower_total_w = max(10, round(_LOWER_TOTAL_WIDTH_FRAC * canvas_size[0]))
         lower_component_w = lower_total_w
-        lower_component_h = max(lower_pulse_h, rasterize_nnj_mark(target_width=lower_mark_w).height)
+        lower_component_h = max(lower_pulse_h, rasterize_kage_watermark(target_width=lower_mark_w).height)
 
         lower_placement, _box, lower_attempts = _evaluate_placements(
             photo, component_size=(lower_component_w, lower_component_h),
@@ -536,7 +539,7 @@ def select_master_news_branding(
         upper_disabled_reason = "single_brand_mark_contract_lower_signature_already_placed"
     else:
         upper_mark_w = max(1, round(_UPPER_MARK_W_FRAC * canvas_size[0]))
-        upper_mark_h = rasterize_nnj_mark(target_width=upper_mark_w).height
+        upper_mark_h = rasterize_kage_watermark(target_width=upper_mark_w).height
         upper_placement, _ubox, upper_attempts = _evaluate_placements(
             photo, component_size=(upper_mark_w, upper_mark_h),
             candidates=(ComponentPlacement.UPPER_RIGHT, ComponentPlacement.UPPER_LEFT),
