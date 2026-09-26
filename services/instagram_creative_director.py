@@ -38,6 +38,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import json
+import math
 import re
 import unicodedata
 from dataclasses import dataclass, field, replace
@@ -105,7 +106,16 @@ EDITORIAL_DECISION_PROMPT_NAME = "instagram_editorial_decision"
 # version file is left untouched/unused, matching this codebase's own established "never edit a
 # shipped prompt version in place" convention.
 _SINGLE_PROMPT_VERSION = "7"  # v7: KAGE identity
-_CREATIVE_DIRECTOR_MAX_TOKENS = 16_000  # upper safety bound (not a target): keeps the gateway worst-case estimate from pricing a model-maximum completion
+_CREATIVE_DIRECTOR_MAX_TOKENS = 16_000  # legacy ceiling; the real per-call cap is director_output_cap() below (2026-09-26)
+# Director output cap (founder task 2026-09-26, scripts/_instagram_director_schema_size.py): the pure schema bound is not usable (every field
+# at maxLength = ~200k JSON chars for 10 slides, and evidence_used / interruption_slides are unbounded), so the cap is the measured worst
+# ALL-IN output per slide of every saved successful carousel response (reasoning + top-level fields + slide JSON: 11,039 tokens / 9 slides
+# = 1,227) x the slides this post may have x 25% headroom. Single / Reel: 1.5 x the measured maximum (2,660).
+_DIRECTOR_TOKENS_PER_SLIDE_MEASURED = 1227
+_DIRECTOR_CAP_HEADROOM = 1.25
+_SINGLE_REEL_OUTPUT_CAP = 4000
+_CAROUSEL_MAX_SLIDES = 10  # the carousel prompt's own SHAPE contract (2 to 10 slides) and the schema's maxItems
+_VIRAL_MAX_SLIDES = 7  # services.instagram_viral_format.VIRAL_CAROUSEL_NOTE: 4-7 distinct beats
 _CAROUSEL_PROMPT_VERSION = "10.11"  # 10.11 = 10.9 + KAGE palette identity; 10.9 = judgment reset: editor-first system text, scoped product rule, editorial_decision first, 22 rules removed; 10.8 = compared angles + critic; 10.7 = content pass: headline + slide_body, editorial_angle, information density; Phase B.5.1.2: v9.1 = v9 + evidence-reference contract (E1..En handles); v9 = Visual DNA v2 families, bounded roles, meta-language guard
 CAROUSEL_PROMPT_VERSION = _CAROUSEL_PROMPT_VERSION
 # weekly recap product pass: a news_recap carousel is planned with 10.10 (v10.9 + the visual-first weekly-roundup direction); every
@@ -215,6 +225,52 @@ class CreativeContractError(ValueError):
     vocabulary). Typed so a contract failure is never reported as an anonymous 'unexpected_error'."""
 
 
+class DirectorStructuredOutputError(CreativeDirectorUnavailableError):
+    """A TECHNICAL failure of the Director's structured output (never an editorial finding): the generation ran away (whitespace or a
+    repeated unit), was cut at the output cap, or is not a complete JSON object. The trigger gives it ONE technical recovery - separate
+    from the one editorial correction - and a second technical failure is terminal. `kind` is the classified reason."""
+
+    def __init__(self, kind: str, detail: str):
+        self.kind = kind
+        super().__init__(f"structured output {kind}: {detail}")
+
+
+_WHITESPACE_RUN = re.compile(r"\s{1000,}")
+_REPEATED_UNIT = re.compile(r"(\S.{0,15}?)\1{120,}", re.DOTALL)
+
+
+def classify_structured_output(text: str | None, finish_reason: str | None, structured_output: object) -> str | None:
+    """None for a complete, sane response; otherwise the technical failure kind. A 1000-character whitespace run or a unit repeated 120+
+    times is never valid Director output (the longest real field is a few hundred characters); a response cut at the cap or without a
+    complete JSON object cannot be validated. Nothing is repaired."""
+    raw = text or ""
+    if _WHITESPACE_RUN.search(raw):
+        return "whitespace_runaway"
+    if _REPEATED_UNIT.search(raw):
+        return "repetition_runaway"
+    if finish_reason == "length":
+        return "truncated_at_cap"
+    if not isinstance(structured_output, dict):
+        return "invalid_json"
+    return None
+
+
+def director_max_slides(director_input: "CreativeDirectorInput") -> int:
+    if director_input.viral_carousel_note:
+        return _VIRAL_MAX_SLIDES
+    if director_input.is_recap_bundle:
+        stories = len(director_input.recap_required_subjects or director_input.recap_subjects or [])
+        return min(_CAROUSEL_MAX_SLIDES, max(2, stories + 2))  # the cover, one slide per story, the end card
+    return _CAROUSEL_MAX_SLIDES
+
+
+def director_output_cap(director_input: "CreativeDirectorInput", prompt_name: str) -> int:
+    """The finite output-token cap for one Director call (reasoning included) - see the constants' derivation above."""
+    if prompt_name != CAROUSEL_PROMPT_NAME:
+        return _SINGLE_REEL_OUTPUT_CAP
+    return math.ceil(_DIRECTOR_CAP_HEADROOM * _DIRECTOR_TOKENS_PER_SLIDE_MEASURED * director_max_slides(director_input))
+
+
 class CreativeLanguageError(ValueError):
     """Raised when final audience/editor-facing output is clearly not Russian for a RU account."""
 
@@ -300,6 +356,8 @@ class CreativeDirectorInput:
     media_note: str = ""
     # founder decision 2026-09-26 (services.instagram_viral_format): a viral / meme-worthy story is retold as swipeable beats
     viral_carousel_note: str = ""
+    # the ONE technical recovery (a structurally invalid / truncated / runaway response): a concise reason, never the malformed text
+    structured_output_recovery_note: str = ""
     # Phase B.6: the shared KAGE voice (rendered from docs/brand/kage_voice_v1.md - never copied into a prompt) and the media facts the media-first
     # contract is checked against: which subject keys are listed, and which of those are NOT suitable as a final visual (article / text cards).
     media_first: bool = False  # the caller runs the media-first + KAGE-voice contract (prompt v10) for this request
@@ -486,6 +544,8 @@ def _build_user_text(director_input: CreativeDirectorInput, *, evidence_handles:
            if director_input.planned_format else "")
         + (_recap_coverage_text(director_input) if director_input.recap_required_subjects else "")
         + (f"\nPREVIOUS ATTEMPT REJECTED: {director_input.contract_retry_note}" if director_input.contract_retry_note else "")
+        + (f"\nPREVIOUS RESPONSE WAS STRUCTURALLY INVALID: {director_input.structured_output_recovery_note}"
+           if director_input.structured_output_recovery_note else "")
     )
 
 
@@ -793,7 +853,7 @@ async def _call_creative_director(
             Message(role="user", content=[ContentPart(type="text", text=_build_user_text(
                 director_input, evidence_handles=_uses_evidence_handles(prompt_name, prompt_version)))]),
         ],
-        response_mode="json_schema", response_schema=prompt.output_schema, max_tokens=_CREATIVE_DIRECTOR_MAX_TOKENS,
+        response_mode="json_schema", response_schema=prompt.output_schema, max_tokens=director_output_cap(director_input, prompt_name),
     )
     runtime = RuntimeContext(
         task_id=uuid4(), event_id=uuid4(), capability_name=prompt_name, priority=TaskPriority.S,
@@ -809,8 +869,11 @@ async def _call_creative_director(
 
     response = outcome.response
     assert response is not None
-    if response.structured_output is None:
-        raise CreativeDirectorUnavailableError("no structured output returned")
+    technical = classify_structured_output(response.text, response.finish_reason, response.structured_output)
+    if technical is not None:
+        output_tokens = getattr(getattr(outcome.call, "usage", None), "output_tokens", None)
+        raise DirectorStructuredOutputError(technical, f"finish_reason={response.finish_reason}, output_tokens={output_tokens}, "
+                                                       f"cap={request.max_tokens}, text_chars={len(response.text or '')}")
     _emit_diagnostic("raw_output", {
         "prompt_name": prompt_name, "prompt_version": prompt_version, "model": getattr(outcome.call, "model_used", None),
         "input_tokens": getattr(getattr(outcome.call, "usage", None), "input_tokens", None),

@@ -469,7 +469,7 @@ async def test_v10_generation_accepts_a_media_first_plan_and_sends_voice_handles
     assert "KAGE VOICE" in text and "E1: " in text and "SOURCE_AVAILABLE" in text
     assert outcome.carousel.slides[0].role == "hook" and [s.media_source for s in outcome.carousel.slides] == ["generated", "graphic", "source"]
     assert outcome.carousel.evidence_used == [_EVIDENCE] and outcome.weak_hook_patterns == ()
-    assert gateway.requests[0].max_tokens == 16_000
+    assert gateway.requests[0].max_tokens == 15_338  # the derived per-post cap for a 10-slide carousel (2026-09-26)
 
 
 @pytest.mark.asyncio

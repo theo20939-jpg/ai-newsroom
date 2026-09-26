@@ -375,7 +375,8 @@ async def _capture_cd_request():
 async def test_creative_director_request_is_bounded_and_otherwise_unchanged() -> None:
     request, repo, director_input = await _capture_cd_request()
     assert cd._CREATIVE_DIRECTOR_MAX_TOKENS == 16_000
-    assert request.max_tokens == 16_000
+    # 2026-09-26: the per-post cap derived from the measured all-in cost per slide (a 10-slide carousel: ceil(1.25 x 1227 x 10))
+    assert request.max_tokens == cd.director_output_cap(director_input, cd.CAROUSEL_PROMPT_NAME) == 15_338
     prompt = repo.resolve(cd.CAROUSEL_PROMPT_NAME, "10.11")
     assert cd._CAROUSEL_PROMPT_VERSION == "10.11"
     assert request.response_mode == "json_schema" and request.response_schema == prompt.output_schema

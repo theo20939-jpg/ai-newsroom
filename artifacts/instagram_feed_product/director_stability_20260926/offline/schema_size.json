@@ -1,0 +1,47 @@
+{
+ "carousel": {
+  "prompt": "instagram_creative_director_carousel v10.11",
+  "schema_worst_case_json_chars_if_bounded": 200746,
+  "schema_per_slide_worst_case_json_chars": 18403,
+  "unbounded_fields": [
+   "$.evidence_used[]",
+   "$.visual_rhythm.interruption_slides[]"
+  ],
+  "slides_max_items": 10
+ },
+ "single": {
+  "prompt": "instagram_creative_director_single v7",
+  "schema_worst_case_json_chars_if_bounded": 12865,
+  "schema_per_slide_worst_case_json_chars": null,
+  "unbounded_fields": [
+   "$.asset_requirements[]",
+   "$.evidence_used[]"
+  ],
+  "slides_max_items": null
+ },
+ "reel": {
+  "prompt": "instagram_creative_director_reel v8",
+  "schema_worst_case_json_chars_if_bounded": 20167,
+  "schema_per_slide_worst_case_json_chars": null,
+  "unbounded_fields": [
+   "$.asset_requirements[]",
+   "$.b_roll_requirements[]",
+   "$.evidence_used[]",
+   "$.on_screen_text[]",
+   "$.scene_sequence[]",
+   "$.scenes[]",
+   "$.shot_list[]"
+  ],
+  "slides_max_items": null
+ },
+ "observed": {
+  "distinct_successful_responses": 36,
+  "carousels": 29,
+  "max_slides": 9,
+  "max_output_tokens": 11039,
+  "max_reasoning_tokens": 1887,
+  "max_json_tokens_per_slide": 1175.0,
+  "min_chars_per_json_token": 3.72,
+  "single_reel_max_output_tokens": 2660
+ }
+}

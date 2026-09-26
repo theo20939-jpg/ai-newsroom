@@ -468,6 +468,46 @@ async def _build_phase_a_editorial_plan(
     )
 
 
+class _EditorialRetry(Exception):
+    """A technically valid Director response failed the editorial validation: the caller uses its ONE editorial correction."""
+
+    def __init__(self, cause: Exception, director_input: Any, trace: list[dict]):
+        super().__init__(str(cause))
+        self.cause, self.director_input, self.trace = cause, director_input, trace
+
+
+async def _run_director_sequence(regenerator: Any, director_input: Any, fmt: Any) -> tuple[Any, list[dict]]:
+    """Founder task 2026-09-26 - the Director call graph for one story, at most 3 calls:
+      INITIAL -> (TECHNICAL: truncated / invalid / runaway structured output) ONE technical recovery -> (EDITORIAL: correctable copy) ONE
+      editorial correction (run by the caller). The two allowances are separate: a malformed response never spends the editorial
+      correction, poor copy never gets a technical retry. A second technical failure, and every hard failure, propagates (terminal).
+    The technical recovery sends only a concise reason - never the malformed output."""
+    from services.instagram_creative_director import DirectorStructuredOutputError
+
+    trace: list[dict] = [{"call": 1, "stage": "initial"}]
+    try:
+        outcome = await regenerator(director_input, fmt)
+        trace[-1]["result"] = "valid"
+        return outcome, trace
+    except DirectorStructuredOutputError as exc:
+        trace[-1].update(result="technical_failure", kind=exc.kind, detail=str(exc)[:300])
+    except MediaFirstContractError as exc:
+        trace[-1].update(result="editorial_findings")
+        raise _EditorialRetry(exc, director_input, trace) from exc
+    recovery_input = replace(director_input, structured_output_recovery_note=(
+        f"your previous response was not a complete, valid JSON object ({trace[-1]['kind']}; {trace[-1]['detail']}). Return ONE complete "
+        "JSON object that matches the required schema exactly - no text outside the JSON, no padding, no repeated whitespace or characters, "
+        "keep every string short. Use the same evidence and facts; do not add any fact."))
+    trace.append({"call": 2, "stage": "technical_recovery"})
+    try:
+        outcome = await regenerator(recovery_input, fmt)  # a second technical failure propagates: terminal
+    except MediaFirstContractError as exc:
+        trace[-1].update(result="editorial_findings")
+        raise _EditorialRetry(exc, recovery_input, trace) from exc
+    trace[-1]["result"] = "valid"
+    return outcome, trace
+
+
 def _decision_outcome(
     *, opportunity: ContentOpportunity, reason: str, trend_signal: str, duplicate: InstagramEditorialDuplicateDecision,
     accepted: bool, gate_decision: str | None = None, delivery_sent: bool = False,
@@ -1081,8 +1121,9 @@ async def evaluate_and_submit_instagram_opportunity(
     try:
         regenerator = build_default_regenerator(gateway, prompt_repository)
         try:
-            creative_outcome = await regenerator(director_input, format_decision.recommended_format)
-        except MediaFirstContractError as exc:
+            creative_outcome, director_trace = await _run_director_sequence(regenerator, director_input, format_decision.recommended_format)
+        except _EditorialRetry as retry:
+            exc = retry.cause
             # A recoverable STRUCTURAL miss (e.g. a generated slide that forgot its source_evidence handle) killed the whole post in a
             # real run. The contract itself is unchanged - the model simply gets one more attempt, told exactly what it broke. Fact-safety
             # errors (ungrounded evidence, unsupported claims, clickbait, language) are never retried: those must fail.
@@ -1090,10 +1131,12 @@ async def evaluate_and_submit_instagram_opportunity(
             # a viral carousel's editorial correction carries every finding at once (services.instagram_viral_format); anything else keeps
             # the original one-line note. Either way this is the ONE correction attempt - a second failure below is terminal.
             note = getattr(exc, "correction_note", None) or f"Your previous attempt was rejected: {exc}. Fix exactly that and keep everything else."
+            director_trace = [*retry.trace, {"call": len(retry.trace) + 1, "stage": "editorial_correction", "findings": str(exc)[:600]}]
             creative_outcome = await regenerator(
-                replace(director_input, contract_retry_note=note),
+                replace(retry.director_input, contract_retry_note=note, structured_output_recovery_note=""),
                 format_decision.recommended_format,
             )
+            director_trace[-1]["result"] = "valid"
     except (
         CreativeDirectorUnavailableError, UngroundedEvidenceError, CreativeFactSafetyError,
         CreativeLanguageError, AudienceFacingCopyError, CreativeContractError, MetaLanguageLeakError,
@@ -1268,6 +1311,7 @@ async def evaluate_and_submit_instagram_opportunity(
         "media_execution": creative_media.execution_metadata(),
         **({"source_media_suitability": source_selection} if source_selection is not None else {}),
         **({"generated_no_photo_slides": generated_promotions} if generated_promotions else {}),
+        "director_call_trace": director_trace,  # initial / technical_recovery / editorial_correction - at most 3 Director calls
     })
     creative_image = creative_media.image
 

@@ -255,7 +255,10 @@ def test_a_recoverable_contract_miss_is_retried_once_with_what_it_broke(monkeypa
 
     monkeypatch.setattr(trig, "build_default_regenerator", lambda gateway, repo: regenerator)
     src = "\n".join(__import__("inspect").getsource(trig.evaluate_and_submit_instagram_opportunity).splitlines())
-    assert "contract_retry_note=" in src and "MediaFirstContractError as exc" in src
+    # 2026-09-26: the Director call graph moved into _run_director_sequence (technical recovery x1 + editorial correction x1); the
+    # contract miss still reaches the ONE correction with what it broke (behaviour: tests/test_instagram_director_stability.py)
+    sequence = __import__("inspect").getsource(trig._run_director_sequence)
+    assert "contract_retry_note=" in src and "_EditorialRetry" in src and "except MediaFirstContractError as exc" in sequence
     base = CreativeDirectorInput(objective="o", format="carousel", opportunity_summary="s", allowed_evidence=["E"], approved_claims=[], restricted_claims=[])
     assert base.contract_retry_note == ""  # never set on a first attempt: existing request text stays byte-identical
 
