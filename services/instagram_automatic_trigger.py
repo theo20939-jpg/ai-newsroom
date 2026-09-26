@@ -576,26 +576,38 @@ def _daily_media_note(selection: dict[str, Any]) -> str:
     """What the SINGLE / REEL Director may plan with: the suitability decision, stated as media truth."""
     if selection.get("suitable") is False:
         kinds = sorted({str(c.get("image_kind") or c.get("basis")) for c in selection.get("checks") or []})
-        return ("SOURCE IMAGE: the story's source image exists but is NOT usable as creative media (" + ", ".join(kinds) + ": an article "
-                "share / preview card or text graphic whose baked-in headline would compete with the new copy or be cropped mid-word). "
-                "Do NOT plan media_strategy 'source_media' and never describe the source image as a background or layer. Plan a designed "
-                "typographic visual (media_strategy 'typographic'): the post's own words and figures ARE the composition.")
+        rejected = ("SOURCE IMAGE: the story's source image exists but is NOT usable as creative media (" + ", ".join(kinds) + ": an article "
+                    "share / preview card or text graphic whose baked-in headline would compete with the new copy or be cropped mid-word). "
+                    "Do NOT plan media_strategy 'source_media' and never describe the source image as a background or layer. ")
+        if generated_media_available():  # no suitable photo => a generated editorial image (founder visual decision)
+            return rejected + ("Plan a GENERATED editorial image (media_strategy 'generated_media'): one strong illustrative scene that "
+                               "expresses the story's idea, with calm space for the exact Russian copy - illustrative, never evidence: no text, "
+                               "UI, screenshots, logos or recognisable people in the picture.")
+        return rejected + ("Plan a designed typographic visual (media_strategy 'typographic'): the post's own words and figures ARE the "
+                           "composition.")
     if selection.get("suitable"):
         chosen = next(c for c in selection["checks"] if c["subject_key"] == selection["selected"])
         return f"SOURCE IMAGE: a {chosen['size'][0]}x{chosen['size'][1]} source image is available and suitable as the main visual."
     return ""
 
 
-def _demote_source_plan(creative: Any) -> tuple[Any, bool]:
-    """The deterministic boundary behind the note: with no suitable source image a SINGLE / REEL plan that still asks for
-    'source_media' becomes the typographic plan (never a failed post, never the unsuitable image). Only the media strategy and its
-    stated reason change - no copy is touched."""
+def _demote_source_plan(creative: Any, *, generation: bool = False) -> tuple[Any, bool]:
+    """The deterministic boundary behind the note: with no suitable source image a SINGLE / REEL plan becomes a GENERATED editorial image
+    when image generation is available, and the designed typographic plan only when it is not (never a failed post, never the
+    unsuitable image). Only the media strategy and its stated reason change - no copy is touched."""
     plan = getattr(creative, "creative_execution_plan", None)
-    if plan is None or plan.media_strategy != "source_media":
+    target = "generated_media" if generation else "typographic"
+    if plan is None or plan.media_strategy == target or (not generation and plan.media_strategy != "source_media"):
         return creative, False
+    from services.instagram_generated_fallback import generated_plan_update
+
+    copy_text = getattr(creative, "on_image_copy", None) or getattr(creative, "hook", None)
     plan = plan.model_copy(update={
-        "media_strategy": "typographic",
-        "media_rationale": "Исходное изображение — карточка статьи с текстом, как визуал не используется: пост собран типографикой.",
+        "media_strategy": target,
+        "media_rationale": ("Подходящего фото нет: исходное изображение — карточка статьи с текстом. Визуал — сгенерированный "
+                            "иллюстративный образ по смыслу истории." if generation else
+                            "Исходное изображение — карточка статьи с текстом, как визуал не используется: пост собран типографикой."),
+        **(generated_plan_update(copy_text) if generation else {}),
     })
     return creative.model_copy(update={"creative_execution_plan": plan}), True
 
@@ -1082,9 +1094,10 @@ async def evaluate_and_submit_instagram_opportunity(
 
     single, carousel, reel = creative_outcome.single, creative_outcome.carousel, creative_outcome.reel
     if source_selection is not None and source_selection.get("suitable") is not True and (single or reel) is not None:
-        demoted, changed = _demote_source_plan(single or reel)
+        generation = generated_media_available()
+        demoted, changed = _demote_source_plan(single or reel, generation=generation)
         if changed:
-            source_selection = {**source_selection, "plan_demoted_to_typographic": True}
+            source_selection = {**source_selection, ("plan_set_to_generated_media" if generation else "plan_demoted_to_typographic"): True}
             if single is not None:
                 single = demoted
                 creative_outcome = replace(creative_outcome, single=single)
@@ -1110,6 +1123,26 @@ async def evaluate_and_submit_instagram_opportunity(
         if exact_subject_notes:
             creative_outcome = replace(creative_outcome, carousel=carousel)
             logger.info("instagram_exact_subject_media_preferred", extra={"opportunity_id": opportunity.id, "slides": exact_subject_notes})
+    unpromoted_carousel = carousel
+    generated_promotions: list[dict] = []
+    if carousel is not None and media_first and generated_media_available():
+        # founder visual decision: NO SUITABLE PHOTO => GENERATED IMAGE, never fact cells / step rectangles / choice cards
+        from services.instagram_generated_fallback import promote_no_photo_slides
+
+        suitable = set(media_subjects[0]) - set(media_subjects[1])
+        promoted_slides, generated_promotions = promote_no_photo_slides(
+            list(carousel.slides), suitable_subjects=suitable, recap=recap_bundle is not None)
+        if generated_promotions:
+            from services.instagram_generated_fallback import generated_plan_update
+
+            plan = carousel.creative_execution_plan
+            carousel = carousel.model_copy(update={
+                "slides": promoted_slides,
+                # the carousel-wide genre described the cards; the promoted pictures read it as their visual genre
+                **({"creative_execution_plan": plan.model_copy(update=generated_plan_update())} if plan is not None else {}),
+            })
+            creative_outcome = replace(creative_outcome, carousel=carousel)
+            logger.info("instagram_no_photo_slides_generated", extra={"opportunity_id": opportunity.id, "slides": generated_promotions})
     if carousel is not None:
         slide_assets, deliberate_fallback, carousel, subject_assets = _resolve_carousel_slide_assets(
             carousel, recap_bundle=recap_bundle, source_image=source_image,
@@ -1143,6 +1176,27 @@ async def evaluate_and_submit_instagram_opportunity(
         })
         return InstagramTriggerCandidateOutcome(
             event_id=opportunity.id, accepted=True, reason=f"creative_media_failed:{type(exc).__name__}",
+        )
+    if generated_promotions and creative_media.status not in {"source_media", "generated_media", "typographic", "graphic", "media_plan_ready"}:
+        # generation for a promoted slide did not produce a picture: the unpromoted plan renders text-led (priority 3) - no second paid call
+        logger.warning("instagram_generated_fallback_failed", extra={"opportunity_id": opportunity.id, "status": creative_media.status})
+        carousel = unpromoted_carousel
+        if recap_bundle is not None:
+            from services.instagram_recap_frames import with_recap_cta
+
+            carousel = with_recap_cta(carousel)
+        slide_assets, deliberate_fallback, carousel, subject_assets = _resolve_carousel_slide_assets(
+            carousel, recap_bundle=recap_bundle, source_image=source_image,
+            source_ref=image_candidate.candidate_id if image_candidate else None,
+        )
+        creative = carousel
+        creative_outcome = replace(creative_outcome, carousel=carousel)
+        generated_promotions = [{**p, "generation_failed": True} for p in generated_promotions]
+        creative_media = await execute_instagram_creative_media(
+            slide_assets=slide_assets, creative=creative, source_image=source_image,
+            source_ref=image_candidate.candidate_id if image_candidate else None, opportunity_summary=opportunity_summary,
+            evidence=list(opportunity.evidence), evidence_story_keys=recap_bundle.evidence_story_keys if recap_bundle is not None else None,
+            content_format=format_decision.recommended_format.value, creative_id=identity, opportunity_id=opportunity.id,
         )
     if creative_media.status not in {
         "source_media", "generated_media", "typographic", "graphic", "media_plan_ready",
@@ -1186,6 +1240,7 @@ async def evaluate_and_submit_instagram_opportunity(
         **pkg.media_plan,
         "media_execution": creative_media.execution_metadata(),
         **({"source_media_suitability": source_selection} if source_selection is not None else {}),
+        **({"generated_no_photo_slides": generated_promotions} if generated_promotions else {}),
     })
     creative_image = creative_media.image
 

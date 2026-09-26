@@ -89,7 +89,9 @@ def validate_instagram_art(
     suitability = package.media_plan.get("source_media_suitability") if isinstance(package.media_plan.get("source_media_suitability"), dict) else None
     source_rejected = suitability is not None and suitability.get("suitable") is False
     source_approved = suitability is not None and suitability.get("suitable") is True
-    if source_rejected and package.source_image_ref:
+    # no suitable photo => a generated editorial image (services.instagram_generated_fallback): its ref is 'generated:...', never the rejected source
+    generated_hero = media_strategy == "generated_media" and str(package.source_image_ref or "").startswith("generated:")
+    if source_rejected and package.source_image_ref and not generated_hero:
         blocking.append(f"unsuitable_source_media_selected: package.source_image_ref={package.source_image_ref!r} but no source candidate was suitable")
     if (
         package.content_format.value == "single" and not package.source_image_ref
@@ -166,7 +168,9 @@ def validate_instagram_art(
         if package.content_format.value == "single":
             if ev.source_image_treatment == "none" and media_strategy != "typographic" and not source_rejected:
                 blocking.append("single_source_image_not_rendered")
-        if source_rejected and package.content_format.value in ("single", "reel"):
+        if generated_hero and ev.source_image_treatment == "none":
+            blocking.append(f"generated_image_not_rendered: slide_index={ev.slide_index}")
+        if source_rejected and package.content_format.value in ("single", "reel") and not generated_hero:
             if ev.source_image_treatment != "none":
                 # the unsuitable image reached the pixels anyway (raw share card / clipped source headline as the hero)
                 blocking.append(f"unsuitable_source_media_rendered: treatment={ev.source_image_treatment!r} slide_index={ev.slide_index}")

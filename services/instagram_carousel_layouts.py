@@ -791,10 +791,18 @@ def render_carousel_slide(
     media_asset_identity: str | None = None,
     layout_plan: dict | None = None, subject_assets: dict | None = None, slide_body: str | None = None,
     recap: bool = False, editorial_fallback: bool = False, ui_paths: bool = False, previous_variant: str | None = None,
+    generated_zone: str | None = None,
 ) -> LayoutResult:
     body_placement = None
     recap_frame = None
-    if recap:
+    if generated_zone is not None and layout_plan:
+        # no suitable photo => a generated editorial image (services.instagram_generated_fallback): the picture IS the canvas, the copy sits
+        # over its calmer end - never a card, never an editorial fallback beat
+        from services.instagram_generated_fallback import hero_layout
+        from services.instagram_media_first import GENERATED_SUBJECT_KEY
+
+        recap_frame = layout_plan = hero_layout(layout_plan, GENERATED_SUBJECT_KEY, zone=generated_zone)
+    elif recap:
         from services.instagram_recap_frames import hero_story_layout, recap_frame_layout, single_photo_story_layout
 
         aspects = {key: image.width / max(1, image.height) for key, (image, _identity) in (subject_assets or {}).items()}

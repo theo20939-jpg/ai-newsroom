@@ -117,9 +117,10 @@ def test_the_deepseek_carousel_is_no_longer_four_identical_statements():
     assert variants.count("statement") <= 2 and all(a != b for a, b in zip(variants, variants[1:]))  # distinct beats, never back to back
 
 
-def test_the_adobe_carousel_keeps_its_steps_ui_path_and_choices():
+def test_the_adobe_carousel_keeps_its_steps_and_no_card_survives_without_generation():
     variants = _variants("2026-08-06_1_ai_hack")
-    assert variants.count("step_numeral") == 2 and variants.count("plan") == 2  # step numbers + the real UI path and the choice cards
+    # founder decision 2026-09-26: with no generated image the UI-path boxes and choice cards become text-led beats too (no "plan" cards)
+    assert variants.count("step_numeral") == 2 and variants.count("plan") == 0
     assert variants[0] == "data_point" and all(a != b for a, b in zip(variants, variants[1:]))
 
 

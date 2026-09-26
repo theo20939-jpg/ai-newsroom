@@ -39,8 +39,14 @@ def interpret_render_plan(
     has_source = bool(package.source_image_ref or media.get("strategy") == "source" or plan_strategy == "source_media")
     fmt = package.content_format.value
 
+    generated = media.get("strategy") == "generated_media"
     if fmt == "single":
-        if media.get("strategy") == "typographic" or plan_strategy == "typographic" or "typograph" in signals or "типограф" in signals:
+        if generated:  # no suitable photo => the generated editorial image is the hero, full bleed
+            family = "editorial_hero"
+            primitives = ["full_bleed_image", "controlled_focal_crop", "readability_gradient", "overlap_typography", "brand_anchor"]
+            source_treatment = "full_bleed_hero"
+            typography = "image_anchored_display"
+        elif media.get("strategy") == "typographic" or plan_strategy == "typographic" or "typograph" in signals or "типограф" in signals:
             family = "typographic_focal"
             primitives = ["field_background", "background_typography", "display_copy", "brand_anchor"]
             source_treatment = "none"
@@ -71,7 +77,12 @@ def interpret_render_plan(
         source_treatment = "generic_composition"
         typography = "display" if role.strip().lower() in {"hook", "problem", "takeaway", "cta"} else "supporting_editorial"
     elif fmt == "reel":
-        if has_source:
+        if generated:  # a generated cover picture: full bleed under the hook, not a screenshot recomposition
+            family = "reel_generated_hero"
+            primitives = ["full_bleed_image", "grid_band_veil", "display_copy", "brand_anchor"]
+            source_treatment = "full_bleed_hero"
+            typography = "center_safe_display"
+        elif has_source:
             family = "reel_recomposed_source"
             primitives = ["blurred_source_field", "masked_source_crop", "solid_copy_panel", "display_copy", "brand_anchor"]
             source_treatment = "masked_detail_crop"

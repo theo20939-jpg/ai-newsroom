@@ -561,10 +561,14 @@ async def test_live_trigger_runs_the_media_first_pipeline_end_to_end(db_session,
     request_text = gateway.carousel_request().messages[1].content[0].text
     assert "KAGE VOICE (shared brand voice, source of truth docs/brand/kage_voice_v1.md" in request_text
     assert "SOURCE_SUITABLE_FOR_FINAL_VISUAL: yes" in request_text and "GENERATED media is a first-class option" in request_text
-    assert len(calls) == 1 and calls[0]["max_attempts"] == 1  # exactly the ONE generated slide; no retries
+    # the Director's ONE generated slide + its no-photo 'graphic' slide, which the founder rule (2026-09-26: no photo => generated image)
+    # now also generates; one attempt each, no retries
+    assert len(calls) == 2 and all(c["max_attempts"] == 1 for c in calls)
     obs = captured["package"].media_plan["b4_observability"]
     assert obs["prompt_version"] == "10.11" and obs["text_only_slides"] == [] and obs["typographic_final_media_slides"] == []
-    assert [s["media_source"] for s in obs["slides"]] == ["generated", "graphic", "source"]
+    assert [s["media_source"] for s in obs["slides"]] == ["generated", "generated", "source"]
+    promoted = captured["package"].media_plan["generated_no_photo_slides"]
+    assert [(p["slide"], p["treatment"]) for p in promoted] == [(1, "generated")] and promoted[0]["before"] != []
     assert obs["overlay_operations_executed_total"] == 0 and obs["art_validation_passed"] is True, obs["art_blocking_issues"]
     plan = captured["package"].media_plan
     assert plan["media_first"] is True and plan["media_execution"]["assets"][0]["media_mode"] == "GENERATED"

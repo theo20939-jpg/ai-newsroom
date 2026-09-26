@@ -1,0 +1,317 @@
+{
+ "plan": {
+  "images": 10,
+  "jobs": [
+   "SINGLE",
+   "REEL",
+   "CAROUSEL slide 1",
+   "CAROUSEL slide 2",
+   "CAROUSEL slide 3",
+   "CAROUSEL slide 4",
+   "CAROUSEL slide 5",
+   "CAROUSEL slide 6",
+   "WEEKLY RECAP slide 2",
+   "WEEKLY RECAP slide 5"
+  ],
+  "dry_statuses": [
+   "generation_dry_run",
+   "generation_dry_run",
+   "generation_dry_run",
+   "generation_dry_run",
+   "generation_dry_run",
+   "generation_dry_run",
+   "generation_dry_run",
+   "generation_dry_run",
+   "generation_dry_run",
+   "generation_dry_run"
+  ],
+  "worst_case_usd": "0.81000",
+  "cap_usd": "1.00",
+  "promotions": {
+   "CAROUSEL": [
+    {
+     "slide": 0,
+     "role": "hook",
+     "before": [
+      "flow_diagram"
+     ],
+     "treatment": "generated"
+    },
+    {
+     "slide": 1,
+     "role": "step",
+     "before": [
+      "flow_diagram"
+     ],
+     "treatment": "generated"
+    },
+    {
+     "slide": 2,
+     "role": "step",
+     "before": [
+      "flow_diagram"
+     ],
+     "treatment": "generated"
+    },
+    {
+     "slide": 3,
+     "role": "step",
+     "before": [
+      "flow_diagram"
+     ],
+     "treatment": "generated"
+    },
+    {
+     "slide": 4,
+     "role": "comparison",
+     "before": [
+      "poll_cards"
+     ],
+     "treatment": "generated"
+    },
+    {
+     "slide": 5,
+     "role": "takeaway",
+     "before": [
+      "flow_diagram"
+     ],
+     "treatment": "generated"
+    }
+   ],
+   "WEEKLY RECAP": [
+    {
+     "slide": 1,
+     "role": "story",
+     "before": [
+      "flow_diagram"
+     ],
+     "treatment": "generated"
+    },
+    {
+     "slide": 4,
+     "role": "story",
+     "before": [
+      "flow_diagram"
+     ],
+     "treatment": "generated"
+    }
+   ]
+  }
+ },
+ "text_only_adobe": {
+  "variants": [
+   "data_point",
+   "step_numeral",
+   "statement",
+   "step_numeral",
+   "negative_space",
+   "statement"
+  ],
+  "art_passed": true,
+  "art_blocking": []
+ },
+ "generation": [
+  {
+   "job": "SINGLE",
+   "status": "generated_media",
+   "reserved_usd": "0.08100",
+   "accounted_usd": "0.02259750",
+   "provider_request_id": "req_4c4b71b6ee9a41438b89bc1a3341a9bc",
+   "asset_ref": "generated:images/1e/1e617f494cbb663a7472bbbdb749e954e187cd9eedce964b99933e3e7c3525e5.png"
+  },
+  {
+   "job": "REEL",
+   "status": "generated_media",
+   "reserved_usd": "0.08100",
+   "accounted_usd": "0.02257250",
+   "provider_request_id": "req_70207d1559694e55923367bb95c1f8c2",
+   "asset_ref": "generated:images/0d/0d8c59d933749e209c46edc460f164a659c4a399eabd9c4616738e636538a844.png"
+  },
+  {
+   "job": "CAROUSEL slide 1",
+   "status": "generated_media",
+   "reserved_usd": "0.08100",
+   "accounted_usd": "0.02254250",
+   "provider_request_id": "req_95871e15b7134096a8621be82551416c",
+   "asset_ref": "generated:images/73/73393369b2e587b66be42907c22be019ccf82c093482455234a6185b25f4ee11.png"
+  },
+  {
+   "job": "CAROUSEL slide 2",
+   "status": "generated_media",
+   "reserved_usd": "0.08100",
+   "accounted_usd": "0.02236250",
+   "provider_request_id": "req_25b12734b93e4b5892851f19f748b5c2",
+   "asset_ref": "generated:images/23/23198a7fb8fe5105158a74ca2dad28899aa124ff1e7f5613d141c5efa56705c6.png"
+  },
+  {
+   "job": "CAROUSEL slide 3",
+   "status": "generated_media",
+   "reserved_usd": "0.08100",
+   "accounted_usd": "0.02245250",
+   "provider_request_id": "req_d67c9a117ad04bb486c7952eaa1bbcca",
+   "asset_ref": "generated:images/8e/8ecc006f01482c2639b4d3187ef67fc7fba8f2e25028d4e9fe96d1b66977542f.png"
+  },
+  {
+   "job": "CAROUSEL slide 4",
+   "status": "generated_media",
+   "reserved_usd": "0.08100",
+   "accounted_usd": "0.02246000",
+   "provider_request_id": "req_e9c746bc4a5d46619eeda33dc7e8a76c",
+   "asset_ref": "generated:images/83/830cd699a4aad74406a76272b5dbb205069ecbf9e1fd4ea9ad86e780bee84967.png"
+  },
+  {
+   "job": "CAROUSEL slide 5",
+   "status": "generated_media",
+   "reserved_usd": "0.08100",
+   "accounted_usd": "0.02251750",
+   "provider_request_id": "req_551d04891b444deb88fdbc363bc666e0",
+   "asset_ref": "generated:images/b6/b6c4e199cae21de1a3778107f1dc0153f89fbfcd51ab72598c670e93695e81a7.png"
+  },
+  {
+   "job": "CAROUSEL slide 6",
+   "status": "generated_media",
+   "reserved_usd": "0.08100",
+   "accounted_usd": "0.02245500",
+   "provider_request_id": "req_0ef335b886df4ab78dde115953e40698",
+   "asset_ref": "generated:images/62/6221859b130157cd6d85a0af2b0aabb2b1a7989b6dd112a06ac38d7c649f2576.png"
+  },
+  {
+   "job": "WEEKLY RECAP slide 2",
+   "status": "generated_media",
+   "reserved_usd": "0.08100",
+   "accounted_usd": "0.02260750",
+   "provider_request_id": "req_0070172963c049659d0b145dd251fc94",
+   "asset_ref": "generated:images/bf/bfb96a639407a24bb3bcd4f09a5235e6b6455335148b1f024a9a1094e0813525.png"
+  },
+  {
+   "job": "WEEKLY RECAP slide 5",
+   "status": "generated_media",
+   "reserved_usd": "0.08100",
+   "accounted_usd": "0.02265500",
+   "provider_request_id": "req_0aaab4ddf0554fe8aa4e432b415db43c",
+   "asset_ref": "generated:images/3b/3b258b8e815847395f2531087134aa30c520d796730315df31707dc33f4cfc31.png"
+  }
+ ],
+ "ledger_usd": "0.2252225",
+ "after": {
+  "SINGLE": {
+   "rendered": true,
+   "slides": 1,
+   "art_passed": true,
+   "art_blocking": [],
+   "per_slide": [
+    {
+     "variant": "news_full_bleed",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    }
+   ]
+  },
+  "REEL": {
+   "rendered": true,
+   "slides": 1,
+   "art_passed": true,
+   "art_blocking": [],
+   "per_slide": [
+    {
+     "variant": "reel_generated_hero",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    }
+   ]
+  },
+  "CAROUSEL": {
+   "generation_failed": [],
+   "rendered": true,
+   "slides": 6,
+   "art_passed": true,
+   "art_blocking": [],
+   "per_slide": [
+    {
+     "variant": "declared_bottom-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_bottom-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_bottom-center_top-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_bottom-center_top-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_bottom-center_top-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_bottom-center_top-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    }
+   ]
+  },
+  "WEEKLY RECAP": {
+   "generation_failed": [],
+   "rendered": true,
+   "slides": 9,
+   "art_passed": true,
+   "art_blocking": [],
+   "per_slide": [
+    {
+     "variant": "declared_top-center_multi_BALANCED_5+",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_bottom-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_top-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_top-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_bottom-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_top-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_bottom-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_top-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_top-center_multi_SUPPORTING_5+",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    }
+   ]
+  }
+ }
+}

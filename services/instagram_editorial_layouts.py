@@ -150,8 +150,7 @@ def _news_full_bleed(*, spec: ProfileSpec, source_image, kicker, headline, dek, 
         draw.text((side_safe, y), line, font=headline_font, fill=tok.TYPE_HEADLINE_L.color)
         bbox = draw.textbbox((side_safe, y), line, font=headline_font)
         regions.append(TextRegionSpec(kind="headline", box=box4(bbox), clipped=headline_clipped and i == len(headline_lines) - 1))
-        bh = bbox[3] - bbox[1]
-        y += bh + round(headline_font.size * 0.18)
+        y += round(headline_font.size * 1.1)  # one constant line advance: a line without descenders never pulls the next one into it
 
     if dek_font is not None and dek_lines:
         y += round(spec.height * 0.005)

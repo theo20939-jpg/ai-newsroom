@@ -123,6 +123,14 @@ def _result_from_layout(
     return InstagramRenderResult(image_bytes=out.getvalue(), evidence=evidence)
 
 
+GENERATED_HERO_KEY = "generated"  # services.instagram_media_first.GENERATED_SUBJECT_KEY
+
+
+def _generated_media(package: InstagramContentPackage) -> bool:
+    """This SINGLE / REEL carries a generated editorial image (no suitable real photo existed)."""
+    return (package.media_plan.get("media_execution") or {}).get("strategy") == "generated_media"
+
+
 def _source_rejected(package: InstagramContentPackage) -> bool:
     """Every source candidate of this SINGLE / REEL was judged unsuitable as creative media (services.instagram_automatic_trigger.
     _select_daily_source_media): no caller can hand the renderer that image as the hero."""
@@ -139,7 +147,7 @@ def render_instagram_feed_image(package: InstagramContentPackage, *, source_imag
     package itself, only `package.source_image_ref`'s traceable string."""
     if package.content_format.value != "single":
         raise InstagramRenderError(f"render_instagram_feed_image requires SINGLE, got {package.content_format!r}")
-    if _source_rejected(package):
+    if _source_rejected(package) and not _generated_media(package):
         source_image = None
     headline = package.on_image_copy or package.caption
     spec = profile_spec(InstagramRenderProfile.PORTRAIT_FEED)
@@ -286,7 +294,13 @@ def render_instagram_carousel(
         from services.instagram_focal_crop import hero_copy_zone
 
         # a recap story photo: where its copy goes (the calmer end of the picture) - the layout and the gradient read the same value
-        zone = HERO_ZONE.set(hero_copy_zone(subject[0]) if recap and subject is not None and role == "story" else None)
+        generated = (((slide_subject_assets or {}).get(index) or {}).get(GENERATED_HERO_KEY)
+                     if slide.get("media_source") == "generated" and slide.get("visual_family_reason") == "no_photo_generated_fallback" else None)
+        generated_zone = (hero_copy_zone(generated[0]) or "bottom") if generated is not None else None
+        if generated_zone is not None:
+            FOCAL_FRAMING.reset(framing)
+            framing = FOCAL_FRAMING.set(True)  # the generated picture is framed and graded exactly like a recap hero photo
+        zone = HERO_ZONE.set(generated_zone or (hero_copy_zone(subject[0]) if recap and subject is not None and role == "story" else None))
         try:
             layout = render_carousel_slide(
                 spec=profile_spec(InstagramRenderProfile.CAROUSEL_SLIDE), role=role, index=index, total=total,
@@ -311,6 +325,7 @@ def render_instagram_carousel(
                 editorial_fallback=bool(package.media_plan.get("media_first")),
                 ui_paths=package.media_plan.get("content_archetype") == "ai_hack",
                 previous_variant=(results[-1].evidence.notes.get("editorial_variant") if results else None),
+                generated_zone=generated_zone,
                 subject_assets=(
                     {k: v for k, v in this_slide_assets.items() if k != "source"}
                     if this_slide_assets and slide.get("media_function") in ("ui_screenshot", "result", "before_after", "concept")
@@ -332,7 +347,7 @@ def render_instagram_reel_cover(package: InstagramContentPackage, *, source_imag
     grid/profile-crop-aware composition lives in `services/instagram_reel_layouts.py`."""
     if package.content_format.value != "reel":
         raise InstagramRenderError(f"render_instagram_reel_cover requires REEL, got {package.content_format!r}")
-    if _source_rejected(package):
+    if _source_rejected(package) and not _generated_media(package):
         source_image = None
     hook = str(package.media_plan.get("hook") or package.caption)
     spec = profile_spec(InstagramRenderProfile.REEL_COVER)

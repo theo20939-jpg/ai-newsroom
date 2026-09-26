@@ -294,7 +294,9 @@ def test_a_weak_fact_cell_story_becomes_an_editorial_slide():
     data = _plan(["story_3"])
     data["regions"].append({"kind": "graphic", "x": 0.07, "y": 0.6, "w": 0.86, "h": 0.25, "z": 3, "graphic_type": "flow_diagram",
                             "flow_steps": ["30B параметров", "1 GPU"]})
-    assert editorial_story_layout(data, role="story", slide_text="30B параметров, 1 GPU.") is None  # real data keeps its graphic
+    # founder decision 2026-09-26: real data no longer keeps fact cells either - the figures stay in the copy, the cells go
+    data_beat = editorial_story_layout(data, role="story", slide_text="30B параметров, 1 GPU.")
+    assert data_beat is not None and "graphic" not in [r["kind"] for r in data_beat["regions"]]
 
 
 def _subject_photo(size=(2000, 1000), box=(200, 250, 700, 950)) -> Image.Image:

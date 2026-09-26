@@ -171,11 +171,11 @@ DESIGNED_TYPOGRAPHIC = ("statement", "step_numeral", "data_point", "negative_spa
 
 
 def _weak_graphic(regions: list[dict[str, Any]], slide_text: str, *, ui_paths: bool) -> bool:
-    graphics = [r for r in regions if r.get("kind") == "graphic" and r.get("graphic_type") in ("flow_diagram", "poll_cards")]
-    if not graphics or graphics[0].get("graphic_type") == "poll_cards":  # a poll's options are the slide's own choices - kept
-        return False
-    labels = [label for g in graphics for label in (g.get("flow_steps") or [])]
-    return not meaningful_fact_graphic(labels, slide_text, ui_paths=ui_paths)
+    """Founder visual decision (2026-09-26, no photo => generated image): fact cells, 01/02/03 step rectangles and choice cards are never
+    the no-photo visual. When no generated image exists either, EVERY such graphic becomes a designed typographic beat - its facts, UI path
+    and choices stay in the slide's own copy. (`meaningful_fact_graphic` remains the content judgement it was; it no longer keeps cells.)"""
+    del slide_text, ui_paths
+    return any(r.get("kind") == "graphic" and r.get("graphic_type") in ("flow_diagram", "poll_cards") for r in regions)
 
 
 def editorial_fallback_layout(layout: dict[str, Any] | None, *, role: str, slide_text: str, headline: str, photo: str | None,

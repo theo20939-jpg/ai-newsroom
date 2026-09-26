@@ -1,0 +1,317 @@
+{
+ "plan": {
+  "images": 10,
+  "jobs": [
+   "SINGLE",
+   "REEL",
+   "CAROUSEL slide 1",
+   "CAROUSEL slide 2",
+   "CAROUSEL slide 3",
+   "CAROUSEL slide 4",
+   "CAROUSEL slide 5",
+   "CAROUSEL slide 6",
+   "WEEKLY RECAP slide 2",
+   "WEEKLY RECAP slide 5"
+  ],
+  "dry_statuses": [
+   "generation_dry_run",
+   "generation_dry_run",
+   "generation_dry_run",
+   "generation_dry_run",
+   "generation_dry_run",
+   "generation_dry_run",
+   "generation_dry_run",
+   "generation_dry_run",
+   "generation_dry_run",
+   "generation_dry_run"
+  ],
+  "worst_case_usd": "0.81000",
+  "cap_usd": "1.00",
+  "promotions": {
+   "CAROUSEL": [
+    {
+     "slide": 0,
+     "role": "hook",
+     "before": [
+      "flow_diagram"
+     ],
+     "treatment": "generated"
+    },
+    {
+     "slide": 1,
+     "role": "step",
+     "before": [
+      "flow_diagram"
+     ],
+     "treatment": "generated"
+    },
+    {
+     "slide": 2,
+     "role": "step",
+     "before": [
+      "flow_diagram"
+     ],
+     "treatment": "generated"
+    },
+    {
+     "slide": 3,
+     "role": "step",
+     "before": [
+      "flow_diagram"
+     ],
+     "treatment": "generated"
+    },
+    {
+     "slide": 4,
+     "role": "comparison",
+     "before": [
+      "poll_cards"
+     ],
+     "treatment": "generated"
+    },
+    {
+     "slide": 5,
+     "role": "takeaway",
+     "before": [
+      "flow_diagram"
+     ],
+     "treatment": "generated"
+    }
+   ],
+   "WEEKLY RECAP": [
+    {
+     "slide": 1,
+     "role": "story",
+     "before": [
+      "flow_diagram"
+     ],
+     "treatment": "generated"
+    },
+    {
+     "slide": 4,
+     "role": "story",
+     "before": [
+      "flow_diagram"
+     ],
+     "treatment": "generated"
+    }
+   ]
+  }
+ },
+ "text_only_adobe": {
+  "variants": [
+   "data_point",
+   "step_numeral",
+   "statement",
+   "step_numeral",
+   "negative_space",
+   "statement"
+  ],
+  "art_passed": true,
+  "art_blocking": []
+ },
+ "generation": [
+  {
+   "job": "SINGLE",
+   "status": "generated_media",
+   "reserved_usd": "0.08100",
+   "accounted_usd": "0.02292750",
+   "provider_request_id": "req_fc94f941fff94a18b47330bcd8aa94ab",
+   "asset_ref": "generated:images/eb/ebcebb7774a66dbe2aa111e34c1b3edd629ee310446e19c751e1b4bddb19c431.png"
+  },
+  {
+   "job": "REEL",
+   "status": "generated_media",
+   "reserved_usd": "0.08100",
+   "accounted_usd": "0.02290250",
+   "provider_request_id": "req_909f2d7860d84cc8ba75c926863617b4",
+   "asset_ref": "generated:images/be/bebf645797b3d8c2cb78fb0bb442225fc5b4db0c2f091608a82696cbceda2241.png"
+  },
+  {
+   "job": "CAROUSEL slide 1",
+   "status": "reused",
+   "reserved_usd": null,
+   "accounted_usd": null,
+   "provider_request_id": null,
+   "asset_ref": "generated:reused/carousel_slide_1.png"
+  },
+  {
+   "job": "CAROUSEL slide 2",
+   "status": "reused",
+   "reserved_usd": null,
+   "accounted_usd": null,
+   "provider_request_id": null,
+   "asset_ref": "generated:reused/carousel_slide_2.png"
+  },
+  {
+   "job": "CAROUSEL slide 3",
+   "status": "reused",
+   "reserved_usd": null,
+   "accounted_usd": null,
+   "provider_request_id": null,
+   "asset_ref": "generated:reused/carousel_slide_3.png"
+  },
+  {
+   "job": "CAROUSEL slide 4",
+   "status": "reused",
+   "reserved_usd": null,
+   "accounted_usd": null,
+   "provider_request_id": null,
+   "asset_ref": "generated:reused/carousel_slide_4.png"
+  },
+  {
+   "job": "CAROUSEL slide 5",
+   "status": "reused",
+   "reserved_usd": null,
+   "accounted_usd": null,
+   "provider_request_id": null,
+   "asset_ref": "generated:reused/carousel_slide_5.png"
+  },
+  {
+   "job": "CAROUSEL slide 6",
+   "status": "reused",
+   "reserved_usd": null,
+   "accounted_usd": null,
+   "provider_request_id": null,
+   "asset_ref": "generated:reused/carousel_slide_6.png"
+  },
+  {
+   "job": "WEEKLY RECAP slide 2",
+   "status": "reused",
+   "reserved_usd": null,
+   "accounted_usd": null,
+   "provider_request_id": null,
+   "asset_ref": "generated:reused/weekly_recap_slide_2.png"
+  },
+  {
+   "job": "WEEKLY RECAP slide 5",
+   "status": "reused",
+   "reserved_usd": null,
+   "accounted_usd": null,
+   "provider_request_id": null,
+   "asset_ref": "generated:reused/weekly_recap_slide_5.png"
+  }
+ ],
+ "ledger_usd": "0.340135",
+ "after": {
+  "SINGLE": {
+   "rendered": true,
+   "slides": 1,
+   "art_passed": true,
+   "art_blocking": [],
+   "per_slide": [
+    {
+     "variant": "news_full_bleed",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    }
+   ]
+  },
+  "REEL": {
+   "rendered": true,
+   "slides": 1,
+   "art_passed": true,
+   "art_blocking": [],
+   "per_slide": [
+    {
+     "variant": "reel_generated_hero",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    }
+   ]
+  },
+  "CAROUSEL": {
+   "generation_failed": [],
+   "rendered": true,
+   "slides": 6,
+   "art_passed": true,
+   "art_blocking": [],
+   "per_slide": [
+    {
+     "variant": "declared_bottom-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_bottom-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_bottom-center_top-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_bottom-center_top-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_bottom-center_top-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_bottom-center_top-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    }
+   ]
+  },
+  "WEEKLY RECAP": {
+   "generation_failed": [],
+   "rendered": true,
+   "slides": 9,
+   "art_passed": true,
+   "art_blocking": [],
+   "per_slide": [
+    {
+     "variant": "declared_top-center_multi_BALANCED_5+",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_bottom-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_top-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_top-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_bottom-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_top-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_bottom-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_top-center_middle-center_DOMINANT_3-4",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    },
+    {
+     "variant": "declared_top-center_multi_SUPPORTING_5+",
+     "editorial_variant": null,
+     "treatment": "cover_cropped"
+    }
+   ]
+  }
+ }
+}

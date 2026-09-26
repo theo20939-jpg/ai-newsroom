@@ -96,7 +96,7 @@ def _diagram(steps, media=()):
     return plan
 
 
-def test_topic_cells_become_editorial_beats_and_real_ui_paths_keep_their_diagram():
+def test_topic_cells_and_real_ui_paths_all_become_editorial_beats():
     from services.instagram_recap_frames import editorial_fallback_layout
 
     weak = ["70+ ИНСТРУМЕНТОВ", "ОДИН ДИАЛОГ", "ТВОЯ ЗАДАЧА"]  # the real Adobe hook: one number does not make three facts
@@ -108,8 +108,10 @@ def test_topic_cells_become_editorial_beats_and_real_ui_paths_keep_their_diagram
     statement = editorial_fallback_layout(_diagram(["ДОСТУПНО СЕГОДНЯ", "ВЕБ + ПРИЛОЖЕНИЕ", "ЕСТЬ ЛИМИТЫ"]), role="takeaway",
                                           slide_text="Начать можно сегодня", headline="Начать можно сегодня", photo=None, ui_paths=True)
     assert statement[1] == "statement" and not any(r.get("graphic_type") for r in statement[0]["regions"])
-    kept = _diagram(["ОТКРОЙ CHATGPT", "ПЕРЕЙДИ В «PLUGINS»", "ДОБАВЬ ADOBE"])  # a real path with an exact UI label
-    assert editorial_fallback_layout(kept, role="step", slide_text="Шаг 1", headline="Шаг 1. Добавь плагин", photo=None, ui_paths=True) is None
+    # founder decision 2026-09-26: even a real UI path is not kept as 01/02/03 rectangles - its path stays in the slide's own copy
+    path = _diagram(["ОТКРОЙ CHATGPT", "ПЕРЕЙДИ В «PLUGINS»", "ДОБАВЬ ADOBE"])
+    beat = editorial_fallback_layout(path, role="step", slide_text="Шаг 1", headline="Шаг 1. Добавь плагин", photo=None, ui_paths=True)
+    assert beat[1] == "step_numeral" and not any(r.get("graphic_type") for r in beat[0]["regions"])
 
 
 def test_a_recap_story_whose_photo_was_judged_unsuitable_uses_it_as_a_quiet_layer_even_without_a_photo_region():

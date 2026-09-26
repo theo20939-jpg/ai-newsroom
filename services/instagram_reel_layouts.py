@@ -48,7 +48,9 @@ def render_reel_cover(
     *, spec: ProfileSpec, kicker: str | None, hook: str, source_image: Image.Image | None,
     package_identity: str, render_plan: dict | None = None,
 ) -> LayoutResult:
-    if source_image is not None:
+    if source_image is not None and (render_plan or {}).get("render_interpretation") == "reel_generated_hero":
+        result = _reel_generated(spec=spec, hook=hook, image=source_image)
+    elif source_image is not None:
         result = _reel_image(spec=spec, kicker=kicker, hook=hook, source_image=source_image, package_identity=package_identity)
     else:
         result = _reel_graphic(spec=spec, kicker=kicker, hook=hook, package_identity=package_identity)
@@ -123,6 +125,41 @@ def _reel_image(*, spec: ProfileSpec, kicker: str | None, hook: str, source_imag
             "sharp_source_panel": [panel_x, panel_y, panel_x + panel_w, panel_y + panel_h],
         },
     )
+
+def _reel_generated(*, spec: ProfileSpec, hook: str, image: Image.Image) -> LayoutResult:
+    """No suitable photo => a generated cover picture: full bleed, a soft veil deepest across the grid-safe band so the hook (set at display
+    size inside that band) reads in the Reel viewer AND in the profile-grid crop. No source text exists in a generated picture."""
+    fitted = fit_image_cover(image, width=spec.width, height=spec.height)
+    canvas = fitted.image.convert("RGBA")
+    grid_top, grid_bottom = _grid_safe_band(spec)
+    veil = Image.new("L", (1, spec.height), 0)
+    centre, half = (grid_top + grid_bottom) / 2, (grid_bottom - grid_top) / 2
+    for y in range(spec.height):
+        d = abs(y - centre) / half  # 0 at the band centre, 1 at its edges
+        veil.putpixel((0, y), round(190 if d <= 0.85 else max(60, 190 - (d - 0.85) * 260)))
+    canvas = Image.composite(Image.new("RGBA", canvas.size, (*tok.INK, 255)), canvas, veil.resize(canvas.size))
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    margin = round(spec.width * tok.MARGIN_FRAC)
+    content_w = spec.width - margin - max(margin, mark_reserve_width(spec, compact=True))
+    hook_font, hook_lines, clipped = fit_text_block(
+        draw, hook, font_max=round(spec.width * tok.TYPE_HEADLINE_M.size_frac), font_min=round(spec.width * 0.06),
+        max_width=content_w, max_lines=6, weight=tok.TYPE_HEADLINE_M.weight,
+    )
+    hook_h = len(hook_lines) * round(hook_font.size * 1.1)
+    y: float = max(grid_top, round(centre - hook_h / 2))
+    regions: list[TextRegionSpec] = []
+    for i, line in enumerate(hook_lines):
+        bbox = draw.textbbox((margin, y), line, font=hook_font)
+        draw.text((margin, y), line, font=hook_font, fill=tok.WHITE)
+        regions.append(TextRegionSpec(kind="hook", box=box4(bbox), clipped=clipped and i == len(hook_lines) - 1))
+        y += round(hook_font.size * 1.1)
+    mark_count = place_brand_mark(canvas, spec, compact=True)
+    return LayoutResult(
+        image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
+        source_image_treatment=fitted.treatment.value, layout_variant="reel_generated_hero", text_clipped=clipped,
+        notes={"grid_safe_band": [grid_top, grid_bottom], "generated_media": True, "source_coverage_fraction": 1.0},
+    )
+
 
 def _reel_graphic(*, spec: ProfileSpec, kicker: str | None, hook: str, package_identity: str) -> LayoutResult:
     canvas = build_structured_fallback(width=spec.width, height=spec.height, identity=package_identity, block_count=0)
