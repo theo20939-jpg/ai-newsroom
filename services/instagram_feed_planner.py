@@ -121,29 +121,74 @@ async def load_recent_event_ids(session: Any, *, now: datetime, hours: int = FEE
     return list(rows)
 
 
+async def load_story_members(session: Any, story_ids: set[Any]) -> dict[Any, list]:
+    """The CONFIRMED members of each story (the same membership rule as coverage) - the input of
+    services.instagram_viral_story_gate.cluster_signals. Only data that already exists - no fetch, no model."""
+    from services.instagram_viral_story_gate import ClusterMember
+
+    if not story_ids:
+        return {}
+    out: dict[Any, list] = {}
+    for story_id, title, source_id, source_name, published_at, collected_at in (await session.execute(
+        select(NewsEventStoryLink.story_id, NewsEvent.title, NewsEvent.source_id, NewsSource.name, NewsEvent.published_at,
+               NewsEvent.collected_at)
+        .join(NewsEvent, NewsEvent.id == NewsEventStoryLink.news_event_id).join(NewsSource, NewsSource.id == NewsEvent.source_id)
+        .where(NewsEventStoryLink.story_id.in_(story_ids), NewsEventStoryLink.match_type.in_((*CONFIRMED_MATCH_TYPES, "new_story")))
+    )).all():
+        out.setdefault(story_id, []).append(ClusterMember(title=title or "", source_id=str(source_id), source_name=source_name or "",
+                                                          seen_at=published_at or collected_at, collected_at=collected_at))
+    return out
+
+
+async def load_recent_headlines(session: Any, *, now: datetime) -> list:
+    """Every headline collected in the last 72 hours (title, source, times): cross-feed corroboration for cluster_signals - Story Memory
+    can fragment a fast-breaking story, so its own cluster may under-count the outlets carrying it."""
+    from services.instagram_viral_story_gate import CURRENT_WINDOW, ClusterMember
+
+    return [ClusterMember(title=title or "", source_id=str(source_id), source_name=source_name or "", seen_at=published_at or collected_at,
+                          collected_at=collected_at)
+            for title, source_id, source_name, published_at, collected_at in (await session.execute(
+                select(NewsEvent.title, NewsEvent.source_id, NewsSource.name, NewsEvent.published_at, NewsEvent.collected_at)
+                .join(NewsSource, NewsSource.id == NewsEvent.source_id).where(NewsEvent.collected_at >= now - CURRENT_WINDOW)
+            )).all()]
+
+
 async def load_feed_candidates(session: Any, event_ids: list[UUID]) -> list[FeedCandidate]:
     if not event_ids:
         return []
     rows = (await session.execute(
-        select(NewsEvent, NewsSource.name, NewsSource.type, Story.event_count, Story.first_event_id, NewsEventStoryLink.match_type)
+        select(NewsEvent, NewsSource.name, NewsSource.type, Story.event_count, Story.first_event_id, NewsEventStoryLink.match_type,
+               NewsEventStoryLink.story_id)
         .join(NewsSource, NewsSource.id == NewsEvent.source_id)
         .outerjoin(NewsEventStoryLink, NewsEventStoryLink.news_event_id == NewsEvent.id)
         .outerjoin(Story, Story.id == NewsEventStoryLink.story_id)
         .where(NewsEvent.id.in_(event_ids))
     )).all()
+    from services.instagram_viral_story_gate import cluster_signals
+
+    members = await load_story_members(session, {row[6] for row in rows if row[6] is not None})
+    now = datetime.now(UTC)
+    recent_headlines = await load_recent_headlines(session, now=now)
     seen: set[str] = set()
     candidates = []
-    for event, source_name, source_type, event_count, first_event_id, match_type in rows:
+    for event, source_name, source_type, event_count, first_event_id, match_type, story_id in rows:
         if str(event.id) in seen:
             continue
         seen.add(str(event.id))
         # a strong UNCERTAIN_MATCH is linked to a story for observability only - it must not inherit that story's coverage
         confirmed = first_event_id == event.id or match_type in CONFIRMED_MATCH_TYPES
+        # momentum / first coverage of THIS event (not of the long-lived topic its story may be)
+        cluster = cluster_signals(event.title or "", members.get(story_id, []) if confirmed else [], now=now,
+                                  recent_headlines=recent_headlines)
         candidates.append(FeedCandidate(
             id=str(event.id), title=event.title or "", summary=(event.summary or event.content or "")[:600],
             source_name=source_name or "", source_type=getattr(source_type, "value", str(source_type or "")),
             category=getattr(event.category, "value", str(event.category or "")), views=event.views_count,
             coverage=int(event_count or 1) if confirmed else 1,
+            published_at=event.published_at, story_first_seen=cluster.get("story_first_seen"),
+            independent_sources=cluster.get("independent_sources", 1), story_events_24h=cluster.get("story_events_24h", 1),
+            on_hacker_news=bool(cluster.get("on_hacker_news")) or (source_name or "").lower().startswith("hacker news"),
+            forwards=event.forwards_count, reactions=event.reactions_count,
         ))
     return candidates
 
@@ -217,8 +262,17 @@ def open_slots(candidates: list[FeedCandidate], usage: FeedUsage, *, day_key: st
     unknown = max(0, usage.today_total - sum(usage_counts.values()))
     if unknown:
         usage_counts[FeedFormat.NEWS_INSIGHT] = usage_counts.get(FeedFormat.NEWS_INSIGHT, 0) + unknown
+    from services.instagram_viral_story_gate import assess_viral_story
+
+    def viral_gate(candidate: FeedCandidate) -> bool:  # the viral slot: a strong, current story - never the best of a weak batch
+        verdict = assess_viral_story(candidate, (evidence or {}).get(candidate.id, ""))
+        if not verdict.eligible:
+            logger.info("instagram_feed_viral_gate_rejected", extra={"event_id": candidate.id, "gate": verdict.failed_gate,
+                                                                      "reason": verdict.reason[:200]})
+        return verdict.eligible
+
     return reads, plan_daily_slots(reads, published_today=usage_counts, news_insight_this_week=usage.news_insight_this_week,
-                                   exclude_ids=_TRIED.get(day_key, set()))
+                                   exclude_ids=_TRIED.get(day_key, set()), viral_gate=viral_gate)
 
 
 def mark_tried(day_key: str, candidate_id: str) -> None:

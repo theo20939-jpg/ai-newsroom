@@ -20,8 +20,9 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 
 
@@ -54,6 +55,14 @@ class FeedCandidate:
     category: str = ""
     views: int | None = None
     coverage: int = 1  # how many events / sources carry this story (Story Memory event_count) - the weekly "worth remembering" proxy
+    # viral story strength + actuality (services.instagram_viral_story_gate) - only signals that exist in production data
+    published_at: datetime | None = None  # the ARTICLE's time (never assumed to be the event's)
+    story_first_seen: datetime | None = None  # the earliest coverage of this same EVENT in its story cluster (title-similar members)
+    independent_sources: int = 1  # distinct sources covering this same event in the last 72 hours
+    story_events_24h: int = 1  # growth: members covering this same event collected in the last 24 hours
+    on_hacker_news: bool = False  # a confirmed member came from the Hacker News front page
+    forwards: int | None = None  # Telegram sources only
+    reactions: int | None = None  # Telegram sources only
 
 
 OUTSIDE_WORLD_REASON = "outside the account's world (not AI / tech / gadgets / internet culture)"
@@ -382,14 +391,21 @@ class SlotPlan:
 def plan_daily_slots(
     reads: Iterable[tuple[FeedCandidate, FeedRead]], *, published_today: Mapping[FeedFormat, int] | None = None,
     news_insight_this_week: int = 0, exclude_ids: Iterable[str] = (),
+    viral_gate: Callable[[FeedCandidate], bool] | None = None,
 ) -> list[SlotPlan]:
-    """Open slots for today, AI_HACK first. Only STRONG reads are eligible - no filler. A day never exceeds DAILY_MAX_POSTS."""
+    """Open slots for today, AI_HACK first. Only STRONG reads are eligible - no filler. A day never exceeds DAILY_MAX_POSTS.
+
+    `viral_gate` (services.instagram_viral_story_gate): a MEME_TREND read enters the viral slot only when the story itself is strong and
+    current enough. A strong read that fails it stays good KAGE news (weekly recap material) - and when no story clears the bar the viral
+    slot stays EMPTY: the schedule never lowers the bar to fill itself."""
     published = {fmt: int((published_today or {}).get(fmt, 0)) for fmt in DAILY_FORMATS}
     remaining = DAILY_MAX_POSTS - sum(published.values())
     excluded = set(exclude_ids)
     pool: dict[FeedFormat, list[tuple[FeedCandidate, FeedRead]]] = {fmt: [] for fmt in DAILY_FORMATS}
     for candidate, read in reads:
         if read.strong and read.format in pool and candidate.id not in excluded:
+            if read.format is FeedFormat.MEME_TREND and viral_gate is not None and not viral_gate(candidate):
+                continue
             pool[read.format].append((candidate, read))
     plans: list[SlotPlan] = []
     for fmt in DAILY_FORMATS:  # priority order: AI_HACK, MEME_TREND, then a rare NEWS_INSIGHT
