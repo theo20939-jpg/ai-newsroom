@@ -1,0 +1,31 @@
+{
+ "slide_count": 5,
+ "primitive_distribution": {
+  "source_media": 5
+ },
+ "source_asset_reuse": {
+  "source": [
+   2,
+   4
+  ]
+ },
+ "asset_reuse_within_slide": [
+  {
+   "slide": 2,
+   "asset": "source",
+   "uses": 3
+  },
+  {
+   "slide": 4,
+   "asset": "source",
+   "uses": 3
+  }
+ ],
+ "layout_signature_repetition": [],
+ "design_repetition_warning": true,
+ "warnings": [
+  "asset 'source' used 3x on slide 2",
+  "asset 'source' used 3x on slide 4"
+ ],
+ "degenerate_composition": null
+}

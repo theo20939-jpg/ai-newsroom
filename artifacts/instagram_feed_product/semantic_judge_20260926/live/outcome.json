@@ -1,0 +1,108 @@
+{
+ "event_id": "30740b23-d278-4d96-b2d1-d47bda2bd400",
+ "title": "Больше никаких «лесенок»: спустя 18 лет моддер реализовал в GTA IV полноценное сглаживание",
+ "source": "3DNews",
+ "url": "https://3dnews.ru/1149023",
+ "published_at": "2026-09-25 07:30:03+00:00",
+ "ingested_at": "2026-09-25 07:39:38.502367+00:00",
+ "planner_read": {
+  "format": "meme_trend",
+  "strong": true,
+  "kinds": [
+   "oddity"
+  ],
+  "reason": "a strange / funny event whose technology is central (KAGE core: software_platform_security_gaming)"
+ },
+ "treatment": {
+  "treatment": "BRIEF",
+  "reason": "no Intelligence significance available - conservative default, never MAJOR/STANDARD blind"
+ },
+ "evidence": "STRONG",
+ "evidence_why": "6 premise facts from 1 fetched source(s)",
+ "source_media": "AVAILABLE",
+ "reason": "creative_director_failed:EditorialCorrectionRequired",
+ "gate": null,
+ "delivery": null,
+ "chosen_format": null,
+ "vision_verdicts": [
+  {
+   "subject_key": "source",
+   "suitable": true,
+   "image_kind": "illustration_or_artwork",
+   "baked_in_text_prominent": false,
+   "reason": "A stylized video-game character in a suit stands indoors with his arms outstretched.",
+   "error": null
+  }
+ ],
+ "generated": [],
+ "llm_calls": [
+  {
+   "post": "post",
+   "kind": "PHASE_A",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 8000,
+   "worst_case_usd": "0.05040800",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 2458,
+   "output_tokens": 848,
+   "reasoning_tokens": 443,
+   "cost_usd": "0.007546"
+  },
+  {
+   "post": "post",
+   "kind": "DIRECTOR",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 10737,
+   "worst_case_usd": "0.07731200",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 12896,
+   "output_tokens": 7130,
+   "reasoning_tokens": 516,
+   "cost_usd": "0.055676"
+  },
+  {
+   "post": "post",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.01052700",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1663,
+   "output_tokens": 774,
+   "reasoning_tokens": 516,
+   "cost_usd": "0.006307"
+  },
+  {
+   "post": "post",
+   "kind": "DIRECTOR",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 10737,
+   "worst_case_usd": "0.07781200",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 13351,
+   "output_tokens": 7016,
+   "reasoning_tokens": 1413,
+   "cost_usd": "0.055447"
+  },
+  {
+   "post": "post",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.0104700",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1599,
+   "output_tokens": 322,
+   "reasoning_tokens": 203,
+   "cost_usd": "0.003531"
+  }
+ ],
+ "llm_spent_usd": "0.128507",
+ "llm_ledger_usd": "0.128507",
+ "image_ledger_usd": null
+}

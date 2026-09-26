@@ -1,0 +1,4 @@
+{
+ "error_type": "EditorialCorrectionRequired",
+ "error": "editorial correction required: caption sentence is a list of names, not a sentence that adds context: 'Мод DLSS-IV добавляет DLSS 4, FSR 3, DLAA и HDR.' - it repeats the slides' list; semantic review: slides 4 and 5 make the same point in different words (Both slides state that DLSS-IV requires Fusion Fix to work) - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter"
+}
