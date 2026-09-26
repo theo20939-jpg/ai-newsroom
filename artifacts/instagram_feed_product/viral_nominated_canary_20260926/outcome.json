@@ -1,0 +1,368 @@
+{
+ "now": "2026-09-26T18:04:01.575346+00:00",
+ "pool": 453,
+ "distinct_events": 339,
+ "eligible_events": [
+  "OpenAI's agents targeted and infiltrated US government websites",
+  "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты."
+ ],
+ "selected_event": "OpenAI's agents targeted and infiltrated US government websites",
+ "copies": [
+  "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+  "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+  "070feacc-88f7-4b75-817a-77effc45c266",
+  "16cc9f34-2380-4f9b-8c56-a2195a0841ed",
+  "bbc0b825-bc3e-46d2-9af8-49582f03fc03",
+  "c10dbf38-0299-4d78-a548-ebce9289f8bc",
+  "e5443cbf-01a4-4110-8faf-b8b0276d3ac8",
+  "89fbed07-6321-42ce-a9d8-47a3006681cb",
+  "a5760260-9242-49a3-9ec8-5f8d5fe4e74f",
+  "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+  "0b5b886f-6f57-4ff1-abd5-a6333beba202",
+  "8d8d157d-f62c-4181-bf9c-067208225ec1",
+  "cce4f2c2-2fba-44c5-9c5c-b0852a3bd1c2",
+  "d9441893-9704-41de-afff-21d20831c8e6",
+  "70003fe6-3960-476e-97cd-452140628404",
+  "744af497-674d-43eb-a841-8e57b56c71a8",
+  "28f32558-8922-480f-a343-8382e7165ea4",
+  "f26f3073-2aa7-43b0-b249-9361aecd79d8",
+  "8828a79a-1a0c-4301-9433-3e5fb87c7464"
+ ],
+ "planned_copy": {
+  "id": "070feacc-88f7-4b75-817a-77effc45c266",
+  "source": "3DNews",
+  "title": "ИИ-агенты OpenAI массово атаковали базы данных онлайн в поисках малоизвестных сведений"
+ },
+ "verdict": {
+  "actuality": "CURRENT_DISCLOSURE",
+  "actuality_reason": "text: the behaviour is dated 'this summer'; the disclosure ('Researchers:') is new - first covered 2026-09-25 23:16 UTC",
+  "underlying_time": "this summer",
+  "disclosed_at": "2026-09-25 23:16:40+00:00",
+  "newly_disclosed": [
+   "commerce department",
+   "education department",
+   "sec"
+  ],
+  "kage": [
+   "ai",
+   "software_platform_security_gaming"
+  ],
+  "broad": "BROAD",
+  "strength": "STRONG",
+  "mechanisms": [
+   "unexpected_ai_behaviour",
+   "security_surprise"
+  ],
+  "momentum": "STRONG",
+  "momentum_evidence": [
+   "19 independent outlets carried this same event in the last 72 hours",
+   "19 articles on it in the last 24 hours",
+   "on the Hacker News front page"
+  ],
+  "hook": "OpenAI's agents targeted and infiltrated US government websites",
+  "reason": "current (text: the behaviour is dated 'this summer'; the disclosure ('Researchers:') is new - first covered 2026-09-25 23:16 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour', 'security_surprise']; momentum strong (19 independent outlets carried this same event in the last 72 hours; 19 articles on it in the last 24 hours; on the Hacker News front page)"
+ },
+ "outlets": [
+  "10tv",
+  "3d",
+  "bbc.com",
+  "bfm.ru",
+  "cbc",
+  "cbs",
+  "engadget",
+  "hacker",
+  "ixbt",
+  "ixbt.com",
+  "politico",
+  "security affairs",
+  "sky",
+  "techmeme",
+  "the federal",
+  "the new york times",
+  "u.s. news &",
+  "вфокусе mail",
+  "реальное время"
+ ],
+ "first_seen": "2026-09-25 23:16:40+00:00",
+ "evidence_attempts": [
+  {
+   "order": 1,
+   "event_id": "070feacc-88f7-4b75-817a-77effc45c266",
+   "source": "3DNews",
+   "title": "ИИ-агенты OpenAI массово атаковали базы данных онлайн в поисках малоизвестных сведений",
+   "url": "https://3dnews.ru/1149086",
+   "acquisition": [
+    {
+     "type": "STORED_BODY",
+     "status": "OK",
+     "chars": 406
+    },
+    {
+     "type": "ORIGINAL_ARTICLE",
+     "status": "FULL_TEXT",
+     "chars": 11752
+    }
+   ],
+   "package_quality": "STRONG",
+   "body_chars": 1402,
+   "preflight": "FAIL",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "quantity": "NOT_USED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "reason": "the body evidence does not support: chronology"
+  },
+  {
+   "order": 2,
+   "event_id": "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+   "source": "Engadget",
+   "title": "OpenAI's agents targeted and infiltrated US government websites",
+   "url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+   "acquisition": [
+    {
+     "type": "STORED_BODY",
+     "status": "OK",
+     "chars": 157
+    },
+    {
+     "type": "ORIGINAL_ARTICLE",
+     "status": "FULL_TEXT",
+     "chars": 4543
+    }
+   ],
+   "package_quality": "STRONG",
+   "body_chars": 817,
+   "preflight": "FAIL",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "quantity": "NOT_USED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "reason": "the body evidence does not support: chronology"
+  },
+  {
+   "order": 3,
+   "event_id": "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+   "source": "Techmeme",
+   "title": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+   "url": "https://www.techmeme.com/260925/p25#a260925p25",
+   "acquisition": [
+    {
+     "type": "STORED_BODY",
+     "status": "OK",
+     "chars": 16
+    },
+    {
+     "type": "STORED_BODY",
+     "status": "OK",
+     "chars": 279
+    },
+    {
+     "type": "ORIGINAL_ARTICLE",
+     "status": "FULL_TEXT",
+     "chars": 20000
+    }
+   ],
+   "package_quality": "STRONG",
+   "body_chars": 926,
+   "preflight": "FAIL",
+   "checks": {
+    "actor": "UNSUPPORTED",
+    "action": "SUPPORTED",
+    "target": "UNSUPPORTED",
+    "quantity": "NOT_USED",
+    "chronology": "SUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "reason": "the body evidence does not support: actor, target"
+  },
+  {
+   "order": 4,
+   "event_id": "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+   "source": "iXBT News",
+   "title": "Неожиданные и тревожные аномалии. ИИ OpenAI сам получил доступ к правительственным сайтам США",
+   "url": "https://www.ixbt.com/news/2026/09/26/438377-neozidannye-i-trevoznye-anomalii-ii-openai-sam-polucil-dostup-k-pravitelstvennym-saitam-ssa.html",
+   "acquisition": [
+    {
+     "type": "STORED_BODY",
+     "status": "OK",
+     "chars": 154
+    },
+    {
+     "type": "ORIGINAL_ARTICLE",
+     "status": "FULL_TEXT",
+     "chars": 3569
+    }
+   ],
+   "package_quality": "STRONG",
+   "body_chars": 890,
+   "preflight": "PASS",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "quantity": "NOT_USED",
+    "chronology": "SUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "reason": "every claim the hook makes is in the stored body evidence"
+  }
+ ],
+ "evidence_copy": {
+  "event_id": "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+  "title": "Неожиданные и тревожные аномалии. ИИ OpenAI сам получил доступ к правительственным сайтам США",
+  "url": "https://www.ixbt.com/news/2026/09/26/438377-neozidannye-i-trevoznye-anomalii-ii-openai-sam-polucil-dostup-k-pravitelstvennym-saitam-ssa.html"
+ },
+ "preflight": {
+  "status": "PASS",
+  "checks": {
+   "actor": "SUPPORTED",
+   "action": "SUPPORTED",
+   "target": "SUPPORTED",
+   "quantity": "NOT_USED",
+   "chronology": "SUPPORTED",
+   "claim:rogue": "NOT_USED",
+   "claim:without_knowledge": "NOT_USED",
+   "claim:tried_to_hack": "NOT_USED",
+   "claim:secret": "NOT_USED",
+   "claim:deliberate": "NOT_USED"
+  },
+  "reason": "every claim the hook makes is in the stored body evidence"
+ },
+ "treatment": {
+  "treatment": "BRIEF",
+  "reason": "no Intelligence significance available - conservative default, never MAJOR/STANDARD blind"
+ },
+ "director_facts": [
+  "Неожиданные и тревожные аномалии. ИИ OpenAI сам получил доступ к правительственным сайтам США",
+  "И выполнял различные действия с размещёнными там данными 26 сентября 2026, 07:49 Искусственный интеллект OpenAI Jin 12",
+  "Автономный ИИ-агент OpenAI снова оказался в центре внимания после несанкционированного взаимодействия с сайтами нескольких государственных учреждений США.",
+  "Этим летом система в лабораторных условиях без соответствующих активных инструкций получила доступ к ресурсам Министерства образования, Министерства торговли и Комиссии по ценным бумагам и биржам США (SEC), а в отдельных случаях выполняла действия с размещёнными там данными.",
+  "OpenAI подтвердила несанкционированный доступ к сайтам Министерства торговли и SEC.",
+  "Расследование эпизода, связанного с ресурсом Министерства образования, продолжается.",
+  "Компания заявила, что заранее уведомила соответствующие американские ведомства и признала, что автономный агент взаимодействовал с государственными сайтами нетипичным способом.",
+  "SOURCE MEDIA: 1456x816 source image available",
+  "CHRONOLOGY: disclosed 2026-09-25; behaviour this summer; newly disclosed: commerce department, education department, sec - the disclosure is new, the behaviour is not (this summer): the hook must say it was revealed / disclosed / reported and must not imply the action happened today"
+ ],
+ "reason": "creative_director_failed:EditorialCorrectionRequired",
+ "gate": null,
+ "delivery": null,
+ "chosen_format": null,
+ "vision_verdicts": [
+  {
+   "subject_key": "source",
+   "suitable": true,
+   "image_kind": "photograph",
+   "baked_in_text_prominent": false,
+   "reason": "A real photograph shows a distressed bearded man wearing glasses and holding his head in an indoor workspace.",
+   "error": null
+  }
+ ],
+ "generated": [],
+ "llm_calls": [
+  {
+   "post": "post",
+   "kind": "PHASE_A",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 8000,
+   "worst_case_usd": "0.05042900",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 2434,
+   "output_tokens": 950,
+   "reasoning_tokens": 473,
+   "cost_usd": "0.008134"
+  },
+  {
+   "post": "post",
+   "kind": "VISION",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 400,
+   "worst_case_usd": "0.00281800",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 956,
+   "output_tokens": 54,
+   "reasoning_tokens": 0,
+   "cost_usd": "0.00128"
+  },
+  {
+   "post": "post",
+   "kind": "DIRECTOR",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 10737,
+   "worst_case_usd": "0.07754200",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 13044,
+   "output_tokens": 7433,
+   "reasoning_tokens": 1472,
+   "cost_usd": "0.057642"
+  },
+  {
+   "post": "post",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.01067800",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1713,
+   "output_tokens": 616,
+   "reasoning_tokens": 411,
+   "cost_usd": "0.005409"
+  },
+  {
+   "post": "post",
+   "kind": "DIRECTOR",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 10737,
+   "worst_case_usd": "0.07813300",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 13573,
+   "output_tokens": 5918,
+   "reasoning_tokens": 740,
+   "cost_usd": "0.049081"
+  },
+  {
+   "post": "post",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.01067500",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1701,
+   "output_tokens": 480,
+   "reasoning_tokens": 279,
+   "cost_usd": "0.004581"
+  }
+ ],
+ "llm_spent_usd": "0.126127",
+ "llm_ledger_usd": "0.126127",
+ "image_ledger_usd": null
+}

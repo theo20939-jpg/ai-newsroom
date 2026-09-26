@@ -1,0 +1,17 @@
+{
+ "slide_count": 5,
+ "primitive_distribution": {
+  "source_media": 4,
+  "poll_cards": 1
+ },
+ "source_asset_reuse": {
+  "source": [
+   0
+  ]
+ },
+ "asset_reuse_within_slide": [],
+ "layout_signature_repetition": [],
+ "design_repetition_warning": false,
+ "warnings": [],
+ "degenerate_composition": null
+}
