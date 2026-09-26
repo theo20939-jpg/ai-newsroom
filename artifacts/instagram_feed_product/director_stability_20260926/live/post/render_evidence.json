@@ -1,0 +1,1070 @@
+[
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     810,
+     913,
+     893
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     905,
+     716,
+     968
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     980,
+     651,
+     1079
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1087,
+     697,
+     1130
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1139,
+     263,
+     1174
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 0,
+  "slide_count": 5,
+  "caption_linkage": "f0c54387-5b11-481b-bbf5-6a4495d63cee",
+  "content_identity": "185614ad54fec4bb",
+  "source_media_candidate_id": "bc205f8a-0364-4b7a-b786-06fb05caedea",
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=bottom-center|media_zone=middle-center|media_dominance=DOMINANT|density=LOW|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "bottom-center",
+    "media_zone": "middle-center",
+    "media_dominance": "DOMINANT",
+    "density": "LOW",
+    "asymmetry": "centered",
+    "visual_weight": "MEDIA",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "generated",
+     "identity": "77ecf28bd7c719e4",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "culture",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 3,
+   "rotation_count": 0,
+   "media_canvas_coverage": 1.0,
+   "text_canvas_coverage": 0.214,
+   "object_canvas_coverage": 1.0,
+   "object_bbox_canvas_coverage": 1.0,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "top",
+    "bottom"
+   ],
+   "negative_space": 0.0,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 107,
+     "lines": 3,
+     "block_h_frac": 0.1993,
+     "block_w_frac": 0.7741,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 2,
+     "block_h_frac": 0.0644,
+     "block_w_frac": 0.575,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [
+    {
+     "ref": "copy",
+     "name": "copy",
+     "box": [
+      0.06,
+      0.592,
+      0.794,
+      0.216
+     ],
+     "mean": 11.11,
+     "p10": 9,
+     "p90": 14,
+     "std": 2.63,
+     "edge_energy": 0.48,
+     "contrast_light_text": 19.3,
+     "contrast_dark_text": 1.02,
+     "text_colour": "light",
+     "quiet": true
+    },
+    {
+     "ref": "body",
+     "name": "body",
+     "box": [
+      0.06,
+      0.797,
+      0.595,
+      0.081
+     ],
+     "mean": 10.01,
+     "p10": 9,
+     "p90": 11,
+     "std": 3.65,
+     "edge_energy": 0.17,
+     "contrast_light_text": 19.68,
+     "contrast_dark_text": 1.02,
+     "text_colour": "light",
+     "quiet": true
+    }
+   ],
+   "creative_plan": {
+    "main_idea": "Показать старую GTA IV как тёмный игровой мир, в который физически возвращается современная гладкость: от заметных «лесенок» к чистым контурам и подключённой технической зависимости.",
+    "focal_point": "Контраст между возрастом GTA IV и конкретным моддерским решением, которое меняет качество изображения.",
+    "composition_direction": "Чередовать полноэкранные тёмные сцены с крупным спокойным текстовым пространством и одним плотным collage-слайдом с реальным изображением GTA IV.",
+    "visual_treatment": "Единый мотив — jagged-to-smooth contours, тёмная игровая среда и физические детали технического вмешательства; без текста, логотипов и фальшивого UI внутри изображений."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "display",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GENERATED",
+   "media_execution_status": "generated_media",
+   "body_placement": null,
+   "recap_frame": true,
+   "editorial_variant": null,
+   "rendered_copy": [
+    "GTA IV избавилась от «лесенок» через 18 лет\n\nИ сделал это не Rockstar Games, а моддер."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GENERATED",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Generated editorial image of a dark open-world game scene with a visible jagged-to-smooth visual contrast, no text or logos.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "source",
+   "must_match_story": false,
+   "media_asset_identity": "77ecf28bd7c719e4",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_bottom-center_middle-center_DOMINANT_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "generated",
+   "visual_preserved": true,
+   "layout_variant": "declared_bottom-center_middle-center_DOMINANT_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     73,
+     810,
+     868,
+     937
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     952,
+     908,
+     1059
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1087,
+     603,
+     1129
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1137,
+     530,
+     1181
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1189,
+     768,
+     1231
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 1,
+  "slide_count": 5,
+  "caption_linkage": "f0c54387-5b11-481b-bbf5-6a4495d63cee",
+  "content_identity": "f0907c599f3efd58",
+  "source_media_candidate_id": "bc205f8a-0364-4b7a-b786-06fb05caedea",
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=bottom-center|media_zone=middle-center|media_dominance=DOMINANT|density=LOW|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "bottom-center",
+    "media_zone": "middle-center",
+    "media_dominance": "DOMINANT",
+    "density": "LOW",
+    "asymmetry": "centered",
+    "visual_weight": "MEDIA",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "generated",
+     "identity": "ebbca3afcbe1cc0e",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "neo",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 3,
+   "rotation_count": 0,
+   "media_canvas_coverage": 1.0,
+   "text_canvas_coverage": 0.241,
+   "object_canvas_coverage": 1.0,
+   "object_bbox_canvas_coverage": 1.0,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "top",
+    "bottom"
+   ],
+   "negative_space": 0.0,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 135,
+     "lines": 2,
+     "block_h_frac": 0.1844,
+     "block_w_frac": 0.7685,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 41,
+     "lines": 3,
+     "block_h_frac": 0.1067,
+     "block_w_frac": 0.6407,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [
+    {
+     "ref": "copy",
+     "name": "copy",
+     "box": [
+      0.06,
+      0.592,
+      0.789,
+      0.201
+     ],
+     "mean": 14.01,
+     "p10": 9,
+     "p90": 27,
+     "std": 6.7,
+     "edge_energy": 1.08,
+     "contrast_light_text": 17.22,
+     "contrast_dark_text": 1.02,
+     "text_colour": "light",
+     "quiet": true
+    },
+    {
+     "ref": "body",
+     "name": "body",
+     "box": [
+      0.06,
+      0.797,
+      0.661,
+      0.123
+     ],
+     "mean": 12.0,
+     "p10": 10,
+     "p90": 15,
+     "std": 1.95,
+     "edge_energy": 0.25,
+     "contrast_light_text": 19.17,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    }
+   ],
+   "creative_plan": {
+    "main_idea": "Показать старую GTA IV как тёмный игровой мир, в который физически возвращается современная гладкость: от заметных «лесенок» к чистым контурам и подключённой технической зависимости.",
+    "focal_point": "Контраст между возрастом GTA IV и конкретным моддерским решением, которое меняет качество изображения.",
+    "composition_direction": "Чередовать полноэкранные тёмные сцены с крупным спокойным текстовым пространством и одним плотным collage-слайдом с реальным изображением GTA IV.",
+    "visual_treatment": "Единый мотив — jagged-to-smooth contours, тёмная игровая среда и физические детали технического вмешательства; без текста, логотипов и фальшивого UI внутри изображений."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GENERATED",
+   "media_execution_status": "generated_media",
+   "body_placement": null,
+   "recap_frame": true,
+   "editorial_variant": null,
+   "rendered_copy": [
+    "Автор мода — ChunkLeChuck\n\nОн добавил GTA IV поддержку современных технологий масштабирования, сглаживания и HDR."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GENERATED",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Generated contextual image of an anonymous workstation and monitor showing an abstracted GTA IV-like city scene, with no interface text or branding.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "source",
+   "must_match_story": false,
+   "media_asset_identity": "ebbca3afcbe1cc0e",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_bottom-center_middle-center_DOMINANT_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "generated",
+   "visual_preserved": true,
+   "layout_variant": "declared_bottom-center_middle-center_DOMINANT_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     810,
+     497,
+     905
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     919,
+     998,
+     1023
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1087,
+     746,
+     1133
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1142,
+     792,
+     1186
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 2,
+  "slide_count": 5,
+  "caption_linkage": "f0c54387-5b11-481b-bbf5-6a4495d63cee",
+  "content_identity": "c1093ecdb75fd096",
+  "source_media_candidate_id": "bc205f8a-0364-4b7a-b786-06fb05caedea",
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=bottom-center|media_zone=middle-center|media_dominance=DOMINANT|density=LOW|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "bottom-center",
+    "media_zone": "middle-center",
+    "media_dominance": "DOMINANT",
+    "density": "LOW",
+    "asymmetry": "centered",
+    "visual_weight": "MEDIA",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "generated",
+     "identity": "daae79ef9c789e04",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "neo",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 3,
+   "rotation_count": 0,
+   "media_canvas_coverage": 1.0,
+   "text_canvas_coverage": 0.2143,
+   "object_canvas_coverage": 1.0,
+   "object_bbox_canvas_coverage": 1.0,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "top",
+    "bottom"
+   ],
+   "negative_space": 0.0,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 131,
+     "lines": 2,
+     "block_h_frac": 0.1578,
+     "block_w_frac": 0.8509,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 2,
+     "block_h_frac": 0.0733,
+     "block_w_frac": 0.663,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [
+    {
+     "ref": "copy",
+     "name": "copy",
+     "box": [
+      0.06,
+      0.592,
+      0.871,
+      0.174
+     ],
+     "mean": 13.02,
+     "p10": 9,
+     "p90": 18,
+     "std": 6.25,
+     "edge_energy": 0.78,
+     "contrast_light_text": 18.73,
+     "contrast_dark_text": 1.02,
+     "text_colour": "light",
+     "quiet": true
+    },
+    {
+     "ref": "body",
+     "name": "body",
+     "box": [
+      0.06,
+      0.797,
+      0.683,
+      0.09
+     ],
+     "mean": 11.07,
+     "p10": 10,
+     "p90": 13,
+     "std": 1.7,
+     "edge_energy": 0.23,
+     "contrast_light_text": 19.44,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    }
+   ],
+   "creative_plan": {
+    "main_idea": "Показать старую GTA IV как тёмный игровой мир, в который физически возвращается современная гладкость: от заметных «лесенок» к чистым контурам и подключённой технической зависимости.",
+    "focal_point": "Контраст между возрастом GTA IV и конкретным моддерским решением, которое меняет качество изображения.",
+    "composition_direction": "Чередовать полноэкранные тёмные сцены с крупным спокойным текстовым пространством и одним плотным collage-слайдом с реальным изображением GTA IV.",
+    "visual_treatment": "Единый мотив — jagged-to-smooth contours, тёмная игровая среда и физические детали технического вмешательства; без текста, логотипов и фальшивого UI внутри изображений."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GENERATED",
+   "media_execution_status": "generated_media",
+   "body_placement": null,
+   "recap_frame": true,
+   "editorial_variant": null,
+   "rendered_copy": [
+    "Вот что приехало в игру\n\nChunkLeChuck добавил поддержку Nvidia DLSS 4, AMD FSR 3, DLAA и HDR."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GENERATED",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Generated close-up of a monitor displaying a dark urban game scene with a visibly smoother diagonal edge, no text or logos.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "source",
+   "must_match_story": false,
+   "media_asset_identity": "daae79ef9c789e04",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_bottom-center_middle-center_DOMINANT_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "generated",
+   "visual_preserved": true,
+   "layout_variant": "declared_bottom-center_middle-center_DOMINANT_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     189,
+     1002,
+     266
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     464,
+     945,
+     507
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 3,
+  "slide_count": 5,
+  "caption_linkage": "f0c54387-5b11-481b-bbf5-6a4495d63cee",
+  "content_identity": "de795632699498c9",
+  "source_media_candidate_id": "bc205f8a-0364-4b7a-b786-06fb05caedea",
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=middle-center|media_zone=bottom-center|media_dominance=DOMINANT|density=HIGH|asymmetry=asymmetric|visual_weight=MIXED|region_count=3-4|surface=light",
+   "layout_characteristics": {
+    "headline_zone": "middle-center",
+    "media_zone": "bottom-center",
+    "media_dominance": "DOMINANT",
+    "density": "HIGH",
+    "asymmetry": "asymmetric",
+    "visual_weight": "MIXED",
+    "region_count": "3-4",
+    "surface": "light"
+   },
+   "media_regions": [
+    {
+     "subject": "source",
+     "identity": "4c5324b14aeae484",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "soft",
+   "palette": "culture",
+   "logo_position": "BOTTOM_LEFT",
+   "arrangement": "standard",
+   "layer_count": 4,
+   "rotation_count": 0,
+   "media_canvas_coverage": 0.48,
+   "text_canvas_coverage": 0.1053,
+   "object_canvas_coverage": 0.48,
+   "object_bbox_canvas_coverage": 0.48,
+   "object_bounding_boxes": [
+    [
+     0.0,
+     0.52,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "left",
+    "right",
+    "bottom"
+   ],
+   "negative_space": 0.4147,
+   "text_metrics": [
+    {
+     "ref": "copy_lead",
+     "token": "HEADLINE_XL",
+     "font_px": 87,
+     "lines": 1,
+     "block_h_frac": 0.057,
+     "block_w_frac": 0.8546,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 1,
+     "block_h_frac": 0.0319,
+     "block_w_frac": 0.8046,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [],
+   "media_scale_adapted": true,
+   "media_scale_orientation": "text_top",
+   "media_scale_requested": [
+    0.47,
+    0.06,
+    0.49,
+    0.58
+   ],
+   "media_scale_executed": [
+    0.0,
+    0.52,
+    1.0,
+    0.48
+   ],
+   "media_scale_rescued_rejected_plan": [
+    "collage_hierarchy_flat",
+    "text_over_media"
+   ],
+   "creative_plan": {
+    "main_idea": "Показать старую GTA IV как тёмный игровой мир, в который физически возвращается современная гладкость: от заметных «лесенок» к чистым контурам и подключённой технической зависимости.",
+    "focal_point": "Контраст между возрастом GTA IV и конкретным моддерским решением, которое меняет качество изображения.",
+    "composition_direction": "Чередовать полноэкранные тёмные сцены с крупным спокойным текстовым пространством и одним плотным collage-слайдом с реальным изображением GTA IV.",
+    "visual_treatment": "Единый мотив — jagged-to-smooth contours, тёмная игровая среда и физические детали технического вмешательства; без текста, логотипов и фальшивого UI внутри изображений."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "supporting_editorial",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "SOURCE",
+   "media_execution_status": "source_media",
+   "body_placement": "headline_box_shared+headline_widened",
+   "recap_frame": false,
+   "editorial_variant": null,
+   "rendered_copy": [
+    "Мод называется DLSS-IV\n\nСкачать его можно на площадке Nexus Mods."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "SOURCE",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Use the supplied 800x450 source image in three unequal crops; no screenshot treatment or fake download interface.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "source",
+   "must_match_story": true,
+   "media_asset_identity": "4c5324b14aeae484",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_middle-center_bottom-center_DOMINANT_3-4",
+   "layout_adaptations": [
+    "text_ref_has_no_content",
+    "progress_marker_hidden",
+    "media_scale_adapted"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "source",
+   "visual_preserved": true,
+   "layout_variant": "declared_middle-center_bottom-center_DOMINANT_3-4"
+  }
+ },
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "carousel",
+  "profile": "carousel_slide",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     810,
+     865,
+     925
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     940,
+     787,
+     1055
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     75,
+     1087,
+     664,
+     1133
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1142,
+     553,
+     1178
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     76,
+     1187,
+     554,
+     1233
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "cover_cropped",
+  "slide_index": 4,
+  "slide_count": 5,
+  "caption_linkage": "f0c54387-5b11-481b-bbf5-6a4495d63cee",
+  "content_identity": "7a07186c8a930954",
+  "source_media_candidate_id": "bc205f8a-0364-4b7a-b786-06fb05caedea",
+  "notes": {
+   "layout_plan_applied": true,
+   "layout_signature": "headline_zone=bottom-center|media_zone=middle-center|media_dominance=DOMINANT|density=LOW|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=dark",
+   "layout_characteristics": {
+    "headline_zone": "bottom-center",
+    "media_zone": "middle-center",
+    "media_dominance": "DOMINANT",
+    "density": "LOW",
+    "asymmetry": "centered",
+    "visual_weight": "MEDIA",
+    "region_count": "3-4",
+    "surface": "dark"
+   },
+   "media_regions": [
+    {
+     "subject": "generated",
+     "identity": "1c6d8637d80b0f51",
+     "treatment": "cover_cropped",
+     "tilted": false,
+     "matted": false
+    }
+   ],
+   "unresolved_media_regions": [],
+   "source_media_pixels_unaltered": true,
+   "graphic_fallback_used": false,
+   "media_regions_tilted": 0,
+   "background": "ink",
+   "palette": "neo",
+   "logo_position": "BOTTOM_RIGHT",
+   "arrangement": "standard",
+   "layer_count": 3,
+   "rotation_count": 0,
+   "media_canvas_coverage": 1.0,
+   "text_canvas_coverage": 0.2193,
+   "object_canvas_coverage": 0.1401,
+   "object_bbox_canvas_coverage": 0.9407,
+   "object_bounding_boxes": [
+    [
+     0.038,
+     0.022,
+     1.0,
+     1.0
+    ]
+   ],
+   "object_edge_bleed": [
+    "right",
+    "bottom"
+   ],
+   "negative_space": 0.0,
+   "text_metrics": [
+    {
+     "ref": "copy",
+     "token": "HEADLINE_XL",
+     "font_px": 135,
+     "lines": 2,
+     "block_h_frac": 0.1815,
+     "block_w_frac": 0.7269,
+     "tilted": false
+    },
+    {
+     "ref": "body",
+     "token": "BODY",
+     "font_px": 45,
+     "lines": 3,
+     "block_h_frac": 0.1081,
+     "block_w_frac": 0.5444,
+     "tilted": false
+    }
+   ],
+   "text_zone_reports": [
+    {
+     "ref": "copy",
+     "name": "copy",
+     "box": [
+      0.06,
+      0.592,
+      0.747,
+      0.198
+     ],
+     "mean": 12.13,
+     "p10": 10,
+     "p90": 14,
+     "std": 1.89,
+     "edge_energy": 0.42,
+     "contrast_light_text": 19.3,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    },
+    {
+     "ref": "body",
+     "name": "body",
+     "box": [
+      0.06,
+      0.797,
+      0.565,
+      0.124
+     ],
+     "mean": 10.9,
+     "p10": 10,
+     "p90": 12,
+     "std": 0.75,
+     "edge_energy": 0.09,
+     "contrast_light_text": 19.56,
+     "contrast_dark_text": 1.01,
+     "text_colour": "light",
+     "quiet": true
+    }
+   ],
+   "creative_plan": {
+    "main_idea": "Показать старую GTA IV как тёмный игровой мир, в который физически возвращается современная гладкость: от заметных «лесенок» к чистым контурам и подключённой технической зависимости.",
+    "focal_point": "Контраст между возрастом GTA IV и конкретным моддерским решением, которое меняет качество изображения.",
+    "composition_direction": "Чередовать полноэкранные тёмные сцены с крупным спокойным текстовым пространством и одним плотным collage-слайдом с реальным изображением GTA IV.",
+    "visual_treatment": "Единый мотив — jagged-to-smooth contours, тёмная игровая среда и физические детали технического вмешательства; без текста, логотипов и фальшивого UI внутри изображений."
+   },
+   "render_interpretation": "carousel_composition",
+   "used_primitives": [
+    "progress_marker",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "generic_composition",
+   "typography_treatment": "display",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "media_mode": "GENERATED",
+   "media_execution_status": "generated_media",
+   "body_placement": null,
+   "recap_frame": true,
+   "editorial_variant": null,
+   "rendered_copy": [
+    "Без Fusion Fix не обойтись\n\nДля работы DLSS-IV требуется глобальная техническая модификация Fusion Fix."
+   ],
+   "internal_labels_rendered": [],
+   "visual_direction_consumed": true,
+   "media_mode_consumed": "GENERATED",
+   "per_slide_media_consumed": true,
+   "media_need_consumed": "Generated contextual image of a monitor and a clearly connected modular technical component, no labels, text, logos or identifiable product design.",
+   "composition_requested": null,
+   "media_position_requested": null,
+   "media_subject": "source",
+   "must_match_story": false,
+   "media_asset_identity": "1c6d8637d80b0f51",
+   "structured_composition_present": true,
+   "structured_composition_executed": true,
+   "fallback_role_layout_used": false,
+   "composition_adapted_for_text_fit": false,
+   "composition_executed": "declared_bottom-center_middle-center_DOMINANT_3-4",
+   "layout_adaptations": [
+    "progress_marker_hidden"
+   ],
+   "layout_plan_rejected": null,
+   "overlay_operations_executed": 0,
+   "media_preserving_fallback_used": false,
+   "media_origin": "generated",
+   "visual_preserved": true,
+   "layout_variant": "declared_bottom-center_middle-center_DOMINANT_3-4"
+  }
+ }
+]

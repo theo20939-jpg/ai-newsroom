@@ -1,0 +1,125 @@
+{
+ "event_id": "30740b23-d278-4d96-b2d1-d47bda2bd400",
+ "title": "Больше никаких «лесенок»: спустя 18 лет моддер реализовал в GTA IV полноценное сглаживание",
+ "source": "3DNews",
+ "url": "https://3dnews.ru/1149023",
+ "published_at": "2026-09-25 07:30:03+00:00",
+ "ingested_at": "2026-09-25 07:39:38.502367+00:00",
+ "planner_read": {
+  "format": "meme_trend",
+  "strong": true,
+  "kinds": [
+   "oddity"
+  ],
+  "reason": "a strange / funny event whose technology is central (KAGE core: software_platform_security_gaming)"
+ },
+ "treatment": {
+  "treatment": "BRIEF",
+  "reason": "no Intelligence significance available - conservative default, never MAJOR/STANDARD blind"
+ },
+ "evidence": "STRONG",
+ "evidence_why": "6 premise facts from 1 fetched source(s)",
+ "source_media": "AVAILABLE",
+ "reason": "submitted",
+ "gate": "ready_for_editor",
+ "delivery": "recorded_ready_for_editor_no_telegram",
+ "chosen_format": "carousel",
+ "vision_verdicts": [
+  {
+   "subject_key": "source",
+   "suitable": true,
+   "image_kind": "illustration_or_artwork",
+   "baked_in_text_prominent": false,
+   "reason": "A 3D-rendered video-game character is shown indoors with no overlaid text.",
+   "error": null
+  }
+ ],
+ "generated": [
+  {
+   "asset_key": "0",
+   "status": "generated_media",
+   "accounted_usd": "0.02275500",
+   "reserved_usd": "0.08100",
+   "provider_request_id": "req_3e08d680fff84d5784f839a22f382eed",
+   "prompt": "VISUAL PROFILE VERSION\ninstagram-reference-board-text-profile-v1\n\nSTORY\nБольше никаких «лесенок»: спустя 18 лет моддер реализовал в GTA IV полноценное сглаживание\nSupported facts only:\n- Больше никаких «лесенок»: спустя 18 лет моддер реализовал в GTA IV полноценное сглаживание\n\nSPECIFIC SCENE TO DEPICT (approved plan for this slide)\nA moody 4:5 view of an anonymous open-world city street on a game monitor, with hard jagged edges on distant buildings and visibly smoother geometry in the foreground, creating a physical visual contrast without text, logos or identifiable real people.\nSTORY-SPECIFIC ANCHOR (what makes this picture belong to THIS story)\nA decades-old-looking game scene receiving a visible smooth-edge treatment after [the numeral the application sets in type over the picture - not part of the picture] years.\nWHAT MUST BE PHYSICALLY VISIBLE, AND WHY (the finished slide: every number, price or word it mentions is typography the application adds on top - draw only the scene)\nA dark, cinematic 4:5 game-world scene viewed from a monitor: an anonymous open-world city street with visibly jagged geometry resolving into clean edges toward the foreground. The left side remains calm and dark for the headline; the image supports the absurd contrast between an old game and a fresh technical fix.\nSlide purpose: Остановить скролл конкретным временным контрастом и сразу показать, кто стоит за результатом.. Media function: hero.\n\nOVERALL IDEA\nПоказать старую GTA IV как тёмный игровой мир, в который физически возвращается современная гладкость: от заметных «лесенок» к чистым контурам и подключённой технической зависимости.\nVisual genre: Единый мотив — jagged-to-smooth contours, тёмная игровая среда и физические детали технического вмешательства; без текста, логотипов и фальшивого UI внутри изображений..\n\nCOMPOSITION FOR THIS SLIDE\na full-bleed scene with ONE large calm, low-detail area (plain wall, sky, fog, table surface or soft floor) in the upper third, kept free of detail so a headline can sit on it. Portrait 4:5 editorial framing, one decisive focal point, believable depth and material detail.\n\nSPECIFICITY\nDepict THIS story's concrete idea so the picture communicates the story before the reader reads the text. The picture must not be reusable unchanged for ten unrelated AI posts. Do NOT produce a glowing cube, floating spheres or random geometry, a generic AI brain, an anonymous robot, a hologram, a cyberpunk city, an abstract monolith, neon circuitry or corporate technology stock art unless this story is literally about it.\n\nCOLOR / MOOD\nDerive colour from the idea; contemporary, specific, cinematic or editorial, never generic.\n\nNEGATIVE CONSTRAINTS\nNO LOGOS. NO WORDMARKS. NO WATERMARKS. NO LARGE TEXT. NO READABLE TEXT OR LETTERING OF ANY KIND. NO FAKE UI. NO RANDOM INTERFACES. NO UNSUPPORTED PRODUCTS, FACTS, NUMBERS OR THIRD-PARTY BRANDING. No shape, colour set or icon that imitates a company's logo or brand symbol (no brand-coloured dots, no sparkle or star icons, no app-icon tiles, no product silhouettes standing in for a named company). Never depict, imitate or re-create a specific real person named in the story, or anyone resembling them, and never stage the reported incident as if it were footage or a photograph of it. Any people are anonymous and unidentifiable (hands, backs, silhouettes, out of focus); prefer objects, places and a visual metaphor. Paper, pages, cards, screens and objects are BLANK: no handwriting, no scribbled lines imitating writing, no marks, stamps or engravings. Anything the story leaves unnamed (which places, people, companies or products) stays abstract and unidentifiable: no recognisable map or state outlines, faces or product designs. Do not bake any headline into the image; the application adds the exact Russian copy and the canonical logo after generation."
+  },
+  {
+   "asset_key": "1",
+   "status": "generated_media",
+   "accounted_usd": "0.02293250",
+   "reserved_usd": "0.08100",
+   "provider_request_id": "req_c80ace38b57a43b09166f138a2c29464",
+   "prompt": "VISUAL PROFILE VERSION\ninstagram-reference-board-text-profile-v1\n\nSTORY\nБольше никаких «лесенок»: спустя 18 лет моддер реализовал в GTA IV полноценное сглаживание\nSupported facts only:\n- В помощь студенту: обзор российских ИИ-сервисов для учёбы и закрепления знаний Компьютер месяца, спецвыпуск: выбираем мини-ПК для работы и развлечений в эпоху дефицита чипов памяти Источник изображений: Rockstar Games Как подметил портал Rock Paper Shotgun, моддер ChunkLeChuck недавно снабдил GTA IV поддержкой технологий интеллектуального масштабирования (Nvidia DLSS 4, AMD FSR 3) и сглаживания (DLAA), а также HDR.\n\nSPECIFIC SCENE TO DEPICT (approved plan for this slide)\nA 4:5 oblique view of an anonymous gaming workstation: a monitor shows a dark open-world city scene, while unidentified hands adjust a physical graphics control beside it. No readable interface, text, logos or recognizable person; the image makes technical intervention physically legible.\nSTORY-SPECIFIC ANCHOR (what makes this picture belong to THIS story)\nChunkLeChuck's mod adds new scaling, anti-aliasing and HDR support to GTA IV.\nWHAT MUST BE PHYSICALLY VISIBLE, AND WHY (the finished slide: every number, price or word it mentions is typography the application adds on top - draw only the scene)\nShow a close, oblique view of an anonymous gaming monitor displaying the same dark open-world city visual language, with a single pair of hands adjusting a physical graphics control knob beside the screen. The subject is the modder's technical intervention, not a portrait; keep the upper-right area visually quiet for copy.\nSlide purpose: Перевести историю от неожиданного результата к конкретному автору решения.. Media function: detail.\n\nOVERALL IDEA\nПоказать старую GTA IV как тёмный игровой мир, в который физически возвращается современная гладкость: от заметных «лесенок» к чистым контурам и подключённой технической зависимости.\nVisual genre: Единый мотив — jagged-to-smooth contours, тёмная игровая среда и физические детали технического вмешательства; без текста, логотипов и фальшивого UI внутри изображений..\n\nCOMPOSITION FOR THIS SLIDE\na full-bleed scene with ONE large calm, low-detail area (plain wall, sky, fog, table surface or soft floor) in the upper third, kept free of detail so a headline can sit on it. Portrait 4:5 editorial framing, one decisive focal point, believable depth and material detail.\n\nSPECIFICITY\nDepict THIS story's concrete idea so the picture communicates the story before the reader reads the text. The picture must not be reusable unchanged for ten unrelated AI posts. Do NOT produce a glowing cube, floating spheres or random geometry, a generic AI brain, an anonymous robot, a hologram, a cyberpunk city, an abstract monolith, neon circuitry or corporate technology stock art unless this story is literally about it.\n\nCOLOR / MOOD\nDerive colour from the idea; contemporary, specific, cinematic or editorial, never generic.\n\nNEGATIVE CONSTRAINTS\nNO LOGOS. NO WORDMARKS. NO WATERMARKS. NO LARGE TEXT. NO READABLE TEXT OR LETTERING OF ANY KIND. NO FAKE UI. NO RANDOM INTERFACES. NO UNSUPPORTED PRODUCTS, FACTS, NUMBERS OR THIRD-PARTY BRANDING. No shape, colour set or icon that imitates a company's logo or brand symbol (no brand-coloured dots, no sparkle or star icons, no app-icon tiles, no product silhouettes standing in for a named company). Never depict, imitate or re-create a specific real person named in the story, or anyone resembling them, and never stage the reported incident as if it were footage or a photograph of it. Any people are anonymous and unidentifiable (hands, backs, silhouettes, out of focus); prefer objects, places and a visual metaphor. Paper, pages, cards, screens and objects are BLANK: no handwriting, no scribbled lines imitating writing, no marks, stamps or engravings. Anything the story leaves unnamed (which places, people, companies or products) stays abstract and unidentifiable: no recognisable map or state outlines, faces or product designs. Do not bake any headline into the image; the application adds the exact Russian copy and the canonical logo after generation."
+  },
+  {
+   "asset_key": "2",
+   "status": "generated_media",
+   "accounted_usd": "0.02286000",
+   "reserved_usd": "0.08100",
+   "provider_request_id": "req_7e007cada61440dc8af3557736d6e7ef",
+   "prompt": "VISUAL PROFILE VERSION\ninstagram-reference-board-text-profile-v1\n\nSTORY\nБольше никаких «лесенок»: спустя 18 лет моддер реализовал в GTA IV полноценное сглаживание\nSupported facts only:\n- В помощь студенту: обзор российских ИИ-сервисов для учёбы и закрепления знаний Компьютер месяца, спецвыпуск: выбираем мини-ПК для работы и развлечений в эпоху дефицита чипов памяти Источник изображений: Rockstar Games Как подметил портал Rock Paper Shotgun, моддер ChunkLeChuck недавно снабдил GTA IV поддержкой технологий интеллектуального масштабирования (Nvidia DLSS 4, AMD FSR 3) и сглаживания (DLAA), а также HDR.\n\nSPECIFIC SCENE TO DEPICT (approved plan for this slide)\nA tight 4:5 macro view of an anonymous monitor showing a dark open-world city scene, centered on a diagonal roofline and skyline edge where jagged pixels transition into a clean smooth contour. No text, interface labels, logos or identifiable game branding appear in the image.\nSTORY-SPECIFIC ANCHOR (what makes this picture belong to THIS story)\nThe mod adds Nvidia DLSS 4, AMD FSR 3, DLAA and HDR support.\nWHAT MUST BE PHYSICALLY VISIBLE, AND WHY (the finished slide: every number, price or word it mentions is typography the application adds on top - draw only the scene)\nUse a generated macro scene of a game monitor with the same city image, focusing on a clean diagonal edge between a building and sky where jagged pixels are visibly reduced. Place the copy in a calm dark side of the frame; the image should make the technical improvement feel observable rather than abstract.\nSlide purpose: Дать сохраняемую конкретику вместо общего разговора об улучшении графики.. Media function: evidence_photo.\n\nOVERALL IDEA\nПоказать старую GTA IV как тёмный игровой мир, в который физически возвращается современная гладкость: от заметных «лесенок» к чистым контурам и подключённой технической зависимости.\nVisual genre: Единый мотив — jagged-to-smooth contours, тёмная игровая среда и физические детали технического вмешательства; без текста, логотипов и фальшивого UI внутри изображений..\n\nCOMPOSITION FOR THIS SLIDE\none decisive focal subject with depth and intentional negative space for a headline. Portrait 4:5 editorial framing, one decisive focal point, believable depth and material detail.\n\nSPECIFICITY\nDepict THIS story's concrete idea so the picture communicates the story before the reader reads the text. The picture must not be reusable unchanged for ten unrelated AI posts. Do NOT produce a glowing cube, floating spheres or random geometry, a generic AI brain, an anonymous robot, a hologram, a cyberpunk city, an abstract monolith, neon circuitry or corporate technology stock art unless this story is literally about it.\n\nCOLOR / MOOD\nDerive colour from the idea; contemporary, specific, cinematic or editorial, never generic.\n\nNEGATIVE CONSTRAINTS\nNO LOGOS. NO WORDMARKS. NO WATERMARKS. NO LARGE TEXT. NO READABLE TEXT OR LETTERING OF ANY KIND. NO FAKE UI. NO RANDOM INTERFACES. NO UNSUPPORTED PRODUCTS, FACTS, NUMBERS OR THIRD-PARTY BRANDING. No shape, colour set or icon that imitates a company's logo or brand symbol (no brand-coloured dots, no sparkle or star icons, no app-icon tiles, no product silhouettes standing in for a named company). Never depict, imitate or re-create a specific real person named in the story, or anyone resembling them, and never stage the reported incident as if it were footage or a photograph of it. Any people are anonymous and unidentifiable (hands, backs, silhouettes, out of focus); prefer objects, places and a visual metaphor. Paper, pages, cards, screens and objects are BLANK: no handwriting, no scribbled lines imitating writing, no marks, stamps or engravings. Anything the story leaves unnamed (which places, people, companies or products) stays abstract and unidentifiable: no recognisable map or state outlines, faces or product designs. Do not bake any headline into the image; the application adds the exact Russian copy and the canonical logo after generation."
+  },
+  {
+   "asset_key": "4",
+   "status": "generated_media",
+   "accounted_usd": "0.02263500",
+   "reserved_usd": "0.08100",
+   "provider_request_id": "req_a623229b07ca4ddd93a9e00679737414",
+   "prompt": "VISUAL PROFILE VERSION\ninstagram-reference-board-text-profile-v1\n\nSTORY\nБольше никаких «лесенок»: спустя 18 лет моддер реализовал в GTA IV полноценное сглаживание\nSupported facts only:\n- Для работы требуется глобальная техническая модификация Fusion Fix.\n\nSPECIFIC SCENE TO DEPICT (approved plan for this slide)\nA 4:5 dark workstation scene with an anonymous monitor showing an open-world city image and a large modular technical connector visibly attached to its side. The connector is a non-branded metaphor for the required Fusion Fix dependency; no text, logos or fake interface appear.\nSTORY-SPECIFIC ANCHOR (what makes this picture belong to THIS story)\nDLSS-IV requires the global technical modification Fusion Fix to work.\nWHAT MUST BE PHYSICALLY VISIBLE, AND WHY (the finished slide: every number, price or word it mentions is typography the application adds on top - draw only the scene)\nShow the same dark game-monitor world with a large anonymous modular connector being physically attached to the side of a monitor, using it as a clear metaphor for a required technical dependency. Keep the lower-left area calm for the conclusion and avoid any text, symbols or fake branding inside the image.\nSlide purpose: Закрыть историю практическим ограничением, которое читателю важно знать перед скачиванием.. Media function: concept.\n\nOVERALL IDEA\nПоказать старую GTA IV как тёмный игровой мир, в который физически возвращается современная гладкость: от заметных «лесенок» к чистым контурам и подключённой технической зависимости.\nVisual genre: Единый мотив — jagged-to-smooth contours, тёмная игровая среда и физические детали технического вмешательства; без текста, логотипов и фальшивого UI внутри изображений..\n\nCOMPOSITION FOR THIS SLIDE\nONE single object, whole and centred with generous margin, on a plain uniform studio ground (flat light grey or flat near-black); no clutter, no scene. Portrait 4:5 editorial framing, one decisive focal point, believable depth and material detail.\n\nSPECIFICITY\nDepict THIS story's concrete idea so the picture communicates the story before the reader reads the text. The picture must not be reusable unchanged for ten unrelated AI posts. Do NOT produce a glowing cube, floating spheres or random geometry, a generic AI brain, an anonymous robot, a hologram, a cyberpunk city, an abstract monolith, neon circuitry or corporate technology stock art unless this story is literally about it.\n\nCOLOR / MOOD\nDerive colour from the idea; contemporary, specific, cinematic or editorial, never generic.\n\nNEGATIVE CONSTRAINTS\nNO LOGOS. NO WORDMARKS. NO WATERMARKS. NO LARGE TEXT. NO READABLE TEXT OR LETTERING OF ANY KIND. NO FAKE UI. NO RANDOM INTERFACES. NO UNSUPPORTED PRODUCTS, FACTS, NUMBERS OR THIRD-PARTY BRANDING. No shape, colour set or icon that imitates a company's logo or brand symbol (no brand-coloured dots, no sparkle or star icons, no app-icon tiles, no product silhouettes standing in for a named company). Never depict, imitate or re-create a specific real person named in the story, or anyone resembling them, and never stage the reported incident as if it were footage or a photograph of it. Any people are anonymous and unidentifiable (hands, backs, silhouettes, out of focus); prefer objects, places and a visual metaphor. Paper, pages, cards, screens and objects are BLANK: no handwriting, no scribbled lines imitating writing, no marks, stamps or engravings. Anything the story leaves unnamed (which places, people, companies or products) stays abstract and unidentifiable: no recognisable map or state outlines, faces or product designs. Do not bake any headline into the image; the application adds the exact Russian copy and the canonical logo after generation."
+  }
+ ],
+ "llm_calls": [
+  {
+   "post": "post",
+   "kind": "PHASE_A",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 8000,
+   "worst_case_usd": "0.05039500",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 2439,
+   "output_tokens": 814,
+   "reasoning_tokens": 323,
+   "cost_usd": "0.007323"
+  },
+  {
+   "post": "post",
+   "kind": "DIRECTOR",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 10737,
+   "worst_case_usd": "0.07723200",
+   "status": "PROVIDER_ERROR",
+   "error": "ProviderTransientError: openai: APIConnectionError: Connection error.",
+   "cost_usd": "0"
+  },
+  {
+   "post": "post",
+   "kind": "DIRECTOR",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 10737,
+   "worst_case_usd": "0.07723200",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 12848,
+   "output_tokens": 8570,
+   "reasoning_tokens": 2099,
+   "cost_usd": "0.064268"
+  },
+  {
+   "post": "post",
+   "kind": "DIRECTOR",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 10737,
+   "worst_case_usd": "0.07744500",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 13060,
+   "output_tokens": 6710,
+   "reasoning_tokens": 1951,
+   "cost_usd": "0.05332"
+  }
+ ],
+ "llm_spent_usd": "0.124911",
+ "llm_ledger_usd": "0.124911",
+ "image_ledger_usd": "0.0911825"
+}
