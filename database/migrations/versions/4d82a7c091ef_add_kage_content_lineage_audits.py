@@ -1,7 +1,7 @@
 """add bounded KAGE content-lineage audit table
 
 Revision ID: 4d82a7c091ef
-Revises: a3f7c1e9b204
+Revises: a3f7c1d9e042
 """
 from typing import Sequence, Union
 
@@ -10,7 +10,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "4d82a7c091ef"
-down_revision: Union[str, None] = "a3f7c1e9b204"
+down_revision: Union[str, None] = "a3f7c1d9e042"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
