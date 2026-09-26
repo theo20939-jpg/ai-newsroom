@@ -1,0 +1,45 @@
+{
+ "source": "the exact live Reel package (live/2026-08-10_2_meme_trend/package.json) re-rendered OFFLINE after the no-photo cover fix, handed the live vc.ru card; 0 provider calls. NOT a live result.",
+ "treatment": "none",
+ "designed_typographic": true,
+ "hook_boxes": [
+  [
+   86,
+   653,
+   818,
+   726
+  ],
+  [
+   85,
+   750,
+   722,
+   795
+  ],
+  [
+   86,
+   825,
+   684,
+   898
+  ],
+  [
+   86,
+   922,
+   759,
+   983
+  ],
+  [
+   84,
+   1008,
+   750,
+   1069
+  ],
+  [
+   86,
+   1094,
+   482,
+   1156
+  ]
+ ],
+ "art_passed": true,
+ "blocking": []
+}

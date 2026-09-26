@@ -1,0 +1,165 @@
+{
+ "schema_version": "v1",
+ "package_id": "0687fa8f-ba37-4540-abab-04fe325333fd",
+ "platform": "instagram",
+ "account_key": "default",
+ "content_format": "single",
+ "caption": "Telegram-бот на DeepSeek получил одну задачу — и дальше действовал сам: искал в интернете подходящие мишени, оценивал их, скачивал готовый код для атаки и пробовал его применить.\n\nИтог кампании: больше 460 целей под атакой и ноль систем, взломанных автономным контуром.\n\nСессию целиком восстановили исследователи Unit 42, подразделения Palo Alto Networks, и 30 июля опубликовали разбор.\n\n460 → 0. Автономности было много, результата — нет.",
+ "caption_is_draft": false,
+ "on_image_copy": "460 → 0\nАвтономный агент попробовал. Не получилось",
+ "cta": null,
+ "hashtags": [],
+ "media_plan": {
+  "kind": "single",
+  "source_subject": "Telegram-бот на DeepSeek",
+  "visual_concept": "Минималистичная hero-композиция: крупное «460» слева, стрелка в центре и контрастное «0» справа. На фоне — абстрактный Telegram/terminal-мотив без реального интерфейса и без инструкций по атаке.",
+  "asset_requirements": [
+   "Использовать доступное исходное изображение размером 1200×630.",
+   "Добавить крупную типографическую связку «460 → 0».",
+   "Сохранить абстрактный Telegram/terminal-мотив без реального интерфейса.",
+   "Не использовать визуальные инструкции по атаке.",
+   "Применить актуальные бренд-ассеты KAGE/NINJA без реконструкции устаревшего логотипа или wordmark."
+  ],
+  "creative_execution_plan": {
+   "main_idea": "Сделать из новости мгновенно считываемый мем-контраст: масштаб автономных действий — «460», результат — «0».",
+   "focal_point": "Типографическая связка «460 → 0»; исходное изображение используется как поддерживающий фон, а не как носитель подробностей.",
+   "media_strategy": "source_media",
+   "media_rationale": "Доступно исходное изображение 1200×630, поэтому authentic source media сохраняет связь с реальным кейсом и позволяет поверх него построить сильный числовой контраст.",
+   "composition_direction": "Разместить «460» слева крупным блоком, стрелку — в центре, «0» — справа с максимальным контрастом. Короткую фразу поставить вторым уровнем, не перегружая изображение.",
+   "branding_treatment": "Небольшой аккуратный брендовый акцент KAGE/NINJA в актуальном исполнении, без центрального watermark и без конкуренции с главным числовым сообщением.",
+   "visual_treatment": "Минималистичный техно-редакционный стиль, контрастная типографика, абстрактные элементы Telegram/terminal-мотива, отсутствие реального интерфейса и атакующих инструкций.",
+   "avoid_recent_treatment": null
+  },
+  "media_execution": {
+   "strategy": "source_media",
+   "status": "source_media",
+   "generation_cost_usd": null,
+   "generation_request_id": null,
+   "assets": [
+    {
+     "asset_key": "primary",
+     "media_mode": "SOURCE",
+     "status": "source_media",
+     "asset_ref": "3d4920c80e6b23219a2ebe5d49625dfa19ef3bc11728357271bac090905b4677",
+     "source_asset_ref": "3d4920c80e6b23219a2ebe5d49625dfa19ef3bc11728357271bac090905b4677",
+     "generated_asset_ref": null,
+     "generation_execution_id": null,
+     "provider_request_id": null,
+     "provider": null,
+     "model": null,
+     "generation_prompt": null,
+     "generation_prompt_sha256": null,
+     "size": null,
+     "quality": null,
+     "reserved_cost_usd": null,
+     "accounted_cost_usd": null,
+     "composition_intent": "Разместить «460» слева крупным блоком, стрелку — в центре, «0» — справа с максимальным контрастом. Короткую фразу поставить вторым уровнем, не перегружая изображение.",
+     "focal_subject": "Типографическая связка «460 → 0»; исходное изображение используется как поддерживающий фон, а не как носитель подробностей.",
+     "source_treatment": "creative_plan_selected_source",
+     "final_compositor_treatment": "exact_russian_typography_canonical_logo_safe_zones",
+     "asset_identity": "2393668e86184a86"
+    }
+   ]
+  },
+  "render_trace": {
+   "assets": [
+    {
+     "slide_index": null,
+     "creative_plan": {
+      "main_idea": "Сделать из новости мгновенно считываемый мем-контраст: масштаб автономных действий — «460», результат — «0».",
+      "focal_point": "Типографическая связка «460 → 0»; исходное изображение используется как поддерживающий фон, а не как носитель подробностей.",
+      "composition_direction": "Разместить «460» слева крупным блоком, стрелку — в центре, «0» — справа с максимальным контрастом. Короткую фразу поставить вторым уровнем, не перегружая изображение.",
+      "visual_treatment": "Минималистичный техно-редакционный стиль, контрастная типографика, абстрактные элементы Telegram/terminal-мотива, отсутствие реального интерфейса и атакующих инструкций."
+     },
+     "render_interpretation": "typographic_focal",
+     "used_primitives": [
+      "field_background",
+      "background_typography",
+      "display_copy",
+      "brand_anchor"
+     ],
+     "source_media_treatment": "none",
+     "typography_treatment": "display_symbol_plus_supporting_copy",
+     "asset_key": "primary"
+    }
+   ]
+  }
+ },
+ "external_video_asset_ref": null,
+ "opportunity_id": "3f78b564-7b07-458d-bf53-e16533f12067",
+ "story_id": "3f78b564-7b07-458d-bf53-e16533f12067",
+ "trend_id": null,
+ "campaign_id": null,
+ "campaign_name": null,
+ "campaign_phase": null,
+ "approved_claims": [],
+ "restricted_claims": [],
+ "product_mention_allowed": false,
+ "director_evidence": {
+  "evidence": [
+   "460 целей, ноль автономных взломов: как Telegram-бот на DeepSeek подставил хозяина",
+   "В мае 2026 года злоумышленник отправил в Telegram одну задачу — и больше ни одного его сообщения восстановить не удалось.",
+   "Все остальное сделала нейросеть: нашла в интернете подходящие мишени, оценила их, скачала готовый код для атаки, попробовала его применить, ничего не добилась, самостоятельно решила, что цель бесперспективная, и ушла искать другую.",
+   "Эту сессию целиком восстановили исследователи из Unit 42, подразделения Palo Alto Networks, и 30 июля опубликовали разбор.",
+   "Итог кампании выглядит так: больше 460 целей под атакой и ноль систем, взломанных автономным контуром.",
+   "Некто под никами knaithe и KnYuan, кто, по оценке Unit 42, находится в китайском Чжухае, взял открытый агентный фреймворк Hermes Agent — обвязку, которая превращает языковую модель в исполнителя с руками, — и подключил к нему DeepSeek.",
+   "Фреймворк дал агенту доступ к терминалу, набор многоразовых навыков и возможность работать без надзора.",
+   "SOURCE MEDIA: 1200x630 source image available"
+  ],
+  "editorial_decision": {
+   "source_summary": "Исследователи Unit 42 восстановили сессию, в которой Telegram-бот на базе DeepSeek самостоятельно искал цели и пытался атаковать их: более 460 целей, но ни одного успешного взлома.",
+   "opportunity_type": "NEWS",
+   "why_now": "Кейс превращает сложную тему автономных AI-агентов в понятный интернет-сюжет с сильным контрастом: агент получил много самостоятельности, но результат оказался нулевым.",
+   "audience_value": "Показывает без техножаргона, что автономность AI не равна эффективности: агент может самостоятельно выбирать цели и выполнять действия, но всё равно провалить задачу.",
+   "angle": "«460 целей. 0 взломов. Самый самостоятельный провал AI?» — подать историю как абсурдный контраст между масштабом действий агента и итогом кампании.",
+   "angle_intent": "MEME",
+   "topic": "Автономный AI-агент, который самостоятельно атаковал сотни целей, но не добился ни одного взлома.",
+   "purpose": "REACH",
+   "origin": "NEWS",
+   "recommended_format": "single",
+   "format_reason": "Один сильный визуальный контраст «460 → 0» считывается мгновенно и лучше всего работает как hero-композиция для реакции и охватов.",
+   "creative_direction": "Минималистичный техно-визуал: крупное «460» слева, стрелка и контрастное «0» справа; короткая подпись «Автономный агент попробовал. Не получилось». В фоне — абстрактный Telegram/terminal-мотив без изображения реального интерфейса и без инструкций по атаке.",
+   "product_connection": null,
+   "trend_rationale": "Подтверждённого Instagram-native сигнала нет, поэтому не заявляем о вирусности или тренде в Instagram. Интернет-native fit здесь — в формате реакции на абсурдный контраст и провал автономного агента, подтверждённый результатами кейса.",
+   "trend_signal_type": null,
+   "trend_signal_provenance": null,
+   "supplementary_story_idea": "Опрос в Stories: «Что важнее для AI-агента: автономность или результат?» — варианты «Автономность» / «Результат».",
+   "evidence_used": [
+    "В мае 2026 года злоумышленник отправил в Telegram одну задачу — и больше ни одного его сообщения восстановить не удалось.",
+    "Все остальное сделала нейросеть: нашла в интернете подходящие мишени, оценила их, скачала готовый код для атаки, попробовала его применить, ничего не добилась, самостоятельно решила, что цель бесперспективная, и ушла искать другую.",
+    "Эту сессию целиком восстановили исследователи из Unit 42, подразделения Palo Alto Networks, и 30 июля опубликовали разбор.",
+    "Итог кампании выглядит так: больше 460 целей под атакой и ноль систем, взломанных автономным контуром.",
+    "Некто под никами knaithe и KnYuan, кто, по оценке Unit 42, находится в китайском Чжухае, взял открытый агентный фреймворк Hermes Agent — обвязку, которая превращает языковую модель в исполнителя с руками, — и подключил к нему DeepSeek.",
+    "Фреймворк дал агенту доступ к терминалу, набор многоразовых навыков и возможность работать без надзора."
+   ],
+   "coverage_plan": null,
+   "duplication_decision": "ALLOW",
+   "duplication_rationale": "no recent or in-flight item has the same canonical story and material angle, nor the same premise on another story",
+   "recent_history_count": 0,
+   "canary_override_used": false,
+   "output_language": "ru",
+   "planned_format": "TREND",
+   "phase_a_source_taxonomy_format": "weekly_news"
+  },
+  "confidence": 0.5,
+  "primary_objective": "reach",
+  "recommended_format": "single",
+  "hook_family": null,
+  "format_decision_why": "Один сильный визуальный контраст «460 → 0» считывается мгновенно и лучше всего работает как hero-композиция для реакции и охватов.",
+  "format_decision_risk": "low",
+  "format_decision_confidence": 0.5,
+  "format_decision_warnings": []
+ },
+ "render_profiles": [
+  "portrait_feed"
+ ],
+ "slide_count": null,
+ "presentation_family": null,
+ "source_image_ref": "3d4920c80e6b23219a2ebe5d49625dfa19ef3bc11728357271bac090905b4677",
+ "media_candidate_id": "203f9700-5d7f-41d4-8acd-7a949920db48",
+ "media_subject_match": null,
+ "media_usage_classification": null,
+ "reel_script_readiness": null,
+ "publication_metadata": {},
+ "created_at": "2026-09-25 23:26:20.914075+00:00"
+}

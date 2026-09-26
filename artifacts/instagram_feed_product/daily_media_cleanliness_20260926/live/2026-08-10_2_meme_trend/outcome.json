@@ -1,0 +1,58 @@
+{
+ "key": "2026-08-10_2_meme_trend",
+ "day": "2026-08-10",
+ "slot": 2,
+ "format": "meme_trend",
+ "title": "Австралиец попросил ИИ-агента записать его в спортзал — тот взломал систему фитнес-клуба, чтобы обойти ограничения на",
+ "source": "vc.ru",
+ "evidence": "STRONG",
+ "evidence_why": "6 premise facts from 2 fetched source(s)",
+ "source_media": "AVAILABLE",
+ "reason": "submitted",
+ "stage": "OK",
+ "gate": "block",
+ "delivery": "recorded_block_no_telegram",
+ "calls": [
+  {
+   "post": "2026-08-10_2_meme_trend",
+   "kind": "PHASE_A",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 8000,
+   "worst_case_usd": "0.05039300",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 2457,
+   "output_tokens": 811,
+   "reasoning_tokens": 333,
+   "cost_usd": "0.007323"
+  },
+  {
+   "post": "2026-08-10_2_meme_trend",
+   "kind": "VISION",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 400,
+   "worst_case_usd": "0.00281800",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 841,
+   "output_tokens": 54,
+   "reasoning_tokens": 0,
+   "cost_usd": "0.001165"
+  },
+  {
+   "post": "2026-08-10_2_meme_trend",
+   "kind": "DIRECTOR",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 16000,
+   "worst_case_usd": "0.09941300",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 3613,
+   "output_tokens": 2241,
+   "reasoning_tokens": 236,
+   "cost_usd": "0.017059"
+  }
+ ],
+ "slides": 1,
+ "spent_so_far": "0.046583"
+}

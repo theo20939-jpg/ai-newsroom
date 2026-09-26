@@ -1,0 +1,47 @@
+{
+ "post_id": "5ae86b7f-e5ab-4af3-912b-e4372c0ad0d5",
+ "format": "weekly_recap_story",
+ "premise": "Reports described Jony Ive’s first OpenAI device as a compact smart speaker, priced around $300–$400.",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "The AI device OpenAI is developing with former Apple designer Jony Ive is \"essentially a smart speaker without a display\" that's battery-powered, doughnut-shaped and roughly the size of a hockey puck, according to Bloomberg reporter Mark Gurman. The device, expected to launch in 2027 for a price over $300, reportedly \"will have a unique look, […]",
+   "status": "OK"
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "The AI device OpenAI is developing with former Apple designer Jony Ive is \"essentially a smart speaker without a display\" that's battery-powered, doughnut-shaped and roughly the size of a hockey puck, according to Bloomberg reporter Mark Gurman.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "The AI device OpenAI is developing with former Apple designer Jony Ive is \"essentially a smart speaker without a display\" that's battery-powered, doughnut-shaped and roughly the size of a hockey puck, according to Bloomberg reporter Mark Gurman."
+  },
+  {
+   "kind": "FACT",
+   "text": "The device, expected to launch in 2027 for a price over $300, reportedly \"will have a unique look, […]",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "The device, expected to launch in 2027 for a price over $300, reportedly \"will have a unique look, […]"
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "NOT_AVAILABLE",
+  "url": null,
+  "width": null,
+  "height": null,
+  "mime_type": null,
+  "source": null,
+  "reason": "recap media is resolved per story by the recap bundle"
+ },
+ "quality": "THIN",
+ "why": "only 2 premise fact(s) - the shareable detail is missing",
+ "excluded_bodies": [
+  "event:f4899ee2-8743-4510-8943-844d915131d8:body"
+ ]
+}

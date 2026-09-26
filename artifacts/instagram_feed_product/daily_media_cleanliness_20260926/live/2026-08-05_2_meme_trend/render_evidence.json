@@ -1,0 +1,87 @@
+[
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "single",
+  "profile": "portrait_feed",
+  "canvas_width": 1080,
+  "canvas_height": 1350,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "headline",
+    "box": [
+     178,
+     430,
+     979,
+     625
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     178,
+     689,
+     650,
+     750
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     178,
+     760,
+     635,
+     838
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "headline",
+    "box": [
+     178,
+     853,
+     608,
+     931
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": null,
+  "slide_count": null,
+  "caption_linkage": "f6f01329-2ff6-43c5-854f-1466eb25c635",
+  "content_identity": "0a93d2301e981e0a",
+  "source_media_candidate_id": null,
+  "notes": {
+   "visual_coverage_fraction": 0.82,
+   "typographic_focal": "figure",
+   "designed_typographic": true,
+   "creative_plan": {
+    "main_idea": "Сделать из фактического итога кампании мгновенно считываемый мем: «460 целей → 0 взломов».",
+    "focal_point": "Гигантская связка чисел «460» и «0», где ноль визуально доминирует как финальный результат.",
+    "composition_direction": "Верхняя треть — «460 ЦЕЛЕЙ» в стиле строки отчёта; центр — стрелка или индикатор движения; нижняя половина — максимально крупное «0 ВЗЛОМОВ». Второстепенный дескриптор «Telegram-бот на DeepSeek» — компактно, чтобы не спорить с главным контрастом.",
+    "visual_treatment": "Контрастный псевдоинтерфейсный дизайн с ощущением системного лога, но без перегруза терминальными деталями. Добавить комедийный акцент через визуально «провалившийся» прогресс или статус без имитацииฮ"
+   },
+   "render_interpretation": "typographic_focal",
+   "used_primitives": [
+    "field_background",
+    "background_typography",
+    "display_copy",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "none",
+   "typography_treatment": "display_symbol_plus_supporting_copy",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "rendered_copy": [
+    "460 ЦЕЛЕЙ\n↓\n0 ВЗЛОМОВ\n\nTelegram-бот на DeepSeek"
+   ],
+   "internal_labels_rendered": [],
+   "source_coverage_fraction": 0.0,
+   "layout_variant": "news_typographic_focal"
+  }
+ }
+]

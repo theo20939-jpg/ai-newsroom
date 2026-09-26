@@ -150,10 +150,16 @@ def _reel_graphic(*, spec: ProfileSpec, kicker: str | None, hook: str, package_i
     ch = 0
     if kicker:
         _, ch = draw_kicker_chip(canvas, x=margin, y=grid_top, text=kicker, accent=True)
+    # a long hook takes more lines at display size (the grid-safe band holds six) instead of shrinking to caption size in four
     hook_font, hook_lines, clipped = fit_text_block(
-        draw, hook, font_max=round(spec.width * tok.TYPE_HEADLINE_M.size_frac), font_min=round(spec.width * 0.045),
-        max_width=content_w, max_lines=4, weight=tok.TYPE_HEADLINE_M.weight,
+        draw, hook, font_max=round(spec.width * tok.TYPE_HEADLINE_M.size_frac), font_min=round(spec.width * 0.06),
+        max_width=content_w, max_lines=6, weight=tok.TYPE_HEADLINE_M.weight,
     )
+    if clipped:  # longer still: the previous fit (smaller type, four lines) - the art gate then reports it as not designed
+        hook_font, hook_lines, clipped = fit_text_block(
+            draw, hook, font_max=round(spec.width * tok.TYPE_HEADLINE_M.size_frac), font_min=round(spec.width * 0.045),
+            max_width=content_w, max_lines=4, weight=tok.TYPE_HEADLINE_M.weight,
+        )
     hook_h = measure_block_height(draw, hook_lines, hook_font)
     y: float = grid_top + ch + round(spec.height * 0.03)
     if y + hook_h > grid_bottom:
@@ -162,7 +168,7 @@ def _reel_graphic(*, spec: ProfileSpec, kicker: str | None, hook: str, package_i
         bbox = draw.textbbox((margin, y), line, font=hook_font)
         draw.text((margin, y), line, font=hook_font, fill=tok.WHITE)
         regions.append(TextRegionSpec(kind="hook", box=box4(bbox), clipped=clipped and i == len(hook_lines) - 1))
-        y += (bbox[3] - bbox[1]) + round(hook_font.size * 0.18)
+        y += round(hook_font.size * 1.1)  # one constant line advance: a line without ascenders no longer pulls the next one up
 
     mark_count = place_brand_mark(canvas, spec, compact=True)
     return LayoutResult(

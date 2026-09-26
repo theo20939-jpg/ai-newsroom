@@ -1,0 +1,9 @@
+[
+ ["SINGLE — NEW (live)", "live/2026-08-05_2_meme_trend", "DeepSeek Telegram bot (Habr), forced SINGLE. All 3 source candidates judged unsuitable (2 flat cards, 1 promo graphic via live vision) -> designed typographic Single"],
+ ["SINGLE — PRIOR (failed)", "prior/single_deepseek_art_block", "previous live run: Habr share card recorded as source, art gate BLOCK single_source_image_not_rendered"],
+ ["CAROUSEL — PRESERVED (passed, not rerun)", "preserved/carousel_adobe", "Adobe tools inside ChatGPT, forced CAROUSEL - the already-passed result, copied unchanged"],
+ ["REEL — NEW (live)", "live/2026-08-10_2_meme_trend", "AI agent / gym booking (vc.ru), forced REEL. Live vision: article_or_news_card -> share card rejected; no-photo cover BLOCKED by the new gate rule (hook shrank below display size)"],
+ ["REEL — OFFLINE REPLAY after cover fix (NOT live)", "offline_reel_replay", "the same live Reel package re-rendered with the no-photo cover fix - zero cost, not a live result"],
+ ["REEL — PRIOR (failed)", "prior/reel_gym_clipped_share_card", "previous live run: vc.ru share card recomposed, source headline clipped mid-word, gate passed it"],
+ ["WEEKLY RECAP — PRESERVED (passed, not rerun)", "preserved/weekly_recap", "the frozen 7-story week - the already-passed result, copied unchanged"]
+]

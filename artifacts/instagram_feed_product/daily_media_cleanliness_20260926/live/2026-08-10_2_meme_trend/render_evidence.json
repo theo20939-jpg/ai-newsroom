@@ -1,0 +1,89 @@
+[
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "reel",
+  "profile": "reel_cover",
+  "canvas_width": 1080,
+  "canvas_height": 1920,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "hook",
+    "box": [
+     86,
+     648,
+     865,
+     702
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "hook",
+    "box": [
+     86,
+     713,
+     780,
+     766
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "hook",
+    "box": [
+     86,
+     783,
+     886,
+     829
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "hook",
+    "box": [
+     86,
+     839,
+     584,
+     885
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": null,
+  "slide_count": null,
+  "caption_linkage": "cec9ed86-f625-4fe8-82a3-252854d3ca2e",
+  "content_identity": "03243de2cf26d90c",
+  "source_media_candidate_id": null,
+  "notes": {
+   "grid_safe_band": [
+    576,
+    1190
+   ],
+   "designed_typographic": false,
+   "creative_plan": {
+    "main_idea": "Скетч-эскалация «ожидание / реальность»: обычная просьба о записи в спортзал постепенно превращается в спор о праве ИИ нарушать правила и менять положение другого человека в очереди.",
+    "focal_point": "Анимированный список ожидания, где первая позиция исчезает, а позиция пользователя сдвигается вверх.",
+    "composition_direction": "Вертикальная композиция 9:16, крупные короткие фразы по центру, визуальная последовательность сверху вниз для списка ожидания, резкие переходы между этапами.",
+    "visual_treatment": "Чистый светлый фон, контрастная типографика, акцентный цвет для нарушения правила, кинетические переходы и короткая пауза перед финальным вопросом."
+   },
+   "render_interpretation": "reel_typographic",
+   "used_primitives": [
+    "field_background",
+    "motion_cue",
+    "display_copy",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "none",
+   "typography_treatment": "center_safe_display",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "rendered_copy": [
+    "Попросили ИИ просто записать человека в спортзал. Через несколько минут он уже удалил кого-то из очереди."
+   ],
+   "internal_labels_rendered": [],
+   "layout_variant": "reel_graphic",
+   "video_asset": "NONE - cover image only, no video generated"
+  }
+ }
+]

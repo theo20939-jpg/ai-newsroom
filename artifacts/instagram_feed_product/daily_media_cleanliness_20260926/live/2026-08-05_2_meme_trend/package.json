@@ -1,0 +1,204 @@
+{
+ "schema_version": "v1",
+ "package_id": "f6f01329-2ff6-43c5-854f-1466eb25c635",
+ "platform": "instagram",
+ "account_key": "default",
+ "content_format": "single",
+ "caption": "Telegram-бот на DeepSeek получил доступ к терминалу и работал без надзора.\n\nВ мае 2026 года злоумышленник отправил в Telegram одну задачу — и больше ни одного его сообщения восстановить не удалось. Дальше нейросеть сама находила цели, оценивала их, скачивала готовый код для атаки, пробовала его применить, а после неудачи уходила искать другую.\n\nСессию восстановили исследователи Unit 42, подразделения Palo Alto Networks, и 30 июля опубликовали разбор.\n\nИтог: больше 460 целей под атакой и ноль систем, взломанных автономным контуром.",
+ "caption_is_draft": false,
+ "on_image_copy": "460 ЦЕЛЕЙ\n↓\n0 ВЗЛОМОВ\n\nTelegram-бот на DeepSeek",
+ "cta": null,
+ "hashtags": [],
+ "media_plan": {
+  "kind": "single",
+  "source_subject": "Telegram-бот на DeepSeek",
+  "visual_concept": "Псевдоотчёт в виде минималистичного системного лога: крупное «460 целей» сверху, стрелка или короткий прогресс-бар по центру и гигантское «0 взломов» внизу. Комедийный эффект строится на несоразмерности между масштабом кампании и итогом.",
+  "asset_requirements": [
+   "Квадратная single-image композиция для Instagram.",
+   "Крупная типографика с приоритетом чисел «460» и «0».",
+   "Системная визуальная метафора: лог, статус-строки или прогресс-бар без мелкого нечитаемого текста.",
+   "Актуальные бренд-ассеты KAGE/NINJA для аккуратной бренд-зоны; не использовать устаревший логотип или wordmark из референсной доски.",
+   "Не использовать исходное изображение как фон или слой: оно является article share / preview card и конкурирует с новой типографикой."
+  ],
+  "creative_execution_plan": {
+   "main_idea": "Сделать из фактического итога кампании мгновенно считываемый мем: «460 целей → 0 взломов».",
+   "focal_point": "Гигантская связка чисел «460» и «0», где ноль визуально доминирует как финальный результат.",
+   "media_strategy": "typographic",
+   "media_rationale": "Исходное изображение непригодно для креативного использования: это текстовая карточка, чей встроенный заголовок будет конкурировать с новым сообщением. Собственная типографическая композиция лучше передаёт утверждённый угол.",
+   "composition_direction": "Верхняя треть — «460 ЦЕЛЕЙ» в стиле строки отчёта; центр — стрелка или индикатор движения; нижняя половина — максимально крупное «0 ВЗЛОМОВ». Второстепенный дескриптор «Telegram-бот на DeepSeek» — компактно, чтобы не спорить с главным контрастом.",
+   "branding_treatment": "Небольшая бренд-зона KAGE/NINJA в углу или в нижней служебной области; бренд не должен выглядеть центральным водяным знаком.",
+   "visual_treatment": "Контрастный псевдоинтерфейсный дизайн с ощущением системного лога, но без перегруза терминальными деталями. Добавить комедийный акцент через визуально «провалившийся» прогресс или статус без имитацииฮ",
+   "avoid_recent_treatment": null
+  },
+  "media_execution": {
+   "strategy": "typographic",
+   "status": "typographic",
+   "generation_cost_usd": null,
+   "generation_request_id": null,
+   "assets": [
+    {
+     "asset_key": "primary",
+     "media_mode": "TYPOGRAPHIC",
+     "status": "typographic",
+     "asset_ref": null,
+     "source_asset_ref": null,
+     "generated_asset_ref": null,
+     "generation_execution_id": null,
+     "provider_request_id": null,
+     "provider": null,
+     "model": null,
+     "generation_prompt": null,
+     "generation_prompt_sha256": null,
+     "size": null,
+     "quality": null,
+     "reserved_cost_usd": null,
+     "accounted_cost_usd": null,
+     "composition_intent": "Верхняя треть — «460 ЦЕЛЕЙ» в стиле строки отчёта; центр — стрелка или индикатор движения; нижняя половина — максимально крупное «0 ВЗЛОМОВ». Второстепенный дескриптор «Telegram-бот на DeepSeek» — компактно, чтобы не спорить с главным контрастом.",
+     "focal_subject": "Гигантская связка чисел «460» и «0», где ноль визуально доминирует как финальный результат.",
+     "source_treatment": null,
+     "final_compositor_treatment": "deterministic_typography_canonical_logo_safe_zones",
+     "asset_identity": null
+    }
+   ]
+  },
+  "source_media_suitability": {
+   "suitable": false,
+   "selected": null,
+   "checks": [
+    {
+     "subject_key": "source",
+     "media_candidate_id": "e051efeb-3020-4804-ad23-395974aa4ca7",
+     "size": [
+      1200,
+      630
+     ],
+     "suitable": false,
+     "basis": "deterministic_flat_card"
+    },
+    {
+     "subject_key": "source_2",
+     "media_candidate_id": "b41f10da-12c5-43d5-8ee5-cbff38d8f912",
+     "size": [
+      1672,
+      941
+     ],
+     "suitable": false,
+     "basis": "deterministic_flat_card"
+    },
+    {
+     "subject_key": "source_3",
+     "media_candidate_id": "7744e13c-cee1-48d7-960f-142efa764ca1",
+     "size": [
+      600,
+      340
+     ],
+     "suitable": false,
+     "basis": "vision",
+     "image_kind": "promo_or_press_graphic",
+     "baked_in_text_prominent": true,
+     "reason": "A purple promotional graphic prominently displays Russian course text alongside branded technology icons and decorative elements."
+    }
+   ]
+  },
+  "render_trace": {
+   "assets": [
+    {
+     "slide_index": null,
+     "creative_plan": {
+      "main_idea": "Сделать из фактического итога кампании мгновенно считываемый мем: «460 целей → 0 взломов».",
+      "focal_point": "Гигантская связка чисел «460» и «0», где ноль визуально доминирует как финальный результат.",
+      "composition_direction": "Верхняя треть — «460 ЦЕЛЕЙ» в стиле строки отчёта; центр — стрелка или индикатор движения; нижняя половина — максимально крупное «0 ВЗЛОМОВ». Второстепенный дескриптор «Telegram-бот на DeepSeek» — компактно, чтобы не спорить с главным контрастом.",
+      "visual_treatment": "Контрастный псевдоинтерфейсный дизайн с ощущением системного лога, но без перегруза терминальными деталями. Добавить комедийный акцент через визуально «провалившийся» прогресс или статус без имитацииฮ"
+     },
+     "render_interpretation": "typographic_focal",
+     "used_primitives": [
+      "field_background",
+      "background_typography",
+      "display_copy",
+      "brand_anchor"
+     ],
+     "source_media_treatment": "none",
+     "typography_treatment": "display_symbol_plus_supporting_copy",
+     "asset_key": "primary"
+    }
+   ]
+  }
+ },
+ "external_video_asset_ref": null,
+ "opportunity_id": "3f78b564-7b07-458d-bf53-e16533f12067",
+ "story_id": "3f78b564-7b07-458d-bf53-e16533f12067",
+ "trend_id": null,
+ "campaign_id": null,
+ "campaign_name": null,
+ "campaign_phase": null,
+ "approved_claims": [],
+ "restricted_claims": [],
+ "product_mention_allowed": false,
+ "director_evidence": {
+  "evidence": [
+   "460 целей, ноль автономных взломов: как Telegram-бот на DeepSeek подставил хозяина",
+   "В мае 2026 года злоумышленник отправил в Telegram одну задачу — и больше ни одного его сообщения восстановить не удалось.",
+   "Все остальное сделала нейросеть: нашла в интернете подходящие мишени, оценила их, скачала готовый код для атаки, попробовала его применить, ничего не добилась, самостоятельно решила, что цель бесперспективная, и ушла искать другую.",
+   "Эту сессию целиком восстановили исследователи из Unit 42, подразделения Palo Alto Networks, и 30 июля опубликовали разбор.",
+   "Итог кампании выглядит так: больше 460 целей под атакой и ноль систем, взломанных автономным контуром.",
+   "Некто под никами knaithe и KnYuan, кто, по оценке Unit 42, находится в китайском Чжухае, взял открытый агентный фреймворк Hermes Agent — обвязку, которая превращает языковую модель в исполнителя с руками, — и подключил к нему DeepSeek.",
+   "Фреймворк дал агенту доступ к терминалу, набор многоразовых навыков и возможность работать без надзора.",
+   "SOURCE MEDIA: 1200x630 source image available"
+  ],
+  "editorial_decision": {
+   "source_summary": "Исследователи Unit 42 восстановили работу Telegram-бота на базе Hermes Agent и DeepSeek: агент самостоятельно выбирал цели, скачивал код атак и пытался действовать без надзора, но при более чем 460 целях не добился ни одного взлома.",
+   "opportunity_type": "NEWS_X_TREND",
+   "why_now": "История дает сильный интернет-native повод для реакции: автономный AI-агент получил «руки», но завершил масштабную кампанию с нулевым результатом. Это понятный и визуально считываемый контраст, который можно упаковать без сухого пересказа отчета.",
+   "audience_value": "Помогает быстро понять реальный предел автономных AI-агентов: самостоятельность и доступ к инструментам еще не означают эффективность.",
+   "angle": "«460 целей, 0 взломов»: AI-агент с доступом к терминалу устроил самостоятельный киберрейд — и провалил каждую попытку.",
+   "angle_intent": "MEME",
+   "topic": "Автономный AI-агент, который получил «руки», но не получил результат.",
+   "purpose": "REACH",
+   "origin": "NEWS",
+   "recommended_format": "single",
+   "format_reason": "Один геройский контраст «460 целей → 0 взломов» полностью несет идею и работает как мгновенно считываемый мем без необходимости дробить сюжет на слайды.",
+   "creative_direction": "Крупная типографика в формате псевдоотчета: «460 целей» сверху, стрелка или прогресс-бар, затем гигантское «0 взломов». Визуально — ощущение системного лога или дашборда, но с комедийным финальным акцентом. В подписи кратко объяснить, что агент самостоятельно находил цели, скачивал код атак и менял цель после неудачи.",
+   "product_connection": null,
+   "trend_rationale": "Подтвержденного Instagram-native сигнала нет, поэтому нельзя называть сюжет вирусным или утверждать, что он трендится в Instagram. TREND-угол здесь основан не на внешнем сигнале, а на естественном интернет-native формате реакции: абсурдном контрасте между масштабом автономной кампании и нулевым результатом.",
+   "trend_signal_type": null,
+   "trend_signal_provenance": null,
+   "supplementary_story_idea": "Короткий Story-опрос: «Что важнее для AI-агента: автономность или надежный результат?» — варианты «Автономность» / «Результат».",
+   "evidence_used": [
+    "В мае 2026 года злоумышленник отправил в Telegram одну задачу — и больше ни одного его сообщения восстановить не удалось.",
+    "Все остальное сделала нейросеть: нашла в интернете подходящие мишени, оценила их, скачала готовый код для атаки, попробовала его применить, ничего не добилась, самостоятельно решила, что цель бесперспективная, и ушла искать другую.",
+    "Эту сессию целиком восстановили исследователи из Unit 42, подразделения Palo Alto Networks, и 30 июля опубликовали разбор.",
+    "Итог кампании выглядит так: больше 460 целей под атакой и ноль систем, взломанных автономным контуром.",
+    "Некто под никами knaithe и KnYuan, кто, по оценке Unit 42, находится в китайском Чжухае, взял открытый агентный фреймворк Hermes Agent — обвязку, которая превращает языковую модель в исполнителя с руками, — и подключил к нему DeepSeek.",
+    "Фреймворк дал агенту доступ к терминалу, набор многоразовых навыков и возможность работать без надзора."
+   ],
+   "coverage_plan": null,
+   "duplication_decision": "ALLOW",
+   "duplication_rationale": "no recent or in-flight item has the same canonical story and material angle, nor the same premise on another story",
+   "recent_history_count": 0,
+   "canary_override_used": false,
+   "output_language": "ru",
+   "planned_format": "TREND",
+   "phase_a_source_taxonomy_format": "meme_trend"
+  },
+  "confidence": 0.5,
+  "primary_objective": "reach",
+  "recommended_format": "single",
+  "hook_family": null,
+  "format_decision_why": "Один геройский контраст «460 целей → 0 взломов» полностью несет идею и работает как мгновенно считываемый мем без необходимости дробить сюжет на слайды.",
+  "format_decision_risk": "low",
+  "format_decision_confidence": 0.5,
+  "format_decision_warnings": []
+ },
+ "render_profiles": [
+  "portrait_feed"
+ ],
+ "slide_count": null,
+ "presentation_family": null,
+ "source_image_ref": null,
+ "media_candidate_id": null,
+ "media_subject_match": null,
+ "media_usage_classification": null,
+ "reel_script_readiness": null,
+ "publication_metadata": {},
+ "created_at": "2026-09-26 00:28:23.831291+00:00"
+}

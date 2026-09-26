@@ -1,0 +1,10 @@
+[
+ {
+  "subject_key": "source",
+  "suitable": false,
+  "image_kind": "article_or_news_card",
+  "baked_in_text_prominent": true,
+  "reason": "A large Russian headline overlays a blurred photo, with small AI and VC.ru branding visible.",
+  "error": null
+ }
+]

@@ -1,0 +1,11 @@
+{
+ "demotions": [
+  {
+   "slide": 4,
+   "demoted": [
+    "story_3"
+   ],
+   "treatment": "background_layer"
+  }
+ ]
+}
