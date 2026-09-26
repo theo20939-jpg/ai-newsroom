@@ -14,8 +14,21 @@ import worker.content_cycle
 from core.config import settings
 from worker.content_main import main
 
-_FAKE_AI_LAYER = SimpleNamespace(capability_registry=object(), cost_tracker=object())
+_FAKE_AI_LAYER = SimpleNamespace(capability_registry=object(), cost_tracker=object(), gateway=object())
 _FAKE_BOT = object()
+
+
+@pytest.fixture(autouse=True)
+def _restore_copywriting_version_after_worker_test(monkeypatch):
+    """The real worker is long-lived; tests must not leak its startup cutover globally."""
+    old_version = settings.copywriting_prompt_version
+    old_fields_set = set(settings.model_fields_set)
+    settings.__dict__["copywriting_prompt_version"] = "11.10"
+    settings.__pydantic_fields_set__.add("copywriting_prompt_version")
+    monkeypatch.setattr(settings, "image_cleanup_every_n_cycles", 10000)
+    yield
+    settings.__dict__["copywriting_prompt_version"] = old_version
+    settings.__pydantic_fields_set__ = old_fields_set
 
 
 @pytest.mark.asyncio
@@ -26,16 +39,19 @@ async def test_enabled_loop_runs_cycles_and_respects_interval(
     monkeypatch.setattr(settings, "content_generation_poll_interval_seconds", 0.01)
 
     call_count = 0
+    two_cycles = asyncio.Event()
 
     async def fake_cycle(*args, **kwargs) -> None:
         nonlocal call_count
         call_count += 1
+        if call_count >= 2:
+            two_cycles.set()
 
     with patch("worker.content_main.assemble_ai_integration_layer", return_value=_FAKE_AI_LAYER):
         with patch("worker.content_main.create_bot", return_value=_FAKE_BOT):
             with patch("worker.content_main.run_content_cycle", side_effect=fake_cycle):
                 task = asyncio.create_task(main())
-                await asyncio.sleep(0.15)
+                await asyncio.wait_for(two_cycles.wait(), timeout=10)
                 task.cancel()
                 with pytest.raises(asyncio.CancelledError):
                     await task
@@ -51,10 +67,13 @@ async def test_enabled_loop_survives_ordinary_exception_and_continues(
     monkeypatch.setattr(settings, "content_generation_poll_interval_seconds", 0.01)
 
     call_count = 0
+    two_cycles = asyncio.Event()
 
     async def flaky_cycle(*args, **kwargs) -> None:
         nonlocal call_count
         call_count += 1
+        if call_count >= 2:
+            two_cycles.set()
         if call_count == 1:
             raise RuntimeError("boom")
 
@@ -62,7 +81,7 @@ async def test_enabled_loop_survives_ordinary_exception_and_continues(
         with patch("worker.content_main.create_bot", return_value=_FAKE_BOT):
             with patch("worker.content_main.run_content_cycle", side_effect=flaky_cycle):
                 task = asyncio.create_task(main())
-                await asyncio.sleep(0.15)
+                await asyncio.wait_for(two_cycles.wait(), timeout=10)
                 task.cancel()
                 with pytest.raises(asyncio.CancelledError):
                     await task
@@ -201,10 +220,13 @@ async def test_cycle_level_infrastructure_failure_logs_and_waits_for_next_interv
     monkeypatch.setattr(settings, "content_generation_poll_interval_seconds", 0.01)
 
     call_count = 0
+    two_cycles = asyncio.Event()
 
     async def always_raises(*args, **kwargs) -> None:
         nonlocal call_count
         call_count += 1
+        if call_count >= 2:
+            two_cycles.set()
         raise ConnectionError("simulated DB unavailable")
 
     with patch("worker.content_main.assemble_ai_integration_layer", return_value=_FAKE_AI_LAYER):
@@ -212,7 +234,7 @@ async def test_cycle_level_infrastructure_failure_logs_and_waits_for_next_interv
             with patch("worker.content_main.run_content_cycle", side_effect=always_raises):
                 with patch("worker.content_main.logger") as mock_logger:
                     task = asyncio.create_task(main())
-                    await asyncio.sleep(0.1)
+                    await asyncio.wait_for(two_cycles.wait(), timeout=10)
                     task.cancel()
                     with pytest.raises(asyncio.CancelledError):
                         await task

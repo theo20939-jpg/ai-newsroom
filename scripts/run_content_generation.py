@@ -136,6 +136,16 @@ class ContentGenerationOutcome:
     content_draft: ContentDraftRead | None
     fact_safety_status: str | None = None
     copywriting_output: dict[str, Any] | None = None
+    research_output: dict[str, Any] | None = None
+    intelligence_output: dict[str, Any] | None = None
+    quality_output: dict[str, Any] | None = None
+
+
+def _successful_step_output(result: WorkflowRunResult, name: str) -> dict[str, Any] | None:
+    for step in result.step_results:
+        if step.step_name == name and step.status == "SUCCESS" and isinstance(step.result, dict):
+            return step.result
+    return None
 
 
 async def run_content_generation_for_event(
@@ -234,6 +244,9 @@ async def run_content_generation_for_event(
             task_id=task.id, workflow_status=result.status, content_draft=draft,
             fact_safety_status=_fact_safety_status(result),
             copywriting_output=_copywriting_output_for_outcome(result),
+            research_output=_successful_step_output(result, "research"),
+            intelligence_output=_successful_step_output(result, "intelligence"),
+            quality_output=_successful_step_output(result, "quality"),
         )
 
 

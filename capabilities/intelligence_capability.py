@@ -25,6 +25,7 @@ from typing import Any
 
 from capabilities.errors import ValidationCapabilityError
 from capabilities.gateway_call import call_generate
+from core.config import settings
 from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, LLMGateway, Message
 from integrations.prompts.protocol import PromptRepository, RenderedPrompt
 from schemas.capability import CapabilityContext, CapabilityResult
@@ -34,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 CAPABILITY_NAME = "intelligence"
 PROMPT_VERSION = "2"
+PROMPT_VERSION_KAGE = "4"
 
 INTELLIGENCE_CAPABILITY_DEFINITION = CapabilityDefinition(
     name=CAPABILITY_NAME,
@@ -140,7 +142,8 @@ class IntelligenceCapability:
     async def execute(self, context: CapabilityContext) -> CapabilityResult:
         started_at = datetime.now(timezone.utc)
 
-        prompt = self._prompt_repository.resolve(CAPABILITY_NAME, PROMPT_VERSION)
+        prompt_version = PROMPT_VERSION_KAGE if settings.copywriting_prompt_version == "11.10" else PROMPT_VERSION
+        prompt = self._prompt_repository.resolve(CAPABILITY_NAME, prompt_version)
         request = _build_request(context, prompt)
 
         # §6.4/§6.5/§6.7 via the centralized M1 mechanism (§6.8) - never reimplemented here.

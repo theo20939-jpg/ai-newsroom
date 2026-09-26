@@ -76,6 +76,9 @@ from services.editorial_scoring import apply_editorial_scoring_v2
 from services.fact_safety import apply_fact_safety
 from services.fact_safety_calibration import calibrate_fact_safety
 from services.image_intelligence import run_shadow_discovery
+from services.kage_editorial_contract import draft_issues as kage_draft_issues, pre_copy_issues as kage_pre_copy_issues
+from services.kage_draft_recovery import remove_unsupported_absence_sentence
+from services.news_editorial_relevance import classify_product_quality
 from services.meme_opportunity import apply_meme_opportunity_shadow
 from services.meme_safety import apply_meme_safety_originality_shadow
 from services.pricing_catalog import PricingCatalog
@@ -517,6 +520,26 @@ class CapabilityExecutor:
             meme_recent_diversity_context=meme_recent_diversity_context,
         )
 
+        # Opt-in KAGE product loop: an explicit negative Intelligence judgment must stop
+        # before Copywriting spends another call. The paid 11.1 shadow ignored this signal
+        # and drafted both Rabbit and the thin Copilot item anyway. All earlier versions
+        # retain their original workflow behavior.
+        kage_product_loop = (
+            settings.copywriting_prompt_version == "11.10"
+            and state_for_bundle.workflow_name == WorkflowType.CONTENT_GENERATION
+        )
+        kage_lane = (
+            classify_product_quality(news_event.title, news_event.content, product_loop=True).lane
+            if kage_product_loop else ""
+        )
+        if kage_product_loop and step.capability == "copywriting":
+            earlier = context.business.workflow_state.step_results
+            issues = kage_pre_copy_issues(
+                earlier.get("research", {}), earlier.get("intelligence", {}), lane=kage_lane,
+            )
+            if issues:
+                raise PermanentStepFailureError(f"KAGE pre-copy hold: {', '.join(issues)}")
+
         # API cost optimization (docs/api_cost_optimization_report.md): CONTENT_GENERATION's
         # "research"/"intelligence" steps reuse the same event's already-COMPLETED
         # NEWS_ANALYSIS task's own persisted results instead of paying for an identical call -
@@ -559,6 +582,32 @@ class CapabilityExecutor:
 
             structured_output = result.structured_output or {}
             await self._record_cost(task, step, result.calls)
+
+        if kage_product_loop and step.capability == "intelligence":
+            issues = kage_pre_copy_issues(
+                context.business.workflow_state.step_results.get("research", {}),
+                structured_output, lane=kage_lane,
+            )
+            if issues:
+                raise PermanentStepFailureError(f"KAGE intelligence hold: {', '.join(issues)}")
+        if kage_product_loop and step.capability == "copywriting":
+            earlier = context.business.workflow_state.step_results
+            issues = kage_draft_issues(
+                earlier.get("research", {}), earlier.get("intelligence", {}),
+                structured_output, lane=kage_lane,
+            )
+            # A single unsupported absence sentence is a draft defect, not story death.
+            # This exact deletion introduces no new claim. The normal Quality step still
+            # receives and independently judges the corrected copy before publication.
+            if issues == ["absence_claim_without_explicit_research_fact"]:
+                candidate = remove_unsupported_absence_sentence(earlier.get("research", {}), structured_output)
+                if candidate is not None and not kage_draft_issues(
+                    earlier.get("research", {}), earlier.get("intelligence", {}), candidate, lane=kage_lane,
+                ):
+                    structured_output = candidate
+                    issues = []
+            if issues:
+                raise PermanentStepFailureError(f"KAGE draft hold: {', '.join(issues)}")
 
         # Phase 15 M4: deterministic Editorial Score V2 post-processing, only for the "scoring"
         # step, only after its own LLM call already succeeded above - see
@@ -1285,6 +1334,14 @@ class CapabilityExecutor:
         if step.capability not in REUSABLE_CAPABILITIES or attempt != 1:
             return None
         state = WorkflowExecutionState.model_validate(task.workflow)
+        if (
+            settings.copywriting_prompt_version == "11.10"
+            and state.workflow_name == WorkflowType.CONTENT_GENERATION
+            and step.capability in ("research", "intelligence")
+        ):
+            # v5/v4 handoff contracts differ from the NEWS_ANALYSIS baseline; reusing an
+            # older step would silently bypass the interesting-part preservation loop.
+            return None
         # Phase 18 M2 (docs/phase18_m2_meme_concept_report.md): MEME_GENERATION's own "research"/
         # "intelligence" steps reuse the same source NEWS_ANALYSIS task's results for identical
         # reasons CONTENT_GENERATION already does (module docstring) - a meme concept is built
@@ -1367,6 +1424,21 @@ class CapabilityExecutor:
                 # only fires when telegraph_research_bundle_text is not None.
                 max_tokens=(
                     _TELEGRAPH_DEEP_RESEARCH_MAX_OUTPUT_TOKENS if is_telegraph_deep_research
+                    else 1400 if (
+                        settings.copywriting_prompt_version == "11.10"
+                        and state.workflow_name == WorkflowType.CONTENT_GENERATION
+                        and step.capability == "research"
+                    )
+                    else 700 if (
+                        settings.copywriting_prompt_version == "11.10"
+                        and state.workflow_name == WorkflowType.CONTENT_GENERATION
+                        and step.capability == "quality"
+                    )
+                    else 900 if (
+                        settings.copywriting_prompt_version == "11.10"
+                        and state.workflow_name == WorkflowType.CONTENT_GENERATION
+                        and step.capability == "copywriting"
+                    )
                     else _MAX_OUTPUT_TOKENS_BY_CAPABILITY.get(step.capability)
                 ),
                 reasoning_effort=(

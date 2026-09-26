@@ -139,12 +139,9 @@ async def test_case_3_router_mode_live_send_includes_correct_chat_and_thread_id(
     runs, and the real card-rendering path runs - only the outermost `bot` is a fake. This is the
     strongest proof available that the actual outgoing aiogram call carries the right values.
 
-    TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1: real candidate discovery against the test DB
-    finds no image for this event (nothing here mocks `get_editorial_image_candidates`), so this
-    now HOLDs for visual recovery rather than completing as a normal post - the exact production
-    defect this phase repairs. This test's own actual purpose - proving the real routing call
-    carries the correct chat id/thread id - is unaffected either way, since `_hold_for_visual_
-    recovery()`'s recovery notice reuses the exact same `send_to_editorial_destination()` call."""
+    Real candidate discovery finds no image for this event, so the accepted finished-feed path
+    sends a deliberate text-only post. The routing call still proves the destination and topic.
+    """
     settings.editorial_delivery_mode = "router"
     monkeypatch.setattr(settings, "newsroom_telegram_chat_id", _REAL_CHAT_ID)
     monkeypatch.setattr(settings, "news_topic_id", _REAL_NEWS_TOPIC_ID)
@@ -161,7 +158,8 @@ async def test_case_3_router_mode_live_send_includes_correct_chat_and_thread_id(
     args, kwargs = fake_bot.send_message.call_args
     assert args[0] == _REAL_CHAT_ID
     assert kwargs["message_thread_id"] == _REAL_NEWS_TOPIC_ID
-    assert result.visual_required_held == 1
+    assert result.visual_required_held == 0  # no visual candidate: accepted text-only post
+    assert result.notified == 1
 
 
 # ---------------------------------------------------------------------------

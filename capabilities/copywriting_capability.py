@@ -167,6 +167,10 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
     `_format_quote_source_excerpt()`), plus `context.business.workflow_state.step_results
     ["research"]`/`["intelligence"]` (§5's exact, already-frozen field paths - never a direct
     import or call of either upstream Capability)."""
+    if prompt.version == "11.10":
+        from services.kage_evidence_first import build_evidence_first_request
+
+        return build_evidence_first_request(context, prompt)
     news_event = context.business.news_event
     research_output = context.business.workflow_state.step_results.get("research", {})
     intelligence_output = context.business.workflow_state.step_results.get("intelligence", {})

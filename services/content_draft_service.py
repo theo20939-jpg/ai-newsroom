@@ -208,6 +208,11 @@ def _draft_status_for(fact_safety_status: str | None) -> str:
     fact-safety findings in `EditorialTask.workflow` all remain fully queryable - only
     `worker/content_cycle.py`'s own delivery decision (a separate change) actually withholds the
     live Telegram send."""
+    # On the frozen KAGE path, the new publication decision is made by the worker.
+    # Keep the legacy verdict in workflow history, but do not let it classify the
+    # draft as blocked before the authoritative gate and guard have run.
+    if settings.copywriting_prompt_version == "11.10":
+        return "draft"
     if settings.fact_safety_mode != "enforce" or fact_safety_status is None:
         return "draft"
     if fact_safety_status == "block":
