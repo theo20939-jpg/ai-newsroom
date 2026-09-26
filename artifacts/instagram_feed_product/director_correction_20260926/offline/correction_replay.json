@@ -1,0 +1,31 @@
+{
+ "provider_calls": 0,
+ "gta_saved_output": {
+  "result": "EditorialCorrectionRequired (correctable -> the ONE correction retry)",
+  "findings": [
+   "CreativeLanguageError: clearly English audience-facing field for locale=ru",
+   "slide 1 hook is a clipped fragment, not natural Russian: 'GTA IV: «лесенки» — всё, через 18 лет' - state the strongest concrete fact as a complete phrase",
+   "slide 3 body is a list of product names, not Russian prose: 'Nvidia DLSS 4 · AMD FSR 3 · DLAA · HDR' - say it as a sentence",
+   "slide 4 body: generic filler with no new fact: 'Классика получила апгрейд от сообщества — спустя почти два десятилетия.' - end on the real fact or its plain irony",
+   "anglicism 'Апгрейд' where Russian has a natural word (обновление / улучшение): 'Апгрейд пришёл не от Rockstar'",
+   "anglicism 'апгрейд' where Russian has a natural word (обновление / улучшение): 'Его можно скачать на Nexus Mods. Классика получила апгрейд от сообщества — спуст'",
+   "anglicism 'апгрейду' where Russian has a natural word (обновление / улучшение): 'ПК-версия Grand Theft Auto IV спустя почти два десятилетия получила поддержку Nv'",
+   "slides 1 and 2 make the same point (both state the same claim about games, iv, rockstar: благ, полн, сгла) - merge them or give the second a new fact"
+  ],
+  "correction_note": "EDITORIAL CORRECTION (your one correction attempt). The previous version was rejected by the editorial review. Rewrite the copy so that EVERY finding below is fixed. You may merge, reorder or drop slides to remove repetition (4-7 slides, each a distinct grounded beat) - never keep a slide only to preserve the count. Keep product and company names as they are; turn a list of names into a natural Russian sentence. Do not add any fact the evidence does not contain, and do not replace a finding with a new slogan.\n1. CreativeLanguageError: clearly English audience-facing field for locale=ru\n2. slide 1 hook is a clipped fragment, not natural Russian: 'GTA IV: «лесенки» — всё, через 18 лет' - state the strongest concrete fact as a complete phrase\n3. slide 3 body is a list of product names, not Russian prose: 'Nvidia DLSS 4 · AMD FSR 3 · DLAA · HDR' - say it as a sentence\n4. slide 4 body: generic filler with no new fact: 'Классика получила апгрейд от сообщества — спустя почти два десятилетия.' - end on the real fact or its plain irony\n5. anglicism 'Апгрейд' where Russian has a natural word (обновление / улучшение): 'Апгрейд пришёл не от Rockstar'\n6. anglicism 'апгрейд' where Russian has a natural word (обновление / улучшение): 'Его можно скачать на Nexus Mods. Классика получила апгрейд от сообщества — спуст'\n7. anglicism 'апгрейду' where Russian has a natural word (обновление / улучшение): 'ПК-версия Grand Theft Auto IV спустя почти два десятилетия получила поддержку Nv'\n8. slides 1 and 2 make the same point (both state the same claim about games, iv, rockstar: благ, полн, сгла) - merge them or give the second a new fact",
+  "required_detected": {
+   "clipped hook": true,
+   "non-prose product list": true,
+   "slide redundancy": true,
+   "generic filler / weak payoff": true,
+   "unnecessary anglicism": true,
+   "language guard (was terminal)": true
+  }
+ },
+ "golden_deepseek": {
+  "result": "PASS"
+ },
+ "golden_hamster": {
+  "result": "PASS"
+ }
+}

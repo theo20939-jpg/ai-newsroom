@@ -147,7 +147,8 @@ def test_the_note_carries_the_hook_humour_structure_and_people_rules():
 def test_the_failed_canary_is_rejected_by_selection_and_would_be_blocked_by_the_director_and_the_gate():
     b = json.loads(REPLAY.read_text(encoding="utf-8"))["B_ishowspeed"]
     assert b["planner_read_now"]["format"] == "reject"
-    assert b["director_validation_now"].startswith("ViralCopyQualityError") and len(b["generated_person_risks"]) == 3
+    # a generated likeness of a named real person is a HARD failure (founder decision 2026-09-26: never laundered through the copy retry)
+    assert b["director_validation_now"].startswith("CreativeFactSafetyError") and len(b["generated_person_risks"]) == 3
     assert not b["art_gate_now"]["art_passed"]
     joined = " ".join(b["all_viral_copy_findings"])
     for expected in ("hook describes how the story spread", "abstract commentary", "unsupported implication", "'между' needs two terms",

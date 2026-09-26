@@ -35,6 +35,8 @@ and generates NO new video beyond the existing Reel/Carousel/Single contract - i
 honest extra sentence of context for the very first pieces of content."""
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import json
 import re
 import unicodedata
@@ -65,7 +67,7 @@ from services.instagram_media_first import (
     visual_repetition_report,
     weak_hook_patterns,
 )
-from services.instagram_meta_language_guard import assert_no_meta_language
+from services.instagram_meta_language_guard import MetaLanguageLeakError, assert_no_meta_language
 from schemas.instagram_creative import (
     InstagramCarouselCreative,
     InstagramEditorialDecision,
@@ -1005,12 +1007,34 @@ def _validate_carousel_output(
         *(str(value or "") for value in (plan.model_dump().values() if plan is not None else [])),
     ]
     _enforce_fact_safety(text_fields=text_fields, evidence_used=creative.evidence_used, director_input=director_input)
-    _enforce_output_policy(
+    # founder decision 2026-09-26: a VIRAL carousel's correctable copy problems are all collected and returned as ONE structured correction
+    # (EditorialCorrectionRequired -> the trigger's one existing correction retry); hard grounding failures above and below still raise
+    viral = bool(director_input.viral_carousel_note)
+    correctable: list[str] = []
+
+    def soft(check: Callable[..., object], *args: object, **kwargs: object) -> object:
+        if not viral:
+            return check(*args, **kwargs)
+        try:
+            return check(*args, **kwargs)
+        except (CreativeLanguageError, AudienceFacingCopyError, MetaLanguageLeakError, MediaFirstContractError) as exc:
+            correctable.append(f"{type(exc).__name__}: {exc}")
+            return None
+
+    if viral:
+        # hard, never laundered through the copy retry: a quote the evidence does not contain
+        from services.instagram_viral_format import invented_quotes
+
+        quotes = invented_quotes([*(s.slide_copy for s in creative.slides), *(s.slide_body or "" for s in creative.slides),
+                                  creative.final_caption or ""], list(director_input.allowed_evidence))
+        if quotes:
+            raise CreativeFactSafetyError(f"invented quote(s) not in the evidence: {quotes}")
+    soft(_enforce_output_policy,
         [*(slide.slide_copy for slide in creative.slides), *(slide.slide_body for slide in creative.slides if slide.slide_body),
          creative.final_cta or "", creative.final_caption or ""],
         locale=director_input.locale,
     )
-    assert_no_meta_language(
+    soft(assert_no_meta_language,
         {**{f"slide_{i}_copy": slide.slide_copy for i, slide in enumerate(creative.slides)},
          **{f"slide_{i}_body": slide.slide_body for i, slide in enumerate(creative.slides) if slide.slide_body},
          "final_cta": creative.final_cta or "", "final_caption": creative.final_caption or ""},
@@ -1027,7 +1051,7 @@ def _validate_carousel_output(
             creative = creative.model_copy(update={"slides": demoted_slides})
             _emit_diagnostic("unsuitable_hero_demoted", {"demotions": demotions})
         # Phase B.6: every slide must carry a meaningful visual idea (deterministic, no OCR / model call); the hook is one strong line; bold framing needs literal support.
-        assert_media_first(
+        soft(assert_media_first,
             list(creative.slides), available_subjects=set(director_input.available_media_subjects),
             unsuitable_subjects=set(director_input.unsuitable_media_subjects),
             evidence=[*director_input.allowed_evidence, director_input.opportunity_summary],
@@ -1035,8 +1059,8 @@ def _validate_carousel_output(
         )
         repetition = visual_repetition_report(list(creative.slides))
         _emit_diagnostic("visual_repetition", repetition)
-        assert_hook_contract(list(creative.slides), require_mechanic=_CAROUSEL_PROMPT_VERSION in HOOK_MECHANIC_CAROUSEL_VERSIONS)
-        assert_hook_is_short(creative.slides[0].slide_copy)
+        soft(assert_hook_contract, list(creative.slides), require_mechanic=_CAROUSEL_PROMPT_VERSION in HOOK_MECHANIC_CAROUSEL_VERSIONS)
+        soft(assert_hook_is_short, creative.slides[0].slide_copy)
         assert_no_unsupported_clickbait(
             {**{f"slide_{i}_copy": slide.slide_copy for i, slide in enumerate(creative.slides)},
              **{f"slide_{i}_body": slide.slide_body for i, slide in enumerate(creative.slides) if slide.slide_body},
@@ -1046,30 +1070,32 @@ def _validate_carousel_output(
         weak_hooks = tuple(weak_hook_patterns(creative.slides[0].slide_copy))
         if _CAROUSEL_PROMPT_VERSION in BODY_COPY_CAROUSEL_VERSIONS:
             # content pass: every slide must say something concrete on its own (recoverable: the one contract retry names the thin slides)
-            assert_information_density(list(creative.slides))
+            soft(assert_information_density, list(creative.slides))
         if _CAROUSEL_PROMPT_VERSION in EDITORIAL_CRITIC_CAROUSEL_VERSIONS:
             # editorial judgment reset: the deterministic editor rejects the known failure shapes of the v10.7 paid validation
             from services.instagram_editorial_critic import assert_editorial_quality
 
-            assert_editorial_quality(list(creative.slides), list(director_input.allowed_evidence), archetype=creative.content_archetype,
-                                     caption=creative.final_caption or "")
-    assert_copy_is_russian_prose({**{f"slide_{i}_copy": slide.slide_copy for i, slide in enumerate(creative.slides)},
+            soft(assert_editorial_quality, list(creative.slides), list(director_input.allowed_evidence), archetype=creative.content_archetype,
+                 caption=creative.final_caption or "")
+    soft(assert_copy_is_russian_prose, {**{f"slide_{i}_copy": slide.slide_copy for i, slide in enumerate(creative.slides)},
                                   **{f"slide_{i}_body": slide.slide_body or "" for i, slide in enumerate(creative.slides)},
                                   "final_caption": creative.final_caption or "", "final_cta": creative.final_cta or ""},
                                  locale=director_input.locale)
     if director_input.media_first:
         # founder decision 2026-09-26: a GENERATED picture never becomes a lookalike / re-enactment of a named real person (the Director's
-        # own briefs included); recoverable - the one correction retry names the slide
-        from services.instagram_viral_format import ViralCopyQualityError, generated_person_risks
+        # own briefs included) - a HARD failure, never laundered through the copy correction retry
+        from services.instagram_viral_format import generated_person_risks
 
         risks = generated_person_risks(list(creative.slides), list(director_input.allowed_evidence))
         if risks:
-            raise ViralCopyQualityError("generated-image review: " + "; ".join(risks))
-    if director_input.viral_carousel_note:
-        # founder copy review 2026-09-26: a viral retelling carries no invented quote and no slide without new information
-        from services.instagram_viral_format import assert_viral_copy_quality
+            raise CreativeFactSafetyError("generated-image review: " + "; ".join(risks))
+    if viral:
+        from services.instagram_viral_format import EditorialCorrectionRequired, viral_copy_findings
 
-        assert_viral_copy_quality(list(creative.slides), list(director_input.allowed_evidence), caption=creative.final_caption or "")
+        correctable += viral_copy_findings(list(creative.slides), list(director_input.allowed_evidence),
+                                           caption=creative.final_caption or "", include_quotes=False)
+        if correctable:
+            raise EditorialCorrectionRequired(list(dict.fromkeys(correctable)))
     return CreativeGenerationOutcome(carousel=creative, call=call, model_emitted_archetype=emitted_archetype,
                                      archetype_correction_required=correction_required, weak_hook_patterns=weak_hooks,
                                      visual_repetition=repetition)

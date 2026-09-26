@@ -9,8 +9,9 @@
    "reason": "viral / strange, but technology is incidental - not a KAGE story (no tech core in the event)",
    "kage_core": []
   },
-  "director_validation_now": "ViralCopyQualityError: generated-image review: slide 1: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions ['IShowSpeed']; show objects, places or a metaphor, people only anonymous; slide 3: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions ['IShowSpeed']; show objects, places or a metaphor, people only anonymous; slide 4: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions 'skater'; show objects, places or a metaphor, people only anonymous",
+  "director_validation_now": "CreativeFactSafetyError: generated-image review: slide 1: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions ['IShowSpeed']; show objects, places or a metaphor, people only anonymous; slide 3: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions ['IShowSpeed']; show objects, places or a metaphor, people only anonymous; slide 4: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions 'skater'; show objects, places or a metaphor, people only anonymous",
   "all_viral_copy_findings": [
+   "anglicism 'фейл' where Russian has a natural word (провал): 'Праздничная песня и внезапный хоккейный фейл дали интернету короткий фрагмент, к'",
    "hook describes how the story spread ('brainrot'), not the event - lead with its strangest concrete fact",
    "abstract commentary: 'интернет' made an actor of the story, but the evidence never mentions it: 'А потом интернет оставил только контраст'",
    "abstract commentary: 'интернету' made an actor of the story, but the evidence never mentions it: 'Праздничная песня и внезапный хоккейный фейл дали интернету короткий фрагмент, который лег'",
@@ -31,6 +32,7 @@
     "generated_named_person_likeness_risk: slide 1: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions ['IShowSpeed']; show objects, places or a metaphor, people only anonymous",
     "generated_named_person_likeness_risk: slide 3: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions ['IShowSpeed']; show objects, places or a metaphor, people only anonymous",
     "generated_named_person_likeness_risk: slide 4: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions 'skater'; show objects, places or a metaphor, people only anonymous",
+    "viral_copy_quality: anglicism 'фейл' where Russian has a natural word (провал): 'Праздничная песня и внезапный хоккейный фейл дали интернету короткий фрагмент, к'",
     "viral_copy_quality: hook describes how the story spread ('brainrot'), not the event - lead with its strangest concrete fact",
     "viral_copy_quality: abstract commentary: 'интернет' made an actor of the story, but the evidence never mentions it: 'А потом интернет оставил только контраст'",
     "viral_copy_quality: abstract commentary: 'интернету' made an actor of the story, but the evidence never mentions it: 'Праздничная песня и внезапный хоккейный фейл дали интернету короткий фрагмент, который лег'",

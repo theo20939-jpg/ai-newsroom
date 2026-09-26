@@ -1087,8 +1087,11 @@ async def evaluate_and_submit_instagram_opportunity(
             # real run. The contract itself is unchanged - the model simply gets one more attempt, told exactly what it broke. Fact-safety
             # errors (ungrounded evidence, unsupported claims, clickbait, language) are never retried: those must fail.
             logger.info("instagram_media_first_contract_retry", extra={"opportunity_id": opportunity.id, "error": str(exc)[:200]})
+            # a viral carousel's editorial correction carries every finding at once (services.instagram_viral_format); anything else keeps
+            # the original one-line note. Either way this is the ONE correction attempt - a second failure below is terminal.
+            note = getattr(exc, "correction_note", None) or f"Your previous attempt was rejected: {exc}. Fix exactly that and keep everything else."
             creative_outcome = await regenerator(
-                replace(director_input, contract_retry_note=f"Your previous attempt was rejected: {exc}. Fix exactly that and keep everything else."),
+                replace(director_input, contract_retry_note=note),
                 format_decision.recommended_format,
             )
     except (

@@ -27,11 +27,13 @@ VIRAL_PRODUCTS = frozenset({"TREND"})
 # NATURAL RUSSIAN + CONCRETE FACT + OPTIONAL DRY PUNCH - never FACT + MANDATORY MEME LINE.
 VIRAL_CAROUSEL_NOTE = (
     "VIRAL STORY - A RETELLING IN BEATS: this story is a carousel because it is unusual, funny, absurd or highly discussable - not because it "
-    "has many facts. Use as many slides as there are DISTINCT grounded beats (at least 3, at most 7) - never stretch one fact over several "
+    "has many facts. Use as many slides as there are DISTINCT grounded beats (at least 4, at most 7) - never stretch one fact over several "
     "slides, and never let two slides make the same point. Typical beats: the surprising concrete hook, how it started, what actually happened, "
     "the strongest extra detail, the result or one dry payoff. HOOK: slide 1 states the STRANGEST CONCRETE FACT of the event itself (the event "
     "and its surprising result), never how the story spread - no 'became a meme', 'went viral', 'the internet is discussing'; if the words meme / "
-    "viral / internet were removed, the hook must still be interesting. HUMOUR: find the joke already present in the facts (factual absurdity, "
+    "viral / internet were removed, the hook must still be interesting; it is a complete natural Russian phrase, never telegraphic fragments "
+    "glued with colons and dashes. Product and company names stay as they are, but a list of names is never a slide's copy - say it as a "
+    "Russian sentence; prefer a Russian word to an anglicism (обновление, not апгрейд). HUMOUR: find the joke already present in the facts (factual absurdity, "
     "factual contrast, concise dry wording) - do not write jokes onto the story; no slogans, no 'the internet decided', no aphorisms about the "
     "internet, no 'plot twist', no claim the evidence does not make (e.g. that something happened 'again'). VOICE: write like a sharp human tech "
     "editor who is amused by the facts, in natural contemporary Russian - short, "
@@ -48,6 +50,25 @@ VIRAL_CAROUSEL_NOTE = (
     "of the reported incident: the generation_brief describes objects, places and a visual metaphor; any people in it are anonymous and "
     "unidentifiable (hands, backs, silhouettes) and are never described as the named person or their role in the event."
 )
+
+
+class EditorialCorrectionRequired(MediaFirstContractError):
+    """Founder decision 2026-09-26: correctable COPY problems of a viral carousel (language, clipped hook, product-name lists, redundancy,
+    filler, anglicisms, ...) are collected - never fail-fast on the first - and sent back as ONE structured correction to the trigger's one
+    existing correction retry. A MediaFirstContractError, so exactly that retry path applies; a second failure is terminal."""
+
+    def __init__(self, findings: list[str]):
+        self.findings = list(findings)
+        super().__init__("editorial correction required: " + "; ".join(self.findings))
+
+    @property
+    def correction_note(self) -> str:
+        lines = "\n".join(f"{i}. {finding}" for i, finding in enumerate(self.findings, 1))
+        return ("EDITORIAL CORRECTION (your one correction attempt). The previous version was rejected by the editorial review. Rewrite the "
+                "copy so that EVERY finding below is fixed. You may merge, reorder or drop slides to remove repetition (4-7 slides, each a "
+                "distinct grounded beat) - never keep a slide only to preserve the count. Keep product and company names as they are; turn a "
+                "list of names into a natural Russian sentence. Do not add any fact the evidence does not contain, and do not replace a "
+                "finding with a new slogan.\n" + lines)
 
 
 class ViralCopyQualityError(MediaFirstContractError):
@@ -112,6 +133,39 @@ _HUMAN_FIGURE = re.compile(r"(?i)\b(person|man|woman|boy|girl|guy|face|faces|loo
                            r"celebrity|человек\w*|мужчин\w*|женщин\w*|парн\w*|парен\w*|девушк\w*|лиц[оа]\b|стример\w*|игрок\w*)")
 
 
+# a verb-like Russian word (past / present / reflexive endings) - a hook of telegraphic fragments has none
+_VERB_LIKE = re.compile(r"(?i)\b[а-яё]{2,}(?:л|ла|ло|ли|ет|ют|ит|ят|ат|ут|ется|ются|ится|ятся|ешь|ишь|ем|им|ал|ил|ыл)\b")
+# a small, principled set of generalising subjects: a sentence built only on them (and no concrete anchor) says nothing new
+_ABSTRACT_SUBJECT = re.compile(r"(?i)\b(классик\w*|сообществ\w*|индустри\w*|будущ\w*|эпох\w*|человечеств\w*|поколени\w*)")
+# anglicisms that have a natural Russian word (the suggestion is a hint, the Director writes the sentence)
+_ANGLICISMS = {"апгрейд": "обновление / улучшение", "фейл": "провал", "хайп": "шум / ажиотаж", "фича": "функция", "фичи": "функции",
+               "юзер": "пользователь", "лайфхак": "приём / совет", "кейс": "случай / пример", "вайб": "настроение", "кринж": "неловкость",
+               "хейт": "критика"}
+_ANGLICISM = re.compile(r"(?i)\b(" + "|".join(sorted(_ANGLICISMS, key=len, reverse=True)) + r")\w*")
+_LIST_SEPARATORS = re.compile(r"\s[·•|/]\s|,\s")
+
+
+def clipped_hook(hook: str) -> bool:
+    """A hook assembled from telegraphic fragments ('GTA IV: «лесенки» — всё, через 18 лет'): split at ':' / '—' it gives several
+    verbless pieces, one of them a scrap of one or two words. A plain nominal sentence ('460 целей. Ни одного взлома.') is not clipped."""
+    pieces = [p.strip(" .,«»\"") for p in re.split(r"[:—]", hook) if p.strip(" .,«»\"")]
+    return len(pieces) >= 3 and not _VERB_LIKE.search(hook) and any(len(p.split()) <= 2 for p in pieces)
+
+
+def product_list(text: str) -> bool:
+    """An audience-facing field that is a bare list of (Latin) names, not Russian prose: several list separators and fewer than two
+    Russian words."""
+    cyrillic_words = re.findall(r"[А-Яа-яЁё]{3,}", text or "")
+    return len(_LIST_SEPARATORS.findall(text or "")) >= 2 and len(cyrillic_words) < 2
+
+
+def generic_filler(sentence: str) -> bool:
+    """A generalising sentence with no concrete anchor (no number, no name): 'Классика получила апгрейд от сообщества'."""
+    from services.instagram_editorial_critic import anchors
+
+    return bool(_ABSTRACT_SUBJECT.search(sentence)) and not anchors(sentence) and not re.search(r"\d", sentence)
+
+
 def named_people(evidence: list[str]) -> set[str]:
     """Real people the evidence NAMES (a proper name next to a person role: 'streamer and YouTuber IShowSpeed', 'NHL player Cole Caufield',
     'Thijs de Buck, an MRI physicist'). Organisations after a preposition ('researchers from Unit 42') are not people."""
@@ -148,13 +202,29 @@ def generated_person_risks(slides: list[Any], evidence: list[str]) -> list[str]:
     return risks
 
 
-def viral_copy_findings(slides: list[Any], evidence: list[str], *, caption: str = "") -> list[str]:
-    """NATURAL RUSSIAN + CONCRETE FACT + OPTIONAL DRY PUNCH, as far as a deterministic editor can prove it without a phrase list."""
-    from services.instagram_editorial_critic import anchors, critique
+def viral_copy_findings(slides: list[Any], evidence: list[str], *, caption: str = "", include_quotes: bool = True) -> list[str]:
+    """NATURAL RUSSIAN + CONCRETE FACT + OPTIONAL DRY PUNCH, as far as a deterministic editor can prove it without a phrase list.
+    `include_quotes=False`: the Director validation treats an invented quote as a HARD grounding failure of its own, not a copy finding."""
+    from services.instagram_editorial_critic import anchors, content_stems, critique
 
     texts = [*(_copy(s) for s in slides), *(_body(s) for s in slides), caption]
     problems = [f"invented quote (not in the evidence): '{q}' - retell it as narration without quotation marks"
-                for q in invented_quotes(texts, evidence)]
+                for q in invented_quotes(texts, evidence)] if include_quotes else []
+    if slides and clipped_hook(_copy(slides[0])):
+        problems.append(f"slide 1 hook is a clipped fragment, not natural Russian: {_copy(slides[0])!r} - state the strongest concrete fact "
+                        "as a complete phrase")
+    for index, slide in enumerate(slides, 1):
+        for field, text in (("headline", _copy(slide)), ("body", _body(slide))):
+            if product_list(text):
+                problems.append(f"slide {index} {field} is a list of product names, not Russian prose: {text!r} - say it as a sentence")
+            for sentence in re.split(r"(?<=[.!?…])\s+", text or ""):
+                if sentence.strip() and generic_filler(sentence):
+                    problems.append(f"slide {index} {field}: generic filler with no new fact: {sentence.strip()!r} - end on the real fact or "
+                                    "its plain irony")
+    for text in texts:
+        for match in _ANGLICISM.finditer(text or ""):
+            word = match.group(1).lower()
+            problems.append(f"anglicism '{match.group(0)}' where Russian has a natural word ({_ANGLICISMS[word]}): {text.strip()[:80]!r}")
     problems += [f.render() + " - a viral slide's body must add a new grounded fact" for f in critique(slides, evidence, caption=caption)
                  if f.code in _VIRAL_BLOCKING]
     if slides and (meta := _DISTRIBUTION_META.search(_copy(slides[0]))):
@@ -181,6 +251,13 @@ def viral_copy_findings(slides: list[Any], evidence: list[str], *, caption: str 
             if not new:
                 problems.append(f"slides {index} and {index + 1} make the same point (both rest on the same evidence item and the second adds "
                                 "no new concrete detail) - merge them or give the second a new fact")
+                continue
+        prev_text, cur_text = f"{_copy(prev)} {_body(prev)}", f"{_copy(cur)} {_body(cur)}"
+        shared_names = {a for a in anchors(prev_text) & anchors(cur_text) if not re.search(r"\d", a)}
+        shared_words = content_stems(prev_text) & content_stems(cur_text)
+        if shared_names and len(shared_words) >= 3:
+            problems.append(f"slides {index} and {index + 1} make the same point (both state the same claim about "
+                            f"{', '.join(sorted(shared_names))}: {', '.join(sorted(shared_words))}) - merge them or give the second a new fact")
     return list(dict.fromkeys(problems))
 
 
