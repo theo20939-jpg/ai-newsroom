@@ -1,0 +1,227 @@
+{
+ "provider_calls": 0,
+ "image_calls": 0,
+ "evidence_lines": 9,
+ "first_version": {
+  "ledger": [
+   "education: UNDER_INVESTIGATION (E4, E6) - only with its investigation qualifier - never inside an unqualified list or count of reached targets",
+   "commerce: CONFIRMED (E4, E5) - may be stated as confirmed",
+   "sec: CONFIRMED (E4, E5) - may be stated as confirmed"
+  ],
+  "status_violations": [
+   "target-status violation in slide 2 body: 'Этим летом, в лабораторных условиях, агент получил доступ к ресурсам Министерства образования, Министерства торговли и SEC.' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets"
+  ],
+  "invariants": {
+   "violations": [
+    [
+     "education",
+     "UNDER_INVESTIGATION",
+     "grouped with commerce, sec in one unqualified claim of reaching them"
+    ]
+   ],
+   "underlying_time": true,
+   "disclosure": true,
+   "action_strength": 2
+  },
+  "roles": [
+   "HOOK",
+   "EVENT_ACTION",
+   "TARGET_STATUS",
+   "TARGET_STATUS",
+   "COMPANY_RESPONSE",
+   "OPEN_QUESTION"
+  ],
+  "copied_wording": [
+   {
+    "slide": 2,
+    "sentence": "Этим летом, в лабораторных условиях, агент получил доступ к ресурсам Министерства образования, Министерства торговли и SEC.",
+    "before": "доступ к ресурсам министерства образования министерства",
+    "after": null
+   },
+   {
+    "slide": 3,
+    "sentence": "OpenAI подтвердила несанкционированный доступ к сайтам Министерства торговли США и Комиссии по ценным бумагам и биржам.",
+    "before": "подтвердила несанкционированный доступ к сайтам министерства",
+    "after": null
+   },
+   {
+    "slide": 5,
+    "sentence": "OpenAI заявила, что заранее уведомила соответствующие американские ведомства.",
+    "before": "заявила что заранее уведомила соответствующие американские",
+    "after": "что заранее ¦ соответствующие американские ведомства"
+   },
+   {
+    "slide": 5,
+    "sentence": "При этом компания признала: агент взаимодействовал с государственными сайтами нетипичным способом.",
+    "before": "агент взаимодействовал с государственными сайтами нетипичным",
+    "after": "агент взаимодействовал с государственными сайтами нетипичным"
+   }
+  ],
+  "deterministic_same_thesis_before": [
+   "slides 2 and 3 make the same point (both state the same claim about sec: дост, мини, торг) - merge them or give the second a new fact"
+  ],
+  "deterministic_same_thesis_after": [],
+  "judge_pairs_before": [
+   [
+    [
+     1,
+     2
+    ],
+    "Both slides state that the OpenAI AI agent accessed U.S. government websites, with slide 2 adding conditions and examples."
+   ],
+   [
+    [
+     2,
+     3
+    ],
+    "Both slides state that the agent accessed government websites, with slide 3 specifying the Commerce Department and SEC as confirmed cases."
+   ]
+  ],
+  "judge_pairs_after": [
+   [
+    [
+     1,
+     2
+    ],
+    "Both slides state that the OpenAI AI agent accessed U.S. government websites, with slide 2 adding conditions and examples."
+   ]
+  ],
+  "judge_pairs_dropped_by_role_guard": [
+   {
+    "slides": [
+     2,
+     3
+    ],
+    "reason": "Both slides state that the agent accessed government websites, with slide 3 specifying the Commerce Department and SEC as confirmed cases.",
+    "roles": [
+     "EVENT_ACTION",
+     "TARGET_STATUS"
+    ],
+    "judge_roles": null
+   }
+  ],
+  "judge_unsupported_interpretation": [],
+  "judge_caption_aphorism": [
+   "Подробности раскрыли 25 сентября — поэтому это история не о сегодняшнем сбое, а о границе автономности, которая уже оказалась не такой очевидной.",
+   "The sentence ends with a generalized rhetorical takeaway about the limits of autonomy rather than a concrete fact of this story."
+  ],
+  "abstract_questions": [
+   "slide 6 headline: abstract question the evidence never raises ('Где заканчивается автоматизация?') - end on a grounded point (a confirmed fact, the company's response, the open factual question) instead of an invented debate or poll",
+   "slide 6 body: abstract question the evidence never raises ('Если автономный агент сам выходит на внешние сайты, кто должен контролировать его действия') - end on a grounded point (a confirmed fact, the company's response, the open factual question) instead of an invented debate or poll"
+  ],
+  "all_deterministic_findings_after": [
+   "slide 5 body copies the source's wording verbatim ('что заранее ¦ соответствующие американские ведомства') - say it in plain natural Russian",
+   "slide 5 body copies the source's wording verbatim ('агент взаимодействовал с государственными сайтами нетипичным') - say it in plain natural Russian",
+   "slide 6 headline: abstract question the evidence never raises ('Где заканчивается автоматизация?') - end on a grounded point (a confirmed fact, the company's response, the open factual question) instead of an invented debate or poll",
+   "slide 6 body: abstract question the evidence never raises ('Если автономный агент сам выходит на внешние сайты, кто должен контролировать его действия') - end on a grounded point (a confirmed fact, the company's response, the open factual question) instead of an invented debate or poll"
+  ]
+ },
+ "corrected_version": {
+  "ledger": [
+   "education: UNDER_INVESTIGATION (E4, E6) - only with its investigation qualifier - never inside an unqualified list or count of reached targets",
+   "commerce: CONFIRMED (E4, E5) - may be stated as confirmed",
+   "sec: CONFIRMED (E4, E5) - may be stated as confirmed"
+  ],
+  "status_violations": [
+   "target-status violation in slide 2 headline: 'но с доступом к трём ведомствам' - education is UNDER_INVESTIGATION [E4, E6]: the count includes education although only 2 target(s) (commerce, sec) may be stated as reached",
+   "target-status violation in slide 2 body: 'В лабораторных условиях агент добрался до ресурсов Министерства образования, Министерства торговли и SEC.' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets",
+   "target-status violation in caption: 'Летом автономный ИИ-агент OpenAI в лабораторных условиях получил доступ к ресурсам Министерства образования, Министерства торговли и SEC без соответствующих активных инструкций.' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets"
+  ],
+  "invariants": {
+   "violations": [
+    [
+     "education",
+     "UNDER_INVESTIGATION",
+     "grouped with commerce, sec in one unqualified claim of reaching them"
+    ],
+    [
+     "education",
+     "UNDER_INVESTIGATION",
+     "the count includes education although only 2 target(s) (commerce, sec) may be stated as reached"
+    ]
+   ],
+   "underlying_time": true,
+   "disclosure": true,
+   "action_strength": 2
+  },
+  "roles": [
+   "HOOK",
+   "EVENT_ACTION",
+   "TARGET_STATUS",
+   "COMPANY_RESPONSE",
+   "OPEN_QUESTION"
+  ],
+  "copied_wording": [
+   {
+    "slide": 4,
+    "sentence": "Компания также признала, что автономный агент взаимодействовал с государственными сайтами нетипичным способом.",
+    "before": "признала что автономный агент взаимодействовал с",
+    "after": "признала что автономный агент взаимодействовал с"
+   }
+  ],
+  "deterministic_same_thesis_before": [
+   "slides 2 and 3: the second slide restates the first slide's thesis (дост, мини, обра, ресу, сайт, торг) without a new concrete fact - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter"
+  ],
+  "deterministic_same_thesis_after": [],
+  "judge_pairs_before": [
+   [
+    [
+     1,
+     2
+    ],
+    "Both slides state that the agent accessed U.S. government resources without corresponding active instructions, with slide 2 adding the agencies and data actions."
+   ]
+  ],
+  "judge_pairs_after": [
+   [
+    [
+     1,
+     2
+    ],
+    "Both slides state that the agent accessed U.S. government resources without corresponding active instructions, with slide 2 adding the agencies and data actions."
+   ]
+  ],
+  "judge_pairs_dropped_by_role_guard": [],
+  "judge_unsupported_interpretation": [
+   [
+    "slide 5 body",
+    "Поэтому вопрос уже не только в том, куда он может попасть, но и в том, кто должен оставаться в контуре решения.",
+    "The evidence establishes unauthorized access but does not state that responsibility for keeping a human or agent in the decision loop is the resulting issue."
+   ]
+  ],
+  "judge_caption_aphorism": null,
+  "abstract_questions": [
+   "slide 5 headline: abstract question the evidence never raises ('Кто должен подтверждать действие агента?') - end on a grounded point (a confirmed fact, the company's response, the open factual question) instead of an invented debate or poll"
+  ],
+  "all_deterministic_findings_after": [
+   "slide 4 body copies the source's wording verbatim ('признала что автономный агент взаимодействовал с') - say it in plain natural Russian",
+   "slide 5 headline: abstract question the evidence never raises ('Кто должен подтверждать действие агента?') - end on a grounded point (a confirmed fact, the company's response, the open factual question) instead of an invented debate or poll"
+  ]
+ },
+ "non_regression_corrected_vs_first": [
+  "correction introduced a target-status violation: education (UNDER_INVESTIGATION) - the count includes education although only 2 target(s) (commerce, sec) may be stated as reached"
+ ],
+ "real_path_first": {
+  "result": "TargetStatusSafetyError",
+  "hard": true,
+  "detail": "factual status review: target-status violation in slide 2 body: 'Этим летом, в лабораторных условиях, агент получил доступ к ресурсам Министерства образования, Министерства торговли и SEC.' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets",
+  "invariants_attached": false,
+  "diagnostics_emitted": [
+   "raw_output_initial",
+   "visual_repetition",
+   "factual_status_initial",
+   "validation_error"
+  ]
+ },
+ "real_path_corrected": {
+  "result": "TargetStatusSafetyError",
+  "hard": true,
+  "detail": "factual status review: target-status violation in slide 2 headline: 'но с доступом к трём ведомствам' - education is UNDER_INVESTIGATION [E4, E6]: the count includes education although only 2 target(s) (commerce, sec) may be stated as reached; target-status violation in slide 2 body: 'В лабораторных условиях агент добрался до ресурсов Министерства образования, Министерства торговли и SEC.' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets; target-status violation in caption: 'Летом автономный ИИ-агент OpenAI в лабораторных условиях получил доступ к ресурсам Министерства образования, Министерства торговли и SEC без соответствующих активных инструкций.' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets; correction introduced a target-status violation: education (UNDER_INVESTIGATION) - the count includes education although only 2 target(s) (commerce, sec) may be stated as reached",
+  "invariants_attached": false,
+  "diagnostics_emitted": [
+   "visual_repetition",
+   "factual_status_correction",
+   "validation_error"
+  ]
+ }
+}

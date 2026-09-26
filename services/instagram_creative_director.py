@@ -215,6 +215,17 @@ class EditorialDecisionContractError(CreativeFactSafetyError):
     the diagnostic sink), never an uncaught pydantic ValidationError."""
 
 
+class TargetStatusSafetyError(CreativeFactSafetyError):
+    """Founder task 2026-09-27: the copy breaks the evidence's target-status ledger (services.instagram_factual_status) - a qualified
+    target inside an unqualified claim or count, a promotion to 'confirmed', an attempt stated as done, an intrusion verb the evidence never
+    uses, 'today' for earlier behaviour - or the one editorial correction made the facts worse than the version it corrected. HARD: never
+    sent to (or laundered through) the editorial correction."""
+
+    def __init__(self, findings: list[str]):
+        self.findings = list(findings)
+        super().__init__("factual status review: " + "; ".join(self.findings))
+
+
 class RecapCoverageContractError(CreativeFactSafetyError):
     """Phase A's WEEKLY_RECAP coverage plan does not carry every selected story exactly once (a recap collapsed into one story,
     a dropped / duplicated / invented story)."""
@@ -376,6 +387,9 @@ class CreativeDirectorInput:
     # Quality loop: set ONLY on a retry after a recoverable structural contract miss (never on a first attempt, so every
     # existing request text stays byte-identical); tells the model exactly what its previous attempt broke.
     contract_retry_note: str = ""
+    # founder task 2026-09-27: set ONLY with the one editorial correction - the factual invariants of the version being corrected
+    # (services.instagram_factual_status.factual_invariants); the corrected version may not lose any of them
+    factual_invariants: dict = field(default_factory=dict)
     # Phase B.5: the STRUCTURED Visual DNA (stored once, reused per post) - rendered rules, never a path.
     visual_dna_context: str = ""
     visual_dna_version: str = ""
@@ -532,6 +546,7 @@ def _build_user_text(director_input: CreativeDirectorInput, *, evidence_handles:
         f"{evidence_heading}:\n{evidence_block}"
         + (f"\nCONTENT ARCHETYPE (derived, plan for it): {director_input.content_archetype}" if director_input.content_archetype else "")
         + (f"\n{director_input.viral_carousel_note}" if director_input.viral_carousel_note else "")
+        + (f"\n{_status_ledger_note(director_input)}" if director_input.viral_carousel_note and _status_ledger_note(director_input) else "")
         + (f"\nMEDIA AVAILABLE FOR THIS POST:\n{director_input.media_note}" if director_input.media_note else "")
         + (f"\n{director_input.visual_dna_context}" if director_input.visual_dna_context else "")
         + (
@@ -547,6 +562,13 @@ def _build_user_text(director_input: CreativeDirectorInput, *, evidence_handles:
         + (f"\nPREVIOUS RESPONSE WAS STRUCTURALLY INVALID: {director_input.structured_output_recovery_note}"
            if director_input.structured_output_recovery_note else "")
     )
+
+
+def _status_ledger_note(director_input: CreativeDirectorInput) -> str:
+    """The binding target-status contract, derived deterministically from the evidence (empty when the evidence names no statused target)."""
+    from services.instagram_factual_status import build_status_ledger, ledger_note
+
+    return ledger_note(build_status_ledger(list(director_input.allowed_evidence)))
 
 
 def _recap_coverage_text(director_input: CreativeDirectorInput) -> str:
@@ -1043,25 +1065,44 @@ async def _validate_viral_carousel(
       judge (services.instagram_viral_editorial_judge, one bounded call, fail closed) -> every correctable finding combined into ONE
       EditorialCorrectionRequired for the trigger's one existing editorial correction.
     The corrected output comes back through this same function, so it is judged once more - but the trigger has no second correction: a
-    finding there is terminal. The judge never overrides a hard failure: it only runs when no hard check raised."""
+    finding there is terminal. The judge never overrides a hard failure: it only runs when no hard check raised.
+    Founder task 2026-09-27: after the grounding checks and BEFORE the judge, the TARGET STATUS gate (services.instagram_factual_status) -
+    HARD - and, for the corrected version, FACTUAL NON-REGRESSION against the version it corrected: a correction that fixes style by
+    drifting facts is rejected (the original stays in the diagnostics). The EditorialCorrectionRequired carries the ledger and this
+    version's factual invariants to the correction."""
+    from services.instagram_factual_status import build_status_ledger, factual_invariants, ledger_lines, non_regression_findings, status_violations
     from services.instagram_viral_editorial_judge import judge_viral_copy
     from services.instagram_viral_format import EditorialCorrectionRequired
 
     deterministic: list[str] = []
     outcome: CreativeGenerationOutcome | None = None
+    correcting = bool(director_input.contract_retry_note)
+    slides, caption = list(output.get("slides") or []), str(output.get("final_caption") or "")
+    evidence = list(director_input.allowed_evidence)
+    if not correcting:
+        _emit_diagnostic("raw_output_initial", {"structured_output": output})  # kept for diagnosis whatever the correction does
     try:
         try:
             outcome = _validate_carousel_output(output, call, director_input=director_input, archetype=archetype)
         except EditorialCorrectionRequired as exc:
             deterministic = list(exc.findings)
-        verdict = await judge_viral_copy(gateway, prompt_repository, slides=list(output.get("slides") or []),
-                                         caption=str(output.get("final_caption") or ""), allowed_evidence=list(director_input.allowed_evidence))
+        ledger = build_status_ledger(evidence)
+        violations = status_violations(slides, caption, ledger, evidence)
+        regression = non_regression_findings(director_input.factual_invariants, slides, caption, ledger, evidence) if correcting else []
+        _emit_diagnostic("factual_status_correction" if correcting else "factual_status_initial",
+                         {"ledger": ledger_lines(ledger), "violations": [v.render() for v in violations], "non_regression": regression,
+                          "baseline_invariants": director_input.factual_invariants})
+        if violations or regression:
+            raise TargetStatusSafetyError([*(v.render() for v in violations), *regression])
+        verdict = await judge_viral_copy(gateway, prompt_repository, slides=slides, caption=caption, allowed_evidence=evidence)
         semantic = verdict.findings()
-        _emit_diagnostic("semantic_judge_correction" if director_input.contract_retry_note else "semantic_judge_initial",
-                         {"verdict": verdict.raw, "semantic_findings": semantic, "deterministic_findings": deterministic})
+        _emit_diagnostic("semantic_judge_correction" if correcting else "semantic_judge_initial",
+                         {"verdict": verdict.raw, "semantic_findings": semantic, "deterministic_findings": deterministic,
+                          "role_guard_dropped": verdict.dropped_pairs})
         combined = list(dict.fromkeys([*deterministic, *semantic]))
         if combined:
-            raise EditorialCorrectionRequired(combined)
+            raise EditorialCorrectionRequired(combined, factual_contract=ledger_lines(ledger),
+                                              factual_invariants=factual_invariants(slides, caption, ledger, evidence))
         assert outcome is not None
         return outcome
     except Exception as exc:

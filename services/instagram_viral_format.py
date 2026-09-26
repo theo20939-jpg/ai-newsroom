@@ -54,7 +54,11 @@ VIRAL_CAROUSEL_NOTE = (
     "per slide - expressive, ironic, meme-adjacent scenes with clear negative space for the copy - never fact cells, stacked info boxes, step "
     "rectangles or dashboard panels. A generated picture NEVER shows a real person named in the story, a lookalike of them or a re-enactment "
     "of the reported incident: the generation_brief describes objects, places and a visual metaphor; any people in it are anonymous and "
-    "unidentifiable (hands, backs, silhouettes) and are never described as the named person or their role in the event."
+    "unidentifiable (hands, backs, silhouettes) and are never described as the named person or their role in the event. "
+    "FACTUAL STATUS: when the evidence gives targets different statuses (confirmed / still investigated / attempted / reported), each keeps "
+    "its own status on every slide and in the caption - never one list or count that mixes them; 'which parts are confirmed' is its own beat. "
+    "THE LAST SLIDE is a grounded point - a confirmed consequence, the company's response or the open factual question - never an invented "
+    "debate, ethics question or poll the evidence does not raise."
 )
 
 
@@ -63,18 +67,27 @@ class EditorialCorrectionRequired(MediaFirstContractError):
     filler, anglicisms, ...) are collected - never fail-fast on the first - and sent back as ONE structured correction to the trigger's one
     existing correction retry. A MediaFirstContractError, so exactly that retry path applies; a second failure is terminal."""
 
-    def __init__(self, findings: list[str]):
+    def __init__(self, findings: list[str], *, factual_contract: list[str] | None = None, factual_invariants: dict | None = None):
         self.findings = list(findings)
+        # founder task 2026-09-27: what the version sent to the correction got right factually - the correction may not lose it
+        self.factual_contract = list(factual_contract or [])
+        self.factual_invariants = dict(factual_invariants or {})
         super().__init__("editorial correction required: " + "; ".join(self.findings))
 
     @property
     def correction_note(self) -> str:
         lines = "\n".join(f"{i}. {finding}" for i, finding in enumerate(self.findings, 1))
+        ledger = ("\nTARGET STATUS (from the evidence, keep exactly): " + "; ".join(self.factual_contract)) if self.factual_contract else ""
         return ("EDITORIAL CORRECTION (your one correction attempt). The previous version was rejected by the editorial review. Rewrite the "
-                "copy so that EVERY finding below is fixed. You may merge, reorder or drop slides to remove repetition (4-7 slides, each a "
-                "distinct grounded beat) - never keep a slide only to preserve the count. Keep product and company names as they are; turn a "
-                "list of names into a natural Russian sentence. Do not add any fact the evidence does not contain, and do not replace a "
-                "finding with a new slogan.\n" + lines)
+                "copy so that EVERY finding below is fixed - and change ONLY what the findings name. You may merge, reorder or drop slides to "
+                "remove repetition (4-7 slides, each a distinct grounded beat) - never keep a slide only to preserve the count. Keep product and "
+                "company names as they are; turn a list of names into a natural Russian sentence. Do not add any fact the evidence does not "
+                "contain, and do not replace a finding with a new slogan.\nFACTUAL PRESERVATION (binding - a correction that breaks it is "
+                "rejected): preserve every target's status exactly; never merge a confirmed and a not-confirmed target into one claim, list or "
+                "count; never strengthen a verb (interaction or access is not 'взлом'); never remove the chronology (when it happened, when it "
+                "was disclosed); keep short exact status wording ('подтвердила доступ', 'расследование продолжается', names, dates) instead of "
+                "paraphrasing it only to avoid overlap with the source; a closing slide stays a grounded fact, the company's response or the "
+                "open factual question - never an invented debate or poll." + ledger + "\n" + lines)
 
 
 class ViralCopyQualityError(MediaFirstContractError):
@@ -210,13 +223,23 @@ def thesis_relation(prev: Any, cur: Any, *, earlier_slides: list[Any]) -> str | 
 _WORD_RE = re.compile(r"[A-Za-zА-Яа-яЁё0-9\-]+")
 
 
+_MASKED = "¦"
+_TOKEN_RE = re.compile(r"[A-Za-zА-Яа-яЁё0-9\-]+|¦")
+
+
 def lifted_wording(text: str, evidence: list[str], *, run: int = 6) -> str | None:
     """A sentence that copies a long run of the SOURCE's own wording ('требуется глобальная техническая модификация ...') instead of saying it
     in natural words: `run` or more consecutive words identical to an evidence item, at least 3 of them long Russian words (a copied run
-    of product names or numbers is not wording; a short plain sentence in the same words is not source register). Returns the run."""
-    words = [w.lower() for w in _WORD_RE.findall(text or "")]
+    of product names or numbers is not wording; a short plain sentence in the same words is not source register). Returns the run.
+    Founder calibration 2026-09-27: short status-critical wording - target / agency names, 'подтвердила', 'расследование продолжается',
+    dates, numbers, Latin names (services.instagram_factual_status.factual_term_spans) - is masked identically on both sides: a masked term
+    still continues a run but never counts as the source's formal wording, so precision is never traded for paraphrase while the prose AROUND
+    those terms is still compared (copied sentence structure still fails)."""
+    from services.instagram_factual_status import mask_factual_terms
+
+    words = [w.lower() for w in _TOKEN_RE.findall(mask_factual_terms(text or "", f" {_MASKED} "))]
     for item in evidence:
-        source = [w.lower() for w in _WORD_RE.findall(item or "")]
+        source = [w.lower() for w in _TOKEN_RE.findall(mask_factual_terms(item or "", f" {_MASKED} "))]
         grams = {tuple(source[i:i + run]) for i in range(len(source) - run + 1)}
         for i in range(len(words) - run + 1):
             gram = tuple(words[i:i + run])
@@ -329,8 +352,13 @@ def viral_copy_findings(slides: list[Any], evidence: list[str], *, caption: str 
             if not re.search(r"(?i)\b(и|с|со)\b", clause.group(1)):
                 problems.append(f"incomplete construction: 'между' needs two terms: {text.strip()[:90]!r}")
     problems += [f"incomplete line (ends on a preposition / conjunction): {line!r}" for line in (_copy(s) for s in slides) if _DANGLING_END.search(line)]
+    from services.instagram_factual_status import abstract_question_findings, distinct_by_role
+
+    problems += abstract_question_findings(slides, caption, evidence)
     for index in range(1, len(slides)):
         prev, cur = slides[index - 1], slides[index]
+        if distinct_by_role(prev, cur, index):
+            continue  # founder calibration 2026-09-27: 'what happened' vs 'which parts are confirmed' are two theses, whatever words they share
         beat = thesis_relation(prev, cur, earlier_slides=slides[:index])
         if beat:
             problems.append(f"slides {index} and {index + 1}: {beat} - merge them into one slide, then use the freed slide for another "

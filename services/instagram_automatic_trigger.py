@@ -1132,8 +1132,11 @@ async def evaluate_and_submit_instagram_opportunity(
             # the original one-line note. Either way this is the ONE correction attempt - a second failure below is terminal.
             note = getattr(exc, "correction_note", None) or f"Your previous attempt was rejected: {exc}. Fix exactly that and keep everything else."
             director_trace = [*retry.trace, {"call": len(retry.trace) + 1, "stage": "editorial_correction", "findings": str(exc)[:600]}]
+            # founder task 2026-09-27: the correction is held to what the corrected version already got right factually (target statuses,
+            # chronology, action strength) - services.instagram_factual_status.non_regression_findings rejects a correction that drifts
             creative_outcome = await regenerator(
-                replace(retry.director_input, contract_retry_note=note, structured_output_recovery_note=""),
+                replace(retry.director_input, contract_retry_note=note, structured_output_recovery_note="",
+                        factual_invariants=dict(getattr(exc, "factual_invariants", None) or {})),
                 format_decision.recommended_format,
             )
             director_trace[-1]["result"] = "valid"

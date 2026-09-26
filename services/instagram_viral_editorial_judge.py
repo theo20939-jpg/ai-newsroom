@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import math
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 from uuid import uuid4
 
@@ -32,7 +32,7 @@ from schemas.capability import RuntimeContext
 from services.instagram_creative_director import CreativeDirectorUnavailableError
 
 JUDGE_PROMPT_NAME = "instagram_viral_editorial_judge"
-JUDGE_PROMPT_VERSION = "4"  # v1-v3 = the calibration rounds (kept published, untouched)
+JUDGE_PROMPT_VERSION = "5"  # v1-v4 = the calibration rounds (kept published, untouched); v5 = thesis roles (founder task 2026-09-27)
 MAX_SLIDES = 7
 MAX_HEADLINE_CHARS = 200
 MAX_BODY_CHARS = 260
@@ -58,6 +58,8 @@ class JudgeVerdict:
     caption_aphorism: tuple[str, str] | None = None  # (sentence, reason), when present
     unsupported_interpretation: list[tuple[str, str, str]] = field(default_factory=list)  # (where, sentence, reason)
     raw: dict = field(default_factory=dict)
+    slide_roles: list[str] = field(default_factory=list)  # the judge's own thesis role per slide (v5; empty for an older verdict)
+    dropped_pairs: list[dict] = field(default_factory=list)  # same-thesis pairs the role guard removed, with both role readings
 
     def findings(self) -> list[str]:
         """The verdict as correctable findings for the one editorial correction (English instructions; the copy stays Russian)."""
@@ -165,13 +167,35 @@ def parse_verdict(output: Any, slide_count: int) -> JudgeVerdict:
         if not isinstance(repeats["present"], bool) or not isinstance(aphorism["present"], bool):
             raise ValueError("present flags must be booleans")
         interpretations = [(str(i["where"]), str(i["sentence"]), str(i["reason"])) for i in output["unsupported_interpretation"]]
+        roles = [str(r) for r in output.get("slide_roles") or []]  # optional: a v4 verdict has none
     except (KeyError, TypeError, ValueError) as exc:
         raise SemanticJudgeUnavailableError(f"semantic judge: malformed structured output ({exc})") from exc
     return JudgeVerdict(
         same_thesis_pairs=sorted(dict.fromkeys(pairs)),
         caption_repeats_slides=str(repeats["reason"]).strip() if repeats["present"] else None,
         caption_aphorism=(str(aphorism["sentence"]).strip(), str(aphorism["reason"]).strip()) if aphorism["present"] else None,
-        unsupported_interpretation=interpretations, raw=output)
+        unsupported_interpretation=interpretations, raw=output, slide_roles=roles)
+
+
+def apply_role_guard(verdict: JudgeVerdict, slides: list[Any]) -> JudgeVerdict:
+    """Founder calibration 2026-09-27: 'what happened' and 'which parts are confirmed / investigated' (or 'what the company said', 'when it
+    happened vs when it became known') are two theses. A same-thesis pair is dropped only when the deterministic roles
+    (services.instagram_factual_status.slide_thesis_role) put the two slides in different roles, one of them a status / chronology /
+    company-response role, AND the judge's own roles - when it gave them - do not put both slides in one role. Same-role pairs stay."""
+    from services.instagram_factual_status import DISTINCT_ROLES, slide_thesis_role
+
+    kept, dropped = [], []
+    for a, b, reason in verdict.same_thesis_pairs:
+        if a > len(slides) or b > len(slides):
+            kept.append((a, b, reason))
+            continue
+        local = (slide_thesis_role(slides[a - 1], a), slide_thesis_role(slides[b - 1], b))
+        judged = (verdict.slide_roles[a - 1], verdict.slide_roles[b - 1]) if len(verdict.slide_roles) >= b else None
+        if local[0] != local[1] and set(local) & DISTINCT_ROLES and (judged is None or judged[0] != judged[1]):
+            dropped.append({"slides": [a, b], "reason": reason, "roles": list(local), "judge_roles": list(judged) if judged else None})
+        else:
+            kept.append((a, b, reason))
+    return replace(verdict, same_thesis_pairs=kept, dropped_pairs=dropped)
 
 
 async def judge_viral_copy(gateway: LLMGateway, prompt_repository: PromptRepository, *, slides: list[Any], caption: str,
@@ -198,4 +222,4 @@ async def judge_viral_copy(gateway: LLMGateway, prompt_repository: PromptReposit
     response = outcome.response
     if response is None or response.finish_reason == "length":
         raise SemanticJudgeUnavailableError("semantic judge: response truncated at the output cap")
-    return parse_verdict(response.structured_output, min(len(slides), MAX_SLIDES))
+    return apply_role_guard(parse_verdict(response.structured_output, min(len(slides), MAX_SLIDES)), slides)

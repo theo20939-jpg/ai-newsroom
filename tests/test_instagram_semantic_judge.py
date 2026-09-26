@@ -2,6 +2,8 @@
 existing editorial correction. Zero provider calls: the judge's gateway is a stub."""
 from __future__ import annotations
 
+import re
+
 import asyncio
 import copy
 import importlib.util
@@ -89,13 +91,15 @@ def test_the_worst_case_cost_is_explicit_and_small():
 
 def test_the_published_prompt_is_the_one_the_judge_uses_and_earlier_versions_stay_untouched():
     repo = FilePromptRepository(ROOT / "prompts")
-    assert JUDGE_PROMPT_VERSION == "4"
+    assert JUDGE_PROMPT_VERSION == "5"  # 2026-09-27: thesis roles; v1-v4 stay published and untouched
     for version in ("1", "2", "3", "4"):
         assert repo.resolve(JUDGE_PROMPT_NAME, version).output_schema["required"] == [
             "same_thesis_pairs", "caption_repeats_slides", "caption_aphorism", "unsupported_interpretation"]
+    assert repo.resolve(JUDGE_PROMPT_NAME, "5").output_schema["required"] == [
+        "slide_roles", "same_thesis_pairs", "caption_repeats_slides", "caption_aphorism", "unsupported_interpretation"]
     rules = " ".join(repo.resolve(JUDGE_PROMPT_NAME, JUDGE_PROMPT_VERSION).rules).lower()
-    for term in ("gta", "rockstar", "моддер", "modder", "dlss", "патч"):
-        assert term not in rules
+    for term in ("gta", "rockstar", "моддер", "modder", "dlss", "патч", "openai", "sec", "commerce", "education department", "министерств"):
+        assert not re.search(rf"{re.escape(term)}", rules), term  # no story-specific rule
 
 
 # --- the validation order ------------------------------------------------------------------------------------------------------------------
