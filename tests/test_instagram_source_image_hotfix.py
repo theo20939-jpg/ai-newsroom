@@ -101,7 +101,10 @@ async def test_general_news_delivery_records_real_story_id_not_opportunity_id(
 
     async def image_source(session, incoming_story_id):
         assert incoming_story_id == story_id
-        return Image.new("RGB", (512, 512), "navy"), candidate, 1, 2048
+        import random
+
+        rng = random.Random(7)  # textured, photo-like: a flat solid square is an unsuitable flat card under the media contract
+        return [(Image.frombytes("RGB", (512, 512), bytes(rng.randrange(256) for _ in range(512 * 512 * 3))), candidate, 2048)], 1
 
     async def creative_generation(director_input, fmt):
         assert director_input.external_news_entities_allowed
@@ -111,7 +114,7 @@ async def test_general_news_delivery_records_real_story_id_not_opportunity_id(
             source_subject="Company X", evidence_used=["Company X announced Y"],
         ))
 
-    monkeypatch.setattr(trigger, "_resolve_single_source_image", image_source)
+    monkeypatch.setattr(trigger, "_decoded_source_candidates", image_source)
     monkeypatch.setattr(trigger, "build_default_regenerator", lambda gateway, prompts: creative_generation)
     monkeypatch.setattr(settings, "newsroom_telegram_chat_id", -1002345678901)
     monkeypatch.setattr(settings, "instagram_topic_id", 40)

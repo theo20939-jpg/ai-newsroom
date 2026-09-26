@@ -39,15 +39,24 @@ _SINGLE_SCHEMA = {
 }
 
 
+def _photo_like(size: int = 512):
+    """A textured, photo-like fixture: a flat solid square is (correctly) an unsuitable flat card under the SINGLE / REEL media contract."""
+    import random
+
+    rng = random.Random(7)
+    return Image.frombytes("RGB", (size, size), bytes(rng.randrange(256) for _ in range(size * size * 3)))
+
+
 @pytest.fixture(autouse=True)
 def _topic_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "newsroom_telegram_chat_id", -1002345678901)
     monkeypatch.setattr(settings, "instagram_topic_id", 40)
 
     async def selected_source(session, story_id):
-        return Image.new("RGB", (512, 512), "navy"), SimpleNamespace(id=uuid4(), candidate_id="test-source"), 1, 2048
+        return [(_photo_like(), SimpleNamespace(id=uuid4(), candidate_id="test-source"), 2048)], 1
 
-    monkeypatch.setattr(trigger_module, "_resolve_single_source_image", selected_source)
+    # SINGLE / REEL read every usable candidate and select the first suitable one (the media-cleanliness contract)
+    monkeypatch.setattr(trigger_module, "_decoded_source_candidates", selected_source)
 
 
 def _prompt_repository() -> FakePromptRepository:

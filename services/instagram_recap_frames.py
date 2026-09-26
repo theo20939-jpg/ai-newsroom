@@ -248,7 +248,7 @@ def _typographic_beat(base: dict[str, Any], surface: list[dict[str, Any]], *, ro
     if variant == "split":                # the headline over the slide's ground, its explanation on a KAGE violet panel below
         return {**text, "regions": [
             *surface,
-            {"kind": "surface", "x": 0.0, "y": 0.56, "w": 1.0, "h": 0.44, "z": 1, "surface": "accent"},
+            {"kind": "surface", "x": 0.0, "y": 0.56, "w": 1.0, "h": 0.44, "z": 1, "surface": "accent", "tone": "accent", "accent_type": "block"},
             {**_text("copy", 0.1, 0.38, "DISPLAY", 4, "primary"), "x": 0.07, "w": 0.86},
             {**_text("body", 0.62, 0.2, "BODY", 5, "primary"), "x": 0.07, "w": 0.74},
         ]}, variant

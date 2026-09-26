@@ -168,5 +168,7 @@ def _reel_graphic(*, spec: ProfileSpec, kicker: str | None, hook: str, package_i
     return LayoutResult(
         image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
         source_image_treatment="none", layout_variant=REEL_VARIANT_GRAPHIC, text_clipped=clipped,
-        notes={"grid_safe_band": [grid_top, grid_bottom]},
+        notes={"grid_safe_band": [grid_top, grid_bottom],
+               # a designed no-photo cover: the hook set at display size, whole (the art gate's typographic_render_not_designed)
+               "designed_typographic": hook_font.size >= round(spec.width * 0.06) and not clipped},
     )

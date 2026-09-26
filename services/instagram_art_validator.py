@@ -82,9 +82,18 @@ def validate_instagram_art(
         planned_strategy = creative_plan.get("media_strategy")
         if planned_strategy == "typographic":
             media_strategy = "typographic"
+    # SINGLE / REEL media contract (services.instagram_automatic_trigger._select_daily_source_media): a source image that exists is not
+    # one that must be used. When every source candidate was judged UNSUITABLE as creative media (article share card, baked-in headline,
+    # text graphic), omitting it is the contract, not a defect - the render must then be a genuinely designed typographic composition.
+    # The record is absent for legacy callers, which keep the unchanged rules below.
+    suitability = package.media_plan.get("source_media_suitability") if isinstance(package.media_plan.get("source_media_suitability"), dict) else None
+    source_rejected = suitability is not None and suitability.get("suitable") is False
+    source_approved = suitability is not None and suitability.get("suitable") is True
+    if source_rejected and package.source_image_ref:
+        blocking.append(f"unsuitable_source_media_selected: package.source_image_ref={package.source_image_ref!r} but no source candidate was suitable")
     if (
         package.content_format.value == "single" and not package.source_image_ref
-        and media_strategy != "typographic"
+        and media_strategy != "typographic" and not source_rejected
     ):
         blocking.append(
             "single_media_reference_required"
@@ -151,10 +160,19 @@ def validate_instagram_art(
                 f"source_image_ref_recorded_but_not_applied: package.source_image_ref={package.source_image_ref!r} "
                 f"but this render's source_image_treatment is 'none' (slide_index={ev.slide_index})"
             )
-            (blocking if package.content_format.value == "single" else warnings).append(issue)
+            # a suitable, SELECTED source image that did not reach the pixels is a defect for a Reel cover too
+            (blocking if package.content_format.value == "single" or (source_approved and package.content_format.value == "reel")
+             else warnings).append(issue)
         if package.content_format.value == "single":
-            if ev.source_image_treatment == "none" and media_strategy != "typographic":
+            if ev.source_image_treatment == "none" and media_strategy != "typographic" and not source_rejected:
                 blocking.append("single_source_image_not_rendered")
+        if source_rejected and package.content_format.value in ("single", "reel"):
+            if ev.source_image_treatment != "none":
+                # the unsuitable image reached the pixels anyway (raw share card / clipped source headline as the hero)
+                blocking.append(f"unsuitable_source_media_rendered: treatment={ev.source_image_treatment!r} slide_index={ev.slide_index}")
+            elif not ev.notes.get("designed_typographic"):
+                # omitting the image is allowed only for a designed composition - never a plain text dump
+                blocking.append(f"typographic_render_not_designed: layout_variant={ev.notes.get('layout_variant')!r} slide_index={ev.slide_index}")
 
         # Phase B.1 objective creative-execution integrity. These checks do not pretend to judge
         # taste; they prove that the plan reached pixels and reject the exact mechanical failures

@@ -288,6 +288,10 @@ def ground_of(image: Image.Image) -> tuple[tuple[int, int, int], float]:
 
 def _surface_colour(layout: InstagramSlideLayout, region: LayoutRegion, subject_assets: dict) -> tuple[int, int, int] | None:
     s = region.surface or "soft"
+    if s == "accent" and region.tone == "accent" and region.accent_type == "block":
+        # the editorial split beat's one panel (services.instagram_recap_frames - renderer-owned, never a Director shape: accent_type is
+        # an accent-region field) carries the KAGE violet itself; every other declared accent surface stays neutral
+        return PALETTES[layout.palette][0]
     if s in _ACCENT_SURFACES:
         return _ACCENT_SURFACES[s]
     if s == "media_ground":

@@ -1,0 +1,205 @@
+{
+ "provider_calls": 0,
+ "1_single_live_failure_reproduced": {
+  "passed": false,
+  "blocking": [
+   "source_image_ref_recorded_but_not_applied: package.source_image_ref='3d4920c80e6b23219a2ebe5d49625dfa19ef3bc11728357271bac090905b4677' but this render's source_image_treatment is 'none' (slide_index=None)",
+   "single_source_image_not_rendered"
+  ]
+ },
+ "2_habr_classified": {
+  "suitable": false,
+  "selected": null,
+  "checks": [
+   {
+    "subject_key": "source",
+    "media_candidate_id": "fixture-habr",
+    "size": [
+     1200,
+     630
+    ],
+    "suitable": false,
+    "basis": "deterministic_flat_card"
+   }
+  ],
+  "vision_fixture_calls": [],
+  "selected_image": null
+ },
+ "2_director_media_note": "SOURCE IMAGE: the story's source image exists but is NOT usable as creative media (deterministic_flat_card: an article share / preview card or text graphic whose baked-in headline would compete with the new copy or be cropped mid-word). Do NOT plan media_strategy 'source_media' and never describe the source image as a background or layer. Plan a designed typographic visual (media_strategy 'typographic'): the post's own words and figures ARE the composition.",
+ "3_single_designed_without_card": {
+  "plan_demoted": true,
+  "file": "single_habr_fixed.png",
+  "treatment": "none",
+  "focal": "figure",
+  "designed_typographic": true
+ },
+ "4_single_gate": {
+  "passed": true,
+  "blocking": []
+ },
+ "5_reel_live_cover_reproduced": {
+  "file": "reel_vcru_before.png",
+  "treatment": "cover_cropped",
+  "gate_without_suitability_record": {
+   "passed": true,
+   "blocking": []
+  }
+ },
+ "6_vcru_classified": {
+  "suitable": false,
+  "selected": null,
+  "checks": [
+   {
+    "subject_key": "source",
+    "media_candidate_id": "fixture-vcru",
+    "size": [
+     1200,
+     630
+    ],
+    "suitable": false,
+    "basis": "vision",
+    "image_kind": "article_or_news_card",
+    "baked_in_text_prominent": true,
+    "reason": "FIXTURE: vc.ru share card, headline over photo"
+   }
+  ],
+  "vision_fixture_calls": [
+   {
+    "image": "vcru",
+    "answer_origin": "fixture - this card never went through vision live"
+   }
+  ],
+  "selected_image": null
+ },
+ "6_share_card_cannot_be_the_hero": {
+  "treatment": "none",
+  "layout_variant": "reel_graphic"
+ },
+ "10_clipped_embedded_text_still_fails": {
+  "passed": false,
+  "blocking": [
+   "unsuitable_source_media_selected: package.source_image_ref='eac77b59f65d31352177b6be62c061fa0b7cfb5e03e179594dd52f5e5b150a12' but no source candidate was suitable",
+   "unsuitable_source_media_rendered: treatment='cover_cropped' slide_index=None"
+  ]
+ },
+ "7_reel_fallback_cover": {
+  "plan_demoted": true,
+  "file": "reel_vcru_fixed.png",
+  "designed_typographic": true,
+  "gate": {
+   "passed": true,
+   "blocking": []
+  }
+ },
+ "8_suitable_photo_eligible": {
+  "alone": {
+   "suitable": true,
+   "selected": "source",
+   "checks": [
+    {
+     "subject_key": "source",
+     "media_candidate_id": "fixture-photo",
+     "size": [
+      1600,
+      899
+     ],
+     "suitable": true,
+     "basis": "vision",
+     "image_kind": "photograph",
+     "baked_in_text_prominent": false,
+     "reason": "recorded live verdict (recap story_4)"
+    }
+   ],
+   "vision_fixture_calls": [
+    {
+     "image": "photo",
+     "answer_origin": "recorded live verdict: recap vision_verdicts.json story_4"
+    }
+   ],
+   "selected_image": "photo"
+  },
+  "after_an_unsuitable_card": {
+   "suitable": true,
+   "selected": "source_2",
+   "checks": [
+    {
+     "subject_key": "source",
+     "media_candidate_id": "fixture-habr",
+     "size": [
+      1200,
+      630
+     ],
+     "suitable": false,
+     "basis": "deterministic_flat_card"
+    },
+    {
+     "subject_key": "source_2",
+     "media_candidate_id": "fixture-photo",
+     "size": [
+      1600,
+      899
+     ],
+     "suitable": true,
+     "basis": "vision",
+     "image_kind": "photograph",
+     "baked_in_text_prominent": false,
+     "reason": "recorded live verdict (recap story_4)"
+    }
+   ],
+   "vision_fixture_calls": [
+    {
+     "image": "photo",
+     "answer_origin": "recorded live verdict: recap vision_verdicts.json story_4"
+    }
+   ],
+   "selected_image": "photo"
+  }
+ },
+ "8_suitable_photo_single": {
+  "file": "single_suitable_photo.png",
+  "treatment": "cover_cropped",
+  "gate": {
+   "passed": true,
+   "blocking": []
+  }
+ },
+ "9_selected_media_missing": {
+  "single": {
+   "passed": false,
+   "blocking": [
+    "source_image_ref_recorded_but_not_applied: package.source_image_ref='3d4920c80e6b23219a2ebe5d49625dfa19ef3bc11728357271bac090905b4677' but this render's source_image_treatment is 'none' (slide_index=None)",
+    "single_source_image_not_rendered",
+    "hero_media_geometry_too_weak: coverage=0.0 slide_index=None"
+   ]
+  },
+  "reel": {
+   "passed": false,
+   "blocking": [
+    "source_image_ref_recorded_but_not_applied: package.source_image_ref='eac77b59f65d31352177b6be62c061fa0b7cfb5e03e179594dd52f5e5b150a12' but this render's source_image_treatment is 'none' (slide_index=None)"
+   ]
+  }
+ },
+ "plain_text_dump_still_fails": {
+  "layout_variant": "news_full_bleed",
+  "file": "single_plain_dump.png",
+  "gate": {
+   "passed": false,
+   "blocking": [
+    "typographic_render_not_designed: layout_variant='news_full_bleed' slide_index=None"
+   ]
+  }
+ },
+ "11_split_panel": {
+  "pixel_rgb": [
+   127,
+   95,
+   255
+  ],
+  "kage_accent": [
+   127,
+   95,
+   255
+  ],
+  "violet": true
+ }
+}

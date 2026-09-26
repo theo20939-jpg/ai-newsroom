@@ -270,6 +270,7 @@ async def test_a_director_taxonomy_that_disagrees_never_drops_or_reclassifies_th
     monkeypatch.setattr(trigger, "get_video_candidates_for_event", AsyncMock(return_value=[]))
     monkeypatch.setattr(trigger.InstagramEditorialDeliveryService, "find_current", AsyncMock(return_value=None))
     monkeypatch.setattr(trigger, "_resolve_single_source_image", AsyncMock(return_value=(None, None, 0, 0)))
+    monkeypatch.setattr(trigger, "_decoded_source_candidates", AsyncMock(return_value=([], 0)))
     outcome = await trigger.evaluate_and_submit_instagram_opportunity(
         AsyncMock(), AsyncMock(), opportunity=opportunity, opportunity_summary="s", gateway=_CreativeDirectorUnavailable(),
         prompt_repository=object(), phase_a_enabled=True, required_feed_format=planned,

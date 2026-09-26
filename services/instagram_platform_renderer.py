@@ -123,6 +123,13 @@ def _result_from_layout(
     return InstagramRenderResult(image_bytes=out.getvalue(), evidence=evidence)
 
 
+def _source_rejected(package: InstagramContentPackage) -> bool:
+    """Every source candidate of this SINGLE / REEL was judged unsuitable as creative media (services.instagram_automatic_trigger.
+    _select_daily_source_media): no caller can hand the renderer that image as the hero."""
+    record = package.media_plan.get("source_media_suitability")
+    return isinstance(record, dict) and record.get("suitable") is False
+
+
 def render_instagram_feed_image(package: InstagramContentPackage, *, source_image: Image.Image | None = None) -> InstagramRenderResult:
     """SINGLE format -> one PORTRAIT_FEED image, NEWS or BREAKING treatment (section 7/8).
     `presentation_family="breaking"` selects BREAKING; anything else (including the field's own
@@ -132,6 +139,8 @@ def render_instagram_feed_image(package: InstagramContentPackage, *, source_imag
     package itself, only `package.source_image_ref`'s traceable string."""
     if package.content_format.value != "single":
         raise InstagramRenderError(f"render_instagram_feed_image requires SINGLE, got {package.content_format!r}")
+    if _source_rejected(package):
+        source_image = None
     headline = package.on_image_copy or package.caption
     spec = profile_spec(InstagramRenderProfile.PORTRAIT_FEED)
     render_plan = interpret_render_plan(package)
@@ -323,6 +332,8 @@ def render_instagram_reel_cover(package: InstagramContentPackage, *, source_imag
     grid/profile-crop-aware composition lives in `services/instagram_reel_layouts.py`."""
     if package.content_format.value != "reel":
         raise InstagramRenderError(f"render_instagram_reel_cover requires REEL, got {package.content_format!r}")
+    if _source_rejected(package):
+        source_image = None
     hook = str(package.media_plan.get("hook") or package.caption)
     spec = profile_spec(InstagramRenderProfile.REEL_COVER)
     render_plan = interpret_render_plan(package)

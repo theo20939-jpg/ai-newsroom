@@ -285,30 +285,54 @@ def _news_framed(*, spec: ProfileSpec, source_image, kicker, headline, dek, pack
 def _news_typographic(
     *, spec: ProfileSpec, headline: str, package_identity: str,
 ) -> LayoutResult:
-    """A source-free editorial composition whose focal symbol and copy occupy the canvas."""
+    """A source-free editorial composition whose focal element and copy occupy the canvas. When the copy opens with its own short
+    figure line ('460 → 0' above the sentence) that figure IS the focal element, set large in the accent; otherwise the focal symbol,
+    drawn only where it cannot touch the copy. Nothing is added to the copy."""
     canvas = Image.new("RGBA", (spec.width, spec.height), (*tok.PAPER, 255))
     draw = ImageDraw.Draw(canvas, "RGBA")
     margin = round(spec.width * tok.MARGIN_FRAC)
-    symbol = "≠" if "≠" in headline or "не равно" in headline.lower() else "•"
-    symbol_font = ig_font(round(spec.width * 0.72), "black")
-    symbol_box = draw.textbbox((0, 0), symbol, font=symbol_font)
-    draw.text(
-        (spec.width - (symbol_box[2] - symbol_box[0]) - margin, round(spec.height * 0.04)),
-        symbol, font=symbol_font, fill=(*tok.RED, 255),
-    )
     draw.rectangle(
         [margin, round(spec.height * 0.18), margin + round(spec.width * 0.045), round(spec.height * 0.64)],
         fill=(*tok.INK, 255),
     )
     content_x = margin + round(spec.width * 0.085)
     content_w = spec.width - content_x - margin
-    font, lines, clipped = fit_text_block(
-        draw, headline, font_max=round(spec.width * 0.082), font_min=round(spec.width * 0.042),
-        max_width=content_w, max_lines=6, weight="black",
-    )
-    text_h = measure_block_height(draw, lines, font)
-    y: float = max(round(spec.height * 0.31), (spec.height - text_h) // 2)
+    first, _, rest = headline.strip().partition("\n")
+    figure = first.strip() if rest.strip() and len(first.strip()) <= 12 and any(c.isdigit() for c in first) else None
     regions: list[TextRegionSpec] = []
+    y: float
+    if figure is not None:
+        figure_font, figure_lines, figure_clipped = fit_text_block(
+            draw, figure, font_max=round(spec.width * 0.24), font_min=round(spec.width * 0.1), max_width=content_w, max_lines=1, weight="black",
+        )
+        font, lines, clipped = fit_text_block(
+            draw, " ".join(rest.split()), font_max=round(spec.width * 0.072), font_min=round(spec.width * 0.042),
+            max_width=content_w, max_lines=5, weight="black",
+        )
+        figure_h = measure_block_height(draw, figure_lines, figure_font)
+        gap = round(spec.height * 0.035)
+        y = max(round(spec.height * 0.18), (spec.height - figure_h - gap - measure_block_height(draw, lines, font)) // 2)
+        bbox = draw.textbbox((content_x, y), figure_lines[0], font=figure_font)
+        draw.text((content_x, y), figure_lines[0], font=figure_font, fill=(*tok.RED, 255))
+        regions.append(TextRegionSpec(kind="headline", box=box4(bbox), clipped=figure_clipped))
+        y = bbox[3] + gap
+        clipped = clipped or figure_clipped
+        symbol_drawn = False
+    else:
+        font, lines, clipped = fit_text_block(
+            draw, headline, font_max=round(spec.width * 0.082), font_min=round(spec.width * 0.042),
+            max_width=content_w, max_lines=6, weight="black",
+        )
+        text_h = measure_block_height(draw, lines, font)
+        y = max(round(spec.height * 0.31), (spec.height - text_h) // 2)
+        symbol = "≠" if "≠" in headline or "не равно" in headline.lower() else "•"
+        symbol_font = ig_font(round(spec.width * 0.72), "black")
+        symbol_box = draw.textbbox((0, 0), symbol, font=symbol_font)
+        at = (spec.width - (symbol_box[2] - symbol_box[0]) - margin, round(spec.height * 0.04))
+        ink = draw.textbbox(at, symbol, font=symbol_font)
+        symbol_drawn = ink[3] + round(spec.height * 0.02) <= y  # the symbol's ink ends above the copy - otherwise it is left out
+        if symbol_drawn:
+            draw.text(at, symbol, font=symbol_font, fill=(*tok.RED, 255))
     for i, line in enumerate(lines):
         bbox = draw.textbbox((content_x, y), line, font=font)
         draw.text((content_x, y), line, font=font, fill=tok.INK)
@@ -318,7 +342,11 @@ def _news_typographic(
     return LayoutResult(
         image=canvas.convert("RGB"), text_regions=regions, visible_brand_mark_count=mark_count,
         source_image_treatment="none", layout_variant="news_typographic_focal",
-        text_clipped=clipped, notes={"visual_coverage_fraction": 0.82},
+        text_clipped=clipped, notes={
+            "visual_coverage_fraction": 0.82, "typographic_focal": "figure" if figure is not None else ("symbol" if symbol_drawn else "type"),
+            # a designed composition, not a text dump: its type set at display size and whole (the art gate reads this)
+            "designed_typographic": font.size >= round(spec.width * 0.06) and not clipped,
+        },
     )
 
 

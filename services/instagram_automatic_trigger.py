@@ -489,16 +489,19 @@ def _decision_outcome(
     )
 
 
-async def _resolve_single_source_image(
+async def _decoded_source_candidates(
     session: Any, story_id: str | None,
-) -> tuple[Image.Image | None, EditorialImageCandidate | None, int, int]:
+) -> tuple[list[tuple[Image.Image, EditorialImageCandidate, int]], int]:
+    """Every usable (decodable, not expired, >= 256px) source image of the story in its stored order: (image, candidate, byte length),
+    plus the raw candidate count."""
     if not story_id:
-        return None, None, 0, 0
+        return [], 0
     try:
         event_id = UUID(story_id)
     except ValueError:
-        return None, None, 0, 0
+        return [], 0
     candidates = await get_editorial_image_candidates(session, news_event_id=event_id, limit=10)
+    usable: list[tuple[Image.Image, EditorialImageCandidate, int]] = []
     for candidate in candidates:
         if candidate.is_expired:
             continue
@@ -515,8 +518,86 @@ async def _resolve_single_source_image(
         except (OSError, ValueError):
             logger.warning("instagram_source_image_decode_failed", extra={"media_candidate_id": str(candidate.id)})
             continue
-        return source_image, candidate, len(candidates), len(data)
-    return None, None, len(candidates), 0
+        usable.append((source_image, candidate, len(data)))
+    return usable, len(candidates)
+
+
+async def _resolve_single_source_image(
+    session: Any, story_id: str | None,
+) -> tuple[Image.Image | None, EditorialImageCandidate | None, int, int]:
+    usable, count = await _decoded_source_candidates(session, story_id)
+    if not usable:
+        return None, None, count, 0
+    image, candidate, length = usable[0]
+    return image, candidate, count, length
+
+
+MAX_DAILY_SOURCE_CHECKS = 3  # SINGLE / REEL: at most this many of the story's own images are judged, in stored order
+
+
+async def _select_daily_source_media(
+    *, gateway: Any, prompt_repository: Any, candidates: list[tuple[Image.Image, EditorialImageCandidate, int]],
+) -> tuple[Image.Image | None, EditorialImageCandidate | None, int, dict[str, Any]]:
+    """SINGLE / REEL: a source image that EXISTS is not a source image that must be USED. The same suitability contract as the
+    carousel / recap path decides whether it may be the creative's main visual: the deterministic flat-card profile
+    (services.instagram_asset_profile), then the narrow vision check (services.instagram_source_suitability) for article share cards,
+    text-heavy preview cards, interface screenshots and baked-in headlines. The story's candidates are judged in stored order and the
+    first suitable one is selected; an unsuitable one is never handed on as creative media (it would be recomposed / cropped into a hero
+    with its source headline clipped). Returns (image, candidate, byte length, the decision record the package, renderer and art gate
+    carry). A vision error keeps the deterministic verdict (the existing rule: an aesthetic check never breaks generation) and says so."""
+    from services.instagram_asset_profile import profile_asset
+    from services.instagram_source_suitability import check_primary_suitability
+
+    checks: list[dict[str, Any]] = []
+    for index, (image, candidate, length) in enumerate(candidates[:MAX_DAILY_SOURCE_CHECKS]):
+        key = "source" if index == 0 else f"source_{index + 1}"
+        record: dict[str, Any] = {"subject_key": key, "media_candidate_id": str(candidate.id), "size": list(image.size)}
+        try:
+            deterministic = profile_asset(image, subject_key=key).suitable_for_final_visual
+        except (OSError, ValueError):
+            deterministic = False
+        if not deterministic:
+            record.update(suitable=False, basis="deterministic_flat_card")
+        else:
+            verdict = (await check_primary_suitability(gateway, prompt_repository, [(key, image)])).get(key)
+            if verdict is None or verdict.suitable is None:
+                record.update(suitable=True, basis="deterministic_only_vision_unavailable",
+                              error=(verdict.error if verdict is not None else "vision check not run"))
+            else:
+                record.update(suitable=verdict.suitable, basis="vision", image_kind=verdict.image_kind,
+                              baked_in_text_prominent=verdict.baked_in_text_prominent, reason=verdict.reason)
+        checks.append(record)
+        if record["suitable"]:
+            return image, candidate, length, {"suitable": True, "selected": key, "checks": checks}
+    return None, None, 0, {"suitable": False if checks else None, "selected": None, "checks": checks}
+
+
+def _daily_media_note(selection: dict[str, Any]) -> str:
+    """What the SINGLE / REEL Director may plan with: the suitability decision, stated as media truth."""
+    if selection.get("suitable") is False:
+        kinds = sorted({str(c.get("image_kind") or c.get("basis")) for c in selection.get("checks") or []})
+        return ("SOURCE IMAGE: the story's source image exists but is NOT usable as creative media (" + ", ".join(kinds) + ": an article "
+                "share / preview card or text graphic whose baked-in headline would compete with the new copy or be cropped mid-word). "
+                "Do NOT plan media_strategy 'source_media' and never describe the source image as a background or layer. Plan a designed "
+                "typographic visual (media_strategy 'typographic'): the post's own words and figures ARE the composition.")
+    if selection.get("suitable"):
+        chosen = next(c for c in selection["checks"] if c["subject_key"] == selection["selected"])
+        return f"SOURCE IMAGE: a {chosen['size'][0]}x{chosen['size'][1]} source image is available and suitable as the main visual."
+    return ""
+
+
+def _demote_source_plan(creative: Any) -> tuple[Any, bool]:
+    """The deterministic boundary behind the note: with no suitable source image a SINGLE / REEL plan that still asks for
+    'source_media' becomes the typographic plan (never a failed post, never the unsuitable image). Only the media strategy and its
+    stated reason change - no copy is touched."""
+    plan = getattr(creative, "creative_execution_plan", None)
+    if plan is None or plan.media_strategy != "source_media":
+        return creative, False
+    plan = plan.model_copy(update={
+        "media_strategy": "typographic",
+        "media_rationale": "Исходное изображение — карточка статьи с текстом, как визуал не используется: пост собран типографикой.",
+    })
+    return creative.model_copy(update={"creative_execution_plan": plan}), True
 
 _MEDIA_COMPOSITIONS = (None, "contained_media", "full_bleed_media", "collage", "screenshot_ui")
 
@@ -901,9 +982,17 @@ async def evaluate_and_submit_instagram_opportunity(
             duplicate=phase_a_plan.duplicate, accepted=True,
         )
 
+    source_selection: dict[str, Any] | None = None
     if recap_bundle is not None:
         # Each recap slide consumes only its own story's asset; there is no shared source image.
         source_image, image_candidate, image_count, read_length = None, None, 0, 0
+    elif format_decision.recommended_format in (ContentFormat.SINGLE, ContentFormat.REEL):
+        usable, image_count = await _decoded_source_candidates(session, source_event_id or opportunity.story_id)
+        source_image, image_candidate, read_length, source_selection = await _select_daily_source_media(
+            gateway=gateway, prompt_repository=prompt_repository, candidates=usable)
+        logger.info("instagram_source_media_suitability", extra={
+            "opportunity_id": opportunity.id, "suitable": source_selection.get("suitable"), "selected": source_selection.get("selected"),
+            "checked": len(source_selection.get("checks") or [])})
     else:
         source_image, image_candidate, image_count, read_length = await _resolve_single_source_image(
             session, source_event_id or opportunity.story_id
@@ -947,7 +1036,8 @@ async def evaluate_and_submit_instagram_opportunity(
         visual_dna_version=_visual_dna_version() if format_decision.recommended_format is ContentFormat.CAROUSEL else "",
         media_note=(
             _carousel_media_note(source_image=source_image, recap_bundle=recap_bundle, media_first=media_first, vision_unsuitable=vision_unsuitable)
-            if format_decision.recommended_format is ContentFormat.CAROUSEL else ""
+            if format_decision.recommended_format is ContentFormat.CAROUSEL
+            else _daily_media_note(source_selection) if source_selection is not None else ""
         ),
         media_first=media_first,
         generated_media_available=generated_media_available(),
@@ -991,6 +1081,17 @@ async def evaluate_and_submit_instagram_opportunity(
         return InstagramTriggerCandidateOutcome(event_id=opportunity.id, accepted=True, reason="creative_director_failed:unexpected_error")
 
     single, carousel, reel = creative_outcome.single, creative_outcome.carousel, creative_outcome.reel
+    if source_selection is not None and source_selection.get("suitable") is not True and (single or reel) is not None:
+        demoted, changed = _demote_source_plan(single or reel)
+        if changed:
+            source_selection = {**source_selection, "plan_demoted_to_typographic": True}
+            if single is not None:
+                single = demoted
+                creative_outcome = replace(creative_outcome, single=single)
+            else:
+                reel = demoted
+                creative_outcome = replace(creative_outcome, reel=reel)
+            logger.info("instagram_unsuitable_source_plan_demoted", extra={"opportunity_id": opportunity.id})
     creative = single or carousel or reel
     if creative is None:
         return InstagramTriggerCandidateOutcome(
@@ -1084,6 +1185,7 @@ async def evaluate_and_submit_instagram_opportunity(
     pkg = replace(pkg, media_plan={
         **pkg.media_plan,
         "media_execution": creative_media.execution_metadata(),
+        **({"source_media_suitability": source_selection} if source_selection is not None else {}),
     })
     creative_image = creative_media.image
 
