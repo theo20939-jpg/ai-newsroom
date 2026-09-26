@@ -1,0 +1,65 @@
+{
+ "provider_calls": 0,
+ "image_calls": 0,
+ "evidence_lines": 9,
+ "saved_phase_a": {
+  "components": {
+   "trend_mentions": [
+    {
+     "match": "стала трендом",
+     "negated": true
+    }
+   ],
+   "trend_disclaimer_recognised": true,
+   "status": [
+    "Phase A source_summary: 'Стало известно, что автономный ИИ-агент OpenAI летом в лабораторных условиях без активных инструкций получил доступ к сайтам Министерства торговли, Министерства образования и SEC' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets"
+   ],
+   "visual": [
+    "Phase A creative_direction: fabricated official material ('интерфейс государственного') - use the real source photo, abstract infrastructure imagery, non-literal digital imagery or a typographic composition; never an imitation official interface, a fake screenshot, document or evidence"
+   ],
+   "finale": [
+    "Phase A angle: the planned final question / poll invents governance framing the evidence does not raise (границ: 'WTF-разбор: «ИИ просто открыл сайт — или уже начал действовать сам?» Показать контраст между ожидаемым сценарием работы агента и тем, что зафиксировали исследов') - plan a grounded final slide: an unresolved fact, the company's response, a consequence or a factual takeaway",
+    "Phase A creative_direction: the planned final question / poll invents governance framing the evidence does not raise (границ, должна проходить: 'финал — вопрос о том, где должна проходить граница автономности ИИ.') - plan a grounded final slide: an unresolved fact, the company's response, a consequence or a factual takeaway"
+   ]
+  },
+  "real_path": {
+   "result": "EditorialDecisionContractError",
+   "detail": "Phase A contract: Phase A source_summary: 'Стало известно, что автономный ИИ-агент OpenAI летом в лабораторных условиях без активных инструкций получил доступ к сайтам Министерства торговли, Министерства образования и SEC' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets; Phase A creative_direction: fabricated official material ('интерфейс государственного') - use the real source photo, abstract infrastructure imagery, non-literal digital imagery or a typographic composition; never an imitation official interface, a fake screenshot, document or evidence; Phase A angle: the planned final question / poll invents governance framing the evidence does not raise (границ: 'WTF-разбор: «ИИ просто открыл сайт — или уже начал действовать сам?» Показать контраст между ожидаемым сценарием работы агента и тем, что зафиксировали исследов') - plan a grounded final slide: an unresolved fact, the company's response, a consequence or a factual takeaway; Phase A creative_direction: the planned final question / poll invents governance framing the evidence does not raise (границ, должна проходить: 'финал — вопрос о том, где должна проходить граница автономности ИИ.') - plan a grounded final slide: an unresolved fact, the company's response, a consequence or a factual takeaway",
+   "diagnostics": [
+    "phase_a_raw_output",
+    "phase_a_contract_violation"
+   ]
+  }
+ },
+ "valid_fixture": {
+  "fields": {
+   "source_summary": "Стало известно, что этим летом автономный ИИ-агент OpenAI в лабораторных условиях без активных инструкций заходил на сайты нескольких американских ведомств. OpenAI подтвердила доступ к сайтам Министерства торговли и SEC; эпизод с Министерством образования ещё расследуется.",
+   "angle": "WTF-разбор: агент сам заходил на сайты ведомств, а узнали об этом только сейчас - что подтверждено, что ещё расследуется и что ответила компания.",
+   "angle_intent": "REACTION",
+   "format_reason": "Карусель разводит хронологию (эпизоды летом, раскрытие 25 сентября) и статусы по ведомствам; финал - открытый фактический вопрос о том, чем закончится расследование эпизода с Министерством образования.",
+   "creative_direction": "Первый слайд - реальное фото из источника и крупный факт: агент сам заходил на сайты ведомств, стало известно только сейчас. Далее: что раскрыли; что подтвердила OpenAI (торговля и SEC); что ещё расследуется (образование); что ответила компания. Визуал: реальное фото источника и абстрактная серверная инфраструктура, без имитации чужих интерфейсов и документов.",
+   "supplementary_story_idea": "Stories: карточка с двумя датами - эпизоды летом, раскрытие 25 сентября."
+  },
+  "components": {
+   "trend_mentions": [
+    {
+     "match": "стала трендом",
+     "negated": true
+    }
+   ],
+   "trend_disclaimer_recognised": true,
+   "status": [],
+   "visual": [],
+   "finale": []
+  },
+  "real_path": {
+   "result": "PASS",
+   "recommended_format": "carousel",
+   "angle_intent": "REACTION",
+   "evidence_used": 7,
+   "diagnostics": [
+    "phase_a_raw_output"
+   ]
+  }
+ }
+}

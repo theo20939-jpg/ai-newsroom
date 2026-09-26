@@ -184,7 +184,7 @@ _REEL_PROMPT_VERSION = "8"  # v8: KAGE identity
 _EDITORIAL_DECISION_PROMPT_VERSION = "1"
 # KAGE downstream format contract: a post whose product format the frozen feed planner already fixed (AI_HACK / TREND / WEEKLY_RECAP)
 # is decided with v2 - the angle INSIDE the planned product, plus the recap coverage plan. Every other caller keeps v1 unchanged.
-_EDITORIAL_DECISION_PLANNED_PROMPT_VERSION = "3"  # v3: KAGE identity + evidence cited by handle
+_EDITORIAL_DECISION_PLANNED_PROMPT_VERSION = "4"  # v3: KAGE identity + evidence cited by handle; v4: the Phase A contract (2026-09-27)
 WEEKLY_RECAP = "WEEKLY_RECAP"
 # Phase A output bound (2026-09-25): it used to send none, so the gateway priced the model's full 128k output (~$0.77 a call). Sized from
 # the schema, not from a budget: 15 strings capped at 3,800 characters in total + `evidence_used` quoting a whole evidence package (the
@@ -596,11 +596,17 @@ def _grouped_evidence(items: list[str], story_keys: dict, labels: dict | None = 
     return "\n".join(lines)
 
 
-_HANDLE_DECISION_VERSIONS = frozenset({"3"})  # Phase A prompt versions whose evidence is listed and cited by handle (E1, E2, ...)
+_HANDLE_DECISION_VERSIONS = frozenset({"3", "4"})  # Phase A prompt versions whose evidence is listed and cited by handle (E1, E2, ...)
+_PHASE_A_CONTRACT_VERSIONS = frozenset({"4"})  # services.instagram_phase_a_contract: status ledger in, contract checked out
 
 
-def _build_decision_user_text(decision_input: InstagramEditorialDecisionInput, *, handles: bool = False) -> str:
+def _build_decision_user_text(decision_input: InstagramEditorialDecisionInput, *, handles: bool = False, contract: bool = False) -> str:
     items = decision_input.allowed_evidence
+    status_note = ""
+    if contract:  # the EXISTING target-status ledger's compact rendering (services.instagram_factual_status) - never a second ledger
+        from services.instagram_phase_a_contract import phase_a_status_note
+
+        status_note = phase_a_status_note(list(items))
     if handles:  # "E3: <exact text>" - the model cites the handle; the exact text is resolved deterministically afterwards
         labelled = {item: f"E{i}: {item}" for i, item in enumerate(items, start=1)}
         evidence = (_grouped_evidence(items, decision_input.evidence_story_keys, labels=labelled)
@@ -622,6 +628,7 @@ def _build_decision_user_text(decision_input: InstagramEditorialDecisionInput, *
         f"TREND/MOMENTUM EVIDENCE (may be absent or a bad fit):\n{decision_input.trend_context or '(none)'}\n"
         f"RECENT/IN-FLIGHT INSTAGRAM CONTENT:\n{decision_input.recent_content_context or '(none)'}\n"
         f"EVIDENCE BULLETS:\n{evidence}"
+        + (f"\n{status_note}" if status_note else "")
         + (f"\nPLANNED PRODUCT FORMAT (fixed by the feed planner - choose the strongest angle INSIDE it, never another product): "
            f"{decision_input.planned_format}" if decision_input.planned_format else "")
         + ("\nWEEKLY RECAP STORIES (every story_key exactly once in coverage_plan):\n" + "\n".join(
@@ -648,9 +655,14 @@ def assert_recap_coverage(decision: InstagramEditorialDecision, story_keys: list
 _CYRILLIC_RE = re.compile(r"[А-Яа-яЁё]")
 _LATIN_WORD_RE = re.compile(r"[A-Za-z][A-Za-z'-]*")
 _VISIBLE_SERVICE_LABEL_RE = re.compile(r"(?im)^\s*(?:CTA|CALL\s+TO\s+ACTION|HOOK|CAPTION|EDITOR\s+NOTE|ANGLE)\s*:")
+# a claim of platform / virality momentum. The two words must sit in ONE sentence (never '... Instagram. Интернет-native fit — формат ...'),
+# and virality claims that name no platform count too ('история набирает вирусный охват', 'сюжет вирусится', 'разлетается по сети').
+_PLATFORM = r"(?:instagram|инстаграм\w*|reels|рилс\w*)"
+_TREND_WORD = r"(?:тренд|вирус|viral|audio|аудио|формат|разлета|охват)"
 _UNSUPPORTED_PLATFORM_TREND_CLAIM_RE = re.compile(
-    r"(?i)(?:(?:instagram|reels).{0,40}(?:тренд|вирус|viral|audio|аудио|формат)|"
-    r"(?:тренд|вирус|viral|audio|аудио|формат).{0,40}(?:instagram|reels))"
+    rf"(?i)(?:{_PLATFORM}[^.!?;]{{0,40}}{_TREND_WORD}|{_TREND_WORD}[^.!?;]{{0,40}}{_PLATFORM}|"
+    r"\bвирусит\w*|\bзавирусил\w*|\bнабира\w*\s+(?:\w+\s+){0,2}охват\w*|\bвирусн\w+\s+охват\w*|\bразлета\w*\s+по\s+\w+|"
+    r"\bстал\w*\s+трендом\b|\bв\s+тренде\b|\bуже\s+(?:\w+-)?тренд\w*)"
 )
 
 
@@ -658,16 +670,36 @@ _UNSUPPORTED_PLATFORM_TREND_CLAIM_RE = re.compile(
 # Reels-тренд", "НЕТ признаков тренда", "БЕЗ опоры на Instagram-формат") or a denial after it ("... тренд НЕ ПОДТВЕРЖДАЕТСЯ") is a
 # disclaimer, not a claim. Intensifiers that ASSERT the trend ("не только", "не просто", "не менее") stay positive. Real launch canary:
 # "Это не Instagram-native тренд и не вирусный формат" and "это не подача через вирусный Reels-тренд" were rejected as claims.
+# Live canary 2026-09-26: "Instagram-native сигнал отсутствует, поэтому НЕЛЬЗЯ называть историю вирусной или УТВЕРЖДАТЬ, ЧТО она стала
+# трендом Instagram" is a DENIAL - but 'нельзя' was not a negator, and conversely any 'не' up to 60 chars back suppressed a real claim
+# ("Мы не ожидали такого, но история стала трендом Instagram"). The negation must govern the trend assertion itself: its scope is the
+# claim's own comma clause, extended backwards only through complement clauses ('..., что ...', '..., будто ...') into the predicate that
+# introduces them, and it never crosses a sentence, ';', ':', a dash or a contrastive conjunction ('но', 'однако', 'хотя'). Affirming
+# idioms ('не только', 'не просто', 'неудивительно', 'не секрет', 'нельзя не') are not negations.
 _CLAUSE_END = re.compile(r"[.!?;]")
-_NEGATION_BEFORE = re.compile(r"(?i)(?<![\w-])(?:не(?!\s+(?:только|просто|менее|меньше|хуже))|нет|ни|без|no|not)(?![\w-])")
+_SCOPE_BREAK = re.compile(r"(?i)[.!?;:]|\s[—–]\s|(?:,\s*|\s)(?:но|однако|зато|хотя|тем не менее|but|however|although)(?![\w-])")
+_COMPLEMENT_START = re.compile(r"(?i)^\s*(?:что|чтобы|будто|якобы|как будто|словно|that|whether|if)(?![\w-])")
+_NEGATION_BEFORE = re.compile(
+    r"(?i)(?<![\w-])(?:не(?!\s+(?:только|просто|менее|меньше|хуже|удивительно|секрет|случайно))|нет|ни|без|нельзя(?!\s+не\b)|невозможно|"
+    r"отсутству\w*|no|not|never|cannot|without)(?![\w-])")
 _DENIAL_AFTER = re.compile(r"(?i)(?:не\s+подтвержда|не\s+доказан|не\s+является|не\s+относится|не\s+наблюда|нет\s+подтвержд|отсутству)")
 
 
+def _negation_scope(text: str, start: int) -> str:
+    """The text a negation must sit in to govern the claim starting at `start`: its own comma clause, extended backwards through complement
+    clauses only, never past a sentence / ';' / ':' / dash / contrastive-conjunction boundary."""
+    segment_start = max((m.end() for m in _SCOPE_BREAK.finditer(text, 0, start)), default=0)
+    parts = text[segment_start:start].split(",")
+    index = len(parts) - 1
+    while index > 0 and _COMPLEMENT_START.match(parts[index]):
+        index -= 1
+    return ",".join(parts[index:])
+
+
 def _trend_mention_negated(text: str, start: int, end: int) -> bool:
-    clause_start = max((m.end() for m in _CLAUSE_END.finditer(text, 0, start)), default=0)
     after = _CLAUSE_END.search(text, end)
     clause_end = after.start() if after else len(text)
-    return bool(_NEGATION_BEFORE.search(text[max(clause_start, start - 60):end]) or _DENIAL_AFTER.search(text[start:clause_end]))
+    return bool(_NEGATION_BEFORE.search(_negation_scope(text, start) + text[start:end]) or _DENIAL_AFTER.search(text[start:clause_end]))
 
 
 def assert_trend_rationale_grounded(
@@ -806,7 +838,7 @@ async def generate_editorial_decision(
                 content=[ContentPart(type="text", text=prompt.system + "\n\nRULES:\n" + "\n".join(f"- {r}" for r in prompt.rules))],
             ),
             Message(role="user", content=[ContentPart(type="text", text=_build_decision_user_text(
-                decision_input, handles=version in _HANDLE_DECISION_VERSIONS))]),
+                decision_input, handles=version in _HANDLE_DECISION_VERSIONS, contract=version in _PHASE_A_CONTRACT_VERSIONS))]),
         ],
         response_mode="json_schema",
         response_schema=prompt.output_schema,
@@ -848,6 +880,15 @@ async def generate_editorial_decision(
         provenance=decision_input.trend_signal_provenance,
         is_platform_native=decision_input.trend_signal_is_platform_native,
     )
+    if version in _PHASE_A_CONTRACT_VERSIONS:
+        # founder task 2026-09-27: Phase A never seeds the Director with a status-collapsed summary, a fabricated official visual or an
+        # invented governance finale (services.instagram_phase_a_contract; Phase A has no retry - the prompt carries the same contract)
+        from services.instagram_phase_a_contract import phase_a_contract_findings
+
+        findings = phase_a_contract_findings(decision, list(decision_input.allowed_evidence))
+        if findings:
+            _emit_diagnostic("phase_a_contract_violation", {"findings": findings})
+            raise EditorialDecisionContractError("Phase A contract: " + "; ".join(findings))
     _enforce_output_policy(
         [
             decision.why_now, decision.audience_value, decision.angle, decision.format_reason,
