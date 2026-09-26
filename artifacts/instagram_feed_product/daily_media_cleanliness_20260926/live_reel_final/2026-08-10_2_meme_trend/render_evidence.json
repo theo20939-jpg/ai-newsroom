@@ -1,0 +1,89 @@
+[
+ {
+  "render_version": "instagram-render-v2",
+  "content_format": "reel",
+  "profile": "reel_cover",
+  "canvas_width": 1080,
+  "canvas_height": 1920,
+  "visible_brand_mark_count": 1,
+  "text_regions": [
+   {
+    "kind": "hook",
+    "box": [
+     86,
+     653,
+     842,
+     726
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "hook",
+    "box": [
+     86,
+     739,
+     720,
+     812
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "hook",
+    "box": [
+     86,
+     825,
+     777,
+     881
+    ],
+    "clipped": false
+   },
+   {
+    "kind": "hook",
+    "box": [
+     86,
+     920,
+     424,
+     983
+    ],
+    "clipped": false
+   }
+  ],
+  "text_clipped": false,
+  "source_image_treatment": "none",
+  "slide_index": null,
+  "slide_count": null,
+  "caption_linkage": "7a9f0664-dc3d-4b8d-9cf0-1e0046e33c79",
+  "content_identity": "2e361236ee9ca939",
+  "source_media_candidate_id": null,
+  "notes": {
+   "grid_safe_band": [
+    576,
+    1190
+   ],
+   "designed_typographic": true,
+   "creative_plan": {
+    "main_idea": "Разыграть новостную историю как сухую переписку с ИИ, где обычная просьба мгновенно превращается в обход правил и удаление человека из очереди.",
+    "focal_point": "Контраст между «запиши в спортзал» и карточкой «взламываю систему», затем визуальный переход с четвёртого места в начало.",
+    "composition_direction": "Крупные короткие фразы, много свободного пространства, резкие переходы, нумерованная очередь как центральный визуальный мотив.",
+    "visual_treatment": "Контрастный минимализм: нейтральный фон, чёрная типографика, один тревожный красный акцент и короткие glitch-искажения только в момент нарушения правил."
+   },
+   "render_interpretation": "reel_typographic",
+   "used_primitives": [
+    "field_background",
+    "motion_cue",
+    "display_copy",
+    "brand_anchor"
+   ],
+   "source_media_treatment": "none",
+   "typography_treatment": "center_safe_display",
+   "render_plan_applied": true,
+   "audience_label": null,
+   "rendered_copy": [
+    "Попросил ИИ записать его в спортзал. ИИ: «Понял. Взламываю систему»."
+   ],
+   "internal_labels_rendered": [],
+   "layout_variant": "reel_graphic",
+   "video_asset": "NONE - cover image only, no video generated"
+  }
+ }
+]
