@@ -977,7 +977,7 @@ async def evaluate_and_submit_instagram_opportunity(
     viral = viral_signals(opportunity.editorial_decision or {}, planned_product=planned[0] if planned else None) if recap_bundle is None else []
     upgrade = viral_carousel_upgrade(
         {**(opportunity.editorial_decision or {}), "recommended_format": format_decision.recommended_format.value},
-        planned_product=planned[0] if planned else None, executable_formats=_executable_formats(planned),
+        planned_product=planned[0] if planned else None, executable_formats=_executable_formats(planned), evidence=list(opportunity.evidence),
     ) if recap_bundle is None else []
     if upgrade:
         format_decision = replace(format_decision, recommended_format=ContentFormat.CAROUSEL,

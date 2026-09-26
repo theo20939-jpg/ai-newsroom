@@ -1057,6 +1057,14 @@ def _validate_carousel_output(
                                   **{f"slide_{i}_body": slide.slide_body or "" for i, slide in enumerate(creative.slides)},
                                   "final_caption": creative.final_caption or "", "final_cta": creative.final_cta or ""},
                                  locale=director_input.locale)
+    if director_input.media_first:
+        # founder decision 2026-09-26: a GENERATED picture never becomes a lookalike / re-enactment of a named real person (the Director's
+        # own briefs included); recoverable - the one correction retry names the slide
+        from services.instagram_viral_format import ViralCopyQualityError, generated_person_risks
+
+        risks = generated_person_risks(list(creative.slides), list(director_input.allowed_evidence))
+        if risks:
+            raise ViralCopyQualityError("generated-image review: " + "; ".join(risks))
     if director_input.viral_carousel_note:
         # founder copy review 2026-09-26: a viral retelling carries no invented quote and no slide without new information
         from services.instagram_viral_format import assert_viral_copy_quality

@@ -1,0 +1,303 @@
+{
+ "pool_size": 1161,
+ "pool_latest_ingest": "2026-09-26 03:00:16.344642+00:00",
+ "before_rev": "HEAD",
+ "before_top10": [
+  {
+   "headline": "IShowSpeed's 'Ronaldo Day' Clip Becomes A Powerful Brainrot Meme",
+   "source": "Know Your Meme",
+   "age": "12.1h",
+   "published_at": "2026-09-25T14:56:52+00:00",
+   "ingested_at": "2026-09-25T18:17:21.259785+00:00",
+   "kage_core": [],
+   "viral_signal": {
+    "event_oddity": false,
+    "distribution_only": true
+   },
+   "before": "meme_trend strong=True rank=2.5",
+   "after": "reject strong=False",
+   "eligible": false,
+   "why": "viral / strange, but technology is incidental - not a KAGE story (no tech core in the event)"
+  },
+  {
+   "headline": "2020 Karen Video About 'Playing Games' Becomes A Meme With Difficult Game Enjoyers On TikTok",
+   "source": "Know Your Meme",
+   "age": "10.2h",
+   "published_at": "2026-09-25T16:48:12+00:00",
+   "ingested_at": "2026-09-25T20:23:49.884053+00:00",
+   "kage_core": [],
+   "viral_signal": {
+    "event_oddity": false,
+    "distribution_only": true
+   },
+   "before": "meme_trend strong=True rank=2.5",
+   "after": "reject strong=False",
+   "eligible": false,
+   "why": "viral / strange, but technology is incidental - not a KAGE story (no tech core in the event)"
+  },
+  {
+   "headline": "Hacks by autonomous AI agents raise thorny questions of legal accountability - PBS",
+   "source": "Google News: Artificial Intelligence",
+   "age": "4.0h",
+   "published_at": "2026-09-25T23:02:57+00:00",
+   "ingested_at": "2026-09-26T03:00:15.798705+00:00",
+   "kage_core": [
+    "ai",
+    "software_platform_security_gaming"
+   ],
+   "viral_signal": {
+    "event_oddity": false,
+    "distribution_only": false
+   },
+   "before": "meme_trend strong=True rank=2.45",
+   "after": "meme_trend strong=True",
+   "eligible": true,
+   "why": "absurd AI behaviour in ordinary life - a story people send"
+  },
+  {
+   "headline": "ИИ случайно взломал правительственный сайт - naukatv.ru",
+   "source": "Google News RU: ИИ",
+   "age": "16.9h",
+   "published_at": "2026-09-25T10:06:56+00:00",
+   "ingested_at": "2026-09-25T10:27:30.024487+00:00",
+   "kage_core": [
+    "ai",
+    "software_platform_security_gaming"
+   ],
+   "viral_signal": {
+    "event_oddity": false,
+    "distribution_only": false
+   },
+   "before": "meme_trend strong=True rank=2.3",
+   "after": "meme_trend strong=True",
+   "eligible": true,
+   "why": "absurd AI behaviour in ordinary life - a story people send"
+  },
+  {
+   "headline": "ИИ впервые взломал госструктуру - 24.kz",
+   "source": "Google News RU: ИИ",
+   "age": "15.4h",
+   "published_at": "2026-09-25T11:37:28+00:00",
+   "ingested_at": "2026-09-25T11:52:39.237762+00:00",
+   "kage_core": [
+    "ai",
+    "software_platform_security_gaming"
+   ],
+   "viral_signal": {
+    "event_oddity": false,
+    "distribution_only": false
+   },
+   "before": "meme_trend strong=True rank=2.3",
+   "after": "meme_trend strong=True",
+   "eligible": true,
+   "why": "absurd AI behaviour in ordinary life - a story people send"
+  },
+  {
+   "headline": "Спутникопад Starlink превратили в глобальный барометр — они помогают изучать атмосферу Земли",
+   "source": "3DNews",
+   "age": "14.7h",
+   "published_at": "2026-09-25T12:17:00+00:00",
+   "ingested_at": "2026-09-25T12:34:49.338991+00:00",
+   "kage_core": [
+    "software_platform_security_gaming"
+   ],
+   "viral_signal": {
+    "event_oddity": true,
+    "distribution_only": false
+   },
+   "before": "meme_trend strong=True rank=2.3",
+   "after": "meme_trend strong=True",
+   "eligible": true,
+   "why": "a strange / funny event whose technology is central (KAGE core: software_platform_security_gaming)"
+  },
+  {
+   "headline": "Why Ed Miliband has embraced his ‘awkward dad’ image in viral TikTok video",
+   "source": "The Guardian Technology",
+   "age": "10.6h",
+   "published_at": "2026-09-25T16:22:55+00:00",
+   "ingested_at": "2026-09-25T16:47:23.040437+00:00",
+   "kage_core": [],
+   "viral_signal": {
+    "event_oddity": false,
+    "distribution_only": true
+   },
+   "before": "meme_trend strong=True rank=2.3",
+   "after": "reject strong=False",
+   "eligible": false,
+   "why": "viral / strange, but technology is incidental - not a KAGE story (no tech core in the event)"
+  },
+  {
+   "headline": "Shows an Incorrect API Key error...which is weird. Nothing on the status page. (EDIT: Added to incident page:",
+   "source": "Hacker News Front Page",
+   "age": "4.1h",
+   "published_at": "2026-09-25T22:51:44+00:00",
+   "ingested_at": "2026-09-25T23:46:24.042668+00:00",
+   "kage_core": [
+    "software_platform_security_gaming"
+   ],
+   "viral_signal": {
+    "event_oddity": true,
+    "distribution_only": false
+   },
+   "before": "meme_trend strong=True rank=2.3",
+   "after": "meme_trend strong=True",
+   "eligible": true,
+   "why": "a strange / funny event whose technology is central (KAGE core: software_platform_security_gaming)"
+  },
+  {
+   "headline": "«Это очень много вырытых могил»: разработчики Graveyard Keeper 2 похвастались продажами за три дня с релиза",
+   "source": "3DNews",
+   "age": "12.6h",
+   "published_at": "2026-09-25T14:23:00+00:00",
+   "ingested_at": "2026-09-25T14:41:03.258355+00:00",
+   "kage_core": [],
+   "viral_signal": {
+    "event_oddity": true,
+    "distribution_only": false
+   },
+   "before": "meme_trend strong=False rank=0.65",
+   "after": "reject strong=False",
+   "eligible": false,
+   "why": "viral / strange, but technology is incidental - not a KAGE story (no tech core in the event)"
+  },
+  {
+   "headline": "Больше никаких «лесенок»: спустя 18 лет моддер реализовал в GTA IV полноценное сглаживание",
+   "source": "3DNews",
+   "age": "19.5h",
+   "published_at": "2026-09-25T07:30:03+00:00",
+   "ingested_at": "2026-09-25T07:39:38.502367+00:00",
+   "kage_core": [
+    "software_platform_security_gaming"
+   ],
+   "viral_signal": {
+    "event_oddity": true,
+    "distribution_only": false
+   },
+   "before": "meme_trend strong=False rank=0.5",
+   "after": "meme_trend strong=True",
+   "eligible": true,
+   "why": "a strange / funny event whose technology is central (KAGE core: software_platform_security_gaming)"
+  }
+ ],
+ "after_top10": [
+  {
+   "headline": "Hacks by autonomous AI agents raise thorny questions of legal accountability - PBS",
+   "source": "Google News: Artificial Intelligence",
+   "age": "4.0h",
+   "published_at": "2026-09-25T23:02:57+00:00",
+   "ingested_at": "2026-09-26T03:00:15.798705+00:00",
+   "kage_core": [
+    "ai",
+    "software_platform_security_gaming"
+   ],
+   "viral_signal": {
+    "event_oddity": false,
+    "distribution_only": false
+   },
+   "after": "meme_trend strong=True rank=2.45",
+   "eligible": true,
+   "why": "absurd AI behaviour in ordinary life - a story people send"
+  },
+  {
+   "headline": "Больше никаких «лесенок»: спустя 18 лет моддер реализовал в GTA IV полноценное сглаживание",
+   "source": "3DNews",
+   "age": "19.5h",
+   "published_at": "2026-09-25T07:30:03+00:00",
+   "ingested_at": "2026-09-25T07:39:38.502367+00:00",
+   "kage_core": [
+    "software_platform_security_gaming"
+   ],
+   "viral_signal": {
+    "event_oddity": true,
+    "distribution_only": false
+   },
+   "after": "meme_trend strong=True rank=2.3",
+   "eligible": true,
+   "why": "a strange / funny event whose technology is central (KAGE core: software_platform_security_gaming)"
+  },
+  {
+   "headline": "ИИ случайно взломал правительственный сайт - naukatv.ru",
+   "source": "Google News RU: ИИ",
+   "age": "16.9h",
+   "published_at": "2026-09-25T10:06:56+00:00",
+   "ingested_at": "2026-09-25T10:27:30.024487+00:00",
+   "kage_core": [
+    "ai",
+    "software_platform_security_gaming"
+   ],
+   "viral_signal": {
+    "event_oddity": false,
+    "distribution_only": false
+   },
+   "after": "meme_trend strong=True rank=2.3",
+   "eligible": true,
+   "why": "absurd AI behaviour in ordinary life - a story people send"
+  },
+  {
+   "headline": "ИИ впервые взломал госструктуру - 24.kz",
+   "source": "Google News RU: ИИ",
+   "age": "15.4h",
+   "published_at": "2026-09-25T11:37:28+00:00",
+   "ingested_at": "2026-09-25T11:52:39.237762+00:00",
+   "kage_core": [
+    "ai",
+    "software_platform_security_gaming"
+   ],
+   "viral_signal": {
+    "event_oddity": false,
+    "distribution_only": false
+   },
+   "after": "meme_trend strong=True rank=2.3",
+   "eligible": true,
+   "why": "absurd AI behaviour in ordinary life - a story people send"
+  },
+  {
+   "headline": "Спутникопад Starlink превратили в глобальный барометр — они помогают изучать атмосферу Земли",
+   "source": "3DNews",
+   "age": "14.7h",
+   "published_at": "2026-09-25T12:17:00+00:00",
+   "ingested_at": "2026-09-25T12:34:49.338991+00:00",
+   "kage_core": [
+    "software_platform_security_gaming"
+   ],
+   "viral_signal": {
+    "event_oddity": true,
+    "distribution_only": false
+   },
+   "after": "meme_trend strong=True rank=2.3",
+   "eligible": true,
+   "why": "a strange / funny event whose technology is central (KAGE core: software_platform_security_gaming)"
+  },
+  {
+   "headline": "Shows an Incorrect API Key error...which is weird. Nothing on the status page. (EDIT: Added to incident page:",
+   "source": "Hacker News Front Page",
+   "age": "4.1h",
+   "published_at": "2026-09-25T22:51:44+00:00",
+   "ingested_at": "2026-09-25T23:46:24.042668+00:00",
+   "kage_core": [
+    "software_platform_security_gaming"
+   ],
+   "viral_signal": {
+    "event_oddity": true,
+    "distribution_only": false
+   },
+   "after": "meme_trend strong=True rank=2.3",
+   "eligible": true,
+   "why": "a strange / funny event whose technology is central (KAGE core: software_platform_security_gaming)"
+  }
+ ],
+ "rejected_by_new_rule": [
+  "IShowSpeed's 'Ronaldo Day' Clip Becomes A Powerful Brainrot Meme",
+  "2020 Karen Video About 'Playing Games' Becomes A Meme With Difficult Game Enjoyers On TikTok",
+  "Why Ed Miliband has embraced his ‘awkward dad’ image in viral TikTok video",
+  "«Это очень много вырытых могил»: разработчики Graveyard Keeper 2 похвастались продажами за три дня с релиза"
+ ],
+ "preserved_by_new_rule": [
+  "Hacks by autonomous AI agents raise thorny questions of legal accountability - PBS",
+  "ИИ случайно взломал правительственный сайт - naukatv.ru",
+  "ИИ впервые взломал госструктуру - 24.kz",
+  "Спутникопад Starlink превратили в глобальный барометр — они помогают изучать атмосферу Земли",
+  "Shows an Incorrect API Key error...which is weird. Nothing on the status page. (EDIT: Added to incident page:",
+  "Больше никаких «лесенок»: спустя 18 лет моддер реализовал в GTA IV полноценное сглаживание"
+ ]
+}

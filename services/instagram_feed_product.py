@@ -148,6 +148,43 @@ _ODDITY = _rx(
     r"\bзавирус", r"\bмем", r"\bшуточн", r"\bкурь[её]з", r"\bстранн", r"\bнеобычн", r"\bради одного", r"\bв шутку", r"\bэнтузиаст", r"\bмоддер",
     r"\bпревратил|\bпревращает", r"\bзапустил\w* .*\b(doom|в браузер|в paint)", r"\bмогил", r"\bхомяк",
 )
+# KAGE-FIRST VIRAL SELECTION (founder decision 2026-09-26). The viral slot is for TECH / AI / GADGET / PLATFORM / GAMING stories that are
+# themselves weird - never 'a viral internet story that happens to be available'. Order: KAGE relevance, then story value, then viral
+# potential; a meme score never compensates for missing relevance. Two things are read separately:
+#   - DISTRIBUTION words say how a story SPREAD (viral, meme, brainrot, trend) - they are not an event;
+#   - the KAGE CORE is technology that is part of the HEADLINE's event. Creator / distribution words (streamer, YouTube, TikTok, internet,
+#     online) are where a story happened, not what it is about, so they never count as core.
+_DISTRIBUTION = _rx(r"\bviral\b", r"\bgo(es|ing)? viral\b", r"\bmemes?\b", r"\bbrainrot\b", r"\btrend(ing|s)?\b", r"\bзавирус",
+                    r"\bмем", r"\bтренд", r"\bбрейнрот")
+_KAGE_CORE_TECH = _rx(
+    r"\b(app|apps|software|firmware|update|feature|bug|glitch|algorithm|server|servers|api|chip|browser|windows|macos|ios|android|linux|"
+    r"steam|console|xbox|playstation|nintendo|gpu|mod|modder|game engine|video game|emulator|robot|robots|drone|drones|satellites?|starlink|"
+    r"strava|fitbit|tracker|sensor|smartwatch|gps|arduino|raspberry pi|3d[- ]print\w*|google|apple|microsoft|openai|anthropic|nvidia|"
+    r"samsung|tesla|amazon|netflix|spotify|discord|telegram|whatsapp|wikipedia|doom|website|password|cyber\w*|hack(ed|er|ers|s)?|"
+    r"malware|chatbot|bot|bots|algorithm|cable|cables|fiber|fibre|data ?cent(er|re)s?|5g|wi-?fi|bluetooth|usb|battery|batteries|charger)\b",
+    r"\bприложени|\bпрограмм|\bобновлен|\bпрошивк|\bбаг\b|\bглюк|\bалгоритм|\bсервер|\bбраузер|\bсмартфон|\bноутбук|\bконсол|"
+    r"\bвидеокарт|\bпроцессор|\bробот|\bдрон|\bспутник|\bсайт|\bмоддер|\bэмулятор|\bвзлом|\bхакер|\bтелеграм|\bбот\w*|\bчат-?бот|"
+    r"\bгаджет|\bустройств|\bплатформ|\bсервис|\bstarlink|\bпароль|\bкабел|\bдата-?центр|\bаккумулятор|\bзарядк",
+)
+
+
+def kage_core(text: str) -> list[str]:
+    """The KAGE technology families present in `text` (a headline): what makes the EVENT a tech / AI / gadget / platform story."""
+    families = []
+    if _has(_AI_TOOL, text) or _has(_AI_MISBEHAVIOUR, text):
+        families.append("ai")
+    if _has(_GADGET, text):
+        families.append("gadget")
+    if _has(_KAGE_CORE_TECH, text):
+        families.append("software_platform_security_gaming")
+    return families
+
+
+def event_oddity(text: str) -> bool:
+    """A strange EVENT in `text` - an oddity signal once the words that only describe spreading (viral, meme, trend) are removed."""
+    return _has(_ODDITY, _DISTRIBUTION.sub(" ", text))
+
+
 _CULTURE_SOURCE = _rx(r"know your meme", r"pc gamer", r"\b404 media\b", r"rozetked", r"код дурова", r"kotaku", r"polygon")
 # an evergreen METHOD or decision principle (not merely an explainer): mistakes to avoid, rules, lessons, how to choose
 _EVERGREEN = _rx(r"\b\d+ (ошибок|ошибки|правил|правила|уроков|принцип\w*|mistakes|lessons|rules|principles)\b", r"\bошибки,? которые\b",
@@ -234,14 +271,20 @@ def read_candidate(candidate: FeedCandidate) -> FeedRead:
     if "instruction" in ks and "ai_tool" in ks and "business" not in ks:
         # the tool is only in the lead ("...how to live" over an AI essay): a candidate for stage 2, never a slot on its own
         return read(FeedFormat.AI_HACK, False, "a how-to whose AI side is not in the headline - needs its stored evidence", 0.9)
-    if "oddity" in ks and ks & {"tech", "gadget", "ai_tool"} and not ks & {"business", "security"}:
-        return read(FeedFormat.MEME_TREND, True, "a strange / funny tech or internet-culture premise", 2.3 + 0.2 * ("culture_source" in ks))
+    if "oddity" in ks and not ks & {"business", "security"}:
+        # KAGE-first: the technology must be part of the headline's event; virality alone never opens the viral slot
+        core = kage_core(title)
+        if not core:
+            return read(FeedFormat.REJECT, False, "viral / strange, but technology is incidental - not a KAGE story (no tech core in the event)", 0.0)
+        if not event_oddity(title):
+            # only a DISTRIBUTION word ('... becomes a meme'): the event itself may still be strange - stage 2 reads its body
+            return read(FeedFormat.MEME_TREND, False, "a tech story that SPREAD - the event itself is not yet shown to be strange", 0.9)
+        return read(FeedFormat.MEME_TREND, True, "a strange / funny event whose technology is central (KAGE core: " + ", ".join(core) + ")",
+                    2.3 + 0.2 * ("culture_source" in ks))
     if "evergreen" in ks and "ai_tool" in ks and "business" not in ks:
         return read(FeedFormat.NEWS_INSIGHT, True, "an evergreen explanation / principle about AI", 1.5)
     if "instruction" in ks and "business" not in ks:
         return read(FeedFormat.AI_HACK, False, "a how-to without an AI tool", 0.8)
-    if "oddity" in ks and not ks & {"business", "security"}:
-        return read(FeedFormat.MEME_TREND, False, "an oddity outside tech", 0.5)
     if ks & {"tech", "ai_tool", "gadget"}:
         return read(FeedFormat.WEEKLY_NEWS, False, "ordinary tech / AI news - weekly recap material at most, never a daily post",
                     min(3.0, math.log2(max(1, candidate.coverage)) + 0.1))
@@ -303,8 +346,10 @@ def read_with_evidence(candidate: FeedCandidate, first: FeedRead, evidence: str)
     if first.format is FeedFormat.AI_HACK and _has(_NAMED_AI_TOOL, body) and has["method"]:
         return upgrade(FeedFormat.AI_HACK, "a method the reader can try - the AI feature is named in the body, not the headline",
                        first.rank + 1.7)
-    if first.format is FeedFormat.MEME_TREND and (has["tech"] or has["gadget"] or has["ai_tool"]) and not has["security"]:
-        return upgrade(FeedFormat.MEME_TREND, "a strange premise whose tech side is in the body", first.rank + 1.8)
+    if (first.format is FeedFormat.MEME_TREND and kage_core(candidate.title) and kage_core(body) and event_oddity(body)
+            and not has["security"]):
+        # KAGE-first: a weak viral read (a tech headline that only SPREAD) needs the body to show a genuinely strange tech event
+        return upgrade(FeedFormat.MEME_TREND, "a tech story whose body shows a strange event", first.rank + 1.8)
     if first.format is FeedFormat.WEEKLY_NEWS and has["misbehaviour"] and not (has["lab"] or has["industry"] or has["security"]):
         return upgrade(FeedFormat.MEME_TREND, "an ordinary headline over absurd AI behaviour in ordinary life", 2.4)
     return FeedRead(first.format, first.strong, kinds, first.reason, first.rank)

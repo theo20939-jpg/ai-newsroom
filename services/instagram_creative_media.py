@@ -211,7 +211,7 @@ def compile_instagram_generation_prompt(
         "quality. The board's old branding is explicitly excluded.\n\n"
         "NEGATIVE CONSTRAINTS\nNO LOGOS. NO WORDMARKS. NO WATERMARKS. NO LARGE TEXT. NO READABLE "
         "TEXT. NO OUTDATED NNJ/NINJA BRANDING. NO FAKE UI. NO RANDOM INTERFACES. NO UNSUPPORTED "
-        "PRODUCTS, FACTS, NUMBERS OR THIRD-PARTY MARKS. " + _BRAND_SYMBOL_RULE + "Do not bake the final headline into the "
+        "PRODUCTS, FACTS, NUMBERS OR THIRD-PARTY MARKS. " + _BRAND_SYMBOL_RULE + _REAL_PERSON_RULE + "Do not bake the final headline into the "
         "image; the application adds exact Russian text and the current canonical logo after generation."
     )
 
@@ -223,6 +223,10 @@ _SPECIFICITY_RULE = (
     "SPECIFICITY\nDepict THIS story's concrete idea so the picture communicates the story before the reader reads the text. The picture must not be reusable unchanged for ten unrelated AI posts. Do NOT produce a "
     "glowing cube, floating spheres or random geometry, a generic AI brain, an anonymous robot, a hologram, a cyberpunk city, an abstract monolith, neon circuitry or corporate technology stock art unless this story is literally about it.\n\n"
 )
+# founder decision 2026-09-26: a generated picture is illustration, never documentary - no real named person, no lookalike, no re-enactment
+_REAL_PERSON_RULE = ("Never depict, imitate or re-create a specific real person named in the story, or anyone resembling them, and never stage "
+                     "the reported incident as if it were footage or a photograph of it. Any people are anonymous and unidentifiable (hands, "
+                     "backs, silhouettes, out of focus); prefer objects, places and a visual metaphor. ")
 _BRAND_SYMBOL_RULE = ("No shape, colour set or icon that imitates a company's logo or brand symbol (no brand-coloured dots, no sparkle or star icons, "
                       "no app-icon tiles, no product silhouettes standing in for a named company). ")
 
@@ -280,7 +284,7 @@ def _compile_slide_scene_prompt(
         + _SPECIFICITY_RULE +
         "COLOR / MOOD\nDerive colour from the idea; contemporary, specific, cinematic or editorial, never generic.\n\n"
         "NEGATIVE CONSTRAINTS\nNO LOGOS. NO WORDMARKS. NO WATERMARKS. NO LARGE TEXT. NO READABLE TEXT OR LETTERING OF ANY KIND. NO FAKE UI. NO RANDOM INTERFACES. NO "
-        "UNSUPPORTED PRODUCTS, FACTS, NUMBERS OR THIRD-PARTY BRANDING. " + _BRAND_SYMBOL_RULE +
+        "UNSUPPORTED PRODUCTS, FACTS, NUMBERS OR THIRD-PARTY BRANDING. " + _BRAND_SYMBOL_RULE + _REAL_PERSON_RULE +
         "Paper, pages, cards, screens and objects are BLANK: no handwriting, no scribbled lines imitating "
         "writing, no marks, stamps or engravings. Anything the story leaves unnamed (which places, people, companies or products) stays abstract and unidentifiable: "
         "no recognisable map or state outlines, faces or product designs. Do not bake any headline into the image; the application adds the exact Russian copy and the "

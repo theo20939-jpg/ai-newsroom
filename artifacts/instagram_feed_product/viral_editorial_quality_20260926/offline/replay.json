@@ -1,0 +1,92 @@
+{
+ "provider_calls": 0,
+ "images_regenerated": 0,
+ "B_ishowspeed": {
+  "story": "IShowSpeed's 'Ronaldo Day' Clip Becomes A Powerful Brainrot Meme",
+  "planner_read_now": {
+   "format": "reject",
+   "strong": false,
+   "reason": "viral / strange, but technology is incidental - not a KAGE story (no tech core in the event)",
+   "kage_core": []
+  },
+  "director_validation_now": "ViralCopyQualityError: generated-image review: slide 1: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions ['IShowSpeed']; show objects, places or a metaphor, people only anonymous; slide 3: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions ['IShowSpeed']; show objects, places or a metaphor, people only anonymous; slide 4: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions 'skater'; show objects, places or a metaphor, people only anonymous",
+  "all_viral_copy_findings": [
+   "hook describes how the story spread ('brainrot'), not the event - lead with its strangest concrete fact",
+   "abstract commentary: 'интернет' made an actor of the story, but the evidence never mentions it: 'А потом интернет оставил только контраст'",
+   "abstract commentary: 'интернету' made an actor of the story, but the evidence never mentions it: 'Праздничная песня и внезапный хоккейный фейл дали интернету короткий фрагмент, который лег'",
+   "abstract commentary: 'Интернету' made an actor of the story, but the evidence never mentions it: 'Старый хоккейный ролик IShowSpeed внезапно получил вторую жизнь в 2026 году.\\n\\nВ исходном в'",
+   "unsupported implication: 'снова' - the evidence does not say it happened before: 'В 2026 году фрагмент с IShowSpeed снова разошёлся как мем — особенно в сентябре.'",
+   "unsupported implication: 'вторую жизнь' - the evidence does not say it happened before: 'Старый хоккейный ролик IShowSpeed внезапно получил вторую жизнь в 2026 году.\\n\\nВ исходном в'",
+   "incomplete construction: 'между' needs two terms: 'Мемом стал не Ronaldo Day, а сбой между ним'",
+   "slides 3 and 4 make the same point (both rest on the same evidence item and the second adds no new concrete detail) - merge them or give the second a new fact"
+  ],
+  "generated_person_risks": [
+   "slide 1: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions ['IShowSpeed']; show objects, places or a metaphor, people only anonymous",
+   "slide 3: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions ['IShowSpeed']; show objects, places or a metaphor, people only anonymous",
+   "slide 4: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions 'skater'; show objects, places or a metaphor, people only anonymous"
+  ],
+  "art_gate_now": {
+   "art_passed": false,
+   "blocking": [
+    "generated_named_person_likeness_risk: slide 1: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions ['IShowSpeed']; show objects, places or a metaphor, people only anonymous",
+    "generated_named_person_likeness_risk: slide 3: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions ['IShowSpeed']; show objects, places or a metaphor, people only anonymous",
+    "generated_named_person_likeness_risk: slide 4: generated picture risks a likeness / re-enactment of a named real person (Cole Caufield, IShowSpeed) - brief mentions 'skater'; show objects, places or a metaphor, people only anonymous",
+    "viral_copy_quality: hook describes how the story spread ('brainrot'), not the event - lead with its strangest concrete fact",
+    "viral_copy_quality: abstract commentary: 'интернет' made an actor of the story, but the evidence never mentions it: 'А потом интернет оставил только контраст'",
+    "viral_copy_quality: abstract commentary: 'интернету' made an actor of the story, but the evidence never mentions it: 'Праздничная песня и внезапный хоккейный фейл дали интернету короткий фрагмент, который лег'",
+    "viral_copy_quality: abstract commentary: 'Интернету' made an actor of the story, but the evidence never mentions it: 'Старый хоккейный ролик IShowSpeed внезапно получил вторую жизнь в 2026 году.\\n\\nВ исходном в'",
+    "viral_copy_quality: unsupported implication: 'снова' - the evidence does not say it happened before: 'В 2026 году фрагмент с IShowSpeed снова разошёлся как мем — особенно в сентябре.'",
+    "viral_copy_quality: unsupported implication: 'вторую жизнь' - the evidence does not say it happened before: 'Старый хоккейный ролик IShowSpeed внезапно получил вторую жизнь в 2026 году.\\n\\nВ исходном в'",
+    "viral_copy_quality: incomplete construction: 'между' needs two terms: 'Мемом стал не Ronaldo Day, а сбой между ним'",
+    "viral_copy_quality: slides 3 and 4 make the same point (both rest on the same evidence item and the second adds no new concrete detail) - merge them or give the second a new fact"
+   ]
+  }
+ },
+ "C_deepseek": {
+  "planner_read_now": {
+   "format": "meme_trend",
+   "strong": true,
+   "reason": "absurd AI behaviour in ordinary life - a story people send",
+   "kage_core": [
+    "ai",
+    "software_platform_security_gaming"
+   ]
+  },
+  "director_validation_now": "PASS",
+  "art_gate_now": {
+   "art_passed": true,
+   "blocking": []
+  }
+ },
+ "C_hamster": {
+  "planner_read_now": {
+   "format": "meme_trend",
+   "strong": true,
+   "reason": "a strange / funny event whose technology is central (KAGE core: software_platform_security_gaming)",
+   "kage_core": [
+    "software_platform_security_gaming"
+   ]
+  },
+  "director_validation_now": "PASS",
+  "art_gate_now": {
+   "art_passed": true,
+   "blocking": []
+  }
+ },
+ "D_adobe_ai_hack": {
+  "planner_read_now": {
+   "format": "ai_hack",
+   "strong": true,
+   "reason": "an AI method / tool the reader can try now",
+   "kage_core": [
+    "ai"
+   ]
+  },
+  "viral_rules_apply": false,
+  "art_gate_now": {
+   "art_passed": true,
+   "blocking": []
+  },
+  "adobe_source_checked": "True"
+ }
+}

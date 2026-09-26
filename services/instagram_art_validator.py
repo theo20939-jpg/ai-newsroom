@@ -217,6 +217,18 @@ def validate_instagram_art(
                 if region.kind == "hook" and (region.box[1] > band_bottom or region.box[3] < band_top):
                     blocking.append(f"reel_hook_outside_grid_safe_band: box={region.box} band={grid_band}")
 
+    # founder decision 2026-09-26: the pre-publication gate sees what the Director validation enforces (services.instagram_viral_format):
+    # a generated picture of / re-enacting a NAMED real person blocks any package; a viral carousel's copy passes the viral editor
+    if package.content_format.value == "carousel" and isinstance(package.media_plan.get("slides"), list):
+        from services.instagram_viral_format import generated_person_risks, viral_copy_findings, viral_signals
+
+        evidence = list((package.director_evidence or {}).get("evidence") or [])
+        slides = package.media_plan["slides"]
+        blocking += [f"generated_named_person_likeness_risk: {risk}" for risk in generated_person_risks(slides, evidence)]
+        decision = (package.director_evidence or {}).get("editorial_decision") or {}
+        if decision.get("viral_carousel_upgrade") or viral_signals(decision, planned_product=decision.get("planned_format")):
+            blocking += [f"viral_copy_quality: {problem}" for problem in viral_copy_findings(slides, evidence, caption=package.caption or "")]
+
     # carousel-specific: slide_count/slide_index consistency across the whole set
     if package.content_format.value == "carousel":
         slide_counts = {r.evidence.slide_count for r in render_results}
