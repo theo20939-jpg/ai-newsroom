@@ -1,0 +1,83 @@
+{
+ "post_id": "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+ "format": "meme_trend",
+ "premise": "OpenAI's agents targeted and infiltrated US government websites",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "OpenAI's agents targeted websites operated by the Commerce Department, the Securities and Exchange Commission and the Department of Education during testing.",
+   "status": "OK"
+  },
+  {
+   "url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "OpenAI's Agents Targeted And Infiltrated US Government Websites\nLatest\nNews\nAI\nApps\nComputing\nMobile\nSocial Media\nEVs & Transportation\nReviews\nSmartphones\nLaptops & PCs\nGaming\nHeadphones\nWearables\nPhotography\nTablets\nHome\nBuying Guides\nLaptops\nHeadphones\nSmart Home\nGaming\nBest Gaming Handhelds\nBest E-Ink Tablets\nBest Power Banks\nBest Fast Chargers\nBest Live TV Streaming\nBest Wireless Earbuds\nGaming\nNintendo\nPC\nPlayStation\nXbox\nBig Tech\nAmazon\nApple\nGoogle\nMeta\nMicrosoft\nSamsung\nEntertainment\nTV & Movies\nStreaming\nCybersecurity\nVPN\nWearables\nTomorrow\nScience\nSpace\nRobotics\nNewsletter\nAbout\nEditorial Policies\nNo-AI Writing Policy\nReviews Policy\nPodcast\nArchive\nPrivacy Policy\nTerms of Use\n© 2026\nStatic Media\n. All Rights Reserved\nOpenAI's agents targeted and infiltrated US government websites\nLatest\nNews\nAI\nApps\nComputing\nMobile\nSocial Media\nEVs & Transportation\nReviews\nSmartphones\nLaptops & PCs\nGaming\nHeadphones\nWearables\nPhotography\nTablets\nHome\nBuying Guides\nLaptops\nHeadphones\nSmart Home\nGaming\nBest Gaming Handhelds\nBest E-Ink Tablets\nBest Power Banks\nBest Fast Chargers\nBest Live TV Streaming\nBest Wireless Earbuds\nGaming\nNintendo\nPC\nPlayStation\nXbox\nBig Tech\nAmazon\nApple\nGoogle\nMeta\nMicrosoft\nSamsung\nEntertainment\nTV & Movies\nStreaming\nCybersecurity\nVPN\nWearables\nTomorrow\nScience\nSpace\nRobotics\nNewsletter\nNews\nAI\nOpenAI's agents targeted and infiltrated US government websites\nThe company also admits that its agents posted images users shared with ChatGPT on photo-sharing services.\nBy\nMariella Moon\nSept. 26, 2026 7:58 am EST\nSean Rayford/Getty Images\nAdd Engadget on Google:\nPreferred Source\nGoogle Discover\nOpenAI's agents had targeted, logged into and even pulled information from US government websites after escaping from their testing environment. The company has admitted to\nThe New York Times\nthat its agents meddled with the Commerce Department's and the Securities and Exchange Commission's websites. It also told the publication that it was looking looking into a supposed incident involving a website operated by the Department of Education.\nTransluce, a nonprofit research lab working on technology to better understand AI systems, told the\nTimes\nthat OpenAI's agent tried hacking the Education Department's website to get data from its civil rights office. An agent also pulled data from Census Bureau's website, under the remit of the Commerce Department, by using login credentials it found online. Plus, an agent shared public data from the SEC on an online forum. A representative for the Chicago mayor's office told the\nTimes,\nas well, that OpenAI notified them that its agent obtained publicly available information from a municipal website. These revelations come after Australia's prime minister\nannounced\nthat an OpenAI agent hacked into his government's Medicare public health insurance system.\nIn an\nupdate\nto an old blog post, OpenAI explained it has been conducting a review for model misalignments after the discovery of the\nHugging Face incident\n. Indeed, it recently\nreported\npreviously undisclosed events of concerning AI behavior in its latest misalignment report. It said in its update that it's focusing on incidents \"where agents interacted with third-party websites in ways that went beyond their assigned tasks or intended methods.\" Some of the affected websites are run by governments and public agencies, the company has admitted.\n\"Most of the activity we've reviewed so far involved routine research tasks, such as accessing public web content to answer questions,\" a spokesperson told the\nTimes\n. \"Some involved government websites because our models often turn to them as authoritative sources of public information.\" In a\npost on X\n, OpenAI chief Sam Altman said the company hasn't been as fast at disclosing misalignments as it would have liked. \"We are prioritizing as best as we can based on severity,\" he said, adding that the Hugging Face incident is the most severe event OpenAI has seen so far.\nIn a separate update, OpenAI revealed that it found 53 instances wherein its agents had posted images provided by ChatGPT to photo-hosting websites. The company didn't share more information about the nature of the images, and\nThe Guardian\nsaid it wouldn't say whether they were AI-generated or identifiable images of real people. Most of the images had reportedly been taken down already, and OpenAI is working on getting the rest removed. OpenAI also said that it's improving its evaluation process to prevent its models from \"exfiltrating data\" in the future.\nRecommended",
+   "status": "FULL_TEXT"
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "The company also admits that its agents posted images users shared with ChatGPT on photo-sharing services.",
+   "source_url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "The company also admits that its agents posted images users shared with ChatGPT on photo-sharing services."
+  },
+  {
+   "kind": "FACT",
+   "text": "OpenAI's agents had targeted, logged into and even pulled information from US government websites after escaping from their testing environment.",
+   "source_url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "OpenAI's agents had targeted, logged into and even pulled information from US government websites after escaping from their testing environment."
+  },
+  {
+   "kind": "FACT",
+   "text": "It also told the publication that it was looking looking into a supposed incident involving a website operated by the Department of Education.",
+   "source_url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "It also told the publication that it was looking looking into a supposed incident involving a website operated by the Department of Education."
+  },
+  {
+   "kind": "FACT",
+   "text": "Transluce, a nonprofit research lab working on technology to better understand AI systems, told the Times that OpenAI's agent tried hacking the Education Department's website to get data from its civil rights office.",
+   "source_url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Transluce, a nonprofit research lab working on technology to better understand AI systems, told the Times that OpenAI's agent tried hacking the Education Department's website to get data from its civil rights office."
+  },
+  {
+   "kind": "FACT",
+   "text": "An agent also pulled data from Census Bureau's website, under the remit of the Commerce Department, by using login credentials it found online.",
+   "source_url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "An agent also pulled data from Census Bureau's website, under the remit of the Commerce Department, by using login credentials it found online."
+  },
+  {
+   "kind": "FACT",
+   "text": "Plus, an agent shared public data from the SEC on an online forum.",
+   "source_url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Plus, an agent shared public data from the SEC on an online forum."
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "AVAILABLE",
+  "url": "https://www.engadget.com/img/gallery/openais-agents-targeted-and-infiltrated-us-government-websites/l-intro-1790423459.jpg",
+  "width": 1600,
+  "height": 899,
+  "mime_type": "image/jpeg",
+  "source": "open_graph_image",
+  "reason": "validated source image"
+ },
+ "quality": "STRONG",
+ "why": "6 premise facts from 1 fetched source(s)",
+ "excluded_bodies": []
+}

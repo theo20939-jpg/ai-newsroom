@@ -32,8 +32,8 @@ import scripts._instagram_e2e_week as harness  # noqa: E402  (scratch DB env, pr
 from core.config import settings  # noqa: E402
 
 IMAGE_CAP = Decimal(os.environ.get("KAGE_CANARY_IMAGE_CAP_USD", "0.55"))
-LLM_NAMESPACE = "kage_viral_nominated_llm_20260926"
-IMAGE_NAMESPACE = "kage_viral_nominated_images_20260926"
+LLM_NAMESPACE = os.environ.get("KAGE_CANARY_LLM_NAMESPACE", "kage_viral_nominated_llm_20260926")  # a new canary = a new ledger
+IMAGE_NAMESPACE = os.environ.get("KAGE_CANARY_IMAGE_NAMESPACE", "kage_viral_nominated_images_20260926")
 
 
 async def main() -> None:
