@@ -1,0 +1,87 @@
+{
+ "provider_calls": 0,
+ "cost_bound": {
+  "input_chars": 12468,
+  "input_tokens_worst": 6234,
+  "output_tokens_cap": 1500,
+  "worst_case_usd": 0.015234
+ },
+ "gta_judge_input_chars": 2036,
+ "gta_judge_input": "SLIDES:\n1. headline: Через 18 лет сглаживание сделал моддер\n   body: И не Rockstar Games.\n   evidence: E1\n2. headline: «Лесенки» ждали почти 20 лет\n   body: Речь о ПК-версии Grand Theft Auto IV. Полноценное сглаживание появилось не благодаря Rockstar Games.\n   evidence: E2\n3. headline: Мод добавил четыре технологии\n   body: Внутри — поддержка Nvidia DLSS 4 и AMD FSR 3, а также DLAA и HDR.\n   evidence: E6\n4. headline: Мод называется DLSS-IV\n   body: Его сделал ChunkLeChuck, а скачать его можно на Nexus Mods.\n   evidence: E7\nEVIDENCE (the only facts the carousel may state):\nE1: Больше никаких «лесенок»: спустя 18 лет моддер реализовал в GTA IV полноценное сглаживание\nE2: После почти двух десятков лет «лесенок» ПК-версия культового криминального боевика с открытым миром Grand Theft Auto IV наконец может похвастаться полноценным сглаживанием, но не благодаря усилиям Rockstar Games.\nE3: Компьютер месяца, спецвыпуск: выбираем мини-ПК для работы и развлечений в эпоху дефицита чипов памяти Обзор смартфона Samsung Galaxy Z Flip8: исчезающий вид?\nE4: 10 флагманских процессоров Intel за 10 лет Мастерская локальных ИИ: салат картофельный с Qwen3.8\nE5: В помощь студенту: обзор российских ИИ-сервисов для учёбы и закрепления знаний Компьютер месяца — сентябрь 2026 года Лучший процессор под DDR4 в 2026 году: AM4 против LGA 1700\nE6: Обзор смартфона Google Pixel 11 Pro: когда надо выпустить хоть что-то Источник изображений: Rockstar Games Как подметил портал Rock Paper Shotgun, моддер ChunkLeChuck недавно снабдил GTA IV поддержкой технологий интеллектуального масштабирования (Nvidia DLSS 4, AMD FSR 3) и сглаживания (DLAA), а также HDR.\nE7: Мод от ChunkLeChuck называется DLSS-IV и доступен для скачивания на площадке Nexus Mods.\nCAPTION: ПК-версия GTA IV почти 18 лет жила с «лесенками», а полноценное сглаживание ей в итоге добавил моддер ChunkLeChuck. DLSS-IV расширяет игру современными технологиями обработки изображения и уже доступен на Nexus Mods. Иногда патч для старой игры приходит совсем не от тех, кто её выпустил.",
+ "deterministic_fixtures": {
+  "4_paraphrase_no_shared_words": {
+   "expected_deterministic": "judge_only",
+   "findings": [],
+   "ok": true
+  },
+  "5_shared_words_different_facts": {
+   "expected_deterministic": "pass",
+   "findings": [],
+   "ok": true
+  },
+  "6_generic_claim_then_component_list": {
+   "expected_deterministic": "fail",
+   "findings": [
+    "[advisory] card_adds_no_new_information (card 2): only 1 of 5 content words are new - the card restates earlier cards - a viral slide's body must add a new grounded fact",
+    "slides 1 and 2: the second slide only specifies the first slide's claim (доба, подд, разр, форм) by naming avif, heic, webp - it adds specificity, not a new beat (no new event, actor, consequence, result, limitation or mechanism) - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter"
+   ],
+   "ok": true
+  },
+  "7_same_evidence_two_facts": {
+   "expected_deterministic": "pass",
+   "findings": [],
+   "ok": true
+  },
+  "8_caption_factual_summary": {
+   "expected_deterministic": "pass",
+   "findings": [],
+   "ok": true
+  },
+  "9_caption_moral_after_payoff": {
+   "expected_deterministic": "judge_only",
+   "findings": [],
+   "ok": true
+  },
+  "10_caption_new_context": {
+   "expected_deterministic": "pass",
+   "findings": [],
+   "ok": true
+  }
+ },
+ "gta_stub_wiring": {
+  "result": "EditorialCorrectionRequired",
+  "findings": [
+   "semantic review: slides 1 and 2 make the same point in different words (stub) - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter",
+   "semantic review: the caption ends on a generalised moral / second punchline ('Иногда патч для старой игры приходит совсем не от тех, кто её выпустил.': stub) - end the caption on a concrete fact; the carousel keeps at most one dry payoff"
+  ],
+  "judge_calls": 1
+ },
+ "golden_stub_empty_verdict": {
+  "deepseek": {
+   "result": "PASS",
+   "judge_calls": 1
+  },
+  "hamster": {
+   "result": "PASS",
+   "judge_calls": 1
+  }
+ },
+ "fail_closed": {
+  "raise": "SemanticJudgeUnavailableError: semantic judge: stub gateway down",
+  "length": "SemanticJudgeUnavailableError: semantic judge: response truncated at the output cap",
+  "malformed": "SemanticJudgeUnavailableError: semantic judge: malformed structured output ('same_thesis_p"
+ },
+ "hard_failure_first": {
+  "result": "CreativeFactSafetyError: invented quote(s) not in the evidence: ['это было проще, чем казалось']",
+  "judge_calls": 0
+ },
+ "checks": {
+  "cost_bound_under_a_fifth_of_director_worst": true,
+  "deterministic_fixtures": true,
+  "gta_stub_findings_reach_one_combined_correction": true,
+  "golden_pass_with_empty_verdict": true,
+  "fail_closed": true,
+  "hard_failure_never_judged": true
+ },
+ "all_pass": true
+}

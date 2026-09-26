@@ -88,6 +88,8 @@ def _call_kind(request) -> str:
         return "PHASE_A"
     if "image_kind" in props:
         return "VISION"
+    if "same_thesis_pairs" in props:
+        return "SEMANTIC_JUDGE"
     if "slides" in props or "hook" in props or "creative_angle" in props:
         return "DIRECTOR"
     return "OTHER"

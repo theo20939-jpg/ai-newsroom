@@ -1000,6 +1000,8 @@ async def generate_carousel_creative(
         gateway, prompt_repository, prompt_name=CAROUSEL_PROMPT_NAME, director_input=director_input,
         prompt_version=_RECAP_CAROUSEL_PROMPT_VERSION if archetype == "news_recap" else _CAROUSEL_PROMPT_VERSION,
     )
+    if director_input.viral_carousel_note:
+        return await _validate_viral_carousel(gateway, prompt_repository, output, call, director_input=director_input, archetype=archetype)
     try:
         outcome = _validate_carousel_output(output, call, director_input=director_input, archetype=archetype)
         if director_input.recap_required_subjects:
@@ -1026,6 +1028,41 @@ async def generate_carousel_creative(
                 raise MediaFirstContractError(f"weekly recap cover: slide 1 shows {len(cover_stories)} stories' images - the cover must show "
                                               f"{RECAP_COVER_MIN_STORIES} or more different stories (one media region per story key, e.g. "
                                               f"{photo_stories[:4]}) and a headline about the week, not about one story")
+        return outcome
+    except Exception as exc:
+        _emit_diagnostic("validation_error", {"error_type": type(exc).__name__, "error": str(exc)[:1500]})
+        raise
+
+
+async def _validate_viral_carousel(
+    gateway: LLMGateway, prompt_repository: PromptRepository, output: dict, call: CapabilityCall, *, director_input: CreativeDirectorInput,
+    archetype: str | None,
+) -> CreativeGenerationOutcome:
+    """Founder task 2026-09-26 - a viral carousel's validation order:
+      HARD grounding / fact-safety checks (raise, never judged) -> deterministic copy checks (collected) -> the ONE semantic editorial
+      judge (services.instagram_viral_editorial_judge, one bounded call, fail closed) -> every correctable finding combined into ONE
+      EditorialCorrectionRequired for the trigger's one existing editorial correction.
+    The corrected output comes back through this same function, so it is judged once more - but the trigger has no second correction: a
+    finding there is terminal. The judge never overrides a hard failure: it only runs when no hard check raised."""
+    from services.instagram_viral_editorial_judge import judge_viral_copy
+    from services.instagram_viral_format import EditorialCorrectionRequired
+
+    deterministic: list[str] = []
+    outcome: CreativeGenerationOutcome | None = None
+    try:
+        try:
+            outcome = _validate_carousel_output(output, call, director_input=director_input, archetype=archetype)
+        except EditorialCorrectionRequired as exc:
+            deterministic = list(exc.findings)
+        verdict = await judge_viral_copy(gateway, prompt_repository, slides=list(output.get("slides") or []),
+                                         caption=str(output.get("final_caption") or ""), allowed_evidence=list(director_input.allowed_evidence))
+        semantic = verdict.findings()
+        _emit_diagnostic("semantic_judge_correction" if director_input.contract_retry_note else "semantic_judge_initial",
+                         {"verdict": verdict.raw, "semantic_findings": semantic, "deterministic_findings": deterministic})
+        combined = list(dict.fromkeys([*deterministic, *semantic]))
+        if combined:
+            raise EditorialCorrectionRequired(combined)
+        assert outcome is not None
         return outcome
     except Exception as exc:
         _emit_diagnostic("validation_error", {"error_type": type(exc).__name__, "error": str(exc)[:1500]})

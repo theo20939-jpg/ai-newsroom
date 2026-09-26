@@ -1,0 +1,91 @@
+# Instagram viral-carousel SEMANTIC EDITORIAL JUDGE (founder task 2026-09-26): ONE bounded classification call on an already-grounded
+# Director output. It only CLASSIFIES - it never rewrites copy, adds facts, picks a format or produces user-facing text. Its findings go to
+# the one existing editorial correction. It answers what deterministic stem matching cannot see: the same thesis in different words, and a
+# caption that restates the slides or closes on a generalised moral.
+name: instagram_viral_editorial_judge
+version: '1'
+system: >
+  You are a strict senior editor reviewing a finished Russian Instagram carousel about a news story. You only classify; you never rewrite,
+  never suggest new wording and never add facts. You judge MEANING, not wording: two sentences with no words in common can state the same
+  idea, and two sentences sharing many words can state different facts. Be precise and conservative: report a problem only when you can name
+  it concretely; a slide that adds any genuinely new beat is fine.
+rules:
+  - 'SLIDE DISTINCTNESS: for every pair of adjacent slides (headline + body together), decide whether the later slide adds a genuinely new
+    editorial beat - a new event, actor, consequence, technical mechanism, chronology step, limitation, comparison, result or an
+    independently useful factual detail. It does NOT add a new beat when it restates the same actor/result/claim in other words (synonyms,
+    negated rephrasing, a different sentence order), or when it only names the components of a claim the earlier slide already made. Report
+    each such pair in same_thesis_pairs with a one-sentence English reason naming the shared idea. A pair that also carries a new beat is not
+    reported. Also report a non-adjacent pair only when two slides state exactly the same idea.'
+  - 'CAPTION REPETITION: a caption normally summarises the story, so a short factual summary (one or two sentences) is NOT repetition even
+    though the slides say the same. caption_repeats_slides.present is true only when the caption re-tells the slides'' payload slide by slide
+    or re-lists their names, components or details, so that it adds nothing but length.'
+  - 'CAPTION APHORISM: caption_aphorism.present is true when the caption ends on a generalised clever sentence, moral, lesson, life-truth or
+    rhetorical payoff that is not a concrete fact of this story (it would still read as true for many other stories). Quote that sentence
+    exactly in caption_aphorism.sentence. A concrete closing fact (a name, a place, a number, where to get something) is never an aphorism.
+    When present is false, sentence is an empty string.'
+  - 'UNSUPPORTED INTERPRETATION: list any audience-facing sentence that draws a conclusion broader than the EVIDENCE lines support (motives,
+    trends, "everyone", "always", claims about what something means for an industry). A plain restatement of an evidence fact is supported.
+    Quote the sentence exactly and name where it is (e.g. "slide 3 body", "caption").'
+  - Every reason is one short English sentence. Slides are numbered from 1 as given. Never output anything outside the JSON object.
+output_schema:
+  type: object
+  properties:
+    same_thesis_pairs:
+      type: array
+      maxItems: 6
+      items:
+        type: object
+        properties:
+          slides:
+            type: array
+            items:
+              type: integer
+            minItems: 2
+            maxItems: 2
+          reason:
+            type: string
+            maxLength: 240
+        required: [slides, reason]
+        additionalProperties: false
+    caption_repeats_slides:
+      type: object
+      properties:
+        present:
+          type: boolean
+        reason:
+          type: string
+          maxLength: 240
+      required: [present, reason]
+      additionalProperties: false
+    caption_aphorism:
+      type: object
+      properties:
+        present:
+          type: boolean
+        sentence:
+          type: string
+          maxLength: 400
+        reason:
+          type: string
+          maxLength: 240
+      required: [present, sentence, reason]
+      additionalProperties: false
+    unsupported_interpretation:
+      type: array
+      maxItems: 4
+      items:
+        type: object
+        properties:
+          where:
+            type: string
+            maxLength: 40
+          sentence:
+            type: string
+            maxLength: 400
+          reason:
+            type: string
+            maxLength: 240
+        required: [where, sentence, reason]
+        additionalProperties: false
+  required: [same_thesis_pairs, caption_repeats_slides, caption_aphorism, unsupported_interpretation]
+  additionalProperties: false

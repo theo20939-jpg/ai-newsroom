@@ -1,0 +1,57 @@
+{
+ "record": {
+  "post": "calibration",
+  "kind": "SEMANTIC_JUDGE",
+  "model": "gpt-5.6-luna",
+  "max_tokens": 1500,
+  "worst_case_usd": "0.00986400",
+  "status": "OK",
+  "finish_reason": "stop",
+  "input_tokens": 992,
+  "output_tokens": 87,
+  "reasoning_tokens": 0,
+  "cost_usd": "0.001514"
+ },
+ "request": [
+  {
+   "role": "system",
+   "text": [
+    "You are a strict senior editor reviewing a finished Russian Instagram carousel about a news story. You only classify; you never rewrite, never suggest new wording and never add facts. You judge MEANING, not wording: two sentences with no words in common can state the same idea, and two sentences sharing many words can state different facts. Be precise and conservative: report a problem only when you can name it concretely; a slide that adds any genuinely new beat is fine.\n\n\nRULES:\n- SLIDE DISTINCTNESS: first name each slide's MAIN CLAIM - the one idea a reader takes away from its headline and body together. For every pair of adjacent slides, report the pair in same_thesis_pairs when the later slide's main claim is the same as the earlier slide's: restated in other words (synonyms, negated or reversed phrasing, a different order), made more specific (naming its components, the platform or version, a rounded number of the same fact), or repeated with a minor qualifier attached. A minor detail attached to a repeated claim does NOT make a new beat - it belongs merged into the earlier slide. Do NOT report a pair whose later main claim is a different event, actor, consequence, mechanism, chronology step, limitation, comparison or result, even when the two slides share many words. The reason is one English sentence naming the shared main claim. Report a non-adjacent pair only when two slides have exactly the same main claim.\n- CAPTION REPETITION: a caption normally summarises the story in a few sentences, so a factual summary is NOT repetition even when every fact in it is also on a slide. caption_repeats_slides.present is true only when the caption re-lists names, components or features the slides already listed, or copies slide sentences (nearly) word for word.\n- CAPTION APHORISM: caption_aphorism.present is true when the caption ends on a generalised clever sentence, moral, lesson, life-truth or rhetorical payoff that is not a concrete fact of this story (it would still read as true for many other stories). Quote that sentence exactly in caption_aphorism.sentence. A concrete closing fact (a name, a place, a number, where to get something) is never an aphorism. When present is false, sentence is an empty string.\n- UNSUPPORTED INTERPRETATION: list any audience-facing sentence that draws a conclusion broader than the EVIDENCE lines support (motives, trends, \"everyone\", \"always\", claims about what something means for an industry). A plain restatement of an evidence fact is supported. Quote the sentence exactly and name where it is (e.g. \"slide 3 body\", \"caption\").\n- Every reason is one short English sentence. Slides are numbered from 1 as given. Never output anything outside the JSON object."
+   ]
+  },
+  {
+   "role": "user",
+   "text": [
+    "SLIDES:\n1. headline: Робот-пылесос сбежал из квартиры\n   body: Хозяйка оставила дверь открытой - и пылесос уехал.\n   evidence: E1\n2. headline: Через два часа пылесос нашли\n   body: Пылесос из той же квартиры стоял в парке у дома с почти пустой батареей.\n   evidence: E2\n3. headline: Вернула его соседка\n   body: Она узнала пылесос по наклейке с адресом.\n   evidence: E3\nEVIDENCE (the only facts the carousel may state):\nE1: Робот-пылесос выехал из квартиры в Сеуле через открытую дверь.\nE2: Через два часа пылесос нашли в парке у дома с почти разряженной батареей.\nE3: Соседка узнала пылесос по наклейке с адресом и вернула его хозяйке.\nCAPTION: В Сеуле робот-пылесос выехал из квартиры и через два часа нашёлся в парке у дома."
+   ]
+  }
+ ],
+ "response": {
+  "text": "{\"same_thesis_pairs\":[],\"caption_repeats_slides\":{\"present\":false,\"reason\":\"The caption provides a factual summary rather than relisting components or copying slide sentences nearly word for word.\"},\"caption_aphorism\":{\"present\":false,\"sentence\":\"\",\"reason\":\"The caption ends with a concrete event location, not a generalized lesson or rhetorical payoff.\"},\"unsupported_interpretation\":[]}",
+  "structured_output": {
+   "same_thesis_pairs": [],
+   "caption_repeats_slides": {
+    "present": false,
+    "reason": "The caption provides a factual summary rather than relisting components or copying slide sentences nearly word for word."
+   },
+   "caption_aphorism": {
+    "present": false,
+    "sentence": "",
+    "reason": "The caption ends with a concrete event location, not a generalized lesson or rhetorical payoff."
+   },
+   "unsupported_interpretation": []
+  },
+  "tool_calls": null,
+  "artifacts": null,
+  "finish_reason": "stop",
+  "model_used": "gpt-5.6-luna",
+  "usage": {
+   "input_tokens": 992,
+   "output_tokens": 87,
+   "units": null,
+   "unit_type": null,
+   "cached_input_tokens": 0,
+   "reasoning_tokens": 0
+  }
+ }
+}

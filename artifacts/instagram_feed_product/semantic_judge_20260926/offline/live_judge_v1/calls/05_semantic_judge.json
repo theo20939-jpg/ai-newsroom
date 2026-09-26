@@ -1,0 +1,57 @@
+{
+ "record": {
+  "post": "calibration",
+  "kind": "SEMANTIC_JUDGE",
+  "model": "gpt-5.6-luna",
+  "max_tokens": 1500,
+  "worst_case_usd": "0.00981900",
+  "status": "OK",
+  "finish_reason": "stop",
+  "input_tokens": 953,
+  "output_tokens": 88,
+  "reasoning_tokens": 0,
+  "cost_usd": "0.001481"
+ },
+ "request": [
+  {
+   "role": "system",
+   "text": [
+    "You are a strict senior editor reviewing a finished Russian Instagram carousel about a news story. You only classify; you never rewrite, never suggest new wording and never add facts. You judge MEANING, not wording: two sentences with no words in common can state the same idea, and two sentences sharing many words can state different facts. Be precise and conservative: report a problem only when you can name it concretely; a slide that adds any genuinely new beat is fine.\n\n\nRULES:\n- SLIDE DISTINCTNESS: for every pair of adjacent slides (headline + body together), decide whether the later slide adds a genuinely new editorial beat - a new event, actor, consequence, technical mechanism, chronology step, limitation, comparison, result or an independently useful factual detail. It does NOT add a new beat when it restates the same actor/result/claim in other words (synonyms, negated rephrasing, a different sentence order), or when it only names the components of a claim the earlier slide already made. Report each such pair in same_thesis_pairs with a one-sentence English reason naming the shared idea. A pair that also carries a new beat is not reported. Also report a non-adjacent pair only when two slides state exactly the same idea.\n- CAPTION REPETITION: a caption normally summarises the story, so a short factual summary (one or two sentences) is NOT repetition even though the slides say the same. caption_repeats_slides.present is true only when the caption re-tells the slides' payload slide by slide or re-lists their names, components or details, so that it adds nothing but length.\n- CAPTION APHORISM: caption_aphorism.present is true when the caption ends on a generalised clever sentence, moral, lesson, life-truth or rhetorical payoff that is not a concrete fact of this story (it would still read as true for many other stories). Quote that sentence exactly in caption_aphorism.sentence. A concrete closing fact (a name, a place, a number, where to get something) is never an aphorism. When present is false, sentence is an empty string.\n- UNSUPPORTED INTERPRETATION: list any audience-facing sentence that draws a conclusion broader than the EVIDENCE lines support (motives, trends, \"everyone\", \"always\", claims about what something means for an industry). A plain restatement of an evidence fact is supported. Quote the sentence exactly and name where it is (e.g. \"slide 3 body\", \"caption\").\n- Every reason is one short English sentence. Slides are numbered from 1 as given. Never output anything outside the JSON object."
+   ]
+  },
+  {
+   "role": "user",
+   "text": [
+    "SLIDES:\n1. headline: Робот-пылесос сбежал из квартиры\n   body: Хозяйка оставила дверь открытой - и пылесос уехал.\n   evidence: E1\n2. headline: Через два часа пылесос нашли\n   body: Пылесос из той же квартиры стоял в парке у дома с почти пустой батареей.\n   evidence: E2\n3. headline: Вернула его соседка\n   body: Она узнала пылесос по наклейке с адресом.\n   evidence: E3\nEVIDENCE (the only facts the carousel may state):\nE1: Робот-пылесос выехал из квартиры в Сеуле через открытую дверь.\nE2: Через два часа пылесос нашли в парке у дома с почти разряженной батареей.\nE3: Соседка узнала пылесос по наклейке с адресом и вернула его хозяйке.\nCAPTION: В Сеуле робот-пылесос выехал из квартиры и через два часа нашёлся в парке у дома."
+   ]
+  }
+ ],
+ "response": {
+  "text": "{\"same_thesis_pairs\":[],\"caption_repeats_slides\":{\"present\":false,\"reason\":\"The caption gives a short factual summary of the story rather than retelling each slide's payload.\"},\"caption_aphorism\":{\"present\":false,\"sentence\":\"\",\"reason\":\"The caption ends with a concrete location and chronology, not a generalised moral or rhetorical payoff.\"},\"unsupported_interpretation\":[]}",
+  "structured_output": {
+   "same_thesis_pairs": [],
+   "caption_repeats_slides": {
+    "present": false,
+    "reason": "The caption gives a short factual summary of the story rather than retelling each slide's payload."
+   },
+   "caption_aphorism": {
+    "present": false,
+    "sentence": "",
+    "reason": "The caption ends with a concrete location and chronology, not a generalised moral or rhetorical payoff."
+   },
+   "unsupported_interpretation": []
+  },
+  "tool_calls": null,
+  "artifacts": null,
+  "finish_reason": "stop",
+  "model_used": "gpt-5.6-luna",
+  "usage": {
+   "input_tokens": 953,
+   "output_tokens": 88,
+   "units": null,
+   "unit_type": null,
+   "cached_input_tokens": 0,
+   "reasoning_tokens": 0
+  }
+ }
+}

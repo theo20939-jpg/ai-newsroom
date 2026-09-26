@@ -1,0 +1,267 @@
+{
+ "provider_calls": 4,
+ "spent_usd": "0.012604",
+ "calls": [
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.01042400",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1543,
+   "output_tokens": 332,
+   "reasoning_tokens": 182,
+   "cost_usd": "0.003535"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.01048800",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1613,
+   "output_tokens": 334,
+   "reasoning_tokens": 241,
+   "cost_usd": "0.003617"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.01036600",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1488,
+   "output_tokens": 385,
+   "reasoning_tokens": 293,
+   "cost_usd": "0.003798"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.01006800",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1126,
+   "output_tokens": 88,
+   "reasoning_tokens": 0,
+   "cost_usd": "0.001654"
+  }
+ ],
+ "results": {
+  "gta_final": {
+   "verdict": {
+    "same_thesis_pairs": [
+     {
+      "slides": [
+       1,
+       2
+      ],
+      "reason": "Both slides claim that full anti-aliasing arrived in GTA IV after nearly 18 years through a modder rather than Rockstar Games."
+     }
+    ],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption retells the story in its own sentences and contains neither a bare list matching a slide nor a word-for-word copied sentence."
+    },
+    "caption_aphorism": {
+     "present": true,
+     "sentence": "Иногда патч для старой игры приходит совсем не от тех, кто её выпустил.",
+     "reason": "This is a generalized rhetorical lesson that could apply to many other stories."
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": [
+    "semantic review: slides 1 and 2 make the same point in different words (Both slides claim that full anti-aliasing arrived in GTA IV after nearly 18 years through a modder rather than Rockstar Games) - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter",
+    "semantic review: the caption ends on a generalised moral / second punchline ('Иногда патч для старой игры приходит совсем не от тех, кто её выпустил.': This is a generalized rhetorical lesson that could apply to many other stories) - end the caption on a concrete fact; the carousel keeps at most one dry payoff"
+   ]
+  },
+  "golden_deepseek": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption retells story facts in complete sentences rather than copying a slide sentence or giving a bare list."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": "The caption ends with a concrete fact about the investigation rather than a generalised lesson or rhetorical payoff."
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": []
+  },
+  "golden_hamster": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption neither copies a slide sentence word for word nor consists of a bare list already given on a slide."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": "The caption ends with a concrete activity result rather than a generalised moral or rhetorical payoff."
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": []
+  },
+  "4_paraphrase_no_shared_words": {
+   "verdict": {
+    "same_thesis_pairs": [
+     {
+      "slides": [
+       1,
+       2
+      ],
+      "reason": "Both slides state that the South Bridge is closed for repairs and will remain inaccessible until September."
+     }
+    ],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption retells the story in ordinary factual sentences rather than copying a slide sentence or presenting a bare list."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": "The caption ends with a concrete fact about the replacement bus routes, not a generalised statement."
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": [
+    "semantic review: slides 1 and 2 make the same point in different words (Both slides state that the South Bridge is closed for repairs and will remain inaccessible until September) - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter"
+   ]
+  },
+  "5_shared_words_different_facts": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption retells concrete story facts and is neither a bare list nor a word-for-word copy of a slide sentence."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": ""
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": []
+  },
+  "6_generic_claim_then_component_list": {
+   "verdict": {
+    "same_thesis_pairs": [
+     {
+      "slides": [
+       1,
+       2
+      ],
+      "reason": "Both slides state that the application gained support for new image formats, with slide 2 naming them."
+     }
+    ],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption restates a story fact but is neither a bare list nor a word-for-word copy of a slide sentence."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": "The caption ends with a concrete fact about the application."
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": [
+    "semantic review: slides 1 and 2 make the same point in different words (Both slides state that the application gained support for new image formats, with slide 2 naming them) - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter"
+   ]
+  },
+  "7_same_evidence_two_facts": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption states a concrete story fact but is neither a bare list nor a word-for-word copy of a slide sentence."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": "The caption ends with a concrete fact about the bridge closure."
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": []
+  },
+  "8_caption_factual_summary": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption retells the story's facts in ordinary sentences rather than copying a slide sentence or serving as a bare list."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": "The caption ends with a concrete fact about where and when the vacuum was found."
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": []
+  },
+  "9_caption_moral_after_payoff": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption contains no bare list and does not copy any slide sentence word for word."
+    },
+    "caption_aphorism": {
+     "present": true,
+     "sentence": "Иногда свобода заканчивается там, где садится батарея.",
+     "reason": "This is a generalized rhetorical lesson rather than a concrete fact unique to the story."
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": [
+    "semantic review: the caption ends on a generalised moral / second punchline ('Иногда свобода заканчивается там, где садится батарея.': This is a generalized rhetorical lesson rather than a concrete fact unique to the story) - end the caption on a concrete fact; the carousel keeps at most one dry payoff"
+   ]
+  },
+  "10_caption_new_context": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption is a factual retelling rather than a bare list or a word-for-word copy of a slide sentence."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": "The caption ends with a concrete transportation fact, not a generalised payoff."
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": []
+  }
+ },
+ "checks": {
+  "1_gta_slides_1_2_same_thesis": true,
+  "1_gta_caption_aphorism": true,
+  "2_golden_deepseek_pass": true,
+  "3_golden_hamster_pass": true,
+  "4_paraphrase_no_shared_words": true,
+  "5_shared_words_different_facts": true,
+  "6_generic_claim_then_component_list": true,
+  "7_same_evidence_two_facts": true,
+  "8_caption_factual_summary": true,
+  "9_caption_moral_after_payoff": true,
+  "10_caption_new_context": true
+ },
+ "all_pass": true
+}

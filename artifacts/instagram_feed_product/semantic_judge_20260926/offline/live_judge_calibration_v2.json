@@ -1,0 +1,402 @@
+{
+ "provider_calls": 10,
+ "spent_usd": "0.028606",
+ "calls": [
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.01008100",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1192,
+   "output_tokens": 522,
+   "reasoning_tokens": 310,
+   "cost_usd": "0.004324"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.01016400",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1291,
+   "output_tokens": 578,
+   "reasoning_tokens": 486,
+   "cost_usd": "0.004759"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.01004400",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1181,
+   "output_tokens": 447,
+   "reasoning_tokens": 315,
+   "cost_usd": "0.003863"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.00984700",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 930,
+   "output_tokens": 162,
+   "reasoning_tokens": 55,
+   "cost_usd": "0.001902"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.00986400",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 992,
+   "output_tokens": 87,
+   "reasoning_tokens": 0,
+   "cost_usd": "0.001514"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.00983600",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 922,
+   "output_tokens": 181,
+   "reasoning_tokens": 77,
+   "cost_usd": "0.002008"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.00979100",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 872,
+   "output_tokens": 127,
+   "reasoning_tokens": 0,
+   "cost_usd": "0.001634"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.00985900",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 986,
+   "output_tokens": 147,
+   "reasoning_tokens": 64,
+   "cost_usd": "0.001868"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.00987200",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1000,
+   "output_tokens": 669,
+   "reasoning_tokens": 449,
+   "cost_usd": "0.005014"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.0098200",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 898,
+   "output_tokens": 137,
+   "reasoning_tokens": 0,
+   "cost_usd": "0.00172"
+  }
+ ],
+ "results": {
+  "gta_final": {
+   "verdict": {
+    "same_thesis_pairs": [
+     {
+      "slides": [
+       1,
+       2
+      ],
+      "reason": "Both slides state that full anti-aliasing arrived in the PC version of GTA IV after about 18 years through a modder rather than Rockstar Games."
+     }
+    ],
+    "caption_repeats_slides": {
+     "present": true,
+     "reason": "The caption repeats the slides' existing claims and names, including the modder, DLSS-IV, Nexus Mods, and the added image-processing technologies."
+    },
+    "caption_aphorism": {
+     "present": true,
+     "sentence": "Иногда патч для старой игры приходит совсем не от тех, кто её выпустил.",
+     "reason": "This is a generalized lesson about who may patch old games rather than a concrete fact of this story."
+    },
+    "unsupported_interpretation": [
+     {
+      "where": "caption",
+      "sentence": "Иногда патч для старой игры приходит совсем не от тех, кто её выпустил.",
+      "reason": "The evidence supports this patch's origin but not a broader generalization about patches for old games."
+     }
+    ]
+   },
+   "findings": [
+    "semantic review: slides 1 and 2 make the same point in different words (Both slides state that full anti-aliasing arrived in the PC version of GTA IV after about 18 years through a modder rather than Rockstar Games) - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter",
+    "semantic review: the caption only restates the slides (The caption repeats the slides' existing claims and names, including the modder, DLSS-IV, Nexus Mods, and the added image-processing technologies) - keep it short and add context the slides do not give, or one factual summary sentence",
+    "semantic review: the caption ends on a generalised moral / second punchline ('Иногда патч для старой игры приходит совсем не от тех, кто её выпустил.': This is a generalized lesson about who may patch old games rather than a concrete fact of this story) - end the caption on a concrete fact; the carousel keeps at most one dry payoff",
+    "semantic review: unsupported interpretation in caption ('Иногда патч для старой игры приходит совсем не от тех, кто её выпустил.': The evidence supports this patch's origin but not a broader generalization about patches for old games) - say only what the evidence supports"
+   ]
+  },
+  "golden_deepseek": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": true,
+     "reason": "The caption copies or relists facts already stated on slides 2, 3, 5, and 1."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": "The caption ends with concrete reporting facts rather than a generalized lesson or rhetorical payoff."
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": [
+    "semantic review: the caption only restates the slides (The caption copies or relists facts already stated on slides 2, 3, 5, and 1) - keep it short and add context the slides do not give, or one factual summary sentence"
+   ]
+  },
+  "golden_hamster": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": true,
+     "reason": "The caption relists the tracker, Mollie's age, Strava account, data fields, distance and duration already presented on the slides."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": ""
+    },
+    "unsupported_interpretation": [
+     {
+      "where": "slide 5 body",
+      "sentence": "Колесо, трекер и отдельный аккаунт — всё как у настоящего бегуна.",
+      "reason": "The evidence supports the listed components but does not support the broader comparison with a real runner."
+     }
+    ]
+   },
+   "findings": [
+    "semantic review: the caption only restates the slides (The caption relists the tracker, Mollie's age, Strava account, data fields, distance and duration already presented on the slides) - keep it short and add context the slides do not give, or one factual summary sentence",
+    "semantic review: unsupported interpretation in slide 5 body ('Колесо, трекер и отдельный аккаунт — всё как у настоящего бегуна.': The evidence supports the listed components but does not support the broader comparison with a real runner) - say only what the evidence supports"
+   ]
+  },
+  "4_paraphrase_no_shared_words": {
+   "verdict": {
+    "same_thesis_pairs": [
+     {
+      "slides": [
+       1,
+       2
+      ],
+      "reason": "Both slides state that the city administration closed the South Bridge for repairs until September."
+     }
+    ],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption gives a factual summary rather than relisting components or copying slide sentences."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": "The caption ends with a concrete fact about the replacement bus routes."
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": [
+    "semantic review: slides 1 and 2 make the same point in different words (Both slides state that the city administration closed the South Bridge for repairs until September) - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter"
+   ]
+  },
+  "5_shared_words_different_facts": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption provides a factual summary rather than relisting components or copying slide sentences nearly word for word."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": "The caption ends with a concrete event location, not a generalized lesson or rhetorical payoff."
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": []
+  },
+  "6_generic_claim_then_component_list": {
+   "verdict": {
+    "same_thesis_pairs": [
+     {
+      "slides": [
+       1,
+       2
+      ],
+      "reason": "Both slides state that the app added support for new image formats, with slide 2 naming WebP, AVIF, and HEIC."
+     }
+    ],
+    "caption_repeats_slides": {
+     "present": true,
+     "reason": "The caption repeats slide 3's body almost word for word."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": ""
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": [
+    "semantic review: slides 1 and 2 make the same point in different words (Both slides state that the app added support for new image formats, with slide 2 naming WebP, AVIF, and HEIC) - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter",
+    "semantic review: the caption only restates the slides (The caption repeats slide 3's body almost word for word) - keep it short and add context the slides do not give, or one factual summary sentence"
+   ]
+  },
+  "7_same_evidence_two_facts": {
+   "verdict": {
+    "same_thesis_pairs": [
+     {
+      "slides": [
+       1,
+       2
+      ],
+      "reason": "Both slides state the same temporary closure-and-detour arrangement: the South Bridge is closed for repairs and two bus routes run via the North Bridge."
+     }
+    ],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption is a factual summary of the story rather than a copied list or near-verbatim repetition of slide text."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": "The caption ends with a concrete fact about the bridge closure and repair period."
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": [
+    "semantic review: slides 1 and 2 make the same point in different words (Both slides state the same temporary closure-and-detour arrangement: the South Bridge is closed for repairs and two bus routes run via the North Bridge) - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter"
+   ]
+  },
+  "8_caption_factual_summary": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption summarizes the story without copying slide sentences or relisting slide components."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": "The caption ends with a concrete event rather than a generalized lesson or rhetorical payoff."
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": []
+  },
+  "9_caption_moral_after_payoff": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption summarizes the story without copying slide sentences or simply listing their components."
+    },
+    "caption_aphorism": {
+     "present": true,
+     "sentence": "Иногда свобода заканчивается там, где садится батарея.",
+     "reason": "This is a generalized rhetorical lesson rather than a concrete fact about the story."
+    },
+    "unsupported_interpretation": [
+     {
+      "where": "slide 1 headline",
+      "sentence": "Робот-пылесос сбежал из квартиры",
+      "reason": "The evidence shows that the vacuum drove out through an open door but does not establish an intentional escape."
+     },
+     {
+      "where": "slide 3 body",
+      "sentence": "Прогулка удалась.",
+      "reason": "The evidence says the neighbor returned the vacuum but does not support judging the outing as successful."
+     },
+     {
+      "where": "caption",
+      "sentence": "Иногда свобода заканчивается там, где садится батарея.",
+      "reason": "This generalizes the incident into a broader claim about freedom that the evidence does not establish."
+     }
+    ]
+   },
+   "findings": [
+    "semantic review: the caption ends on a generalised moral / second punchline ('Иногда свобода заканчивается там, где садится батарея.': This is a generalized rhetorical lesson rather than a concrete fact about the story) - end the caption on a concrete fact; the carousel keeps at most one dry payoff",
+    "semantic review: unsupported interpretation in slide 1 headline ('Робот-пылесос сбежал из квартиры': The evidence shows that the vacuum drove out through an open door but does not establish an intentional escape) - say only what the evidence supports",
+    "semantic review: unsupported interpretation in slide 3 body ('Прогулка удалась.': The evidence says the neighbor returned the vacuum but does not support judging the outing as successful) - say only what the evidence supports",
+    "semantic review: unsupported interpretation in caption ('Иногда свобода заканчивается там, где садится батарея.': This generalizes the incident into a broader claim about freedom that the evidence does not establish) - say only what the evidence supports"
+   ]
+  },
+  "10_caption_new_context": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption summarizes the repair duration and adds a traffic detail rather than relisting slide components or copying their sentences."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": "The caption ends with a concrete claim about transport service, not a generalized lesson or rhetorical payoff."
+    },
+    "unsupported_interpretation": [
+     {
+      "where": "caption",
+      "sentence": "обычный транспорт до Северного моста ходит без изменений.",
+      "reason": "The evidence only supports two additional bus routes through the Northern Bridge and does not establish that regular transport there is unchanged."
+     }
+    ]
+   },
+   "findings": [
+    "semantic review: unsupported interpretation in caption ('обычный транспорт до Северного моста ходит без изменений.': The evidence only supports two additional bus routes through the Northern Bridge and does not establish that regular transport there is unchanged) - say only what the evidence supports"
+   ]
+  }
+ },
+ "checks": {
+  "1_gta_slides_1_2_same_thesis": true,
+  "1_gta_caption_aphorism": true,
+  "2_golden_deepseek_pass": false,
+  "3_golden_hamster_pass": false,
+  "4_paraphrase_no_shared_words": true,
+  "5_shared_words_different_facts": true,
+  "6_generic_claim_then_component_list": true,
+  "7_same_evidence_two_facts": false,
+  "8_caption_factual_summary": true,
+  "9_caption_moral_after_payoff": true,
+  "10_caption_new_context": true
+ },
+ "all_pass": false
+}

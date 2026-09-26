@@ -1,0 +1,388 @@
+{
+ "provider_calls": 10,
+ "spent_usd": "0.035500",
+ "calls": [
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.01001900",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1129,
+   "output_tokens": 689,
+   "reasoning_tokens": 516,
+   "cost_usd": "0.005263"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.01011900",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1252,
+   "output_tokens": 745,
+   "reasoning_tokens": 667,
+   "cost_usd": "0.005722"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.00999900",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1142,
+   "output_tokens": 950,
+   "reasoning_tokens": 859,
+   "cost_usd": "0.006842"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.00980200",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 891,
+   "output_tokens": 162,
+   "reasoning_tokens": 47,
+   "cost_usd": "0.001863"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.00981900",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 953,
+   "output_tokens": 88,
+   "reasoning_tokens": 0,
+   "cost_usd": "0.001481"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.00979100",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 883,
+   "output_tokens": 180,
+   "reasoning_tokens": 70,
+   "cost_usd": "0.001963"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.00974500",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 833,
+   "output_tokens": 127,
+   "reasoning_tokens": 56,
+   "cost_usd": "0.001595"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.00981400",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 947,
+   "output_tokens": 355,
+   "reasoning_tokens": 221,
+   "cost_usd": "0.003077"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.00982700",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 961,
+   "output_tokens": 717,
+   "reasoning_tokens": 444,
+   "cost_usd": "0.005263"
+  },
+  {
+   "post": "calibration",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.00977400",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 859,
+   "output_tokens": 262,
+   "reasoning_tokens": 133,
+   "cost_usd": "0.002431"
+  }
+ ],
+ "results": {
+  "gta_final": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption gives a brief factual summary rather than retelling the slides in sequence or relisting their details."
+    },
+    "caption_aphorism": {
+     "present": true,
+     "sentence": "Иногда патч для старой игры приходит совсем не от тех, кто её выпустил.",
+     "reason": "This is a generalised lesson about who fixes old games, not a concrete fact specific to this story."
+    },
+    "unsupported_interpretation": [
+     {
+      "where": "slide 3 body",
+      "sentence": "Внутри — поддержка Nvidia DLSS 4 и AMD FSR 3, а также DLAA и HDR.",
+      "reason": "The supplied E6 evidence mentions support for image-scaling technologies but does not establish these four specific technologies."
+     }
+    ]
+   },
+   "findings": [
+    "semantic review: the caption ends on a generalised moral / second punchline ('Иногда патч для старой игры приходит совсем не от тех, кто её выпустил.': This is a generalised lesson about who fixes old games, not a concrete fact specific to this story) - end the caption on a concrete fact; the carousel keeps at most one dry payoff",
+    "semantic review: unsupported interpretation in slide 3 body ('Внутри — поддержка Nvidia DLSS 4 и AMD FSR 3, а также DLAA и HDR.': The supplied E6 evidence mentions support for image-scaling technologies but does not establish these four specific technologies) - say only what the evidence supports"
+   ]
+  },
+  "golden_deepseek": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": true,
+     "reason": "The caption re-lists the slides' chronology, actions, outcome, and investigators without adding a distinct summary beyond those details."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": ""
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": [
+    "semantic review: the caption only restates the slides (The caption re-lists the slides' chronology, actions, outcome, and investigators without adding a distinct summary beyond those details) - keep it short and add context the slides do not give, or one factual summary sentence"
+   ]
+  },
+  "golden_hamster": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": true,
+     "reason": "The caption re-lists the carousel’s main components and details, including the tracker, Mollie’s age, Strava data, distance, and duration, without adding anything beyond the slides."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": ""
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": [
+    "semantic review: the caption only restates the slides (The caption re-lists the carousel’s main components and details, including the tracker, Mollie’s age, Strava data, distance, and duration, without adding anything beyond the slides) - keep it short and add context the slides do not give, or one factual summary sentence"
+   ]
+  },
+  "4_paraphrase_no_shared_words": {
+   "verdict": {
+    "same_thesis_pairs": [
+     {
+      "slides": [
+       1,
+       2
+      ],
+      "reason": "Both slides state that the city administration closed the South Bridge for repairs until September."
+     }
+    ],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption is a short factual summary of the story rather than a slide-by-slide retelling."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": "The caption ends with a concrete fact about the temporary bus routes, not a generalized takeaway."
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": [
+    "semantic review: slides 1 and 2 make the same point in different words (Both slides state that the city administration closed the South Bridge for repairs until September) - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter"
+   ]
+  },
+  "5_shared_words_different_facts": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption gives a short factual summary of the story rather than retelling each slide's payload."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": "The caption ends with a concrete location and chronology, not a generalised moral or rhetorical payoff."
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": []
+  },
+  "6_generic_claim_then_component_list": {
+   "verdict": {
+    "same_thesis_pairs": [
+     {
+      "slides": [
+       1,
+       2
+      ],
+      "reason": "Slide 2 only names the formats already described as newly supported on slide 1."
+     }
+    ],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption is a short factual summary of the story, not a slide-by-slide retelling."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": "The caption ends with a concrete fact about iPhone photos."
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": [
+    "semantic review: slides 1 and 2 make the same point in different words (Slide 2 only names the formats already described as newly supported on slide 1) - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter"
+   ]
+  },
+  "7_same_evidence_two_facts": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption is a short factual summary of the story, not a slide-by-slide repetition."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": ""
+    },
+    "unsupported_interpretation": []
+   },
+   "findings": []
+  },
+  "8_caption_factual_summary": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption is a short factual summary rather than a slide-by-slide retelling."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": "The caption ends with a concrete event, not a generalised lesson or rhetorical payoff."
+    },
+    "unsupported_interpretation": [
+     {
+      "where": "slide 1 body",
+      "sentence": "Хозяйка оставила дверь открытой - и пылесос уехал.",
+      "reason": "The evidence states only that the door was open, not that the hostess left it open."
+     }
+    ]
+   },
+   "findings": [
+    "semantic review: unsupported interpretation in slide 1 body ('Хозяйка оставила дверь открытой - и пылесос уехал.': The evidence states only that the door was open, not that the hostess left it open) - say only what the evidence supports"
+   ]
+  },
+  "9_caption_moral_after_payoff": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption gives a short factual summary rather than retelling the slides detail by detail."
+    },
+    "caption_aphorism": {
+     "present": true,
+     "sentence": "Иногда свобода заканчивается там, где садится батарея.",
+     "reason": "This is a generalized rhetorical lesson rather than a concrete fact of the story."
+    },
+    "unsupported_interpretation": [
+     {
+      "where": "slide 1 headline",
+      "sentence": "Робот-пылесос сбежал из квартиры",
+      "reason": "The evidence establishes that the vacuum exited through an open door but does not establish an intentional escape."
+     },
+     {
+      "where": "slide 3 body",
+      "sentence": "Прогулка удалась.",
+      "reason": "The evidence says the neighbor found and returned the vacuum but does not support judging the outing as successful."
+     },
+     {
+      "where": "caption",
+      "sentence": "Робот-пылесос из Сеула сбежал через открытую дверь и нашёлся в парке.",
+      "reason": "The evidence supports the exit and discovery but does not establish that the vacuum intentionally escaped."
+     },
+     {
+      "where": "caption",
+      "sentence": "Иногда свобода заканчивается там, где садится батарея.",
+      "reason": "This generalizes the incident into a broader life lesson not supported by the evidence."
+     }
+    ]
+   },
+   "findings": [
+    "semantic review: the caption ends on a generalised moral / second punchline ('Иногда свобода заканчивается там, где садится батарея.': This is a generalized rhetorical lesson rather than a concrete fact of the story) - end the caption on a concrete fact; the carousel keeps at most one dry payoff",
+    "semantic review: unsupported interpretation in slide 1 headline ('Робот-пылесос сбежал из квартиры': The evidence establishes that the vacuum exited through an open door but does not establish an intentional escape) - say only what the evidence supports",
+    "semantic review: unsupported interpretation in slide 3 body ('Прогулка удалась.': The evidence says the neighbor found and returned the vacuum but does not support judging the outing as successful) - say only what the evidence supports",
+    "semantic review: unsupported interpretation in caption ('Робот-пылесос из Сеула сбежал через открытую дверь и нашёлся в парке.': The evidence supports the exit and discovery but does not establish that the vacuum intentionally escaped) - say only what the evidence supports",
+    "semantic review: unsupported interpretation in caption ('Иногда свобода заканчивается там, где садится батарея.': This generalizes the incident into a broader life lesson not supported by the evidence) - say only what the evidence supports"
+   ]
+  },
+  "10_caption_new_context": {
+   "verdict": {
+    "same_thesis_pairs": [],
+    "caption_repeats_slides": {
+     "present": false,
+     "reason": "The caption is a short summary rather than a slide-by-slide retelling of the carousel."
+    },
+    "caption_aphorism": {
+     "present": false,
+     "sentence": "",
+     "reason": ""
+    },
+    "unsupported_interpretation": [
+     {
+      "where": "caption",
+      "sentence": "Ремонт Южного моста продлится до сентября; обычный транспорт до Северного моста ходит без изменений.",
+      "reason": "The evidence supports the repair duration but does not support the claim that ordinary transport to the North Bridge is unchanged."
+     }
+    ]
+   },
+   "findings": [
+    "semantic review: unsupported interpretation in caption ('Ремонт Южного моста продлится до сентября; обычный транспорт до Северного моста ходит без изменений.': The evidence supports the repair duration but does not support the claim that ordinary transport to the North Bridge is unchanged) - say only what the evidence supports"
+   ]
+  }
+ },
+ "checks": {
+  "1_gta_slides_1_2_same_thesis": false,
+  "1_gta_caption_aphorism": true,
+  "2_golden_deepseek_pass": false,
+  "3_golden_hamster_pass": false,
+  "4_paraphrase_no_shared_words": true,
+  "5_shared_words_different_facts": true,
+  "6_generic_claim_then_component_list": true,
+  "7_same_evidence_two_facts": true,
+  "8_caption_factual_summary": true,
+  "9_caption_moral_after_payoff": true,
+  "10_caption_new_context": true
+ },
+ "all_pass": false
+}
