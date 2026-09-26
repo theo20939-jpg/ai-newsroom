@@ -1,0 +1,258 @@
+{
+ "llm_cap_usd": "0.30",
+ "image_cap_usd": "1.30",
+ "deepseek": {
+  "story": "460 целей, ноль автономных взломов: как Telegram-бот на DeepSeek подставил хозяина",
+  "phase_a_recommended_format": "single",
+  "phase_a_angle_intent": "MEME",
+  "phase_a_format_reason": "Один геройский контраст «460 целей → 0 взломов» полностью несет идею и работает как мгновенно считываемый мем без необходимости дробить сюжет на слайды.",
+  "upgrade_signals": null,
+  "result": "carousel",
+  "slides": 5,
+  "generated_pictures": 5,
+  "art_passed": true,
+  "art_blocking": [],
+  "generated_no_photo_slides": [
+   {
+    "slide": 0,
+    "treatment": "viral_hero"
+   },
+   {
+    "slide": 1,
+    "treatment": "viral_hero"
+   },
+   {
+    "slide": 2,
+    "treatment": "viral_hero"
+   },
+   {
+    "slide": 3,
+    "treatment": "viral_hero"
+   },
+   {
+    "slide": 4,
+    "treatment": "viral_hero"
+   }
+  ],
+  "director_media_sources": [
+   "generated",
+   "generated",
+   "generated",
+   "generated",
+   "generated"
+  ],
+  "copy": [
+   {
+    "role": "hook",
+    "copy": "460 целей. 0 взломов.",
+    "body": "Автономный AI-агент получил доступ к инструментам — и провалил каждую попытку."
+   },
+   {
+    "role": "context",
+    "copy": "Человек написал один раз.",
+    "body": "В мае 2026 года злоумышленник отправил в Telegram одну задачу — и дальше его сообщений не нашли."
+   },
+   {
+    "role": "step",
+    "copy": "Дальше бот работал сам.",
+    "body": "Он искал мишени, оценивал их, скачивал готовый код для атаки и после неудачи уходил к следующей."
+   },
+   {
+    "role": "evidence",
+    "copy": "Ему дали терминал и свободу.",
+    "body": "Hermes Agent дал доступ к терминалу, набор многоразовых навыков и возможность работать без надзора."
+   },
+   {
+    "role": "takeaway",
+    "copy": "Автономность ≠ результат.",
+    "body": "В этой кампании было больше 460 целей под атакой — и ноль систем, взломанных автономным контуром."
+   }
+  ],
+  "caption": "В мае 2026 года человек отправил Telegram-боту одну задачу — и дальше, по восстановленной исследователями Unit 42 сессии, нейросеть действовала сама: искала цели, скачивала код атак, пробовала его и переключалась после неудачи. В основе схемы были Hermes Agent и DeepSeek; фреймворк дал агенту доступ к терминалу и возможность работать без надзора. Итог: больше 460 целей под атакой и ноль взломанных систем. Автономность — это способ действовать без человека. Не гарантия, что действие сработает.",
+  "reused_from_run": true
+ },
+ "hamster": {
+  "story": "Physicist Rigged His Pet Hamster's Wheel to Strava. It Runs Far Every Night",
+  "phase_a_recommended_format": "single",
+  "phase_a_angle_intent": "MEME",
+  "phase_a_format_reason": "Один визуальный герой и одна сильная шутка полностью держат сюжет. Карусель потребовала бы дополнительных фактов, которых в источнике нет.",
+  "upgrade_signals": null,
+  "result": "carousel",
+  "slides": 5,
+  "generated_pictures": 5,
+  "art_passed": true,
+  "art_blocking": [],
+  "generated_no_photo_slides": [
+   {
+    "slide": 0,
+    "treatment": "viral_hero"
+   },
+   {
+    "slide": 1,
+    "treatment": "viral_hero"
+   },
+   {
+    "slide": 2,
+    "treatment": "viral_hero"
+   },
+   {
+    "slide": 3,
+    "treatment": "viral_hero"
+   },
+   {
+    "slide": 4,
+    "treatment": "viral_hero"
+   }
+  ],
+  "director_media_sources": [
+   "generated",
+   "generated",
+   "generated",
+   "generated",
+   "generated"
+  ],
+  "copy": [
+   {
+    "role": "hook",
+    "copy": "Хомяк пробежал 6,06 мили",
+    "body": "За 4 часа 37 минут. Mollie теперь выглядит так, будто Strava — её основная работа."
+   },
+   {
+    "role": "story",
+    "copy": "Это не шутка Strava",
+    "body": "Thijs de Buck, физик MRI из Утрехта, собрал для колеса Mollie трекер скорости и дистанции. Данные автоматически отправляются в её собственный аккаунт."
+   },
+   {
+    "role": "story",
+    "copy": "У Mollie — своя Strava",
+    "body": "Ей 10 месяцев, и она регулярно заносит ночные пробежки: дистанция, темп и время. Очень серьёзный подход к жизни."
+   },
+   {
+    "role": "evidence",
+    "copy": "Ночная смена: 4:37",
+    "body": "Одна из активностей Mollie: 6,06 мили за 4 часа 37 минут. Не тренировка. Полноценная смена."
+   },
+   {
+    "role": "closing",
+    "copy": "Mollie уже в Strava",
+    "body": "У неё есть колесо, ночные забеги и статистика. Осталось только понять, кто из вас двоих дисциплинированнее."
+   }
+  ],
+  "caption": "Физик Thijs de Buck подключил колесо своего 10-месячного хомяка Mollie к трекеру, а данные автоматически отправляются в её аккаунт Strava. В одной из последних активностей — 6,06 мили за 4 часа 37 минут. Кажется, у кого-то ночной режим работает лучше, чем у нас.",
+  "reused_from_run": true
+ },
+ "stays_single": {
+  "story": "Google Assistant will disappear from your phone next month",
+  "phase_a_recommended_format": "carousel",
+  "phase_a_angle_intent": "EXPLAINER",
+  "phase_a_opportunity_type": "NEWS",
+  "phase_a_format_reason": "Карусель позволит последовательно раскрыть новость: что изменится, когда произойдёт отключение и как появление Gemini связано с уходом Google Assistant.",
+  "upgrade_signals": [],
+  "result": "Phase A chose carousel - not a Single to keep; the rule never downgrades"
+ },
+ "vision_verdicts": [],
+ "previous_runs": [
+  {
+   "llm_cap_usd": "0.70",
+   "image_cap_usd": "1.30",
+   "deepseek": {
+    "result": "error: AttributeError: 'InstagramCarouselSlideCreative' object has no attribute 'body'"
+   },
+   "hamster": {
+    "result": "error: AttributeError: 'InstagramCarouselSlideCreative' object has no attribute 'body'"
+   },
+   "stays_single": {
+    "story": "OpenAI updates the default model for free users to GPT-5.6 Luna, adds unlimited text chats for free users, rolls out an",
+    "phase_a_recommended_format": "carousel",
+    "phase_a_angle_intent": "IMPACT",
+    "phase_a_opportunity_type": "NEWS",
+    "phase_a_format_reason": "Несколько изменений лучше разложить по слайдам: новая модель, снятие лимитов и контекст перехода с GPT-5.5 Instant.",
+    "upgrade_signals": [],
+    "result": "Phase A chose carousel - not a Single to keep; the rule never downgrades"
+   },
+   "vision_verdicts": [
+    {
+     "subject_key": "source",
+     "suitable": false,
+     "image_kind": "screenshot_or_interface",
+     "baked_in_text_prominent": true,
+     "reason": "A Strava-style activity interface card with profile details, metrics, buttons, and a hamster photo is shown.",
+     "error": null
+    }
+   ],
+   "llm_calls": [
+    {
+     "post": "deepseek",
+     "kind": "DIRECTOR",
+     "model": "gpt-5.6-luna",
+     "max_tokens": 16000,
+     "worst_case_usd": "0.10825400",
+     "status": "OK",
+     "finish_reason": "stop",
+     "input_tokens": 12404,
+     "output_tokens": 6956,
+     "reasoning_tokens": 1687,
+     "cost_usd": "0.05414"
+    },
+    {
+     "post": "hamster",
+     "kind": "VISION",
+     "model": "gpt-5.6-luna",
+     "max_tokens": 400,
+     "worst_case_usd": "0.00281800",
+     "status": "OK",
+     "finish_reason": "stop",
+     "input_tokens": 1158,
+     "output_tokens": 242,
+     "reasoning_tokens": 182,
+     "cost_usd": "0.00261"
+    },
+    {
+     "post": "hamster",
+     "kind": "DIRECTOR",
+     "model": "gpt-5.6-luna",
+     "max_tokens": 16000,
+     "worst_case_usd": "0.10811900",
+     "status": "OK",
+     "finish_reason": "stop",
+     "input_tokens": 12219,
+     "output_tokens": 5338,
+     "reasoning_tokens": 446,
+     "cost_usd": "0.044247"
+    },
+    {
+     "post": "stays_single",
+     "kind": "PHASE_A",
+     "model": "gpt-5.6-luna",
+     "max_tokens": 8000,
+     "worst_case_usd": "0.05013600",
+     "status": "OK",
+     "finish_reason": "stop",
+     "input_tokens": 2151,
+     "output_tokens": 532,
+     "reasoning_tokens": 209,
+     "cost_usd": "0.005343"
+    }
+   ],
+   "llm_spent_usd": "0.106340",
+   "image_ledger_usd": "0.2242225"
+  }
+ ],
+ "llm_calls": [
+  {
+   "post": "stays_single_story_2",
+   "kind": "PHASE_A",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 8000,
+   "worst_case_usd": "0.05012600",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 2127,
+   "output_tokens": 572,
+   "reasoning_tokens": 186,
+   "cost_usd": "0.005559"
+  }
+ ],
+ "llm_spent_usd": "0.005559",
+ "image_ledger_usd": "0.2242225"
+}

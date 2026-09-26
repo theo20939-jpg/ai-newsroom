@@ -37,16 +37,23 @@ _GENERATED_DIRECTION = ("Сгенерированный иллюстративн
                         "свет; никаких карточек, схем, интерфейсов и надписей; спокойная треть кадра остаётся под заголовок.")
 
 
+# viral / meme-worthy stories (services.instagram_viral_format): the picture may carry irony, absurdity and meme energy - still illustrative,
+# never evidence, never a fake screenshot, quote or poster imitation
+_VIRAL_BRIEF_TAIL = ("Выразительная редакционная иллюстрация с иронией, абсурдом и мем-энергией в стиле KAGE - смелая сцена, не документ: "
+                     "без текста, цифр, логотипов, интерфейсов, скриншотов, цитат, узнаваемых людей и подражания постерам; "
+                     "треть кадра спокойная под заголовок.")
+VIRAL_VISUAL_TREATMENT = ("Выразительная редакционная иллюстрация во весь кадр с визуальной иронией и мем-энергией: преувеличенная сцена-метафора, "
+                          "напряжение и абсурд, но в чистом стиле KAGE; без карточек, схем, интерфейсов и надписей.")
 GENERATED_VISUAL_TREATMENT = ("Редакционная сгенерированная иллюстрация во весь кадр: одна сильная сцена по смыслу истории, глубина, свет и "
                               "материал; без карточек, схем, интерфейсов и надписей.")
 GENERATED_COMPOSITION = ("Вертикальный кадр с одной решающей сценой и выразительной глубиной; одна треть кадра спокойная и без деталей - "
                          "на неё ложится точный русский текст.")
 
 
-def generated_plan_update(copy_text: str | None = None) -> dict[str, str]:
+def generated_plan_update(copy_text: str | None = None, *, viral: bool = False) -> dict[str, str]:
     """The plan fields the image prompt reads, rewritten when the SYSTEM (not the Director) moves a post to generated imagery: a plan
     written for fact cards or typography ('option cards', 'pseudo-interface', 'typographic 460 -> 0') would otherwise be drawn literally."""
-    update = {"visual_treatment": GENERATED_VISUAL_TREATMENT, "composition_direction": GENERATED_COMPOSITION}
+    update = {"visual_treatment": VIRAL_VISUAL_TREATMENT if viral else GENERATED_VISUAL_TREATMENT, "composition_direction": GENERATED_COMPOSITION}
     headline = " ".join(str(copy_text or "").split())
     if headline:
         update["focal_point"] = f"Образ для мысли «{headline}»"[:199]
@@ -84,15 +91,16 @@ def no_photo_treatment(slide: Any, suitable: set[str], *, recap: bool) -> str | 
     return "generated"
 
 
-def generation_brief(slide: Any) -> str:
+def generation_brief(slide: Any, *, viral: bool = False) -> str:
     """The picture's brief from the slide's own grounded copy - the idea to illustrate, never a new fact."""
     headline = " ".join(str(_get(slide, "slide_copy") or _get(slide, "text") or "").split())
-    body = " ".join(str(_get(slide, "body") or "").split())
+    body = " ".join(str(_get(slide, "body") or _get(slide, "slide_body") or "").split())  # package dict / Director slide
+    tail = _VIRAL_BRIEF_TAIL if viral else _BRIEF_TAIL
     idea = (f"Образ для мысли «{headline}»" + (f": {body}" if body else "")).rstrip(" .")
-    room = _BRIEF_LIMIT - len(_BRIEF_TAIL) - 2
+    room = _BRIEF_LIMIT - len(tail) - 2
     if len(idea) > room:
         idea = idea[: room - 1].rsplit(" ", 1)[0] + "…"
-    return f"{idea}. {_BRIEF_TAIL}"
+    return f"{idea}. {tail}"
 
 
 def hero_layout(layout: Any, ref: str, zone: str = "bottom") -> dict[str, Any]:
@@ -116,7 +124,29 @@ def hero_layout(layout: Any, ref: str, zone: str = "bottom") -> dict[str, Any]:
     }
 
 
-def promote_no_photo_slides(slides: list[Any], *, suitable_subjects: set[str], recap: bool) -> tuple[list[Any], list[dict[str, Any]]]:
+def viral_generated_heroes(slides: list[Any]) -> tuple[list[Any], list[int]]:
+    """Viral / meme-worthy carousel (services.instagram_viral_format): EVERY generated picture - the Director's own too - is the slide's
+    hero, full bleed with the copy over its calmer end (founder visual rule: strong hero image, expressive swipe-friendly scenes, bold type
+    in clear negative space). A generated picture shrunk into a small panel or inset is exactly what a viral retelling must not do.
+    Real photos and non-generated slides are untouched. Returns (slides, indices re-composed)."""
+    out, changed = [], []
+    for index, slide in enumerate(slides):
+        if _get(slide, "media_source") != "generated" or _get(slide, "visual_family_reason") == NO_PHOTO_GENERATED:
+            out.append(slide)
+            continue
+        update = {"layout": hero_layout(_get(slide, "layout"), GENERATED_SUBJECT_KEY), "visual_family_reason": NO_PHOTO_GENERATED}
+        if isinstance(slide, dict):
+            out.append({**slide, **update})
+        else:
+            from schemas.instagram_creative import InstagramSlideLayout
+
+            out.append(slide.model_copy(update={**update, "layout": InstagramSlideLayout.model_validate(update["layout"])}))
+        changed.append(index)
+    return out, changed
+
+
+def promote_no_photo_slides(slides: list[Any], *, suitable_subjects: set[str], recap: bool,
+                            viral: bool = False) -> tuple[list[Any], list[dict[str, Any]]]:
     """Every slide without a suitable real photo becomes a generated editorial image (or, for a recap story with a suitable photo of its
     own, that photo as its hero). Works on the Director's pydantic slides and on a package's slide dicts alike. Deterministic, no call.
     Returns (slides, one note per promoted slide)."""
@@ -134,7 +164,7 @@ def promote_no_photo_slides(slides: list[Any], *, suitable_subjects: set[str], r
         else:
             # the old art direction described the fact graphic (boxes, steps, cards): the generation prompt reads it as "what must be
             # visible", so the promoted slide carries the picture's own direction instead
-            update = {"media_source": "generated", "generation_brief": generation_brief(slide),
+            update = {"media_source": "generated", "generation_brief": generation_brief(slide, viral=viral),
                       "layout": hero_layout(_get(slide, "layout"), GENERATED_SUBJECT_KEY),
                       "visual_direction": _GENERATED_DIRECTION, "visual_family": "immersive_image_field", "media_function": "hero",
                       "composition": "full_bleed_media", "media_position": "full", "visual_family_reason": NO_PHOTO_GENERATED}
@@ -144,5 +174,5 @@ def promote_no_photo_slides(slides: list[Any], *, suitable_subjects: set[str], r
             from schemas.instagram_creative import InstagramSlideLayout
 
             out.append(slide.model_copy(update={**update, "layout": InstagramSlideLayout.model_validate(update["layout"])}))
-        notes.append({"slide": index, "role": _get(slide, "role"), "before": before, "treatment": treatment})
+        notes.append({"slide": index, "role": _get(slide, "role"), "before": before, "treatment": treatment, **({"viral": True} if viral else {})})
     return out, notes

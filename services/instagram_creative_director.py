@@ -296,6 +296,8 @@ class CreativeDirectorInput:
     # the model plans against what exists (never invents assets). Empty for every non-carousel call.
     content_archetype: str = ""
     media_note: str = ""
+    # founder decision 2026-09-26 (services.instagram_viral_format): a viral / meme-worthy story is retold as swipeable beats
+    viral_carousel_note: str = ""
     # Phase B.6: the shared KAGE voice (rendered from docs/brand/kage_voice_v1.md - never copied into a prompt) and the media facts the media-first
     # contract is checked against: which subject keys are listed, and which of those are NOT suitable as a final visual (article / text cards).
     media_first: bool = False  # the caller runs the media-first + KAGE-voice contract (prompt v10) for this request
@@ -469,6 +471,7 @@ def _build_user_text(director_input: CreativeDirectorInput, *, evidence_handles:
         f"APPROVED EDITORIAL DECISION:\n{director_input.editorial_decision or '(legacy call: not supplied)'}\n"
         f"{evidence_heading}:\n{evidence_block}"
         + (f"\nCONTENT ARCHETYPE (derived, plan for it): {director_input.content_archetype}" if director_input.content_archetype else "")
+        + (f"\n{director_input.viral_carousel_note}" if director_input.viral_carousel_note else "")
         + (f"\nMEDIA AVAILABLE FOR THIS POST:\n{director_input.media_note}" if director_input.media_note else "")
         + (f"\n{director_input.visual_dna_context}" if director_input.visual_dna_context else "")
         + (

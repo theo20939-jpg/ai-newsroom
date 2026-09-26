@@ -971,6 +971,21 @@ async def evaluate_and_submit_instagram_opportunity(
             "phase_a_source_taxonomy_format": decided.value if decided else None,
         })
 
+    # founder decision 2026-09-26: a viral / meme-worthy story Phase A made a Single is retold as a Carousel (services.instagram_viral_format)
+    from services.instagram_viral_format import VIRAL_CAROUSEL_NOTE, viral_carousel_upgrade, viral_signals
+
+    viral = viral_signals(opportunity.editorial_decision or {}, planned_product=planned[0] if planned else None) if recap_bundle is None else []
+    upgrade = viral_carousel_upgrade(
+        {**(opportunity.editorial_decision or {}), "recommended_format": format_decision.recommended_format.value},
+        planned_product=planned[0] if planned else None, executable_formats=_executable_formats(planned),
+    ) if recap_bundle is None else []
+    if upgrade:
+        format_decision = replace(format_decision, recommended_format=ContentFormat.CAROUSEL,
+                                  why=f"{format_decision.why} | вирусная история - раскрываем каруселью ({', '.join(upgrade)})")
+        opportunity = replace(opportunity, editorial_decision={**(opportunity.editorial_decision or {}), "recommended_format": "carousel",
+                                                               "viral_carousel_upgrade": upgrade, "phase_a_recommended_format": "single"})
+        logger.info("instagram_viral_story_upgraded_to_carousel", extra={"opportunity_id": opportunity.id, "signals": upgrade})
+
     identity = compute_package_identity(source_key=opportunity.id, content_format=format_decision.recommended_format.value)
     delivery_service = InstagramEditorialDeliveryService()
     existing = await delivery_service.find_current(session, package_identity=identity)
@@ -1058,6 +1073,7 @@ async def evaluate_and_submit_instagram_opportunity(
         recap_required_subjects=[s.key for s in recap_bundle.stories if s.evidence_quality != "BLOCKING"] if recap_bundle is not None else [],
         evidence_story_keys=recap_bundle.evidence_story_keys if recap_bundle is not None else {},
         kage_voice_context=load_kage_voice().render_context() if media_first else "",
+        viral_carousel_note=VIRAL_CAROUSEL_NOTE if viral and format_decision.recommended_format is ContentFormat.CAROUSEL else "",
         available_media_subjects=media_subjects[0],
         unsuitable_media_subjects=media_subjects[1],
     )
@@ -1131,15 +1147,23 @@ async def evaluate_and_submit_instagram_opportunity(
 
         suitable = set(media_subjects[0]) - set(media_subjects[1])
         promoted_slides, generated_promotions = promote_no_photo_slides(
-            list(carousel.slides), suitable_subjects=suitable, recap=recap_bundle is not None)
+            list(carousel.slides), suitable_subjects=suitable, recap=recap_bundle is not None, viral=bool(viral))
+        if viral:  # a viral retelling: every generated picture (the Director's own too) is its slide's full-bleed hero
+            from services.instagram_generated_fallback import viral_generated_heroes
+
+            promoted_slides, heroes = viral_generated_heroes(promoted_slides)
+            if heroes:
+                generated_promotions = [*generated_promotions, *({"slide": i, "treatment": "viral_hero"} for i in heroes)]
         if generated_promotions:
             from services.instagram_generated_fallback import generated_plan_update
 
             plan = carousel.creative_execution_plan
             carousel = carousel.model_copy(update={
                 "slides": promoted_slides,
-                # the carousel-wide genre described the cards; the promoted pictures read it as their visual genre
-                **({"creative_execution_plan": plan.model_copy(update=generated_plan_update())} if plan is not None else {}),
+                # the carousel-wide genre described the cards; the promoted pictures read it as their visual genre (a plan whose pictures the
+                # Director planned itself keeps its own treatment)
+                **({"creative_execution_plan": plan.model_copy(update=generated_plan_update(viral=bool(viral)))}
+                   if plan is not None and any(p["treatment"] == "generated" for p in generated_promotions) else {}),
             })
             creative_outcome = replace(creative_outcome, carousel=carousel)
             logger.info("instagram_no_photo_slides_generated", extra={"opportunity_id": opportunity.id, "slides": generated_promotions})
