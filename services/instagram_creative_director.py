@@ -1310,13 +1310,16 @@ def _validate_carousel_output(
             return None
 
     if viral:
-        # hard, never laundered through the copy retry: a quote the evidence does not contain
-        from services.instagram_viral_format import invented_quotes
+        # founder decision 2026-09-27 (canary 7): an unsupported quote PRESENTED AS SOMEONE'S WORDS stays hard, never laundered through the
+        # copy retry; an unattributed editorial term in quotation marks is a repairable finding for the ONE correction (never a silent PASS)
+        from services.instagram_viral_format import classify_quote_use
 
-        quotes = invented_quotes([*(s.slide_copy for s in creative.slides), *(s.slide_body or "" for s in creative.slides),
-                                  creative.final_caption or ""], list(director_input.allowed_evidence))
-        if quotes:
-            raise CreativeFactSafetyError(f"invented quote(s) not in the evidence: {quotes}")
+        quote_use = classify_quote_use([*((f"slide {i} hook", s.slide_copy) for i, s in enumerate(creative.slides, 1)),
+                                        *((f"slide {i} body", s.slide_body or "") for i, s in enumerate(creative.slides, 1)),
+                                        ("caption", creative.final_caption or "")], list(director_input.allowed_evidence))
+        if quote_use.terminal:
+            raise CreativeFactSafetyError(f"invented quote(s) not in the evidence: {quote_use.terminal}")
+        correctable.extend(quote_use.repairable)
     soft(_enforce_output_policy,
         [*(slide.slide_copy for slide in creative.slides), *(slide.slide_body for slide in creative.slides if slide.slide_body),
          creative.final_cta or "", creative.final_caption or ""],

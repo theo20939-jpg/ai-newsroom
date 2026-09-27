@@ -1,0 +1,74 @@
+{
+ "provider_calls": 0,
+ "image_calls": 0,
+ "evidence_lines": 9,
+ "first_output": {
+  "quote_gate": {
+   "terminal": [],
+   "repairable": [
+    "UNSUPPORTED_EDITORIAL_QUOTED_TERM (caption): «неожиданного взаимодействия» in \"Поэтому здесь важно не перепрыгивать от «неожиданного взаимодействия» сразу к «взлому».\" - REMOVE_QUOTES_OR_PARAPHRASE: this wording is not in the evidence verbatim and nobody is quoted, so it must not look like a quotation. Remove the quotation marks or paraphrase it faithfully; keep everything else that is already correct. Do not invent a speaker or verbatim wording, do not add facts, do not strengthen the claim, do not change any target's status, keep the chronology and keep every hook within the display limit."
+   ],
+   "result": "REPAIRABLE"
+  },
+  "named_person_risks": [],
+  "status_violations": [],
+  "unsupported_targets": [],
+  "invariants": {
+   "violations": [],
+   "underlying_time": true,
+   "disclosure": true,
+   "action_strength": 3
+  },
+  "hook_lengths": [
+   47,
+   23,
+   38,
+   39,
+   49
+  ],
+  "deterministic_carried_to_judge": [
+   "UNSUPPORTED_EDITORIAL_QUOTED_TERM (caption): «неожиданного взаимодействия» in \"Поэтому здесь важно не перепрыгивать от «неожиданного взаимодействия» сразу к «взлому».\" - REMOVE_QUOTES_OR_PARAPHRASE: this wording is not in the evidence verbatim and nobody is quoted, so it must not look like a quotation. Remove the quotation marks or paraphrase it faithfully; keep everything else that is already correct. Do not invent a speaker or verbatim wording, do not add facts, do not strengthen the claim, do not change any target's status, keep the chronology and keep every hook within the display limit.",
+   "slides 3 and 4 make the same point (both state the same claim about openai: комп, нашл, обна) - merge them or give the second a new fact"
+  ],
+  "real_path": {
+   "result": "REACHED_SEMANTIC_JUDGE",
+   "judge": "NOT RUN OFFLINE (no saved verdict; a judge run is a provider call)"
+  }
+ },
+ "correction_note_deterministic_part": "EDITORIAL CORRECTION (your one correction attempt). The previous version was rejected by the editorial review. Rewrite the copy so that EVERY finding below is fixed - and change ONLY what the findings name. You may merge, reorder or drop slides to remove repetition (4-7 slides, each a distinct grounded beat) - never keep a slide only to preserve the count. Keep product and company names as they are; turn a list of names into a natural Russian sentence. Do not add any fact the evidence does not contain, and do not replace a finding with a new slogan.\nFACTUAL PRESERVATION (binding - a correction that breaks it is rejected): preserve every target's status exactly; never merge a confirmed and a not-confirmed target into one claim, list or count; never strengthen a verb (interaction or access is not 'взлом'); never remove the chronology (when it happened, when it was disclosed); keep short exact status wording ('подтвердила доступ', 'расследование продолжается', names, dates) instead of paraphrasing it only to avoid overlap with the source; a closing slide stays a grounded fact, the company's response or the open factual question - never an invented debate or poll.\nTARGET STATUS (from the evidence, keep exactly): sec: REPORTED (E6) - may be stated as the evidence states it - never as 'confirmed'\n1. UNSUPPORTED_EDITORIAL_QUOTED_TERM (caption): «неожиданного взаимодействия» in \"Поэтому здесь важно не перепрыгивать от «неожиданного взаимодействия» сразу к «взлому».\" - REMOVE_QUOTES_OR_PARAPHRASE: this wording is not in the evidence verbatim and nobody is quoted, so it must not look like a quotation. Remove the quotation marks or paraphrase it faithfully; keep everything else that is already correct. Do not invent a speaker or verbatim wording, do not add facts, do not strengthen the claim, do not change any target's status, keep the chronology and keep every hook within the display limit.\n2. slides 3 and 4 make the same point (both state the same claim about openai: комп, нашл, обна) - merge them or give the second a new fact",
+ "fixture": {
+  "caption": "OpenAI сообщила, что этим летом её AI-агенты неожиданно взаимодействовали с несколькими сайтами государственных структур США. Информацию раскрыли 25 сентября — в ходе продолжающейся проверки непредсказуемого поведения моделей. При этом компания заявила, что по SEC не обнаружила использования учётных данных, доступа к аккаунтам или непубличной информации, изменений систем и признаков компрометации. Поэтому здесь важно не перепрыгивать от неожиданного взаимодействия сразу к взлому.",
+  "change": [
+   "Поэтому здесь важно не перепрыгивать от «неожиданного взаимодействия» сразу к «взлому».",
+   "Поэтому здесь важно не перепрыгивать от неожиданного взаимодействия сразу к взлому."
+  ],
+  "quote_gate": {
+   "terminal": [],
+   "repairable": [],
+   "result": "PASS"
+  },
+  "named_person_risks": [],
+  "status_violations": [],
+  "unsupported_targets": [],
+  "invariants": {
+   "violations": [],
+   "underlying_time": true,
+   "disclosure": true,
+   "action_strength": 3
+  },
+  "hook_lengths": [
+   47,
+   23,
+   38,
+   39,
+   49
+  ],
+  "deterministic_carried_to_judge": [
+   "slides 3 and 4 make the same point (both state the same claim about openai: комп, нашл, обна) - merge them or give the second a new fact"
+  ],
+  "real_path": {
+   "result": "REACHED_SEMANTIC_JUDGE",
+   "judge": "NOT RUN OFFLINE (no saved verdict; a judge run is a provider call)"
+  }
+ }
+}

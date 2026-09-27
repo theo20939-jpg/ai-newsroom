@@ -14,6 +14,7 @@ EVERGREEN_VALUE single on a NEWS_INSIGHT or AI_HACK post remains a Single."""
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import Any
 
 from services.instagram_media_first import MediaFirstContractError
@@ -125,6 +126,70 @@ def invented_quotes(texts: list[str], evidence: list[str]) -> list[str]:
             if len(phrase.split()) >= 2 and _norm(phrase) not in corpus:
                 found.append(phrase.strip())
     return found
+
+
+# QUOTE-USE CLASSIFICATION (founder task 2026-09-27, after the seventh paid viral canary). Quote provenance is unchanged - a quoted
+# multi-word span is supported only when the evidence contains it verbatim - but an UNSUPPORTED span is now classified by how it is used:
+#   ATTRIBUTED (hard / terminal): the text presents it as someone's literal wording - a reporting or naming verb of a speaker in the same
+#     sentence ('OpenAI заявила', 'Компания назвала произошедшее', 'said'), a source frame ('по словам', 'в заявлении', 'according to',
+#     'дословно'), a colon introducing it ('Сэм Альтман: «...»') or dialogue ('— «...»'). No correction may launder a fabricated quote.
+#   EDITORIAL TERM MENTION (repairable): no speaker, no attribution - the marks label or contrast concepts ('не перепрыгивать от «X» к «Y»',
+#     'это ещё не «подтверждённый взлом»', 'не стоит называть это «атакой»'). It goes to the ONE existing Director correction as
+#     UNSUPPORTED_EDITORIAL_QUOTED_TERM / REMOVE_QUOTES_OR_PARAPHRASE - never a silent PASS.
+# Naming verbs are attribution only when a subject performs them ('назвала', 'называют'); the editorial forms ('называть', 'называем',
+# 'назовём') mention a term. Everything is sentence-scoped and conservative: any attribution signal in the sentence makes the span hard.
+_ATTRIBUTION = re.compile(
+    r"(?i)(?<![\w])(сказал\w*|скажет|говор(?:ит|ят|ил\w*)|заяв\w*|сообщ\w*|написал\w*|пиш(?:ет|ут)|отмет\w*|отмеча\w*|подчеркн\w*|"
+    r"подч[её]ркива\w*|добав(?:ил\w*|ляет|ляют)|признал\w*|призна[её]т|признают|поясн\w*|ответ(?:ил\w*|ила)|цитир\w*|процитирова\w*|"
+    r"утвержда\w*|объяв(?:ил\w*|ляет|ляют)|выразил\w*|выражается|назвал\w*|называ(?:ет|ют|л\w*)|окрестил\w*|охарактеризовал\w*|"
+    r"по\s+словам|со\s+слов|по\s+заявлению|по\s+версии|в\s+(?:своём\s+|своем\s+)?(?:заявлении|сообщении|пресс-релизе|посте|блоге|письме|"
+    r"отч[её]те|интервью|твите)|дословно|цитат\w*|"
+    r"said|says|told|wrote|writes|stated|states|claimed|claims|called|calls|described|according\s+to|quoted|in\s+a\s+statement|put\s+it)"
+    r"(?![\w])")
+_SENTENCE_END = re.compile(r"[.!?…]+(?=\s|$)")
+_DIALOGUE_START = re.compile(r"(?:^|\n)\s*[—–-]\s*$")
+
+
+@dataclass(frozen=True)
+class QuoteFindings:
+    terminal: list[str]  # unsupported spans presented as someone's literal wording - a hard CreativeFactSafetyError
+    repairable: list[str]  # UNSUPPORTED_EDITORIAL_QUOTED_TERM findings for the one Director correction
+
+
+def _sentence_bounds(text: str, start: int, end: int) -> tuple[str, str, str]:
+    """(prefix, sentence, suffix) of the sentence that holds text[start:end] - sentence ends inside the quote itself do not count."""
+    before = [m.end() for m in _SENTENCE_END.finditer(text, 0, start)]
+    s_start = before[-1] if before else 0
+    after = _SENTENCE_END.search(text, end)
+    s_end = after.end() if after else len(text)
+    return text[s_start:start], text[s_start:s_end].strip(), text[end:s_end]
+
+
+def classify_quote_use(fields: list[tuple[str, str]], evidence: list[str]) -> QuoteFindings:
+    """Every unsupported quoted multi-word span in the copy, classified as ATTRIBUTED (terminal) or an EDITORIAL term mention (repairable).
+    A span the evidence contains verbatim passes; a single quoted word is a label and is left alone (as in invented_quotes)."""
+    corpus = _norm(" ".join(evidence))
+    terminal: list[str] = []
+    repairable: list[str] = []
+    for where, text in fields:
+        text = text or ""
+        for match in _QUOTED.finditer(text):
+            phrase = match.group(1).strip()
+            if len(phrase.split()) < 2 or _norm(phrase) in corpus:
+                continue
+            prefix, sentence, suffix = _sentence_bounds(text, match.start(), match.end())
+            attributed = (_ATTRIBUTION.search(prefix) or _ATTRIBUTION.search(suffix) or prefix.rstrip().endswith(":")
+                          or _DIALOGUE_START.search(text[:match.start()]))
+            if attributed:
+                terminal.append(phrase)
+            else:
+                repairable.append(
+                    f"UNSUPPORTED_EDITORIAL_QUOTED_TERM ({where}): «{phrase}» in \"{sentence}\" - REMOVE_QUOTES_OR_PARAPHRASE: this wording is "
+                    "not in the evidence verbatim and nobody is quoted, so it must not look like a quotation. Remove the quotation marks or "
+                    "paraphrase it faithfully; keep everything else that is already correct. Do not invent a speaker or verbatim wording, do "
+                    "not add facts, do not strengthen the claim, do not change any target's status, keep the chronology and keep every hook "
+                    "within the display limit.")
+    return QuoteFindings(terminal=terminal, repairable=repairable)
 
 
 def _copy(slide: Any) -> str:
