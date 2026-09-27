@@ -1,0 +1,108 @@
+{
+ "diagnostic_started_utc": "2026-09-27T21:57:33.434113+00:00",
+ "canary8_clock": "2026-09-27T21:27:34.410547+00:00",
+ "event": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+ "provider_calls": 0,
+ "image_calls": 0,
+ "copies": [
+  {
+   "position": 5,
+   "event_id": "10856ebf-530f-41b4-80ea-2c7592cca2b8",
+   "age_hours_at_canary8": 21.6,
+   "title": "OpenAI pauses training of latest models after agents probed US government sites in unexpected ways - WRAL",
+   "collected_at": "2026-09-26T23:52:23.128162+00:00",
+   "original_url": "https://news.google.com/rss/articles/CBMizwFBVV95cUxPV0lDdHVveGZJM1hlSjhBbVJnWmdrQkxpV3dlcHlONEgyeENMV0JiZUVySFRhVmlyVUVZSkZFbV84MTFXa2YxclA0ZFlFdDVVbXNmQ2lHYlNsazBtYWN3VVd2VmJCMV9OTlRSdVBuQlhVYkNJb0d0TU9QVlN0c0JvRE1hZUdjdm9JeDFDYUNnM2R0TUYybEtBT2FJXzdWeVNLR2MwN2UxenNwdU5iYkY5QlgxcWZQRHA2aUY3ZWR6eVAyd2RET0pSXzhVMXhDT0U?oc=5",
+   "resolution_status": "RESOLVED",
+   "resolution_method": "google_news_article_token",
+   "resolved_url": "https://www.wral.com/news/ap/2f8a2-openai-pauses-training-of-latest-models-after-agents-probed-us-government-sites-in-unexpected-ways/",
+   "publisher_domain": "www.wral.com",
+   "resolution_metadata": {
+    "endpoint_status": 200,
+    "endpoint_bytes": 264,
+    "publisher_domain": "www.wral.com"
+   },
+   "acquisition_status": "FULL_TEXT",
+   "acquisition_error": null,
+   "extracted_chars": 3881,
+   "content_sha256": "f359df18e62e0e464c9d3f7c61ba717704ffa2980b33cacc264c9a5e90fb5109",
+   "evidence_source_url": "https://www.wral.com/news/ap/2f8a2-openai-pauses-training-of-latest-models-after-agents-probed-us-government-sites-in-unexpected-ways/",
+   "evidence_source_original_url": "https://news.google.com/rss/articles/CBMizwFBVV95cUxPV0lDdHVveGZJM1hlSjhBbVJnWmdrQkxpV3dlcHlONEgyeENMV0JiZUVySFRhVmlyVUVZSkZFbV84MTFXa2YxclA0ZFlFdDVVbXNmQ2lHYlNsazBtYWN3VVd2VmJCMV9OTlRSdVBuQlhVYkNJb0d0TU9QVlN0c0JvRE1hZUdjdm9JeDFDYUNnM2R0TUYybEtBT2FJXzdWeVNLR2MwN2UxenNwdU5iYkY5QlgxcWZQRHA2aUY3ZWR6eVAyd2RET0pSXzhVMXhDT0U?oc=5",
+   "package_quality": "STRONG",
+   "body_chars": 1148,
+   "preflight": "FAIL",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "UNSUPPORTED"
+   },
+   "preflight_reason": "the body evidence does not support: chronology"
+  },
+  {
+   "position": 6,
+   "event_id": "d08eaab6-90a6-48d1-b99f-fef7f059e01f",
+   "age_hours_at_canary8": 11.1,
+   "title": "OpenAI pauses training of latest models after agents probed U.S. government sites in unexpected ways - Los Angeles Times",
+   "collected_at": "2026-09-27T10:20:55.154911+00:00",
+   "original_url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxOMnJlT0VjMlhfME40NFk4ZXV0NXkzOGpzS2I1T3pDZF9yYUdSTVJPZGszcUhRNnZ3VWkycHllSi1RWEdDMWRlMzZUVWtzVk91cGhscndZMWU4eUJzWktZMV9FX1RVdFRSazhPVnlxRGhXUXZ5dDJMZnVONTlMbFpMT2E3b2xJOUZfTTdFdjVSTFphNzcwSEstZGxsODRVOFZkMTNCNWJYLW0xLWJnbks4LUhHUmVzM2VZZzVnd1pPUnhFb3p5T3c?oc=5",
+   "resolution_status": "RESOLVED",
+   "resolution_method": "google_news_article_token",
+   "resolved_url": "https://www.latimes.com/world-nation/story/2026-09-27/openai-pauses-training-of-models-after-agents-probed-u-s-government-sites",
+   "publisher_domain": "www.latimes.com",
+   "resolution_metadata": {
+    "endpoint_status": 200,
+    "endpoint_bytes": 256,
+    "publisher_domain": "www.latimes.com"
+   },
+   "acquisition_status": "FULL_TEXT",
+   "acquisition_error": null,
+   "extracted_chars": 10526,
+   "content_sha256": "acd87565bbfd92f07fc36c2eb63f4498eff592f241fffee79bf5abbf190e2b49",
+   "evidence_source_url": "https://www.latimes.com/world-nation/story/2026-09-27/openai-pauses-training-of-models-after-agents-probed-u-s-government-sites",
+   "evidence_source_original_url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxOMnJlT0VjMlhfME40NFk4ZXV0NXkzOGpzS2I1T3pDZF9yYUdSTVJPZGszcUhRNnZ3VWkycHllSi1RWEdDMWRlMzZUVWtzVk91cGhscndZMWU4eUJzWktZMV9FX1RVdFRSazhPVnlxRGhXUXZ5dDJMZnVONTlMbFpMT2E3b2xJOUZfTTdFdjVSTFphNzcwSEstZGxsODRVOFZkMTNCNWJYLW0xLWJnbks4LUhHUmVzM2VZZzVnd1pPUnhFb3p5T3c?oc=5",
+   "package_quality": "STRONG",
+   "body_chars": 1039,
+   "preflight": "FAIL",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "UNSUPPORTED",
+    "chronology": "UNSUPPORTED"
+   },
+   "preflight_reason": "the body evidence does not support: target, chronology"
+  },
+  {
+   "position": 7,
+   "event_id": "a6b32ec3-2697-432c-ae6e-c175c496b6e0",
+   "age_hours_at_canary8": 0.7,
+   "title": "OpenAI pauses training of latest models after AI agents probed U.S. government sites in unexpected ways - CBC",
+   "collected_at": "2026-09-27T20:45:37.124125+00:00",
+   "original_url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxObEFoTklmUEQ2aVdLVFhuZl8tNTBYNXZoOGpFODY4N2ZLNXA2WWc2dDlGb1QtcG9vR1ZRa2N3cWJqbVA5MGVWYzJmT2p6ZGczMFQyU1lRSGk1VC0wejJ2ZURCWGE1MHhQOWpmcWVfcVg5QUxYaXhYdTZxdVRmRl9HSUpqTQ?oc=5",
+   "resolution_status": "RESOLVED",
+   "resolution_method": "google_news_article_token",
+   "resolved_url": "https://www.cbc.ca/news/business/openai-pause-training-after-probes-9.7360166",
+   "publisher_domain": "www.cbc.ca",
+   "resolution_metadata": {
+    "endpoint_status": 200,
+    "endpoint_bytes": 208,
+    "publisher_domain": "www.cbc.ca"
+   },
+   "acquisition_status": "FULL_TEXT",
+   "acquisition_error": null,
+   "extracted_chars": 6582,
+   "content_sha256": "6cee8b53daa12994882e9b7e3341758136c20cac45eeee22677a53cf588d4788",
+   "evidence_source_url": "https://www.cbc.ca/news/business/openai-pause-training-after-probes-9.7360166",
+   "evidence_source_original_url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxObEFoTklmUEQ2aVdLVFhuZl8tNTBYNXZoOGpFODY4N2ZLNXA2WWc2dDlGb1QtcG9vR1ZRa2N3cWJqbVA5MGVWYzJmT2p6ZGczMFQyU1lRSGk1VC0wejJ2ZURCWGE1MHhQOWpmcWVfcVg5QUxYaXhYdTZxdVRmRl9HSUpqTQ?oc=5",
+   "package_quality": "STRONG",
+   "body_chars": 715,
+   "preflight": "PASS",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "SUPPORTED"
+   },
+   "preflight_reason": "every claim the hook makes is in the stored body evidence"
+  }
+ ]
+}
