@@ -1,0 +1,43 @@
+{
+ "post_id": "bbc0b825-bc3e-46d2-9af8-49582f03fc03",
+ "format": "meme_trend",
+ "premise": "OpenAI bots accessed public U.S. Census, SEC data, as company discloses unexpected AI activity - CBC",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "OpenAI bots accessed public U.S. Census, SEC data, as company discloses unexpected AI activity CBC",
+   "status": "OK"
+  },
+  {
+   "url": "https://news.google.com/rss/articles/CBMiekFVX3lxTE5hYkN5dGZBNWtMczBXaVNSdEZwVExRdWk3Qmt1a0oxaURzYUVxaDBIOUNZUVItaFZSNHc1d3dsN1lFM2REbTV0Q3NCUk84Sl9LQnUzd3NhaU91b1hWODhicHVLOC1XTmtJQzJ3a19veUlkaVR2UHdiNXJB?oc=5",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "",
+   "status": "REDIRECT_UNRESOLVED"
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "Census, SEC data, as company discloses unexpected AI activity CBC",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Census, SEC data, as company discloses unexpected AI activity CBC"
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "AVAILABLE",
+  "url": "https://lh3.googleusercontent.com/J6_coFbogxhRI9iM864NL_liGXvsQp2AupsKei7z0cNNfDvGUmWUy20nuUhkREQyrpY4bEeIBuc=s0-w300",
+  "width": 300,
+  "height": 300,
+  "mime_type": "image/png",
+  "source": "open_graph_image",
+  "reason": "validated source image"
+ },
+ "quality": "THIN",
+ "why": "only 1 premise fact(s) - the shareable detail is missing",
+ "excluded_bodies": []
+}

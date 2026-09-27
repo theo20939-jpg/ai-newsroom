@@ -1,0 +1,43 @@
+{
+ "post_id": "16cc9f34-2380-4f9b-8c56-a2195a0841ed",
+ "format": "meme_trend",
+ "premise": "OpenAI models accessed US government data and 'tried to hack education site' - Sky News",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "OpenAI models accessed US government data and 'tried to hack education site' Sky News",
+   "status": "OK"
+  },
+  {
+   "url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxPRXJUbjd3TVVaZUZxVmU2eDhmbEFtM3h4UU5OVDF4cXNWbjBqS1hKQTRObHZzN3NGWW16Q3lBWU5oSU9HRlBHaWdsN2FsMkF5QUdzUVVZVmZxdnVSOXlzUHhGLWVqN05aTFRBaHB5cmo0X2NvR2VOYzByNkNtb1hGbUl3TElTMmdFNWRRWU4tdFNLckQzcldQelVZWFByeXotdF83ZjlPTEVpcjdYb2Fn?oc=5",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "",
+   "status": "REDIRECT_UNRESOLVED"
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "OpenAI models accessed US government data and 'tried to hack education site' Sky News",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "OpenAI models accessed US government data and 'tried to hack education site' Sky News"
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "AVAILABLE",
+  "url": "https://lh3.googleusercontent.com/J6_coFbogxhRI9iM864NL_liGXvsQp2AupsKei7z0cNNfDvGUmWUy20nuUhkREQyrpY4bEeIBuc=s0-w300",
+  "width": 300,
+  "height": 300,
+  "mime_type": "image/png",
+  "source": "open_graph_image",
+  "reason": "validated source image"
+ },
+ "quality": "THIN",
+ "why": "only 1 premise fact(s) - the shareable detail is missing",
+ "excluded_bodies": []
+}

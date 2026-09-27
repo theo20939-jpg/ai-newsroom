@@ -1,0 +1,43 @@
+{
+ "post_id": "fb04cb7c-7484-4a1f-b97f-092755e096d6",
+ "format": "meme_trend",
+ "premise": "OpenAI bots meddled with multiple US Government agency sites",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "OpenAI bots meddled with multiple US Government agency sites",
+   "status": "OK"
+  },
+  {
+   "url": "https://www.bbc.com/news/articles/cw62jje658dlo",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "",
+   "status": "FETCH_FAILED"
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "OpenAI bots meddled with multiple US Government agency sites",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "OpenAI bots meddled with multiple US Government agency sites"
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "NOT_AVAILABLE",
+  "url": null,
+  "width": null,
+  "height": null,
+  "mime_type": null,
+  "source": null,
+  "reason": "dns_failure"
+ },
+ "quality": "THIN",
+ "why": "only 1 premise fact(s) - the shareable detail is missing",
+ "excluded_bodies": []
+}
