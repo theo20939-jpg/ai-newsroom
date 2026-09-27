@@ -184,7 +184,7 @@ _REEL_PROMPT_VERSION = "8"  # v8: KAGE identity
 _EDITORIAL_DECISION_PROMPT_VERSION = "1"
 # KAGE downstream format contract: a post whose product format the frozen feed planner already fixed (AI_HACK / TREND / WEEKLY_RECAP)
 # is decided with v2 - the angle INSIDE the planned product, plus the recap coverage plan. Every other caller keeps v1 unchanged.
-_EDITORIAL_DECISION_PLANNED_PROMPT_VERSION = "4"  # v3: KAGE identity + evidence cited by handle; v4: the Phase A contract (2026-09-27)
+_EDITORIAL_DECISION_PLANNED_PROMPT_VERSION = "5"  # v3: KAGE identity + handles; v4: the Phase A contract; v5: complete <=650-char plans
 WEEKLY_RECAP = "WEEKLY_RECAP"
 # Phase A output bound (2026-09-25): it used to send none, so the gateway priced the model's full 128k output (~$0.77 a call). Sized from
 # the schema, not from a budget: 15 strings capped at 3,800 characters in total + `evidence_used` quoting a whole evidence package (the
@@ -596,8 +596,8 @@ def _grouped_evidence(items: list[str], story_keys: dict, labels: dict | None = 
     return "\n".join(lines)
 
 
-_HANDLE_DECISION_VERSIONS = frozenset({"3", "4"})  # Phase A prompt versions whose evidence is listed and cited by handle (E1, E2, ...)
-_PHASE_A_CONTRACT_VERSIONS = frozenset({"4"})  # services.instagram_phase_a_contract: status ledger in, contract checked out
+_HANDLE_DECISION_VERSIONS = frozenset({"3", "4", "5"})  # Phase A prompt versions whose evidence is listed and cited by handle (E1, E2, ...)
+_PHASE_A_CONTRACT_VERSIONS = frozenset({"4", "5"})  # services.instagram_phase_a_contract: status ledger in, contract checked out
 
 
 def _build_decision_user_text(decision_input: InstagramEditorialDecisionInput, *, handles: bool = False, contract: bool = False) -> str:

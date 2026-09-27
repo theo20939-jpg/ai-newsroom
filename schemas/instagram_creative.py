@@ -15,6 +15,9 @@ INSTAGRAM_CREATIVE_SCHEMA_VERSION = "v1"
 
 _SHORT_TEXT_MAX_LENGTH = 200
 _MEDIUM_TEXT_MAX_LENGTH = 400
+# Phase A v5 (canary 3, 2026-09-27): a complete editorial plan did not fit 400 characters and reached the Director cut mid-sentence; the
+# prompt asks for <= 650, the schema bound leaves margin (a longer plan is still rejected, never silently truncated)
+_CREATIVE_DIRECTION_MAX_LENGTH = 700
 _LONG_TEXT_MAX_LENGTH = 1200
 
 
@@ -54,7 +57,7 @@ class InstagramEditorialDecision(BaseModel):
     origin: Literal["NEWS", "TREND", "PRODUCT", "CULTURE", "EVERGREEN"]
     recommended_format: Literal["single", "carousel", "reel"]
     format_reason: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
-    creative_direction: str = Field(min_length=1, max_length=_MEDIUM_TEXT_MAX_LENGTH)
+    creative_direction: str = Field(min_length=1, max_length=_CREATIVE_DIRECTION_MAX_LENGTH)
     product_connection: str | None = Field(default=None, max_length=_MEDIUM_TEXT_MAX_LENGTH)
     trend_rationale: str | None = Field(default=None, max_length=_MEDIUM_TEXT_MAX_LENGTH)
     # Deterministic Phase A.1 metadata is attached after generation from the supplied normalized

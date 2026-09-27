@@ -21,24 +21,37 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 ROOT = Path(__file__).resolve().parent.parent
 CANARY2 = ROOT / "artifacts/instagram_feed_product/viral_nominated_canary2_20260927/post"
+CANARY3 = ROOT / "artifacts/instagram_feed_product/viral_nominated_canary3_20260927/post"  # Phase A v4 live output (canary 3)
 
 
-def saved_output() -> dict:
-    return json.loads((CANARY2 / "director_phase_a_raw_output.json").read_text(encoding="utf-8"))["structured_output"]
+def saved_output(canary: Path = CANARY2) -> dict:
+    return json.loads((canary / "director_phase_a_raw_output.json").read_text(encoding="utf-8"))["structured_output"]
 
 
-def saved_evidence() -> list[str]:
-    call = json.loads((CANARY2 / "calls/01_phase_a.json").read_text(encoding="utf-8"))
+def saved_evidence(canary: Path = CANARY2) -> list[str]:
+    call = json.loads((canary / "calls/01_phase_a.json").read_text(encoding="utf-8"))
     text = "\n".join(t for message in call["request"] for t in message["text"])
     return [line for _n, line in re.findall(r"^E(\d+): (.*)$", text, re.M)]
 
 
-def decision_input():
+def decision_input(canary: Path = CANARY2):
     from services.instagram_creative_director import InstagramEditorialDecisionInput
 
     return InstagramEditorialDecisionInput(source_type="NEWS", source_summary="OpenAI agents / US government websites",
-                                           allowed_evidence=saved_evidence(), executable_formats=["single", "carousel"], locale="ru",
+                                           allowed_evidence=saved_evidence(canary), executable_formats=["single", "carousel"], locale="ru",
                                            planned_format="TREND")
+
+
+def valid_v5_fixture(saved: dict) -> dict:
+    """Canary 3's own (substantively correct) Phase A plan with a COMPLETE creative_direction under 650 characters; the negated warning
+    against calling it a hack stays. Replay / test material only, never production wording."""
+    fixture = copy.deepcopy(saved)
+    fixture["creative_direction"] = (
+        "Первый слайд — реальное фото из источника и крупный хук: ИИ-агент OpenAI сам заходил на сайты ведомств США, узнали об этом только "
+        "сейчас. Далее: хронология — поведение летом, раскрытие 25–26 сентября; доступ к сайтам Министерства торговли и SEC подтверждён; "
+        "эпизод с Министерством образования ещё расследуется; что ответила компания. Визуал: реальное фото источника и абстрактная "
+        "серверная инфраструктура. Финал — главный факт: это раскрытие летнего эпизода, а не событие сегодняшнего дня.")
+    return fixture
 
 
 def valid_fixture(saved: dict) -> dict:
@@ -63,7 +76,7 @@ def valid_fixture(saved: dict) -> dict:
     return fixture
 
 
-async def run_phase_a(structured: dict) -> dict:
+async def run_phase_a(structured: dict, canary: Path = CANARY2) -> dict:
     """The REAL Phase A validation path with only the model call replaced by `structured`."""
     import services.instagram_creative_director as cd
     from integrations.prompts.file_repository import FilePromptRepository
@@ -77,7 +90,7 @@ async def run_phase_a(structured: dict) -> dict:
 
     cd.call_generate = fake_call
     try:
-        decision, _call = await cd.generate_editorial_decision(None, FilePromptRepository(ROOT / "prompts"), decision_input=decision_input())
+        decision, _call = await cd.generate_editorial_decision(None, FilePromptRepository(ROOT / "prompts"), decision_input=decision_input(canary))
         result = {"result": "PASS", "recommended_format": decision.recommended_format, "angle_intent": decision.angle_intent,
                   "evidence_used": len(decision.evidence_used)}
     except Exception as exc:  # noqa: BLE001 - the replay reports what the validation raises
@@ -89,17 +102,23 @@ async def run_phase_a(structured: dict) -> dict:
     return result
 
 
-def component_view(structured: dict) -> dict:
+def component_view(structured: dict, canary: Path = CANARY2) -> dict:
     import services.instagram_creative_director as cd
-    from services.instagram_phase_a_contract import phase_a_finale_findings, phase_a_status_findings, phase_a_visual_findings
+    from services.instagram_phase_a_contract import (
+        incomplete_creative_direction,
+        phase_a_finale_findings,
+        phase_a_status_findings,
+        phase_a_visual_findings,
+    )
 
-    evidence = saved_evidence()
+    evidence = saved_evidence(canary)
     rationale = structured.get("trend_rationale") or ""
     trend = [{"match": m.group(0), "negated": cd._trend_mention_negated(rationale, m.start(), m.end())}
              for m in cd._UNSUPPORTED_PLATFORM_TREND_CLAIM_RE.finditer(rationale)]
     return {"trend_mentions": trend, "trend_disclaimer_recognised": all(t["negated"] for t in trend),
             "status": phase_a_status_findings(structured, evidence), "visual": phase_a_visual_findings(structured),
-            "finale": phase_a_finale_findings(structured, evidence)}
+            "finale": phase_a_finale_findings(structured, evidence), "incomplete_creative_direction": incomplete_creative_direction(structured),
+            "creative_direction_chars": len(structured.get("creative_direction") or "")}
 
 
 def main() -> None:
@@ -112,6 +131,11 @@ def main() -> None:
               "valid_fixture": {"fields": {k: fixture[k] for k in ("source_summary", "angle", "angle_intent", "format_reason",
                                                                     "creative_direction", "supplementary_story_idea")},
                                 "components": component_view(fixture), "real_path": asyncio.run(run_phase_a(fixture))}}
+    saved3 = saved_output(CANARY3)
+    fixture3 = valid_v5_fixture(saved3)
+    report["saved_canary3_phase_a_v4"] = {"components": component_view(saved3, CANARY3), "real_path": asyncio.run(run_phase_a(saved3, CANARY3))}
+    report["valid_v5_fixture"] = {"creative_direction": fixture3["creative_direction"], "components": component_view(fixture3, CANARY3),
+                                  "real_path": asyncio.run(run_phase_a(fixture3, CANARY3))}
     (out / "phase_a_contract_replay.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps({k: {"components": v["components"], "real_path": v["real_path"]} for k, v in report.items() if isinstance(v, dict)},
                      ensure_ascii=False, indent=1)[:6000])

@@ -12,6 +12,10 @@ raises. Phase A is now held to what the Director is held to, BEFORE the Director
      decide' or responsibility framing the evidence does not raise; an unresolved fact, the company's response, a consequence or a factual
      takeaway are fine.
 Chronology and trend truth are the Phase A prompt's own rules and the (negation-aware) trend-rationale guard.
+Canary 3 (2026-09-27): Phase A's reasoning explains what NOT to claim ('не воспринимать историю как доказанный «взлом» всех трёх ведомств'),
+so a status finding whose action / status word the clause itself DENIES is not a Phase A claim (the downstream Director gate is unchanged
+and still sees only audience copy); and creative_direction must be a COMPLETE plan - a string that ends on a continuation mark
+(INCOMPLETE_CREATIVE_DIRECTION) never reaches the Director.
 Phase A has no retry: a violation is an EditorialDecisionContractError (terminal) - the prompt carries the same contract, so the model is
 told before it is checked."""
 from __future__ import annotations
@@ -53,6 +57,44 @@ def _get(decision: Any, name: str) -> str:
     return str(value or "")
 
 
+# double negation that AFFIRMS the possibility ('нельзя исключать, что агент взломал', 'не исключено') - never a denial of the claim
+_AFFIRMING = re.compile(r"(?i)\bнельзя\s+исключ\w*|\bне\s+исключ\w*|\bнельзя\s+не\b|\bне\s+может\s+не\b|\bcannot\s+be\s+ruled\s+out\b|"
+                        r"\bcan'?t\s+rule\s+out\b|\bnot\s+impossible\b")
+# what DENIES an action / status word: a plain negator (affirming idioms excluded) or 'без доказательств / подтверждения' - never a bare 'без'
+_ACTION_NEGATOR = re.compile(r"(?i)(?<![\w-])(?:не(?!\s+(?:только|просто|менее|меньше|хуже|удивительно|секрет|случайно))|нет|ни|нельзя(?!\s+не\b)|"
+                             r"невозможно|no|not|never|cannot)(?![\w-])|\bбез\s+(?:доказательств\w*|подтвержд\w*|оснований)")
+_ACTION_NEGATION_WORDS = 6
+# a denial AFTER the claimed word, inside the same clause ('формулировка «взлом» здесь не подтверждена')
+_DENIED_AFTER = re.compile(r"(?i)\bотсутству\w*|\bне\s+подтвержд\w*|\bне\s+доказан\w*|\bне\s+является\b|\bнет\s+(?:доказательств|данных|подтвержд\w*)|"
+                           r"\bnot\s+(?:confirmed|proven|established)\b|\bunconfirmed\b|\bunproven\b")
+
+
+def _claim_denied(clause: str, kind: str = "") -> bool:
+    """True when every word the VIOLATION is about (the intrusion verb of a stronger-verb finding, the 'confirmed' word of a promotion, the
+    reaching verb of a grouping / count / qualifier / attempt finding) is DENIED by that clause itself: a negation in its own scope (the Phase A
+    trend guard's clause scope - a complement clause extends it, a contrastive conjunction / sentence / dash ends it) or a denial after it.
+    Affirming idioms ('не только', 'не просто', 'неудивительно', 'нельзя исключать', 'не исключено') never deny. A quoted word is not
+    safe by itself - only its clause's polarity counts."""
+    from services.instagram_creative_director import _SCOPE_BREAK, _negation_scope
+    from services.instagram_factual_status import _ACCESS, _CONFIRMED, _INTRUSION
+
+    patterns = {"stronger_verb": (_INTRUSION,), "promoted_confirmed": (_CONFIRMED,)}.get(kind, (_ACCESS, _INTRUSION))
+    matches = [m for p in patterns for m in p.finditer(clause)]
+    if not matches:
+        return False
+    for m in matches:
+        # the negator must govern THIS word: inside its clause scope and within the last _ACTION_NEGATION_WORDS words before it - a bare 'без'
+        # ('без активных инструкций получил доступ') negates something else, never the access
+        before = " ".join(_negation_scope(clause, m.start()).split()[-_ACTION_NEGATION_WORDS:])
+        after = clause[m.end():]
+        boundary = _SCOPE_BREAK.search(after)  # a denial after the word counts only up to the next scope break ('..., хотя ...')
+        denied = ((bool(_ACTION_NEGATOR.search(before)) and not _AFFIRMING.search(before))
+                  or bool(_DENIED_AFTER.search(after[:boundary.start()] if boundary else after)))
+        if not denied:
+            return False
+    return True
+
+
 def phase_a_status_findings(decision: Any, evidence: list[str]) -> list[str]:
     ledger = build_status_ledger(evidence)
     if not ledger:
@@ -63,8 +105,39 @@ def phase_a_status_findings(decision: Any, evidence: list[str]) -> list[str]:
         if not text.strip():
             continue
         for v in status_violations([{"slide_copy": text}], "", ledger, evidence):
+            if _claim_denied(v.generated_claim, v.kind):
+                continue  # Phase A explains what NOT to claim - a denial is not an assertion (every field stays checked)
             found.append(f"Phase A {field}: " + v.render().split(": ", 1)[1].replace("slide 1 headline", field))
     return list(dict.fromkeys(found))
+
+
+_CONTINUATION_TAIL = re.compile(r"[,;:]\s*$|\s[—–-]\s*$|[—–]\s*$")
+
+
+def incomplete_creative_direction(decision: Any) -> str | None:
+    """INCOMPLETE_CREATIVE_DIRECTION: the plan visibly stops mid-sentence - it ends on a comma, semicolon, colon or a continuation dash, or
+    leaves a quote / bracket open. A normal sentence ending in punctuation or a closing quote passes (no grammar checking beyond that)."""
+    text = _get(decision, "creative_direction").rstrip()
+    if not text:
+        return None
+    reasons = []
+    if _CONTINUATION_TAIL.search(text):
+        reasons.append(f"ends on a continuation mark ({text[-1]!r})")
+    if text.count('"') % 2:
+        reasons.append("an unclosed quote (\")")
+    if text.count("«") > text.count("»"):
+        reasons.append("an unclosed quote («)")
+    # „…“ (Russian / German: “ closes) and “…” (English: “ opens) share the “ mark: the “ left over after closing every „ opens an English quote
+    low, left, right = text.count("„"), text.count("“"), text.count("”")
+    if low > left or max(0, left - low) > right:
+        reasons.append("an unclosed quote („ / “)")
+    for opening, closing in (("(", ")"), ("[", "]")):
+        if text.count(opening) > text.count(closing):
+            reasons.append(f"an unclosed bracket ({opening})")
+    if not reasons:
+        return None
+    return (f"INCOMPLETE_CREATIVE_DIRECTION: creative_direction {' and '.join(reasons)} - the plan reached the Director cut off "
+            f"('...{text[-60:]}'); write a complete plan of at most 650 characters")
 
 
 def phase_a_visual_findings(decision: Any) -> list[str]:
@@ -97,7 +170,9 @@ def phase_a_finale_findings(decision: Any, evidence: list[str]) -> list[str]:
 
 
 def phase_a_contract_findings(decision: Any, evidence: list[str]) -> list[str]:
-    return [*phase_a_status_findings(decision, evidence), *phase_a_visual_findings(decision), *phase_a_finale_findings(decision, evidence)]
+    tail = incomplete_creative_direction(decision)
+    return [*phase_a_status_findings(decision, evidence), *phase_a_visual_findings(decision), *phase_a_finale_findings(decision, evidence),
+            *([tail] if tail else [])]
 
 
 def phase_a_status_note(evidence: list[str]) -> str:
