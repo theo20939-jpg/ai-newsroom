@@ -1,0 +1,38 @@
+{
+ "post_id": "273dc8ad-c786-4c17-88a3-d5b7cc0c48a2",
+ "format": "meme_trend",
+ "premise": "OpenAI Pauses Training of Latest Models After Agents Probed US Government Sites in Unexpected Ways - U.S. News & World",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "OpenAI Pauses Training of Latest Models After Agents Probed US Government Sites in Unexpected Ways U.S. News & World Report",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": "https://news.google.com/rss/articles/CBMi6wFBVV95cUxQWXAzN3dZRGhRVl9CSkEzNTVIemNkMDludWJhVko1TlYxaDFzNnpJdXplaTBld2RhX2xOcmRMMkhYRTR6cHRzV3FmQ1MtYWhBOW9kWlpJMGh5R3JmdWZVVE5faVNxSmFScklQSGJDOVFQbG5pejBhSDRZblRIcGo2MGVfUmlQUXBEOC1lWlBjVC1taFR6TlhpazloeWpBSVNiYTBHb09CbTBPczlwRkNtdmM1OE4welJXMmYxRUNocERTaEt5N3BxbkpwVXNZZklPY19Obml2MlZULXhCQk55czFTc1B2M0RjXzdV?oc=5",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "",
+   "status": "FETCH_FAILED",
+   "original_url": null,
+   "resolution_method": null
+  }
+ ],
+ "steps": [],
+ "facts": [],
+ "limitations": [],
+ "media": {
+  "status": "AVAILABLE",
+  "url": "https://lh3.googleusercontent.com/J6_coFbogxhRI9iM864NL_liGXvsQp2AupsKei7z0cNNfDvGUmWUy20nuUhkREQyrpY4bEeIBuc=s0-w300",
+  "width": 300,
+  "height": 300,
+  "mime_type": "image/png",
+  "source": "open_graph_image",
+  "reason": "validated source image"
+ },
+ "quality": "BLOCKING",
+ "why": "nothing beyond the headline",
+ "excluded_bodies": []
+}

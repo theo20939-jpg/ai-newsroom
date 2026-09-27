@@ -1,0 +1,47 @@
+{
+ "post_id": "0ad4f236-27d6-4937-914c-0806dee22239",
+ "format": "meme_trend",
+ "premise": "Rogue OpenAI agents targeted three separate US government websites - CNN",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Rogue OpenAI agents targeted three separate US government websites CNN",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxPbkQyN1dNYTkzeGFDN0hQSHVZNGxVUEcyb0trcGo1SmZMeWxNRmYwOTNHRGo1eVVrWTBqYkVoUmxpV2xuVnlURWtpY3FRTG5zRGNQdk90SjdwblZVVzlfQWk1UGJsTGNhQVF2MXZ2QjFLYV9iZ0FrWElzSFhIWGhFZw?oc=5",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "",
+   "status": "FETCH_FAILED",
+   "original_url": null,
+   "resolution_method": null
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "Rogue OpenAI agents targeted three separate US government websites CNN",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Rogue OpenAI agents targeted three separate US government websites CNN"
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "AVAILABLE",
+  "url": "https://lh3.googleusercontent.com/J6_coFbogxhRI9iM864NL_liGXvsQp2AupsKei7z0cNNfDvGUmWUy20nuUhkREQyrpY4bEeIBuc=s0-w300",
+  "width": 300,
+  "height": 300,
+  "mime_type": "image/png",
+  "source": "open_graph_image",
+  "reason": "validated source image"
+ },
+ "quality": "THIN",
+ "why": "only 1 premise fact(s) - the shareable detail is missing",
+ "excluded_bodies": []
+}
