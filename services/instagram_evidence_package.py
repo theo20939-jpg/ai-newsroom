@@ -89,6 +89,10 @@ class EvidenceSource:
     source_type: str
     text: str
     status: str = "OK"
+    # Google News article-token resolution (2026-09-27): `url` is then the PUBLISHER article actually fetched; the Google News link it
+    # came from and how it was resolved stay beside it
+    original_url: str | None = None
+    resolution_method: str | None = None
 
 
 @dataclass(frozen=True)
@@ -450,23 +454,29 @@ async def _fetch_html(url: str) -> str:
     return result.body.decode("utf-8", errors="replace") if result.status_code < 400 else ""
 
 
-async def _own_article(session, event, url: str) -> tuple[str, str]:
+async def _own_article(session, event, url: str) -> tuple[str, str, str | None, str | None]:
     """With a session: the existing get_or_acquire() (persisted, idempotent, reuse-aware) read back through get_effective_acquisition();
-    without one (an offline historical replay): a plain acquire_article() fetch."""
+    without one (an offline historical replay): a plain acquire_article() fetch. Returns (text, status, publisher URL, resolution method)
+    - the last two only when a Google News link was resolved to its publisher article."""
     from database.models.news_event_article_acquisition import TRIGGERED_BY_INSTAGRAM_SELECTED
-    from services.article_acquisition import get_effective_acquisition, get_or_acquire
+    from services.article_acquisition import acquire_article, get_effective_acquisition, get_or_acquire
     from services.evidence_package import TRUSTED_FULL_ARTICLE_STATUSES
+    from services.google_news_resolver import RESOLUTION_METHOD
+    from services.text_normalization import is_google_news_redirect_host
 
     if session is None or event is None:
-        text, status, _ = await _fetch_article(url, event_id=getattr(event, "id", None))
-        return text, status
+        outcome = await acquire_article(url, event_id=getattr(event, "id", None))
+        return outcome.raw_extracted_text or "", outcome.status, outcome.resolved_url, outcome.resolution_method if outcome.resolved_url else None
     await get_or_acquire(session, event, triggered_by=TRIGGERED_BY_INSTAGRAM_SELECTED)
     await session.flush()
     row = await get_effective_acquisition(session, event.id)
     if row is None:
-        return "", "NO_ROW"
+        return "", "NO_ROW", None, None
     trusted = row.acquisition_status in TRUSTED_FULL_ARTICLE_STATUSES
-    return (row.raw_extracted_text or "") if trusted else "", row.acquisition_status
+    # the persisted row keeps the publisher page as canonical_url; the Google News link stays the event's own url
+    resolved = row.canonical_url if (is_google_news_redirect_host(url) and row.canonical_url
+                                     and not is_google_news_redirect_host(row.canonical_url)) else None
+    return (row.raw_extracted_text or "") if trusted else "", row.acquisition_status, resolved, RESOLUTION_METHOD if resolved else None
 
 
 async def build_daily_evidence_package(
@@ -489,17 +499,20 @@ async def build_daily_evidence_package(
                        for paragraph in recap_paragraphs(stored_body))
     article_url = telegram_outbound_link(stored_body or "") if telegram else url
     if article_url and acquisition_enabled:
+        resolved_url: str | None = None
+        resolution_method: str | None = None
         try:
             if telegram:
                 raw, status, _ = await _fetch_article(article_url, event_id=event_id)
             else:
-                raw, status = await _own_article(session, event, article_url)
+                raw, status, resolved_url, resolution_method = await _own_article(session, event, article_url)
         except Exception:  # noqa: BLE001 - acquisition never blocks the post; the grade reports the gap
             raw, status = "", "FETCH_FAILED"
         # the RAW extraction, read inside its article span: the project cleaner drops short standalone lines, and a UI name split out
         # by an inline link ("Click / Gemini / in the menu bar") is exactly such a line
-        sources.append(EvidenceSource(url=article_url, source_type=LINKED_ARTICLE if telegram else ORIGINAL_ARTICLE,
-                                      text=raw, status=status))
+        sources.append(EvidenceSource(url=resolved_url or article_url, source_type=LINKED_ARTICLE if telegram else ORIGINAL_ARTICLE,
+                                      text=raw, status=status, original_url=article_url if resolved_url else None,
+                                      resolution_method=resolution_method))
         if raw and fmt == "ai_hack":
             html = await _fetch_html(article_url)
             for doc_url in official_doc_links(html, base_url=article_url, premise=title):

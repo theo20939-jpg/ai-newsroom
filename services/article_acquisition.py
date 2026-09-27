@@ -29,6 +29,7 @@ import hashlib
 import logging
 import re
 import time
+import dataclasses
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
@@ -112,6 +113,15 @@ class AcquisitionOutcome:
     # The caller (services/content_draft_service.py, gated on video_discovery_mode) decides
     # whether/how to validate and persist these.
     discovered_video_hints: list = field(default_factory=list)
+    # Google News article-token resolution (services/google_news_resolver.py, 2026-09-27): provenance of an acquisition that went
+    # through a Google News link - the link itself, the publisher URL it resolved to, how, and a hash of the text actually fetched from the
+    # publisher. Additive, defaulted: every other acquisition is unaffected.
+    original_url: str | None = None
+    resolved_url: str | None = None
+    resolution_method: str | None = None
+    resolution_status: str | None = None
+    resolution_metadata: dict = field(default_factory=dict)
+    content_sha256: str | None = None
 
 
 class _ArticleTextCollector(HTMLParser):
@@ -401,11 +411,25 @@ async def acquire_article(url: str, *, event_id: UUID, _google_news_hop: bool = 
         if redirect_target is not None:
             return await acquire_article(redirect_target, event_id=event_id, _google_news_hop=True)
 
+        # Google News article-token resolution (services/google_news_resolver.py): the shell's own resolution parameters, ONE bounded POST
+        # to Google's fixed endpoint, the publisher URL -> fetched through this same single-hop path (which re-applies every URL / private-
+        # network rule to it). Anything unexpected keeps the existing REDIRECT_UNRESOLVED outcome - never a search, never a guess.
+        from services.google_news_resolver import resolve_google_news_url
+
+        resolution = await resolve_google_news_url(url, html, policy=_fetch_policy())
+        provenance = {"original_url": url, "resolution_method": resolution.method, "resolution_status": resolution.status,
+                      "resolution_metadata": {**resolution.metadata, **({"detail": resolution.detail} if resolution.detail else {})}}
+        if resolution.resolved_url is not None:
+            fetched = await acquire_article(resolution.resolved_url, event_id=event_id, _google_news_hop=True)
+            text = fetched.raw_extracted_text or ""
+            return dataclasses.replace(fetched, resolved_url=resolution.resolved_url,
+                                       content_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest() if text else None, **provenance)
+
         return AcquisitionOutcome(
             status=ACQUISITION_STATUS_REDIRECT_UNRESOLVED, raw_extracted_text=None,
             extracted_char_count=None, canonical_url=canonical_url,
             source_html_bytes=result.received_byte_count, fetch_duration_ms=duration_ms,
-            error_code="google_news_redirect_unresolved",
+            error_code="google_news_redirect_unresolved", **provenance,
         )
 
     # Phase 19 M10: zero additional network request - extracted from this same already-fetched

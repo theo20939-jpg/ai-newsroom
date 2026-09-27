@@ -222,7 +222,8 @@ def _validate_url(url: str) -> httpx.URL:
 
 
 async def _single_hop(
-    url: httpx.URL, *, policy: SafeFetchPolicy, extra_headers: dict[str, str] | None = None
+    url: httpx.URL, *, policy: SafeFetchPolicy, extra_headers: dict[str, str] | None = None, method: str = "GET",
+    content: bytes | None = None,
 ) -> tuple[httpcore.Response, str]:
     """One connection attempt: resolve+validate DNS, pin the connection, send the request, and
     return the raw httpcore.Response (caller owns closing it) plus the validated (unused, host is
@@ -244,9 +245,11 @@ async def _single_hop(
     headers = [(b"Host", host_header), (b"User-Agent", USER_AGENT.encode("ascii"))]
     for name, value in (extra_headers or {}).items():
         headers.append((name.encode("ascii"), value.encode("ascii")))
+    if content is not None:
+        headers.append((b"Content-Length", str(len(content)).encode("ascii")))
 
     request = httpcore.Request(
-        method="GET",
+        method=method,
         url=httpcore.URL(
             scheme=url.scheme.encode("ascii"),
             host=url.host.encode("idna"),
@@ -254,6 +257,7 @@ async def _single_hop(
             target=(url.raw_path or b"/"),
         ),
         headers=headers,
+        content=content,
         extensions={"timeout": {"connect": policy.connect_timeout_seconds, "read": policy.read_timeout_seconds}},
     )
 
@@ -379,6 +383,39 @@ async def safe_fetch(url: str, *, policy: SafeFetchPolicy) -> SafeFetchResult:
                 )
             finally:
                 await response.aclose()
+
+    try:
+        return await asyncio.wait_for(_run(), timeout=policy.total_timeout_seconds)
+    except asyncio.TimeoutError as error:
+        raise SafeFetchError(FetchErrorCode.TOTAL_TIMEOUT) from error
+    except asyncio.CancelledError:
+        raise SafeFetchError(FetchErrorCode.CANCELLED)
+    except SafeFetchError:
+        raise
+    except Exception as error:
+        raise SafeFetchError(FetchErrorCode.INTERNAL_FETCH_ERROR, type(error).__name__) from error
+
+
+async def safe_post(url: str, *, content: bytes, content_type: str, policy: SafeFetchPolicy) -> SafeFetchResult:
+    """ONE bounded POST through the same validated, DNS-pinned connection as safe_fetch (scheme / credentials / hostname validation, the
+    private / loopback / link-local IP block, timeouts, the streaming byte cap). A POST never follows a redirect: any 3xx is a
+    BLOCKED_REDIRECT error. Added for the Google News article-token resolver (services/google_news_resolver.py) - a fixed endpoint, never a
+    caller-supplied host. Raises SafeFetchError on any failure."""
+    start = time.monotonic()
+    target = _validate_url(url)
+
+    async def _run() -> SafeFetchResult:
+        response, _pinned_ip = await _single_hop(target, policy=policy, extra_headers={"Content-Type": content_type}, method="POST",
+                                                 content=content)
+        try:
+            if response.status in _REDIRECT_STATUS_CODES:
+                raise SafeFetchError(FetchErrorCode.BLOCKED_REDIRECT, "post_redirect")
+            body = await _read_bounded(response, max_bytes=policy.max_bytes)
+            return SafeFetchResult(requested_url=url, final_url=str(target), status_code=response.status, redirect_count=0,
+                                   declared_content_type=_header_value(response.headers, b"content-type"), received_byte_count=len(body),
+                                   duration_seconds=time.monotonic() - start, body=body)
+        finally:
+            await response.aclose()
 
     try:
         return await asyncio.wait_for(_run(), timeout=policy.total_timeout_seconds)
