@@ -33,7 +33,6 @@ from database.models.editorial_task import EditorialTask
 from database.models.news_event import NewsEvent
 from database.models.news_source import NewsSource
 from database.models.story_link import NewsEventStoryLink
-from database.models.story_telegram_delivery import StoryTelegramDelivery
 from database.session import async_session_factory
 from integrations.llm_gateway.boot import assemble_ai_integration_layer
 from integrations.llm_gateway.models.catalog import build_model_registry
@@ -41,6 +40,7 @@ from integrations.prompts.file_repository import FilePromptRepository
 from schemas.editorial_route import EditorialDestination
 from scripts._canary_delivery_cap import HardDeliveryCap, wrap_bot_with_hard_cap
 from scripts._kage_telegram_hard_cost_canary import _configure_frozen_canary_settings
+from services.kage_delivery_truth import event_publication_state
 from services.kage_telegram_canary_envelope import (
     CANARY_STAGE_INPUT_TOKEN_CAPS,
     CANARY_STAGE_OUTPUT_TOKEN_CAPS,
@@ -173,11 +173,10 @@ class AtomicNaturalCanary:
                 EditorialTask.workflow["workflow_name"].as_string() == "CONTENT_GENERATION",
             )
         )).scalar_one())
-        deliveries = int((await session.execute(
-            select(func.count()).select_from(StoryTelegramDelivery).where(
-                StoryTelegramDelivery.source_event_id == event_id,
-            )
-        )).scalar_one())
+        # Durable event -> task -> draft -> receipt / publication_outcome path; the receipt's
+        # source_event_id is never populated by record_delivery() and must not be used here.
+        publication = await event_publication_state(session, event_id)
+        deliveries = len(publication["delivered_task_ids"])
         story_id = (await session.execute(
             select(NewsEventStoryLink.story_id).where(
                 NewsEventStoryLink.news_event_id == event_id,
@@ -201,6 +200,8 @@ class AtomicNaturalCanary:
             "analysis_fresh": fresh,
             "content_generation_tasks": content_tasks,
             "delivery_records": deliveries,
+            "delivery_receipt_ids": publication["sent_receipt_ids"],
+            "publication_in_flight_tasks": publication["in_flight_task_ids"],
             "selector_result": {
                 "eligible": decision.final_eligible,
                 "selection_path": decision.selection_path,

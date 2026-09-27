@@ -99,6 +99,48 @@ async def record_terminal_outcome(
     return candidate
 
 
+async def event_publication_state(session: AsyncSession, event_id: UUID) -> dict:
+    """Read-only: has THIS event already produced a successful Telegram publication?
+
+    Resolved through the durable path the delivery code actually writes: generation task
+    (``event_id``) -> draft (``task_id``) -> ``story_telegram_deliveries.content_draft_id``,
+    plus the task's own ``workflow.publication_outcome``. ``story_telegram_deliveries.
+    source_event_id`` is deliberately not used: ``record_delivery()`` never populates it.
+    A failed/blocked attempt alone is not a delivery; IN_FLIGHT is reported separately.
+    """
+    rows = (await session.execute(
+        select(EditorialTask.id, EditorialTask.workflow,
+               StoryTelegramDelivery.id, StoryTelegramDelivery.delivery_status,
+               StoryTelegramDelivery.telegram_message_id)
+        .outerjoin(ContentDraft, ContentDraft.task_id == EditorialTask.id)
+        .outerjoin(StoryTelegramDelivery,
+                   StoryTelegramDelivery.content_draft_id == ContentDraft.id)
+        .where(EditorialTask.event_id == event_id)
+    )).all()
+    delivered_tasks: set[str] = set()
+    in_flight_tasks: set[str] = set()
+    receipt_ids: set[str] = set()
+    for task_id, workflow, receipt_id, delivery_status, message_id in rows:
+        if not isinstance(workflow, dict) or workflow.get("workflow_name") != "CONTENT_GENERATION":
+            continue
+        outcome = workflow.get("publication_outcome")
+        status = outcome.get("status") if isinstance(outcome, dict) else None
+        if delivery_status == DeliveryStatus.SENT and message_id is not None:
+            receipt_ids.add(str(receipt_id))
+            delivered_tasks.add(str(task_id))
+        if status == "DELIVERED":
+            delivered_tasks.add(str(task_id))
+        elif status == "IN_FLIGHT":
+            in_flight_tasks.add(str(task_id))
+    return {
+        "event_id": str(event_id),
+        "already_delivered": bool(delivered_tasks),
+        "delivered_task_ids": sorted(delivered_tasks),
+        "sent_receipt_ids": sorted(receipt_ids),
+        "in_flight_task_ids": sorted(in_flight_tasks - delivered_tasks),
+    }
+
+
 async def count_terminal_outcomes(
     session: AsyncSession, *, window_start: datetime, window_end: datetime,
 ) -> dict[str, int]:

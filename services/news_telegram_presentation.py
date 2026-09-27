@@ -496,8 +496,32 @@ def build_ninja_pulse_footer_html() -> str:
     text "KAGE" is the clickable anchor - the raw URL is never visible
     (mirrors the existing `[🔗 Источник]` inline-button convention of never showing a raw URL in
     the body, applied here to an in-text anchor instead of a button, since this is meant to read
-    as a normal sentence-ending line, not a second button)."""
-    return f'<a href="{_KAGE_PUBLIC_URL}">{_v8_escape(_KAGE_PUBLIC_TEXT)}</a>'
+    as a normal sentence-ending line, not a second button).
+
+    When a valid KAGE custom emoji is configured it is prepended as Telegram's own
+    `<tg-emoji emoji-id="...">` HTML entity (Telegram computes the UTF-16 entity offsets from the
+    markup); any missing/invalid configuration yields the unchanged plain footer."""
+    link = f'<a href="{_KAGE_PUBLIC_URL}">{_v8_escape(_KAGE_PUBLIC_TEXT)}</a>'
+    emoji = _kage_custom_emoji_html()
+    return f"{emoji} {link}" if emoji else link
+
+
+_CUSTOM_EMOJI_ID_RE = re.compile(r"[0-9]{1,32}")
+
+
+def _kage_custom_emoji_html() -> str | None:
+    """`<tg-emoji emoji-id="ID">FALLBACK</tg-emoji>` from settings, or None when not safely usable:
+    the id must be all digits, the fallback a short run of non-ASCII, non-whitespace characters
+    (a real emoji glyph, never text). Never raises - the footer must not become a send dependency."""
+    from core.config import settings
+
+    emoji_id = (settings.kage_telegram_custom_emoji_id or "").strip()
+    fallback = (settings.kage_telegram_custom_emoji_fallback or "").strip()
+    if not _CUSTOM_EMOJI_ID_RE.fullmatch(emoji_id):
+        return None
+    if not fallback or len(fallback) > 8 or any(ch.isspace() or ch.isascii() for ch in fallback):
+        return None
+    return f'<tg-emoji emoji-id="{emoji_id}">{_v8_escape(fallback)}</tg-emoji>'
 
 
 def render_v8_news_card_html(copywriting_output: dict[str, Any], *, treatment: str = STANDARD) -> str:

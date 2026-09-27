@@ -913,6 +913,13 @@ class Settings(BaseSettings):
     brand_red_asset_path: str = "assets/brand/kage_watermark.png"
     brand_raster_fallback_path: str = "assets/brand/kage_watermark.png"
     brand_template_version: str = "v1"
+    # KAGE Telegram footer custom emoji (services/news_telegram_presentation.py::
+    # build_ninja_pulse_footer_html()). Presentation-only: both unset (the default) -> plain
+    # "KAGE" footer. The id is the numeric Telegram custom_emoji_id; the fallback is the regular
+    # Unicode emoji Telegram's <tg-emoji> markup requires as its inner text (the emoji the custom
+    # emoji is attached to in its sticker set). Both must be valid or the plain footer is used.
+    kage_telegram_custom_emoji_id: str | None = None
+    kage_telegram_custom_emoji_fallback: str | None = None
     # Unset by default - see services/brand_renderer.py's own module docstring for the OS-font
     # resolution fallback chain this drives (no font file is ever downloaded or shipped).
     brand_font_path: str | None = None
