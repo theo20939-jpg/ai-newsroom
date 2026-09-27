@@ -1,0 +1,328 @@
+{
+ "provider_calls": 0,
+ "image_calls": 0,
+ "now": "2026-09-27T11:14:31.893685+00:00",
+ "event": "OpenAI's agents targeted and infiltrated US government websites",
+ "google_news_copies": 11,
+ "resolved": 11,
+ "usable_bodies": 7,
+ "preflight_pass": 2,
+ "copies": [
+  {
+   "title": "OpenAI says AI agents unexpectedly accessed US government websites - The Federal",
+   "collected_at": "2026-09-26T12:35:10.496686+00:00",
+   "original_url": "https://news.google.com/rss/articles/CBMiuwFBVV95cUxPLVF2eG5CMzFKcF9yZkI4S3ZkcjZvRTdlU3lwMWhSN2daSDJ2R1pkZnM0VGphekxLOFd5S1VXVUFKaEJHQVNEOHBjbE00Ykx2M2kxUEtsV3lHQkdXLUlFZXVpRGcxYlVUVEEyRVE2cXRwSUt6M2I0LWl0X2pMMEtJbExob0hqQ0JydUQ3NGZBaTVIVnk0SEZQazNoaFAzb0ZSU25ZekF2M2poRElkTzZNdWdWcEgzSlFpM1Iw?oc=5",
+   "resolution_status": "RESOLVED",
+   "resolution_method": "google_news_article_token",
+   "resolved_url": "https://thefederal.com/category/international/openai-says-ai-agents-unexpectedly-accessed-us-government-websites-257740",
+   "publisher_domain": "thefederal.com",
+   "resolution_metadata": {
+    "endpoint_status": 200,
+    "endpoint_bytes": 250,
+    "publisher_domain": "thefederal.com"
+   },
+   "acquisition_status": "FULL_TEXT",
+   "acquisition_error": null,
+   "extracted_chars": 5441,
+   "content_sha256": "9c586c8123373e5ccd5dd99b299b1cc487e5b92900d71e91c4cdc3aac3845138",
+   "evidence_source_url": "https://thefederal.com/category/international/openai-says-ai-agents-unexpectedly-accessed-us-government-websites-257740",
+   "evidence_source_original_url": "https://news.google.com/rss/articles/CBMiuwFBVV95cUxPLVF2eG5CMzFKcF9yZkI4S3ZkcjZvRTdlU3lwMWhSN2daSDJ2R1pkZnM0VGphekxLOFd5S1VXVUFKaEJHQVNEOHBjbE00Ykx2M2kxUEtsV3lHQkdXLUlFZXVpRGcxYlVUVEEyRVE2cXRwSUt6M2I0LWl0X2pMMEtJbExob0hqQ0JydUQ3NGZBaTVIVnk0SEZQazNoaFAzb0ZSU25ZekF2M2poRElkTzZNdWdWcEgzSlFpM1Iw?oc=5",
+   "package_quality": "STRONG",
+   "body_chars": 945,
+   "preflight": "PASS",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "SUPPORTED"
+   },
+   "preflight_reason": "every claim the hook makes is in the stored body evidence"
+  },
+  {
+   "title": "OpenAI models accessed US government data and 'tried to hack education site' - Sky News",
+   "collected_at": "2026-09-26T13:16:30.40169+00:00",
+   "original_url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxPRXJUbjd3TVVaZUZxVmU2eDhmbEFtM3h4UU5OVDF4cXNWbjBqS1hKQTRObHZzN3NGWW16Q3lBWU5oSU9HRlBHaWdsN2FsMkF5QUdzUVVZVmZxdnVSOXlzUHhGLWVqN05aTFRBaHB5cmo0X2NvR2VOYzByNkNtb1hGbUl3TElTMmdFNWRRWU4tdFNLckQzcldQelVZWFByeXotdF83ZjlPTEVpcjdYb2Fn?oc=5",
+   "resolution_status": "RESOLVED",
+   "resolution_method": "google_news_article_token",
+   "resolved_url": "https://news.sky.com/story/openai-models-accessed-us-government-data-and-tried-to-hack-education-site-13591998",
+   "publisher_domain": "news.sky.com",
+   "resolution_metadata": {
+    "endpoint_status": 200,
+    "endpoint_bytes": 241,
+    "publisher_domain": "news.sky.com"
+   },
+   "acquisition_status": "FETCH_FAILED",
+   "acquisition_error": "http_error",
+   "extracted_chars": null,
+   "content_sha256": null,
+   "evidence_source_url": "https://news.sky.com/story/openai-models-accessed-us-government-data-and-tried-to-hack-education-site-13591998",
+   "evidence_source_original_url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxPRXJUbjd3TVVaZUZxVmU2eDhmbEFtM3h4UU5OVDF4cXNWbjBqS1hKQTRObHZzN3NGWW16Q3lBWU5oSU9HRlBHaWdsN2FsMkF5QUdzUVVZVmZxdnVSOXlzUHhGLWVqN05aTFRBaHB5cmo0X2NvR2VOYzByNkNtb1hGbUl3TElTMmdFNWRRWU4tdFNLckQzcldQelVZWFByeXotdF83ZjlPTEVpcjdYb2Fn?oc=5",
+   "package_quality": "THIN",
+   "body_chars": 85,
+   "preflight": "PENDING",
+   "checks": {},
+   "preflight_reason": "only 0 characters of stored body evidence - the article itself must be acquired before any claim can be checked"
+  },
+  {
+   "title": "OpenAI bots accessed public U.S. Census, SEC data, as company discloses unexpected AI activity - CBC",
+   "collected_at": "2026-09-26T15:21:42.015691+00:00",
+   "original_url": "https://news.google.com/rss/articles/CBMiekFVX3lxTE5hYkN5dGZBNWtMczBXaVNSdEZwVExRdWk3Qmt1a0oxaURzYUVxaDBIOUNZUVItaFZSNHc1d3dsN1lFM2REbTV0Q3NCUk84Sl9LQnUzd3NhaU91b1hWODhicHVLOC1XTmtJQzJ3a19veUlkaVR2UHdiNXJB?oc=5",
+   "resolution_status": "RESOLVED",
+   "resolution_method": "google_news_article_token",
+   "resolved_url": "https://www.cbc.ca/news/world/openai-rogue-us-sites-activity-9.7359673",
+   "publisher_domain": "www.cbc.ca",
+   "resolution_metadata": {
+    "endpoint_status": 200,
+    "endpoint_bytes": 201,
+    "publisher_domain": "www.cbc.ca"
+   },
+   "acquisition_status": "FULL_TEXT",
+   "acquisition_error": null,
+   "extracted_chars": 9932,
+   "content_sha256": "fa49d0694eb88f74505a7481b90db290db06c7d742fe2c3380597f67d1b5b8e7",
+   "evidence_source_url": "https://www.cbc.ca/news/world/openai-rogue-us-sites-activity-9.7359673",
+   "evidence_source_original_url": "https://news.google.com/rss/articles/CBMiekFVX3lxTE5hYkN5dGZBNWtMczBXaVNSdEZwVExRdWk3Qmt1a0oxaURzYUVxaDBIOUNZUVItaFZSNHc1d3dsN1lFM2REbTV0Q3NCUk84Sl9LQnUzd3NhaU91b1hWODhicHVLOC1XTmtJQzJ3a19veUlkaVR2UHdiNXJB?oc=5",
+   "package_quality": "STRONG",
+   "body_chars": 829,
+   "preflight": "FAIL",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "UNSUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "SUPPORTED"
+   },
+   "preflight_reason": "the body evidence does not support: action"
+  },
+  {
+   "title": "OpenAI says its models engaged with US government websites in misbehavior disclosure - NPR",
+   "collected_at": "2026-09-26T23:12:09.461388+00:00",
+   "original_url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxPZktfT2p6V3MwTEFNUDJPZk11c053QzgzQ0QxaXF4UkZpWEd2ZzZZdkRUMk9OelR5encydHBkSGFlT1oxMkVWdjZlODBLMGJTbGdtbTJpbDlHRHZFTTlNSGxMUlVGc3BuQ1dGNWtRZlRQLURjMkdiaVVvWXQ3a2xRTTBzVWZtNEp4bG05VU5EZw?oc=5",
+   "resolution_status": "RESOLVED",
+   "resolution_method": "google_news_article_token",
+   "resolved_url": "https://www.npr.org/2026/09/26/nx-s1-5981979/openai-us-government-websites-misbehavior",
+   "publisher_domain": "www.npr.org",
+   "resolution_metadata": {
+    "endpoint_status": 200,
+    "endpoint_bytes": 216,
+    "publisher_domain": "www.npr.org"
+   },
+   "acquisition_status": "FULL_TEXT",
+   "acquisition_error": null,
+   "extracted_chars": 6333,
+   "content_sha256": "b215b2b27ccd3cae550d0c5a66a274b6a14b72bbee71deb4f500776b497ade43",
+   "evidence_source_url": "https://www.npr.org/2026/09/26/nx-s1-5981979/openai-us-government-websites-misbehavior",
+   "evidence_source_original_url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxPZktfT2p6V3MwTEFNUDJPZk11c053QzgzQ0QxaXF4UkZpWEd2ZzZZdkRUMk9OelR5encydHBkSGFlT1oxMkVWdjZlODBLMGJTbGdtbTJpbDlHRHZFTTlNSGxMUlVGc3BuQ1dGNWtRZlRQLURjMkdiaVVvWXQ3a2xRTTBzVWZtNEp4bG05VU5EZw?oc=5",
+   "package_quality": "STRONG",
+   "body_chars": 760,
+   "preflight": "FAIL",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "UNSUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "UNSUPPORTED"
+   },
+   "preflight_reason": "the body evidence does not support: action, chronology"
+  },
+  {
+   "title": "OpenAI says its models engaged with US government websites in new model misbehavior disclosure - 10TV",
+   "collected_at": "2026-09-26T17:26:20.838683+00:00",
+   "original_url": "https://news.google.com/rss/articles/CBMikAJBVV95cUxPdTZBSGsyY3ZmaEZIYVlCVVd5S1ZvTXBYaGx3eU0xRHgxVGdMSXZMNS1qdnFJcEhpYlVINGZWWDR1RjNWSFphRGdwLUtyTXAwdHdVYTJfb3dHWjhKeFBxX0hTLVlXc2ZjN3RXU1JQS0ZWSVNucVI4Tnl6SVpwX2hxNk00TERRMkFsZmZtb252Vm5lQTFNS2lic0ZBc0dWRjM3d3ptaFduVE1WZUVSQ3ZyRnY4SktxeHJNbWlPN3AtSDlWUEwtcXBka0JYX05JdzVxaG0yR0VYSVRCaTEwM2NhMlJTM193ZTBha3BrdmdyTjBEdWpxZ1N1VTlZcjFvSnJrc0h3bDZRZ3REdERTSC1mSw?oc=5",
+   "resolution_status": "RESOLVED",
+   "resolution_method": "google_news_article_token",
+   "resolved_url": "https://www.10tv.com/article/news/nation-world/openai-models-government-websites-model-misbehavior-disclosure-artificial-intelligence-ai-rogue/507-668c1ee0-9a9c-4791-9cbf-2208b602e300",
+   "publisher_domain": "www.10tv.com",
+   "resolution_metadata": {
+    "endpoint_status": 200,
+    "endpoint_bytes": 315,
+    "publisher_domain": "www.10tv.com"
+   },
+   "acquisition_status": "FETCH_FAILED",
+   "acquisition_error": "http_error",
+   "extracted_chars": null,
+   "content_sha256": null,
+   "evidence_source_url": "https://www.10tv.com/article/news/nation-world/openai-models-government-websites-model-misbehavior-disclosure-artificial-intelligence-ai-rogue/507-668c1ee0-9a9c-4791-9cbf-2208b602e300",
+   "evidence_source_original_url": "https://news.google.com/rss/articles/CBMikAJBVV95cUxPdTZBSGsyY3ZmaEZIYVlCVVd5S1ZvTXBYaGx3eU0xRHgxVGdMSXZMNS1qdnFJcEhpYlVINGZWWDR1RjNWSFphRGdwLUtyTXAwdHdVYTJfb3dHWjhKeFBxX0hTLVlXc2ZjN3RXU1JQS0ZWSVNucVI4Tnl6SVpwX2hxNk00TERRMkFsZmZtb252Vm5lQTFNS2lic0ZBc0dWRjM3d3ptaFduVE1WZUVSQ3ZyRnY4SktxeHJNbWlPN3AtSDlWUEwtcXBka0JYX05JdzVxaG0yR0VYSVRCaTEwM2NhMlJTM193ZTBha3BrdmdyTjBEdWpxZ1N1VTlZcjFvSnJrc0h3bDZRZ3REdERTSC1mSw?oc=5",
+   "package_quality": "THIN",
+   "body_chars": 99,
+   "preflight": "PENDING",
+   "checks": {},
+   "preflight_reason": "only 0 characters of stored body evidence - the article itself must be acquired before any claim can be checked"
+  },
+  {
+   "title": "OpenAI Agents Accessed US Government Websites Without Authorization - Security Affairs",
+   "collected_at": "2026-09-26T17:26:20.838683+00:00",
+   "original_url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxOZm11QTFHT2laeDBITXp6NDhpS2ZteEZ4Ty1IeVJKQlNDTnNYd3pBaVlyWjk3dkx2Yk53ZHZURm8tbXFlRHJTckgwclpDRXhfaHdPTGxIVDZFdklZc21MWXkxMEVfMHJ2WkpydXliZ1ZiR0NwSVN1Qk1LV196UjhGLXpnWFlWTWN6Ri0wYjZOckRVMUc2Tk5nWGE1VmVISU55aUw2OUtYUDgtMWJERjEw0gG0AUFVX3lxTE1EWTdXN1pQMXg2UW5XaU0xSDllb2RFRldKcUprY2N4Z3hEem5zNXFVdHNuYWZTd05FUDJHMU5OZkdLWXBlTDNGLV91RVI4N0dpTHliUjNDR0xITEh5dDhqU0FvWXZNRHFRd1hLMlJZY0RLeFpYZjVqeFFWdk1PbHluN2dyQVNlUkZhNnRMZE5pSzJZOWlMekQ0ck5nRHU2aGFpTi1TVzZmSG10eklTUHdBUk5BOQ?oc=5",
+   "resolution_status": "RESOLVED",
+   "resolution_method": "google_news_article_token",
+   "resolved_url": "https://securityaffairs.com/199815/ai/openai-agents-accessed-us-government-websites-without-authorization.html",
+   "publisher_domain": "securityaffairs.com",
+   "resolution_metadata": {
+    "endpoint_status": 200,
+    "endpoint_bytes": 360,
+    "publisher_domain": "securityaffairs.com"
+   },
+   "acquisition_status": "FULL_TEXT",
+   "acquisition_error": null,
+   "extracted_chars": 9617,
+   "content_sha256": "67640ece1ae70a4446c1cfc7bef3c3dcf88f104990a3e92f44f77745e1362c89",
+   "evidence_source_url": "https://securityaffairs.com/199815/ai/openai-agents-accessed-us-government-websites-without-authorization.html",
+   "evidence_source_original_url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxOZm11QTFHT2laeDBITXp6NDhpS2ZteEZ4Ty1IeVJKQlNDTnNYd3pBaVlyWjk3dkx2Yk53ZHZURm8tbXFlRHJTckgwclpDRXhfaHdPTGxIVDZFdklZc21MWXkxMEVfMHJ2WkpydXliZ1ZiR0NwSVN1Qk1LV196UjhGLXpnWFlWTWN6Ri0wYjZOckRVMUc2Tk5nWGE1VmVISU55aUw2OUtYUDgtMWJERjEw0gG0AUFVX3lxTE1EWTdXN1pQMXg2UW5XaU0xSDllb2RFRldKcUprY2N4Z3hEem5zNXFVdHNuYWZTd05FUDJHMU5OZkdLWXBlTDNGLV91RVI4N0dpTHliUjNDR0xITEh5dDhqU0FvWXZNRHFRd1hLMlJZY0RLeFpYZjVqeFFWdk1PbHluN2dyQVNlUkZhNnRMZE5pSzJZOWlMekQ0ck5nRHU2aGFpTi1TVzZmSG10eklTUHdBUk5BOQ?oc=5",
+   "package_quality": "STRONG",
+   "body_chars": 498,
+   "preflight": "FAIL",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "UNSUPPORTED"
+   },
+   "preflight_reason": "the body evidence does not support: chronology"
+  },
+  {
+   "title": "OpenAI says its models unexpectedly engaged with US government websites - Boston Herald",
+   "collected_at": "2026-09-26T19:46:59.455504+00:00",
+   "original_url": "https://news.google.com/rss/articles/CBMisgFBVV95cUxPMlBnUmxmMldiSEZRRTZvbWk3UEduNWRiQk1JQndvdkF4SVM1QWk4THUySERCaU1naU1wTG53SzlMQlZxTWtqYzJxT3pITWFnN1gwRHdELWJSbFgtMWtiOVFmTzRCckx1X2dueE9NTi1xQWhoQ1NJTEdraFlZbFMtSnR0WE5SN2pzWm9FN2hmSmRjUS1OREttLVJDXzdzM0Zacms1MXoxaUx6dEEwRFNFMklR?oc=5",
+   "resolution_status": "RESOLVED",
+   "resolution_method": "google_news_article_token",
+   "resolved_url": "https://www.bostonherald.com/2026/09/26/openai-says-its-models-unexpectedly-engaged-with-us-government-websites/",
+   "publisher_domain": "www.bostonherald.com",
+   "resolution_metadata": {
+    "endpoint_status": 200,
+    "endpoint_bytes": 244,
+    "publisher_domain": "www.bostonherald.com"
+   },
+   "acquisition_status": "FULL_TEXT",
+   "acquisition_error": null,
+   "extracted_chars": 8926,
+   "content_sha256": "c38086baeaf0a1f806150cb28efeb66d9568dabbc4cc151305f3709c615b4da6",
+   "evidence_source_url": "https://www.bostonherald.com/2026/09/26/openai-says-its-models-unexpectedly-engaged-with-us-government-websites/",
+   "evidence_source_original_url": "https://news.google.com/rss/articles/CBMisgFBVV95cUxPMlBnUmxmMldiSEZRRTZvbWk3UEduNWRiQk1JQndvdkF4SVM1QWk4THUySERCaU1naU1wTG53SzlMQlZxTWtqYzJxT3pITWFnN1gwRHdELWJSbFgtMWtiOVFmTzRCckx1X2dueE9NTi1xQWhoQ1NJTEdraFlZbFMtSnR0WE5SN2pzWm9FN2hmSmRjUS1OREttLVJDXzdzM0Zacms1MXoxaUx6dEEwRFNFMklR?oc=5",
+   "package_quality": "STRONG",
+   "body_chars": 996,
+   "preflight": "PASS",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "SUPPORTED"
+   },
+   "preflight_reason": "every claim the hook makes is in the stored body evidence"
+  },
+  {
+   "title": "Rogue OpenAI agents targeted three separate US government websites - CNN",
+   "collected_at": "2026-09-26T21:53:03.809309+00:00",
+   "original_url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxPbkQyN1dNYTkzeGFDN0hQSHVZNGxVUEcyb0trcGo1SmZMeWxNRmYwOTNHRGo1eVVrWTBqYkVoUmxpV2xuVnlURWtpY3FRTG5zRGNQdk90SjdwblZVVzlfQWk1UGJsTGNhQVF2MXZ2QjFLYV9iZ0FrWElzSFhIWGhFZw?oc=5",
+   "resolution_status": "RESOLVED",
+   "resolution_method": "google_news_article_token",
+   "resolved_url": "https://www.cnn.com/2026/09/26/tech/openai-agents-rogue-government-websites",
+   "publisher_domain": "www.cnn.com",
+   "resolution_metadata": {
+    "endpoint_status": 200,
+    "endpoint_bytes": 206,
+    "publisher_domain": "www.cnn.com"
+   },
+   "acquisition_status": "FETCH_FAILED",
+   "acquisition_error": "content_length_exceeded",
+   "extracted_chars": null,
+   "content_sha256": null,
+   "evidence_source_url": "https://www.cnn.com/2026/09/26/tech/openai-agents-rogue-government-websites",
+   "evidence_source_original_url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxPbkQyN1dNYTkzeGFDN0hQSHVZNGxVUEcyb0trcGo1SmZMeWxNRmYwOTNHRGo1eVVrWTBqYkVoUmxpV2xuVnlURWtpY3FRTG5zRGNQdk90SjdwblZVVzlfQWk1UGJsTGNhQVF2MXZ2QjFLYV9iZ0FrWElzSFhIWGhFZw?oc=5",
+   "package_quality": "THIN",
+   "body_chars": 70,
+   "preflight": "PENDING",
+   "checks": {},
+   "preflight_reason": "only 0 characters of stored body evidence - the article itself must be acquired before any claim can be checked"
+  },
+  {
+   "title": "OpenAI pauses training of latest models after agents probed US government sites in unexpected ways - WRAL",
+   "collected_at": "2026-09-26T23:52:23.128162+00:00",
+   "original_url": "https://news.google.com/rss/articles/CBMizwFBVV95cUxPV0lDdHVveGZJM1hlSjhBbVJnWmdrQkxpV3dlcHlONEgyeENMV0JiZUVySFRhVmlyVUVZSkZFbV84MTFXa2YxclA0ZFlFdDVVbXNmQ2lHYlNsazBtYWN3VVd2VmJCMV9OTlRSdVBuQlhVYkNJb0d0TU9QVlN0c0JvRE1hZUdjdm9JeDFDYUNnM2R0TUYybEtBT2FJXzdWeVNLR2MwN2UxenNwdU5iYkY5QlgxcWZQRHA2aUY3ZWR6eVAyd2RET0pSXzhVMXhDT0U?oc=5",
+   "resolution_status": "RESOLVED",
+   "resolution_method": "google_news_article_token",
+   "resolved_url": "https://www.wral.com/news/ap/2f8a2-openai-pauses-training-of-latest-models-after-agents-probed-us-government-sites-in-unexpected-ways/",
+   "publisher_domain": "www.wral.com",
+   "resolution_metadata": {
+    "endpoint_status": 200,
+    "endpoint_bytes": 266,
+    "publisher_domain": "www.wral.com"
+   },
+   "acquisition_status": "FULL_TEXT",
+   "acquisition_error": null,
+   "extracted_chars": 3881,
+   "content_sha256": "f359df18e62e0e464c9d3f7c61ba717704ffa2980b33cacc264c9a5e90fb5109",
+   "evidence_source_url": "https://www.wral.com/news/ap/2f8a2-openai-pauses-training-of-latest-models-after-agents-probed-us-government-sites-in-unexpected-ways/",
+   "evidence_source_original_url": "https://news.google.com/rss/articles/CBMizwFBVV95cUxPV0lDdHVveGZJM1hlSjhBbVJnWmdrQkxpV3dlcHlONEgyeENMV0JiZUVySFRhVmlyVUVZSkZFbV84MTFXa2YxclA0ZFlFdDVVbXNmQ2lHYlNsazBtYWN3VVd2VmJCMV9OTlRSdVBuQlhVYkNJb0d0TU9QVlN0c0JvRE1hZUdjdm9JeDFDYUNnM2R0TUYybEtBT2FJXzdWeVNLR2MwN2UxenNwdU5iYkY5QlgxcWZQRHA2aUY3ZWR6eVAyd2RET0pSXzhVMXhDT0U?oc=5",
+   "package_quality": "STRONG",
+   "body_chars": 1148,
+   "preflight": "FAIL",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "UNSUPPORTED"
+   },
+   "preflight_reason": "the body evidence does not support: chronology"
+  },
+  {
+   "title": "OpenAI Pauses Training of Latest Models After Agents Probed US Government Sites in Unexpected Ways - U.S. News & World",
+   "collected_at": "2026-09-27T00:31:32.562723+00:00",
+   "original_url": "https://news.google.com/rss/articles/CBMi6wFBVV95cUxQWXAzN3dZRGhRVl9CSkEzNTVIemNkMDludWJhVko1TlYxaDFzNnpJdXplaTBld2RhX2xOcmRMMkhYRTR6cHRzV3FmQ1MtYWhBOW9kWlpJMGh5R3JmdWZVVE5faVNxSmFScklQSGJDOVFQbG5pejBhSDRZblRIcGo2MGVfUmlQUXBEOC1lWlBjVC1taFR6TlhpazloeWpBSVNiYTBHb09CbTBPczlwRkNtdmM1OE4welJXMmYxRUNocERTaEt5N3BxbkpwVXNZZklPY19Obml2MlZULXhCQk55czFTc1B2M0RjXzdV?oc=5",
+   "resolution_status": "RESOLVED",
+   "resolution_method": "google_news_article_token",
+   "resolved_url": "https://www.usnews.com/news/business/articles/2026-09-26/openai-pauses-training-of-latest-models-after-agents-probed-us-government-sites-in-unexpected-ways",
+   "publisher_domain": "www.usnews.com",
+   "resolution_metadata": {
+    "endpoint_status": 200,
+    "endpoint_bytes": 287,
+    "publisher_domain": "www.usnews.com"
+   },
+   "acquisition_status": "FETCH_FAILED",
+   "acquisition_error": "read_timeout",
+   "extracted_chars": null,
+   "content_sha256": null,
+   "evidence_source_url": "https://www.usnews.com/news/business/articles/2026-09-26/openai-pauses-training-of-latest-models-after-agents-probed-us-government-sites-in-unexpected-ways",
+   "evidence_source_original_url": "https://news.google.com/rss/articles/CBMi6wFBVV95cUxQWXAzN3dZRGhRVl9CSkEzNTVIemNkMDludWJhVko1TlYxaDFzNnpJdXplaTBld2RhX2xOcmRMMkhYRTR6cHRzV3FmQ1MtYWhBOW9kWlpJMGh5R3JmdWZVVE5faVNxSmFScklQSGJDOVFQbG5pejBhSDRZblRIcGo2MGVfUmlQUXBEOC1lWlBjVC1taFR6TlhpazloeWpBSVNiYTBHb09CbTBPczlwRkNtdmM1OE4welJXMmYxRUNocERTaEt5N3BxbkpwVXNZZklPY19Obml2MlZULXhCQk55czFTc1B2M0RjXzdV?oc=5",
+   "package_quality": "BLOCKING",
+   "body_chars": 0,
+   "preflight": "PENDING",
+   "checks": {},
+   "preflight_reason": "only 0 characters of stored body evidence - the article itself must be acquired before any claim can be checked"
+  },
+  {
+   "title": "OpenAI pauses training of latest models after agents probed U.S. government sites in unexpected ways - Los Angeles Times",
+   "collected_at": "2026-09-27T10:20:55.154911+00:00",
+   "original_url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxOMnJlT0VjMlhfME40NFk4ZXV0NXkzOGpzS2I1T3pDZF9yYUdSTVJPZGszcUhRNnZ3VWkycHllSi1RWEdDMWRlMzZUVWtzVk91cGhscndZMWU4eUJzWktZMV9FX1RVdFRSazhPVnlxRGhXUXZ5dDJMZnVONTlMbFpMT2E3b2xJOUZfTTdFdjVSTFphNzcwSEstZGxsODRVOFZkMTNCNWJYLW0xLWJnbks4LUhHUmVzM2VZZzVnd1pPUnhFb3p5T3c?oc=5",
+   "resolution_status": "RESOLVED",
+   "resolution_method": "google_news_article_token",
+   "resolved_url": "https://www.latimes.com/world-nation/story/2026-09-27/openai-pauses-training-of-models-after-agents-probed-u-s-government-sites",
+   "publisher_domain": "www.latimes.com",
+   "resolution_metadata": {
+    "endpoint_status": 200,
+    "endpoint_bytes": 259,
+    "publisher_domain": "www.latimes.com"
+   },
+   "acquisition_status": "FULL_TEXT",
+   "acquisition_error": null,
+   "extracted_chars": 10929,
+   "content_sha256": "f7b469bf2a97ae0a7c694505d2d51caba8aefc122d3ad04fac9277c9ed12303b",
+   "evidence_source_url": "https://www.latimes.com/world-nation/story/2026-09-27/openai-pauses-training-of-models-after-agents-probed-u-s-government-sites",
+   "evidence_source_original_url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxOMnJlT0VjMlhfME40NFk4ZXV0NXkzOGpzS2I1T3pDZF9yYUdSTVJPZGszcUhRNnZ3VWkycHllSi1RWEdDMWRlMzZUVWtzVk91cGhscndZMWU4eUJzWktZMV9FX1RVdFRSazhPVnlxRGhXUXZ5dDJMZnVONTlMbFpMT2E3b2xJOUZfTTdFdjVSTFphNzcwSEstZGxsODRVOFZkMTNCNWJYLW0xLWJnbks4LUhHUmVzM2VZZzVnd1pPUnhFb3p5T3c?oc=5",
+   "package_quality": "STRONG",
+   "body_chars": 1039,
+   "preflight": "FAIL",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "UNSUPPORTED",
+    "chronology": "UNSUPPORTED"
+   },
+   "preflight_reason": "the body evidence does not support: target, chronology"
+  }
+ ],
+ "hacker_news_bbc": {
+  "url": "https://www.bbc.com/news/articles/cw62jje658dlo",
+  "status": "FETCH_FAILED",
+  "error_code": "dns_failure",
+  "chars": null
+ }
+}
