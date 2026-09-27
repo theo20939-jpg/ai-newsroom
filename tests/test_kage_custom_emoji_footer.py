@@ -1,4 +1,4 @@
-"""KAGE footer custom emoji: configurable, never a send dependency, UTF-16-correct entities."""
+"""KAGE footer: Unicode 🥷 + linked KAGE by default; a branded custom emoji only when validly configured."""
 from __future__ import annotations
 
 import html
@@ -14,9 +14,11 @@ from bot.keyboards.image_preview import build_editorial_send_keyboard
 from core.config import settings
 from services.news_telegram_presentation import build_ninja_pulse_footer_html, render_v81_news_card_html
 
+NINJA = "\U0001F977"  # 🥷
+LINK = '<a href="https://t.me/kage_journal">KAGE</a>'
+NINJA_FOOTER = f"{NINJA} {LINK}"
 EMOJI_ID = "5368324170671202286"  # Bot API docs example id - NOT the real KAGE emoji
-FALLBACK = "🥷"
-PLAIN_FOOTER = '<a href="https://t.me/kage_journal">KAGE</a>'
+FALLBACK = NINJA
 CANARY_TITLE = "На даркнет-маркетплейсах продают доступ к ИИ-моделям со скидками до 97%"
 CANARY_BODY = ("Google Threat Intelligence Group обнаружила предложения доступа к моделям "
                "Anthropic, Google и OpenAI.")
@@ -70,35 +72,110 @@ def _utf16_slice(text: str, offset: int, length: int) -> str:
     return raw[offset * 2:(offset + length) * 2].decode("utf-16-le")
 
 
+def _card(title: str = CANARY_TITLE, body: str = CANARY_BODY) -> str:
+    return render_v81_news_card_html({"title": title, "main_body": body}, include_ninja_pulse_footer=True)
+
+
+@pytest.fixture(autouse=True)
+def release_default(monkeypatch):
+    """This release: no custom emoji configured (the production default)."""
+    monkeypatch.setattr(settings, "kage_telegram_custom_emoji_id", None)
+    monkeypatch.setattr(settings, "kage_telegram_custom_emoji_fallback", None)
+
+
 @pytest.fixture
 def emoji_configured(monkeypatch):
     monkeypatch.setattr(settings, "kage_telegram_custom_emoji_id", EMOJI_ID)
     monkeypatch.setattr(settings, "kage_telegram_custom_emoji_fallback", FALLBACK)
 
 
-@pytest.fixture
-def emoji_absent(monkeypatch):
-    monkeypatch.setattr(settings, "kage_telegram_custom_emoji_id", None)
-    monkeypatch.setattr(settings, "kage_telegram_custom_emoji_fallback", None)
+# --- this release: Unicode ninja footer ------------------------------------------------------
 
-
-def _custom_emoji_entities(markup: str) -> list[dict]:
-    return [e for e in _parse(markup)[1] if e["type"] == "custom_emoji"]
-
-
-def test_configured_footer_has_exactly_one_custom_emoji_entity_before_the_kage_link(emoji_configured):
+def test_release_footer_is_unicode_ninja_then_linked_kage():
     footer = build_ninja_pulse_footer_html()
-    assert footer == f'<tg-emoji emoji-id="{EMOJI_ID}">{FALLBACK}</tg-emoji> {PLAIN_FOOTER}'
+    assert footer == NINJA_FOOTER
+    assert footer.encode("utf-8").startswith(b"\xf0\x9f\xa5\xb7 ")  # U+1F977, a normal Unicode emoji
+    text, entities = _parse(footer)
+    assert text == f"{NINJA} KAGE"
+    # Only KAGE is linked; 🥷 is plain text (2 UTF-16 units) - no custom_emoji entity at all.
+    assert entities == [{"type": "text_link", "offset": 3, "length": 4, "url": "https://t.me/kage_journal"}]
+
+
+def test_release_card_emits_no_custom_emoji_entity_and_links_kage():
+    markup = _card()
+    assert "<tg-emoji" not in markup
+    text, entities = _parse(markup)
+    assert not [e for e in entities if e["type"] == "custom_emoji"]
+    links = [e for e in entities if e["type"] == "text_link"]
+    assert len(links) == 1 and links[0]["url"] == "https://t.me/kage_journal"
+    assert _utf16_slice(text, links[0]["offset"], links[0]["length"]) == "KAGE"
+    assert text.endswith(f"{NINJA} KAGE")
+
+
+@pytest.mark.parametrize("title,body", [
+    (CANARY_TITLE, CANARY_BODY),
+    ("Запуск 🚀 и 𝕏: 👨‍👩‍👧 семья", "Текст с астральными символами 😀🧪 и кириллицей & <знаками>."),
+])
+def test_cyrillic_and_astral_text_before_the_ninja_footer_keep_utf16_offsets(title, body):
+    markup = _card(title, body)
+    text, entities = _parse(markup)
+    link = [e for e in entities if e["type"] == "text_link"][0]
+    prefix = text[: text.rindex("KAGE")]
+    assert prefix.endswith(f"{NINJA} ")
+    assert link["offset"] == _utf16(prefix)  # UTF-16 units: 🥷 and any astral chars count 2
+    assert _utf16_slice(text, link["offset"], link["length"]) == "KAGE"
+    rebuilt = html_decoration.unparse(text, [MessageEntity(**e) for e in entities])
+    assert _parse(rebuilt) == (text, entities)  # aiogram's own UTF-16 entity model agrees
+
+
+def test_utf16_length_accounting_counts_the_ninja_as_two_units():
+    assert _utf16(NINJA) == 2 and len(NINJA) == 1
+    assert _utf16(NINJA_FOOTER) == _utf16(LINK) + 3
+    visible = _parse(_card())[0]
+    assert _utf16(visible) == len(visible) + 1  # the only astral character in the canary card is 🥷
+
+
+def test_photo_caption_payload_keeps_the_ninja_footer_within_caption_limits():
+    caption = _card()
+    payload = SendPhoto(chat_id=-1004297182444, message_thread_id=2, photo="file-id",
+                        caption=caption, parse_mode="HTML").model_dump(exclude_none=True)
+    assert payload["caption"] == caption and payload["parse_mode"] == "HTML"
+    assert payload["caption"].endswith(NINJA_FOOTER)
+    assert _utf16(caption) <= 1024
+
+
+def test_source_and_meme_buttons_unchanged():
+    labels = [b["text"] for row in build_editorial_send_keyboard("https://example.com/a", CANARY_EVENT)
+              .model_dump()["inline_keyboard"] for b in row]
+    assert labels == ["🔗 Источник", "😂 Сгенерировать мем"]
+
+
+def test_no_duplicate_footer():
+    markup = _card()
+    assert markup.count("https://t.me/kage_journal") == 1
+    assert markup.count(NINJA) == 1
+    assert _parse(markup)[0].count("KAGE") == 1
+
+
+def test_accepted_canary_replay_only_the_footer_is_the_ninja_footer():
+    markup = _card()
+    assert markup == f"<b>{html.escape(CANARY_TITLE, quote=False)}</b>\n\n{CANARY_BODY}\n\n{NINJA_FOOTER}"
+
+
+# --- future path: branded custom emoji, only when validly configured (disabled in this release) ---
+
+def test_release_default_has_no_custom_emoji_configuration():
+    assert settings.kage_telegram_custom_emoji_id is None
+    assert settings.kage_telegram_custom_emoji_fallback is None
+
+
+def test_future_configured_custom_emoji_replaces_the_ninja(emoji_configured):
+    footer = build_ninja_pulse_footer_html()
+    assert footer == f'<tg-emoji emoji-id="{EMOJI_ID}">{FALLBACK}</tg-emoji> {LINK}'
     text, entities = _parse(footer)
     assert text == f"{FALLBACK} KAGE"
-    assert entities == [
-        {"type": "custom_emoji", "offset": 0, "length": 2, "custom_emoji_id": EMOJI_ID},
-        {"type": "text_link", "offset": 3, "length": 4, "url": "https://t.me/kage_journal"},
-    ]
-
-
-def test_absent_emoji_keeps_the_exact_plain_footer(emoji_absent):
-    assert build_ninja_pulse_footer_html() == PLAIN_FOOTER
+    assert entities[0] == {"type": "custom_emoji", "offset": 0, "length": 2, "custom_emoji_id": EMOJI_ID}
+    assert _card().count("<tg-emoji") == 1 and _card().count(NINJA) == 1
 
 
 @pytest.mark.parametrize("emoji_id,fallback", [
@@ -106,82 +183,7 @@ def test_absent_emoji_keeps_the_exact_plain_footer(emoji_absent):
     ('1"><b>x', FALLBACK), ("1" * 33, FALLBACK), (EMOJI_ID, None), (EMOJI_ID, ""), (EMOJI_ID, "K"),
     (EMOJI_ID, "KAGE"), (EMOJI_ID, "🥷 x"), (EMOJI_ID, "<b>"), (EMOJI_ID, "🥷" * 9),
 ])
-def test_invalid_or_partial_configuration_falls_back_to_plain_footer(monkeypatch, emoji_id, fallback):
+def test_invalid_or_partial_custom_configuration_keeps_the_unicode_ninja(monkeypatch, emoji_id, fallback):
     monkeypatch.setattr(settings, "kage_telegram_custom_emoji_id", emoji_id)
     monkeypatch.setattr(settings, "kage_telegram_custom_emoji_fallback", fallback)
-    assert build_ninja_pulse_footer_html() == PLAIN_FOOTER
-
-
-@pytest.mark.parametrize("title,body", [
-    (CANARY_TITLE, CANARY_BODY),
-    ("Запуск 🚀 и 𝕏: 👨‍👩‍👧 семья", "Текст с астральными символами 😀🧪 и кириллицей & <знаками>."),
-])
-def test_custom_emoji_entity_offset_is_correct_in_utf16_after_cyrillic_and_astral_text(
-    emoji_configured, title, body,
-):
-    markup = render_v81_news_card_html({"title": title, "main_body": body}, include_ninja_pulse_footer=True)
-    text, entities = _parse(markup)
-    emoji = _custom_emoji_entities(markup)
-    assert len(emoji) == 1
-    prefix = text[: text.rindex(f"{FALLBACK} KAGE")]
-    assert emoji[0]["offset"] == _utf16(prefix)  # UTF-16 units, not Python code points
-    assert _utf16_slice(text, emoji[0]["offset"], emoji[0]["length"]) == FALLBACK
-    link = [e for e in entities if e["type"] == "text_link"]
-    assert len(link) == 1 and _utf16_slice(text, link[0]["offset"], link[0]["length"]) == "KAGE"
-    # aiogram's own UTF-16 entity model renders the same entity set back to the same markup.
-    rebuilt = html_decoration.unparse(text, [MessageEntity(**e) for e in entities])
-    assert _parse(rebuilt) == (text, entities)
-
-
-def test_astral_prefix_really_shifts_utf16_offset_relative_to_python_index(emoji_configured):
-    markup = render_v81_news_card_html({"title": "𝕏 😀", "main_body": "🚀"}, include_ninja_pulse_footer=True)
-    text, _ = _parse(markup)
-    offset = _custom_emoji_entities(markup)[0]["offset"]
-    prefix = text[: text.rindex(f"{FALLBACK} KAGE")]
-    assert offset == _utf16(prefix) == len(prefix) + 3  # three astral characters before the footer
-
-
-def test_photo_caption_payload_keeps_the_custom_emoji_markup(emoji_configured):
-    caption = render_v81_news_card_html({"title": CANARY_TITLE, "main_body": CANARY_BODY},
-                                        include_ninja_pulse_footer=True)
-    payload = SendPhoto(chat_id=-1004297182444, message_thread_id=2, photo="file-id",
-                        caption=caption, parse_mode="HTML").model_dump(exclude_none=True)
-    assert payload["caption"] == caption
-    assert payload["parse_mode"] == "HTML"
-    assert payload["caption"].count(f'<tg-emoji emoji-id="{EMOJI_ID}">') == 1
-    assert _utf16(caption) <= 1024
-
-
-def test_source_and_meme_buttons_are_unaffected_by_the_emoji_setting(monkeypatch):
-    monkeypatch.setattr(settings, "kage_telegram_custom_emoji_id", None)
-    monkeypatch.setattr(settings, "kage_telegram_custom_emoji_fallback", None)
-    plain = build_editorial_send_keyboard("https://example.com/a", CANARY_EVENT).model_dump()
-    monkeypatch.setattr(settings, "kage_telegram_custom_emoji_id", EMOJI_ID)
-    monkeypatch.setattr(settings, "kage_telegram_custom_emoji_fallback", FALLBACK)
-    with_emoji = build_editorial_send_keyboard("https://example.com/a", CANARY_EVENT).model_dump()
-    assert plain == with_emoji
-    labels = [button["text"] for row in with_emoji["inline_keyboard"] for button in row]
-    assert labels == ["🔗 Источник", "😂 Сгенерировать мем"]
-
-
-def test_no_duplicate_kage_footer(emoji_configured):
-    markup = render_v81_news_card_html({"title": CANARY_TITLE, "main_body": CANARY_BODY},
-                                       include_ninja_pulse_footer=True)
-    assert markup.count("https://t.me/kage_journal") == 1
-    assert markup.count("<tg-emoji") == 1
-    assert _parse(markup)[0].count("KAGE") == 1
-
-
-def test_accepted_canary_replay_changes_only_the_footer(monkeypatch):
-    card = {"title": CANARY_TITLE, "main_body": CANARY_BODY}
-    monkeypatch.setattr(settings, "kage_telegram_custom_emoji_id", None)
-    monkeypatch.setattr(settings, "kage_telegram_custom_emoji_fallback", None)
-    before = render_v81_news_card_html(card, include_ninja_pulse_footer=True)
-    monkeypatch.setattr(settings, "kage_telegram_custom_emoji_id", EMOJI_ID)
-    monkeypatch.setattr(settings, "kage_telegram_custom_emoji_fallback", FALLBACK)
-    after = render_v81_news_card_html(card, include_ninja_pulse_footer=True)
-    assert before == f"<b>{html.escape(CANARY_TITLE, quote=False)}</b>\n\n{CANARY_BODY}\n\n{PLAIN_FOOTER}"
-    assert before.endswith(PLAIN_FOOTER) and after.endswith(PLAIN_FOOTER)
-    head = before[: -len(PLAIN_FOOTER)]
-    assert after == f'{head}<tg-emoji emoji-id="{EMOJI_ID}">{FALLBACK}</tg-emoji> {PLAIN_FOOTER}'
-    assert after.encode("utf-8").startswith(head.encode("utf-8"))  # byte-identical above the footer
+    assert build_ninja_pulse_footer_html() == NINJA_FOOTER

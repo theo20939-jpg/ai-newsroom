@@ -428,6 +428,7 @@ _V8_EXCEPTIONAL_CEILING_BY_TREATMENT: dict[str, int] = {BRIEF: 280, STANDARD: 45
 
 _KAGE_PUBLIC_URL = "https://t.me/kage_journal"
 _KAGE_PUBLIC_TEXT = "KAGE"
+_KAGE_FOOTER_EMOJI = "🥷"  # 🥷 - plain Unicode, not a Telegram custom emoji
 
 
 def _v8_escape(value: str) -> str:
@@ -498,12 +499,13 @@ def build_ninja_pulse_footer_html() -> str:
     the body, applied here to an in-text anchor instead of a button, since this is meant to read
     as a normal sentence-ending line, not a second button).
 
-    When a valid KAGE custom emoji is configured it is prepended as Telegram's own
-    `<tg-emoji emoji-id="...">` HTML entity (Telegram computes the UTF-16 entity offsets from the
-    markup); any missing/invalid configuration yields the unchanged plain footer."""
+    The footer is `🥷 KAGE` with only "KAGE" linked: a plain Unicode ninja emoji (no custom_emoji
+    entity). A future branded Telegram custom emoji replaces the 🥷 only when a valid one is
+    configured (`<tg-emoji emoji-id="...">`, offsets computed by Telegram from the markup); any
+    missing/invalid configuration keeps the Unicode 🥷."""
     link = f'<a href="{_KAGE_PUBLIC_URL}">{_v8_escape(_KAGE_PUBLIC_TEXT)}</a>'
-    emoji = _kage_custom_emoji_html()
-    return f"{emoji} {link}" if emoji else link
+    emoji = _kage_custom_emoji_html() or _KAGE_FOOTER_EMOJI
+    return f"{emoji} {link}"
 
 
 _CUSTOM_EMOJI_ID_RE = re.compile(r"[0-9]{1,32}")

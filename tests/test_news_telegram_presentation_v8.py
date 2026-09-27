@@ -176,7 +176,7 @@ def test_case_n_useful_ending_is_included() -> None:
 
 def test_case_o_footer_exact_text_and_link() -> None:
     footer = build_ninja_pulse_footer_html()
-    assert footer == '<a href="https://t.me/kage_journal">KAGE</a>'
+    assert footer == '🥷 <a href="https://t.me/kage_journal">KAGE</a>'
 
 
 def test_case_p_footer_appears_exactly_once() -> None:
@@ -211,9 +211,10 @@ def test_case_r_render_function_has_no_source_url_parameter_at_all() -> None:
 def test_case_s_kage_url_is_never_shown_as_plain_visible_text() -> None:
     """The KAGE URL appears only as the anchor target, with concise visible publication identity."""
     footer = build_ninja_pulse_footer_html()
-    assert footer.startswith('<a href="https://t.me/kage_journal">')
+    assert footer.startswith('🥷 <a href="https://t.me/kage_journal">')
     visible_text = footer.split(">", 1)[1].rsplit("<", 1)[0]
     assert visible_text == "KAGE"
+    assert "<tg-emoji" not in footer  # plain Unicode ninja emoji, no custom_emoji entity
     assert "https://t.me/kage_journal" not in visible_text
 
 
