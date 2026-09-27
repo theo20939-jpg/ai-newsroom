@@ -309,6 +309,143 @@ def generic_filler(sentence: str) -> bool:
     return bool(_ABSTRACT_SUBJECT.search(sentence)) and not anchors(sentence) and not re.search(r"\d", sentence)
 
 
+# PROPOSITION-AWARE THESIS COMPARISON (founder task 2026-09-27, after the canary-7 offline continuation). The old comparison used
+# services.instagram_editorial_critic.content_stems - a 4-letter prefix per word - so 'Компания' and 'компрометации' were both 'комп',
+# and 'нашли' / 'не нашли' were both 'нашл': slides 3 ('found during the review') and 4 ('no compromise found at the SEC') shared
+# {комп, нашл, обна} plus the name OpenAI and were called the same point. The thesis layer now compares PROPOSITIONS:
+#   - tokens: a conservative Russian suffix stripper (the stem keeps >= 4 letters, so 'компани' != 'компрометаци'), stopwords dropped;
+#   - polarity: a word governed by не / ни / нет / без / no / not is its own token ('¬нашл' != 'нашл');
+#   - concepts: the few predicates a news carousel re-words - find / disclose / interact / the AI actor / the company / a site / a check -
+#     count as one token each, so a paraphrase ('раскрыла' / 'рассказала', 'агент' / 'ИИ') is still the same claim;
+#   - roles: what each slide DOES (discovery mechanism, target status, event time, disclosure time, ongoing check, company statement,
+#     reader consequence, commercial detail); two different specific roles are two theses whatever words they share.
+_RU_ENDINGS = tuple(sorted((
+    "иями", "ями", "ами", "ией", "ого", "его", "ому", "ему", "ыми", "ими", "иях", "ых", "их", "ым", "им", "ил", "ыл", "ях", "ах", "ая", "яя", "ое", "ее", "ые", "ие", "ый",
+    "ий", "ой", "ую", "юю", "ам", "ям", "ом", "ем", "ов", "ев", "ей", "ия", "ию", "ии", "ть", "ться", "лась", "лись", "ила", "или", "ило",
+    "ыла", "ыли", "ала", "али", "ет", "ют", "ит", "ят", "ут", "ешь", "ишь", "ла", "ли", "ло", "ся", "сь", "а", "я", "о", "е", "ы",
+    "и", "у", "ю", "ь", "й"), key=len, reverse=True))
+_NEGATOR = frozenset({"не", "ни", "нет", "без", "no", "not", "never", "without"})
+_CONCEPTS = (
+    ("FIND", re.compile(r"^(?:наш[её]?л|найд|найт|обнаруж|выяв|found|find|discover|detect)")),
+    ("DISCLOSE", re.compile(r"^(?:раскр[ыо]|рассказ|сообщ|объяв|обнарод|disclos|reveal|announc)")),
+    ("INTERACT", re.compile(r"^(?:взаимодейств|обращ|заход|заш[её]?л|посещ|ходил|interact|access|visit)")),
+    ("AI", re.compile(r"^(?:агент|ии$|ai$|нейросет|agent)")),
+    ("ORG", re.compile(r"^(?:компани|company)")),
+    ("SITE", re.compile(r"^(?:сайт|site|портал|website)")),
+    ("CHECK", re.compile(r"^(?:провер|расследов|аудит|review|investig|audit)")),
+)
+_TOKEN = re.compile(r"[A-Za-zА-Яа-яЁё]+|\d+")
+_EVENT_TIME = re.compile(r"(?i)\b(летом|весной|осенью|зимой|в\s+(?:январе|феврале|марте|апреле|мае|июне|июле|августе|сентябре|октябре|"
+                         r"ноябре|декабре)|произош\w*|случил\w*|this summer|last (?:summer|month|year))\b")
+_ONGOING = re.compile(r"(?i)\b(продолжа\w*|ещё идёт|еще идет|пока идёт|пока идет|не завершен\w*|ongoing|continu\w*|still under)\b")
+_DURING = re.compile(r"(?i)\b(в ходе|во время|при|during|in the course of)\b")
+_READER = re.compile(r"(?i)\b(стоит|нужно|следует|проверьте|обновите|пользовател\w*|вам|вы|читател\w*|you|your)\b")
+_COMMERCIAL = re.compile(r"(?i)(\d\s?%|[$€£₽]\s?\d|\d\s?(?:руб|долл))")
+_COMMERCIAL_WORD = re.compile(r"(?i)\b(скидк\w*|цен\w*|стоим\w*|дешев\w*|дешёв\w*|price\w*|discount\w*|продаж\w*|продают)")
+_STATEMENT = re.compile(r"(?i)\b(заяви\w*|сообщи\w*|пообеща\w*|извини\w*|ответи\w*|поддержива\w*|said|stated|promised)\b")
+SPECIFIC_THESIS_ROLES = frozenset({"DISCOVERY_MECHANISM", "TARGET_STATUS", "CHRONOLOGY_EVENT", "CHRONOLOGY_DISCLOSURE",
+                                   "INVESTIGATION_ONGOING", "COMPANY_STATEMENT", "READER_CONSEQUENCE", "COMMERCIAL_DETAIL"})
+
+
+def ru_stem(word: str) -> str:
+    """Conservative suffix stripping: the longest inflectional ending whose removal leaves at least four letters."""
+    w = word.lower().replace("ё", "е")
+    for ending in _RU_ENDINGS:
+        if w.endswith(ending) and len(w) - len(ending) >= 4:
+            w = w[: -len(ending)]
+            break
+    # the -ени- / -ани- / -ци- noun stems keep a trailing 'и' in some cases only ('столкновение' / 'столкновением'): drop it
+    return w[:-1] if w.endswith("и") and len(w) > 4 else w
+
+
+def thesis_tokens(text: str) -> set[str]:
+    """The proposition-bearing tokens of a text: concepts / Russian stems, each marked '¬' when a negator governs it. Numbers and
+    Latin-script names are anchors (services.instagram_editorial_critic.anchors), compared separately - as in content_stems."""
+    from services.instagram_editorial_critic import _STOP
+
+    tokens: set[str] = set()
+    negate = False
+    for raw in _TOKEN.findall(text or ""):
+        low = raw.lower().replace("ё", "е")
+        if low in _NEGATOR:
+            negate = True
+            continue
+        concept = next((name for name, pattern in _CONCEPTS if pattern.search(low)), None)
+        if concept is None and (low in _STOP or len(low) < 4) and not low.isdigit():
+            continue  # a stopword does not end the negation's reach ('не для всех нашли'); a content word does
+        if concept is None and not re.search(r"[а-я]", low):
+            negate = False
+            continue  # numbers and Latin-script names are ANCHORS (compared as names / specificity), not content words
+        token = concept or ru_stem(low)
+        tokens.add(("¬" if negate else "") + token)
+        negate = False
+    return tokens
+
+
+def _slide_text(slide: Any) -> str:
+    return f"{_copy(slide)} {_body(slide)}"
+
+
+def proposition_role(slide: Any) -> str:
+    """What the slide DOES editorially - one of SPECIFIC_THESIS_ROLES, or 'GENERAL' when nothing specific is recognised."""
+    from services.instagram_factual_status import mentioned_targets
+
+    text = _slide_text(slide)
+    tokens = thesis_tokens(text)
+    if mentioned_targets(text) and ({"¬FIND"} & tokens or re.search(r"(?i)\b(подтвержд\w*|компрометац\w*|признак\w*|confirmed|compromis\w*)", text)):
+        return "TARGET_STATUS"
+    if "FIND" in tokens and _DURING.search(text) and "CHECK" in tokens:
+        return "DISCOVERY_MECHANISM"
+    if _ONGOING.search(text) and "CHECK" in tokens:
+        return "INVESTIGATION_ONGOING"
+    event, disclosure = bool(_EVENT_TIME.search(text)), "DISCLOSE" in tokens
+    if event and not disclosure:
+        return "CHRONOLOGY_EVENT"
+    if disclosure and not event and re.search(r"\d", text):
+        return "CHRONOLOGY_DISCLOSURE"
+    if _COMMERCIAL.search(text) and _COMMERCIAL_WORD.search(text):
+        return "COMMERCIAL_DETAIL"
+    if _READER.search(text):
+        return "READER_CONSEQUENCE"
+    if _STATEMENT.search(text):
+        return "COMPANY_STATEMENT"
+    return "GENERAL"
+
+
+def distinct_propositions(prev: Any, cur: Any) -> bool:
+    """Two different SPECIFIC roles, or a polarity conflict on the same concept ('нашли' vs 'не нашли'), are two theses."""
+    a, b = proposition_role(prev), proposition_role(cur)
+    if a != b and a in SPECIFIC_THESIS_ROLES and b in SPECIFIC_THESIS_ROLES:
+        return True
+    ta, tb = thesis_tokens(_slide_text(prev)), thesis_tokens(_slide_text(cur))
+    return any(("¬" + t) in tb for t in ta if not t.startswith("¬")) or any(("¬" + t) in ta for t in tb if not t.startswith("¬"))
+
+
+def same_proposition(prev: Any, cur: Any) -> str | None:
+    """Two adjacent cards that state substantially the same proposition, in any words: the smaller card's content is mostly (>= 60 %,
+    at least two tokens) contained in the other's, they share a concrete entity, and the smaller card brings no new number or name."""
+    from services.instagram_editorial_critic import anchors
+
+    pa, pb = _slide_text(prev), _slide_text(cur)
+    entities_a = {a for a in anchors(pa) if not re.search(r"\d", a)} | ({"ORG"} & thesis_tokens(pa))
+    entities_b = {a for a in anchors(pb) if not re.search(r"\d", a)} | ({"ORG"} & thesis_tokens(pb))
+    # a Latin-script company name and 'компания' refer to the same kind of actor
+    if any(not re.search(r"\d", a) for a in anchors(pa)):
+        entities_a.add("ORG")
+    if any(not re.search(r"\d", a) for a in anchors(pb)):
+        entities_b.add("ORG")
+    ta = thesis_tokens(pa) - {"ORG"}
+    tb = thesis_tokens(pb) - {"ORG"}
+    small, large = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
+    shared = small & large
+    if not (entities_a & entities_b) or len(shared) < 2 or len(shared) < 0.6 * len(small):
+        return None
+    new_anchors = (anchors(pb) - anchors(pa)) if small is tb else (anchors(pa) - anchors(pb))
+    if {a for a in new_anchors if a not in {"ai-", "ai"}}:
+        return None
+    return f"both state the same claim ({', '.join(sorted(shared))})"
+
+
 def thesis_relation(prev: Any, cur: Any, *, earlier_slides: list[Any]) -> str | None:
     """Founder rule 2026-09-26: EVERY SLIDE ADDS A NEW IDEA, NOT MORE SPECIFIC WORDS FOR THE PREVIOUS IDEA. A slide's claim is its body (its
     headline too when that carries a name or a number, or when the body is too short to state one). Compared with the previous slide - never by
@@ -318,15 +455,15 @@ def thesis_relation(prev: Any, cur: Any, *, earlier_slides: list[Any]) -> str | 
         specifies the previous claim (a new detail, not a new beat: no new event, actor, consequence, result, limitation or mechanism);
       - RESTATED THESIS: it shares several content words with the previous claim and brings no new concrete fact at all.
     Returns the explanation, or None when the slide is a new beat."""
-    from services.instagram_editorial_critic import anchors, content_stems
+    from services.instagram_editorial_critic import anchors
 
     head = _copy(cur)
     body = _body(cur)
     # the headline joins the claim when it carries a name / number, or when the body alone is too short to state a thesis
-    claim = body + (f" {head}" if anchors(head) or re.search(r"\d", head) or len(content_stems(body)) < 2 else "")
+    claim = body + (f" {head}" if anchors(head) or re.search(r"\d", head) or len(thesis_tokens(body)) < 2 else "")
     prev_text = f"{_copy(prev)} {_body(prev)}"
-    claim_words = content_stems(claim)
-    prev_words = content_stems(prev_text)
+    claim_words = thesis_tokens(claim)
+    prev_words = thesis_tokens(prev_text)
     if len(claim_words) < 2:
         return None  # too little Russian text to judge a thesis
     new_words = claim_words - prev_words
@@ -529,7 +666,7 @@ def generated_person_risks(slides: list[Any], evidence: list[str]) -> list[str]:
 def viral_copy_findings(slides: list[Any], evidence: list[str], *, caption: str = "", include_quotes: bool = True) -> list[str]:
     """NATURAL RUSSIAN + CONCRETE FACT + OPTIONAL DRY PUNCH, as far as a deterministic editor can prove it without a phrase list.
     `include_quotes=False`: the Director validation treats an invented quote as a HARD grounding failure of its own, not a copy finding."""
-    from services.instagram_editorial_critic import anchors, content_stems, critique
+    from services.instagram_editorial_critic import critique
 
     texts = [*(_copy(s) for s in slides), *(_body(s) for s in slides), caption]
     problems = [f"invented quote (not in the evidence): '{q}' - retell it as narration without quotation marks"
@@ -577,19 +714,16 @@ def viral_copy_findings(slides: list[Any], evidence: list[str], *, caption: str 
     problems += abstract_question_findings(slides, caption, evidence)
     for index in range(1, len(slides)):
         prev, cur = slides[index - 1], slides[index]
-        if distinct_by_role(prev, cur, index):
-            continue  # founder calibration 2026-09-27: 'what happened' vs 'which parts are confirmed' are two theses, whatever words they share
+        if distinct_by_role(prev, cur, index) or distinct_propositions(prev, cur):
+            continue  # founder calibration 2026-09-27: two different editorial roles (or opposite polarity) are two theses, whatever words they share
         beat = thesis_relation(prev, cur, earlier_slides=slides[:index])
         if beat:
             problems.append(f"slides {index} and {index + 1}: {beat} - merge them into one slide, then use the freed slide for another "
                             "distinct grounded fact or make the carousel shorter")
             continue
-        prev_text, cur_text = f"{_copy(prev)} {_body(prev)}", f"{_copy(cur)} {_body(cur)}"
-        shared_names = {a for a in anchors(prev_text) & anchors(cur_text) if not re.search(r"\d", a)}
-        shared_words = content_stems(prev_text) & content_stems(cur_text)
-        if shared_names and len(shared_words) >= 3:
-            problems.append(f"slides {index} and {index + 1} make the same point (both state the same claim about "
-                            f"{', '.join(sorted(shared_names))}: {', '.join(sorted(shared_words))}) - merge them or give the second a new fact")
+        same = same_proposition(prev, cur)
+        if same:
+            problems.append(f"slides {index} and {index + 1} make the same point ({same}) - merge them or give the second a new fact")
     return list(dict.fromkeys(problems))
 
 

@@ -1,0 +1,173 @@
+{
+ "provider_calls": 0,
+ "image_calls": 0,
+ "slides_3_4": {
+  "old": {
+   "slide_3_stems": [
+    "ai-а",
+    "взаи",
+    "врем",
+    "госу",
+    "комп",
+    "моде",
+    "нашл",
+    "неож",
+    "непр",
+    "неск",
+    "обна",
+    "обра",
+    "пове",
+    "пров",
+    "прод",
+    "сайт",
+    "сооб",
+    "стру",
+    "ходе"
+   ],
+   "slide_4_stems": [
+    "акка",
+    "данн",
+    "дока",
+    "дост",
+    "заяв",
+    "изме",
+    "инфо",
+    "испо",
+    "комп",
+    "нашл",
+    "непу",
+    "обна",
+    "приз",
+    "сист",
+    "учет",
+    "уязв"
+   ],
+   "shared_stems": [
+    "комп",
+    "нашл",
+    "обна"
+   ],
+   "shared_names": [
+    "openai"
+   ],
+   "rule": "shared_names non-empty AND len(shared_stems) >= 3",
+   "roles_old": [
+    "COMPANY_RESPONSE",
+    "COMPANY_RESPONSE"
+   ],
+   "distinct_by_role": false,
+   "duplicate": true
+  },
+  "new": {
+   "slide_3_tokens": [
+    "AI",
+    "CHECK",
+    "DISCLOSE",
+    "FIND",
+    "INTERACT",
+    "ORG",
+    "SITE",
+    "врем",
+    "государственн",
+    "модел",
+    "неожиданн",
+    "непредсказуем",
+    "нескольк",
+    "образ",
+    "поведен",
+    "продолжающей",
+    "структур",
+    "ходе"
+   ],
+   "slide_4_tokens": [
+    "¬FIND",
+    "аккаунт",
+    "данн",
+    "доказательств",
+    "доступ",
+    "заяв",
+    "изменен",
+    "информац",
+    "использован",
+    "компрометац",
+    "непубличн",
+    "признак",
+    "сист",
+    "учетн",
+    "уязвимост"
+   ],
+   "shared_tokens": [],
+   "roles": [
+    "DISCOVERY_MECHANISM",
+    "TARGET_STATUS"
+   ],
+   "distinct_propositions": true,
+   "thesis_relation": null,
+   "same_proposition": null
+  }
+ },
+ "first_output": {
+  "quote_gate": {
+   "terminal": [],
+   "repairable": [
+    "UNSUPPORTED_EDITORIAL_QUOTED_TERM (caption): «неожиданного взаимодействия» in \"Поэтому здесь важно не перепрыгивать от «неожиданного взаимодействия» сразу к «взлому».\" - REMOVE_QUOTES_OR_PARAPHRASE: this wording is not in the evidence verbatim and nobody is quoted, so it must not look like a quotation. Remove the quotation marks or paraphrase it faithfully; keep everything else that is already correct. Do not invent a speaker or verbatim wording, do not add facts, do not strengthen the claim, do not change any target's status, keep the chronology and keep every hook within the display limit."
+   ],
+   "result": "REPAIRABLE"
+  },
+  "named_person_risks": [],
+  "status_violations": [],
+  "unsupported_targets": [],
+  "invariants": {
+   "violations": [],
+   "underlying_time": true,
+   "disclosure": true,
+   "action_strength": 3
+  },
+  "hook_lengths": [
+   47,
+   23,
+   38,
+   39,
+   49
+  ],
+  "deterministic_carried_to_judge": [
+   "UNSUPPORTED_EDITORIAL_QUOTED_TERM (caption): «неожиданного взаимодействия» in \"Поэтому здесь важно не перепрыгивать от «неожиданного взаимодействия» сразу к «взлому».\" - REMOVE_QUOTES_OR_PARAPHRASE: this wording is not in the evidence verbatim and nobody is quoted, so it must not look like a quotation. Remove the quotation marks or paraphrase it faithfully; keep everything else that is already correct. Do not invent a speaker or verbatim wording, do not add facts, do not strengthen the claim, do not change any target's status, keep the chronology and keep every hook within the display limit."
+  ],
+  "real_path": {
+   "result": "REACHED_SEMANTIC_JUDGE",
+   "judge": "NOT RUN OFFLINE (no saved verdict; a judge run is a provider call)"
+  }
+ },
+ "fixture": {
+  "change": [
+   "Поэтому здесь важно не перепрыгивать от «неожиданного взаимодействия» сразу к «взлому».",
+   "Поэтому здесь важно не перепрыгивать от неожиданного взаимодействия сразу к взлому."
+  ],
+  "quote_gate": {
+   "terminal": [],
+   "repairable": [],
+   "result": "PASS"
+  },
+  "named_person_risks": [],
+  "status_violations": [],
+  "unsupported_targets": [],
+  "invariants": {
+   "violations": [],
+   "underlying_time": true,
+   "disclosure": true,
+   "action_strength": 3
+  },
+  "hook_lengths": [
+   47,
+   23,
+   38,
+   39,
+   49
+  ],
+  "deterministic_carried_to_judge": [],
+  "real_path": {
+   "result": "REACHED_SEMANTIC_JUDGE",
+   "judge": "NOT RUN OFFLINE (no saved verdict; a judge run is a provider call)"
+  }
+ }
+}
