@@ -1,0 +1,4 @@
+{
+ "error_type": "CreativeFactSafetyError",
+ "error": "invented quote(s) not in the evidence: ['неожиданного взаимодействия']"
+}
