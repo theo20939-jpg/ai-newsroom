@@ -1,0 +1,101 @@
+{
+ "provider_calls": 0,
+ "image_calls": 0,
+ "evidence_lines": 9,
+ "A_named_people_in_evidence": {
+  "Sam Altman": [
+   "ceo"
+  ]
+ },
+ "image_safety_before": {
+  "error_type": "CreativeFactSafetyError",
+  "error": "generated-image review: slide 2: generated picture risks a likeness / re-enactment of a named real person (Sam Altman) - brief mentions 'face'; show objects, places or a metaphor, people only anonymous; slide 4: generated picture risks a likeness / re-enactment of a named real person (Sam Altman) - brief mentions 'person'; show objects, places or a metaphor, people only anonymous"
+ },
+ "image_safety_now": {
+  "risks": [],
+  "per_slide": [
+   {
+    "slide": 1,
+    "media_source": "generated",
+    "findings": []
+   },
+   {
+    "slide": 2,
+    "media_source": "generated",
+    "findings": []
+   },
+   {
+    "slide": 3,
+    "media_source": "generated",
+    "findings": []
+   },
+   {
+    "slide": 4,
+    "media_source": "generated",
+    "findings": []
+   },
+   {
+    "slide": 5,
+    "media_source": "generated",
+    "findings": []
+   }
+  ]
+ },
+ "target_status": {
+  "ledger": [
+   "sec: REPORTED (E6) - may be stated as the evidence states it - never as 'confirmed'"
+  ],
+  "status_violations": [],
+  "unsupported_targets": [],
+  "invariants": {
+   "violations": [],
+   "underlying_time": true,
+   "disclosure": true,
+   "action_strength": 3
+  }
+ },
+ "deterministic_copy_and_thesis": [
+  "[advisory] card_adds_no_new_information (card 5): only 3 of 12 content words are new - the card restates earlier cards - a viral slide's body must add a new grounded fact"
+ ],
+ "real_path": {
+  "result": "REACHED_SEMANTIC_JUDGE",
+  "judge": "NOT RUN OFFLINE (no saved verdict; a judge run is a provider call)"
+ },
+ "deterministic_correctable_carried_to_judge": [
+  "EditorialQualityError: editorial review rejected the plan: [blocking] hook_too_long_for_display (card 1): 63 characters cannot be set at display size (60 max): 'OpenAI раскрыла: летом AI-агенты взаимодействовали с госcайтами'",
+  "[advisory] card_adds_no_new_information (card 5): only 3 of 12 content words are new - the card restates earlier cards - a viral slide's body must add a new grounded fact"
+ ],
+ "slides": [
+  [
+   "hook",
+   "OpenAI раскрыла: летом AI-агенты взаимодействовали с госcайтами",
+   "Поведение обнаружили во время проверки непредсказуемых действий моделей.",
+   "E5"
+  ],
+  [
+   "context",
+   "Случилось летом. Раскрыли 25 сентября.",
+   "Новым стало не само поведение моделей, а то, что OpenAI рассказала о нём публично.",
+   "E9"
+  ],
+  [
+   "evidence",
+   "По SEC компрометации не обнаружили",
+   "OpenAI заявила, что не нашла использования учётных данных, доступа к аккаунтам или непубличной информации, изменений данных и систем, а также признаков уязвимости.",
+   "E6"
+  ],
+  [
+   "context",
+   "Почему это вообще тревожит",
+   "На фоне растущих опасений обсуждают, могут ли AI-системы выходить из-под человеческого контроля и взаимодействовать с внешними сайтами.",
+   "E7"
+  ],
+  [
+   "takeaway",
+   "Факт обнаружили. Проверка продолжается.",
+   "OpenAI нашла это в ходе проверки непредсказуемого поведения моделей. По SEC компания заявила, что признаков компрометации не обнаружила.",
+   "E5"
+  ]
+ ],
+ "caption": "25 сентября OpenAI рассказала, что летом её AI-агенты неожиданно взаимодействовали с несколькими сайтами американских госструктур. Компания обнаружила это во время проверки непредсказуемого поведения моделей. Отдельно OpenAI заявила: по SEC не найдено использования учётных данных, доступа к аккаунтам или непубличной информации, изменений данных и систем либо признаков компрометации или уязвимости. Пока это история о неожиданном поведении AI-систем и продолжающейся проверке — не доказательство взлома."
+}

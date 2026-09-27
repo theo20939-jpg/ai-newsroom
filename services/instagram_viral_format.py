@@ -148,18 +148,67 @@ _RECURRENCE_IN_EVIDENCE = re.compile(r"(?i)\b(again|back|return\w*|second|revive
 _BETWEEN = re.compile(r"(?i)\bмежду\b([^.!?;:—]*)")
 _DANGLING_END = re.compile(r"(?i)\b(в|на|с|со|по|к|ко|у|о|об|от|до|из|за|для|без|между|и|а|но|или)\s*[.!?…]?\s*$")
 _PERSON_ROLE = re.compile(r"(?i)\b(streamer|youtuber|tiktoker|influencer|creator|player|athlete|ceo|founder|physicist|researcher|scientist|"
-                          r"engineer|developer|artist|singer|rapper|actor|actress|politician|minister|president|host|owner|"
+                          r"engineer|developer|artist|singer|rapper|actor|actress|politician|minister|president|host|owner|chief\s+executive|"
                           r"стример\w*|блогер\w*|игрок\w*|основател\w*|глав[аеуы]|физик\w*|исследовател\w*|учён\w*|инженер\w*|"
                           r"разработчик\w*|художник\w*|певиц\w*|певец\w*|актёр\w*|актер\w*|спортсмен\w*|политик\w*|министр\w*|"
                           r"президент\w*|ведущ\w*|владел\w*)\b")
 _NAME = r"(?:[A-ZА-ЯЁ][\w'’\-]+(?:\s+(?:de|van|von|da|di|le|la)\b)?(?:\s+[A-ZА-ЯЁ][\w'’\-]+){0,2})"
 _ROLE_THEN_NAME = re.compile(_PERSON_ROLE.pattern[4:] + r"(?:\s+(?:and|и)\s+\w+)?\s+(" + _NAME + r")")
 _NAME_THEN_ROLE = re.compile(r"(" + _NAME + r"),\s+(?:an?\s+|the\s+)?(?:[\w\-]+\s+){0,2}" + _PERSON_ROLE.pattern[4:], re.IGNORECASE)
-# a whole human figure in a generated picture's brief (hands alone are anonymous and allowed)
-# nouns that in an image brief almost always mean a HUMAN in the picture. Left out on purpose: 'portrait' (the frame orientation) and
-# metaphor-prone words ('athlete', 'figure', 'people' - 'a hamster posed like an athlete', 'the contrast between pet and athlete')
-_HUMAN_FIGURE = re.compile(r"(?i)\b(person|man|woman|boy|girl|guy|face|faces|lookalike|look-alike|streamer\w*|skater\w*|player\w*|"
-                           r"celebrity|человек\w*|мужчин\w*|женщин\w*|парн\w*|парен\w*|девушк\w*|лиц[оа]\b|стример\w*|игрок\w*)")
+# NAMED-PERSON IMAGE SAFETY (founder task 2026-09-27, after the sixth paid viral canary): the gate asks two separate questions -
+#   A. does the EVIDENCE name a real person (named_people)?   B. does the picture BRIEF positively ask to depict that person / identity?
+# Only B blocks. Canary 6 was stopped by raw keywords: 'face' in 'a blank clock face', 'person' / 'people' inside 'without depicting a real
+# person' and 'No ... identifiable people are visible'. B is now read per clause, with polarity and word sense, never by a word list:
+#   - the person's name (or surname) mentioned positively;
+#   - a role that resolves to the named person ('Sam Altman, CEO of OpenAI' -> 'the named CEO', 'OpenAI CEO');
+#   - a likeness instruction (lookalike / resembling / likeness / impersonating) or a positive 'recognizable face / person';
+#   - a pronoun object of a depiction verb ('show him') once the brief names the person;
+#   - a whole, individual, non-anonymous human figure (a man, a woman, a skater...) - a re-enactment of the named person's story.
+# A term is negated only inside a prohibition's scope in its own clause ('no / without / never / avoid / do not [show] ...'); a negated
+# REMOVAL ('do not hide') and 'not only' stay positive. 'face' is a human face only with a human possessor or a human adjective ('his
+# face', 'a man's face', 'human / realistic / recognizable face'); a figure word that heads an object compound ('person icon') or is
+# anonymised ('anonymous', 'faceless', 'silhouette', 'from behind') is not a person. Hands are anonymous and allowed.
+_HUMAN_FIGURE = re.compile(r"(?i)\b(person|man|woman|boy|girl|guy|gentleman|lady|businessman|businesswoman|lookalike|look-alike|"
+                           r"streamer\w*|skater\w*|player\w*|celebrity|human\s+(?:figure|being)|человек\w*|мужчин\w*|женщин\w*|парн\w*|"
+                           r"парен\w*|девушк\w*|стример\w*|игрок\w*)\b")
+_FACE = re.compile(r"(?i)\b(faces?|лиц[оа])\b")
+# a possessor may take one adjective in between ('his tired face'); a human adjective sits directly on the noun ('realistic face')
+_FACE_HUMAN_BEFORE = re.compile(r"(?i)(?:\b(?:his|her|their|его|её|ее)\s+(?:[\w\-]+\s+)?|"
+                                r"\b(?:person|man|woman|boy|girl|guy|streamer|skater|player|ceo|founder)['’]s\s+(?:[\w\-]+\s+)?|"
+                                r"\b(?:human|real|realistic|photo-?realistic|lifelike|life-like|recogni[sz]able|identifiable|человеческ\w*|"
+                                r"реалистичн\w*)\s+)$")
+_FACE_HUMAN_AFTER = re.compile(r"(?i)^\s+of\s+(?:an?\s+|the\s+)?(?:[\w\-]+\s+)?(?:person|man|woman|boy|girl|guy|him|her|them|streamer|skater|"
+                               r"player|ceo|founder|celebrity|real\b)")
+_LIKENESS = re.compile(r"(?i)\b(lookalike|look-alike|resembl\w*|likeness\w*|impersonat\w*|doppelg\w*|двойник\w*|похож\w*)")
+_RECOGNIZABLE = re.compile(r"(?i)\b(recogni[sz]able|identifiable|узнаваем\w*)\s+(?:[\w\-]+\s+)?(face|faces|features|person|people|figure|"
+                           r"individual|depiction|portrait|likeness|человек\w*|люд\w*|лиц\w*)\b")
+_PRONOUN_DEPICTION = re.compile(r"(?i)\b(show\w*|depict\w*|portray\w*|draw\w*|render\w*|paint\w*|feature\w*|photograph\w*|recreat\w*|"
+                                r"re-creat\w*|reproduc\w*|include\w*|put)\s+(him|her|them|his\s+face|her\s+face)\b")
+_CLAUSE_SPLIT = re.compile(r"(?i)[.;:!?]+(?=\s|$)|\s[–—-]\s|\bbut\b|\bhowever\b|\binstead\b|\bно\b|\bа\s+не\b")
+_PROHIBITION = re.compile(r"(?i)\b(no|not|without|never|avoid\w*|exclud\w*|omit\w*|nor|don['’]t|doesn['’]t|mustn['’]t|shouldn['’]t|"
+                          r"без|не|нет|никак\w*|ни)\b")
+_NEW_PHRASE = re.compile(r"(?i),\s*(?:and\s+|with\s+)?(?:a|an|the|one|two|three)\s")
+_NOT_ONLY = re.compile(r"(?i)^\s*(only|just|merely|simply|только|лишь)\b")
+# a prohibited REMOVAL is an instruction to show ('do not hide his face')
+_REMOVAL = re.compile(r"(?i)\b(hid(?:e|es|ing|den)|blur\w*|obscur\w*|crop\w*|cut\w*|remov\w*|mask\w*|cover\w*|conceal\w*|anonymi[sz]\w*|"
+                      r"leave\s+out|скрыва\w*|скры\w*|размыва\w*|закрыва\w*)\b")
+_REVERSAL = re.compile(r"(?i)\b(but|only|except|instead|rather|yet|а|но|кроме)\b")
+_POSTPOSED_NEGATION = re.compile(r"(?i)^[\s'’s]*(?:[\w\-]+\s+){0,3}?(?:must|should|does|do|is|are|will|shall|may|can)?\s*(?:not|never|n['’]t)\s+"
+                                 r"(?:be\s+)?(appear\w*|shown|show\w*|visible|depict\w*|includ\w*|pictured|present|featured|identifiable|"
+                                 r"recogni[sz]able)")
+_ANONYMISED = re.compile(r"(?i)\b(anonymous|anonymi[sz]ed|faceless|unidentifiable|unrecogni[sz]able|featureless|silhouett\w*|from\s+behind|"
+                         r"back\s+view|seen\s+from\s+the\s+back|stick[\s-]figure|out\s+of\s+focus|blurred|анонимн\w*|безлик\w*|силуэт\w*|"
+                         r"со\s+спины)")
+# a figure / role word heading an OBJECT compound is a thing, not a person ('person icon', 'icon of a person')
+_OBJECT_HEAD_AFTER = re.compile(r"(?i)^[\s\-]*(icons?|symbols?|pictograms?|emoji\w*|avatars?|glyphs?|badges?|logos?|outlines?|shapes?|"
+                                r"placeholders?|signs?|markers?|silhouettes?|consoles?|portals?|dashboards?|accounts?|interfaces?|"
+                                r"иконк\w*|значк\w*|пиктограмм\w*)\b")
+_OBJECT_HEAD_BEFORE = re.compile(r"(?i)\b(icons?|symbols?|pictograms?|emoji|avatars?|glyphs?|outlines?|placeholders?|иконк\w*|значк\w*)\s+"
+                                 r"(?:of\s+)?(?:an?\s+|the\s+)?$")
+_SIMILE_BEFORE = re.compile(r"(?i)\b(like|as|как|словно|будто)\s+(an?\s+)?(\w+\s+)?$")
+_ROLE_CANON = {"chief executive": "ceo"}
+# a role that only possesses an anonymous body part ('an MRI physicist's hands') shows hands, not the person - the NAME is never excused
+_ANONYMOUS_PART_AFTER = re.compile(r"(?i)^['’]s\s+(?:[\w\-]+\s+)?(hands?|fingers?|palms?|arms?|wrists?)\b")
 
 
 # a verb-like Russian word (past / present / reflexive endings) - a hook of telegraphic fragments has none
@@ -280,39 +329,135 @@ def caption_findings(caption: str, slides: list[Any]) -> list[str]:
     return problems
 
 
-def named_people(evidence: list[str]) -> set[str]:
-    """Real people the evidence NAMES (a proper name next to a person role: 'streamer and YouTuber IShowSpeed', 'NHL player Cole Caufield',
-    'Thijs de Buck, an MRI physicist'). Organisations after a preposition ('researchers from Unit 42') are not people."""
-    names: set[str] = set()
+def _role_key(role: str) -> str:
+    key = re.sub(r"\s+", " ", role.lower().strip())
+    return _ROLE_CANON.get(key, key)
+
+
+def named_identities(evidence: list[str]) -> dict[str, set[str]]:
+    """Real people the evidence NAMES, each with the role(s) that identify them ('Sam Altman, CEO of OpenAI' -> {'Sam Altman': {'ceo'}})."""
+    found: dict[str, set[str]] = {}
     for line in evidence:
         for match in _ROLE_THEN_NAME.finditer(line):
-            names.add(match.group(match.lastindex).strip())
+            found.setdefault(match.group(match.lastindex or 0).strip(), set()).add(_role_key(match.group(1)))
         for match in _NAME_THEN_ROLE.finditer(line):
             candidate = match.group(1).strip()
             if candidate.split()[0].lower() not in ("the", "a", "an", "this", "that", "his", "her"):
-                names.add(candidate)
-    return {n for n in names if len(n) >= 3}
+                found.setdefault(candidate, set()).add(_role_key(match.group(2)))
+    return {name: roles for name, roles in found.items() if len(name) >= 3}
+
+
+def named_people(evidence: list[str]) -> set[str]:
+    """Real people the evidence NAMES (a proper name next to a person role: 'streamer and YouTuber IShowSpeed', 'NHL player Cole Caufield',
+    'Thijs de Buck, an MRI physicist'). Organisations after a preposition ('researchers from Unit 42') are not people."""
+    return set(named_identities(evidence))
+
+
+def _clauses(brief: str) -> list[str]:
+    text = re.sub(r"[“”\"«»„]", " ", brief).replace("’", "'")
+    return [c for c in _CLAUSE_SPLIT.split(text) if c and c.strip()]
+
+
+def _negated(clause: str, start: int, end: int) -> bool:
+    """True when the term at clause[start:end] sits inside a prohibition's scope in its own clause."""
+    prefix = clause[:start]
+    last = None
+    for last in _PROHIBITION.finditer(prefix):
+        pass
+    if last is not None:
+        between = prefix[last.end():]
+        # a new article-led noun phrase after a comma ('without logos, a man at a desk') is outside the prohibition (conservative)
+        if not (_NOT_ONLY.match(between) or _REMOVAL.search(between) or _REVERSAL.search(between) or _NEW_PHRASE.search(between)):
+            return True
+    return bool(_POSTPOSED_NEGATION.match(clause[end:]))
+
+
+def _object_sense(clause: str, start: int, end: int) -> bool:
+    return bool(_OBJECT_HEAD_AFTER.match(clause[end:]) or _OBJECT_HEAD_BEFORE.search(clause[:start]))
+
+
+def _anonymised(clause: str, start: int, end: int) -> bool:
+    before = " ".join(clause[:start].split()[-4:])
+    after = " ".join(clause[end:].split()[:6])
+    return bool(_ANONYMISED.search(before) or _ANONYMISED.search(after))
+
+
+def _positive(clause: str, match: re.Match) -> bool:
+    return not _negated(clause, match.start(), match.end())
+
+
+def depiction_findings(brief: str, identities: dict[str, set[str]]) -> list[str]:
+    """What in ONE generated-picture brief positively asks to depict a named real person (question B); empty when nothing does."""
+    if not identities:
+        return []
+    findings: list[str] = []
+    patterns = []
+    for name in sorted(identities):
+        patterns.append((name, re.compile(r"(?i)(?<![\w])" + re.escape(name) + r"(?![\w])")))
+        surname = name.split()[-1]
+        if surname != name and len(surname) >= 4:
+            patterns.append((name, re.compile(r"(?<![\w])" + re.escape(surname) + r"(?![\w])")))  # case-sensitive: 'Buck', not 'buck'
+    roles = {role: name for name, rs in identities.items() for role in rs}
+    role_pattern = re.compile(r"(?i)\b(" + "|".join(re.escape(r).replace(r"\ ", r"\s+") for r in sorted(roles, key=len, reverse=True))
+                              + r")\b") if roles else None
+    clauses = _clauses(brief)
+    names_in_brief = any(p.search(c) for c in clauses for _n, p in patterns)
+    for clause in clauses:
+        for name, pattern in patterns:
+            if any(_positive(clause, m) for m in pattern.finditer(clause)) and name not in findings:
+                findings.append(name)
+        if role_pattern is not None:
+            for m in role_pattern.finditer(clause):
+                if (_positive(clause, m) and not _object_sense(clause, m.start(), m.end()) and not _SIMILE_BEFORE.search(clause[:m.start()])
+                        and not _ANONYMOUS_PART_AFTER.match(clause[m.end():])):
+                    findings.append(f"role '{m.group(0)}' ({roles[_role_key(m.group(0))]})")
+                    break
+        for m in _LIKENESS.finditer(clause):
+            if _positive(clause, m):
+                findings.append(f"likeness '{m.group(0)}'")
+                break
+        for m in _RECOGNIZABLE.finditer(clause):
+            if _positive(clause, m):
+                findings.append(f"'{m.group(0)}'")
+                break
+        if names_in_brief:
+            for m in _PRONOUN_DEPICTION.finditer(clause):
+                if _positive(clause, m):
+                    findings.append(f"'{m.group(0)}'")
+                    break
+        for m in _FACE.finditer(clause):
+            human = _FACE_HUMAN_BEFORE.search(clause[:m.start()]) or _FACE_HUMAN_AFTER.match(clause[m.end():])
+            if human and _positive(clause, m) and not _anonymised(clause, m.start(), m.end()):
+                findings.append(f"human face '{(human.group(0).strip() + ' ' + m.group(0)).strip()}'")
+                break
+        for m in _HUMAN_FIGURE.finditer(clause):
+            if (_positive(clause, m) and not _SIMILE_BEFORE.search(clause[max(0, m.start() - 24):m.start()])
+                    and not _object_sense(clause, m.start(), m.end()) and not _anonymised(clause, m.start(), m.end())):
+                findings.append(repr(m.group(0)))
+                break
+    return list(dict.fromkeys(findings))
 
 
 def generated_person_risks(slides: list[Any], evidence: list[str]) -> list[str]:
-    """A generated picture that could become a lookalike of / re-enactment with a NAMED real person: its brief names them, or - when the
-    story names people - describes a whole human figure. Real source photos are not affected."""
-    people = named_people(evidence)
-    if not people:
+    """A generated picture whose brief POSITIVELY asks to depict a named real person (see depiction_findings): by name, by a role that
+    resolves to them, as a likeness, or as a whole non-anonymous human figure re-enacting their story. Negated mentions ('without
+    depicting a real person'), object senses ('a blank clock face', 'a person icon') and anonymous human elements (hands, silhouettes)
+    are not depictions. Real source photos are not affected."""
+    identities = named_identities(evidence)
+    if not identities:
         return []
+    people = ", ".join(sorted(identities))
     risks = []
     for index, slide in enumerate(slides, 1):
         if _get(slide, "media_source") != "generated":
             continue
         # what the PICTURE is asked to show (story_anchor states the story's fact, which may legitimately name the person)
         brief = " ".join(str(_get(slide, key) or "") for key in ("generation_brief", "visual_direction"))
-        named = sorted(p for p in people if p.lower() in brief.lower())
-        # a figure word in a simile ('a hamster posed like an athlete') describes something else, not a person in the picture
-        figure = next((m for m in _HUMAN_FIGURE.finditer(brief)
-                       if not re.search(r"(?i)\b(like|as|как|словно|будто)\s+(an?\s+)?(\w+\s+)?$", brief[max(0, m.start() - 24):m.start()])), None)
-        if named or figure:
-            risks.append(f"slide {index}: generated picture risks a likeness / re-enactment of a named real person ({', '.join(sorted(people))})"
-                         f" - brief mentions {named or repr(figure.group(0))}; show objects, places or a metaphor, people only anonymous")
+        found = depiction_findings(brief, identities)
+        if found:
+            names = [f for f in found if f in identities]
+            risks.append(f"slide {index}: generated picture risks a likeness / re-enactment of a named real person ({people})"
+                         f" - brief mentions {names or found[0]}; show objects, places or a metaphor, people only anonymous")
     return risks
 
 
