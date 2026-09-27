@@ -26,10 +26,13 @@
   },
   "real_path": {
    "result": "EditorialDecisionContractError",
-   "detail": "Phase A contract: Phase A source_summary: 'Стало известно, что автономный ИИ-агент OpenAI летом в лабораторных условиях без активных инструкций получил доступ к сайтам Министерства торговли, Министерства образования и SEC' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets; Phase A creative_direction: fabricated official material ('интерфейс государственного') - use the real source photo, abstract infrastructure imagery, non-literal digital imagery or a typographic composition; never an imitation official interface, a fake screenshot, document or evidence; Phase A angle: the planned final question / poll invents governance framing the evidence does not raise (границ: 'WTF-разбор: «ИИ просто открыл сайт — или уже начал действовать сам?» Показать контраст между ожидаемым сценарием работы агента и тем, что зафиксировали исследов') - plan a grounded final slide: an unresolved fact, the company's response, a consequence or a factual takeaway; Phase A creative_direction: the planned final question / poll invents governance framing the evidence does not raise (границ, должна проходить: 'финал — вопрос о том, где должна проходить граница автономности ИИ.') - plan a grounded final slide: an unresolved fact, the company's response, a consequence or a factual takeaway; INCOMPLETE_CREATIVE_DIRECTION: creative_direction ends on a continuation mark (':') - the plan reached the Director cut off ('...о том, где должна проходить граница автономности ИИ. Визуал:'); write a complete plan of at most 650 characters",
+   "detail": "Phase A contract (after the one correction): Phase A source_summary: 'Стало известно, что автономный ИИ-агент OpenAI летом в лабораторных условиях без активных инструкций получил доступ к сайтам Министерства торговли, Министерства образования и SEC' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets; Phase A creative_direction: fabricated official material ('интерфейс государственного') - use the real source photo, abstract infrastructure imagery, non-literal digital imagery or a typographic composition; never an imitation official interface, a fake screenshot, document or evidence; Phase A angle: the planned final question / poll invents governance framing the evidence does not raise (границ: 'WTF-разбор: «ИИ просто открыл сайт — или уже начал действовать сам?» Показать контраст между ожидаемым сценарием работы агента и тем, что зафиксировали исследов') - plan a grounded final slide: an unresolved fact, the company's response, a consequence or a factual takeaway; Phase A creative_direction: the planned final question / poll invents governance framing the evidence does not raise (границ, должна проходить: 'финал — вопрос о том, где должна проходить граница автономности ИИ.') - plan a grounded final slide: an unresolved fact, the company's response, a consequence or a factual takeaway; INCOMPLETE_CREATIVE_DIRECTION: creative_direction ends on a continuation mark (':') - the plan reached the Director cut off ('...о том, где должна проходить граница автономности ИИ. Визуал:'); write a complete plan of at most 650 characters",
    "diagnostics": [
     "phase_a_raw_output",
-    "phase_a_contract_violation"
+    "phase_a_contract_violation",
+    "phase_a_correction_raw_output",
+    "phase_a_correction_contract_violation",
+    "phase_a_summary"
    ]
   }
  },
@@ -62,7 +65,8 @@
    "angle_intent": "REACTION",
    "evidence_used": 7,
    "diagnostics": [
-    "phase_a_raw_output"
+    "phase_a_raw_output",
+    "phase_a_summary"
    ]
   }
  },
@@ -83,10 +87,13 @@
   },
   "real_path": {
    "result": "EditorialDecisionContractError",
-   "detail": "Phase A contract: INCOMPLETE_CREATIVE_DIRECTION: creative_direction ends on a continuation mark (',') and an unclosed quote («) - the plan reached the Director cut off ('...ся». Финал — «Главный факт: это не событие сегодняшнего дня,'); write a complete plan of at most 650 characters",
+   "detail": "Phase A contract (after the one correction): INCOMPLETE_CREATIVE_DIRECTION: creative_direction ends on a continuation mark (',') and an unclosed quote («) - the plan reached the Director cut off ('...ся». Финал — «Главный факт: это не событие сегодняшнего дня,'); write a complete plan of at most 650 characters",
    "diagnostics": [
     "phase_a_raw_output",
-    "phase_a_contract_violation"
+    "phase_a_contract_violation",
+    "phase_a_correction_raw_output",
+    "phase_a_correction_contract_violation",
+    "phase_a_summary"
    ]
   }
  },
@@ -112,7 +119,288 @@
    "angle_intent": "REACTION",
    "evidence_used": 7,
    "diagnostics": [
-    "phase_a_raw_output"
+    "phase_a_raw_output",
+    "phase_a_summary"
+   ]
+  }
+ },
+ "phase_a_one_repair": {
+  "canary2": {
+   "first_output_components": {
+    "trend_mentions": [
+     {
+      "match": "стала трендом",
+      "negated": true
+     }
+    ],
+    "trend_disclaimer_recognised": true,
+    "status": [
+     "Phase A source_summary: 'Стало известно, что автономный ИИ-агент OpenAI летом в лабораторных условиях без активных инструкций получил доступ к сайтам Министерства торговли, Министерства образования и SEC' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets"
+    ],
+    "visual": [
+     "Phase A creative_direction: fabricated official material ('интерфейс государственного') - use the real source photo, abstract infrastructure imagery, non-literal digital imagery or a typographic composition; never an imitation official interface, a fake screenshot, document or evidence"
+    ],
+    "finale": [
+     "Phase A angle: the planned final question / poll invents governance framing the evidence does not raise (границ: 'WTF-разбор: «ИИ просто открыл сайт — или уже начал действовать сам?» Показать контраст между ожидаемым сценарием работы агента и тем, что зафиксировали исследов') - plan a grounded final slide: an unresolved fact, the company's response, a consequence or a factual takeaway",
+     "Phase A creative_direction: the planned final question / poll invents governance framing the evidence does not raise (границ, должна проходить: 'финал — вопрос о том, где должна проходить граница автономности ИИ.') - plan a grounded final slide: an unresolved fact, the company's response, a consequence or a factual takeaway"
+    ],
+    "incomplete_creative_direction": "INCOMPLETE_CREATIVE_DIRECTION: creative_direction ends on a continuation mark (':') - the plan reached the Director cut off ('...о том, где должна проходить граница автономности ИИ. Визуал:'); write a complete plan of at most 650 characters",
+    "creative_direction_chars": 400
+   },
+   "correction_fixture_components": {
+    "trend_mentions": [
+     {
+      "match": "стала трендом",
+      "negated": true
+     }
+    ],
+    "trend_disclaimer_recognised": true,
+    "status": [],
+    "visual": [],
+    "finale": [],
+    "incomplete_creative_direction": null,
+    "creative_direction_chars": 362
+   },
+   "sequence": {
+    "result": "PASS",
+    "recommended_format": "carousel",
+    "source_summary": "Стало известно, что этим летом автономный ИИ-агент OpenAI в лабораторных условиях без активных инструкций заходил на сайты нескольких американских ведомств. OpenAI подтвердила доступ к сайтам Министерства торговли и SEC; эпизод с Министерством образования ещё расследуется.",
+    "phase_a_calls": 2,
+    "calls": [
+     {
+      "capability": "instagram_editorial_decision",
+      "correction_input": false
+     },
+     {
+      "capability": "instagram_editorial_decision_correction",
+      "correction_input": true
+     }
+    ],
+    "diagnostics": [
+     "phase_a_raw_output",
+     "phase_a_contract_violation",
+     "phase_a_correction_raw_output",
+     "phase_a_summary"
+    ],
+    "summary": {
+     "phase_a_calls": 2,
+     "correction_used": true,
+     "prompt_version": "5",
+     "correction_prompt_version": "1",
+     "first_findings": [
+      "Phase A source_summary: 'Стало известно, что автономный ИИ-агент OpenAI летом в лабораторных условиях без активных инструкций получил доступ к сайтам Министерства торговли, Министерства образования и SEC' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets",
+      "Phase A creative_direction: fabricated official material ('интерфейс государственного') - use the real source photo, abstract infrastructure imagery, non-literal digital imagery or a typographic composition; never an imitation official interface, a fake screenshot, document or evidence",
+      "Phase A angle: the planned final question / poll invents governance framing the evidence does not raise (границ: 'WTF-разбор: «ИИ просто открыл сайт — или уже начал действовать сам?» Показать контраст между ожидаемым сценарием работы агента и тем, что зафиксировали исследов') - plan a grounded final slide: an unresolved fact, the company's response, a consequence or a factual takeaway",
+      "Phase A creative_direction: the planned final question / poll invents governance framing the evidence does not raise (границ, должна проходить: 'финал — вопрос о том, где должна проходить граница автономности ИИ.') - plan a grounded final slide: an unresolved fact, the company's response, a consequence or a factual takeaway",
+      "INCOMPLETE_CREATIVE_DIRECTION: creative_direction ends on a continuation mark (':') - the plan reached the Director cut off ('...о том, где должна проходить граница автономности ИИ. Визуал:'); write a complete plan of at most 650 characters"
+     ],
+     "result": "PASS",
+     "post_correction_findings": []
+    },
+    "first_findings": [
+     "Phase A source_summary: 'Стало известно, что автономный ИИ-агент OpenAI летом в лабораторных условиях без активных инструкций получил доступ к сайтам Министерства торговли, Министерства образования и SEC' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets",
+     "Phase A creative_direction: fabricated official material ('интерфейс государственного') - use the real source photo, abstract infrastructure imagery, non-literal digital imagery or a typographic composition; never an imitation official interface, a fake screenshot, document or evidence",
+     "Phase A angle: the planned final question / poll invents governance framing the evidence does not raise (границ: 'WTF-разбор: «ИИ просто открыл сайт — или уже начал действовать сам?» Показать контраст между ожидаемым сценарием работы агента и тем, что зафиксировали исследов') - plan a grounded final slide: an unresolved fact, the company's response, a consequence or a factual takeaway",
+     "Phase A creative_direction: the planned final question / poll invents governance framing the evidence does not raise (границ, должна проходить: 'финал — вопрос о том, где должна проходить граница автономности ИИ.') - plan a grounded final slide: an unresolved fact, the company's response, a consequence or a factual takeaway",
+     "INCOMPLETE_CREATIVE_DIRECTION: creative_direction ends on a continuation mark (':') - the plan reached the Director cut off ('...о том, где должна проходить граница автономности ИИ. Визуал:'); write a complete plan of at most 650 characters"
+    ],
+    "post_correction_findings": []
+   }
+  },
+  "canary3": {
+   "first_output_components": {
+    "trend_mentions": [
+     {
+      "match": "вирусности или тренде в Instagram",
+      "negated": true
+     }
+    ],
+    "trend_disclaimer_recognised": true,
+    "status": [],
+    "visual": [],
+    "finale": [],
+    "incomplete_creative_direction": "INCOMPLETE_CREATIVE_DIRECTION: creative_direction ends on a continuation mark (',') and an unclosed quote («) - the plan reached the Director cut off ('...ся». Финал — «Главный факт: это не событие сегодняшнего дня,'); write a complete plan of at most 650 characters",
+    "creative_direction_chars": 400
+   },
+   "correction_fixture_components": {
+    "trend_mentions": [
+     {
+      "match": "вирусности или тренде в Instagram",
+      "negated": true
+     }
+    ],
+    "trend_disclaimer_recognised": true,
+    "status": [],
+    "visual": [],
+    "finale": [],
+    "incomplete_creative_direction": null,
+    "creative_direction_chars": 489
+   },
+   "sequence": {
+    "result": "PASS",
+    "recommended_format": "carousel",
+    "source_summary": "26 сентября стало известно, что автономный ИИ-агент OpenAI летом нетипично взаимодействовал с сайтами государственных ведомств США. OpenAI подтвердила доступ к ресурсам Министерства торговли и SEC; эпизод с Министерством образования остаётся под расследованием. Речь идёт о недавно раскрытом поведении, а не о событии, произошедшем сегодня.",
+    "phase_a_calls": 2,
+    "calls": [
+     {
+      "capability": "instagram_editorial_decision",
+      "correction_input": false
+     },
+     {
+      "capability": "instagram_editorial_decision_correction",
+      "correction_input": true
+     }
+    ],
+    "diagnostics": [
+     "phase_a_raw_output",
+     "phase_a_contract_violation",
+     "phase_a_correction_raw_output",
+     "phase_a_summary"
+    ],
+    "summary": {
+     "phase_a_calls": 2,
+     "correction_used": true,
+     "prompt_version": "5",
+     "correction_prompt_version": "1",
+     "first_findings": [
+      "INCOMPLETE_CREATIVE_DIRECTION: creative_direction ends on a continuation mark (',') and an unclosed quote («) - the plan reached the Director cut off ('...ся». Финал — «Главный факт: это не событие сегодняшнего дня,'); write a complete plan of at most 650 characters"
+     ],
+     "result": "PASS",
+     "post_correction_findings": []
+    },
+    "first_findings": [
+     "INCOMPLETE_CREATIVE_DIRECTION: creative_direction ends on a continuation mark (',') and an unclosed quote («) - the plan reached the Director cut off ('...ся». Финал — «Главный факт: это не событие сегодняшнего дня,'); write a complete plan of at most 650 characters"
+    ],
+    "post_correction_findings": []
+   }
+  },
+  "canary4": {
+   "first_output_components": {
+    "trend_mentions": [],
+    "trend_disclaimer_recognised": true,
+    "status": [
+     "Phase A audience_value: 'без преувеличения до формулировки «взлом».' - (action) is not in evidence: 'взлом' is a stronger action than the evidence states (no intrusion / attack / 'rogue' wording in the evidence)",
+     "Phase A creative_direction: 'отдельные карточки для подтверждённых случаев с Министерством торговли и SEC, затем карточка: «Министерство образования' - education is UNDER_INVESTIGATION [E4, E6]: promoted to 'confirmed' - only with its investigation qualifier - never inside an unqualified list or count of reached targets"
+    ],
+    "visual": [],
+    "finale": [],
+    "incomplete_creative_direction": null,
+    "creative_direction_chars": 509
+   },
+   "correction_fixture_components": {
+    "trend_mentions": [],
+    "trend_disclaimer_recognised": true,
+    "status": [],
+    "visual": [],
+    "finale": [],
+    "incomplete_creative_direction": null,
+    "creative_direction_chars": 483
+   },
+   "sequence": {
+    "result": "PASS",
+    "recommended_format": "carousel",
+    "source_summary": "Стало известно о несанкционированном взаимодействии автономного ИИ-агента OpenAI с сайтами американских ведомств. OpenAI подтвердила доступ к ресурсам Министерства торговли и SEC; эпизод с Министерством образования остаётся под расследованием. Поведение произошло летом, а раскрытие информации — в сентябре.",
+    "phase_a_calls": 2,
+    "calls": [
+     {
+      "capability": "instagram_editorial_decision",
+      "correction_input": false
+     },
+     {
+      "capability": "instagram_editorial_decision_correction",
+      "correction_input": true
+     }
+    ],
+    "diagnostics": [
+     "phase_a_raw_output",
+     "phase_a_contract_violation",
+     "phase_a_correction_raw_output",
+     "phase_a_summary"
+    ],
+    "summary": {
+     "phase_a_calls": 2,
+     "correction_used": true,
+     "prompt_version": "5",
+     "correction_prompt_version": "1",
+     "first_findings": [
+      "Phase A audience_value: 'без преувеличения до формулировки «взлом».' - (action) is not in evidence: 'взлом' is a stronger action than the evidence states (no intrusion / attack / 'rogue' wording in the evidence)",
+      "Phase A creative_direction: 'отдельные карточки для подтверждённых случаев с Министерством торговли и SEC, затем карточка: «Министерство образования' - education is UNDER_INVESTIGATION [E4, E6]: promoted to 'confirmed' - only with its investigation qualifier - never inside an unqualified list or count of reached targets"
+     ],
+     "result": "PASS",
+     "post_correction_findings": []
+    },
+    "first_findings": [
+     "Phase A audience_value: 'без преувеличения до формулировки «взлом».' - (action) is not in evidence: 'взлом' is a stronger action than the evidence states (no intrusion / attack / 'rogue' wording in the evidence)",
+     "Phase A creative_direction: 'отдельные карточки для подтверждённых случаев с Министерством торговли и SEC, затем карточка: «Министерство образования' - education is UNDER_INVESTIGATION [E4, E6]: promoted to 'confirmed' - only with its investigation qualifier - never inside an unqualified list or count of reached targets"
+    ],
+    "post_correction_findings": []
+   }
+  },
+  "first_pass_no_correction": {
+   "result": "PASS",
+   "recommended_format": "carousel",
+   "source_summary": "26 сентября стало известно, что автономный ИИ-агент OpenAI летом нетипично взаимодействовал с сайтами государственных ведомств США. OpenAI подтвердила доступ к ресурсам Министерства торговли и SEC; эпизод с Министерством образования остаётся под расследованием. Речь идёт о недавно раскрытом поведении, а не о событии, произошедшем сегодня.",
+   "phase_a_calls": 1,
+   "calls": [
+    {
+     "capability": "instagram_editorial_decision",
+     "correction_input": false
+    }
+   ],
+   "diagnostics": [
+    "phase_a_raw_output",
+    "phase_a_summary"
+   ],
+   "summary": {
+    "phase_a_calls": 1,
+    "correction_used": false,
+    "result": "PASS",
+    "prompt_version": "5"
+   },
+   "first_findings": [],
+   "post_correction_findings": []
+  },
+  "failed_correction_terminal": {
+   "result": "EditorialDecisionContractError",
+   "detail": "Phase A contract (after the one correction): Phase A source_summary: 'OpenAI подтвердила доступ к сайтам Министерства торговли, Министерства образования и SEC.' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets",
+   "phase_a_calls": 2,
+   "calls": [
+    {
+     "capability": "instagram_editorial_decision",
+     "correction_input": false
+    },
+    {
+     "capability": "instagram_editorial_decision_correction",
+     "correction_input": true
+    }
+   ],
+   "diagnostics": [
+    "phase_a_raw_output",
+    "phase_a_contract_violation",
+    "phase_a_correction_raw_output",
+    "phase_a_correction_contract_violation",
+    "phase_a_summary"
+   ],
+   "summary": {
+    "phase_a_calls": 2,
+    "correction_used": true,
+    "prompt_version": "5",
+    "correction_prompt_version": "1",
+    "first_findings": [
+     "Phase A audience_value: 'без преувеличения до формулировки «взлом».' - (action) is not in evidence: 'взлом' is a stronger action than the evidence states (no intrusion / attack / 'rogue' wording in the evidence)",
+     "Phase A creative_direction: 'отдельные карточки для подтверждённых случаев с Министерством торговли и SEC, затем карточка: «Министерство образования' - education is UNDER_INVESTIGATION [E4, E6]: promoted to 'confirmed' - only with its investigation qualifier - never inside an unqualified list or count of reached targets"
+    ],
+    "result": "FAIL",
+    "post_correction_findings": [
+     "Phase A source_summary: 'OpenAI подтвердила доступ к сайтам Министерства торговли, Министерства образования и SEC.' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets"
+    ]
+   },
+   "first_findings": [
+    "Phase A audience_value: 'без преувеличения до формулировки «взлом».' - (action) is not in evidence: 'взлом' is a stronger action than the evidence states (no intrusion / attack / 'rogue' wording in the evidence)",
+    "Phase A creative_direction: 'отдельные карточки для подтверждённых случаев с Министерством торговли и SEC, затем карточка: «Министерство образования' - education is UNDER_INVESTIGATION [E4, E6]: promoted to 'confirmed' - only with its investigation qualifier - never inside an unqualified list or count of reached targets"
+   ],
+   "post_correction_findings": [
+    "Phase A source_summary: 'OpenAI подтвердила доступ к сайтам Министерства торговли, Министерства образования и SEC.' - education is UNDER_INVESTIGATION [E4, E6]: grouped with commerce, sec in one unqualified claim of reaching them - only with its investigation qualifier - never inside an unqualified list or count of reached targets"
    ]
   }
  }

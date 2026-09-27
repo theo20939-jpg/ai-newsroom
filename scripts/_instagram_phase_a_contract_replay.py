@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 ROOT = Path(__file__).resolve().parent.parent
 CANARY2 = ROOT / "artifacts/instagram_feed_product/viral_nominated_canary2_20260927/post"
 CANARY3 = ROOT / "artifacts/instagram_feed_product/viral_nominated_canary3_20260927/post"  # Phase A v4 live output (canary 3)
+CANARY4 = ROOT / "artifacts/instagram_feed_product/viral_nominated_canary4_20260927/post"  # Phase A v5 live output (canary 4)
 
 
 def saved_output(canary: Path = CANARY2) -> dict:
@@ -74,6 +75,57 @@ def valid_fixture(saved: dict) -> dict:
         supplementary_story_idea="Stories: карточка с двумя датами - эпизоды летом, раскрытие 25 сентября.",
     )
     return fixture
+
+
+def canary4_correction_fixture(saved: dict) -> dict:
+    """What a valid ONE-REPAIR correction of canary 4's plan looks like: the same plan, the two flagged passages rephrased unambiguously
+    (no warning word to misread, the Education card as its own sentence). Replay / test material only, never production wording."""
+    fixture = copy.deepcopy(saved)
+    fixture["audience_value"] = ("Аудитория поймёт, что именно подтверждено, какие действия агента описаны в источнике и почему автономный "
+                                 "доступ к государственным сайтам вызывает тревогу - без преувеличений.")
+    fixture["creative_direction"] = (
+        "Открытие: крупная типографика «ИИ сам взаимодействовал с госсайтами?» и пометка «раскрыто сейчас, произошло летом». Далее отдельные "
+        "карточки: OpenAI подтвердила доступ к сайтам Министерства торговли и SEC. Затем отдельная карточка: эпизод с Министерством "
+        "образования ещё расследуется. Использовать исходное изображение и абстрактную графику цифровой инфраструктуры, без имитации "
+        "чужих сайтов и документов. Финал: «Это не сегодняшнее событие: сегодня раскрыли детали летнего эпизода».")
+    return fixture
+
+
+async def run_phase_a_sequence(outputs: list[dict], canary: Path = CANARY2) -> dict:
+    """The REAL Phase A path (generate_editorial_decision) with the model calls replaced by `outputs` in order: the first generation, then
+    the one correction. Records every call (capability, the correction prompt's presence) and the diagnostics."""
+    import services.instagram_creative_director as cd
+    from integrations.prompts.file_repository import FilePromptRepository
+
+    real = cd.call_generate
+    diagnostics: list = []
+    calls: list = []
+    cd.set_raw_output_sink(lambda event, payload: diagnostics.append((event, payload)))
+
+    async def fake_call(_gateway, request, **kw):
+        calls.append({"capability": kw["runtime"].capability_name,
+                      "correction_input": "ORIGINAL PHASE A PLAN" in request.messages[1].content[0].text})
+        if len(calls) > len(outputs):
+            raise AssertionError("more Phase A calls than the bound")
+        return SimpleNamespace(error=None, call=None, response=SimpleNamespace(finish_reason="stop",
+                                                                             structured_output=copy.deepcopy(outputs[len(calls) - 1])))
+
+    cd.call_generate = fake_call
+    try:
+        decision, _call = await cd.generate_editorial_decision(None, FilePromptRepository(ROOT / "prompts"), decision_input=decision_input(canary))
+        result = {"result": "PASS", "recommended_format": decision.recommended_format, "source_summary": decision.source_summary}
+    except Exception as exc:  # noqa: BLE001 - the replay reports what the validation raises
+        result = {"result": type(exc).__name__, "detail": str(exc)[:3000]}
+    finally:
+        cd.call_generate = real
+        cd.set_raw_output_sink(None)
+    result["phase_a_calls"] = len(calls)
+    result["calls"] = calls
+    result["diagnostics"] = [event for event, _p in diagnostics]
+    result["summary"] = next((p for event, p in reversed(diagnostics) if event == "phase_a_summary"), None)
+    result["first_findings"] = next((p["findings"] for event, p in diagnostics if event == "phase_a_contract_violation"), [])
+    result["post_correction_findings"] = next((p["findings"] for event, p in diagnostics if event == "phase_a_correction_contract_violation"), [])
+    return result
 
 
 async def run_phase_a(structured: dict, canary: Path = CANARY2) -> dict:
@@ -136,6 +188,19 @@ def main() -> None:
     report["saved_canary3_phase_a_v4"] = {"components": component_view(saved3, CANARY3), "real_path": asyncio.run(run_phase_a(saved3, CANARY3))}
     report["valid_v5_fixture"] = {"creative_direction": fixture3["creative_direction"], "components": component_view(fixture3, CANARY3),
                                   "real_path": asyncio.run(run_phase_a(fixture3, CANARY3))}
+    # --- Phase A ONE-REPAIR (founder task 2026-09-27): the saved first outputs stay failures; the orchestration repairs them once ---
+    saved4 = saved_output(CANARY4)
+    fixture4 = canary4_correction_fixture(saved4)
+    repair = {}
+    for name, canary, first, corrected in (("canary2", CANARY2, saved, fixture), ("canary3", CANARY3, saved3, fixture3),
+                                           ("canary4", CANARY4, saved4, fixture4)):
+        repair[name] = {"first_output_components": component_view(first, canary), "correction_fixture_components": component_view(corrected, canary),
+                        "sequence": asyncio.run(run_phase_a_sequence([first, corrected], canary))}
+    repair["first_pass_no_correction"] = asyncio.run(run_phase_a_sequence([fixture3], CANARY3))
+    still_bad = copy.deepcopy(fixture4)
+    still_bad["source_summary"] = "OpenAI подтвердила доступ к сайтам Министерства торговли, Министерства образования и SEC."  # promotes Education
+    repair["failed_correction_terminal"] = asyncio.run(run_phase_a_sequence([saved4, still_bad], CANARY4))
+    report["phase_a_one_repair"] = repair
     (out / "phase_a_contract_replay.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps({k: {"components": v["components"], "real_path": v["real_path"]} for k, v in report.items() if isinstance(v, dict)},
                      ensure_ascii=False, indent=1)[:6000])

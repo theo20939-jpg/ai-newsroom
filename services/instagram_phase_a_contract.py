@@ -178,3 +178,21 @@ def phase_a_contract_findings(decision: Any, evidence: list[str]) -> list[str]:
 def phase_a_status_note(evidence: list[str]) -> str:
     """The compact factual-status summary Phase A receives (the existing ledger's own rendering); empty when no target has a status."""
     return ledger_note(build_status_ledger(evidence))
+
+
+def phase_a_non_regression(first: Any, corrected: Any) -> list[str]:
+    """What the ONE Phase A correction may not lose relative to the draft it corrects (the FULL contract already re-checks status, trend,
+    visual, finale and completeness on the corrected plan): the planned format, and the chronology - a draft that said WHEN the behaviour
+    happened and that it was disclosed now keeps both markers (the existing factual-status chronology markers, no second system)."""
+    from services.instagram_factual_status import _DISCLOSED, _UNDERLYING_TIME
+
+    problems = []
+    if _get(first, "recommended_format") and _get(corrected, "recommended_format") != _get(first, "recommended_format"):
+        problems.append(f"correction changed recommended_format ({_get(first, 'recommended_format')} -> {_get(corrected, 'recommended_format')})")
+    before = " ".join(_get(first, f) for f in _PROSE_FIELDS)
+    after = " ".join(_get(corrected, f) for f in _PROSE_FIELDS)
+    if _UNDERLYING_TIME.search(before) and not _UNDERLYING_TIME.search(after):
+        problems.append("correction removed WHEN the behaviour happened (the draft dated it; the corrected plan does not)")
+    if _DISCLOSED.search(before) and not _DISCLOSED.search(after):
+        problems.append("correction removed that the facts were disclosed now (the draft said so; the corrected plan does not)")
+    return problems

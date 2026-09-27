@@ -11,6 +11,12 @@ The event's copies are read-only copied from production into the local scratch D
 Image generation is LIVE in this process only (the accepted no-photo => generated rule) behind an isolated, capped ledger; the LLM goes
 through the harness provider guard (worst-case refused above the cap). No Telegram send (captured), no production write, no publication.
 Usage (OPENAI_API_KEY in the environment only): python scripts/_instagram_viral_nominated_canary.py <pool.jsonl> <members.jsonl> <out dir>
+
+Cost bound (Phase A ONE-REPAIR, 2026-09-27): at most 2 Phase A calls now. Worst case per call at its output cap (gpt-5.6-luna $1 / $6 per
+M tokens): Phase A $0.0510 + the one Phase A correction $0.0545 + vision $0.0033 + Director 2 x $0.0784 + judge 2 x $0.0115 = $0.2886 LLM
+(was $0.2341) - under the unchanged $0.45 LLM cap, which the provider guard enforces BEFORE every request; images stay capped at $0.55.
+The Phase A diagnostics (first output, findings + repairability, correction output + prompt version, post-correction findings, call count)
+land in the post directory as director_phase_a_*.json.
 """
 from __future__ import annotations
 

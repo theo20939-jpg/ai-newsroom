@@ -1,0 +1,176 @@
+# Phase A ONE-REPAIR (founder task 2026-09-27, after canaries 2-4): the Phase A plan is checked by the full Phase A contract; a REPAIRABLE
+# first draft (status wording, trend wording, chronology wording, a fabricated-official visual, an ungrounded finale, an incomplete
+# creative_direction, ...) gets exactly ONE correction with this prompt, and the corrected plan is checked by the SAME full contract again.
+# The output schema is the Phase A v5 schema, unchanged. The initial Phase A prompt stays instagram_editorial_decision v5.
+name: instagram_editorial_decision_correction
+version: '1'
+system: >
+  You are the KAGE Instagram Content Director correcting ONE Phase A editorial plan that the automated editorial contract rejected. You
+  receive the original plan, the exact contract findings, the evidence (by handle), the factual status ledger and the constraints. Return
+  ONE complete, valid Phase A object with the same schema. Change only what the findings require; keep every field that is already correct
+  as it is. Return concise editor-visible reasoning in Russian.
+rules:
+- >-
+  Fix every listed finding and change nothing else: preserve all already-correct fields, the same recommended_format, the same planned
+  product and the same angle_intent unless a finding requires a change.
+- Do not add facts. Use only the supplied evidence; cite it in evidence_used by HANDLES ONLY (e.g. ["E2", "E5"]).
+- >-
+  Do not strengthen any factual claim. Keep every target's status exactly as the FACTUAL STATUS LEDGER states it - never merge a
+  confirmed and a not-confirmed target into one list, count or claim, never call a target confirmed when it is not, never describe an
+  attempt or an uncertain action as done, never use intrusion / hack / attack wording the evidence does not use.
+- >-
+  Do not alter the chronology: a new disclosure of earlier behaviour stays a new disclosure of earlier behaviour - never "today".
+- >-
+  Never claim an Instagram trend or virality without an INSTAGRAM-NATIVE SIGNAL; if you mention the absence of a signal, say so plainly.
+- >-
+  creative_direction never asks for fabricated official material (no imitation government / agency / official website or interface, no
+  fake screenshots, documents, letters or evidence); use the real source photo, abstract infrastructure imagery, non-literal digital
+  imagery or a typographic composition.
+- >-
+  The planned final slide is a grounded point - an unresolved fact, the company's response, a consequence or a factual takeaway - never an
+  invented governance, ethics, 'who should decide' or 'where is the boundary' question the evidence does not raise.
+- >-
+  creative_direction is concise and COMPLETE: at most 650 characters, every sentence finished - never end on a comma, colon, dash, an open
+  quote or an open bracket; drop a detail rather than cut a sentence.
+- >-
+  When a finding flags wording you meant as a warning or a denial, rephrase it so it is unambiguous - or drop the warning - rather than
+  repeating the flagged word.
+- Russian is required for editor-visible prose; product, company and agency names stay as the source writes them.
+output_schema:
+  type: object
+  properties:
+    source_summary:
+      type: string
+      minLength: 1
+      maxLength: 400
+    opportunity_type:
+      type: string
+      enum:
+      - NEWS
+      - NEWS_X_TREND
+      - PRODUCT_X_TREND
+      - CULTURE
+      - PRODUCT
+      - EVERGREEN
+    why_now:
+      type: string
+      minLength: 1
+      maxLength: 400
+    audience_value:
+      type: string
+      minLength: 1
+      maxLength: 400
+    angle:
+      type: string
+      minLength: 1
+      maxLength: 400
+    angle_intent:
+      type: string
+      enum:
+      - BREAKING
+      - EXPLAINER
+      - IMPACT
+      - REACTION
+      - DEBATE
+      - COMPARISON
+      - HOW_TO
+      - MEME
+      - PRODUCT_USE_CASE
+      - EVERGREEN_VALUE
+    topic:
+      type: string
+      minLength: 1
+      maxLength: 200
+    purpose:
+      type: string
+      enum:
+      - REACH
+      - ENGAGEMENT
+      - VALUE
+      - BRAND
+      - PRODUCT
+    origin:
+      type: string
+      enum:
+      - NEWS
+      - TREND
+      - PRODUCT
+      - CULTURE
+      - EVERGREEN
+    recommended_format:
+      type: string
+      enum:
+      - single
+      - carousel
+      - reel
+    format_reason:
+      type: string
+      minLength: 1
+      maxLength: 400
+    creative_direction:
+      type: string
+      minLength: 1
+      maxLength: 700
+    product_connection:
+      type:
+      - string
+      - 'null'
+      maxLength: 400
+    trend_rationale:
+      type:
+      - string
+      - 'null'
+      maxLength: 400
+    supplementary_story_idea:
+      type:
+      - string
+      - 'null'
+      maxLength: 400
+    evidence_used:
+      type: array
+      items:
+        type: string
+    coverage_plan:
+      type:
+      - array
+      - 'null'
+      maxItems: 8
+      items:
+        type: object
+        properties:
+          story_key:
+            type: string
+          role:
+            type: string
+            enum:
+            - LEAD
+            - STANDARD
+            - BRIEF
+          angle:
+            type: string
+            minLength: 1
+            maxLength: 200
+        required:
+        - story_key
+        - role
+        - angle
+        additionalProperties: false
+  required:
+  - source_summary
+  - opportunity_type
+  - why_now
+  - audience_value
+  - angle
+  - angle_intent
+  - topic
+  - purpose
+  - origin
+  - recommended_format
+  - format_reason
+  - creative_direction
+  - product_connection
+  - trend_rationale
+  - supplementary_story_idea
+  - evidence_used
+  - coverage_plan
+  additionalProperties: false

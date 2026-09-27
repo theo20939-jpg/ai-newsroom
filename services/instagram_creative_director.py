@@ -84,6 +84,11 @@ SINGLE_PROMPT_NAME = "instagram_creative_director_single"
 CAROUSEL_PROMPT_NAME = "instagram_creative_director_carousel"
 REEL_PROMPT_NAME = "instagram_creative_director_reel"
 EDITORIAL_DECISION_PROMPT_NAME = "instagram_editorial_decision"
+# founder task 2026-09-27 (Phase A ONE-REPAIR): a REPAIRABLE Phase A first draft gets exactly one correction with its own prompt; the
+# initial prompt stays instagram_editorial_decision v5. At most MAX_PHASE_A_CALLS model calls per story, never more.
+EDITORIAL_DECISION_CORRECTION_PROMPT_NAME = "instagram_editorial_decision_correction"
+EDITORIAL_DECISION_CORRECTION_PROMPT_VERSION = "1"
+MAX_PHASE_A_CALLS = 2
 # INSTAGRAM-CONTENT-STRATEGY-V2 Phase 2/3 ROLLOUT CLOSURE HOTFIX: a real bounded Reel canary
 # against the live production OpenAI endpoint surfaced the exact same structured-output contract
 # bug the business_context_parser hotfix already diagnosed and fixed - OpenAI's strict
@@ -224,6 +229,17 @@ class TargetStatusSafetyError(CreativeFactSafetyError):
     def __init__(self, findings: list[str]):
         self.findings = list(findings)
         super().__init__("factual status review: " + "; ".join(self.findings))
+
+
+class PhaseARepairableError(EditorialDecisionContractError):
+    """A Phase A plan that fails its contract on REPAIRABLE wording / planning findings (target-status wording, stronger-action or trend
+    wording, chronology wording, a fabricated-official visual, an ungrounded finale, an incomplete creative_direction, language policy) -
+    fixable by rewriting the same plan from the same evidence. It gets the ONE Phase A correction; it never leaves generate_editorial_decision
+    for a contract-version prompt (a failed correction is a plain, terminal EditorialDecisionContractError)."""
+
+    def __init__(self, findings: list[str]):
+        self.findings = list(findings)
+        super().__init__("Phase A contract: " + "; ".join(self.findings))
 
 
 class RecapCoverageContractError(CreativeFactSafetyError):
@@ -823,31 +839,20 @@ def _enforce_output_policy(text_fields: list[str], *, locale: str) -> None:
     assert_audience_facing_copy(text_fields)
 
 
-async def generate_editorial_decision(
-    gateway: LLMGateway, prompt_repository: PromptRepository, *, decision_input: InstagramEditorialDecisionInput,
-) -> tuple[InstagramEditorialDecision, CapabilityCall]:
-    version = _EDITORIAL_DECISION_PLANNED_PROMPT_VERSION if decision_input.planned_format else _EDITORIAL_DECISION_PROMPT_VERSION
-    try:
-        prompt = prompt_repository.resolve(EDITORIAL_DECISION_PROMPT_NAME, version)
-    except Exception as exc:
-        raise CreativeDirectorUnavailableError(f"prompt unavailable: {exc}") from exc
+async def _phase_a_generate(gateway: LLMGateway, prompt: object, user_text: str, *, capability_name: str) -> tuple[dict, CapabilityCall]:
+    """One Phase A model call. Every provider / truncation / empty-output failure is TERMINAL (CreativeDirectorUnavailableError)."""
     request = GenerateRequest(
         messages=[
-            Message(
-                role="system",
-                content=[ContentPart(type="text", text=prompt.system + "\n\nRULES:\n" + "\n".join(f"- {r}" for r in prompt.rules))],
-            ),
-            Message(role="user", content=[ContentPart(type="text", text=_build_decision_user_text(
-                decision_input, handles=version in _HANDLE_DECISION_VERSIONS, contract=version in _PHASE_A_CONTRACT_VERSIONS))]),
+            Message(role="system",
+                    content=[ContentPart(type="text", text=prompt.system + "\n\nRULES:\n" + "\n".join(f"- {r}" for r in prompt.rules))]),
+            Message(role="user", content=[ContentPart(type="text", text=user_text)]),
         ],
         response_mode="json_schema",
         response_schema=prompt.output_schema,
         max_tokens=_EDITORIAL_DECISION_MAX_TOKENS,
     )
-    runtime = RuntimeContext(
-        task_id=uuid4(), event_id=uuid4(), capability_name=EDITORIAL_DECISION_PROMPT_NAME,
-        priority=TaskPriority.S, attempt=1, iteration_count=0,
-    )
+    runtime = RuntimeContext(task_id=uuid4(), event_id=uuid4(), capability_name=capability_name, priority=TaskPriority.S, attempt=1,
+                             iteration_count=0)
     try:
         outcome = await call_generate(gateway, request, runtime=runtime, sequence=0)
     except Exception as exc:
@@ -858,12 +863,17 @@ async def generate_editorial_decision(
         raise CreativeDirectorUnavailableError(f"editorial decision truncated at max_tokens={_EDITORIAL_DECISION_MAX_TOKENS}")
     if outcome.response is None or outcome.response.structured_output is None:
         raise CreativeDirectorUnavailableError("no structured output returned")
-    _emit_diagnostic("phase_a_raw_output", {"planned_format": decision_input.planned_format, "prompt_version": version,
-                                             "structured_output": outcome.response.structured_output})
+    return outcome.response.structured_output, outcome.call
+
+
+def _validate_phase_a(structured: dict, decision_input: InstagramEditorialDecisionInput, version: str) -> InstagramEditorialDecision:
+    """The FULL Phase A validation. TERMINAL (raised as is): an output that does not satisfy the schema, evidence handles that do not
+    exist, a broken weekly-recap coverage plan. REPAIRABLE (collected, raised together as PhaseARepairableError for a contract version):
+    the trend-rationale guard, the Phase A contract (status / visual / finale / incomplete plan) and the language / audience-copy policy.
+    A legacy (pre-contract) version keeps its original fail-fast behaviour exactly."""
     try:
         decision = InstagramEditorialDecision.model_validate(
-            outcome.response.structured_output,
-            context={"planned_format": decision_input.planned_format} if decision_input.planned_format else None)
+            structured, context={"planned_format": decision_input.planned_format} if decision_input.planned_format else None)
     except ValidationError as exc:
         raise EditorialDecisionContractError(f"Phase A output does not satisfy the decision schema: {exc.errors()[:3]}") from exc
     if version in _HANDLE_DECISION_VERSIONS:
@@ -874,30 +884,97 @@ async def generate_editorial_decision(
     assert_evidence_grounded(decision.evidence_used, decision_input.allowed_evidence)
     if decision_input.planned_format == WEEKLY_RECAP:
         assert_recap_coverage(decision, [str(s["story_key"]) for s in decision_input.recap_stories])
-    assert_trend_rationale_grounded(
-        decision.trend_rationale,
-        signal_type=decision_input.trend_signal_type,
-        provenance=decision_input.trend_signal_provenance,
-        is_platform_native=decision_input.trend_signal_is_platform_native,
-    )
-    if version in _PHASE_A_CONTRACT_VERSIONS:
-        # founder task 2026-09-27: Phase A never seeds the Director with a status-collapsed summary, a fabricated official visual or an
-        # invented governance finale (services.instagram_phase_a_contract; Phase A has no retry - the prompt carries the same contract)
-        from services.instagram_phase_a_contract import phase_a_contract_findings
+    contract = version in _PHASE_A_CONTRACT_VERSIONS
+    policy_fields = [decision.why_now, decision.audience_value, decision.angle, decision.format_reason, decision.creative_direction,
+                     decision.product_connection or "", decision.trend_rationale or "", decision.supplementary_story_idea or ""]
+    trend = {"signal_type": decision_input.trend_signal_type, "provenance": decision_input.trend_signal_provenance,
+             "is_platform_native": decision_input.trend_signal_is_platform_native}
+    if not contract:
+        assert_trend_rationale_grounded(decision.trend_rationale, **trend)
+        _enforce_output_policy(policy_fields, locale=decision_input.locale)
+        return decision
+    from services.instagram_phase_a_contract import phase_a_contract_findings
 
-        findings = phase_a_contract_findings(decision, list(decision_input.allowed_evidence))
-        if findings:
-            _emit_diagnostic("phase_a_contract_violation", {"findings": findings})
-            raise EditorialDecisionContractError("Phase A contract: " + "; ".join(findings))
-    _enforce_output_policy(
-        [
-            decision.why_now, decision.audience_value, decision.angle, decision.format_reason,
-            decision.creative_direction, decision.product_connection or "", decision.trend_rationale or "",
-            decision.supplementary_story_idea or "",
-        ],
-        locale=decision_input.locale,
-    )
-    return decision, outcome.call
+    findings: list[str] = []
+    try:
+        assert_trend_rationale_grounded(decision.trend_rationale, **trend)
+    except UngroundedTrendClaimError as exc:
+        findings.append(f"trend: {exc}")
+    findings += phase_a_contract_findings(decision, list(decision_input.allowed_evidence))
+    try:
+        _enforce_output_policy(policy_fields, locale=decision_input.locale)
+    except (CreativeLanguageError, AudienceFacingCopyError) as exc:
+        findings.append(f"language policy: {type(exc).__name__}: {exc}")
+    if findings:
+        raise PhaseARepairableError(findings)
+    return decision
+
+
+def _phase_a_correction_text(user_text: str, first: dict, findings: list[str]) -> str:
+    """The one correction's input: the SAME Phase A input (evidence by handle, the factual status ledger, the planned product), the
+    original plan and the exact contract findings - plus the constraints the corrected plan is checked against again."""
+    return (user_text
+            + "\n\nORIGINAL PHASE A PLAN (rejected by the editorial contract):\n" + json.dumps(first, ensure_ascii=False, indent=1)
+            + "\n\nCONTRACT FINDINGS (fix every one; change nothing else):\n" + "\n".join(f"{i}. {f}" for i, f in enumerate(findings, 1))
+            + "\n\nCONSTRAINTS (the corrected plan is checked by the FULL contract again - a fix that breaks another rule fails): preserve "
+              "all already-correct fields; change only what the findings require; do not add facts; do not strengthen factual claims; do "
+              "not collapse mixed target statuses; do not alter the chronology; no fabricated official UI, screenshots or documents; no "
+              "unsupported trend claim; a grounded final slide; creative_direction complete and at most 650 characters; return a "
+              "complete valid Phase A object.")
+
+
+async def generate_editorial_decision(
+    gateway: LLMGateway, prompt_repository: PromptRepository, *, decision_input: InstagramEditorialDecisionInput,
+) -> tuple[InstagramEditorialDecision, CapabilityCall]:
+    """Phase A. Founder task 2026-09-27 (ONE-REPAIR): FIRST generation -> FULL contract -> PASS: done; REPAIRABLE FAIL: exactly ONE
+    correction (instagram_editorial_decision_correction v1) -> the FULL contract again + correction non-regression -> PASS: done, FAIL:
+    terminal. TERMINAL failures (provider, schema, unknown evidence handles, recap coverage) never get a correction. At most
+    MAX_PHASE_A_CALLS calls; the Director never sees a plan that has not passed."""
+    version = _EDITORIAL_DECISION_PLANNED_PROMPT_VERSION if decision_input.planned_format else _EDITORIAL_DECISION_PROMPT_VERSION
+    try:
+        prompt = prompt_repository.resolve(EDITORIAL_DECISION_PROMPT_NAME, version)
+    except Exception as exc:
+        raise CreativeDirectorUnavailableError(f"prompt unavailable: {exc}") from exc
+    user_text = _build_decision_user_text(decision_input, handles=version in _HANDLE_DECISION_VERSIONS,
+                                          contract=version in _PHASE_A_CONTRACT_VERSIONS)
+    first, call = await _phase_a_generate(gateway, prompt, user_text, capability_name=EDITORIAL_DECISION_PROMPT_NAME)
+    _emit_diagnostic("phase_a_raw_output", {"planned_format": decision_input.planned_format, "prompt_version": version,
+                                             "structured_output": first})
+    try:
+        decision = _validate_phase_a(first, decision_input, version)
+        _emit_diagnostic("phase_a_summary", {"phase_a_calls": 1, "correction_used": False, "result": "PASS", "prompt_version": version})
+        return decision, call
+    except PhaseARepairableError as rejected:
+        findings = rejected.findings
+    _emit_diagnostic("phase_a_contract_violation", {"findings": findings, "repairability": "REPAIRABLE"})
+    try:
+        correction_prompt = prompt_repository.resolve(EDITORIAL_DECISION_CORRECTION_PROMPT_NAME, EDITORIAL_DECISION_CORRECTION_PROMPT_VERSION)
+    except Exception as exc:
+        raise CreativeDirectorUnavailableError(f"correction prompt unavailable: {exc}") from exc
+    corrected, correction_call = await _phase_a_generate(gateway, correction_prompt, _phase_a_correction_text(user_text, first, findings),
+                                                         capability_name=EDITORIAL_DECISION_CORRECTION_PROMPT_NAME)
+    _emit_diagnostic("phase_a_correction_raw_output", {"correction_prompt_version": EDITORIAL_DECISION_CORRECTION_PROMPT_VERSION,
+                                                        "structured_output": corrected})
+    summary = {"phase_a_calls": MAX_PHASE_A_CALLS, "correction_used": True, "prompt_version": version,
+               "correction_prompt_version": EDITORIAL_DECISION_CORRECTION_PROMPT_VERSION, "first_findings": findings}
+    try:
+        decision = _validate_phase_a(corrected, decision_input, version)
+    except PhaseARepairableError as still:
+        _emit_diagnostic("phase_a_correction_contract_violation", {"findings": still.findings})
+        _emit_diagnostic("phase_a_summary", {**summary, "result": "FAIL", "post_correction_findings": still.findings})
+        raise EditorialDecisionContractError("Phase A contract (after the one correction): " + "; ".join(still.findings)) from still
+    except Exception as exc:  # a terminal failure of the corrected plan (schema, unknown handles, ...) is terminal as is
+        _emit_diagnostic("phase_a_summary", {**summary, "result": "FAIL", "post_correction_error": f"{type(exc).__name__}: {str(exc)[:300]}"})
+        raise
+    from services.instagram_phase_a_contract import phase_a_non_regression
+
+    regression = phase_a_non_regression(first, corrected)
+    if regression:
+        _emit_diagnostic("phase_a_correction_contract_violation", {"findings": regression, "non_regression": True})
+        _emit_diagnostic("phase_a_summary", {**summary, "result": "FAIL", "post_correction_findings": regression})
+        raise EditorialDecisionContractError("Phase A correction regressed: " + "; ".join(regression))
+    _emit_diagnostic("phase_a_summary", {**summary, "result": "PASS", "post_correction_findings": []})
+    return decision, correction_call
 
 
 async def _call_creative_director(
