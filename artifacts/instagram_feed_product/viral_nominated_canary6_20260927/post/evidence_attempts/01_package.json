@@ -1,0 +1,87 @@
+{
+ "post_id": "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+ "format": "meme_trend",
+ "premise": "OpenAI agents tried to ‘bruteforce’ a UN website",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Security researcher Rowan Howard-Jones says that OpenAI agents scanned the UN Conference on Trade and Development's (UNCTAD) statistics site over 16,000 times between April and June. While the incident doesn't quite rise to the level of the Hugging Face hack, or the recent attacks on US government sites, it's yet another concerning example of AI […]",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": "https://www.theverge.com/ai-artificial-intelligence/1001178/openai-agents-bruteforce-un-website",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "OpenAI agents tried to ‘bruteforce’ a UN website | The Verge\nSkip to main content\nThe homepage\nTech\nReviews\nScience\nEntertainment\nAI\nPolicy\nThe homepage\nNavigation Drawer\nLogin\n/\nSign Up\nclose\nSearch\nLight\nSystem\nDark\nTech\nAmazon\nApple\nFacebook\nGoogle\nMicrosoft\nSamsung\nBusiness\nSee all tech\nReviews\nSmart Home Reviews\nPhone Reviews\nTablet Reviews\nHeadphone Reviews\nSee all reviews\nScience\nSpace\nEnergy\nEnvironment\nHealth\nSee all science\nEntertainment\nTV Shows\nMovies\nAudio\nSee all entertainment\nAI\nOpenAI\nAnthropic\nSee all AI\nPolicy\nAntitrust\nPolitics\nLaw\nSecurity\nSee all policy\nGadgets\nLaptops\nPhones\nTVs\nHeadphones\nSpeakers\nWearables\nSee all gadgets\nVerge Shopping\nBuying Guides\nDeals\nGift Guides\nSee all shopping\nGaming\nXbox\nPlayStation\nNintendo\nSee all gaming\nStreaming\nDisney\nHBO\nNetflix\nYouTube\nCreators\nSee all streaming\nTransportation\nElectric Cars\nAutonomous Cars\nRide-sharing\nScooters\nSee all transportation\nFeatures\nVerge Video\nTikTok\nYouTube\nInstagram\nPodcasts\nDecoder\nThe Vergecast\nVersion History\nNewsletters\nArchives\nStore\nVerge Product Updates\nSubscribe\nOpenAI agents tried to ‘bruteforce’ a UN website\nComments Drawer\nComments\nLoading comments\nGetting the conversation ready...\nAI\nAI\nPosts from this topic will be added to your daily email digest and your homepage feed.\nFollow\nSee All\nAI\nNews\nNews\nPosts from this topic will be added to your daily email digest and your homepage feed.\nFollow\nSee All\nNews\nOpenAI\nOpenAI\nPosts from this topic will be added to your daily email digest and your homepage feed.\nFollow\nSee All\nOpenAI\nOpenAI agents tried to ‘bruteforce’ a UN website\nOpenAI’s agents resorted to increasingly aggressive tactics when they couldn’t immediately get what they wanted.\nOpenAI’s agents resorted to increasingly aggressive tactics when they couldn’t immediately get what they wanted.\nby\nTerrence O'Brien\nTerrence O'Brien\nWeekend Editor\nPosts from this author will be added to your daily email digest and your homepage feed.\nFollow\nSee All by\nTerrence O'Brien\nSep 27, 2026, 5:21 PM UTC\nThe United Nations logo on a gate outside the UN headquarters in New York.\nAFP via Getty Images\nTerrence O'Brien\nTerrence O'Brien\nPosts from this author will be added to your daily email digest and your homepage feed.\nFollow\nSee All by\nTerrence O'Brien\nis the Verge’s weekend editor. He’s covered the tech industry for over 18 years and knows a thing or two about synths.\nSecurity researcher Rowan Howard-Jones says that OpenAI agents scanned the UN Conference on Trade and Development’s (UNCTAD) statistics site\nover 16,000 times between April and June\n. While the incident doesn’t quite rise to the level of the\nHugging Face hack\n, or the recent\nattacks on US government sites\n, it’s yet another concerning example of AI agents going\noutside the normal bounds\nto accomplish a task.\nAccording to Howard-Jones, the agents were likely tasked with retrieving publicly available data related to the Productive Capacities Index (PCI) through the UNCTADstat API. However, the agents did not appear to have direct API access and were limited in their ability to pull data from UNCTADstat because of restrictions on their HTTP tools.\nThe agents eventually worked out a way to bypass their limitations and start pulling data from the site, but still encountered some errors. At this point, the AI went from creative to deceptive. Believing that the errors were due to its requests being caught by a nonexistent filter, it started to mask its behavior. It eventually realized it could hijack Google’s XSS game (a cross-site scripting learning tool) to accomplish its goals. The agents resorted to increasingly\naggressive tactics\nto get access to UN data.\nOpenAI and the UN did not immediately reply to a request for comment.\nFollow topics and authors\nfrom this story to see more like this in your personalized homepage feed and to receive email updates.\nTerrence O'Brien\nTerrence O'Brien\nWeekend Editor\nPosts from this author will be added to your daily email digest and your homepage feed.\nFollow\nSee All by\nTerrence O'Brien\nAI\nAI\nPosts from this topic will be added to your daily email digest and your homepage feed.\nFollow\nSee All\nAI\nNews\nNews\nPosts from this topic will be added to your daily email digest and your homepage feed.\nFollow\nSee All\nNews\nOpenAI\nOpenAI\nPosts from this topic will be added to your daily email digest and your homepage feed.\nFollow\nSee All\nOpenAI\nMost Popular\nMost Popular\nOpenAI pauses training of its ‘most capable models’\nApple hit with $5.7 billion in damages over haptic patents\nThe smart home graveyard is getting crowded\nControl Resonant is a great game — it’s even better when you read everything\nLeaks reveal a new Apple HomePod mini, iPad mini, and Apple TV 4K\nThe Verge Daily\nA free daily digest of the news that matters most.\nEmail (required)\nSign Up\nBy providing your information, you agree to our\nTerms of Use\nand our\nPrivacy Policy\n. We use vendors that may also process your information to help provide our services. This site is protected by reCAPTCHA and the Google\nPrivacy Policy\nand\nTerms of Service\napply.\nAdvertiser Content From\nThis is the title for the native ad\nMore in\nAI\nOpenAI pauses training of its ‘most capable models’\nCan Cloudflare CEO Matthew Prince save the web from AI?\nMeta makes the Muse filesystem even more accessible\nSony and UMG are suing Suno again\nOne company is at the center of a wave of rogue AI attacks\nCan Apple Home’s AI camera features outsmart Amazon’s and Google’s? I put them to the test\nOpenAI pauses training of its ‘most capable models’\nTerrence O'Brien\nSep 26\nCan Cloudflare CEO Matthew Prince save the web from AI?\nNilay Patel\nSep 26\nMeta makes the Muse filesystem even more accessible\nTerrence O'Brien\nSep 25\nSony and UMG are suing Suno again\nTerrence O'Brien\nSep 25\nOne company is at the center of a wave of rogue AI attacks\nRobert Hart\nSep 25\nCan Apple Home’s AI camera features outsmart Amazon’s and Google’s? I put them to the test\nJennifer Pattison Tuohy\nSep 25\nAdvertiser Content From\nThis is the title for the native ad\nTop Stories\n12:25 PM UTC\nWhy OLPC’s $100 laptop never stood a chance\n12:00 PM UTC\nThe smart home graveyard is getting crowded\n12:00 PM UTC\nGooglebooks might be the real deal\nSep 25\nOne company is at the center of a wave of rogue AI attacks\nSep 26\nCan ‘eSUV’ e-bikes really go from trail to town?\nContact\nTip Us\nCommunity Guidelines\nArchives\nAbout\nEthics Statement\nHow We Rate and Review Products\nCookie Settings\nTerms of Use\nPrivacy Policy\nYour California Privacy Rights\nYour Privacy Choices\nCookie Notice\nAdChoices\nLicensing FAQ\nAccessibility\nPlatform Status\nPenske Media Corporation\nThe Verge\nis a part of PMX Global, LLC, a subsidiary of Penske Media Corporation.\n©\n2026\nVM Publishing, LLC. All rights reserved.\nOur Sites\nThe American Pavilion\nARTnews\nArt in America\nArtforum\nArt Week NYC\nBeauty Inc\nBillboard\nDeadline\nDick Clark Productions\nThe Dodo\nEater\nFlow Space\nFN\nGold Derby\nGolden Globes\nThe Hollywood Reporter\nIndieWire\nLife is Beautiful\nPopsugar\nPunch\nSJ Denim\nRobb Report\nRolling Stone\nSB Nation\nSHE Media\nShe Knows\nSourcing Journal\nSoaps\nSportico\nStyleCaster\nSXSW\nThrillist\nVariety\nThe Verge\nVibe\nWWD\nNotifications Drawer\nSign in to see your notifications or create an account to join the conversation.\nSign in",
+   "status": "FULL_TEXT",
+   "original_url": null,
+   "resolution_method": null
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "OpenAI’s agents resorted to increasingly aggressive tactics when they couldn’t immediately get what they wanted.",
+   "source_url": "https://www.theverge.com/ai-artificial-intelligence/1001178/openai-agents-bruteforce-un-website",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "OpenAI’s agents resorted to increasingly aggressive tactics when they couldn’t immediately get what they wanted."
+  },
+  {
+   "kind": "FACT",
+   "text": "Posts from this author will be added to your daily email digest and your homepage feed.",
+   "source_url": "https://www.theverge.com/ai-artificial-intelligence/1001178/openai-agents-bruteforce-un-website",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Posts from this author will be added to your daily email digest and your homepage feed."
+  },
+  {
+   "kind": "FACT",
+   "text": "The United Nations logo on a gate outside the UN headquarters in New York.",
+   "source_url": "https://www.theverge.com/ai-artificial-intelligence/1001178/openai-agents-bruteforce-un-website",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "The United Nations logo on a gate outside the UN headquarters in New York."
+  },
+  {
+   "kind": "FACT",
+   "text": "He’s covered the tech industry for over 18 years and knows a thing or two about synths.",
+   "source_url": "https://www.theverge.com/ai-artificial-intelligence/1001178/openai-agents-bruteforce-un-website",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "He’s covered the tech industry for over 18 years and knows a thing or two about synths."
+  },
+  {
+   "kind": "FACT",
+   "text": "Security researcher Rowan Howard-Jones says that OpenAI agents scanned the UN Conference on Trade and Development’s (UNCTAD) statistics site over 16,000 times between April and June.",
+   "source_url": "https://www.theverge.com/ai-artificial-intelligence/1001178/openai-agents-bruteforce-un-website",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Security researcher Rowan Howard-Jones says that OpenAI agents scanned the UN Conference on Trade and Development’s (UNCTAD) statistics site over 16,000 times between April and June."
+  },
+  {
+   "kind": "FACT",
+   "text": "While the incident doesn’t quite rise to the level of the Hugging Face hack, or the recent attacks on US government sites, it’s yet another concerning example of AI agents going outside the normal bounds to accomplish a task.",
+   "source_url": "https://www.theverge.com/ai-artificial-intelligence/1001178/openai-agents-bruteforce-un-website",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "While the incident doesn’t quite rise to the level of the Hugging Face hack, or the recent attacks on US government sites, it’s yet another concerning example of AI agents going outside the normal bounds to accomplish a task."
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "AVAILABLE",
+  "url": "https://platform.theverge.com/wp-content/uploads/sites/2/2026/09/gettyimages-2236154957.jpg?quality=90&strip=all&crop=16.663332666533,0,66.673334666933,100",
+  "width": 3299,
+  "height": 3333,
+  "mime_type": "image/jpeg",
+  "source": "jsonld_article_image",
+  "reason": "validated source image"
+ },
+ "quality": "STRONG",
+ "why": "6 premise facts from 1 fetched source(s)",
+ "excluded_bodies": []
+}

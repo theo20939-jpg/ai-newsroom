@@ -1,0 +1,4 @@
+{
+ "error_type": "CreativeFactSafetyError",
+ "error": "generated-image review: slide 2: generated picture risks a likeness / re-enactment of a named real person (Sam Altman) - brief mentions 'face'; show objects, places or a metaphor, people only anonymous; slide 4: generated picture risks a likeness / re-enactment of a named real person (Sam Altman) - brief mentions 'person'; show objects, places or a metaphor, people only anonymous"
+}

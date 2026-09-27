@@ -111,8 +111,8 @@ async def main() -> None:
                              "mechanisms": list(event.verdict.mechanisms), "momentum": event.verdict.momentum,
                              "momentum_evidence": list(event.verdict.momentum_signals), "hook": event.verdict.hook, "reason": event.verdict.reason},
                  "outlets": list(event.outlets), "first_seen": str(event.first_seen)}
-    if "government" not in event.key.lower():
-        raise SystemExit(f"the nominated event is not the founder-approved one: {event.key!r} - stopping, never switching events")
+    # canary 6 (founder): the run takes the CURRENT top naturally eligible event - the nomination's own first shortlist entry, exactly as
+    # the worker's viral slot would - never a hand-picked one (the earlier title guard for the approved event is retired)
 
     # --- providers: capped, isolated ledgers ---------------------------------------------------------------------------------------
     diag = Redis.from_url(harness.DIAG_REDIS_URL, decode_responses=True)

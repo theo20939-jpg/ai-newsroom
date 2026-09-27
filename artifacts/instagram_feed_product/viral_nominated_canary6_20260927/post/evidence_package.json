@@ -1,0 +1,87 @@
+{
+ "post_id": "4371aba5-6ff7-4b6d-b38c-df16b0e104b2",
+ "format": "meme_trend",
+ "premise": "OpenAI says its models unexpectedly engaged with US government websites - Boston Herald",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "OpenAI says its models unexpectedly engaged with US government websites Boston Herald",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": "https://www.bostonherald.com/2026/09/26/openai-says-its-models-unexpectedly-engaged-with-us-government-websites/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "OpenAI says its models engaged with US government websites\nSkip to content\nAll Sections\nSubscribe Now\n59°F\nSunday, September 27th 2026\nE-Edition\nHome Page\nNews\nNews\nLocal News\nCrime & Public Safety\nYour Tax Dollars At Work\nMassachusetts\nNation\nWorld News\nBusiness\nBest Reviews\nHealth\nColumnists\nTraffic\nEspanol\nAutomotive\nReal Estate\nOpinion\nOpinion\nEditorials\nLetters to the Editor\nSubmit a Letter\nSports\nSports\nBoston Red Sox\nNew England Patriots\nBoston Celtics\nBoston Bruins\nOlympics\nCollege Sports\nHigh School Sports\nPolitics\nPolitics\nDonald Trump\nElection 2024\nState House\nBoston City Hall\nEntertainment\nEntertainment\nArts\nMovies\nTV and Streaming\nMusic and Concerts\nEvents\nFun & Games\nContests\nComics\nPuzzles\nSpecial Sections\nLifestyle\nLifestyle\nRestaurants Food & Drink\nTravel\nFashion\nBoston Herald Store\nPhoto\nObituaries\nObituaries\nNews Obituaries\nPlace an Obituary\nClassifieds\nBestReviews\nBranded Content\nAdvertising by Ascend\nPaid Content by Brandpoint\nSubscribe\nLogout\nLogin\nSign up for email newsletters\nSign Up\nBusiness |\nOpenAI says its models unexpectedly engaged…\nShare this:\nShare on Facebook (Opens in new window)\nFacebook\nShare on X (Opens in new window)\nX\nShare on Reddit (Opens in new window)\nReddit\nPrint (Opens in new window)\nPrint\nSubscribe\nLogin\nAccount Settings\nContact Us\nLog Out\nSpoof a user\nSign up for email newsletters\nSign Up\nSubscribe\nLogin\nSearch\n59°F\nSunday, September 27th 2026\nE-Edition\nBusiness\nLocal\nCrime\nYour Tax Dollars\nMassachusetts\nNation\nWorld News\nBusiness\nHealth\nColumnists\nTraffic\nTrending:\nHerald’s Howie Carr\nNor’easter\nMCAS ‘Gut Punch’\nNov. 3 ballot questions\nNew England Patriots Central\nBusiness\nOpenAI says its models unexpectedly engaged with US government websites\nShare this:\nShare on Facebook (Opens in new window)\nFacebook\nShare on X (Opens in new window)\nX\nShare on Reddit (Opens in new window)\nReddit\nPrint (Opens in new window)\nPrint\nSam Altman, CEO of OpenAI, listens during a Security Council meeting on artificial intelligence at the 81st session of the United Nations General Assembly at United Nations headquarters, Wednesday, Sept. 23, 2026. AP Photo/Yuki Iwamura\nBy\nAssociated Press\nPUBLISHED:\nSeptember 26, 2026 at 3:43 PM EDT\nGetting your\nTrinity Audio\nplayer ready...\nOpenAI disclosed that its artificial intelligence agents had interacted with several U.S. government websites in unexpected ways, discovered as part of an ongoing review into the company’s models’ unanticipated behavior.\nThe AI giant’s models accessed publicly available information on two websites operated by the Securities and Exchange Commission as well as U.S. Census Bureau data, the company revealed Friday. OpenAI did not find any use of SEC credentials, access to accounts or nonpublic information, changes to SEC data or systems, or evidence of a compromise or vulnerability, the company said.\nThe disclosure comes at a time of heightened global concerns about AI systems escaping human control and hacking into external websites, as well as industry calls for a slowdown on AI development, which OpenAI has said it supports.\nOpenAI spokesperson Liz Bourgeois said in a statement that the lab is continuing to conduct a review of “misaligned model activity” — meaning when AI systems behave in undesired ways — and is notifying organizations when it identifies potential impacts to their systems.\nOpenAI’s CEO Sam Altman said on social media Friday that there is an “extensive and ongoing review related to our agents’ use of internet access during training and evaluation.”\nAI evaluator and research lab Transluce said Friday that through an independent investigation it also found that agents appearing to originate from OpenAI attempted a rudimentary hack on a Department of Education website for the department’s civil rights office, which did not succeed.\nThe Department of Education’s “system operations reviews” found “no evidence of any impact to our website or databases,” a department spokesperson said Friday.\nA Transluce spokesperson said as part of its investigation, it came across data on the open web that revealed fresh details about some previously identified OpenAI agents’ activities on U.S. government websites and brought it to OpenAI’s attention.\nTransluce found “additional rogue activity, some of which is not clearly attributable to OpenAI,” targeting other government agencies, including the Justice Department and the Commerce Department, as well as some state government websites in California, Maryland, Illinois, Texas and New York. The models were “using sites in unintended ways and sometimes violating explicit usage policies,” Transluce said in a statement.\nOpenAI said it is reviewing Transluce’s report.\nIf OpenAI notifies organizations it identifies as being impacted by unexpected model behavior, that does not mean there was a security incident, the company said, and could identify a design issue or security weakness that impacted organizations want to address.\nMost of the activity OpenAI said it has reviewed so far has involved routine research tasks where agents accessed public web content to answer questions, including government websites seen as authoritative sources of public information.\nSeveral companies have disclosed incidents in recent months when they say their models have behaved unpredictably or hacked into other organizations’ websites or systems. OpenAI disclosed in July that two of its most capable AI models were responsible for the cyberattack targeting AI startup Hugging Face.\nAltman said in his social media post Friday that the Hugging Face incident “is still the most severe event we’ve seen.”\nThat incident stirred widespread panic in the industry and beyond about AI models going rogue, and several competing AI labs made similar disclosures in the days and weeks that followed. OpenAI most recently shared six reports of “unexpected or concerning” behavior in AI models and introduced a framework for tracking, probing and disclosing instances of what it called misalignment.\nShare this:\nShare on Facebook (Opens in new window)\nFacebook\nShare on X (Opens in new window)\nX\nShare on Reddit (Opens in new window)\nReddit\nPrint (Opens in new window)\nPrint\nMost Popular\nMost Popular\nCape Cod restaurant hit with harassment, hoax 911 calls after hosting GOP fundraiser\nCape Cod restaurant hit with harassment, hoax 911 calls after hosting GOP fundraiser\nUMass Dartmouth fatal stabbing suspect an illegal immigrant, Healey dodges questions\nUMass Dartmouth fatal stabbing suspect an illegal immigrant, Healey dodges questions\nHow Patriots’ oldest player went from CFL to his first New England start Sunday\nHow Patriots' oldest player went from CFL to his first New England start Sunday\nHowie Carr: Lindsay Clancy’s lawyer liens arresting\nHowie Carr: Lindsay Clancy's lawyer liens arresting\nRed Sox playoff schedule: Dates for Wild Card series vs. Yankees\nRed Sox playoff schedule: Dates for Wild Card series vs. Yankees\nMassachusetts nor’easter: Hurricane-like storm set to blast the Bay State\nMassachusetts nor'easter: Hurricane-like storm set to blast the Bay State\nPedro Martinez defends Blue Jays star after contract remark controversy\nPedro Martinez defends Blue Jays star after contract remark controversy\nMassachusetts nor’easter: The ‘worst is yet to come’ with gusty winds, heavy rains in Bay State\nMassachusetts nor'easter: The 'worst is yet to come' with gusty winds, heavy rains in Bay State\nBoston City Council ‘mean girl’ feud intensifies as Erin Murphy slams Sharon Durkan\nBoston City Council 'mean girl' feud intensifies as Erin Murphy slams Sharon Durkan\nJudge rules against former Lexington Minute Men president, citing ‘prior restraint,’ and orders Minute Men leaders to disclose documents\nJudge rules against former Lexington Minute Men president, citing 'prior restraint,' and orders Minute Men leaders to disclose documents\nMore in Business\nFlock vs. Lowell: Surveillance company defends product\nBill proposes a 32-hour work week for Americans\nIndustry struggles claim California’s oldest family-owned winery\nCape Cod restaurant hit with harassment, hoax 911 calls after hosting GOP fundraiser\n2026\nSeptember\n26\nSign Up For Newsletters\ne-Edition\nSend a News Tip\nContact Us\nBoston Herald Store/Back Copies\nWork With Us\nDigital Subscription FAQ\nLegal Notices\nPrivacy Policy\nAccessibility\nSitemap\nClassifieds\nContests\nSpecial Sections\nFun & Games\nJobs\nBusiness Directory\nNetwork Advertising\nAdtaxi Solutions\nSubscribe Now\nTerms of Use\nCookie Policy\nCookie Preferences\nCalifornia Notice at Collection\nNotice of Financial Incentive\nDo Not Sell/Share My Personal Informatio\nArbitration\nPowered by WordPress.com VIP\nCopyright 2026 Boston Herald. All rights reserved. The use of any content on this website for the purpose of training artificial intelligence systems, algorithms, machine learning models, text and data mining, or similar use is strictly prohibited without explicit written consent.\nClose",
+   "status": "FULL_TEXT",
+   "original_url": "https://news.google.com/rss/articles/CBMisgFBVV95cUxPMlBnUmxmMldiSEZRRTZvbWk3UEduNWRiQk1JQndvdkF4SVM1QWk4THUySERCaU1naU1wTG53SzlMQlZxTWtqYzJxT3pITWFnN1gwRHdELWJSbFgtMWtiOVFmTzRCckx1X2dueE9NTi1xQWhoQ1NJTEdraFlZbFMtSnR0WE5SN2pzWm9FN2hmSmRjUS1OREttLVJDXzdzM0Zacms1MXoxaUx6dEEwRFNFMklR?oc=5",
+   "resolution_method": "google_news_article_token"
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "Share on Reddit (Opens in new window) Reddit Print (Opens in new window) Print",
+   "source_url": "https://www.bostonherald.com/2026/09/26/openai-says-its-models-unexpectedly-engaged-with-us-government-websites/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Share on Reddit (Opens in new window) Reddit Print (Opens in new window) Print"
+  },
+  {
+   "kind": "FACT",
+   "text": "Sam Altman, CEO of OpenAI, listens during a Security Council meeting on artificial intelligence at the 81st session of the United Nations General Assembly at United Nations headquarters, Wednesday, Sept.",
+   "source_url": "https://www.bostonherald.com/2026/09/26/openai-says-its-models-unexpectedly-engaged-with-us-government-websites/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Sam Altman, CEO of OpenAI, listens during a Security Council meeting on artificial intelligence at the 81st session of the United Nations General Assembly at United Nations headquarters, Wednesday, Sept."
+  },
+  {
+   "kind": "FACT",
+   "text": "September 26, 2026 at 3:43 PM EDT Getting your Trinity Audio player ready...",
+   "source_url": "https://www.bostonherald.com/2026/09/26/openai-says-its-models-unexpectedly-engaged-with-us-government-websites/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "September 26, 2026 at 3:43 PM EDT Getting your Trinity Audio player ready..."
+  },
+  {
+   "kind": "FACT",
+   "text": "OpenAI disclosed that its artificial intelligence agents had interacted with several U.S. government websites in unexpected ways, discovered as part of an ongoing review into the company’s models’ unanticipated behavior.",
+   "source_url": "https://www.bostonherald.com/2026/09/26/openai-says-its-models-unexpectedly-engaged-with-us-government-websites/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "OpenAI disclosed that its artificial intelligence agents had interacted with several U.S. government websites in unexpected ways, discovered as part of an ongoing review into the company’s models’ unanticipated behavior."
+  },
+  {
+   "kind": "FACT",
+   "text": "OpenAI did not find any use of SEC credentials, access to accounts or nonpublic information, changes to SEC data or systems, or evidence of a compromise or vulnerability, the company said.",
+   "source_url": "https://www.bostonherald.com/2026/09/26/openai-says-its-models-unexpectedly-engaged-with-us-government-websites/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "OpenAI did not find any use of SEC credentials, access to accounts or nonpublic information, changes to SEC data or systems, or evidence of a compromise or vulnerability, the company said."
+  },
+  {
+   "kind": "FACT",
+   "text": "The disclosure comes at a time of heightened global concerns about AI systems escaping human control and hacking into external websites, as well as industry calls for a slowdown on AI development, which OpenAI has said it supports.",
+   "source_url": "https://www.bostonherald.com/2026/09/26/openai-says-its-models-unexpectedly-engaged-with-us-government-websites/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "The disclosure comes at a time of heightened global concerns about AI systems escaping human control and hacking into external websites, as well as industry calls for a slowdown on AI development, which OpenAI has said it supports."
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "AVAILABLE",
+  "url": "https://lh3.googleusercontent.com/J6_coFbogxhRI9iM864NL_liGXvsQp2AupsKei7z0cNNfDvGUmWUy20nuUhkREQyrpY4bEeIBuc=s0-w300",
+  "width": 300,
+  "height": 300,
+  "mime_type": "image/png",
+  "source": "open_graph_image",
+  "reason": "validated source image"
+ },
+ "quality": "STRONG",
+ "why": "6 premise facts from 1 fetched source(s)",
+ "excluded_bodies": []
+}

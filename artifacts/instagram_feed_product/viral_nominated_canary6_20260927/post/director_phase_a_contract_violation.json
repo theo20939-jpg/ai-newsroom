@@ -1,0 +1,6 @@
+{
+ "findings": [
+  "Phase A format_reason: 'Карусель позволит развести по слайдам новое раскрытие, хронологию, подтверждённые компанией отрицательные выводы по SEC и контекст, не превращая сложную историю в заголовок о «взломе».' - sec is REPORTED [E6]: promoted to 'confirmed' - may be stated as the evidence states it - never as 'confirmed'"
+ ],
+ "repairability": "REPAIRABLE"
+}
