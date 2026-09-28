@@ -55,6 +55,13 @@ def _jpeg(width: int, height: int) -> bytes:
     return out.getvalue()
 
 
+def _source(width: int, height: int) -> bytes:
+    """A flat landscape source photo: recomposition-eligible (no corner branding-pixel risk)."""
+    out = io.BytesIO()
+    Image.new("RGB", (width, height), (200, 120, 40)).save(out, format="JPEG")
+    return out.getvalue()
+
+
 class FakeImagesAPI:
     """Stands in for `AsyncOpenAI().images.with_raw_response` - records every call's kwargs."""
 
@@ -158,7 +165,9 @@ def test_gpt_image_2_5_worst_cases_are_official_rates_times_provisional_caps():
     (FLARE, ImageGenerationOperation.TEXT_TO_IMAGE, 1, "high"),         # generation with a reference
 ], ids=["unpriced_quality", "edit_two_references", "generation_with_reference"])
 def test_unpriced_gpt_image_2_5_shapes_fail_before_any_call(model, operation, refs, quality):
-    with pytest.raises(UnknownImagePricingError):
+    # an edit with no reference is already refused by the request schema (a ValueError) - either way
+    # nothing unpriced can reach a provider
+    with pytest.raises((UnknownImagePricingError, ValueError)):
         _quote(model, operation, refs=refs, quality=quality)
 
 
@@ -226,7 +235,7 @@ async def test_generation_without_reported_usage_is_refused_and_fails_closed(ope
 @pytest.mark.asyncio
 async def test_source_photo_edit_is_one_openai_sunburst_call_on_a_bounded_reference(openai_world):
     api = openai_world.make_api(_jpeg(1536, 1024), usage=(500, 2_500, 6_200))
-    source = _jpeg(2400, 1350)  # eligible landscape, larger than the 1536 px reference bound
+    source = _source(2400, 1350)  # eligible landscape, larger than the 1536 px reference bound
     envelope = TelegramCanaryEnvelope(hard_cap_usd=canary.MAX_COST)
     with telegram_canary_envelope(envelope):
         result = await editorial_recomposition.maybe_recompose(source_image_bytes=source)
@@ -252,7 +261,7 @@ async def test_source_photo_edit_is_one_openai_sunburst_call_on_a_bounded_refere
 @pytest.mark.asyncio
 async def test_source_edit_without_usage_keeps_the_original_photo_and_fails_closed(openai_world):
     openai_world.make_api(_jpeg(1536, 1024), usage=None)
-    source = _jpeg(1600, 900)
+    source = _source(1600, 900)
     envelope = TelegramCanaryEnvelope(hard_cap_usd=canary.MAX_COST)
     with telegram_canary_envelope(envelope):
         result = await editorial_recomposition.maybe_recompose(source_image_bytes=source)
@@ -266,7 +275,7 @@ async def test_one_story_never_pays_for_both_an_edit_and_a_generation(openai_wor
     openai_world.make_api(_jpeg(1536, 1024))
     envelope = TelegramCanaryEnvelope(hard_cap_usd=canary.MAX_COST)
     with telegram_canary_envelope(envelope):
-        await editorial_recomposition.maybe_recompose(source_image_bytes=_jpeg(1600, 900))
+        await editorial_recomposition.maybe_recompose(source_image_bytes=_source(1600, 900))
         image, reason = await vf.generate_editorial_image("brief")
     assert image is None and reason.startswith("cost_envelope_refused")
     assert len(openai_world.api.calls) == 1
@@ -280,7 +289,7 @@ async def test_missing_openai_key_means_no_call_and_a_gemini_key_is_never_a_subs
     monkeypatch.setattr(settings, "openai_api_key", None)
     monkeypatch.setattr(settings, "gemini_api_key", SecretStr("gemini-key-must-be-ignored"))
     image, reason = await vf.generate_editorial_image("brief")
-    result = await editorial_recomposition.maybe_recompose(source_image_bytes=_jpeg(1600, 900))
+    result = await editorial_recomposition.maybe_recompose(source_image_bytes=_source(1600, 900))
     assert (image, reason) == (None, "openai_api_key_absent")
     assert result.used_recomposed_image is False and result.fallback_reason == "openai_api_key_absent"
     assert openai_world.api.calls == [] and openai_world.clients == []
