@@ -237,13 +237,44 @@ _BROAD = _rx(
 _AI_ACTOR = _rx(r"\b(ai|ии|agent\w*|агент(?!ств)\w*|chatbot|чат-?бот\w*|нейросет\w*|robot\w*|робот\w*)\b")
 
 
+# OWN-EVENT READING (founder selection review 2026-09-29, after canary 10): a story is judged on what ITS event is, never on a different
+# event it mentions as background. Canary 10's winner ('Anthropic will not appear at Senate inquiry ... amid fallout from OpenAI hack')
+# owed both viral mechanisms and its broad-interest anchor to the OpenAI breach it only referred to. A background-attribution clause
+# ('amid ...', 'in the wake of ...', 'following reports that ...', 'на фоне ...') is removed - up to the end of its sentence - before
+# mechanisms and anchors are read; the event's own words stay.
+_BACKGROUND = re.compile(
+    r"(?i)(?:\bamid(?:st)?\b|\bin the wake of\b|\bin the aftermath of\b|\bfollowing (?:the )?(?:revelations?|reports?|news|disclosures?)\b|"
+    r"\bafter (?:the )?(?:revelations?|reports?|news|disclosures?) (?:that|of|about)\b|\bна фоне\b|\bвслед за\b|"
+    r"\bпосле (?:сообщени\w*|новост\w*|публикаци\w*|того,? как стало известно)\b)[^.!?…]*")
+# a PROCEDURAL action as the headline's own event: a hearing, an inquiry, a committee appearance, testimony, a summons / invitation -
+# institutional mechanics, not an event a reader feels. Such a headline needs a real-world CONSEQUENCE to be broad: the name of a famous
+# company or of an institution alone is not a reason to care (the brand-name trap). Not a ban - a ban, a lawsuit, a breach, millions of
+# users, an outage or a recall in the same headline still make it broad.
+_PROCEDURAL = re.compile(
+    r"(?i)\b(hearings?|inquir(?:y|ies)|committees?|testif(?:y|ies|ied)|testimony|summon(?:s|ed)?|subpoena\w*|"
+    r"(?:called|invited|asked|declines?|declined|refuses?|refused|will not|won'?t) (?:to )?appear\w*|appear (?:before|at)|"
+    r"consultations?|submissions?|слушани\w*|комитет\w*|парламентск\w* расследовани\w*|сенатск\w* расследовани\w*|"
+    r"выступ\w* (?:перед|в) (?:сенат|парламент|комитет)\w*|вызва\w* (?:в|на) (?:сенат|парламент|комитет|слушани)\w*|дать показания)\b")
+
+
+def own_event_text(text: str) -> str:
+    """The text with every background-attribution clause removed (the event's own words only)."""
+    return " ".join(_BACKGROUND.sub(" ", text or "").split())
+
+
 def assess_broad_interest(title: str, lead: str) -> tuple[str, str]:
-    """BROAD / NARROW / UNCLEAR, with the reason. A normal KAGE reader must see why it matters from one sentence."""
+    """BROAD / NARROW / UNCLEAR, with the reason. A normal KAGE reader must see why it matters from one sentence - from the story's OWN
+    event (background clauses removed); a procedural headline needs a real-world consequence, a famous name alone is not enough."""
+    title, lead = own_event_text(title), own_event_text(lead)
     head = f"{title} {lead[:300]}"
     niche = _NICHE.search(head)
     consequence = _CONSEQUENCE.search(head)
     if niche and not consequence:
         return "NARROW", f"specialist / niche subject ({niche.group(0)!r}) with no real-world consequence in the headline or lead"
+    procedural = _PROCEDURAL.search(title)
+    if procedural and not consequence:
+        return ("NARROW", f"procedural event ({procedural.group(0)!r}) with no real-world consequence - a famous company or institution named "
+                          "in it is not, by itself, a reason for a reader to care")
     broad = _BROAD.search(head)
     if broad:
         return "BROAD", f"everyday-life / mass-product / security anchor ({broad.group(0)!r})"
@@ -318,6 +349,7 @@ def assess_inherent_strength(title: str, lead: str) -> tuple[str, list[str], str
     headline (an event framed as a question, a warning, an analysis) has no factual hook of its own: NONE."""
     if _COMMENTARY.search(title):
         return "NONE", [], title
+    title, lead = own_event_text(title), own_event_text(lead)  # mechanisms must belong to the story's own event, never to its background
     best: tuple[int, list[str], str] = (0, [], _hook_sentences(title, lead)[0])
     for sentence in _hook_sentences(title, lead):
         text = _ACTOR_ONLY.sub(" ", sentence)

@@ -1,0 +1,420 @@
+{
+ "canary": {
+  "before_winner": "OpenAI's agents targeted and infiltrated US government websites",
+  "after_winner": "OpenAI's agents targeted and infiltrated US government websites",
+  "before_eligible": [
+   "OpenAI's agents targeted and infiltrated US government websites",
+   "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты."
+  ],
+  "after_eligible": [
+   "OpenAI's agents targeted and infiltrated US government websites",
+   "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты."
+  ],
+  "events_whose_gate_changed": [],
+  "procedural_story_after": null
+ },
+ "canary2": {
+  "before_winner": "OpenAI's agents targeted and infiltrated US government websites",
+  "after_winner": "OpenAI's agents targeted and infiltrated US government websites",
+  "before_eligible": [
+   "OpenAI's agents targeted and infiltrated US government websites",
+   "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты."
+  ],
+  "after_eligible": [
+   "OpenAI's agents targeted and infiltrated US government websites",
+   "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты."
+  ],
+  "events_whose_gate_changed": [],
+  "procedural_story_after": null
+ },
+ "canary3": {
+  "before_winner": "OpenAI's agents targeted and infiltrated US government websites",
+  "after_winner": "OpenAI's agents targeted and infiltrated US government websites",
+  "before_eligible": [
+   "OpenAI's agents targeted and infiltrated US government websites",
+   "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты."
+  ],
+  "after_eligible": [
+   "OpenAI's agents targeted and infiltrated US government websites",
+   "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты."
+  ],
+  "events_whose_gate_changed": [],
+  "procedural_story_after": null
+ },
+ "canary4": {
+  "before_winner": "OpenAI's agents targeted and infiltrated US government websites",
+  "after_winner": "OpenAI's agents targeted and infiltrated US government websites",
+  "before_eligible": [
+   "OpenAI's agents targeted and infiltrated US government websites",
+   "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты."
+  ],
+  "after_eligible": [
+   "OpenAI's agents targeted and infiltrated US government websites",
+   "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты."
+  ],
+  "events_whose_gate_changed": [],
+  "procedural_story_after": null
+ },
+ "canary5": {
+  "before_winner": "OpenAI's agents targeted and infiltrated US government websites",
+  "after_winner": "OpenAI's agents targeted and infiltrated US government websites",
+  "before_eligible": [
+   "OpenAI's agents targeted and infiltrated US government websites",
+   "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+   "Искусственный интеллект от создателей ChatGPT взломал сайт правительства"
+  ],
+  "after_eligible": [
+   "OpenAI's agents targeted and infiltrated US government websites",
+   "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+   "Искусственный интеллект от создателей ChatGPT взломал сайт правительства"
+  ],
+  "events_whose_gate_changed": [
+   {
+    "event": "Australia summons OpenAI and Anthropic CEOs to appear at AI inquiry",
+    "before": [
+     false,
+     "4_inherent_virality",
+     "BROAD",
+     "NONE",
+     []
+    ],
+    "after": [
+     false,
+     "3_broad_interest",
+     "NARROW",
+     "NONE",
+     []
+    ],
+    "after_reason": "procedural event ('summons') with no real-world consequence - a famous company or institution named in it is not, by itself, a reason for a reader to care"
+   },
+   {
+    "event": "Австралия потребовала от руководителей компаний OpenAI и Anthropic дать показания о безопасности искусственного",
+    "before": [
+     false,
+     "4_inherent_virality",
+     "BROAD",
+     "NONE",
+     []
+    ],
+    "after": [
+     false,
+     "3_broad_interest",
+     "NARROW",
+     "NONE",
+     []
+    ],
+    "after_reason": "procedural event ('дать показания') with no real-world consequence - a famous company or institution named in it is not, by itself, a reason for a reader to care"
+   }
+  ],
+  "procedural_story_after": null
+ },
+ "canary6": {
+  "before_winner": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+  "after_winner": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+  "before_eligible": [
+   "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+   "Искусственный интеллект от создателей ChatGPT взломал сайт правительства"
+  ],
+  "after_eligible": [
+   "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+   "Искусственный интеллект от создателей ChatGPT взломал сайт правительства"
+  ],
+  "events_whose_gate_changed": [
+   {
+    "event": "Глав OpenAI и Anthropic вызвали на «ковер» в Австралии из-за работы ИИ",
+    "before": [
+     false,
+     "4_inherent_virality",
+     "BROAD",
+     "MODERATE",
+     [
+      "unexpected_ai_behaviour"
+     ]
+    ],
+    "after": [
+     false,
+     "3_broad_interest",
+     "NARROW",
+     "MODERATE",
+     [
+      "unexpected_ai_behaviour"
+     ]
+    ],
+    "after_reason": "procedural event ('вызвали в парламент') with no real-world consequence - a famous company or institution named in it is not, by itself, a reason for a reader to care"
+   },
+   {
+    "event": "Australia summons OpenAI and Anthropic CEOs to appear at AI inquiry",
+    "before": [
+     false,
+     "4_inherent_virality",
+     "BROAD",
+     "NONE",
+     []
+    ],
+    "after": [
+     false,
+     "3_broad_interest",
+     "NARROW",
+     "NONE",
+     []
+    ],
+    "after_reason": "procedural event ('summons') with no real-world consequence - a famous company or institution named in it is not, by itself, a reason for a reader to care"
+   },
+   {
+    "event": "Австралия потребовала от руководителей компаний OpenAI и Anthropic дать показания о безопасности искусственного",
+    "before": [
+     false,
+     "4_inherent_virality",
+     "BROAD",
+     "NONE",
+     []
+    ],
+    "after": [
+     false,
+     "3_broad_interest",
+     "NARROW",
+     "NONE",
+     []
+    ],
+    "after_reason": "procedural event ('дать показания') with no real-world consequence - a famous company or institution named in it is not, by itself, a reason for a reader to care"
+   }
+  ],
+  "procedural_story_after": null
+ },
+ "canary7": {
+  "before_winner": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+  "after_winner": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+  "before_eligible": [
+   "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+   "Искусственный интеллект от создателей ChatGPT взломал сайт правительства"
+  ],
+  "after_eligible": [
+   "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+   "Искусственный интеллект от создателей ChatGPT взломал сайт правительства"
+  ],
+  "events_whose_gate_changed": [
+   {
+    "event": "Глав OpenAI и Anthropic вызвали на «ковер» в Австралии из-за работы ИИ",
+    "before": [
+     false,
+     "4_inherent_virality",
+     "BROAD",
+     "MODERATE",
+     [
+      "unexpected_ai_behaviour"
+     ]
+    ],
+    "after": [
+     false,
+     "3_broad_interest",
+     "NARROW",
+     "MODERATE",
+     [
+      "unexpected_ai_behaviour"
+     ]
+    ],
+    "after_reason": "procedural event ('вызвали в парламент') with no real-world consequence - a famous company or institution named in it is not, by itself, a reason for a reader to care"
+   },
+   {
+    "event": "Australia summons OpenAI and Anthropic CEOs to appear at AI inquiry",
+    "before": [
+     false,
+     "4_inherent_virality",
+     "BROAD",
+     "NONE",
+     []
+    ],
+    "after": [
+     false,
+     "3_broad_interest",
+     "NARROW",
+     "NONE",
+     []
+    ],
+    "after_reason": "procedural event ('summons') with no real-world consequence - a famous company or institution named in it is not, by itself, a reason for a reader to care"
+   },
+   {
+    "event": "Австралия потребовала от руководителей компаний OpenAI и Anthropic дать показания о безопасности искусственного",
+    "before": [
+     false,
+     "4_inherent_virality",
+     "BROAD",
+     "NONE",
+     []
+    ],
+    "after": [
+     false,
+     "3_broad_interest",
+     "NARROW",
+     "NONE",
+     []
+    ],
+    "after_reason": "procedural event ('дать показания') with no real-world consequence - a famous company or institution named in it is not, by itself, a reason for a reader to care"
+   }
+  ],
+  "procedural_story_after": null
+ },
+ "canary8": {
+  "before_winner": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+  "after_winner": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+  "before_eligible": [
+   "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge"
+  ],
+  "after_eligible": [
+   "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge"
+  ],
+  "events_whose_gate_changed": [
+   {
+    "event": "Глав OpenAI и Anthropic вызвали на «ковер» в Австралии из-за работы ИИ",
+    "before": [
+     false,
+     "4_inherent_virality",
+     "BROAD",
+     "MODERATE",
+     [
+      "unexpected_ai_behaviour"
+     ]
+    ],
+    "after": [
+     false,
+     "3_broad_interest",
+     "NARROW",
+     "MODERATE",
+     [
+      "unexpected_ai_behaviour"
+     ]
+    ],
+    "after_reason": "procedural event ('вызвали в парламент') with no real-world consequence - a famous company or institution named in it is not, by itself, a reason for a reader to care"
+   },
+   {
+    "event": "Australia summons OpenAI and Anthropic CEOs to appear at AI inquiry",
+    "before": [
+     false,
+     "4_inherent_virality",
+     "BROAD",
+     "NONE",
+     []
+    ],
+    "after": [
+     false,
+     "3_broad_interest",
+     "NARROW",
+     "NONE",
+     []
+    ],
+    "after_reason": "procedural event ('summons') with no real-world consequence - a famous company or institution named in it is not, by itself, a reason for a reader to care"
+   },
+   {
+    "event": "Австралия потребовала от руководителей компаний OpenAI и Anthropic дать показания о безопасности искусственного",
+    "before": [
+     false,
+     "4_inherent_virality",
+     "BROAD",
+     "NONE",
+     []
+    ],
+    "after": [
+     false,
+     "3_broad_interest",
+     "NARROW",
+     "NONE",
+     []
+    ],
+    "after_reason": "procedural event ('дать показания') with no real-world consequence - a famous company or institution named in it is not, by itself, a reason for a reader to care"
+   }
+  ],
+  "procedural_story_after": null
+ },
+ "canary9": {
+  "before_winner": "OpenAI, Anthropic CEOs called to appear at Australian AI probe",
+  "after_winner": "OpenAI agents tried to ‘bruteforce’ a UN website",
+  "before_eligible": [
+   "OpenAI, Anthropic CEOs called to appear at Australian AI probe",
+   "OpenAI agents tried to ‘bruteforce’ a UN website"
+  ],
+  "after_eligible": [
+   "OpenAI agents tried to ‘bruteforce’ a UN website"
+  ],
+  "events_whose_gate_changed": [
+   {
+    "event": "OpenAI, Anthropic CEOs called to appear at Australian AI probe",
+    "before": [
+     true,
+     null,
+     "BROAD",
+     "STRONG",
+     [
+      "unexpected_ai_behaviour",
+      "security_surprise"
+     ]
+    ],
+    "after": [
+     false,
+     "3_broad_interest",
+     "NARROW",
+     "MODERATE",
+     [
+      "unexpected_ai_behaviour"
+     ]
+    ],
+    "after_reason": "procedural event ('вызвали в парламент') with no real-world consequence - a famous company or institution named in it is not, by itself, a reason for a reader to care"
+   }
+  ],
+  "procedural_story_after": {
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "broad": "NARROW",
+   "broad_reason": "procedural event ('вызвали в парламент') with no real-world consequence - a famous company or institution named in it is not, by itself, a reason for a reader t",
+   "strength": "MODERATE",
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ]
+  }
+ },
+ "canary10": {
+  "before_winner": "OpenAI, Anthropic CEOs called to appear at Australian AI probe",
+  "after_winner": "OpenAI agents tried to ‘bruteforce’ a UN website",
+  "before_eligible": [
+   "OpenAI, Anthropic CEOs called to appear at Australian AI probe",
+   "OpenAI agents tried to ‘bruteforce’ a UN website"
+  ],
+  "after_eligible": [
+   "OpenAI agents tried to ‘bruteforce’ a UN website"
+  ],
+  "events_whose_gate_changed": [
+   {
+    "event": "OpenAI, Anthropic CEOs called to appear at Australian AI probe",
+    "before": [
+     true,
+     null,
+     "BROAD",
+     "STRONG",
+     [
+      "unexpected_ai_behaviour",
+      "security_surprise"
+     ]
+    ],
+    "after": [
+     false,
+     "3_broad_interest",
+     "NARROW",
+     "MODERATE",
+     [
+      "unexpected_ai_behaviour"
+     ]
+    ],
+    "after_reason": "procedural event ('вызвали в парламент') with no real-world consequence - a famous company or institution named in it is not, by itself, a reason for a reader to care"
+   }
+  ],
+  "procedural_story_after": {
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "broad": "NARROW",
+   "broad_reason": "procedural event ('вызвали в парламент') with no real-world consequence - a famous company or institution named in it is not, by itself, a reason for a reader t",
+   "strength": "MODERATE",
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ]
+  }
+ }
+}
