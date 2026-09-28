@@ -152,6 +152,55 @@ def test_named_organizations_are_semantic_context_not_pixel_instructions():
     assert "generic, unbranded" in brief["prompt"] and brief["named_person_detected"] is False
 
 
+def test_2865_selects_physical_infrastructure_and_no_display_surfaces():
+    policy = _brief()["scene_policy"]
+    assert policy["family"] == vf.SCENE_PHYSICAL_INFRASTRUCTURE
+    assert policy["capabilities"] == [vf.NO_DISPLAY_SURFACES]
+    assert policy["allowed_objects"] == [
+        "server racks", "cables", "cooling ducts", "generic compute hardware",
+        "data-center architecture", "practical lights",
+    ]
+
+
+def test_2865_positive_scene_description_contains_no_entity_or_display_object_terms():
+    brief = _brief()
+    policy = brief["scene_policy"]
+    positive = " ".join((policy["positive_scene_description"], policy["physical_state_metaphor"],
+                         *policy["allowed_objects"])).lower()
+    for forbidden in ("openai", "nbc", "laptop", "screen", "monitor", "browser", "interface", "dashboard"):
+        assert forbidden not in positive
+    assert "OpenAI" not in brief["prompt"] and "NBC News" not in brief["prompt"]
+
+
+def test_software_story_without_required_ui_selects_screenless_infrastructure():
+    policy = vf.select_generated_visual_scene_policy(
+        title="Алгоритм защиты обновили после атаки",
+        facts=["Облачный сервис изменил алгоритм кибербезопасности."],
+        research={"category": "software"}, intelligence={},
+    )
+    assert policy.family == vf.SCENE_PHYSICAL_INFRASTRUCTURE
+    assert vf.NO_DISPLAY_SURFACES in policy.capabilities
+
+
+def test_supported_physical_phone_product_is_not_forced_screenless():
+    policy = vf.select_generated_visual_scene_policy(
+        title="Производитель представил новый смартфон",
+        facts=["Физический смартфон поступит в продажу осенью."],
+        research={"category": "hardware product"}, intelligence={},
+    )
+    assert policy.family == vf.SCENE_PHYSICAL_PRODUCT
+    assert vf.NO_DISPLAY_SURFACES not in policy.capabilities
+
+
+def test_screenless_scene_policy_rejects_positive_object_conflict_before_dispatch():
+    policy = vf.GeneratedVisualScenePolicy(
+        vf.SCENE_PHYSICAL_INFRASTRUCTURE, (vf.NO_DISPLAY_SURFACES,), ("server racks", "laptop"),
+        "A physical data-center aisle.", "Use dimmed practical lights.",
+    )
+    with pytest.raises(ValueError, match="screenless_scene_object_conflict:laptop"):
+        vf.validate_scene_policy(policy)
+
+
 # --- Tier 2 / Tier 3 ladder ---------------------------------------------------------------------------
 
 async def _ladder(gateway, *, title=TITLE_2865, allow_generation=True, compliance=None):

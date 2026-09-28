@@ -33,6 +33,125 @@ GENERATION_MODEL = "gpt-image-2.5-flare"
 GENERATION_QUALITY, GENERATION_SIZE = "high", "1536x1024"  # landscape hero for the KAGE NEWS renderer
 GENERATION_MAX_DISPATCHES = 1
 
+SCENE_PHYSICAL_INFRASTRUCTURE = "PHYSICAL_INFRASTRUCTURE"
+SCENE_PHYSICAL_PRODUCT = "PHYSICAL_PRODUCT"
+SCENE_ENVIRONMENTAL_EDITORIAL = "ENVIRONMENTAL_EDITORIAL"
+SCENE_HUMAN_ACTIVITY_ANONYMOUS = "HUMAN_ACTIVITY_ANONYMOUS"
+SCENE_ABSTRACT_PHYSICAL_METAPHOR = "ABSTRACT_PHYSICAL_METAPHOR"
+NO_DISPLAY_SURFACES = "NO_DISPLAY_SURFACES"
+
+_SOFTWARE_STORY = re.compile(
+    r"\b(?:ai|artificial intelligence|software|algorithm|cybersecurity|online service|cloud|"
+    r"website|model|agent)\b|(?:\bии\b|нейросет|модел|агент|алгоритм|кибер|онлайн|программ|сайт)",
+    re.IGNORECASE,
+)
+_PHYSICAL_PRODUCT = re.compile(
+    r"\b(?:smartphone|phone|laptop|tablet|handset|physical product)\b|"
+    r"смартфон|телефон|ноутбук|планшет|физическ\w+ продукт",
+    re.IGNORECASE,
+)
+_PRODUCT_IS_SUBJECT = re.compile(
+    r"\b(?:launch|unveil|release|review|sales|ships?)\b|представ|анонс|выпуст|обзор|продаж|поставк",
+    re.IGNORECASE,
+)
+_ENVIRONMENTAL_STORY = re.compile(
+    r"climate|weather|energy|environment|construction|city|архитект|климат|погод|энерг|эколог|строител",
+    re.IGNORECASE,
+)
+_HUMAN_ACTIVITY_STORY = re.compile(
+    r"factory|laboratory|maintenance|manufactur|workshop|лаборатор|производ|ремонт|мастерск",
+    re.IGNORECASE,
+)
+_PAUSED_ACTIVITY = re.compile(r"pause|paused|halt|stop|interrupt|приостанов|пауз|останов|прерван", re.IGNORECASE)
+_DISPLAY_OBJECT_TERMS = frozenset({
+    "laptop", "monitor", "phone", "tablet", "screen", "display", "browser", "dashboard",
+    "interface", "television", "terminal", "projected", "hud",
+})
+
+
+@dataclass(frozen=True)
+class GeneratedVisualScenePolicy:
+    family: str
+    capabilities: tuple[str, ...]
+    allowed_objects: tuple[str, ...]
+    positive_scene_description: str
+    physical_state_metaphor: str
+
+    def audit(self) -> dict[str, Any]:
+        return {
+            "family": self.family,
+            "capabilities": list(self.capabilities),
+            "allowed_objects": list(self.allowed_objects),
+            "positive_scene_description": self.positive_scene_description,
+            "physical_state_metaphor": self.physical_state_metaphor,
+        }
+
+
+def select_generated_visual_scene_policy(
+    *, title: str, facts: list[str], research: Mapping[str, Any], intelligence: Mapping[str, Any],
+) -> GeneratedVisualScenePolicy:
+    """Choose one small, deterministic positive scene grammar from supported story material."""
+    metadata = " ".join(
+        str(value) for payload in (research, intelligence)
+        for key in ("topic", "category", "domain", "angle")
+        if (value := payload.get(key)) is not None
+    )
+    context = " ".join((title, *facts, metadata))
+    physical_product_subject = bool(_PHYSICAL_PRODUCT.search(context) and _PRODUCT_IS_SUBJECT.search(context))
+    if physical_product_subject:
+        return GeneratedVisualScenePolicy(
+            SCENE_PHYSICAL_PRODUCT, (),
+            ("generic physical product body", "neutral casing", "physical controls", "connectors",
+             "unbranded tabletop", "practical lights"),
+            "A restrained product photograph built only from the supported physical object and neutral materials.",
+            "Use physical placement and practical lighting to express the reported state.",
+        )
+    if _SOFTWARE_STORY.search(context):
+        state = (
+            "Express paused or interrupted activity only through a dimmed inactive section of the infrastructure "
+            "and reduced practical lighting."
+            if _PAUSED_ACTIVITY.search(context)
+            else "Express software activity only through physical infrastructure state and practical lighting."
+        )
+        return GeneratedVisualScenePolicy(
+            SCENE_PHYSICAL_INFRASTRUCTURE, (NO_DISPLAY_SURFACES,),
+            ("server racks", "cables", "cooling ducts", "generic compute hardware",
+             "data-center architecture", "practical lights"),
+            "A realistic data-center aisle made only from physical compute infrastructure and architecture.",
+            state,
+        )
+    if _ENVIRONMENTAL_STORY.search(context):
+        return GeneratedVisualScenePolicy(
+            SCENE_ENVIRONMENTAL_EDITORIAL, (),
+            ("architectural environment", "landscape materials", "weather conditions", "practical lights"),
+            "A realistic environmental editorial scene made from architecture, landscape and natural conditions.",
+            "Express the reported state through physical conditions and lighting.",
+        )
+    if _HUMAN_ACTIVITY_STORY.search(context):
+        return GeneratedVisualScenePolicy(
+            SCENE_HUMAN_ACTIVITY_ANONYMOUS, (),
+            ("anonymous hands", "physical tools", "work surfaces", "materials", "practical lights"),
+            "A realistic physical work scene with anonymous activity and no visible identity.",
+            "Express the reported activity through tools, materials and physical action.",
+        )
+    return GeneratedVisualScenePolicy(
+        SCENE_ABSTRACT_PHYSICAL_METAPHOR, (),
+        ("unbranded geometric objects", "physical materials", "shadows", "architectural space", "practical lights"),
+        "A restrained photographic metaphor made only from real physical materials and architectural space.",
+        "Express the reported state through physical arrangement, shadow and light.",
+    )
+
+
+def validate_scene_policy(policy: GeneratedVisualScenePolicy) -> None:
+    """Fail before dispatch when a screenless positive grammar names a display-bearing object."""
+    if NO_DISPLAY_SURFACES not in policy.capabilities:
+        return
+    positive_fields = " ".join((policy.positive_scene_description, policy.physical_state_metaphor,
+                                *policy.allowed_objects)).lower()
+    conflicts = sorted(term for term in _DISPLAY_OBJECT_TERMS if re.search(rf"\b{re.escape(term)}\b", positive_fields))
+    if conflicts:
+        raise ValueError(f"screenless_scene_object_conflict:{','.join(conflicts)}")
+
 # --- generation brief ------------------------------------------------------------------------------
 
 # Deterministic named-person detection: a capitalized first name from this list followed by a
@@ -158,9 +277,42 @@ def build_generation_brief(
         protected_entities.extend(entity for entity in entities if entity not in protected_entities)
         person_flags.append(flagged)
     named_person = any(person_flags)
-    lines = ["KAGE EDITORIAL NEWS IMAGE", f"Story headline: {headline}", "Verified facts:"]
+    scene_policy = select_generated_visual_scene_policy(
+        title=headline, facts=facts, research=research, intelligence=intelligence,
+    )
+    validate_scene_policy(scene_policy)
+    lines = [
+        "KAGE EDITORIAL NEWS IMAGE",
+        "SUPPORTED STORY CONTEXT (journalism only; do not copy its literal nouns into the scene):",
+        f"Story headline: {headline}",
+        "Verified facts:",
+    ]
     lines += [f"- {fact}" for fact in facts]
-    lines += list(_STYLE_AND_SAFETY)
+    lines += [
+        "MANDATORY POSITIVE SCENE GRAMMAR:",
+        f"Scene family: {scene_policy.family}",
+        "The image must be made ONLY from these allowed physical ingredients:",
+        *[f"- {item}" for item in scene_policy.allowed_objects],
+        f"Scene construction: {scene_policy.positive_scene_description}",
+        f"Physical state: {scene_policy.physical_state_metaphor}",
+        "Do not introduce any object that is not in the positive allowlist.",
+    ]
+    if NO_DISPLAY_SURFACES in scene_policy.capabilities:
+        lines += [
+            "STRICT CAPABILITY: NO_DISPLAY_SURFACES.",
+            "No object whose primary purpose is displaying content may exist anywhere in the image.",
+            "Forbidden objects: laptops, desktop monitors, phones, tablets, televisions, control-room "
+            "displays, digital dashboards, projected interfaces, HUDs, screens, browser windows, "
+            "terminal windows and visible display panels.",
+            "Use only generic physical infrastructure; never invent product details or branded hardware.",
+        ]
+    lines += [rule for rule in _STYLE_AND_SAFETY if not (
+        NO_DISPLAY_SURFACES in scene_policy.capabilities
+        and (rule.startswith("Show devices") or rule.startswith("Never depict a real"))
+    )]
+    if NO_DISPLAY_SURFACES in scene_policy.capabilities:
+        lines.append("Never depict a real, identifiable person or a lookalike of one. "
+                     "For this scene show no people or body parts at all.")
     if named_person:
         lines.append("This story names a real person: show no person at all - depict objects, "
                      "devices or an environment connected to the facts.")
@@ -170,6 +322,7 @@ def build_generation_brief(
     return {
         "prompt": "\n".join(lines), "safe_visual_concept": concept, "fact_ids": fact_ids,
         "named_person_detected": named_person, "masked_entity_surfaces": protected_entities,
+        "scene_policy": scene_policy.audit(),
     }
 
 

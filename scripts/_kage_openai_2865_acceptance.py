@@ -116,6 +116,7 @@ async def _run(output_dir: Path) -> dict[str, Any]:
             "prompt": prompt,
             "safe_visual_concept": brief["safe_visual_concept"],
             "masked_entity_surfaces": brief["masked_entity_surfaces"],
+            "scene_policy": brief["scene_policy"],
             "prompt_utf8_bytes": len(prompt.encode("utf-8")),
             "prompt_sha256": prompt_sha,
         },
