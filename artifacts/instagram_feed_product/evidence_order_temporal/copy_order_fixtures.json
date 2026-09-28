@@ -1,0 +1,823 @@
+{
+ "canary": {
+  "run": "viral_nominated_canary_20260926",
+  "clock": "2026-09-26T18:04:01.575346+00:00",
+  "planned": "070feacc-88f7-4b75-817a-77effc45c266",
+  "candidate_ids": [
+   "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+   "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+   "070feacc-88f7-4b75-817a-77effc45c266",
+   "16cc9f34-2380-4f9b-8c56-a2195a0841ed",
+   "bbc0b825-bc3e-46d2-9af8-49582f03fc03",
+   "c10dbf38-0299-4d78-a548-ebce9289f8bc",
+   "e5443cbf-01a4-4110-8faf-b8b0276d3ac8",
+   "89fbed07-6321-42ce-a9d8-47a3006681cb",
+   "a5760260-9242-49a3-9ec8-5f8d5fe4e74f",
+   "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+   "0b5b886f-6f57-4ff1-abd5-a6333beba202",
+   "8d8d157d-f62c-4181-bf9c-067208225ec1",
+   "cce4f2c2-2fba-44c5-9c5c-b0852a3bd1c2",
+   "d9441893-9704-41de-afff-21d20831c8e6",
+   "70003fe6-3960-476e-97cd-452140628404",
+   "744af497-674d-43eb-a841-8e57b56c71a8",
+   "28f32558-8922-480f-a343-8382e7165ea4",
+   "f26f3073-2aa7-43b0-b249-9361aecd79d8",
+   "8828a79a-1a0c-4301-9433-3e5fb87c7464"
+  ],
+  "copies": {
+   "6429ccc5-9952-4160-aebe-5b3dda6808d8": {
+    "url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+    "collected_at": "2026-09-26T12:33:30.589762+00:00"
+   },
+   "f408be6b-7ab0-4a49-9926-69a66ddf93f5": {
+    "url": "https://www.techmeme.com/260925/p25#a260925p25",
+    "collected_at": "2026-09-26T00:25:05.971903+00:00"
+   },
+   "070feacc-88f7-4b75-817a-77effc45c266": {
+    "url": "https://3dnews.ru/1149086",
+    "collected_at": "2026-09-26T06:55:34.780591+00:00"
+   },
+   "16cc9f34-2380-4f9b-8c56-a2195a0841ed": {
+    "url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxPRXJUbjd3TVVaZUZxVmU2eDhmbEFtM3h4UU5OVDF4cXNWbjBqS1hKQTRObHZzN3NGWW16Q3lBWU5oSU9HRlBHaWdsN2FsMkF5QUdzUVVZVmZxdnVSOXlzUHhGLWVqN05aTFRBaHB5cmo0X2NvR2VOYzByNkNtb1hGbUl3TElTMmdFNWRRWU4tdFNLckQzcldQelVZWFByeXotdF83ZjlPTEVpcjdYb2Fn?oc=5",
+    "collected_at": "2026-09-26T13:16:30.40169+00:00"
+   },
+   "bbc0b825-bc3e-46d2-9af8-49582f03fc03": {
+    "url": "https://news.google.com/rss/articles/CBMiekFVX3lxTE5hYkN5dGZBNWtMczBXaVNSdEZwVExRdWk3Qmt1a0oxaURzYUVxaDBIOUNZUVItaFZSNHc1d3dsN1lFM2REbTV0Q3NCUk84Sl9LQnUzd3NhaU91b1hWODhicHVLOC1XTmtJQzJ3a19veUlkaVR2UHdiNXJB?oc=5",
+    "collected_at": "2026-09-26T15:21:42.015691+00:00"
+   },
+   "c10dbf38-0299-4d78-a548-ebce9289f8bc": {
+    "url": "https://news.google.com/rss/articles/CBMijAFBVV95cUxQZmkxQnUxa1JKaDBBa1JwQVUyN1JZSXRtV3VwZ0s5TTJzNEMxekNGcHJiZzRLa1NULXFMb3VSOTl6bnNURDhBTzBERlpkZVk0MncyODBIb2FKa3h0cVVEVnV0ams3M2xmZ09zU0EwY2psbGUzcUs2R2RRUzhRa1dYZXZrMDJWSG5NZnZPVw?oc=5",
+    "collected_at": "2026-09-25T23:47:38.686647+00:00"
+   },
+   "e5443cbf-01a4-4110-8faf-b8b0276d3ac8": {
+    "url": "https://news.google.com/rss/articles/CBMiowFBVV95cUxPZDFBeDhjMVNRTFUtUVNrcmE4Uk9PQ3Nmdnp0Z0hXSWhCSGRFMkI0U05ueXViaFFycmNpODhSRDgxVFFUUFA2T3FpLWRTV20tNTR2SURkVjk0ZUJPTkVGZXFXQmtBRUZnWlRlQkE3bGx3eUJESTBtQWpoWUFma24tMEJMc1BMQTlIMUdNbkloQW9raVdIMWxic0J0UTMtWDdPZlJV?oc=5",
+    "collected_at": "2026-09-26T03:39:10.243933+00:00"
+   },
+   "89fbed07-6321-42ce-a9d8-47a3006681cb": {
+    "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE1Gc2xjQ1lxckxXLVQ1ajFKakNhUkNZT2FlLWRDYXFmdTJkUndJcjlPaVFhZmFlTVBkbWFTV2VwczA5SnlhNjF6VUJCdnMzemVXWFZBdWJfd0c5V2s?oc=5",
+    "collected_at": "2026-09-26T06:55:56.65932+00:00"
+   },
+   "a5760260-9242-49a3-9ec8-5f8d5fe4e74f": {
+    "url": "https://news.google.com/rss/articles/CBMi5gFBVV95cUxQaXV1UmYzWlNQZ1pwR2FlYllRUGtIbjVJa25iYmRvV2V1TlpmelcxMVhGVTUwVVo0TXV1OHY1cFdmMl84bkZUaHctZXZ1OUttSnRERUlNSWRxXzRnZXZ1UEZpUW5mVTYydF9pbEJkc2JENjNMakxnQjF0RWxwcHNjSmhQVlZ1Vk81eEw5eDNaUzZDUVVaV2tzTFppcWtEV19YSUJIMmItNkRDRlVjdDVUOGZHVnJFQ0ZHbVFGWFp2YXktUlJUSjBhTXN1RU5aWDExMTVJd2NYazYzNnRHaHRXNXE5aTNldw?oc=5",
+    "collected_at": "2026-09-26T04:17:53.016675+00:00"
+   },
+   "8164a3d7-e826-43e9-9dd6-96babe0c71aa": {
+    "url": "https://www.ixbt.com/news/2026/09/26/438377-neozidannye-i-trevoznye-anomalii-ii-openai-sam-polucil-dostup-k-pravitelstvennym-saitam-ssa.html",
+    "collected_at": "2026-09-26T04:56:13.73358+00:00"
+   },
+   "0b5b886f-6f57-4ff1-abd5-a6333beba202": {
+    "url": "https://news.google.com/rss/articles/CBMi1wFBVV95cUxNaFdpNGJHdHFTWGxGLVNuR2dTUDJZTFZqRWdvU3g0cWJlVlN2SVBnY0dpY0MtN19KRGN0ZEZlR2pXNW9TYkN6NUxicGVPOElZT0pFOENJb1FJY1hnb0REaXhhUW53aVR6TmFaZDYxd0hWUUxYalJlNjluX0JYQWNBUnI3cTFXZzVnLS0tYm9iUkF3Q1B5S21QLWR3cGRtWDBOY1lfdFlVQ1pQZURpNHZ6cDNnZXRta0VUSXJXYktCbFYyRzhuTlpnT0hwMW9ESXhrYVpuU1lic9IB3AFBVV95cUxOMzhOSHB1dlJtc0E0U2pSX1doczQ1bmpfWFBacnhLNHhhd0pUR1llalBSY2F3VGExSWNiVDZQMGtsSzBNU09mbEh2ZWxoQWhsUGZkcnUxN01OSndoak9pbGxUNW1STlNpdHdKdWRxOTV0NFNnWEpZOEtFOVhDS05IbG1oUVlMODkyVUsyTUw0TTV5YTJrNHgyREx2S2ctWjRCamg1bUtRMWhMMFJLbjFVdEdpZDhCTl9hLUdGZWIyNGtCYTdHb0FFdENFSTBSWlN5akpyS0lsNDFzbkhZ?oc=5",
+    "collected_at": "2026-09-26T06:15:49.922426+00:00"
+   },
+   "8d8d157d-f62c-4181-bf9c-067208225ec1": {
+    "url": "https://news.google.com/rss/articles/CBMiuwFBVV95cUxPLVF2eG5CMzFKcF9yZkI4S3ZkcjZvRTdlU3lwMWhSN2daSDJ2R1pkZnM0VGphekxLOFd5S1VXVUFKaEJHQVNEOHBjbE00Ykx2M2kxUEtsV3lHQkdXLUlFZXVpRGcxYlVUVEEyRVE2cXRwSUt6M2I0LWl0X2pMMEtJbExob0hqQ0JydUQ3NGZBaTVIVnk0SEZQazNoaFAzb0ZSU25ZekF2M2poRElkTzZNdWdWcEgzSlFpM1Iw?oc=5",
+    "collected_at": "2026-09-26T12:35:10.496686+00:00"
+   },
+   "cce4f2c2-2fba-44c5-9c5c-b0852a3bd1c2": {
+    "url": "https://news.google.com/rss/articles/CBMiREFVX3lxTFAyRHdsWjhPemx3UTZyeVVXTnNJc3F3Y2oxM1BhS09UdDhTQUViS083ZnBLdWl3UU5INTFSNHhHTF9NRXBB0gFKQVVfeXFMTzRaeXpFbGtLZWtjcnAwR0hNTndia1JnNE55LVpFYTNmYXppZ0t0aVpfci10c01WUS1uUUUtci1pYUU4dHB6c3VpRGc?oc=5",
+    "collected_at": "2026-09-26T07:39:30.60372+00:00"
+   },
+   "d9441893-9704-41de-afff-21d20831c8e6": {
+    "url": "https://news.google.com/rss/articles/CBMihgFBVV95cUxOcHoweTB6SkhjcllkWkdIVEhBbW16dEFFUnc4ZkpvRWlLTGJReDhFTnBqVDZTUFh6b0FCdGE0dTJ5dkk2RDBOSEVXVmdpcXppS2ZzTE9rUXFZWGctaUNKakJMRXcwWmxHRm9LRGJ1eTBUbmppcW9TNkR4NkhJdW8xR0lQRVNJZw?oc=5",
+    "collected_at": "2026-09-26T09:04:23.113871+00:00"
+   },
+   "70003fe6-3960-476e-97cd-452140628404": {
+    "url": "https://news.google.com/rss/articles/CBMingFBVV95cUxObDJpZEtlVTNJUHVzeWJyQ3JybnFmQ2JSR1Vxcnc5SWE1T2EtaFU4QkhMMlFiUmlBakViQzVQT21RS05NUF95VnBsUUdBdk1DdHNUazFyQlhNQjVjdVhZYlc0ejFqWThSZ0w0Z3JSZzZPeFZxY0I3dkFuYUh4Y1JmOGhsQlM2SU5NTGVUNE9DOWdvQy0xNnZydE9ObGRFUQ?oc=5",
+    "collected_at": "2026-09-26T09:46:55.905106+00:00"
+   },
+   "744af497-674d-43eb-a841-8e57b56c71a8": {
+    "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxPdzlVa0tWc3kzeWVORGNGdlJzTXduaE9XNjdGeHo0WUpaUC1KOHE1ZHVjSFVGMlFTdEZudzhpZFNPdVBodFk0RFUxNTItOERrNXRoMlZqUThIR2stMGRzaWxsNGJkYUtQbllXU09WQWpTcjR4U25jeHdjOTNwT2xGVkQzMHZIZXFGclJUWkNxa2xMZw?oc=5",
+    "collected_at": "2026-09-26T10:29:21.22865+00:00"
+   },
+   "28f32558-8922-480f-a343-8382e7165ea4": {
+    "url": "https://www.securityweek.com/openai-says-its-models-engaged-with-us-government-websites-in-new-model-misbehavior-disclosure/",
+    "collected_at": "2026-09-26T11:10:16.407369+00:00"
+   },
+   "f26f3073-2aa7-43b0-b249-9361aecd79d8": {
+    "url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxOZm11QTFHT2laeDBITXp6NDhpS2ZteEZ4Ty1IeVJKQlNDTnNYd3pBaVlyWjk3dkx2Yk53ZHZURm8tbXFlRHJTckgwclpDRXhfaHdPTGxIVDZFdklZc21MWXkxMEVfMHJ2WkpydXliZ1ZiR0NwSVN1Qk1LV196UjhGLXpnWFlWTWN6Ri0wYjZOckRVMUc2Tk5nWGE1VmVISU55aUw2OUtYUDgtMWJERjEw0gG0AUFVX3lxTE1EWTdXN1pQMXg2UW5XaU0xSDllb2RFRldKcUprY2N4Z3hEem5zNXFVdHNuYWZTd05FUDJHMU5OZkdLWXBlTDNGLV91RVI4N0dpTHliUjNDR0xITEh5dDhqU0FvWXZNRHFRd1hLMlJZY0RLeFpYZjVqeFFWdk1PbHluN2dyQVNlUkZhNnRMZE5pSzJZOWlMekQ0ck5nRHU2aGFpTi1TVzZmSG10eklTUHdBUk5BOQ?oc=5",
+    "collected_at": "2026-09-26T17:26:20.838683+00:00"
+   },
+   "8828a79a-1a0c-4301-9433-3e5fb87c7464": {
+    "url": "https://news.google.com/rss/articles/CBMikAJBVV95cUxPdTZBSGsyY3ZmaEZIYVlCVVd5S1ZvTXBYaGx3eU0xRHgxVGdMSXZMNS1qdnFJcEhpYlVINGZWWDR1RjNWSFphRGdwLUtyTXAwdHdVYTJfb3dHWjhKeFBxX0hTLVlXc2ZjN3RXU1JQS0ZWSVNucVI4Tnl6SVpwX2hxNk00TERRMkFsZmZtb252Vm5lQTFNS2lic0ZBc0dWRjM3d3ptaFduVE1WZUVSQ3ZyRnY4SktxeHJNbWlPN3AtSDlWUEwtcXBka0JYX05JdzVxaG0yR0VYSVRCaTEwM2NhMlJTM193ZTBha3BrdmdyTjBEdWpxZ1N1VTlZcjFvSnJrc0h3bDZRZ3REdERTSC1mSw?oc=5",
+    "collected_at": "2026-09-26T17:26:20.838683+00:00"
+   }
+  },
+  "original_attempts": [
+   [
+    "070feacc-88f7-4b75-817a-77effc45c266",
+    "FAIL"
+   ],
+   [
+    "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+    "FAIL"
+   ],
+   [
+    "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+    "FAIL"
+   ],
+   [
+    "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+    "PASS"
+   ]
+  ]
+ },
+ "canary2": {
+  "run": "viral_nominated_canary2_20260927",
+  "clock": "2026-09-26T22:45:04.821426+00:00",
+  "planned": "070feacc-88f7-4b75-817a-77effc45c266",
+  "candidate_ids": [
+   "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+   "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+   "070feacc-88f7-4b75-817a-77effc45c266",
+   "16cc9f34-2380-4f9b-8c56-a2195a0841ed",
+   "bbc0b825-bc3e-46d2-9af8-49582f03fc03",
+   "c10dbf38-0299-4d78-a548-ebce9289f8bc",
+   "e5443cbf-01a4-4110-8faf-b8b0276d3ac8",
+   "89fbed07-6321-42ce-a9d8-47a3006681cb",
+   "a5760260-9242-49a3-9ec8-5f8d5fe4e74f",
+   "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+   "0b5b886f-6f57-4ff1-abd5-a6333beba202",
+   "8d8d157d-f62c-4181-bf9c-067208225ec1",
+   "cce4f2c2-2fba-44c5-9c5c-b0852a3bd1c2",
+   "d9441893-9704-41de-afff-21d20831c8e6",
+   "70003fe6-3960-476e-97cd-452140628404",
+   "744af497-674d-43eb-a841-8e57b56c71a8",
+   "28f32558-8922-480f-a343-8382e7165ea4",
+   "fb04cb7c-7484-4a1f-b97f-092755e096d6",
+   "0ad4f236-27d6-4937-914c-0806dee22239",
+   "f26f3073-2aa7-43b0-b249-9361aecd79d8",
+   "8828a79a-1a0c-4301-9433-3e5fb87c7464",
+   "4371aba5-6ff7-4b6d-b38c-df16b0e104b2"
+  ],
+  "copies": {
+   "6429ccc5-9952-4160-aebe-5b3dda6808d8": {
+    "url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+    "collected_at": "2026-09-26T12:33:30.589762+00:00"
+   },
+   "f408be6b-7ab0-4a49-9926-69a66ddf93f5": {
+    "url": "https://www.techmeme.com/260925/p25#a260925p25",
+    "collected_at": "2026-09-26T00:25:05.971903+00:00"
+   },
+   "070feacc-88f7-4b75-817a-77effc45c266": {
+    "url": "https://3dnews.ru/1149086",
+    "collected_at": "2026-09-26T06:55:34.780591+00:00"
+   },
+   "16cc9f34-2380-4f9b-8c56-a2195a0841ed": {
+    "url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxPRXJUbjd3TVVaZUZxVmU2eDhmbEFtM3h4UU5OVDF4cXNWbjBqS1hKQTRObHZzN3NGWW16Q3lBWU5oSU9HRlBHaWdsN2FsMkF5QUdzUVVZVmZxdnVSOXlzUHhGLWVqN05aTFRBaHB5cmo0X2NvR2VOYzByNkNtb1hGbUl3TElTMmdFNWRRWU4tdFNLckQzcldQelVZWFByeXotdF83ZjlPTEVpcjdYb2Fn?oc=5",
+    "collected_at": "2026-09-26T13:16:30.40169+00:00"
+   },
+   "bbc0b825-bc3e-46d2-9af8-49582f03fc03": {
+    "url": "https://news.google.com/rss/articles/CBMiekFVX3lxTE5hYkN5dGZBNWtMczBXaVNSdEZwVExRdWk3Qmt1a0oxaURzYUVxaDBIOUNZUVItaFZSNHc1d3dsN1lFM2REbTV0Q3NCUk84Sl9LQnUzd3NhaU91b1hWODhicHVLOC1XTmtJQzJ3a19veUlkaVR2UHdiNXJB?oc=5",
+    "collected_at": "2026-09-26T15:21:42.015691+00:00"
+   },
+   "c10dbf38-0299-4d78-a548-ebce9289f8bc": {
+    "url": "https://news.google.com/rss/articles/CBMijAFBVV95cUxQZmkxQnUxa1JKaDBBa1JwQVUyN1JZSXRtV3VwZ0s5TTJzNEMxekNGcHJiZzRLa1NULXFMb3VSOTl6bnNURDhBTzBERlpkZVk0MncyODBIb2FKa3h0cVVEVnV0ams3M2xmZ09zU0EwY2psbGUzcUs2R2RRUzhRa1dYZXZrMDJWSG5NZnZPVw?oc=5",
+    "collected_at": "2026-09-25T23:47:38.686647+00:00"
+   },
+   "e5443cbf-01a4-4110-8faf-b8b0276d3ac8": {
+    "url": "https://news.google.com/rss/articles/CBMiowFBVV95cUxPZDFBeDhjMVNRTFUtUVNrcmE4Uk9PQ3Nmdnp0Z0hXSWhCSGRFMkI0U05ueXViaFFycmNpODhSRDgxVFFUUFA2T3FpLWRTV20tNTR2SURkVjk0ZUJPTkVGZXFXQmtBRUZnWlRlQkE3bGx3eUJESTBtQWpoWUFma24tMEJMc1BMQTlIMUdNbkloQW9raVdIMWxic0J0UTMtWDdPZlJV?oc=5",
+    "collected_at": "2026-09-26T03:39:10.243933+00:00"
+   },
+   "89fbed07-6321-42ce-a9d8-47a3006681cb": {
+    "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE1Gc2xjQ1lxckxXLVQ1ajFKakNhUkNZT2FlLWRDYXFmdTJkUndJcjlPaVFhZmFlTVBkbWFTV2VwczA5SnlhNjF6VUJCdnMzemVXWFZBdWJfd0c5V2s?oc=5",
+    "collected_at": "2026-09-26T06:55:56.65932+00:00"
+   },
+   "a5760260-9242-49a3-9ec8-5f8d5fe4e74f": {
+    "url": "https://news.google.com/rss/articles/CBMi5gFBVV95cUxQaXV1UmYzWlNQZ1pwR2FlYllRUGtIbjVJa25iYmRvV2V1TlpmelcxMVhGVTUwVVo0TXV1OHY1cFdmMl84bkZUaHctZXZ1OUttSnRERUlNSWRxXzRnZXZ1UEZpUW5mVTYydF9pbEJkc2JENjNMakxnQjF0RWxwcHNjSmhQVlZ1Vk81eEw5eDNaUzZDUVVaV2tzTFppcWtEV19YSUJIMmItNkRDRlVjdDVUOGZHVnJFQ0ZHbVFGWFp2YXktUlJUSjBhTXN1RU5aWDExMTVJd2NYazYzNnRHaHRXNXE5aTNldw?oc=5",
+    "collected_at": "2026-09-26T04:17:53.016675+00:00"
+   },
+   "8164a3d7-e826-43e9-9dd6-96babe0c71aa": {
+    "url": "https://www.ixbt.com/news/2026/09/26/438377-neozidannye-i-trevoznye-anomalii-ii-openai-sam-polucil-dostup-k-pravitelstvennym-saitam-ssa.html",
+    "collected_at": "2026-09-26T04:56:13.73358+00:00"
+   },
+   "0b5b886f-6f57-4ff1-abd5-a6333beba202": {
+    "url": "https://news.google.com/rss/articles/CBMi1wFBVV95cUxNaFdpNGJHdHFTWGxGLVNuR2dTUDJZTFZqRWdvU3g0cWJlVlN2SVBnY0dpY0MtN19KRGN0ZEZlR2pXNW9TYkN6NUxicGVPOElZT0pFOENJb1FJY1hnb0REaXhhUW53aVR6TmFaZDYxd0hWUUxYalJlNjluX0JYQWNBUnI3cTFXZzVnLS0tYm9iUkF3Q1B5S21QLWR3cGRtWDBOY1lfdFlVQ1pQZURpNHZ6cDNnZXRta0VUSXJXYktCbFYyRzhuTlpnT0hwMW9ESXhrYVpuU1lic9IB3AFBVV95cUxOMzhOSHB1dlJtc0E0U2pSX1doczQ1bmpfWFBacnhLNHhhd0pUR1llalBSY2F3VGExSWNiVDZQMGtsSzBNU09mbEh2ZWxoQWhsUGZkcnUxN01OSndoak9pbGxUNW1STlNpdHdKdWRxOTV0NFNnWEpZOEtFOVhDS05IbG1oUVlMODkyVUsyTUw0TTV5YTJrNHgyREx2S2ctWjRCamg1bUtRMWhMMFJLbjFVdEdpZDhCTl9hLUdGZWIyNGtCYTdHb0FFdENFSTBSWlN5akpyS0lsNDFzbkhZ?oc=5",
+    "collected_at": "2026-09-26T06:15:49.922426+00:00"
+   },
+   "8d8d157d-f62c-4181-bf9c-067208225ec1": {
+    "url": "https://news.google.com/rss/articles/CBMiuwFBVV95cUxPLVF2eG5CMzFKcF9yZkI4S3ZkcjZvRTdlU3lwMWhSN2daSDJ2R1pkZnM0VGphekxLOFd5S1VXVUFKaEJHQVNEOHBjbE00Ykx2M2kxUEtsV3lHQkdXLUlFZXVpRGcxYlVUVEEyRVE2cXRwSUt6M2I0LWl0X2pMMEtJbExob0hqQ0JydUQ3NGZBaTVIVnk0SEZQazNoaFAzb0ZSU25ZekF2M2poRElkTzZNdWdWcEgzSlFpM1Iw?oc=5",
+    "collected_at": "2026-09-26T12:35:10.496686+00:00"
+   },
+   "cce4f2c2-2fba-44c5-9c5c-b0852a3bd1c2": {
+    "url": "https://news.google.com/rss/articles/CBMiREFVX3lxTFAyRHdsWjhPemx3UTZyeVVXTnNJc3F3Y2oxM1BhS09UdDhTQUViS083ZnBLdWl3UU5INTFSNHhHTF9NRXBB0gFKQVVfeXFMTzRaeXpFbGtLZWtjcnAwR0hNTndia1JnNE55LVpFYTNmYXppZ0t0aVpfci10c01WUS1uUUUtci1pYUU4dHB6c3VpRGc?oc=5",
+    "collected_at": "2026-09-26T07:39:30.60372+00:00"
+   },
+   "d9441893-9704-41de-afff-21d20831c8e6": {
+    "url": "https://news.google.com/rss/articles/CBMihgFBVV95cUxOcHoweTB6SkhjcllkWkdIVEhBbW16dEFFUnc4ZkpvRWlLTGJReDhFTnBqVDZTUFh6b0FCdGE0dTJ5dkk2RDBOSEVXVmdpcXppS2ZzTE9rUXFZWGctaUNKakJMRXcwWmxHRm9LRGJ1eTBUbmppcW9TNkR4NkhJdW8xR0lQRVNJZw?oc=5",
+    "collected_at": "2026-09-26T09:04:23.113871+00:00"
+   },
+   "70003fe6-3960-476e-97cd-452140628404": {
+    "url": "https://news.google.com/rss/articles/CBMingFBVV95cUxObDJpZEtlVTNJUHVzeWJyQ3JybnFmQ2JSR1Vxcnc5SWE1T2EtaFU4QkhMMlFiUmlBakViQzVQT21RS05NUF95VnBsUUdBdk1DdHNUazFyQlhNQjVjdVhZYlc0ejFqWThSZ0w0Z3JSZzZPeFZxY0I3dkFuYUh4Y1JmOGhsQlM2SU5NTGVUNE9DOWdvQy0xNnZydE9ObGRFUQ?oc=5",
+    "collected_at": "2026-09-26T09:46:55.905106+00:00"
+   },
+   "744af497-674d-43eb-a841-8e57b56c71a8": {
+    "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxPdzlVa0tWc3kzeWVORGNGdlJzTXduaE9XNjdGeHo0WUpaUC1KOHE1ZHVjSFVGMlFTdEZudzhpZFNPdVBodFk0RFUxNTItOERrNXRoMlZqUThIR2stMGRzaWxsNGJkYUtQbllXU09WQWpTcjR4U25jeHdjOTNwT2xGVkQzMHZIZXFGclJUWkNxa2xMZw?oc=5",
+    "collected_at": "2026-09-26T10:29:21.22865+00:00"
+   },
+   "28f32558-8922-480f-a343-8382e7165ea4": {
+    "url": "https://www.securityweek.com/openai-says-its-models-engaged-with-us-government-websites-in-new-model-misbehavior-disclosure/",
+    "collected_at": "2026-09-26T11:10:16.407369+00:00"
+   },
+   "fb04cb7c-7484-4a1f-b97f-092755e096d6": {
+    "url": "https://www.bbc.com/news/articles/cw62jje658dlo",
+    "collected_at": "2026-09-26T18:11:51.622505+00:00"
+   },
+   "0ad4f236-27d6-4937-914c-0806dee22239": {
+    "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxPbkQyN1dNYTkzeGFDN0hQSHVZNGxVUEcyb0trcGo1SmZMeWxNRmYwOTNHRGo1eVVrWTBqYkVoUmxpV2xuVnlURWtpY3FRTG5zRGNQdk90SjdwblZVVzlfQWk1UGJsTGNhQVF2MXZ2QjFLYV9iZ0FrWElzSFhIWGhFZw?oc=5",
+    "collected_at": "2026-09-26T21:53:03.809309+00:00"
+   },
+   "f26f3073-2aa7-43b0-b249-9361aecd79d8": {
+    "url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxOZm11QTFHT2laeDBITXp6NDhpS2ZteEZ4Ty1IeVJKQlNDTnNYd3pBaVlyWjk3dkx2Yk53ZHZURm8tbXFlRHJTckgwclpDRXhfaHdPTGxIVDZFdklZc21MWXkxMEVfMHJ2WkpydXliZ1ZiR0NwSVN1Qk1LV196UjhGLXpnWFlWTWN6Ri0wYjZOckRVMUc2Tk5nWGE1VmVISU55aUw2OUtYUDgtMWJERjEw0gG0AUFVX3lxTE1EWTdXN1pQMXg2UW5XaU0xSDllb2RFRldKcUprY2N4Z3hEem5zNXFVdHNuYWZTd05FUDJHMU5OZkdLWXBlTDNGLV91RVI4N0dpTHliUjNDR0xITEh5dDhqU0FvWXZNRHFRd1hLMlJZY0RLeFpYZjVqeFFWdk1PbHluN2dyQVNlUkZhNnRMZE5pSzJZOWlMekQ0ck5nRHU2aGFpTi1TVzZmSG10eklTUHdBUk5BOQ?oc=5",
+    "collected_at": "2026-09-26T17:26:20.838683+00:00"
+   },
+   "8828a79a-1a0c-4301-9433-3e5fb87c7464": {
+    "url": "https://news.google.com/rss/articles/CBMikAJBVV95cUxPdTZBSGsyY3ZmaEZIYVlCVVd5S1ZvTXBYaGx3eU0xRHgxVGdMSXZMNS1qdnFJcEhpYlVINGZWWDR1RjNWSFphRGdwLUtyTXAwdHdVYTJfb3dHWjhKeFBxX0hTLVlXc2ZjN3RXU1JQS0ZWSVNucVI4Tnl6SVpwX2hxNk00TERRMkFsZmZtb252Vm5lQTFNS2lic0ZBc0dWRjM3d3ptaFduVE1WZUVSQ3ZyRnY4SktxeHJNbWlPN3AtSDlWUEwtcXBka0JYX05JdzVxaG0yR0VYSVRCaTEwM2NhMlJTM193ZTBha3BrdmdyTjBEdWpxZ1N1VTlZcjFvSnJrc0h3bDZRZ3REdERTSC1mSw?oc=5",
+    "collected_at": "2026-09-26T17:26:20.838683+00:00"
+   },
+   "4371aba5-6ff7-4b6d-b38c-df16b0e104b2": {
+    "url": "https://news.google.com/rss/articles/CBMisgFBVV95cUxPMlBnUmxmMldiSEZRRTZvbWk3UEduNWRiQk1JQndvdkF4SVM1QWk4THUySERCaU1naU1wTG53SzlMQlZxTWtqYzJxT3pITWFnN1gwRHdELWJSbFgtMWtiOVFmTzRCckx1X2dueE9NTi1xQWhoQ1NJTEdraFlZbFMtSnR0WE5SN2pzWm9FN2hmSmRjUS1OREttLVJDXzdzM0Zacms1MXoxaUx6dEEwRFNFMklR?oc=5",
+    "collected_at": "2026-09-26T19:46:59.455504+00:00"
+   }
+  },
+  "original_attempts": [
+   [
+    "070feacc-88f7-4b75-817a-77effc45c266",
+    "FAIL"
+   ],
+   [
+    "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+    "FAIL"
+   ],
+   [
+    "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+    "FAIL"
+   ],
+   [
+    "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+    "PASS"
+   ]
+  ]
+ },
+ "canary3": {
+  "run": "viral_nominated_canary3_20260927",
+  "clock": "2026-09-26T23:41:20.946837+00:00",
+  "planned": "070feacc-88f7-4b75-817a-77effc45c266",
+  "candidate_ids": [
+   "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+   "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+   "070feacc-88f7-4b75-817a-77effc45c266",
+   "16cc9f34-2380-4f9b-8c56-a2195a0841ed",
+   "bbc0b825-bc3e-46d2-9af8-49582f03fc03",
+   "c10dbf38-0299-4d78-a548-ebce9289f8bc",
+   "e5443cbf-01a4-4110-8faf-b8b0276d3ac8",
+   "89fbed07-6321-42ce-a9d8-47a3006681cb",
+   "a5760260-9242-49a3-9ec8-5f8d5fe4e74f",
+   "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+   "0b5b886f-6f57-4ff1-abd5-a6333beba202",
+   "8d8d157d-f62c-4181-bf9c-067208225ec1",
+   "cce4f2c2-2fba-44c5-9c5c-b0852a3bd1c2",
+   "d9441893-9704-41de-afff-21d20831c8e6",
+   "70003fe6-3960-476e-97cd-452140628404",
+   "744af497-674d-43eb-a841-8e57b56c71a8",
+   "28f32558-8922-480f-a343-8382e7165ea4",
+   "fb04cb7c-7484-4a1f-b97f-092755e096d6",
+   "0ad4f236-27d6-4937-914c-0806dee22239",
+   "f26f3073-2aa7-43b0-b249-9361aecd79d8",
+   "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+   "8828a79a-1a0c-4301-9433-3e5fb87c7464",
+   "4371aba5-6ff7-4b6d-b38c-df16b0e104b2"
+  ],
+  "copies": {
+   "6429ccc5-9952-4160-aebe-5b3dda6808d8": {
+    "url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+    "collected_at": "2026-09-26T12:33:30.589762+00:00"
+   },
+   "f408be6b-7ab0-4a49-9926-69a66ddf93f5": {
+    "url": "https://www.techmeme.com/260925/p25#a260925p25",
+    "collected_at": "2026-09-26T00:25:05.971903+00:00"
+   },
+   "070feacc-88f7-4b75-817a-77effc45c266": {
+    "url": "https://3dnews.ru/1149086",
+    "collected_at": "2026-09-26T06:55:34.780591+00:00"
+   },
+   "16cc9f34-2380-4f9b-8c56-a2195a0841ed": {
+    "url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxPRXJUbjd3TVVaZUZxVmU2eDhmbEFtM3h4UU5OVDF4cXNWbjBqS1hKQTRObHZzN3NGWW16Q3lBWU5oSU9HRlBHaWdsN2FsMkF5QUdzUVVZVmZxdnVSOXlzUHhGLWVqN05aTFRBaHB5cmo0X2NvR2VOYzByNkNtb1hGbUl3TElTMmdFNWRRWU4tdFNLckQzcldQelVZWFByeXotdF83ZjlPTEVpcjdYb2Fn?oc=5",
+    "collected_at": "2026-09-26T13:16:30.40169+00:00"
+   },
+   "bbc0b825-bc3e-46d2-9af8-49582f03fc03": {
+    "url": "https://news.google.com/rss/articles/CBMiekFVX3lxTE5hYkN5dGZBNWtMczBXaVNSdEZwVExRdWk3Qmt1a0oxaURzYUVxaDBIOUNZUVItaFZSNHc1d3dsN1lFM2REbTV0Q3NCUk84Sl9LQnUzd3NhaU91b1hWODhicHVLOC1XTmtJQzJ3a19veUlkaVR2UHdiNXJB?oc=5",
+    "collected_at": "2026-09-26T15:21:42.015691+00:00"
+   },
+   "c10dbf38-0299-4d78-a548-ebce9289f8bc": {
+    "url": "https://news.google.com/rss/articles/CBMijAFBVV95cUxQZmkxQnUxa1JKaDBBa1JwQVUyN1JZSXRtV3VwZ0s5TTJzNEMxekNGcHJiZzRLa1NULXFMb3VSOTl6bnNURDhBTzBERlpkZVk0MncyODBIb2FKa3h0cVVEVnV0ams3M2xmZ09zU0EwY2psbGUzcUs2R2RRUzhRa1dYZXZrMDJWSG5NZnZPVw?oc=5",
+    "collected_at": "2026-09-25T23:47:38.686647+00:00"
+   },
+   "e5443cbf-01a4-4110-8faf-b8b0276d3ac8": {
+    "url": "https://news.google.com/rss/articles/CBMiowFBVV95cUxPZDFBeDhjMVNRTFUtUVNrcmE4Uk9PQ3Nmdnp0Z0hXSWhCSGRFMkI0U05ueXViaFFycmNpODhSRDgxVFFUUFA2T3FpLWRTV20tNTR2SURkVjk0ZUJPTkVGZXFXQmtBRUZnWlRlQkE3bGx3eUJESTBtQWpoWUFma24tMEJMc1BMQTlIMUdNbkloQW9raVdIMWxic0J0UTMtWDdPZlJV?oc=5",
+    "collected_at": "2026-09-26T03:39:10.243933+00:00"
+   },
+   "89fbed07-6321-42ce-a9d8-47a3006681cb": {
+    "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE1Gc2xjQ1lxckxXLVQ1ajFKakNhUkNZT2FlLWRDYXFmdTJkUndJcjlPaVFhZmFlTVBkbWFTV2VwczA5SnlhNjF6VUJCdnMzemVXWFZBdWJfd0c5V2s?oc=5",
+    "collected_at": "2026-09-26T06:55:56.65932+00:00"
+   },
+   "a5760260-9242-49a3-9ec8-5f8d5fe4e74f": {
+    "url": "https://news.google.com/rss/articles/CBMi5gFBVV95cUxQaXV1UmYzWlNQZ1pwR2FlYllRUGtIbjVJa25iYmRvV2V1TlpmelcxMVhGVTUwVVo0TXV1OHY1cFdmMl84bkZUaHctZXZ1OUttSnRERUlNSWRxXzRnZXZ1UEZpUW5mVTYydF9pbEJkc2JENjNMakxnQjF0RWxwcHNjSmhQVlZ1Vk81eEw5eDNaUzZDUVVaV2tzTFppcWtEV19YSUJIMmItNkRDRlVjdDVUOGZHVnJFQ0ZHbVFGWFp2YXktUlJUSjBhTXN1RU5aWDExMTVJd2NYazYzNnRHaHRXNXE5aTNldw?oc=5",
+    "collected_at": "2026-09-26T04:17:53.016675+00:00"
+   },
+   "8164a3d7-e826-43e9-9dd6-96babe0c71aa": {
+    "url": "https://www.ixbt.com/news/2026/09/26/438377-neozidannye-i-trevoznye-anomalii-ii-openai-sam-polucil-dostup-k-pravitelstvennym-saitam-ssa.html",
+    "collected_at": "2026-09-26T04:56:13.73358+00:00"
+   },
+   "0b5b886f-6f57-4ff1-abd5-a6333beba202": {
+    "url": "https://news.google.com/rss/articles/CBMi1wFBVV95cUxNaFdpNGJHdHFTWGxGLVNuR2dTUDJZTFZqRWdvU3g0cWJlVlN2SVBnY0dpY0MtN19KRGN0ZEZlR2pXNW9TYkN6NUxicGVPOElZT0pFOENJb1FJY1hnb0REaXhhUW53aVR6TmFaZDYxd0hWUUxYalJlNjluX0JYQWNBUnI3cTFXZzVnLS0tYm9iUkF3Q1B5S21QLWR3cGRtWDBOY1lfdFlVQ1pQZURpNHZ6cDNnZXRta0VUSXJXYktCbFYyRzhuTlpnT0hwMW9ESXhrYVpuU1lic9IB3AFBVV95cUxOMzhOSHB1dlJtc0E0U2pSX1doczQ1bmpfWFBacnhLNHhhd0pUR1llalBSY2F3VGExSWNiVDZQMGtsSzBNU09mbEh2ZWxoQWhsUGZkcnUxN01OSndoak9pbGxUNW1STlNpdHdKdWRxOTV0NFNnWEpZOEtFOVhDS05IbG1oUVlMODkyVUsyTUw0TTV5YTJrNHgyREx2S2ctWjRCamg1bUtRMWhMMFJLbjFVdEdpZDhCTl9hLUdGZWIyNGtCYTdHb0FFdENFSTBSWlN5akpyS0lsNDFzbkhZ?oc=5",
+    "collected_at": "2026-09-26T06:15:49.922426+00:00"
+   },
+   "8d8d157d-f62c-4181-bf9c-067208225ec1": {
+    "url": "https://news.google.com/rss/articles/CBMiuwFBVV95cUxPLVF2eG5CMzFKcF9yZkI4S3ZkcjZvRTdlU3lwMWhSN2daSDJ2R1pkZnM0VGphekxLOFd5S1VXVUFKaEJHQVNEOHBjbE00Ykx2M2kxUEtsV3lHQkdXLUlFZXVpRGcxYlVUVEEyRVE2cXRwSUt6M2I0LWl0X2pMMEtJbExob0hqQ0JydUQ3NGZBaTVIVnk0SEZQazNoaFAzb0ZSU25ZekF2M2poRElkTzZNdWdWcEgzSlFpM1Iw?oc=5",
+    "collected_at": "2026-09-26T12:35:10.496686+00:00"
+   },
+   "cce4f2c2-2fba-44c5-9c5c-b0852a3bd1c2": {
+    "url": "https://news.google.com/rss/articles/CBMiREFVX3lxTFAyRHdsWjhPemx3UTZyeVVXTnNJc3F3Y2oxM1BhS09UdDhTQUViS083ZnBLdWl3UU5INTFSNHhHTF9NRXBB0gFKQVVfeXFMTzRaeXpFbGtLZWtjcnAwR0hNTndia1JnNE55LVpFYTNmYXppZ0t0aVpfci10c01WUS1uUUUtci1pYUU4dHB6c3VpRGc?oc=5",
+    "collected_at": "2026-09-26T07:39:30.60372+00:00"
+   },
+   "d9441893-9704-41de-afff-21d20831c8e6": {
+    "url": "https://news.google.com/rss/articles/CBMihgFBVV95cUxOcHoweTB6SkhjcllkWkdIVEhBbW16dEFFUnc4ZkpvRWlLTGJReDhFTnBqVDZTUFh6b0FCdGE0dTJ5dkk2RDBOSEVXVmdpcXppS2ZzTE9rUXFZWGctaUNKakJMRXcwWmxHRm9LRGJ1eTBUbmppcW9TNkR4NkhJdW8xR0lQRVNJZw?oc=5",
+    "collected_at": "2026-09-26T09:04:23.113871+00:00"
+   },
+   "70003fe6-3960-476e-97cd-452140628404": {
+    "url": "https://news.google.com/rss/articles/CBMingFBVV95cUxObDJpZEtlVTNJUHVzeWJyQ3JybnFmQ2JSR1Vxcnc5SWE1T2EtaFU4QkhMMlFiUmlBakViQzVQT21RS05NUF95VnBsUUdBdk1DdHNUazFyQlhNQjVjdVhZYlc0ejFqWThSZ0w0Z3JSZzZPeFZxY0I3dkFuYUh4Y1JmOGhsQlM2SU5NTGVUNE9DOWdvQy0xNnZydE9ObGRFUQ?oc=5",
+    "collected_at": "2026-09-26T09:46:55.905106+00:00"
+   },
+   "744af497-674d-43eb-a841-8e57b56c71a8": {
+    "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxPdzlVa0tWc3kzeWVORGNGdlJzTXduaE9XNjdGeHo0WUpaUC1KOHE1ZHVjSFVGMlFTdEZudzhpZFNPdVBodFk0RFUxNTItOERrNXRoMlZqUThIR2stMGRzaWxsNGJkYUtQbllXU09WQWpTcjR4U25jeHdjOTNwT2xGVkQzMHZIZXFGclJUWkNxa2xMZw?oc=5",
+    "collected_at": "2026-09-26T10:29:21.22865+00:00"
+   },
+   "28f32558-8922-480f-a343-8382e7165ea4": {
+    "url": "https://www.securityweek.com/openai-says-its-models-engaged-with-us-government-websites-in-new-model-misbehavior-disclosure/",
+    "collected_at": "2026-09-26T11:10:16.407369+00:00"
+   },
+   "fb04cb7c-7484-4a1f-b97f-092755e096d6": {
+    "url": "https://www.bbc.com/news/articles/cw62jje658dlo",
+    "collected_at": "2026-09-26T18:11:51.622505+00:00"
+   },
+   "0ad4f236-27d6-4937-914c-0806dee22239": {
+    "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxPbkQyN1dNYTkzeGFDN0hQSHVZNGxVUEcyb0trcGo1SmZMeWxNRmYwOTNHRGo1eVVrWTBqYkVoUmxpV2xuVnlURWtpY3FRTG5zRGNQdk90SjdwblZVVzlfQWk1UGJsTGNhQVF2MXZ2QjFLYV9iZ0FrWElzSFhIWGhFZw?oc=5",
+    "collected_at": "2026-09-26T21:53:03.809309+00:00"
+   },
+   "f26f3073-2aa7-43b0-b249-9361aecd79d8": {
+    "url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxOZm11QTFHT2laeDBITXp6NDhpS2ZteEZ4Ty1IeVJKQlNDTnNYd3pBaVlyWjk3dkx2Yk53ZHZURm8tbXFlRHJTckgwclpDRXhfaHdPTGxIVDZFdklZc21MWXkxMEVfMHJ2WkpydXliZ1ZiR0NwSVN1Qk1LV196UjhGLXpnWFlWTWN6Ri0wYjZOckRVMUc2Tk5nWGE1VmVISU55aUw2OUtYUDgtMWJERjEw0gG0AUFVX3lxTE1EWTdXN1pQMXg2UW5XaU0xSDllb2RFRldKcUprY2N4Z3hEem5zNXFVdHNuYWZTd05FUDJHMU5OZkdLWXBlTDNGLV91RVI4N0dpTHliUjNDR0xITEh5dDhqU0FvWXZNRHFRd1hLMlJZY0RLeFpYZjVqeFFWdk1PbHluN2dyQVNlUkZhNnRMZE5pSzJZOWlMekQ0ck5nRHU2aGFpTi1TVzZmSG10eklTUHdBUk5BOQ?oc=5",
+    "collected_at": "2026-09-26T17:26:20.838683+00:00"
+   },
+   "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5": {
+    "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxPZktfT2p6V3MwTEFNUDJPZk11c053QzgzQ0QxaXF4UkZpWEd2ZzZZdkRUMk9OelR5encydHBkSGFlT1oxMkVWdjZlODBLMGJTbGdtbTJpbDlHRHZFTTlNSGxMUlVGc3BuQ1dGNWtRZlRQLURjMkdiaVVvWXQ3a2xRTTBzVWZtNEp4bG05VU5EZw?oc=5",
+    "collected_at": "2026-09-26T23:12:09.461388+00:00"
+   },
+   "8828a79a-1a0c-4301-9433-3e5fb87c7464": {
+    "url": "https://news.google.com/rss/articles/CBMikAJBVV95cUxPdTZBSGsyY3ZmaEZIYVlCVVd5S1ZvTXBYaGx3eU0xRHgxVGdMSXZMNS1qdnFJcEhpYlVINGZWWDR1RjNWSFphRGdwLUtyTXAwdHdVYTJfb3dHWjhKeFBxX0hTLVlXc2ZjN3RXU1JQS0ZWSVNucVI4Tnl6SVpwX2hxNk00TERRMkFsZmZtb252Vm5lQTFNS2lic0ZBc0dWRjM3d3ptaFduVE1WZUVSQ3ZyRnY4SktxeHJNbWlPN3AtSDlWUEwtcXBka0JYX05JdzVxaG0yR0VYSVRCaTEwM2NhMlJTM193ZTBha3BrdmdyTjBEdWpxZ1N1VTlZcjFvSnJrc0h3bDZRZ3REdERTSC1mSw?oc=5",
+    "collected_at": "2026-09-26T17:26:20.838683+00:00"
+   },
+   "4371aba5-6ff7-4b6d-b38c-df16b0e104b2": {
+    "url": "https://news.google.com/rss/articles/CBMisgFBVV95cUxPMlBnUmxmMldiSEZRRTZvbWk3UEduNWRiQk1JQndvdkF4SVM1QWk4THUySERCaU1naU1wTG53SzlMQlZxTWtqYzJxT3pITWFnN1gwRHdELWJSbFgtMWtiOVFmTzRCckx1X2dueE9NTi1xQWhoQ1NJTEdraFlZbFMtSnR0WE5SN2pzWm9FN2hmSmRjUS1OREttLVJDXzdzM0Zacms1MXoxaUx6dEEwRFNFMklR?oc=5",
+    "collected_at": "2026-09-26T19:46:59.455504+00:00"
+   }
+  },
+  "original_attempts": [
+   [
+    "070feacc-88f7-4b75-817a-77effc45c266",
+    "FAIL"
+   ],
+   [
+    "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+    "FAIL"
+   ],
+   [
+    "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+    "FAIL"
+   ],
+   [
+    "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+    "PASS"
+   ]
+  ]
+ },
+ "canary4": {
+  "run": "viral_nominated_canary4_20260927",
+  "clock": "2026-09-27T00:25:01.636467+00:00",
+  "planned": "070feacc-88f7-4b75-817a-77effc45c266",
+  "candidate_ids": [
+   "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+   "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+   "070feacc-88f7-4b75-817a-77effc45c266",
+   "16cc9f34-2380-4f9b-8c56-a2195a0841ed",
+   "bbc0b825-bc3e-46d2-9af8-49582f03fc03",
+   "e5443cbf-01a4-4110-8faf-b8b0276d3ac8",
+   "89fbed07-6321-42ce-a9d8-47a3006681cb",
+   "a5760260-9242-49a3-9ec8-5f8d5fe4e74f",
+   "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+   "0b5b886f-6f57-4ff1-abd5-a6333beba202",
+   "8d8d157d-f62c-4181-bf9c-067208225ec1",
+   "cce4f2c2-2fba-44c5-9c5c-b0852a3bd1c2",
+   "d9441893-9704-41de-afff-21d20831c8e6",
+   "70003fe6-3960-476e-97cd-452140628404",
+   "744af497-674d-43eb-a841-8e57b56c71a8",
+   "28f32558-8922-480f-a343-8382e7165ea4",
+   "fb04cb7c-7484-4a1f-b97f-092755e096d6",
+   "0ad4f236-27d6-4937-914c-0806dee22239",
+   "f26f3073-2aa7-43b0-b249-9361aecd79d8",
+   "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+   "8828a79a-1a0c-4301-9433-3e5fb87c7464",
+   "4371aba5-6ff7-4b6d-b38c-df16b0e104b2",
+   "10856ebf-530f-41b4-80ea-2c7592cca2b8"
+  ],
+  "copies": {
+   "6429ccc5-9952-4160-aebe-5b3dda6808d8": {
+    "url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+    "collected_at": "2026-09-26T12:33:30.589762+00:00"
+   },
+   "f408be6b-7ab0-4a49-9926-69a66ddf93f5": {
+    "url": "https://www.techmeme.com/260925/p25#a260925p25",
+    "collected_at": "2026-09-26T00:25:05.971903+00:00"
+   },
+   "070feacc-88f7-4b75-817a-77effc45c266": {
+    "url": "https://3dnews.ru/1149086",
+    "collected_at": "2026-09-26T06:55:34.780591+00:00"
+   },
+   "16cc9f34-2380-4f9b-8c56-a2195a0841ed": {
+    "url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxPRXJUbjd3TVVaZUZxVmU2eDhmbEFtM3h4UU5OVDF4cXNWbjBqS1hKQTRObHZzN3NGWW16Q3lBWU5oSU9HRlBHaWdsN2FsMkF5QUdzUVVZVmZxdnVSOXlzUHhGLWVqN05aTFRBaHB5cmo0X2NvR2VOYzByNkNtb1hGbUl3TElTMmdFNWRRWU4tdFNLckQzcldQelVZWFByeXotdF83ZjlPTEVpcjdYb2Fn?oc=5",
+    "collected_at": "2026-09-26T13:16:30.40169+00:00"
+   },
+   "bbc0b825-bc3e-46d2-9af8-49582f03fc03": {
+    "url": "https://news.google.com/rss/articles/CBMiekFVX3lxTE5hYkN5dGZBNWtMczBXaVNSdEZwVExRdWk3Qmt1a0oxaURzYUVxaDBIOUNZUVItaFZSNHc1d3dsN1lFM2REbTV0Q3NCUk84Sl9LQnUzd3NhaU91b1hWODhicHVLOC1XTmtJQzJ3a19veUlkaVR2UHdiNXJB?oc=5",
+    "collected_at": "2026-09-26T15:21:42.015691+00:00"
+   },
+   "e5443cbf-01a4-4110-8faf-b8b0276d3ac8": {
+    "url": "https://news.google.com/rss/articles/CBMiowFBVV95cUxPZDFBeDhjMVNRTFUtUVNrcmE4Uk9PQ3Nmdnp0Z0hXSWhCSGRFMkI0U05ueXViaFFycmNpODhSRDgxVFFUUFA2T3FpLWRTV20tNTR2SURkVjk0ZUJPTkVGZXFXQmtBRUZnWlRlQkE3bGx3eUJESTBtQWpoWUFma24tMEJMc1BMQTlIMUdNbkloQW9raVdIMWxic0J0UTMtWDdPZlJV?oc=5",
+    "collected_at": "2026-09-26T03:39:10.243933+00:00"
+   },
+   "89fbed07-6321-42ce-a9d8-47a3006681cb": {
+    "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE1Gc2xjQ1lxckxXLVQ1ajFKakNhUkNZT2FlLWRDYXFmdTJkUndJcjlPaVFhZmFlTVBkbWFTV2VwczA5SnlhNjF6VUJCdnMzemVXWFZBdWJfd0c5V2s?oc=5",
+    "collected_at": "2026-09-26T06:55:56.65932+00:00"
+   },
+   "a5760260-9242-49a3-9ec8-5f8d5fe4e74f": {
+    "url": "https://news.google.com/rss/articles/CBMi5gFBVV95cUxQaXV1UmYzWlNQZ1pwR2FlYllRUGtIbjVJa25iYmRvV2V1TlpmelcxMVhGVTUwVVo0TXV1OHY1cFdmMl84bkZUaHctZXZ1OUttSnRERUlNSWRxXzRnZXZ1UEZpUW5mVTYydF9pbEJkc2JENjNMakxnQjF0RWxwcHNjSmhQVlZ1Vk81eEw5eDNaUzZDUVVaV2tzTFppcWtEV19YSUJIMmItNkRDRlVjdDVUOGZHVnJFQ0ZHbVFGWFp2YXktUlJUSjBhTXN1RU5aWDExMTVJd2NYazYzNnRHaHRXNXE5aTNldw?oc=5",
+    "collected_at": "2026-09-26T04:17:53.016675+00:00"
+   },
+   "8164a3d7-e826-43e9-9dd6-96babe0c71aa": {
+    "url": "https://www.ixbt.com/news/2026/09/26/438377-neozidannye-i-trevoznye-anomalii-ii-openai-sam-polucil-dostup-k-pravitelstvennym-saitam-ssa.html",
+    "collected_at": "2026-09-26T04:56:13.73358+00:00"
+   },
+   "0b5b886f-6f57-4ff1-abd5-a6333beba202": {
+    "url": "https://news.google.com/rss/articles/CBMi1wFBVV95cUxNaFdpNGJHdHFTWGxGLVNuR2dTUDJZTFZqRWdvU3g0cWJlVlN2SVBnY0dpY0MtN19KRGN0ZEZlR2pXNW9TYkN6NUxicGVPOElZT0pFOENJb1FJY1hnb0REaXhhUW53aVR6TmFaZDYxd0hWUUxYalJlNjluX0JYQWNBUnI3cTFXZzVnLS0tYm9iUkF3Q1B5S21QLWR3cGRtWDBOY1lfdFlVQ1pQZURpNHZ6cDNnZXRta0VUSXJXYktCbFYyRzhuTlpnT0hwMW9ESXhrYVpuU1lic9IB3AFBVV95cUxOMzhOSHB1dlJtc0E0U2pSX1doczQ1bmpfWFBacnhLNHhhd0pUR1llalBSY2F3VGExSWNiVDZQMGtsSzBNU09mbEh2ZWxoQWhsUGZkcnUxN01OSndoak9pbGxUNW1STlNpdHdKdWRxOTV0NFNnWEpZOEtFOVhDS05IbG1oUVlMODkyVUsyTUw0TTV5YTJrNHgyREx2S2ctWjRCamg1bUtRMWhMMFJLbjFVdEdpZDhCTl9hLUdGZWIyNGtCYTdHb0FFdENFSTBSWlN5akpyS0lsNDFzbkhZ?oc=5",
+    "collected_at": "2026-09-26T06:15:49.922426+00:00"
+   },
+   "8d8d157d-f62c-4181-bf9c-067208225ec1": {
+    "url": "https://news.google.com/rss/articles/CBMiuwFBVV95cUxPLVF2eG5CMzFKcF9yZkI4S3ZkcjZvRTdlU3lwMWhSN2daSDJ2R1pkZnM0VGphekxLOFd5S1VXVUFKaEJHQVNEOHBjbE00Ykx2M2kxUEtsV3lHQkdXLUlFZXVpRGcxYlVUVEEyRVE2cXRwSUt6M2I0LWl0X2pMMEtJbExob0hqQ0JydUQ3NGZBaTVIVnk0SEZQazNoaFAzb0ZSU25ZekF2M2poRElkTzZNdWdWcEgzSlFpM1Iw?oc=5",
+    "collected_at": "2026-09-26T12:35:10.496686+00:00"
+   },
+   "cce4f2c2-2fba-44c5-9c5c-b0852a3bd1c2": {
+    "url": "https://news.google.com/rss/articles/CBMiREFVX3lxTFAyRHdsWjhPemx3UTZyeVVXTnNJc3F3Y2oxM1BhS09UdDhTQUViS083ZnBLdWl3UU5INTFSNHhHTF9NRXBB0gFKQVVfeXFMTzRaeXpFbGtLZWtjcnAwR0hNTndia1JnNE55LVpFYTNmYXppZ0t0aVpfci10c01WUS1uUUUtci1pYUU4dHB6c3VpRGc?oc=5",
+    "collected_at": "2026-09-26T07:39:30.60372+00:00"
+   },
+   "d9441893-9704-41de-afff-21d20831c8e6": {
+    "url": "https://news.google.com/rss/articles/CBMihgFBVV95cUxOcHoweTB6SkhjcllkWkdIVEhBbW16dEFFUnc4ZkpvRWlLTGJReDhFTnBqVDZTUFh6b0FCdGE0dTJ5dkk2RDBOSEVXVmdpcXppS2ZzTE9rUXFZWGctaUNKakJMRXcwWmxHRm9LRGJ1eTBUbmppcW9TNkR4NkhJdW8xR0lQRVNJZw?oc=5",
+    "collected_at": "2026-09-26T09:04:23.113871+00:00"
+   },
+   "70003fe6-3960-476e-97cd-452140628404": {
+    "url": "https://news.google.com/rss/articles/CBMingFBVV95cUxObDJpZEtlVTNJUHVzeWJyQ3JybnFmQ2JSR1Vxcnc5SWE1T2EtaFU4QkhMMlFiUmlBakViQzVQT21RS05NUF95VnBsUUdBdk1DdHNUazFyQlhNQjVjdVhZYlc0ejFqWThSZ0w0Z3JSZzZPeFZxY0I3dkFuYUh4Y1JmOGhsQlM2SU5NTGVUNE9DOWdvQy0xNnZydE9ObGRFUQ?oc=5",
+    "collected_at": "2026-09-26T09:46:55.905106+00:00"
+   },
+   "744af497-674d-43eb-a841-8e57b56c71a8": {
+    "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxPdzlVa0tWc3kzeWVORGNGdlJzTXduaE9XNjdGeHo0WUpaUC1KOHE1ZHVjSFVGMlFTdEZudzhpZFNPdVBodFk0RFUxNTItOERrNXRoMlZqUThIR2stMGRzaWxsNGJkYUtQbllXU09WQWpTcjR4U25jeHdjOTNwT2xGVkQzMHZIZXFGclJUWkNxa2xMZw?oc=5",
+    "collected_at": "2026-09-26T10:29:21.22865+00:00"
+   },
+   "28f32558-8922-480f-a343-8382e7165ea4": {
+    "url": "https://www.securityweek.com/openai-says-its-models-engaged-with-us-government-websites-in-new-model-misbehavior-disclosure/",
+    "collected_at": "2026-09-26T11:10:16.407369+00:00"
+   },
+   "fb04cb7c-7484-4a1f-b97f-092755e096d6": {
+    "url": "https://www.bbc.com/news/articles/cw62jje658dlo",
+    "collected_at": "2026-09-26T18:11:51.622505+00:00"
+   },
+   "0ad4f236-27d6-4937-914c-0806dee22239": {
+    "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxPbkQyN1dNYTkzeGFDN0hQSHVZNGxVUEcyb0trcGo1SmZMeWxNRmYwOTNHRGo1eVVrWTBqYkVoUmxpV2xuVnlURWtpY3FRTG5zRGNQdk90SjdwblZVVzlfQWk1UGJsTGNhQVF2MXZ2QjFLYV9iZ0FrWElzSFhIWGhFZw?oc=5",
+    "collected_at": "2026-09-26T21:53:03.809309+00:00"
+   },
+   "f26f3073-2aa7-43b0-b249-9361aecd79d8": {
+    "url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxOZm11QTFHT2laeDBITXp6NDhpS2ZteEZ4Ty1IeVJKQlNDTnNYd3pBaVlyWjk3dkx2Yk53ZHZURm8tbXFlRHJTckgwclpDRXhfaHdPTGxIVDZFdklZc21MWXkxMEVfMHJ2WkpydXliZ1ZiR0NwSVN1Qk1LV196UjhGLXpnWFlWTWN6Ri0wYjZOckRVMUc2Tk5nWGE1VmVISU55aUw2OUtYUDgtMWJERjEw0gG0AUFVX3lxTE1EWTdXN1pQMXg2UW5XaU0xSDllb2RFRldKcUprY2N4Z3hEem5zNXFVdHNuYWZTd05FUDJHMU5OZkdLWXBlTDNGLV91RVI4N0dpTHliUjNDR0xITEh5dDhqU0FvWXZNRHFRd1hLMlJZY0RLeFpYZjVqeFFWdk1PbHluN2dyQVNlUkZhNnRMZE5pSzJZOWlMekQ0ck5nRHU2aGFpTi1TVzZmSG10eklTUHdBUk5BOQ?oc=5",
+    "collected_at": "2026-09-26T17:26:20.838683+00:00"
+   },
+   "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5": {
+    "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxPZktfT2p6V3MwTEFNUDJPZk11c053QzgzQ0QxaXF4UkZpWEd2ZzZZdkRUMk9OelR5encydHBkSGFlT1oxMkVWdjZlODBLMGJTbGdtbTJpbDlHRHZFTTlNSGxMUlVGc3BuQ1dGNWtRZlRQLURjMkdiaVVvWXQ3a2xRTTBzVWZtNEp4bG05VU5EZw?oc=5",
+    "collected_at": "2026-09-26T23:12:09.461388+00:00"
+   },
+   "8828a79a-1a0c-4301-9433-3e5fb87c7464": {
+    "url": "https://news.google.com/rss/articles/CBMikAJBVV95cUxPdTZBSGsyY3ZmaEZIYVlCVVd5S1ZvTXBYaGx3eU0xRHgxVGdMSXZMNS1qdnFJcEhpYlVINGZWWDR1RjNWSFphRGdwLUtyTXAwdHdVYTJfb3dHWjhKeFBxX0hTLVlXc2ZjN3RXU1JQS0ZWSVNucVI4Tnl6SVpwX2hxNk00TERRMkFsZmZtb252Vm5lQTFNS2lic0ZBc0dWRjM3d3ptaFduVE1WZUVSQ3ZyRnY4SktxeHJNbWlPN3AtSDlWUEwtcXBka0JYX05JdzVxaG0yR0VYSVRCaTEwM2NhMlJTM193ZTBha3BrdmdyTjBEdWpxZ1N1VTlZcjFvSnJrc0h3bDZRZ3REdERTSC1mSw?oc=5",
+    "collected_at": "2026-09-26T17:26:20.838683+00:00"
+   },
+   "4371aba5-6ff7-4b6d-b38c-df16b0e104b2": {
+    "url": "https://news.google.com/rss/articles/CBMisgFBVV95cUxPMlBnUmxmMldiSEZRRTZvbWk3UEduNWRiQk1JQndvdkF4SVM1QWk4THUySERCaU1naU1wTG53SzlMQlZxTWtqYzJxT3pITWFnN1gwRHdELWJSbFgtMWtiOVFmTzRCckx1X2dueE9NTi1xQWhoQ1NJTEdraFlZbFMtSnR0WE5SN2pzWm9FN2hmSmRjUS1OREttLVJDXzdzM0Zacms1MXoxaUx6dEEwRFNFMklR?oc=5",
+    "collected_at": "2026-09-26T19:46:59.455504+00:00"
+   },
+   "10856ebf-530f-41b4-80ea-2c7592cca2b8": {
+    "url": "https://news.google.com/rss/articles/CBMizwFBVV95cUxPV0lDdHVveGZJM1hlSjhBbVJnWmdrQkxpV3dlcHlONEgyeENMV0JiZUVySFRhVmlyVUVZSkZFbV84MTFXa2YxclA0ZFlFdDVVbXNmQ2lHYlNsazBtYWN3VVd2VmJCMV9OTlRSdVBuQlhVYkNJb0d0TU9QVlN0c0JvRE1hZUdjdm9JeDFDYUNnM2R0TUYybEtBT2FJXzdWeVNLR2MwN2UxenNwdU5iYkY5QlgxcWZQRHA2aUY3ZWR6eVAyd2RET0pSXzhVMXhDT0U?oc=5",
+    "collected_at": "2026-09-26T23:52:23.128162+00:00"
+   }
+  },
+  "original_attempts": [
+   [
+    "070feacc-88f7-4b75-817a-77effc45c266",
+    "FAIL"
+   ],
+   [
+    "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+    "FAIL"
+   ],
+   [
+    "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+    "FAIL"
+   ],
+   [
+    "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+    "PASS"
+   ]
+  ]
+ },
+ "canary5": {
+  "run": "viral_nominated_canary5_20260927",
+  "clock": "2026-09-27T11:14:31.893685+00:00",
+  "planned": "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+  "candidate_ids": [
+   "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+   "16cc9f34-2380-4f9b-8c56-a2195a0841ed",
+   "bbc0b825-bc3e-46d2-9af8-49582f03fc03",
+   "8d8d157d-f62c-4181-bf9c-067208225ec1",
+   "fb04cb7c-7484-4a1f-b97f-092755e096d6",
+   "0ad4f236-27d6-4937-914c-0806dee22239",
+   "f26f3073-2aa7-43b0-b249-9361aecd79d8",
+   "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+   "8828a79a-1a0c-4301-9433-3e5fb87c7464",
+   "4371aba5-6ff7-4b6d-b38c-df16b0e104b2",
+   "273dc8ad-c786-4c17-88a3-d5b7cc0c48a2",
+   "10856ebf-530f-41b4-80ea-2c7592cca2b8",
+   "d08eaab6-90a6-48d1-b99f-fef7f059e01f"
+  ],
+  "copies": {
+   "6429ccc5-9952-4160-aebe-5b3dda6808d8": {
+    "url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+    "collected_at": "2026-09-26T12:33:30.589762+00:00"
+   },
+   "16cc9f34-2380-4f9b-8c56-a2195a0841ed": {
+    "url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxPRXJUbjd3TVVaZUZxVmU2eDhmbEFtM3h4UU5OVDF4cXNWbjBqS1hKQTRObHZzN3NGWW16Q3lBWU5oSU9HRlBHaWdsN2FsMkF5QUdzUVVZVmZxdnVSOXlzUHhGLWVqN05aTFRBaHB5cmo0X2NvR2VOYzByNkNtb1hGbUl3TElTMmdFNWRRWU4tdFNLckQzcldQelVZWFByeXotdF83ZjlPTEVpcjdYb2Fn?oc=5",
+    "collected_at": "2026-09-26T13:16:30.40169+00:00"
+   },
+   "bbc0b825-bc3e-46d2-9af8-49582f03fc03": {
+    "url": "https://news.google.com/rss/articles/CBMiekFVX3lxTE5hYkN5dGZBNWtMczBXaVNSdEZwVExRdWk3Qmt1a0oxaURzYUVxaDBIOUNZUVItaFZSNHc1d3dsN1lFM2REbTV0Q3NCUk84Sl9LQnUzd3NhaU91b1hWODhicHVLOC1XTmtJQzJ3a19veUlkaVR2UHdiNXJB?oc=5",
+    "collected_at": "2026-09-26T15:21:42.015691+00:00"
+   },
+   "8d8d157d-f62c-4181-bf9c-067208225ec1": {
+    "url": "https://news.google.com/rss/articles/CBMiuwFBVV95cUxPLVF2eG5CMzFKcF9yZkI4S3ZkcjZvRTdlU3lwMWhSN2daSDJ2R1pkZnM0VGphekxLOFd5S1VXVUFKaEJHQVNEOHBjbE00Ykx2M2kxUEtsV3lHQkdXLUlFZXVpRGcxYlVUVEEyRVE2cXRwSUt6M2I0LWl0X2pMMEtJbExob0hqQ0JydUQ3NGZBaTVIVnk0SEZQazNoaFAzb0ZSU25ZekF2M2poRElkTzZNdWdWcEgzSlFpM1Iw?oc=5",
+    "collected_at": "2026-09-26T12:35:10.496686+00:00"
+   },
+   "fb04cb7c-7484-4a1f-b97f-092755e096d6": {
+    "url": "https://www.bbc.com/news/articles/cw62jje658dlo",
+    "collected_at": "2026-09-26T18:11:51.622505+00:00"
+   },
+   "0ad4f236-27d6-4937-914c-0806dee22239": {
+    "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxPbkQyN1dNYTkzeGFDN0hQSHVZNGxVUEcyb0trcGo1SmZMeWxNRmYwOTNHRGo1eVVrWTBqYkVoUmxpV2xuVnlURWtpY3FRTG5zRGNQdk90SjdwblZVVzlfQWk1UGJsTGNhQVF2MXZ2QjFLYV9iZ0FrWElzSFhIWGhFZw?oc=5",
+    "collected_at": "2026-09-26T21:53:03.809309+00:00"
+   },
+   "f26f3073-2aa7-43b0-b249-9361aecd79d8": {
+    "url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxOZm11QTFHT2laeDBITXp6NDhpS2ZteEZ4Ty1IeVJKQlNDTnNYd3pBaVlyWjk3dkx2Yk53ZHZURm8tbXFlRHJTckgwclpDRXhfaHdPTGxIVDZFdklZc21MWXkxMEVfMHJ2WkpydXliZ1ZiR0NwSVN1Qk1LV196UjhGLXpnWFlWTWN6Ri0wYjZOckRVMUc2Tk5nWGE1VmVISU55aUw2OUtYUDgtMWJERjEw0gG0AUFVX3lxTE1EWTdXN1pQMXg2UW5XaU0xSDllb2RFRldKcUprY2N4Z3hEem5zNXFVdHNuYWZTd05FUDJHMU5OZkdLWXBlTDNGLV91RVI4N0dpTHliUjNDR0xITEh5dDhqU0FvWXZNRHFRd1hLMlJZY0RLeFpYZjVqeFFWdk1PbHluN2dyQVNlUkZhNnRMZE5pSzJZOWlMekQ0ck5nRHU2aGFpTi1TVzZmSG10eklTUHdBUk5BOQ?oc=5",
+    "collected_at": "2026-09-26T17:26:20.838683+00:00"
+   },
+   "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5": {
+    "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxPZktfT2p6V3MwTEFNUDJPZk11c053QzgzQ0QxaXF4UkZpWEd2ZzZZdkRUMk9OelR5encydHBkSGFlT1oxMkVWdjZlODBLMGJTbGdtbTJpbDlHRHZFTTlNSGxMUlVGc3BuQ1dGNWtRZlRQLURjMkdiaVVvWXQ3a2xRTTBzVWZtNEp4bG05VU5EZw?oc=5",
+    "collected_at": "2026-09-26T23:12:09.461388+00:00"
+   },
+   "8828a79a-1a0c-4301-9433-3e5fb87c7464": {
+    "url": "https://news.google.com/rss/articles/CBMikAJBVV95cUxPdTZBSGsyY3ZmaEZIYVlCVVd5S1ZvTXBYaGx3eU0xRHgxVGdMSXZMNS1qdnFJcEhpYlVINGZWWDR1RjNWSFphRGdwLUtyTXAwdHdVYTJfb3dHWjhKeFBxX0hTLVlXc2ZjN3RXU1JQS0ZWSVNucVI4Tnl6SVpwX2hxNk00TERRMkFsZmZtb252Vm5lQTFNS2lic0ZBc0dWRjM3d3ptaFduVE1WZUVSQ3ZyRnY4SktxeHJNbWlPN3AtSDlWUEwtcXBka0JYX05JdzVxaG0yR0VYSVRCaTEwM2NhMlJTM193ZTBha3BrdmdyTjBEdWpxZ1N1VTlZcjFvSnJrc0h3bDZRZ3REdERTSC1mSw?oc=5",
+    "collected_at": "2026-09-26T17:26:20.838683+00:00"
+   },
+   "4371aba5-6ff7-4b6d-b38c-df16b0e104b2": {
+    "url": "https://news.google.com/rss/articles/CBMisgFBVV95cUxPMlBnUmxmMldiSEZRRTZvbWk3UEduNWRiQk1JQndvdkF4SVM1QWk4THUySERCaU1naU1wTG53SzlMQlZxTWtqYzJxT3pITWFnN1gwRHdELWJSbFgtMWtiOVFmTzRCckx1X2dueE9NTi1xQWhoQ1NJTEdraFlZbFMtSnR0WE5SN2pzWm9FN2hmSmRjUS1OREttLVJDXzdzM0Zacms1MXoxaUx6dEEwRFNFMklR?oc=5",
+    "collected_at": "2026-09-26T19:46:59.455504+00:00"
+   },
+   "273dc8ad-c786-4c17-88a3-d5b7cc0c48a2": {
+    "url": "https://news.google.com/rss/articles/CBMi6wFBVV95cUxQWXAzN3dZRGhRVl9CSkEzNTVIemNkMDludWJhVko1TlYxaDFzNnpJdXplaTBld2RhX2xOcmRMMkhYRTR6cHRzV3FmQ1MtYWhBOW9kWlpJMGh5R3JmdWZVVE5faVNxSmFScklQSGJDOVFQbG5pejBhSDRZblRIcGo2MGVfUmlQUXBEOC1lWlBjVC1taFR6TlhpazloeWpBSVNiYTBHb09CbTBPczlwRkNtdmM1OE4welJXMmYxRUNocERTaEt5N3BxbkpwVXNZZklPY19Obml2MlZULXhCQk55czFTc1B2M0RjXzdV?oc=5",
+    "collected_at": "2026-09-27T00:31:32.562723+00:00"
+   },
+   "10856ebf-530f-41b4-80ea-2c7592cca2b8": {
+    "url": "https://news.google.com/rss/articles/CBMizwFBVV95cUxPV0lDdHVveGZJM1hlSjhBbVJnWmdrQkxpV3dlcHlONEgyeENMV0JiZUVySFRhVmlyVUVZSkZFbV84MTFXa2YxclA0ZFlFdDVVbXNmQ2lHYlNsazBtYWN3VVd2VmJCMV9OTlRSdVBuQlhVYkNJb0d0TU9QVlN0c0JvRE1hZUdjdm9JeDFDYUNnM2R0TUYybEtBT2FJXzdWeVNLR2MwN2UxenNwdU5iYkY5QlgxcWZQRHA2aUY3ZWR6eVAyd2RET0pSXzhVMXhDT0U?oc=5",
+    "collected_at": "2026-09-26T23:52:23.128162+00:00"
+   },
+   "d08eaab6-90a6-48d1-b99f-fef7f059e01f": {
+    "url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxOMnJlT0VjMlhfME40NFk4ZXV0NXkzOGpzS2I1T3pDZF9yYUdSTVJPZGszcUhRNnZ3VWkycHllSi1RWEdDMWRlMzZUVWtzVk91cGhscndZMWU4eUJzWktZMV9FX1RVdFRSazhPVnlxRGhXUXZ5dDJMZnVONTlMbFpMT2E3b2xJOUZfTTdFdjVSTFphNzcwSEstZGxsODRVOFZkMTNCNWJYLW0xLWJnbks4LUhHUmVzM2VZZzVnd1pPUnhFb3p5T3c?oc=5",
+    "collected_at": "2026-09-27T10:20:55.154911+00:00"
+   }
+  },
+  "original_attempts": [
+   [
+    "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+    "FAIL"
+   ],
+   [
+    "fb04cb7c-7484-4a1f-b97f-092755e096d6",
+    "PENDING"
+   ],
+   [
+    "16cc9f34-2380-4f9b-8c56-a2195a0841ed",
+    "PENDING"
+   ],
+   [
+    "bbc0b825-bc3e-46d2-9af8-49582f03fc03",
+    "PENDING"
+   ]
+  ]
+ },
+ "canary6": {
+  "run": "viral_nominated_canary6_20260927",
+  "clock": "2026-09-27T18:37:57.825368+00:00",
+  "planned": "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+  "candidate_ids": [
+   "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+   "0ad4f236-27d6-4937-914c-0806dee22239",
+   "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+   "4371aba5-6ff7-4b6d-b38c-df16b0e104b2",
+   "273dc8ad-c786-4c17-88a3-d5b7cc0c48a2",
+   "10856ebf-530f-41b4-80ea-2c7592cca2b8",
+   "d08eaab6-90a6-48d1-b99f-fef7f059e01f"
+  ],
+  "copies": {
+   "d4ef74d3-1eef-4544-818a-1b8d24d8fa18": {
+    "url": "https://www.theverge.com/ai-artificial-intelligence/1001178/openai-agents-bruteforce-un-website",
+    "collected_at": "2026-09-27T17:56:52.805865+00:00"
+   },
+   "0ad4f236-27d6-4937-914c-0806dee22239": {
+    "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxPbkQyN1dNYTkzeGFDN0hQSHVZNGxVUEcyb0trcGo1SmZMeWxNRmYwOTNHRGo1eVVrWTBqYkVoUmxpV2xuVnlURWtpY3FRTG5zRGNQdk90SjdwblZVVzlfQWk1UGJsTGNhQVF2MXZ2QjFLYV9iZ0FrWElzSFhIWGhFZw?oc=5",
+    "collected_at": "2026-09-26T21:53:03.809309+00:00"
+   },
+   "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5": {
+    "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxPZktfT2p6V3MwTEFNUDJPZk11c053QzgzQ0QxaXF4UkZpWEd2ZzZZdkRUMk9OelR5encydHBkSGFlT1oxMkVWdjZlODBLMGJTbGdtbTJpbDlHRHZFTTlNSGxMUlVGc3BuQ1dGNWtRZlRQLURjMkdiaVVvWXQ3a2xRTTBzVWZtNEp4bG05VU5EZw?oc=5",
+    "collected_at": "2026-09-26T23:12:09.461388+00:00"
+   },
+   "4371aba5-6ff7-4b6d-b38c-df16b0e104b2": {
+    "url": "https://news.google.com/rss/articles/CBMisgFBVV95cUxPMlBnUmxmMldiSEZRRTZvbWk3UEduNWRiQk1JQndvdkF4SVM1QWk4THUySERCaU1naU1wTG53SzlMQlZxTWtqYzJxT3pITWFnN1gwRHdELWJSbFgtMWtiOVFmTzRCckx1X2dueE9NTi1xQWhoQ1NJTEdraFlZbFMtSnR0WE5SN2pzWm9FN2hmSmRjUS1OREttLVJDXzdzM0Zacms1MXoxaUx6dEEwRFNFMklR?oc=5",
+    "collected_at": "2026-09-26T19:46:59.455504+00:00"
+   },
+   "273dc8ad-c786-4c17-88a3-d5b7cc0c48a2": {
+    "url": "https://news.google.com/rss/articles/CBMi6wFBVV95cUxQWXAzN3dZRGhRVl9CSkEzNTVIemNkMDludWJhVko1TlYxaDFzNnpJdXplaTBld2RhX2xOcmRMMkhYRTR6cHRzV3FmQ1MtYWhBOW9kWlpJMGh5R3JmdWZVVE5faVNxSmFScklQSGJDOVFQbG5pejBhSDRZblRIcGo2MGVfUmlQUXBEOC1lWlBjVC1taFR6TlhpazloeWpBSVNiYTBHb09CbTBPczlwRkNtdmM1OE4welJXMmYxRUNocERTaEt5N3BxbkpwVXNZZklPY19Obml2MlZULXhCQk55czFTc1B2M0RjXzdV?oc=5",
+    "collected_at": "2026-09-27T00:31:32.562723+00:00"
+   },
+   "10856ebf-530f-41b4-80ea-2c7592cca2b8": {
+    "url": "https://news.google.com/rss/articles/CBMizwFBVV95cUxPV0lDdHVveGZJM1hlSjhBbVJnWmdrQkxpV3dlcHlONEgyeENMV0JiZUVySFRhVmlyVUVZSkZFbV84MTFXa2YxclA0ZFlFdDVVbXNmQ2lHYlNsazBtYWN3VVd2VmJCMV9OTlRSdVBuQlhVYkNJb0d0TU9QVlN0c0JvRE1hZUdjdm9JeDFDYUNnM2R0TUYybEtBT2FJXzdWeVNLR2MwN2UxenNwdU5iYkY5QlgxcWZQRHA2aUY3ZWR6eVAyd2RET0pSXzhVMXhDT0U?oc=5",
+    "collected_at": "2026-09-26T23:52:23.128162+00:00"
+   },
+   "d08eaab6-90a6-48d1-b99f-fef7f059e01f": {
+    "url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxOMnJlT0VjMlhfME40NFk4ZXV0NXkzOGpzS2I1T3pDZF9yYUdSTVJPZGszcUhRNnZ3VWkycHllSi1RWEdDMWRlMzZUVWtzVk91cGhscndZMWU4eUJzWktZMV9FX1RVdFRSazhPVnlxRGhXUXZ5dDJMZnVONTlMbFpMT2E3b2xJOUZfTTdFdjVSTFphNzcwSEstZGxsODRVOFZkMTNCNWJYLW0xLWJnbks4LUhHUmVzM2VZZzVnd1pPUnhFb3p5T3c?oc=5",
+    "collected_at": "2026-09-27T10:20:55.154911+00:00"
+   }
+  },
+  "original_attempts": [
+   [
+    "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+    "FAIL"
+   ],
+   [
+    "0ad4f236-27d6-4937-914c-0806dee22239",
+    "PENDING"
+   ],
+   [
+    "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+    "FAIL"
+   ],
+   [
+    "4371aba5-6ff7-4b6d-b38c-df16b0e104b2",
+    "PASS"
+   ]
+  ]
+ },
+ "canary7": {
+  "run": "viral_nominated_canary7_20260927",
+  "clock": "2026-09-27T19:36:41.21566+00:00",
+  "planned": "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+  "candidate_ids": [
+   "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+   "0ad4f236-27d6-4937-914c-0806dee22239",
+   "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+   "4371aba5-6ff7-4b6d-b38c-df16b0e104b2",
+   "273dc8ad-c786-4c17-88a3-d5b7cc0c48a2",
+   "10856ebf-530f-41b4-80ea-2c7592cca2b8",
+   "d08eaab6-90a6-48d1-b99f-fef7f059e01f"
+  ],
+  "copies": {
+   "d4ef74d3-1eef-4544-818a-1b8d24d8fa18": {
+    "url": "https://www.theverge.com/ai-artificial-intelligence/1001178/openai-agents-bruteforce-un-website",
+    "collected_at": "2026-09-27T17:56:52.805865+00:00"
+   },
+   "0ad4f236-27d6-4937-914c-0806dee22239": {
+    "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxPbkQyN1dNYTkzeGFDN0hQSHVZNGxVUEcyb0trcGo1SmZMeWxNRmYwOTNHRGo1eVVrWTBqYkVoUmxpV2xuVnlURWtpY3FRTG5zRGNQdk90SjdwblZVVzlfQWk1UGJsTGNhQVF2MXZ2QjFLYV9iZ0FrWElzSFhIWGhFZw?oc=5",
+    "collected_at": "2026-09-26T21:53:03.809309+00:00"
+   },
+   "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5": {
+    "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxPZktfT2p6V3MwTEFNUDJPZk11c053QzgzQ0QxaXF4UkZpWEd2ZzZZdkRUMk9OelR5encydHBkSGFlT1oxMkVWdjZlODBLMGJTbGdtbTJpbDlHRHZFTTlNSGxMUlVGc3BuQ1dGNWtRZlRQLURjMkdiaVVvWXQ3a2xRTTBzVWZtNEp4bG05VU5EZw?oc=5",
+    "collected_at": "2026-09-26T23:12:09.461388+00:00"
+   },
+   "4371aba5-6ff7-4b6d-b38c-df16b0e104b2": {
+    "url": "https://news.google.com/rss/articles/CBMisgFBVV95cUxPMlBnUmxmMldiSEZRRTZvbWk3UEduNWRiQk1JQndvdkF4SVM1QWk4THUySERCaU1naU1wTG53SzlMQlZxTWtqYzJxT3pITWFnN1gwRHdELWJSbFgtMWtiOVFmTzRCckx1X2dueE9NTi1xQWhoQ1NJTEdraFlZbFMtSnR0WE5SN2pzWm9FN2hmSmRjUS1OREttLVJDXzdzM0Zacms1MXoxaUx6dEEwRFNFMklR?oc=5",
+    "collected_at": "2026-09-26T19:46:59.455504+00:00"
+   },
+   "273dc8ad-c786-4c17-88a3-d5b7cc0c48a2": {
+    "url": "https://news.google.com/rss/articles/CBMi6wFBVV95cUxQWXAzN3dZRGhRVl9CSkEzNTVIemNkMDludWJhVko1TlYxaDFzNnpJdXplaTBld2RhX2xOcmRMMkhYRTR6cHRzV3FmQ1MtYWhBOW9kWlpJMGh5R3JmdWZVVE5faVNxSmFScklQSGJDOVFQbG5pejBhSDRZblRIcGo2MGVfUmlQUXBEOC1lWlBjVC1taFR6TlhpazloeWpBSVNiYTBHb09CbTBPczlwRkNtdmM1OE4welJXMmYxRUNocERTaEt5N3BxbkpwVXNZZklPY19Obml2MlZULXhCQk55czFTc1B2M0RjXzdV?oc=5",
+    "collected_at": "2026-09-27T00:31:32.562723+00:00"
+   },
+   "10856ebf-530f-41b4-80ea-2c7592cca2b8": {
+    "url": "https://news.google.com/rss/articles/CBMizwFBVV95cUxPV0lDdHVveGZJM1hlSjhBbVJnWmdrQkxpV3dlcHlONEgyeENMV0JiZUVySFRhVmlyVUVZSkZFbV84MTFXa2YxclA0ZFlFdDVVbXNmQ2lHYlNsazBtYWN3VVd2VmJCMV9OTlRSdVBuQlhVYkNJb0d0TU9QVlN0c0JvRE1hZUdjdm9JeDFDYUNnM2R0TUYybEtBT2FJXzdWeVNLR2MwN2UxenNwdU5iYkY5QlgxcWZQRHA2aUY3ZWR6eVAyd2RET0pSXzhVMXhDT0U?oc=5",
+    "collected_at": "2026-09-26T23:52:23.128162+00:00"
+   },
+   "d08eaab6-90a6-48d1-b99f-fef7f059e01f": {
+    "url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxOMnJlT0VjMlhfME40NFk4ZXV0NXkzOGpzS2I1T3pDZF9yYUdSTVJPZGszcUhRNnZ3VWkycHllSi1RWEdDMWRlMzZUVWtzVk91cGhscndZMWU4eUJzWktZMV9FX1RVdFRSazhPVnlxRGhXUXZ5dDJMZnVONTlMbFpMT2E3b2xJOUZfTTdFdjVSTFphNzcwSEstZGxsODRVOFZkMTNCNWJYLW0xLWJnbks4LUhHUmVzM2VZZzVnd1pPUnhFb3p5T3c?oc=5",
+    "collected_at": "2026-09-27T10:20:55.154911+00:00"
+   }
+  },
+  "original_attempts": [
+   [
+    "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+    "FAIL"
+   ],
+   [
+    "0ad4f236-27d6-4937-914c-0806dee22239",
+    "PENDING"
+   ],
+   [
+    "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+    "FAIL"
+   ],
+   [
+    "4371aba5-6ff7-4b6d-b38c-df16b0e104b2",
+    "PASS"
+   ]
+  ]
+ },
+ "canary8": {
+  "run": "viral_nominated_canary8_20260928",
+  "clock": "2026-09-27T21:27:34.410547+00:00",
+  "planned": "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+  "candidate_ids": [
+   "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+   "0ad4f236-27d6-4937-914c-0806dee22239",
+   "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+   "273dc8ad-c786-4c17-88a3-d5b7cc0c48a2",
+   "10856ebf-530f-41b4-80ea-2c7592cca2b8",
+   "d08eaab6-90a6-48d1-b99f-fef7f059e01f",
+   "a6b32ec3-2697-432c-ae6e-c175c496b6e0"
+  ],
+  "copies": {
+   "d4ef74d3-1eef-4544-818a-1b8d24d8fa18": {
+    "url": "https://www.theverge.com/ai-artificial-intelligence/1001178/openai-agents-bruteforce-un-website",
+    "collected_at": "2026-09-27T17:56:52.805865+00:00"
+   },
+   "0ad4f236-27d6-4937-914c-0806dee22239": {
+    "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxPbkQyN1dNYTkzeGFDN0hQSHVZNGxVUEcyb0trcGo1SmZMeWxNRmYwOTNHRGo1eVVrWTBqYkVoUmxpV2xuVnlURWtpY3FRTG5zRGNQdk90SjdwblZVVzlfQWk1UGJsTGNhQVF2MXZ2QjFLYV9iZ0FrWElzSFhIWGhFZw?oc=5",
+    "collected_at": "2026-09-26T21:53:03.809309+00:00"
+   },
+   "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5": {
+    "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxPZktfT2p6V3MwTEFNUDJPZk11c053QzgzQ0QxaXF4UkZpWEd2ZzZZdkRUMk9OelR5encydHBkSGFlT1oxMkVWdjZlODBLMGJTbGdtbTJpbDlHRHZFTTlNSGxMUlVGc3BuQ1dGNWtRZlRQLURjMkdiaVVvWXQ3a2xRTTBzVWZtNEp4bG05VU5EZw?oc=5",
+    "collected_at": "2026-09-26T23:12:09.461388+00:00"
+   },
+   "273dc8ad-c786-4c17-88a3-d5b7cc0c48a2": {
+    "url": "https://news.google.com/rss/articles/CBMi6wFBVV95cUxQWXAzN3dZRGhRVl9CSkEzNTVIemNkMDludWJhVko1TlYxaDFzNnpJdXplaTBld2RhX2xOcmRMMkhYRTR6cHRzV3FmQ1MtYWhBOW9kWlpJMGh5R3JmdWZVVE5faVNxSmFScklQSGJDOVFQbG5pejBhSDRZblRIcGo2MGVfUmlQUXBEOC1lWlBjVC1taFR6TlhpazloeWpBSVNiYTBHb09CbTBPczlwRkNtdmM1OE4welJXMmYxRUNocERTaEt5N3BxbkpwVXNZZklPY19Obml2MlZULXhCQk55czFTc1B2M0RjXzdV?oc=5",
+    "collected_at": "2026-09-27T00:31:32.562723+00:00"
+   },
+   "10856ebf-530f-41b4-80ea-2c7592cca2b8": {
+    "url": "https://news.google.com/rss/articles/CBMizwFBVV95cUxPV0lDdHVveGZJM1hlSjhBbVJnWmdrQkxpV3dlcHlONEgyeENMV0JiZUVySFRhVmlyVUVZSkZFbV84MTFXa2YxclA0ZFlFdDVVbXNmQ2lHYlNsazBtYWN3VVd2VmJCMV9OTlRSdVBuQlhVYkNJb0d0TU9QVlN0c0JvRE1hZUdjdm9JeDFDYUNnM2R0TUYybEtBT2FJXzdWeVNLR2MwN2UxenNwdU5iYkY5QlgxcWZQRHA2aUY3ZWR6eVAyd2RET0pSXzhVMXhDT0U?oc=5",
+    "collected_at": "2026-09-26T23:52:23.128162+00:00"
+   },
+   "d08eaab6-90a6-48d1-b99f-fef7f059e01f": {
+    "url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxOMnJlT0VjMlhfME40NFk4ZXV0NXkzOGpzS2I1T3pDZF9yYUdSTVJPZGszcUhRNnZ3VWkycHllSi1RWEdDMWRlMzZUVWtzVk91cGhscndZMWU4eUJzWktZMV9FX1RVdFRSazhPVnlxRGhXUXZ5dDJMZnVONTlMbFpMT2E3b2xJOUZfTTdFdjVSTFphNzcwSEstZGxsODRVOFZkMTNCNWJYLW0xLWJnbks4LUhHUmVzM2VZZzVnd1pPUnhFb3p5T3c?oc=5",
+    "collected_at": "2026-09-27T10:20:55.154911+00:00"
+   },
+   "a6b32ec3-2697-432c-ae6e-c175c496b6e0": {
+    "url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxObEFoTklmUEQ2aVdLVFhuZl8tNTBYNXZoOGpFODY4N2ZLNXA2WWc2dDlGb1QtcG9vR1ZRa2N3cWJqbVA5MGVWYzJmT2p6ZGczMFQyU1lRSGk1VC0wejJ2ZURCWGE1MHhQOWpmcWVfcVg5QUxYaXhYdTZxdVRmRl9HSUpqTQ?oc=5",
+    "collected_at": "2026-09-27T20:45:37.124125+00:00"
+   }
+  },
+  "original_attempts": [
+   [
+    "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+    "FAIL"
+   ],
+   [
+    "0ad4f236-27d6-4937-914c-0806dee22239",
+    "PENDING"
+   ],
+   [
+    "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+    "FAIL"
+   ],
+   [
+    "273dc8ad-c786-4c17-88a3-d5b7cc0c48a2",
+    "PENDING"
+   ]
+  ]
+ }
+}

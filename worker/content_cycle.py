@@ -1125,21 +1125,49 @@ async def _feed_evidence_package(session: AsyncSession, event_id: UUID, event_ro
     )
 
 
+def _order_evidence_copies(event_id: UUID, rows: dict[UUID, Any]) -> list[UUID]:
+    """TEMPORAL-DIVERSITY order of a nominated event's copies for body evidence (founder decision 2026-09-28). The live canaries showed the
+    passing copy was sometimes the NEWEST in-window copy (canary 8) and sometimes the OLDEST (canaries 6 / 7), so a bounded search covers
+    the window's time range instead of following one monotonic policy:
+      slot 1 - the planned copy, as before;
+      slot 2 - the NEWEST remaining copy by collected_at (the timestamp the 24-hour window is defined on);
+      slot 3 - the OLDEST remaining copy (every copy here is already inside the window);
+      slot 4 and after - the remaining copies in the existing priority order (direct publisher before redirect shell, then nomination).
+    Ties: existing priority, then copy id. A copy with no collected_at is never picked by time, only by priority. Which copies are
+    eligible and how many are tried (_VIRAL_EVIDENCE_COPIES) are unchanged."""
+    from services.text_normalization import is_google_news_redirect_host
+
+    # the existing priority: stable sort that puts aggregator redirect shells after direct publisher copies (rows keep nomination order)
+    priority = sorted((cid for cid in rows if cid != event_id), key=lambda cid: is_google_news_redirect_host(rows[cid].url or ""))
+    rank = {cid: i for i, cid in enumerate(priority)}
+    order = [event_id]
+    remaining = list(priority)
+    timed = [cid for cid in remaining if getattr(rows[cid], "collected_at", None) is not None]
+    if timed:
+        newest = min(timed, key=lambda cid: (-rows[cid].collected_at.timestamp(), rank[cid], str(cid)))
+        order.append(newest)
+        remaining.remove(newest)
+        timed.remove(newest)
+    if timed:
+        oldest = min(timed, key=lambda cid: (rows[cid].collected_at.timestamp(), rank[cid], str(cid)))
+        order.append(oldest)
+        remaining.remove(oldest)
+    return order + remaining
+
+
 async def _viral_evidence_copy(session: AsyncSession, viral_event: Any, event_id: UUID, event_row: Any, *, slot_format: Any,
                                now: datetime) -> tuple[UUID, Any, Any, Any]:
     """The first copy of a nominated viral event whose ACQUIRED body passes the evidence preflight (services/instagram_viral_nomination
     .viral_evidence_preflight) - the planned copy first, then up to _VIRAL_EVIDENCE_COPIES - 1 other copies of the SAME event. Returns
     (event id, row, package, preflight) of the passing copy, or of the last one tried (then status PENDING / FAIL). Copies with a direct
-    publisher URL go before aggregator redirect shells (a Google News shell often cannot be resolved to its article)."""
-    from services.text_normalization import is_google_news_redirect_host
-
+    publisher URL go before aggregator redirect shells (a Google News shell often cannot be resolved to its article) in the existing
+    priority; slots 2 and 3 take the newest and the oldest remaining copy (_order_evidence_copies, temporal diversity)."""
     rows = {event_id: event_row}
     for cid in (viral_event.candidate_ids if viral_event is not None else ()):
         if cid != str(event_id) and (row := await session.get(NewsEvent, UUID(cid))) is not None:
             rows[UUID(cid)] = row
-    others = sorted((cid for cid in rows if cid != event_id), key=lambda cid: is_google_news_redirect_host(rows[cid].url or ""))
     result = None
-    for copy_id in [event_id, *others][:_VIRAL_EVIDENCE_COPIES]:
+    for copy_id in _order_evidence_copies(event_id, rows)[:_VIRAL_EVIDENCE_COPIES]:
         row = rows[copy_id]
         package = await _feed_evidence_package(session, copy_id, row, slot_format)
         preflight = viral_evidence_preflight(
