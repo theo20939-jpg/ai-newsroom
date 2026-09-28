@@ -261,12 +261,13 @@ class BoundedNaturalBatch:
         index = self.attempts
         cost, stage_costs, gap = _story_cost(outcome)
         self.spent += cost
-        self.provider_calls += len(outcome.get("provider_dispatches") or [])
+        provider_calls = sum(1 for d in outcome.get("provider_dispatches") or [] if d.get("provider_call", True))
+        self.provider_calls += provider_calls
         record: dict[str, Any] = {
             "index": index, "event_id": str(event_id), "story_id": selection.get("story_id"),
             "title_at_selection": selection.get("title"), "selector_result": selection.get("selector_result"),
             "score": selection.get("score"), "claimed_at_utc": selection.get("claim_acquired_at_utc"),
-            "provider_calls": len(outcome.get("provider_dispatches") or []), "stage_costs": stage_costs,
+            "provider_calls": provider_calls, "stage_costs": stage_costs,
             "story_cost_usd": str(cost), "cumulative_cost_usd": str(self.spent),
             "task_id": None, "draft_id": None, "factual_gate": None, "outcome": None,
             "receipt_id": None, "telegram_message_id": None, "terminal_reason": None, "artifact": None,

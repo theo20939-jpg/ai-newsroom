@@ -909,6 +909,11 @@ class Settings(BaseSettings):
     # NOT exercised by any live call in that phase - a separate, explicitly-authorized canary
     # phase is required before this is ever set to "live" outside a test.
     editorial_recomposition_mode: Literal["off", "dry_run", "live"] = "off"
+    # KAGE Telegram NEWS visual fallback (services/kage_visual_fallback.py): when no usable source
+    # photo resolved, "live" tries ONE evidence-grounded generated editorial image (Gemini
+    # text-to-image, inside the per-story cost envelope), then a deterministic local KAGE typography
+    # card, then VISUAL_HOLD. "off" (default) keeps the plain VISUAL_HOLD. Never a text-only post.
+    kage_news_visual_fallback_mode: Literal["off", "live"] = "off"
     brand_asset_path: str = "assets/brand/kage_watermark.png"
     brand_red_asset_path: str = "assets/brand/kage_watermark.png"
     brand_raster_fallback_path: str = "assets/brand/kage_watermark.png"

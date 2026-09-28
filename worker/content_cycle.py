@@ -607,6 +607,46 @@ HOLD_REASON_NO_VISUAL_RESOLVED = "no_visual_resolved"
 HOLD_REASON_MEDIA_SEND_FAILED = "media_send_failed"
 
 
+async def _kage_visual_fallback_photo(
+    *, outcome: Any, event: NewsEvent, session_factory: async_sessionmaker[AsyncSession],
+    caption_fits: bool, dry_run: bool,
+) -> tuple[BufferedInputFile | None, str]:
+    """KAGE NEWS Tier 2 (one generated editorial image) then Tier 3 (local typography card) for a
+    story with no usable source photo. Returns (photo, "ok") or (None, hold_reason). A caption that
+    cannot fit a photo is held BEFORE any paid call. Never a text-only post."""
+    from services.kage_telegram_canary_envelope import current_telegram_canary_envelope
+    from services.kage_visual_fallback import TIER_TYPOGRAPHY, resolve_visual_fallback
+
+    if not caption_fits:
+        return None, "caption_exceeds_photo_budget"
+    copy = outcome.copywriting_output or {}
+    body = str(copy.get("main_body") or "")
+    if isinstance(copy.get("ending"), str) and copy["ending"].strip():
+        body = "\n\n".join((body, copy["ending"]))
+    fallback = await resolve_visual_fallback(
+        title=str(copy.get("title") or ""), body=body,
+        research=outcome.research_output or {}, intelligence=outcome.intelligence_output or {},
+        source_headline=event.title, category=str(getattr(event.category, "value", event.category) or "NEWS"),
+        editorial_code=build_editorial_code(outcome.task_id), allow_generation=not dry_run,
+    )
+    envelope = current_telegram_canary_envelope()
+    if envelope is not None and fallback.tier == TIER_TYPOGRAPHY:
+        envelope.record_local_visual(stage="news_typography_card", detail=fallback.typography_reason or "ok")
+    try:
+        async with session_factory() as audit_session:
+            await update_attempt_audit(audit_session, task_id=outcome.task_id, section="stage", value=fallback.audit())
+            await audit_session.commit()
+    except Exception:  # noqa: BLE001 - audit is best-effort here; the outcome is still recorded terminally
+        logger.warning("kage_visual_fallback_audit_failed", exc_info=True)
+    logger.info("kage_visual_fallback", extra={"draft_id": str(outcome.content_draft.id), "tier": fallback.tier,
+                                                "generation_reason": fallback.generation_reason,
+                                                "typography_reason": fallback.typography_reason})
+    if fallback.image_bytes is None:
+        return None, fallback.reason
+    extension = "png" if fallback.tier == TIER_TYPOGRAPHY else "jpg"
+    return BufferedInputFile(fallback.image_bytes, filename=f"kage-{fallback.tier}.{extension}"), "ok"
+
+
 async def _hold_for_visual_recovery(
     session_factory: async_sessionmaker[AsyncSession], bot: Bot, *,
     draft_id: UUID, event: NewsEvent, presentation_type: str, reason: str, dry_run: bool,
@@ -2905,15 +2945,33 @@ async def _run_content_cycle_impl(
                         had_any_visual = (
                             photo_input is not None or bool(media_group_items) or video_only_input is not None
                         )
-                        if not had_any_visual:
+                        fallback_photo: BufferedInputFile | None = None
+                        fallback_hold_reason = HOLD_REASON_NO_VISUAL_RESOLVED
+                        if not had_any_visual and settings.kage_news_visual_fallback_mode == "live":
+                            fallback_photo, fallback_hold_reason = await _kage_visual_fallback_photo(
+                                outcome=outcome, event=event, session_factory=session_factory,
+                                caption_fits=fits_caption_budget, dry_run=effective_dry_run,
+                            )
+                        if not had_any_visual and fallback_photo is not None:
+                            # KAGE Tier 2/3 visual: a generated editorial image or the typography card.
+                            send_as_photo = True
+                            send_boundary_reached = True
+                            send_attempted_at = datetime.now(timezone.utc)
+                            _mark_kage_send_boundary(send_attempted_at)
+                            routing_outcome = await send_photo_to_editorial_destination(
+                                bot, EditorialDestination.NEWS, fallback_photo, html,
+                                dry_run=effective_dry_run, reply_markup=keyboard,
+                                reply_to_message_id=reply_to_message_id,
+                            )
+                        elif not had_any_visual:
                             await _hold_for_visual_recovery(
                                 session_factory, bot,
                                 draft_id=outcome.content_draft.id, event=event,
                                 presentation_type=original_presentation_type_for_hold,
-                                reason=HOLD_REASON_NO_VISUAL_RESOLVED, dry_run=effective_dry_run,
+                                reason=fallback_hold_reason, dry_run=effective_dry_run,
                             )
                             result.visual_required_held += 1
-                            visual_hold_reason = HOLD_REASON_NO_VISUAL_RESOLVED
+                            visual_hold_reason = fallback_hold_reason
                             routing_outcome = None
                         else:
                             send_boundary_reached = True
