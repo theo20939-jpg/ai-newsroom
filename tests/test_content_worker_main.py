@@ -26,6 +26,9 @@ def _restore_copywriting_version_after_worker_test(monkeypatch):
     settings.__dict__["copywriting_prompt_version"] = "11.10"
     settings.__pydantic_fields_set__.add("copywriting_prompt_version")
     monkeypatch.setattr(settings, "image_cleanup_every_n_cycles", 10000)
+    # The KAGE worker only starts in the release delivery mode (router, unified pipeline off).
+    monkeypatch.setattr(settings, "editorial_delivery_mode", "router")
+    monkeypatch.setattr(settings, "unified_editorial_pipeline_enabled", False)
     yield
     settings.__dict__["copywriting_prompt_version"] = old_version
     settings.__pydantic_fields_set__ = old_fields_set

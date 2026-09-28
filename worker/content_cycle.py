@@ -117,7 +117,7 @@ from services.kage_delivery_truth import (
 from services.telegram_routing import (
     send_media_group_to_editorial_destination,
     send_photo_to_editorial_destination,
-    send_to_editorial_destination,
+    send_to_editorial_destination,  # noqa: F401 - no NEWS text send remains; kept as a patchable name
     send_video_to_editorial_destination,
 )
 from services.instagram_automatic_trigger import (
@@ -605,6 +605,8 @@ HOLD_FOR_VISUAL_STATUS = "hold_for_visual"
 # NEWS_BRANDING_NO_SOURCE_BYTES below).
 HOLD_REASON_NO_VISUAL_RESOLVED = "no_visual_resolved"
 HOLD_REASON_MEDIA_SEND_FAILED = "media_send_failed"
+HOLD_REASON_PHOTO_CAPTION_OVERFLOW = "photo_caption_overflow"
+HOLD_REASON_VISUAL_NOT_SENDABLE = "visual_not_sendable"
 
 
 async def _kage_visual_fallback_photo(
@@ -618,7 +620,7 @@ async def _kage_visual_fallback_photo(
     from services.kage_visual_fallback import TIER_TYPOGRAPHY, resolve_visual_fallback
 
     if not caption_fits:
-        return None, "caption_exceeds_photo_budget"
+        return None, HOLD_REASON_PHOTO_CAPTION_OVERFLOW
     copy = outcome.copywriting_output or {}
     body = str(copy.get("main_body") or "")
     if isinstance(copy.get("ending"), str) and copy["ending"].strip():
@@ -2937,11 +2939,10 @@ async def _run_content_cycle_impl(
                             show_caption_above_media=show_caption_above_media,
                         )
                     else:
-                        # KAGE visual-first (Founder invariant, restored after message 2865): when the
-                        # accepted source/contextual/media resolution produced no usable visual, the
-                        # story HOLDS (durable VISUAL_HOLD, no send) - never a silent text-only NEWS
-                        # card. The only remaining text send below is the caption-budget case, where a
-                        # visual exists but the finished copy does not fit a caption.
+                        # KAGE visual-first (Founder invariant): this router branch has NO text send.
+                        # No usable visual -> Tier 2/3 visual fallback, else VISUAL_HOLD. A visual that
+                        # exists but cannot be sent with this caption (photo-caption overflow, or an
+                        # unsendable media combination) -> VISUAL_HOLD too. Never a text-only NEWS post.
                         had_any_visual = (
                             photo_input is not None or bool(media_group_items) or video_only_input is not None
                         )
@@ -2974,13 +2975,19 @@ async def _run_content_cycle_impl(
                             visual_hold_reason = fallback_hold_reason
                             routing_outcome = None
                         else:
-                            send_boundary_reached = True
-                            send_attempted_at = datetime.now(timezone.utc)
-                            _mark_kage_send_boundary(send_attempted_at)
-                            routing_outcome = await send_to_editorial_destination(
-                                bot, EditorialDestination.NEWS, html, dry_run=effective_dry_run, reply_markup=keyboard,
-                                reply_to_message_id=reply_to_message_id,
+                            unsendable_reason = (
+                                HOLD_REASON_PHOTO_CAPTION_OVERFLOW if not fits_caption_budget
+                                else HOLD_REASON_VISUAL_NOT_SENDABLE
                             )
+                            await _hold_for_visual_recovery(
+                                session_factory, bot,
+                                draft_id=outcome.content_draft.id, event=event,
+                                presentation_type=original_presentation_type_for_hold,
+                                reason=unsendable_reason, dry_run=effective_dry_run,
+                            )
+                            result.visual_required_held += 1
+                            visual_hold_reason = unsendable_reason
+                            routing_outcome = None
 
                     # Delivery-gap fix (2026-08-16 production forensic): a real photo/media-group
                     # send timing out (or any other live TelegramAPIError) previously dropped a fully

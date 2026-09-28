@@ -447,11 +447,12 @@ async def test_case_g_major_over_caption_limit_falls_back_to_text_only_without_t
     ):
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
-    fake_bot.send_photo.assert_not_called()  # too long for a caption - safe fallback used instead
-    fake_bot.send_message.assert_called_once()
-    sent_text = fake_bot.send_message.call_args.args[1]
-    assert "…" not in sent_text  # no word-boundary squeeze/truncation marker anywhere
-    assert result.notified == 1
+    # Too long for a photo caption: KAGE NEWS never degrades to a text-only post and never
+    # truncates - the story holds (VISUAL_HOLD, reason photo_caption_overflow).
+    fake_bot.send_photo.assert_not_called()
+    fake_bot.send_message.assert_not_called()
+    assert result.visual_required_held == 1
+    assert result.notified == 0
     assert result.router_image_sent == 0
 
 
@@ -1004,11 +1005,9 @@ async def test_ninja_pulse_footer_survives_caption_overflow_fallback_to_text(
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A V8-family MAJOR post long enough to exceed the photo-caption limit must fall back to the
-    existing plain-text send path (never truncated, never a second ad-hoc truncation system) and
-    the footer must still be present in that fallback text - the footer is appended to the same
-    `html` string this fallback decision measures, so it is included in the length calculation by
-    construction, not via any new mechanism."""
+    """A V8-family MAJOR post long enough to exceed the photo-caption limit HOLDS (VISUAL_HOLD,
+    photo_caption_overflow) - never a text-only NEWS post, never truncated. The footer is part of
+    the same `html` string the caption budget measures, so it counts toward the overflow."""
     settings.editorial_delivery_mode = "router"
     monkeypatch.setattr(settings, "newsroom_telegram_chat_id", _REAL_CHAT_ID)
     monkeypatch.setattr(settings, "news_topic_id", _REAL_NEWS_TOPIC_ID)
@@ -1031,12 +1030,10 @@ async def test_ninja_pulse_footer_survives_caption_overflow_fallback_to_text(
     ):
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
-    fake_bot.send_photo.assert_not_called()  # too long for a caption - safe fallback used instead
-    fake_bot.send_message.assert_called_once()
-    sent_text = fake_bot.send_message.call_args.args[1]
-    assert "…" not in sent_text  # no truncation marker - the existing "never truncate" guarantee holds
-    assert sent_text.count("KAGE") == 1
-    assert result.notified == 1
+    fake_bot.send_photo.assert_not_called()
+    fake_bot.send_message.assert_not_called()  # no text-only fallback
+    assert result.visual_required_held == 1
+    assert result.notified == 0
 
 
 # ---------------------------------------------------------------------------

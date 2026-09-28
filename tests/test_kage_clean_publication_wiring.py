@@ -40,14 +40,24 @@ from PIL import Image, ImageChops
 
 
 def test_content_worker_default_and_explicit_override(monkeypatch):
-    default = Settings(_env_file=None)
+    default = Settings(_env_file=None, editorial_delivery_mode="router")
     assert default.copywriting_prompt_version == "4"  # unrelated workflows retain their default
     monkeypatch.setattr(content_main, "settings", default)
     assert content_main._configure_telegram_copywriting_default() == "11.10"
     assert default.copywriting_prompt_version == "11.10"
-    explicit = Settings(_env_file=None, copywriting_prompt_version="8.9")
+    explicit = Settings(_env_file=None, copywriting_prompt_version="8.9", editorial_delivery_mode="router")
     monkeypatch.setattr(content_main, "settings", explicit)
     with pytest.raises(RuntimeError, match="11.10"):
+        content_main._configure_telegram_copywriting_default()
+
+
+@pytest.mark.parametrize("overrides, message", [
+    ({"editorial_delivery_mode": "legacy"}, "editorial_delivery_mode=router"),
+    ({"editorial_delivery_mode": "router", "unified_editorial_pipeline_enabled": True}, "unified_editorial_pipeline_enabled=false"),
+])
+def test_kage_worker_refuses_every_mode_that_can_send_text_only_news(monkeypatch, overrides, message):
+    monkeypatch.setattr(content_main, "settings", Settings(_env_file=None, **overrides))
+    with pytest.raises(RuntimeError, match=message):
         content_main._configure_telegram_copywriting_default()
 
 
@@ -91,7 +101,7 @@ def test_kage_legacy_fact_safety_is_history_not_publication_authority(monkeypatc
 
 @pytest.mark.asyncio
 async def test_actual_worker_startup_resolves_1110_without_override(monkeypatch):
-    worker_settings = Settings(_env_file=None)
+    worker_settings = Settings(_env_file=None, editorial_delivery_mode="router")  # the release mode
     monkeypatch.setattr(content_main, "settings", worker_settings)
     layer = SimpleNamespace(capability_registry=object(), cost_tracker=None, gateway=object())
     with (

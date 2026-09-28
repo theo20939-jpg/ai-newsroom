@@ -398,3 +398,60 @@ def test_fallback_default_is_off_and_release_flags_enable_it():
     assert Settings.model_fields["kage_news_visual_fallback_mode"].default == "off"
     flags = load_flags()
     assert flags["KAGE_NEWS_VISUAL_FALLBACK_MODE"] == "live" and flags["UNIFIED_EDITORIAL_PIPELINE_ENABLED"] == "false"
+
+
+# --- the last text-only escape hatch: photo-caption overflow -----------------------------------------
+
+def _overflowing_2864_body() -> str:
+    fact = M2864["research"]["facts"][0]
+    body = " ".join([fact] * 8)
+    assert len(body) > 1024  # far beyond Telegram's 1024-unit photo caption
+    return body
+
+
+@pytest.mark.asyncio
+async def test_source_photo_with_an_overflowing_caption_holds_and_never_sends_text(factory, test_source, monkeypatch):
+    run = await _cycle(factory, test_source, monkeypatch, M2864, _overflowing_2864_body(), [_fake_candidate()],
+                       generated=_photo())
+    run.bot.send_message.assert_not_called()
+    run.bot.send_photo.assert_not_called()
+    assert run.outcome["status"] == "VISUAL_HOLD" and run.outcome["reason"] == "photo_caption_overflow"
+    assert run.draft_status == HOLD_FOR_VISUAL_STATUS and run.receipts == 0
+    assert run.generate.await_count == 0  # a real source photo existed; no generation attempted
+
+
+@pytest.mark.asyncio
+async def test_no_source_and_overflowing_caption_holds_before_any_paid_generation(factory, test_source, monkeypatch):
+    run = await _cycle(factory, test_source, monkeypatch, M2864, _overflowing_2864_body(), [], generated=_photo())
+    run.bot.send_message.assert_not_called()
+    run.bot.send_photo.assert_not_called()
+    assert run.generate.await_count == 0
+    assert run.outcome["status"] == "VISUAL_HOLD" and run.outcome["reason"] == "photo_caption_overflow"
+
+
+def test_every_news_text_send_branch_is_gone_or_unreachable_for_kage():
+    """Structural enumeration of worker/content_cycle.py's Telegram send calls."""
+    import ast
+
+    source = Path(__file__).resolve().parents[1].joinpath("worker", "content_cycle.py").read_text(encoding="utf-8")
+    calls: dict[str, int] = {}
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Call):
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            if name in {"send_to_editorial_destination", "send_editorial_card", "send_message",
+                        "send_photo_to_editorial_destination", "send_media_group_to_editorial_destination",
+                        "send_video_to_editorial_destination", "run_unified_telegram_delivery"}:
+                calls[name] = calls.get(name, 0) + 1
+    # Router NEWS branch: photo / media group / video / fallback photo only - no text send at all.
+    assert "send_to_editorial_destination" not in calls and "send_message" not in calls
+    assert calls["send_photo_to_editorial_destination"] == 2  # source photo + Tier 2/3 fallback photo
+    # The two remaining text-capable branches are unreachable for a KAGE worker (startup refuses).
+    assert calls["send_editorial_card"] == 1 and calls["run_unified_telegram_delivery"] == 1
+    from worker import content_main
+
+    for overrides in ({"editorial_delivery_mode": "legacy"},
+                      {"editorial_delivery_mode": "router", "unified_editorial_pipeline_enabled": True}):
+        with patch.object(content_main, "settings", Settings(_env_file=None, **overrides)):
+            with pytest.raises(RuntimeError):
+                content_main._configure_telegram_copywriting_default()
