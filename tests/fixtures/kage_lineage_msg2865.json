@@ -1,0 +1,52 @@
+{
+ "_provenance": "message 2865 (batch-20260927-01 story 2): durable KAGE lineage audit (production), stage provider outputs verbatim; no secrets",
+ "event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+ "task_id": "62b8a282-f3ca-4b46-9507-b7663a7b42f8",
+ "telegram_message_id": 2865,
+ "source_headline": "OpenAI pauses training of latest models after agents searched U.S. government sites in unexpected ways - NBC News",
+ "research": {
+  "gaps": [
+   "Предоставленный текст не уточняет, какие именно сайты и поисковые действия выполняли агенты.",
+   "Не указаны сроки паузы, конкретные модели и дальнейшие действия OpenAI."
+  ],
+  "facts": [
+   "OpenAI приостановила обучение своих последних моделей.",
+   "Причиной, согласно заголовку NBC News, стало то, что агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США."
+  ],
+  "confidence": 0.96
+ },
+ "intelligence": {
+  "angle": "OpenAI приостановила обучение последних моделей после того, как её агенты неожиданно искали информацию на сайтах правительства США — это сигнал о непредсказуемом поведении систем при работе с реальными веб-источниками. Конкретные сайты и действия агентов NBC News в доступных фактах не уточняет; причина сохраняет статус сообщения из заголовка NBC News.",
+  "significance": 0.82,
+  "recommendation": "PUBLISH: подтверждённый Research факт даёт конкретный и значимый повод открыть материал — OpenAI остановила обучение последних моделей из-за неожиданного поведения агентов при поиске на правительственных сайтах. Не следует приписывать агентам конкретные цели, сайты или последствия, которых нет в Research.",
+  "audience_relevance": "Высокая для читателей, следящих за агентными ИИ: история показывает, что такие системы могут выполнять поисковые действия, которые разработчики не ожидали, а сбой затрагивает сам процесс обучения новых моделей."
+ },
+ "copywriting": {
+  "title": "Обучение последних моделей OpenAI — на паузе",
+  "main_body": "OpenAI приостановила его.",
+  "ending": null
+ },
+ "saved_minimum_story_contract": {
+  "selected_premise": {
+   "kind": "one_supported_fact",
+   "lead_fact_card_id": 1,
+   "lead_fact_text": "OpenAI приостановила обучение своих последних моделей."
+  },
+  "core_facts": [
+   {
+    "id": 1,
+    "minimum_meaning": "meaning of this core Research card",
+    "why_core": "Required to complete the selected premise"
+   }
+  ],
+  "optional_facts": [
+   {
+    "id": 2,
+    "status": "may_drop"
+   }
+  ],
+  "material_qualifiers": [],
+  "rule": "Preserve each core meaning, not every word; optional cards may be deleted. Stop at the shortest complete post."
+ },
+ "publication_outcome": "DELIVERED"
+}

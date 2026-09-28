@@ -227,15 +227,22 @@ def evaluate_content_quality_gates(
     rendered_html: str | None = None,
     is_update: bool = False,
     root_body: str | None = None,
+    why_it_matters_expected: bool = True,
 ) -> QualityGateReport:
     """Pure. Combines every individual gate above into one report - the caller decides what to
-    do with a failing gate (reject, log, route to review); this function only assesses."""
+    do with a failing gate (reject, log, route to review); this function only assesses.
+
+    `why_it_matters_expected=False` marks `why_it_matters_present` not applicable: a copy schema
+    that has no such field (e.g. Copywriting 11.10's title/main_body/ending) can never satisfy it,
+    so evaluating it there only produced a permanent failure, never a signal."""
     gates = {
         "no_headline_body_repetition": check_no_headline_body_repetition(title, body),
         "no_duplicate_source_headline": check_no_duplicate_source_headline(body, source_title),
         "no_generic_filler": check_no_generic_filler(f"{body}\n{why_it_matters or ''}"),
         "no_unsupported_competitive_claim": check_no_unsupported_competitive_claim(f"{body}\n{why_it_matters or ''}"),
-        "why_it_matters_present": check_why_it_matters_present(why_it_matters, what_happened),
+        "why_it_matters_present": (
+            check_why_it_matters_present(why_it_matters, what_happened) if why_it_matters_expected else True
+        ),
         "quote_traceable": check_quote_traceable(quote_text, source_content),
         "quote_has_attribution": check_quote_has_attribution(quote_text, quote_speaker),
         "quote_is_self_contained": check_quote_is_self_contained(quote_text),

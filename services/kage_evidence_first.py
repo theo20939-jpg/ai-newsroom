@@ -237,6 +237,78 @@ def select_evidence_cards(
     return selected, omitted, lead_id
 
 
+_RU_ENDING = re.compile(
+    r"(?:иями|ями|ами|ого|его|ому|ему|ыми|ими|ах|ях|ов|ев|ей|ой|ый|ий|ая|яя|ое|ее|ые|ие|ом|ем|ам|ям|ую|юю|"
+    r"ть|ла|ли|ло|ет|ют|ит|ат|ят|ы|и|а|я|о|е|у|ю|ь)$"
+)
+# Attribution, selection-meta and connective words: they never carry a story's substance.
+_NON_SUBSTANTIVE_STEMS = frozenset({
+    "согла", "загол", "сообщ", "данны", "слова", "заяви", "news", "стало", "стать", "образ", "своих", "свое",
+    "котор", "также", "этого", "того", "было", "была", "были", "будет", "этот", "эта", "эти", "такж", "один",
+    "причи", "истор", "выбра", "текст", "предо", "указа", "говор", "отмеч", "пишет", "сказа", "report",
+})
+# Premise context carriers: cause, reason, consequence, trigger.
+_CAUSAL = re.compile(
+    r"причин|из-за|после того|в результате|вследствие|потому|поэтому|в ответ|привел|следств|because|after", re.IGNORECASE,
+)
+# A Research card that states what the evidence lacks, or why the item was chosen, is not story content.
+_GAP_OR_META = re.compile(
+    r"не указан|не уточн|не назван|не сообщ|нет данных|не раскры|неизвестн|истори[яю] выбран|материал выбран",
+    re.IGNORECASE,
+)
+_PREMISE_CONTEXT_MAX_EXTRA = 2
+_SHORTEST_COMPLETE_RULE = (
+    "Preserve each core meaning, not every word; optional cards may be deleted. Stop at the shortest complete post."
+)
+_GENERIC_COMPLETENESS_RULE = (
+    "Preserve each core meaning, not every word; optional cards may be deleted. State what happened and preserve "
+    "the supported reason/context that makes the selected premise meaningful. Short is still preferred: no filler, "
+    "generic significance, opinion or padding."
+)
+
+
+def content_stems(text: str) -> set[str]:
+    """Deterministic substance stems: Russian endings stripped, 5-char prefix, no attribution/meta words."""
+    result: set[str] = set()
+    for word in _WORD.findall(text):
+        low = word.casefold()
+        stem = _RU_ENDING.sub("", low) if re.match(r"[а-яё]", low) and len(low) > 5 else low
+        stem = stem[:5]
+        if len(stem) >= 4 and stem not in _NON_SUBSTANTIVE_STEMS:
+            result.add(stem)
+    return result
+
+
+def premise_context_card_ids(
+    cards: list[dict[str, Any]], intelligence: Mapping[str, Any], lead_id: int,
+) -> list[int]:
+    """Selected cards the Intelligence premise materially depends on, beyond the lead fact.
+
+    Story-agnostic: a card is premise context when most of its own substance (stems not
+    already in the lead card) is what the Intelligence angle/recommendation is built on. A
+    causal/reason card needs a lower share. Gap statements and selection-meta cards never
+    qualify. At most two extra cards, strongest first.
+    """
+    by_id = {card["id"]: card for card in cards}
+    if lead_id not in by_id:
+        return []
+    lead = content_stems(by_id[lead_id]["fact"])
+    premise = content_stems(" ".join(str(intelligence.get(key) or "") for key in ("angle", "recommendation")))
+    scored: list[tuple[float, int]] = []
+    for card in cards:
+        if card["id"] == lead_id or _GAP_OR_META.search(card["fact"]):
+            continue
+        own = content_stems(card["fact"]) - lead
+        if not own:
+            continue
+        overlap = len(own & premise)
+        share = overlap / len(own)
+        needed = 0.34 if _CAUSAL.search(card["fact"]) else 0.5
+        if overlap >= 2 and share >= needed:
+            scored.append((share + overlap / 100, card["id"]))
+    return [card_id for _, card_id in sorted(scored, reverse=True)[:_PREMISE_CONTEXT_MAX_EXTRA]]
+
+
 def selected_editorial_premise(
     research: Mapping[str, Any], intelligence: Mapping[str, Any], *, source_headline: str = "",
 ) -> dict[str, Any]:
@@ -295,6 +367,8 @@ def minimum_story_contract(
     all_text = " ".join(card["fact"] for card in evidence_cards(research))
     requirements: list[tuple[int, str, str]] = []
     extra_qualifiers: list[str] = []
+    premise_kind = premise["kind"]
+    rule = _SHORTEST_COMPLETE_RULE
 
     def require(pattern: str, meaning: str, why: str) -> None:
         matches = [card for card in cards if re.search(pattern, card["fact"], re.IGNORECASE)]
@@ -368,8 +442,23 @@ def minimum_story_contract(
         require(r"заменить объектив", "owner-replaceable lens, €39 kit, reviewer under five minutes", "The repair improvement is the complete story")
         extra_qualifiers.append("Reviewer test, not an all-user repair-time guarantee")
     else:
-        for fact_id in premise["core_fact_card_ids"]:
-            requirements.append((fact_id, "meaning of this core Research card", "Required to complete the selected premise"))
+        # Generic (non-special-cased) story: the lead fact plus every supported context card the
+        # selected Intelligence premise materially depends on (story-agnostic, see
+        # premise_context_card_ids). Special-cased branches above are unchanged.
+        lead_fact_id = premise["core_fact_card_ids"][0]
+        generic_core_ids = list(premise["core_fact_card_ids"])
+        if premise["kind"] == "one_supported_fact":
+            context_ids = premise_context_card_ids(cards, intelligence, lead_fact_id)
+            if context_ids:
+                generic_core_ids = [lead_fact_id, *context_ids]
+                premise_kind = "supported_fact_with_premise_context"
+            rule = _GENERIC_COMPLETENESS_RULE
+        for fact_id in generic_core_ids:
+            requirements.append((
+                fact_id, "meaning of this core Research card",
+                "Required to complete the selected premise" if fact_id == lead_fact_id
+                else "Supported reason/context the selected premise depends on",
+            ))
 
     core_ids = list(dict.fromkeys(item[0] for item in requirements))
     if not core_ids or any(fact_id not in selected_by_id for fact_id in core_ids):
@@ -384,14 +473,14 @@ def minimum_story_contract(
     ))
     return {
         "selected_premise": {
-            "kind": premise["kind"],
+            "kind": premise_kind,
             "lead_fact_card_id": premise["core_fact_card_ids"][0],
             "lead_fact_text": selected_by_id[premise["core_fact_card_ids"][0]]["fact"],
         },
         "core_facts": core,
         "optional_facts": [{"id": card["id"], "status": "may_drop"} for card in cards if card["id"] not in core_ids],
         "material_qualifiers": qualifiers,
-        "rule": "Preserve each core meaning, not every word; optional cards may be deleted. Stop at the shortest complete post.",
+        "rule": rule,
     }
 
 

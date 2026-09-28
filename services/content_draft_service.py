@@ -404,6 +404,8 @@ class ContentDraftService:
             source_content=source_content,
             is_update=is_update,
             root_body=root_body,
+            # Only schemas that define the field can be judged on it (not Copywriting 11.10).
+            why_it_matters_expected="why_it_matters" in copywriting_output,
         )
         if not quality_report.passed:
             logger.warning(

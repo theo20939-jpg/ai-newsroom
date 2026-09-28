@@ -110,6 +110,7 @@ from services.telegram_notifier import send_editorial_card, to_editorial_card
 from services.telegram_radar_evidence import evaluate_origin_before_generation
 from services.kage_publication_worker_gate import evaluate_worker_publication_gate
 from services.kage_content_lineage_audit import update_attempt_audit
+from services.kage_editorial_usefulness import evaluate_editorial_usefulness
 from services.kage_delivery_truth import (
     TerminalStatus, mark_publication_started, record_terminal_outcome,
 )
@@ -656,6 +657,7 @@ class ContentCycleResult:
     local_guard_block: int = 0
     both_block: int = 0
     final_publication_pass: int = 0
+    editorial_usefulness_block: int = 0
     publication_gate_records: list[dict[str, Any]] = field(default_factory=list)
     # Phase 16 M6 + UX fix (docs/phase16_m6_telegram_editorial_preview_report.md §7, docs/
     # phase16_ux_combined_preview_fix_report.md): a strict subset of `notified` - counts drafts
@@ -1753,12 +1755,49 @@ async def _run_content_cycle_impl(
                     await blocked_session.commit()
                 _kage_active_attempt.set(None)
                 continue
+            # Deterministic editorial-usefulness guard (no model call, not a factual verdict): a
+            # factually safe body that only restates the headline never reaches either send branch.
+            copy = outcome.copywriting_output or {}
+            copy_body = str(copy.get("main_body") or "")
+            if isinstance(copy.get("ending"), str) and copy["ending"].strip():
+                copy_body = "\n\n".join((copy_body, copy["ending"]))
+            try:
+                usefulness = evaluate_editorial_usefulness(
+                    title=str(copy.get("title") or ""), body=copy_body,
+                    research=outcome.research_output or {}, intelligence=outcome.intelligence_output or {},
+                    source_headline=event.title,
+                )
+            except Exception as exc:  # noqa: BLE001 - fail closed: an unevaluable post is not published
+                usefulness = {"passed": False, "applicable": True, "reason": f"guard_error:{type(exc).__name__}"}
             async with session_factory() as gate_audit_session:
                 await update_attempt_audit(
                     gate_audit_session, task_id=outcome.task_id,
                     section="publication_factual_gate", value=gate_result.audit_payload,
                 )
+                await update_attempt_audit(
+                    gate_audit_session, task_id=outcome.task_id,
+                    section="stage", value={"name": "editorial_usefulness", **usefulness},
+                )
+                if not usefulness["passed"]:
+                    await gate_audit_session.execute(
+                        update(ContentDraft).where(ContentDraft.id == outcome.content_draft.id)
+                        .values(status="draft_blocked_editorial_usefulness")
+                    )
+                    usefulness_story_link = await gate_audit_session.get(
+                        ContentDraftStoryLink, outcome.content_draft.id
+                    )
+                    await record_terminal_outcome(
+                        gate_audit_session, task_id=outcome.task_id, status="BLOCKED_EDITORIAL_USEFULNESS",
+                        draft_id=outcome.content_draft.id,
+                        story_id=(usefulness_story_link.story_id if usefulness_story_link else None),
+                        reason=usefulness.get("reason"),
+                    )
                 await gate_audit_session.commit()
+            if not usefulness["passed"]:
+                result.editorial_usefulness_block += 1
+                logger.warning("kage_editorial_usefulness_blocked", extra={"task_id": str(outcome.task_id), **usefulness})
+                _kage_active_attempt.set(None)
+                continue
             result.final_publication_pass += 1
             logger.info("kage_publication_passed", extra=gate_result.record)
 

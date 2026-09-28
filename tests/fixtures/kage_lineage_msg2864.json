@@ -1,0 +1,59 @@
+{
+ "_provenance": "message 2864 (accepted natural canary): durable KAGE lineage audit (production), stage provider outputs verbatim; no secrets",
+ "event_id": "0c61fab4-90ca-4cf8-a9d8-1e6909a5c027",
+ "task_id": "edba304b-e544-4f60-94b7-399b8154864f",
+ "telegram_message_id": 2864,
+ "source_headline": "Google Threat Intelligence Group finds dark web marketplaces selling access to AI models, including from Anthropic,",
+ "research": {
+  "gaps": [
+   "Не раскрыты методика проверки Google Threat Intelligence Group и объём выявленных предложений.",
+   "Основной фрагмент содержит подборку других историй, не относящихся к продаже доступа к ИИ‑моделям."
+  ],
+  "facts": [
+   "Google Threat Intelligence Group обнаружила на даркнет‑маркетплейсах предложения доступа к моделям Anthropic, Google и OpenAI со скидками до 97%.",
+   "История выбрана из‑за сообщения о продаже на даркнете доступа к ИИ‑моделям, включая модели Anthropic.",
+   "В предоставленном тексте не указаны названия маркетплейсов, конкретные модели или подтверждённые цены после скидки."
+  ],
+  "confidence": 0.98
+ },
+ "intelligence": {
+  "angle": "Google Threat Intelligence Group сообщает, что на даркнет‑маркетплейсах предлагают доступ к моделям Anthropic, Google и OpenAI со скидками до 97%. Это указывает на появление отдельного рынка перепродажи или нелегального доступа к ИИ‑сервисам, но конкретные площадки, модели и цены в исследовании не названы, поэтому утверждение следует подавать именно как результат наблюдений GTIG.",
+  "significance": 7,
+  "recommendation": "PUBLISH — исследование GTIG даёт конкретный и читательски понятный повод: на даркнет‑маркетплейсах продают доступ к моделям Anthropic, Google и OpenAI с заявленными скидками до 97%. Публиковать с сохранением атрибуции и без выдачи неподтверждённых деталей о площадках, моделях или фактических ценах.",
+  "audience_relevance": "Высокая для пользователей ИИ, компаний и специалистов по кибербезопасности: доступ к популярным моделям предлагают через неофициальные каналы, а заявленная скидка до 97% делает предложение потенциально привлекательным и одновременно сигнализирует о рисках происхождения такого доступа."
+ },
+ "copywriting": {
+  "title": "На даркнет-маркетплейсах продают доступ к ИИ-моделям со скидками до 97%",
+  "main_body": "Google Threat Intelligence Group обнаружила предложения доступа к моделям Anthropic, Google и OpenAI.",
+  "ending": null
+ },
+ "saved_minimum_story_contract": {
+  "selected_premise": {
+   "kind": "one_supported_fact",
+   "lead_fact_card_id": 1,
+   "lead_fact_text": "Google Threat Intelligence Group обнаружила на даркнет‑маркетплейсах предложения доступа к моделям Anthropic, Google и OpenAI со скидками до 97%."
+  },
+  "core_facts": [
+   {
+    "id": 1,
+    "minimum_meaning": "meaning of this core Research card",
+    "why_core": "Required to complete the selected premise"
+   }
+  ],
+  "optional_facts": [
+   {
+    "id": 2,
+    "status": "may_drop"
+   },
+   {
+    "id": 3,
+    "status": "may_drop"
+   }
+  ],
+  "material_qualifiers": [
+   "до"
+  ],
+  "rule": "Preserve each core meaning, not every word; optional cards may be deleted. Stop at the shortest complete post."
+ },
+ "publication_outcome": "DELIVERED"
+}

@@ -363,6 +363,7 @@ async def _run_claimed(event_id: UUID, selection: dict[str, object], ai, bot, pr
                 "factual_gate_pass": result.factual_gate_pass,
                 "factual_gate_block": result.factual_gate_block,
                 "local_guard_block": result.local_guard_block,
+                "editorial_usefulness_block": result.editorial_usefulness_block,
                 "publication_records": result.publication_gate_records,
             },
             "selection": selection,

@@ -40,6 +40,7 @@ RUN_ID_RE = re.compile(r"[a-z0-9][a-z0-9-]{2,39}")
 # Non-delivered terminal outcomes that are normal editorial/safety results: the batch continues.
 CONTINUE_OUTCOMES = frozenset({
     "BLOCKED_FACTUAL_GATE", "BLOCKED_LOCAL_GUARD", "BLOCKED_BOTH", "VISUAL_HOLD", "DUPLICATE_SUPERSEDED",
+    "BLOCKED_EDITORIAL_USEFULNESS",
 })
 CLEAN_TERMINALS = frozenset({
     "COMPLETED_MAX_ATTEMPTS", "COMPLETED_MAX_DELIVERIES", "BUDGET_RESERVATION_EXHAUSTED",

@@ -1,0 +1,49 @@
+{
+ "_provenance": "batch-20260927-01 story 1 (factual-gate blocked): durable KAGE lineage audit (production), stage provider outputs verbatim; no secrets",
+ "event_id": "5fdf6ae9-d550-490f-a8a3-a461cac0b1f7",
+ "task_id": "47a65da5-782b-4fed-a86a-1c7d1b322d6d",
+ "telegram_message_id": null,
+ "source_headline": "Bill Gates warns artificial intelligence 'powerful enough' to cause 'a billion deaths' if unchecked - Fox News",
+ "research": {
+  "gaps": [
+   "Предоставленный текст не содержит подробностей о времени, контексте и основаниях предупреждения Гейтса.",
+   "Ссылка ведёт на материал Fox News, но его содержание в предоставленном тексте не раскрыто."
+  ],
+  "facts": [
+   "Билл Гейтс предупредил, что искусственный интеллект может стать достаточно мощным, чтобы вызвать гибель миллиарда человек, если его не контролировать."
+  ],
+  "confidence": 0.98
+ },
+ "intelligence": {
+  "angle": "Билл Гейтс предупредил: если искусственный интеллект не контролировать, он может стать достаточно мощным, чтобы привести к гибели миллиарда человек. Это именно оценка Гейтса, а не подтверждённый прогноз.",
+  "significance": 7,
+  "recommendation": "PUBLISH — материал имеет конкретный и сильный читательский payoff: Гейтс связывает отсутствие контроля над ИИ с потенциальной гибелью миллиарда людей. Сохранить атрибуцию и формулировку как предупреждение, не превращая её в установленный факт; дополнительные детали о времени, контексте и основаниях в Research не подтверждены.",
+  "audience_relevance": "Для аудитории, следящей за ИИ, это заметное предупреждение одного из наиболее известных технологических предпринимателей о потенциальном масштабе риска. Однако без контекста и обоснований из первоисточника выводы следует подавать осторожно."
+ },
+ "copywriting": {
+  "title": "ИИ может привести к гибели миллиарда человек — предупреждает Билл Гейтс",
+  "main_body": "По его словам, искусственный интеллект может стать достаточно мощным, чтобы вызвать такую гибель, если его не контролировать.",
+  "ending": null
+ },
+ "saved_minimum_story_contract": {
+  "selected_premise": {
+   "kind": "one_supported_fact",
+   "lead_fact_card_id": 1,
+   "lead_fact_text": "Билл Гейтс предупредил, что искусственный интеллект может стать достаточно мощным, чтобы вызвать гибель миллиарда человек, если его не контролировать."
+  },
+  "core_facts": [
+   {
+    "id": 1,
+    "minimum_meaning": "meaning of this core Research card",
+    "why_core": "Required to complete the selected premise"
+   }
+  ],
+  "optional_facts": [],
+  "material_qualifiers": [
+   "может",
+   "если"
+  ],
+  "rule": "Preserve each core meaning, not every word; optional cards may be deleted. Stop at the shortest complete post."
+ },
+ "publication_outcome": "BLOCKED_FACTUAL_GATE"
+}
