@@ -266,8 +266,11 @@ async def generate_editorial_image(prompt: str, *, gateway: Any | None = None) -
         response = await adapter.generate_image(request)
     except Exception as exc:  # noqa: BLE001 - one bounded attempt; any failure falls to Tier 3
         _record(None)
-        logger.warning("kage_generated_image_failed", extra={"error_class": type(exc).__name__})
-        return None, f"generation_error:{type(exc).__name__}"
+        # The provider adapters' messages carry only status/type information (never request bodies
+        # or secrets); a bounded copy is kept so a failed dispatch is diagnosable from the audit.
+        detail = " ".join(str(exc).split())[:200]
+        logger.warning("kage_generated_image_failed", extra={"error_class": type(exc).__name__, "detail": detail})
+        return None, f"generation_error:{type(exc).__name__}" + (f": {detail}" if detail else "")
     _record(getattr(response, "cost_usd", None))
     check = validate_generated_image(getattr(response, "image_bytes", None))
     logger.info("kage_generated_image_result", extra={"valid": check.ok, "reason": check.reason,

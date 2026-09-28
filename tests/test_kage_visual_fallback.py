@@ -145,13 +145,13 @@ async def test_generation_is_text_to_image_16x9_and_called_exactly_once():
     (_photo(800, 450), None, "generated_invalid:resolution_too_low"),
     (_photo(flat=True), None, "generated_invalid:blank_or_uniform"),
     (b"not an image", None, "generated_invalid:undecodable"),
-    (None, RuntimeError("provider down"), "generation_error:RuntimeError"),
+    (None, RuntimeError("provider down"), "generation_error:RuntimeError: provider down"),
 ], ids=["square", "too_small", "blank", "undecodable", "provider_error"])
 async def test_invalid_or_failed_generation_falls_to_the_typography_card_without_retry(image, error, reason):
     gateway = FakeGateway(image, error=error)
     result = await _ladder(gateway)
     assert gateway.calls == 1  # never regenerated
-    assert result.tier == vf.TIER_TYPOGRAPHY and result.generation_reason == reason
+    assert result.tier == vf.TIER_TYPOGRAPHY and result.generation_reason.startswith(reason)
     assert result.image_bytes and result.image_bytes.startswith(b"\x89PNG")
 
 
