@@ -1,0 +1,141 @@
+{
+ "provider_calls": 0,
+ "image_calls": 0,
+ "canary10": {
+  "first_invariants": {
+   "violations": [],
+   "underlying_time": false,
+   "disclosure": false,
+   "disclosure_marker": true,
+   "chronology": "CURRENT_EVENT",
+   "underlying_time_values": [],
+   "disclosure_dates": [],
+   "action_strength": 3
+  },
+  "corrected_non_regression": [],
+  "corrected_deterministic": {
+   "media_first_contract": "PASS",
+   "generated_slide_fields": [
+    {
+     "slide": 1,
+     "generation_brief": true,
+     "story_anchor": true,
+     "visual_direction": true,
+     "source_evidence": true,
+     "layout": true
+    },
+    {
+     "slide": 2,
+     "generation_brief": true,
+     "story_anchor": true,
+     "visual_direction": true,
+     "source_evidence": true,
+     "layout": true
+    },
+    {
+     "slide": 3,
+     "generation_brief": true,
+     "story_anchor": true,
+     "visual_direction": true,
+     "source_evidence": true,
+     "layout": true
+    },
+    {
+     "slide": 4,
+     "generation_brief": true,
+     "story_anchor": true,
+     "visual_direction": true,
+     "source_evidence": true,
+     "layout": true
+    },
+    {
+     "slide": 5,
+     "generation_brief": true,
+     "story_anchor": true,
+     "visual_direction": true,
+     "source_evidence": true,
+     "layout": true
+    }
+   ],
+   "quote_use": {
+    "terminal": [],
+    "repairable": []
+   },
+   "named_person_risks": [],
+   "status_violations": [],
+   "unsupported_targets": [],
+   "hook_lengths": [
+    56,
+    38,
+    32,
+    51,
+    44
+   ],
+   "copy_thesis_findings": [
+    "[advisory] body_repeats_headline (card 4): the body restates the headline instead of developing it: 'История с Anthropic появилась после сообщения о том, что агенты OpenAI проникли на австралийские правительственные сайты.' - a viral slide's body must add a new grounded fact"
+   ]
+  },
+  "corrected_real_path_correction_mode": {
+   "result": "REACHED_SEMANTIC_JUDGE",
+   "judge": "NOT RUN OFFLINE (canary 10 never reached its final judge; no verdict is invented)"
+  }
+ },
+ "viral_nominated_canary6_20260927": {
+  "first_invariants": {
+   "violations": [],
+   "underlying_time": true,
+   "disclosure": true,
+   "disclosure_marker": true,
+   "chronology": "PAST_EVENT_DISCLOSED_NOW",
+   "underlying_time_values": [
+    "summer"
+   ],
+   "disclosure_dates": [
+    "25 сентябр"
+   ],
+   "action_strength": 3
+  },
+  "chronology_line": "CHRONOLOGY: disclosed 2026-09-25; behaviour this summer; newly disclosed: commerce department, education department, hugging face, sec - the disclosure is new, the behaviour is not (this summer): the hook must say it was revealed / disclosed / reported and must not imply the action happened today",
+  "probes": {
+   "drop_disclosure": [
+    "correction removed the supported event/disclosure chronology: the earlier version said the behaviour was disclosed now (after it happened earlier), the correction does not"
+   ],
+   "move_event_time": [
+    "correction changed WHEN the behaviour happened (summer -> spring)"
+   ],
+   "move_disclosure_date": [
+    "correction changed the disclosure date (25 сентябр -> 24 сентябр)"
+   ],
+   "unchanged_first_output": []
+  }
+ },
+ "viral_nominated_canary7_20260927": {
+  "first_invariants": {
+   "violations": [],
+   "underlying_time": true,
+   "disclosure": true,
+   "disclosure_marker": true,
+   "chronology": "PAST_EVENT_DISCLOSED_NOW",
+   "underlying_time_values": [
+    "summer"
+   ],
+   "disclosure_dates": [
+    "25 сентябр"
+   ],
+   "action_strength": 3
+  },
+  "chronology_line": "CHRONOLOGY: disclosed 2026-09-25; behaviour this summer; newly disclosed: commerce department, education department, hugging face, sec - the disclosure is new, the behaviour is not (this summer): the hook must say it was revealed / disclosed / reported and must not imply the action happened today",
+  "probes": {
+   "drop_disclosure": [
+    "correction removed the supported event/disclosure chronology: the earlier version said the behaviour was disclosed now (after it happened earlier), the correction does not"
+   ],
+   "move_event_time": [
+    "correction changed WHEN the behaviour happened (summer -> spring)"
+   ],
+   "move_disclosure_date": [
+    "correction changed the disclosure date (25 сентябр -> 24 сентябр)"
+   ],
+   "unchanged_first_output": []
+  }
+ }
+}

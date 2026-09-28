@@ -119,7 +119,14 @@ _TODAY = _rx(r"\bсегодня\b", r"\bвчера\b", r"\bпрямо сейча
 _UNDERLYING_TIME = _rx(r"\bлет(?:ом|а)\b", r"\bвесной\b", r"\bзимой\b", r"\bосенью\b", r"\bэтим летом\b", r"\bin (?:the )?summer\b",
                        r"\bthis summer\b", r"\bранее\b", r"\bв (?:январ|феврал|март|апрел|ма[ея]|июн|июл|август|сентябр|октябр|ноябр|декабр)\w*")
 _DISCLOSED = _rx(r"\bраскры\w*", r"\bстало известно\b", r"\bсообщил\w*", r"\bпризнал\w*", r"\bрассказал\w*", r"\bdisclos\w*",
-                 r"\brevealed?\b", r"\bподробности\b", r"\b\d{1,2}\s+(?:сентябр|октябр|ноябр|декабр|январ|феврал|март|апрел|ма|июн|июл|август)\w*")
+                 r"\brevealed?\b", r"\bподробности\b", r"\bопубликова\w*", r"\bpublished\b",
+                 r"\b\d{1,2}\s+(?:сентябр|октябр|ноябр|декабр|январ|феврал|март|апрел|ма|июн|июл|август)\w*")
+# the VALUES a chronology states (founder task 2026-09-28): a correction may not silently move WHEN the behaviour happened or WHEN it was
+# disclosed - 'летом' -> 'весной' or '25 сентября' -> '24 сентября' is a factual change even though a marker is still present
+_TIME_VALUE = (("summer", r"лет(?:ом|а)|summer"), ("spring", r"весн\w*|spring"), ("winter", r"зим\w*|winter"), ("autumn", r"осен\w*|autumn"),
+               ("earlier", r"ранее|earlier"),
+               *((m, rf"в {m}\w*") for m in ("январ", "феврал", "март", "апрел", "ма", "июн", "июл", "август", "сентябр", "октябр", "ноябр", "декабр")))
+_DISCLOSURE_DATE = re.compile(r"(?i)\b(\d{1,2})\s+(сентябр|октябр|ноябр|декабр|январ|феврал|март|апрел|ма|июн|июл|август)\w*")
 
 _STATUS_ORDER = ["FAILED_ATTEMPT", "DISPUTED", "UNDER_INVESTIGATION", "UNCONFIRMED", "ATTEMPTED", "CONFIRMED", "REPORTED"]
 _ASSERTABLE = {"CONFIRMED", "REPORTED"}
@@ -377,12 +384,34 @@ def _strength(text: str) -> int:
     return 3 if _INTRUSION.search(text) else 2 if _ACCESS.search(text) else 1 if _INTERACTION.search(text) else 0
 
 
+def _time_values(texts: str) -> list[str]:
+    found: set[str] = set()
+    for m in _UNDERLYING_TIME.finditer(texts):
+        found.update(name for name, pattern in _TIME_VALUE if re.fullmatch(rf"(?i)(?:этим\s+|in (?:the )?|this\s+)?(?:{pattern})", m.group(0)))
+    return sorted(found)
+
+
+def chronology_state(texts: str, evidence: list[str]) -> str:
+    """PAST_EVENT_DISCLOSED_NOW when the story has a split chronology - the behaviour happened earlier and is disclosed now - proven by the
+    evidence's structured CHRONOLOGY line (added for CURRENT_DISCLOSURE stories by services.instagram_viral_nomination) or by the version
+    itself dating the behaviour; otherwise CURRENT_EVENT (reporting language such as 'стало известно' only says a current fact became
+    public, founder task 2026-09-28 after canary 10)."""
+    split = any(re.match(r"(?i)^\s*chronology\s*:", e or "") for e in evidence) or bool(_UNDERLYING_TIME.search(texts))
+    return "PAST_EVENT_DISCLOSED_NOW" if split else "CURRENT_EVENT"
+
+
 def factual_invariants(slides: list[Any], caption: str, ledger: list[TargetStatus], evidence: list[str]) -> dict:
-    """What a version got right, to hold its correction to: the violations it already had (the correction may not add one), whether it
-    kept the chronology (an underlying-time marker and a disclosure marker), and its strongest action verb."""
+    """What a version got right, to hold its correction to: the violations it already had (the correction may not add one), its
+    chronology (an underlying-time marker; a disclosure marker - BINDING only when the story has a split chronology; the time values it
+    states) and its strongest action verb."""
     texts = " ".join(t for _w, t in _field_texts(slides, caption))
+    state = chronology_state(texts, evidence)
+    marker = bool(_DISCLOSED.search(texts))
     return {"violations": sorted({(v.target, v.evidence_status, v.reason.split(" - ")[0]) for v in status_violations(slides, caption, ledger, evidence)}),
-            "underlying_time": bool(_UNDERLYING_TIME.search(texts)), "disclosure": bool(_DISCLOSED.search(texts)),
+            "underlying_time": bool(_UNDERLYING_TIME.search(texts)),
+            "disclosure": marker and state == "PAST_EVENT_DISCLOSED_NOW", "disclosure_marker": marker, "chronology": state,
+            "underlying_time_values": _time_values(texts),
+            "disclosure_dates": sorted({f"{d} {m}" for d, m in _DISCLOSURE_DATE.findall(texts)}),
             "action_strength": _strength(texts), "ledger": ledger_lines(ledger)}
 
 
@@ -396,8 +425,17 @@ def non_regression_findings(baseline: dict, slides: list[Any], caption: str, led
     problems = [f"correction introduced a target-status violation: {v[0]} ({v[1]}) - {v[2]}" for v in now["violations"] if tuple(v) not in before]
     if baseline.get("underlying_time") and not now["underlying_time"]:
         problems.append("correction removed the chronology: the earlier version said WHEN the behaviour happened, the correction does not")
-    if baseline.get("disclosure") and not now["disclosure"]:
-        problems.append("correction removed the chronology: the earlier version said the facts were disclosed now, the correction does not")
+    # binding only for a split chronology (event earlier, disclosed now); the baseline's own flag already encodes that - a correction
+    # of a CURRENT_EVENT story may drop a reporting phrase ('стало известно') without losing any chronology (canary 10)
+    if baseline.get("disclosure") and not now["disclosure_marker"]:
+        problems.append("correction removed the supported event/disclosure chronology: the earlier version said the behaviour was disclosed "
+                        "now (after it happened earlier), the correction does not")
+    before_times, now_times = set(baseline.get("underlying_time_values") or []), set(now["underlying_time_values"])
+    if before_times and now_times and not before_times & now_times:
+        problems.append(f"correction changed WHEN the behaviour happened ({', '.join(sorted(before_times))} -> {', '.join(sorted(now_times))})")
+    before_dates, now_dates = set(baseline.get("disclosure_dates") or []), set(now["disclosure_dates"])
+    if before_dates and now_dates and not before_dates & now_dates:
+        problems.append(f"correction changed the disclosure date ({', '.join(sorted(before_dates))} -> {', '.join(sorted(now_dates))})")
     if now["action_strength"] > int(baseline.get("action_strength", 0)):
         problems.append("correction strengthened the action verb beyond the earlier version (interaction < access < intrusion)")
     return problems
