@@ -236,9 +236,9 @@ def _resolve_default_image_gateway() -> ImageGenerationGateway | None:
     `settings.openai_api_key` absent -> returns `None` (never `MockImageAdapter`), mirroring
     `services/editorial_recomposition.py::maybe_recompose()`'s own fail-closed-on-missing-key
     pattern exactly, so the caller can fail closed rather than silently downgrading a paid-mode
-    request to a placeholder image. `GeminiImageAdapter` remains fully intact and used elsewhere
-    (`editorial_recomposition.py`'s own live NEWS photo recomposition path) - this function is the
-    ONLY place MEME image generation's own provider choice lives; nothing else changes."""
+    request to a placeholder image. (NEWS photo recomposition is a separate OpenAI consumer in
+    `editorial_recomposition.py`.) This function is the ONLY place MEME image generation's own
+    provider choice lives; nothing else changes."""
     from integrations.llm_gateway.providers.mock_image_adapter import MockImageAdapter
 
     if settings.meme_image_generation_mode != "enforce":
@@ -307,8 +307,8 @@ async def trigger_meme_generation(
 
     "REAL IMAGE PROVIDER FINALIZATION" phase: `_resolve_default_image_gateway()` returns
     `MockImageAdapter` for `settings.meme_image_generation_mode` "off"/"dry_run" (unchanged), and
-    the real, production-proven `GeminiImageAdapter` for "enforce" - but only when
-    `settings.gemini_api_key` is actually configured. If "enforce" is set with no key, that
+    the real `OpenAIImageAdapter` for "enforce" - but only when
+    `settings.openai_api_key` is actually configured. If "enforce" is set with no key, that
     resolver returns `None` and this function FAILS CLOSED (`status="provider_not_configured"`)
     rather than silently falling back to `MockImageAdapter` - a paid-mode request must never
     silently deliver a placeholder image as if it were real."""

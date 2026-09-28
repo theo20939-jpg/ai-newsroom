@@ -1,18 +1,18 @@
 """Phase V2.3 (docs/nnj_source_faithful_editorial_visual_recomposition_v1.md §15-17): the FIRST
 production runtime consumer of the Phase V2.1/V2.2 image-edit infrastructure. A thin, fail-open
 recomposition step for the NEWS presentation path only - never a second image-generation
-architecture. `ImageGenerationGateway`/`ImageGenerationRequest`/`GeminiImageAdapter` remain
+architecture. `ImageGenerationGateway`/`ImageGenerationRequest`/`OpenAIImageAdapter` remain
 canonical and are called through, never duplicated or reimplemented here.
 
 Gated by `settings.editorial_recomposition_mode` (core/config.py) - default `"off"`:
 existing deployments with no new environment variable set behave byte-identically to before this
 phase (`maybe_recompose()` returns the original bytes unchanged, zero gateway calls).
 
-Model policy (locked in docs/nnj_source_faithful_editorial_visual_recomposition_v1.md §16-17):
-`gemini-3.1-flash-image` only. On ANY failure at the recomposition boundary, this module fails
-open to the caller's own original `source_image_bytes` - it NEVER falls back to
-`gemini-3-pro-image` or `gpt-image-2` (a more creative/aggressive model is a higher factual-
-mutation-risk path, not a safer fallback - see §17's own explicit rule).
+Model policy (KAGE OpenAI-only runtime, 2026-09-28; supersedes the Gemini policy of
+docs/nnj_source_faithful_editorial_visual_recomposition_v1.md §16-17): `gpt-image-2.5-sunburst`
+image edit only. On ANY failure at the recomposition boundary, this module fails open to the
+caller's own original `source_image_bytes` - it NEVER falls back to another model or provider
+(a more creative/aggressive model is a higher factual-mutation-risk path, not a safer fallback).
 
 Eligibility (Stage 6 - deterministic only, no new ML classifier): reuses
 `services/image_quality.py`'s own already-calibrated `resolution_band()`/`aspect_ratio_band()`
@@ -44,16 +44,35 @@ from integrations.llm_gateway.image_protocol import (
     ImageGenerationRequest,
     ReferenceImage,
 )
-from integrations.llm_gateway.providers.gemini_image_adapter import (
-    GEMINI_3_1_FLASH_IMAGE,
-    GeminiImageAdapter,
-    GeminiImageAdapterError,
+from integrations.llm_gateway.providers.openai_image_adapter import (
+    GPT_IMAGE_2_5_SUNBURST,
+    OpenAIImageAdapter,
+    OpenAIImageAdapterError,
 )
 from schemas.image_candidate import AspectRatioBand, ResolutionBand
 from services.image_quality import aspect_ratio_band, resolution_band
 from services.nnj_candidate_c_contract import build_overlay_aware_prompt_clause, load_candidate_c_geometry
 
 _FORMAT_TO_MIME = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}
+
+# OpenAI-only KAGE runtime (2026-09-28): source-photo recomposition is a gpt-image-2.5-sunburst
+# image edit (edit fidelity), high quality, 1536x1024 JPEG, one attempt, inside the per-story
+# envelope. Gemini is no longer used here.
+RECOMPOSITION_PROVIDER = "openai"
+RECOMPOSITION_MODEL = GPT_IMAGE_2_5_SUNBURST
+_REFERENCE_MAX_EDGE = 1536  # bounds the edit's input-image tokens (pricing cap assumption)
+
+
+def _bounded_reference(source_image_bytes: bytes, mime_type: str) -> tuple[bytes, str]:
+    """Downscale the source photo to <= 1536 px on its long edge (aspect preserved) for the edit."""
+    with Image.open(io.BytesIO(source_image_bytes)) as im:
+        if max(im.size) <= _REFERENCE_MAX_EDGE:
+            return source_image_bytes, mime_type
+        image = im.convert("RGB")
+        image.thumbnail((_REFERENCE_MAX_EDGE, _REFERENCE_MAX_EDGE), Image.Resampling.LANCZOS)
+        out = io.BytesIO()
+        image.save(out, format="JPEG", quality=92)
+        return out.getvalue(), "image/jpeg"
 
 
 def build_recomposition_prompt() -> str:
@@ -304,7 +323,8 @@ async def maybe_recompose(
     unexpected exception) resolves to a `RecompositionResult` carrying the ORIGINAL bytes.
 
     `gateway` is injectable for tests only - production callers never pass it; a real
-    `GeminiImageAdapter` is constructed internally when eligible and mode is `"live"`."""
+    `OpenAIImageAdapter` (gpt-image-2.5-sunburst edit) is constructed internally when eligible and
+    mode is `"live"`."""
     mode = settings.editorial_recomposition_mode
     source_sha256 = hashlib.sha256(source_image_bytes).hexdigest()
 
@@ -323,7 +343,7 @@ async def maybe_recompose(
     if mode == "dry_run":
         return _fail_open(
             mode="dry_run", eligibility=eligibility, source_image_bytes=source_image_bytes,
-            source_sha256=source_sha256, provider="gemini", model=GEMINI_3_1_FLASH_IMAGE,
+            source_sha256=source_sha256, provider=RECOMPOSITION_PROVIDER, model=RECOMPOSITION_MODEL,
         )
 
     # mode == "live"
@@ -334,18 +354,22 @@ async def maybe_recompose(
     adapter = gateway
     production_paid_adapter = adapter is None
     if adapter is None:
-        api_key = settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else None
+        api_key = settings.openai_api_key.get_secret_value() if settings.openai_api_key else None
         if not api_key:
             return _fail_open(
                 mode="live", eligibility=eligibility, source_image_bytes=source_image_bytes,
-                source_sha256=source_sha256, provider="gemini", model=GEMINI_3_1_FLASH_IMAGE,
-                fallback_reason="gemini_api_key_absent",
+                source_sha256=source_sha256, provider=RECOMPOSITION_PROVIDER, model=RECOMPOSITION_MODEL,
+                fallback_reason="openai_api_key_absent",
             )
-        adapter = GeminiImageAdapter(model_id=GEMINI_3_1_FLASH_IMAGE, api_key=api_key)
+        adapter = OpenAIImageAdapter(
+            api_key=api_key, model_id=RECOMPOSITION_MODEL, output_format="jpeg", output_compression=90,
+            edit_size="1536x1024", edit_quality="high", input_fidelity="high", max_retries=0, timeout_seconds=120,
+        )
 
+    reference_data, reference_mime = _bounded_reference(source_image_bytes, mime_type)
     request = ImageGenerationRequest(
         prompt=build_overlay_aware_recomposition_prompt(), operation=ImageGenerationOperation.IMAGE_EDIT,
-        reference_images=(ReferenceImage(data=source_image_bytes, mime_type=mime_type),),
+        reference_images=(ReferenceImage(data=reference_data, mime_type=reference_mime),),
         target_aspect_ratio="16:9",
     )
 
@@ -357,7 +381,7 @@ async def maybe_recompose(
             gateway=adapter,
             executor=build_budgeted_image_executor(),
             profile=ImageExecutionProfile(
-                provider="gemini", model=GEMINI_3_1_FLASH_IMAGE, quality="standard", size="1K",
+                provider=RECOMPOSITION_PROVIDER, model=RECOMPOSITION_MODEL, quality="high", size="1536x1024",
                 operation=ImageGenerationOperation.IMAGE_EDIT,
             ),
             mode="live",
@@ -379,49 +403,65 @@ async def maybe_recompose(
     if envelope is not None:
         try:
             envelope.authorize_visual_dispatch(
-                stage=VISUAL_RECOMPOSITION_STAGE, model_id=GEMINI_3_1_FLASH_IMAGE,
+                stage=VISUAL_RECOMPOSITION_STAGE, model_id=RECOMPOSITION_MODEL,
                 reserved_usd=visual_recomposition_worst_case(),
             )
         except CanaryPreDispatchSafetyRejection as exc:
             return _fail_open(
                 mode="live", eligibility=eligibility, source_image_bytes=source_image_bytes,
-                source_sha256=source_sha256, provider="gemini", model=GEMINI_3_1_FLASH_IMAGE,
+                source_sha256=source_sha256, provider=RECOMPOSITION_PROVIDER, model=RECOMPOSITION_MODEL,
                 fallback_reason=f"cost_envelope_refused:{exc}",
             )
 
-    def _record_visual_cost(response_cost: object, status: str) -> None:
+    def _record_visual_cost(
+        response_cost: object, status: str, usage: object = None,
+        request_id: str | None = None, provider_status_code: int | None = None,
+    ) -> None:
         if envelope is None:
             return
         cost = None if response_cost is None else Decimal(str(response_cost))
         envelope.record_visual_result(stage=VISUAL_RECOMPOSITION_STAGE, actual_cost_usd=cost,
-                                      status=status if cost is not None else "COST_UNKNOWN")
+                                      status=status if cost is not None else "COST_UNKNOWN",
+                                      input_tokens=getattr(usage, "input_tokens", None),
+                                      output_tokens=getattr(usage, "output_tokens", None),
+                                      text_input_tokens=getattr(usage, "text_input_tokens", None),
+                                      image_input_tokens=getattr(usage, "image_input_tokens", None),
+                                      request_id=request_id, provider_status_code=provider_status_code)
 
     started = time.monotonic()
     try:
         response = await adapter.generate_image(request)
-    except GeminiImageAdapterError as exc:
+    except OpenAIImageAdapterError as exc:
         _record_visual_cost(None, "FAILED")
         return _fail_open(
             mode="live", eligibility=eligibility, source_image_bytes=source_image_bytes,
-            source_sha256=source_sha256, provider="gemini", model=GEMINI_3_1_FLASH_IMAGE,
+            source_sha256=source_sha256, provider=RECOMPOSITION_PROVIDER, model=RECOMPOSITION_MODEL,
             fallback_reason=f"{type(exc).__name__}", latency_ms=(time.monotonic() - started) * 1000,
         )
     except Exception as exc:  # noqa: BLE001 - Stage 8's own explicit "catch failures only at the
         # appropriate recomposition boundary" - this IS that boundary; never lets an unexpected
         # provider/gateway exception escape and block the NEWS send path.
-        _record_visual_cost(None, "FAILED")
+        bounded_response = getattr(exc, "response", None)
+        _record_visual_cost(
+            getattr(exc, "actual_cost_usd", None), "FAILED", getattr(bounded_response, "usage", None),
+            getattr(bounded_response, "request_id", None),
+            getattr(bounded_response, "provider_status_code", None),
+        )
         return _fail_open(
             mode="live", eligibility=eligibility, source_image_bytes=source_image_bytes,
-            source_sha256=source_sha256, provider="gemini", model=GEMINI_3_1_FLASH_IMAGE,
+            source_sha256=source_sha256, provider=RECOMPOSITION_PROVIDER, model=RECOMPOSITION_MODEL,
             fallback_reason=f"unexpected_error:{type(exc).__name__}", latency_ms=(time.monotonic() - started) * 1000,
         )
     latency_ms = (time.monotonic() - started) * 1000
-    _record_visual_cost(getattr(response, "cost_usd", None), "SUCCEEDED")
+    _record_visual_cost(
+        getattr(response, "cost_usd", None), "SUCCEEDED", getattr(response, "usage", None),
+        getattr(response, "request_id", None), getattr(response, "provider_status_code", None),
+    )
 
     if not response.image_bytes:
         return _fail_open(
             mode="live", eligibility=eligibility, source_image_bytes=source_image_bytes,
-            source_sha256=source_sha256, provider="gemini", model=GEMINI_3_1_FLASH_IMAGE,
+            source_sha256=source_sha256, provider=RECOMPOSITION_PROVIDER, model=RECOMPOSITION_MODEL,
             fallback_reason="empty_image", latency_ms=latency_ms,
         )
     try:
@@ -430,7 +470,7 @@ async def maybe_recompose(
     except (UnidentifiedImageError, OSError):
         return _fail_open(
             mode="live", eligibility=eligibility, source_image_bytes=source_image_bytes,
-            source_sha256=source_sha256, provider="gemini", model=GEMINI_3_1_FLASH_IMAGE,
+            source_sha256=source_sha256, provider=RECOMPOSITION_PROVIDER, model=RECOMPOSITION_MODEL,
             fallback_reason="undecodable_result_image", latency_ms=latency_ms,
         )
 
@@ -438,7 +478,7 @@ async def maybe_recompose(
     usage = response.usage
     return RecompositionResult(
         used_recomposed_image=True, image_bytes=response.image_bytes, mode="live", eligibility=eligibility,
-        provider="gemini", model=GEMINI_3_1_FLASH_IMAGE, source_sha256=source_sha256,
+        provider=RECOMPOSITION_PROVIDER, model=RECOMPOSITION_MODEL, source_sha256=source_sha256,
         result_sha256=result_sha256, fallback_reason=None, latency_ms=latency_ms,
         request_id=response.request_id,
         input_tokens=usage.input_tokens if usage is not None else None,

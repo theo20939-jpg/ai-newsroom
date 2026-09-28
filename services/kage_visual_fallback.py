@@ -1,7 +1,7 @@
 """KAGE Telegram NEWS visual fallback: generated editorial image -> KAGE typography card -> hold.
 
 Reached only when the accepted source-photo path (Tier 1) produced no usable visual. Tier 2 is ONE
-evidence-grounded Gemini text-to-image dispatch, reserved and accounted inside the same per-story
+evidence-grounded OpenAI gpt-image-2.5-flare text-to-image dispatch, reserved and accounted inside the same per-story
 envelope as every other paid call (services/kage_telegram_canary_envelope.py). Tier 3 is a local,
 deterministic KAGE typography cover (headline + KAGE mark + NEWS treatment) - $0 provider cost.
 Anything else is VISUAL_HOLD. No retries, no loops, no web discovery.
@@ -29,7 +29,8 @@ TIER_TYPOGRAPHY = "typography_card"
 TIER_HOLD = "visual_hold"
 HOLD_REASON_VISUAL_FALLBACK_EXHAUSTED = "visual_fallback_exhausted"
 
-GENERATION_MODEL = "gemini-3.1-flash-image"
+GENERATION_MODEL = "gpt-image-2.5-flare"
+GENERATION_QUALITY, GENERATION_SIZE = "high", "1536x1024"  # landscape hero for the KAGE NEWS renderer
 GENERATION_MAX_DISPATCHES = 1
 
 # --- generation brief ------------------------------------------------------------------------------
@@ -216,7 +217,7 @@ def render_typography_card(title: str) -> bytes | None:
 # --- Tier 2: one generated image inside the per-story envelope ------------------------------------------
 
 async def generate_editorial_image(prompt: str, *, gateway: Any | None = None) -> tuple[bytes | None, str]:
-    """ONE Gemini text-to-image dispatch. Reserved in the active per-story envelope before dispatch;
+    """ONE OpenAI gpt-image-2.5-flare text-to-image dispatch. Reserved in the active per-story envelope before dispatch;
     the provider-accounted cost is recorded after it (unknown cost fails closed downstream).
     Never raises: (image_bytes or None, reason)."""
     from integrations.llm_gateway.image_protocol import ImageGenerationOperation, ImageGenerationRequest
@@ -229,18 +230,23 @@ async def generate_editorial_image(prompt: str, *, gateway: Any | None = None) -
                                      target_aspect_ratio="16:9")
     adapter = gateway
     if adapter is None:
-        api_key = settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else None
+        api_key = settings.openai_api_key.get_secret_value() if settings.openai_api_key else None
         if not api_key:
-            return None, "gemini_api_key_absent"
-        from integrations.llm_gateway.providers.gemini_image_adapter import GeminiImageAdapter
+            return None, "openai_api_key_absent"
+        from integrations.llm_gateway.providers.openai_image_adapter import OpenAIImageAdapter
         from services.budgeted_image_execution import BudgetedImageGateway, build_budgeted_image_executor
         from services.image_pricing import ImageExecutionProfile
 
         prompt_sha = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
         adapter = BudgetedImageGateway(
-            gateway=GeminiImageAdapter(model_id=GENERATION_MODEL, api_key=api_key),
+            gateway=OpenAIImageAdapter(
+                api_key=api_key, model_id=GENERATION_MODEL, quality=GENERATION_QUALITY,
+                text_to_image_size=GENERATION_SIZE, output_format="jpeg", output_compression=90,
+                max_retries=0, timeout_seconds=120,
+            ),
             executor=build_budgeted_image_executor(),
-            profile=ImageExecutionProfile(provider="gemini", model=GENERATION_MODEL, quality="standard", size="1K",
+            profile=ImageExecutionProfile(provider="openai", model=GENERATION_MODEL, quality=GENERATION_QUALITY,
+                                          size=GENERATION_SIZE,
                                           operation=ImageGenerationOperation.TEXT_TO_IMAGE),
             mode="live", purpose="news_generated_image", execution_id=f"news-generated:{prompt_sha}",
             creative_id=f"news-generated:{prompt_sha}", package_id=prompt_sha, max_attempts=GENERATION_MAX_DISPATCHES,
@@ -254,24 +260,40 @@ async def generate_editorial_image(prompt: str, *, gateway: Any | None = None) -
         except CanaryPreDispatchSafetyRejection as exc:
             return None, f"cost_envelope_refused:{exc}"
 
-    def _record(cost: object) -> None:
+    def _record(
+        cost: object, usage: Any = None, request_id: str | None = None,
+        provider_status_code: int | None = None,
+    ) -> None:
         if envelope is None:
             return
         value = None if cost is None else Decimal(str(cost))
         envelope.record_visual_result(stage=VISUAL_GENERATION_STAGE, actual_cost_usd=value,
-                                      status="SUCCEEDED" if value is not None else "COST_UNKNOWN")
+                                      status="SUCCEEDED" if value is not None else "COST_UNKNOWN",
+                                      input_tokens=getattr(usage, "input_tokens", None),
+                                      output_tokens=getattr(usage, "output_tokens", None),
+                                      text_input_tokens=getattr(usage, "text_input_tokens", None),
+                                      image_input_tokens=getattr(usage, "image_input_tokens", None),
+                                      request_id=request_id, provider_status_code=provider_status_code)
 
     started = time.monotonic()
     try:
         response = await adapter.generate_image(request)
     except Exception as exc:  # noqa: BLE001 - one bounded attempt; any failure falls to Tier 3
-        _record(None)
+        bounded_response = getattr(exc, "response", None)
+        _record(
+            getattr(exc, "actual_cost_usd", None), getattr(bounded_response, "usage", None),
+            getattr(bounded_response, "request_id", None),
+            getattr(bounded_response, "provider_status_code", None),
+        )
         # The provider adapters' messages carry only status/type information (never request bodies
         # or secrets); a bounded copy is kept so a failed dispatch is diagnosable from the audit.
         detail = " ".join(str(exc).split())[:200]
         logger.warning("kage_generated_image_failed", extra={"error_class": type(exc).__name__, "detail": detail})
         return None, f"generation_error:{type(exc).__name__}" + (f": {detail}" if detail else "")
-    _record(getattr(response, "cost_usd", None))
+    _record(
+        getattr(response, "cost_usd", None), getattr(response, "usage", None),
+        getattr(response, "request_id", None), getattr(response, "provider_status_code", None),
+    )
     check = validate_generated_image(getattr(response, "image_bytes", None))
     logger.info("kage_generated_image_result", extra={"valid": check.ok, "reason": check.reason,
                                                        "latency_ms": round((time.monotonic() - started) * 1000)})

@@ -17,7 +17,7 @@ from integrations.llm_gateway.models.catalog import GPT_5_6_LUNA, GPT_5_6_TERRA
 from integrations.llm_gateway.models.registry import ModelDescriptor
 from integrations.llm_gateway.protocol import GenerateRequest
 
-CANARY_HARD_CAP_USD = Decimal("1.00")
+CANARY_HARD_CAP_USD = Decimal("1.24")  # >= text 0.746389 + one OpenAI visual 0.488 (provisional), rounded up
 CANARY_MODEL_ROUTE = ("gpt-5.6-luna", "gpt-5.6-terra")
 CANARY_MAX_DISPATCHES_PER_STAGE = 2
 CANARY_WORKFLOW_STEP_ATTEMPTS = 1
@@ -137,17 +137,22 @@ def _per_dispatch_cost(stage: str, model: ModelDescriptor) -> Decimal:
     ) / million
 
 
-# Billable visual calls reachable on the KAGE Telegram NEWS path, both on one priced model:
-# - Tier 1 source-photo recomposition (services/editorial_recomposition.py::maybe_recompose), only
-#   when a usable source photo exists;
-# - Tier 2 generated editorial image (services/kage_visual_fallback.py), only when none exists.
+# Billable visual calls reachable on the KAGE Telegram NEWS path (OpenAI only):
+# - Tier 1 source-photo recomposition (services/editorial_recomposition.py::maybe_recompose) with
+#   gpt-image-2.5-sunburst image edit, only when a usable source photo exists;
+# - Tier 2 generated editorial image (services/kage_visual_fallback.py) with gpt-image-2.5-flare
+#   text-to-image, only when none exists.
 # They are mutually exclusive per story, so at most ONE visual dispatch is allowed in total and it is
 # reserved once, at the larger worst case - never both. Vision subject matching is not a stage here:
 # under this envelope it is rejected before dispatch (unknown stage).
 VISUAL_RECOMPOSITION_STAGE = "news_recomposition"
 VISUAL_GENERATION_STAGE = "news_generated_image"
 VISUAL_STAGES = (VISUAL_RECOMPOSITION_STAGE, VISUAL_GENERATION_STAGE)
-VISUAL_RECOMPOSITION_MODEL = "gemini-3.1-flash-image"
+VISUAL_RECOMPOSITION_MODEL = "gpt-image-2.5-sunburst"
+VISUAL_GENERATION_MODEL = "gpt-image-2.5-flare"
+VISUAL_STAGE_MODELS = {VISUAL_RECOMPOSITION_STAGE: VISUAL_RECOMPOSITION_MODEL,
+                       VISUAL_GENERATION_STAGE: VISUAL_GENERATION_MODEL}
+VISUAL_QUALITY, VISUAL_SIZE = "high", "1536x1024"
 VISUAL_RECOMPOSITION_MAX_DISPATCHES = 1  # total visual dispatches per story, across both stages
 
 
@@ -161,12 +166,13 @@ def visual_recomposition_worst_case() -> Decimal:
 
     catalog = ImagePricingCatalog()
     worst = Decimal("0")
-    for operation, references in (
-        (ImageGenerationOperation.IMAGE_EDIT, (ReferenceImage(data=b"\x00", mime_type="image/png"),)),
-        (ImageGenerationOperation.TEXT_TO_IMAGE, ()),
+    for model, operation, references in (
+        (VISUAL_RECOMPOSITION_MODEL, ImageGenerationOperation.IMAGE_EDIT,
+         (ReferenceImage(data=b"\x00", mime_type="image/png"),)),
+        (VISUAL_GENERATION_MODEL, ImageGenerationOperation.TEXT_TO_IMAGE, ()),
     ):
         profile = ImageExecutionProfile(
-            provider="gemini", model=VISUAL_RECOMPOSITION_MODEL, quality="standard", size="1K", operation=operation,
+            provider="openai", model=model, quality=VISUAL_QUALITY, size=VISUAL_SIZE, operation=operation,
         )
         probe = ImageGenerationRequest(prompt="worst-case pricing probe", operation=operation, reference_images=references)
         worst = max(worst, catalog.quote(profile, probe).worst_case_cost_usd)
@@ -301,7 +307,7 @@ class TelegramCanaryEnvelope:
 
     def authorize_visual_dispatch(self, *, stage: str, model_id: str, reserved_usd: Decimal) -> None:
         """Reserve the one bounded visual dispatch inside this same per-story ledger, or refuse."""
-        if stage not in VISUAL_STAGES or model_id != VISUAL_RECOMPOSITION_MODEL:
+        if VISUAL_STAGE_MODELS.get(stage) != model_id:
             raise CanaryPreDispatchSafetyRejection("telegram canary: visual call is outside the bounded visual stage")
         assert self.dispatch_records is not None
         if sum(1 for r in self.dispatch_records if r["stage"] in VISUAL_STAGES) >= VISUAL_RECOMPOSITION_MAX_DISPATCHES:
@@ -319,13 +325,24 @@ class TelegramCanaryEnvelope:
             "status": "DISPATCH_AUTHORIZED",
         })
 
-    def record_visual_result(self, *, stage: str, actual_cost_usd: Decimal | None, status: str) -> None:
-        """Attach the provider-accounted cost; an unknown cost stays None (fails closed downstream)."""
+    def record_visual_result(
+        self, *, stage: str, actual_cost_usd: Decimal | None, status: str,
+        input_tokens: int | None = None, output_tokens: int | None = None,
+        text_input_tokens: int | None = None, image_input_tokens: int | None = None,
+        request_id: str | None = None, provider_status_code: int | None = None,
+    ) -> None:
+        """Attach the provider-accounted cost and reported token usage; an unknown cost stays None
+        (fails closed downstream)."""
         record = next((r for r in reversed(self.dispatch_records or []) if r["stage"] == stage), None)
         if record is None:
             raise ProviderPermanentIncompatibleError("telegram canary: visual result without dispatch record")
         record.update({
             "actual_cost_usd": str(actual_cost_usd) if actual_cost_usd is not None else None,
+            "actual_input_tokens": input_tokens, "actual_output_tokens": output_tokens,
+            "actual_text_input_tokens": text_input_tokens,
+            "actual_image_input_tokens": image_input_tokens,
+            "provider_request_id": request_id,
+            "provider_status_code": provider_status_code,
             "status": status if actual_cost_usd is None or actual_cost_usd <= Decimal(str(record["reserved_max_cost_usd"]))
             else "ACTUAL_EXCEEDED_RESERVATION",
         })

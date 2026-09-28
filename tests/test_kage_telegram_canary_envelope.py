@@ -40,8 +40,8 @@ def _request(
 
 def test_computed_envelope_is_deterministic_and_below_hard_cap() -> None:
     assert maximum_text_canary_cost() == Decimal("0.746389")
-    assert visual_recomposition_worst_case() == Decimal("0.230840")
-    assert maximum_canary_cost() == Decimal("0.977229")
+    assert visual_recomposition_worst_case() == Decimal("0.488")
+    assert maximum_canary_cost() == Decimal("1.234389")
     assert maximum_canary_cost() <= CANARY_HARD_CAP_USD
     assert CANARY_MODEL_ROUTE == ("gpt-5.6-luna", "gpt-5.6-terra")
     assert CANARY_MAX_PROVIDER_DISPATCHES == 12

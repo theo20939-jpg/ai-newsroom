@@ -264,7 +264,7 @@ return {'reserved', '', tostring(attempt)}
         *,
         execution_id: str,
         capability_name: str,
-        status: Literal["success", "failed"],
+        status: Literal["success", "failed", "cost_bound_exceeded"],
         accounted_cost: Decimal | None,
         audit_fields: dict[str, str],
     ) -> None:
@@ -285,13 +285,13 @@ return {'reserved', '', tostring(attempt)}
         try:
             if not await self._redis.exists(key):
                 raise BudgetExceededError("Image reservation disappeared before settlement")
-            if status == "success" and accounted_cost is not None:
+            if status in ("success", "cost_bound_exceeded") and accounted_cost is not None:
                 script = """
 local current = redis.call('HGET', KEYS[3], 'status')
 if current ~= 'reserved' then return 0 end
 local reserved = tonumber(redis.call('HGET', KEYS[3], 'reserved_cost_usd') or '0')
 local actual = tonumber(ARGV[1])
-if actual > 0 and actual <= reserved then
+if actual > 0 then
   local delta = actual - reserved
   redis.call('INCRBYFLOAT', KEYS[1], tostring(delta))
   redis.call('INCRBYFLOAT', KEYS[2], tostring(delta))

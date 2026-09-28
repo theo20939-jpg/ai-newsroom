@@ -244,6 +244,10 @@ class CapabilityUsage(BaseModel):
 
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
+    # Image API usage breakdown. Populated only when the provider reports it; GPT Image 2.5
+    # prices text and image inputs differently, so exact post-dispatch accounting requires both.
+    text_input_tokens: int | None = Field(default=None, ge=0)
+    image_input_tokens: int | None = Field(default=None, ge=0)
     units: int | None = Field(default=None, ge=0)
     unit_type: str | None = None
     # API cost optimization (docs/api_cost_optimization_report.md §8): populated only when the

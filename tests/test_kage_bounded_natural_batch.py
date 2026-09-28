@@ -79,6 +79,8 @@ class World:
                        "actual_cost_usd": None if spec.get("cost_gap") and i == 0 else str(per),
                        "reserved_max_cost_usd": "0.1"} for i in range(6)]
         dispatches[-1]["actual_cost_usd"] = str(cost - per * 5) if not spec.get("cost_gap") else str(per)
+        if spec.get("exceeded"):
+            dispatches[-1].update(stage="visual_generation", status="ACTUAL_EXCEEDED_RESERVATION")
         status = spec.get("status", "DELIVERED")
         sends = []
         if status == "DELIVERED" or spec.get("sends"):
@@ -129,8 +131,8 @@ async def _run(tmp_path: Path, specs: list[dict], limits: BatchLimits = BatchLim
 
 def test_release_constants_are_the_accepted_bounds():
     assert (batch.MAX_ATTEMPTS, batch.MAX_DELIVERIES, batch.MIN_DESIRED_ATTEMPTS) == (10, 10, 5)
-    assert batch.BATCH_HARD_CAP_USD == Decimal("4.89")
-    assert batch.PER_STORY_MAX_USD == Decimal("0.977229")  # text 0.746389 + visual 0.230840
+    assert batch.BATCH_HARD_CAP_USD == Decimal("6.18")
+    assert batch.PER_STORY_MAX_USD == Decimal("1.234389")  # text 0.746389 + OpenAI visual 0.488 (provisional)
     assert batch.NATURAL_WINDOW_SECONDS == 12 * 3600
 
 
@@ -163,25 +165,33 @@ async def test_never_more_than_ten_deliveries(tmp_path):
 
 @pytest.mark.asyncio
 async def test_reserve_before_next_claim(tmp_path):
-    manifest, world = await _run(tmp_path, [{"cost": "0.70"} for _ in range(10)])
-    # after 6 stories: 4.20 spent; 4.20 + 0.977229 (text+visual worst case) > 4.89 -> no 7th claim
+    manifest, world = await _run(tmp_path, [{"cost": "0.90"} for _ in range(10)])
+    # after 6 stories: 5.40 spent; 5.40 + 1.234389 (text+visual worst case) > 6.18 -> no 7th claim
     assert manifest["terminal_reason"] == "BUDGET_RESERVATION_EXHAUSTED" and manifest["clean"]
-    assert len(world.claims) == 6 and Decimal(manifest["cumulative_cost_usd"]) == Decimal("4.20")
+    assert len(world.claims) == 6 and Decimal(manifest["cumulative_cost_usd"]) == Decimal("5.40")
 
 
 @pytest.mark.asyncio
 async def test_worst_case_every_story_cannot_exceed_the_cap(tmp_path):
-    manifest, world = await _run(tmp_path, [{"cost": "0.977229"} for _ in range(10)])
-    # the $4.89 cap guarantees exactly 5 fully-reserved worst-case stories, never a 6th
+    manifest, world = await _run(tmp_path, [{"cost": "1.234389"} for _ in range(10)])
+    # the $6.18 cap guarantees exactly 5 fully-reserved worst-case stories, never a 6th
     assert len(world.claims) == 5
-    assert Decimal(manifest["cumulative_cost_usd"]) == Decimal("4.886145") <= Decimal("4.89")
+    assert Decimal(manifest["cumulative_cost_usd"]) == Decimal("6.171945") <= Decimal("6.18")
 
 
 @pytest.mark.asyncio
 async def test_story_above_per_story_max_is_a_hard_budget_violation(tmp_path):
-    manifest, _ = await _run(tmp_path, [{"cost": "1.00"}, {}])
+    manifest, _ = await _run(tmp_path, [{"cost": "1.30"}, {}])
     assert manifest["terminal_reason"] == "HARD_BUDGET_VIOLATION" and not manifest["clean"]
     assert manifest["attempts"] == 1
+
+
+@pytest.mark.asyncio
+async def test_visual_actual_above_its_provisional_reservation_stops_the_batch(tmp_path):
+    # OpenAI publishes no per-image token bound: a wrong provisional cap must fail closed, not continue
+    manifest, world = await _run(tmp_path, [{"cost": "0.60", "exceeded": True}, {}])
+    assert manifest["terminal_reason"] == "HARD_BUDGET_VIOLATION" and not manifest["clean"]
+    assert manifest["attempts"] == 1 and len(world.claims) == 1
 
 
 @pytest.mark.asyncio

@@ -80,16 +80,9 @@ def _common_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "newsroom_telegram_chat_id", _REAL_CHAT_ID)
     monkeypatch.setattr(settings, "news_topic_id", _REAL_NEWS_TOPIC_ID)
     monkeypatch.setattr(settings, "content_generation_dry_run", False)
-    # Phase V2.10R: the recomposition tests below patch `GeminiImageAdapter` itself so no real
-    # network call ever happens, but `maybe_recompose()` (services/editorial_recomposition.py)
-    # checks `settings.gemini_api_key` and fail-opens to ORIGINAL_SOURCE with
-    # fallback_reason="gemini_api_key_absent" *before* ever constructing/calling that mock if the
-    # key is falsy - a real, previously-silent dependency on whatever ambient `.env` the test
-    # happened to run under (present and non-empty on this dev machine, confirmed absent on the
-    # VPS ephemeral test container - the actual root cause of the real VPS failure in
-    # test_recomposed_image_receives_adaptive_branding). A dummy, deterministic key here makes
-    # every test in this file self-contained regardless of environment.
-    monkeypatch.setattr(settings, "gemini_api_key", SecretStr("test-gemini-api-key-do-not-use"))
+    # The recomposition tests patch `OpenAIImageAdapter` so no real network call happens. A dummy,
+    # deterministic key crosses the production credential boundary before that mock is built.
+    monkeypatch.setattr(settings, "openai_api_key", SecretStr("test-openai-api-key-do-not-use"))
     monkeypatch.setattr(settings, "copywriting_prompt_version", "6")
 
 
@@ -185,7 +178,7 @@ def _stored_media_group_candidates(tmp_path, monkeypatch: pytest.MonkeyPatch, *,
 def _valid_response(image_bytes: bytes | None = None) -> ImageGenerationResponse:
     return ImageGenerationResponse(
         image_bytes=image_bytes or _jpeg_bytes(1376, 768), mime_type="image/jpeg",
-        model_used="gemini-3.1-flash-image", provider="gemini",
+        model_used="gpt-image-2.5-sunburst", provider="openai",
         usage=CapabilityUsage(input_tokens=100, output_tokens=50, units=1, unit_type="image"),
         request_id="v1_test", cost_usd=None,
     )
@@ -298,7 +291,9 @@ async def test_recomposed_image_receives_adaptive_branding(
     with (
         patch("worker.content_cycle._classify_event_for_router_treatment", new=AsyncMock(return_value=_standard_decision())),
         patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[candidate])),
-        patch("services.editorial_recomposition.GeminiImageAdapter", return_value=fake_image_gateway),
+        patch("services.editorial_recomposition.OpenAIImageAdapter", return_value=fake_image_gateway),
+        patch("services.budgeted_image_execution.BudgetedImageGateway", side_effect=lambda *, gateway, **_: gateway),
+        patch("services.budgeted_image_execution.build_budgeted_image_executor", return_value=object()),
         caplog.at_level("INFO"),
     ):
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
@@ -314,7 +309,7 @@ async def test_recomposition_failure_falls_open_to_original_source_then_adaptive
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch, tmp_path, caplog,
 ) -> None:
-    from integrations.llm_gateway.providers.gemini_image_adapter import GeminiImageAdapterError
+    from integrations.llm_gateway.providers.openai_image_adapter import OpenAIImageAdapterError
 
     _common_settings(monkeypatch)
     settings.editorial_recomposition_mode = "live"
@@ -325,12 +320,14 @@ async def test_recomposition_failure_falls_open_to_original_source_then_adaptive
     candidate = _stored_candidate(tmp_path, monkeypatch)
 
     fake_image_gateway = AsyncMock()
-    fake_image_gateway.generate_image = AsyncMock(side_effect=GeminiImageAdapterError("boom"))
+    fake_image_gateway.generate_image = AsyncMock(side_effect=OpenAIImageAdapterError("boom"))
 
     with (
         patch("worker.content_cycle._classify_event_for_router_treatment", new=AsyncMock(return_value=_standard_decision())),
         patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[candidate])),
-        patch("services.editorial_recomposition.GeminiImageAdapter", return_value=fake_image_gateway),
+        patch("services.editorial_recomposition.OpenAIImageAdapter", return_value=fake_image_gateway),
+        patch("services.budgeted_image_execution.BudgetedImageGateway", side_effect=lambda *, gateway, **_: gateway),
+        patch("services.budgeted_image_execution.build_budgeted_image_executor", return_value=object()),
         caplog.at_level("INFO"),
     ):
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
@@ -596,11 +593,11 @@ async def test_cached_file_id_with_source_risk_still_brands_with_lower_signature
     monkeypatch: pytest.MonkeyPatch, tmp_path, caplog,
 ) -> None:
     """Same cached-file_id gap, combined with a real source-risk warning: `maybe_recompose()`
-    must never even be called (zero Gemini calls, the risk gate skips it entirely, unchanged by
+    must never even be called (zero provider calls, the risk gate skips it entirely, unchanged by
     this phase), yet MASTER NEWS branding must still run on the promoted ORIGINAL_SOURCE bytes,
     with `disable_lower_signature=True` exactly as the pre-existing risk contract requires."""
-    _common_settings(monkeypatch)  # already sets a dummy gemini_api_key via monkeypatch
-    settings.editorial_recomposition_mode = "live"  # proves the risk gate - not the mode - is why Gemini is skipped
+    _common_settings(monkeypatch)
+    settings.editorial_recomposition_mode = "live"  # proves the risk gate, not mode, skips OpenAI
     await _seed_eligible_event(factory, test_source)
     _gateway, registry = _v6_capability_registry()
     fake_bot = AsyncMock()
@@ -610,13 +607,13 @@ async def test_cached_file_id_with_source_risk_still_brands_with_lower_signature
     with (
         patch("worker.content_cycle._classify_event_for_router_treatment", new=AsyncMock(return_value=_standard_decision())),
         patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[candidate])),
-        patch("services.editorial_recomposition.GeminiImageAdapter") as mock_adapter_class,
+        patch("services.editorial_recomposition.OpenAIImageAdapter") as mock_adapter_class,
         caplog.at_level("INFO"),
     ):
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     assert result.notified == 1
-    mock_adapter_class.assert_not_called()  # zero Gemini calls - the risk gate skips it entirely
+    mock_adapter_class.assert_not_called()  # zero provider calls - the risk gate skips it entirely
 
     branding_records = [r for r in caplog.records if r.msg == "master_news_branding_applied"]
     assert len(branding_records) == 1

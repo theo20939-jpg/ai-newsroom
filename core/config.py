@@ -54,12 +54,10 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr | None = None
     openai_api_key: SecretStr | None = None
     anthropic_api_key: SecretStr | None = None
-    # Phase V2.1 (docs/nnj_source_faithful_editorial_visual_recomposition_v1.md): the Gemini image
-    # adapter's own credential, consumed by `services/editorial_recomposition.py` (live NEWS photo
-    # recomposition, gated by `editorial_recomposition_mode`) and, as of the REAL IMAGE PROVIDER
-    # FINALIZATION phase, also by `services/meme_generation_orchestrator.py` (gated by
-    # `meme_image_generation_mode == "enforce"`) - the same credential, two independent gated
-    # consumers, never a provider-specific key duplicated per feature.
+    # DORMANT since the KAGE OpenAI-only provider migration (2026-09-28): the Gemini image adapter's
+    # credential. No KAGE runtime path reads it any more (NEWS recomposition, NEWS generation and
+    # meme images are all OpenAI); only the offline bake-off tool and the dormant adapter's own
+    # tests reference it. Optional - KAGE starts without it.
     gemini_api_key: SecretStr | None = None
     max_daily_ai_cost: float | None = None
     max_monthly_ai_cost: float | None = None
@@ -774,9 +772,8 @@ class Settings(BaseSettings):
     # rather than a growing Gemini-specific prompt-rewrite/policy-recovery subsystem, the provider
     # was replaced). If `openai_api_key` is unset while this is "enforce", the orchestrator FAILS
     # CLOSED (`MemeGenerationOutcome.status == "provider_not_configured"`) rather than silently
-    # falling back to Mock. `GeminiImageAdapter` remains the live provider for NEWS photo
-    # recomposition (`services/editorial_recomposition.py`) - completely unaffected by this
-    # setting. Still defaults to "off" - flipping this to "enforce" is the explicit morning
+    # falling back to Mock. NEWS photo recomposition (`services/editorial_recomposition.py`) is a
+    # separate OpenAI consumer - completely unaffected by this setting. Still defaults to "off" - flipping this to "enforce" is the explicit morning
     # activation decision, not made by this phase.
     meme_image_generation_mode: Literal["off", "dry_run", "enforce"] = "off"
     meme_image_max_bytes: int = Field(default=10_000_000, gt=0)
@@ -903,15 +900,15 @@ class Settings(BaseSettings):
     # "off"/"dry_run"/"enforce" values). "off" (default): zero
     # ImageGenerationGateway calls, byte-identical to pre-V2.3 behavior. "dry_run": eligibility is
     # evaluated and the request that WOULD be sent is built, but no network call is made. "live":
-    # a real gemini-3.1-flash-image call is made when eligible; any failure fails open to the
-    # original source bytes (services/editorial_recomposition.py::maybe_recompose(), never a
-    # fallback to gemini-3-pro-image or gpt-image-2). "live" exists in this type after V2.3 but is
+    # a real OpenAI gpt-image-2.5-sunburst edit call is made when eligible; any failure fails open to
+    # the original source bytes (services/editorial_recomposition.py::maybe_recompose(), never a
+    # fallback to a second model or provider). "live" exists in this type after V2.3 but is
     # NOT exercised by any live call in that phase - a separate, explicitly-authorized canary
     # phase is required before this is ever set to "live" outside a test.
     editorial_recomposition_mode: Literal["off", "dry_run", "live"] = "off"
     # KAGE Telegram NEWS visual fallback (services/kage_visual_fallback.py): when no usable source
-    # photo resolved, "live" tries ONE evidence-grounded generated editorial image (Gemini
-    # text-to-image, inside the per-story cost envelope), then a deterministic local KAGE typography
+    # photo resolved, "live" tries ONE evidence-grounded generated editorial image (OpenAI
+    # gpt-image-2.5-flare text-to-image, inside the per-story cost envelope), then a deterministic local KAGE typography
     # card, then VISUAL_HOLD. "off" (default) keeps the plain VISUAL_HOLD. Never a text-only post.
     kage_news_visual_fallback_mode: Literal["off", "live"] = "off"
     brand_asset_path: str = "assets/brand/kage_watermark.png"

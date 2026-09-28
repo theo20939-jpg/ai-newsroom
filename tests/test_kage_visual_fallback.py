@@ -75,7 +75,7 @@ class FakeGateway:
         if self.error:
             raise self.error
         return ImageGenerationResponse(image_bytes=self.image, mime_type="image/jpeg", model_used=VISUAL_RECOMPOSITION_MODEL,
-                                       provider="gemini", usage=CapabilityUsage(units=1, unit_type="image"), cost_usd=self.cost)
+                                       provider="openai", usage=CapabilityUsage(units=1, unit_type="image"), cost_usd=self.cost)
 
 
 # --- generation brief -------------------------------------------------------------------------------
@@ -191,9 +191,9 @@ def test_typography_card_refuses_a_headline_that_cannot_fit():
 # --- cost envelope --------------------------------------------------------------------------------------
 
 def test_visual_branches_are_mutually_exclusive_so_the_hard_max_does_not_double_reserve():
-    assert visual_recomposition_worst_case() == Decimal("0.230840")  # edit and text-to-image priced alike
-    assert maximum_canary_cost() == Decimal("0.977229") == canary.MAX_COST == batch.PER_STORY_MAX_USD
-    assert (5 * maximum_canary_cost()).quantize(Decimal("0.01"), rounding=ROUND_CEILING) == Decimal("4.89")
+    assert visual_recomposition_worst_case() == Decimal("0.488")  # max(OpenAI edit 0.488, generation 0.440)
+    assert maximum_canary_cost() == Decimal("1.234389") == canary.MAX_COST == batch.PER_STORY_MAX_USD
+    assert (5 * maximum_canary_cost()).quantize(Decimal("0.01"), rounding=ROUND_CEILING) == Decimal("6.18")
     envelope = TelegramCanaryEnvelope()
     envelope.authorize_visual_dispatch(stage=VISUAL_RECOMPOSITION_STAGE, model_id=VISUAL_RECOMPOSITION_MODEL,
                                        reserved_usd=visual_recomposition_worst_case())

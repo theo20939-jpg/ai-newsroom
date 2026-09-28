@@ -3,9 +3,9 @@
 Proves (per the phase's own Section 4 requirements): the harness cannot send Telegram, makes no
 provider calls at import time, reuses real production helpers rather than duplicating their
 logic, validates the source-only keyboard, validates the destination, persists a self-contained
-manifest/package with correct hashes, and caps Gemini recomposition to at most one call at
+manifest/package with correct hashes, and caps OpenAI recomposition to at most one call at
 runtime. No real DB session, no real Postgres/Redis, no real Gemini/OpenAI/Anthropic call
-anywhere in this file - `services.editorial_recomposition.GeminiImageAdapter` is always mocked."""
+anywhere in this file - `services.editorial_recomposition.OpenAIImageAdapter` is always mocked."""
 from __future__ import annotations
 
 import ast
@@ -23,7 +23,7 @@ from PIL import Image
 from core.config import settings
 from schemas.capability import CapabilityUsage
 from integrations.llm_gateway.image_protocol import ImageGenerationResponse
-from integrations.llm_gateway.providers.gemini_image_adapter import GeminiImageAdapterError
+from integrations.llm_gateway.providers.openai_image_adapter import OpenAIImageAdapterError
 from services.image_persistence import EditorialImageCandidate
 from services.nnj_master_news_overlay import apply_master_news_branding
 from services.telegram_routing import RouteTarget
@@ -49,10 +49,10 @@ def _fake_candidate(*, warnings: list[str] | None = None) -> EditorialImageCandi
     )
 
 
-def _valid_gemini_response() -> ImageGenerationResponse:
+def _valid_openai_response() -> ImageGenerationResponse:
     return ImageGenerationResponse(
         image_bytes=_jpeg_bytes(1376, 768), mime_type="image/jpeg",
-        model_used="gemini-3.1-flash-image", provider="gemini",
+        model_used="gpt-image-2.5-sunburst", provider="openai",
         usage=CapabilityUsage(input_tokens=100, output_tokens=50, units=1, unit_type="image"),
         request_id="v1_test", cost_usd=None,
     )
@@ -184,12 +184,16 @@ def test_render_final_html_includes_ninja_pulse_cta_exactly_once() -> None:
 @pytest.mark.asyncio
 async def test_recomposition_capped_to_one_call_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "editorial_recomposition_mode", "live")
-    monkeypatch.setattr(settings, "gemini_api_key", SecretStr("test-gemini-api-key-do-not-use"))
+    monkeypatch.setattr(settings, "openai_api_key", SecretStr("test-openai-api-key-do-not-use"))
     fake_gateway = AsyncMock()
-    fake_gateway.generate_image = AsyncMock(return_value=_valid_gemini_response())
+    fake_gateway.generate_image = AsyncMock(return_value=_valid_openai_response())
     candidate = _fake_candidate(warnings=None)
 
-    with patch("services.editorial_recomposition.GeminiImageAdapter", return_value=fake_gateway):
+    with (
+        patch("services.editorial_recomposition.OpenAIImageAdapter", return_value=fake_gateway),
+        patch("services.budgeted_image_execution.BudgetedImageGateway", side_effect=lambda *, gateway, **_: gateway),
+        patch("services.budgeted_image_execution.build_budgeted_image_executor", return_value=object()),
+    ):
         chosen_bytes, result, visual_path = await stage_a.apply_visual_path(candidate, _jpeg_bytes())
 
     assert visual_path == "RECOMPOSE"
@@ -201,13 +205,17 @@ async def test_recomposition_capped_to_one_call_on_success(monkeypatch: pytest.M
 @pytest.mark.asyncio
 async def test_recomposition_capped_to_one_call_on_failure_falls_open(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "editorial_recomposition_mode", "live")
-    monkeypatch.setattr(settings, "gemini_api_key", SecretStr("test-gemini-api-key-do-not-use"))
+    monkeypatch.setattr(settings, "openai_api_key", SecretStr("test-openai-api-key-do-not-use"))
     fake_gateway = AsyncMock()
-    fake_gateway.generate_image = AsyncMock(side_effect=GeminiImageAdapterError("boom"))
+    fake_gateway.generate_image = AsyncMock(side_effect=OpenAIImageAdapterError("boom"))
     candidate = _fake_candidate(warnings=None)
     source_bytes = _jpeg_bytes()
 
-    with patch("services.editorial_recomposition.GeminiImageAdapter", return_value=fake_gateway):
+    with (
+        patch("services.editorial_recomposition.OpenAIImageAdapter", return_value=fake_gateway),
+        patch("services.budgeted_image_execution.BudgetedImageGateway", side_effect=lambda *, gateway, **_: gateway),
+        patch("services.budgeted_image_execution.build_budgeted_image_executor", return_value=object()),
+    ):
         chosen_bytes, result, visual_path = await stage_a.apply_visual_path(candidate, source_bytes)
 
     assert visual_path == "ORIGINAL_SOURCE"
@@ -218,13 +226,13 @@ async def test_recomposition_capped_to_one_call_on_failure_falls_open(monkeypatc
 @pytest.mark.asyncio
 async def test_recomposition_never_attempted_when_source_risk_flagged(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "editorial_recomposition_mode", "live")
-    monkeypatch.setattr(settings, "gemini_api_key", SecretStr("test-gemini-api-key-do-not-use"))
+    monkeypatch.setattr(settings, "openai_api_key", SecretStr("test-openai-api-key-do-not-use"))
     fake_gateway = AsyncMock()
-    fake_gateway.generate_image = AsyncMock(return_value=_valid_gemini_response())
+    fake_gateway.generate_image = AsyncMock(return_value=_valid_openai_response())
     candidate = _fake_candidate(warnings=["possible_watermark"])
     source_bytes = _jpeg_bytes()
 
-    with patch("services.editorial_recomposition.GeminiImageAdapter", return_value=fake_gateway):
+    with patch("services.editorial_recomposition.OpenAIImageAdapter", return_value=fake_gateway):
         chosen_bytes, result, visual_path = await stage_a.apply_visual_path(candidate, source_bytes)
 
     assert visual_path == "ORIGINAL_SOURCE"

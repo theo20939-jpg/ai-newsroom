@@ -25,6 +25,22 @@ from services.image_pricing import ImageExecutionProfile, ImagePriceQuote, Image
 ImageExecutionMode = Literal["off", "dry_run", "live"]
 
 
+class ImageCostUnaccountedError(RuntimeError):
+    retryable = False
+
+
+class ImageCostBoundExceededError(RuntimeError):
+    retryable = False
+
+    def __init__(self, *, actual_cost_usd: Decimal, reserved_cost_usd: Decimal, response: ImageGenerationResponse) -> None:
+        super().__init__(
+            f"actual image cost ${actual_cost_usd} exceeded provisional reservation ${reserved_cost_usd}"
+        )
+        self.actual_cost_usd = actual_cost_usd
+        self.reserved_cost_usd = reserved_cost_usd
+        self.response = response
+
+
 @dataclass(frozen=True)
 class BudgetedImageResult:
     status: Literal["off", "dry_run", "generated", "duplicate", "attempt_limit"]
@@ -129,27 +145,80 @@ class BudgetedImageExecutor:
             )
             raise
 
+        if quote.requires_reported_usage and (
+            response.usage.input_tokens is None or response.usage.output_tokens is None
+        ):
+            # Provisional-cap pricing cannot cost a response without token usage: book the full
+            # reservation against the budget and refuse the image so no unaccounted visual ships.
+            await self._budget_guard.complete_image_reservation(
+                execution_id=execution_id,
+                capability_name=capability_name,
+                status="success",
+                accounted_cost=quote.worst_case_cost_usd,
+                audit_fields={
+                    **base_audit,
+                    "accounted_cost_usd": str(quote.worst_case_cost_usd),
+                    "accounted_cost_semantics": "usage_missing_worst_case_booked",
+                    "provider_request_id": response.request_id or "",
+                    "provider_status_code": str(response.provider_status_code or ""),
+                },
+            )
+            raise ImageCostUnaccountedError("paid image response carried no token usage; cost unaccounted")
+
+        if quote.requires_detailed_input_usage and (
+            response.usage.text_input_tokens is None or response.usage.image_input_tokens is None
+        ):
+            await self._budget_guard.complete_image_reservation(
+                execution_id=execution_id,
+                capability_name=capability_name,
+                status="success",
+                accounted_cost=quote.worst_case_cost_usd,
+                audit_fields={
+                    **base_audit,
+                    "accounted_cost_usd": str(quote.worst_case_cost_usd),
+                    "accounted_cost_semantics": "usage_breakdown_missing_worst_case_booked",
+                    "provider_request_id": response.request_id or "",
+                    "provider_status_code": str(response.provider_status_code or ""),
+                },
+            )
+            raise ImageCostUnaccountedError(
+                "paid image response carried no text/image input usage breakdown; cost unaccounted"
+            )
+
         accounted_cost = quote.cost_from_usage(
             input_tokens=response.usage.input_tokens,
             output_tokens=response.usage.output_tokens,
+            text_input_tokens=response.usage.text_input_tokens,
+            image_input_tokens=response.usage.image_input_tokens,
         )
         if accounted_cost <= 0:
             # A live paid provider must never silently become a zero-cost record.
             accounted_cost = quote.expected_cost_usd
+        bound_exceeded = accounted_cost > quote.worst_case_cost_usd
         await self._budget_guard.complete_image_reservation(
             execution_id=execution_id,
             capability_name=capability_name,
-            status="success",
+            status="cost_bound_exceeded" if bound_exceeded else "success",
             accounted_cost=accounted_cost,
             audit_fields={
                 **base_audit,
                 "accounted_cost_usd": str(accounted_cost),
                 "accounted_cost_semantics": quote.cost_semantics,
                 "provider_request_id": response.request_id or "",
+                "provider_status_code": str(response.provider_status_code or ""),
                 "input_tokens": str(response.usage.input_tokens or 0),
+                "text_input_tokens": str(response.usage.text_input_tokens or 0),
+                "image_input_tokens": str(response.usage.image_input_tokens or 0),
                 "output_tokens": str(response.usage.output_tokens or 0),
+                "cost_bound_exceeded": "true" if bound_exceeded else "false",
             },
         )
+        if bound_exceeded:
+            raise ImageCostBoundExceededError(
+                actual_cost_usd=accounted_cost,
+                reserved_cost_usd=quote.worst_case_cost_usd,
+                response=response,
+            )
         return BudgetedImageResult(
             status="generated", quote=quote, response=response,
             accounted_cost_usd=accounted_cost, cost_semantics=quote.cost_semantics,

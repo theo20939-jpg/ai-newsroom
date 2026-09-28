@@ -25,8 +25,8 @@ from uuid import UUID
 MIN_DESIRED_ATTEMPTS = 5
 MAX_ATTEMPTS = 10
 MAX_DELIVERIES = 10
-PER_STORY_MAX_USD = Decimal("0.977229")  # text 0.746389 + visual 0.230840 (one ledger)
-BATCH_HARD_CAP_USD = Decimal("4.89")  # >= 5 x 0.977229, rounded up: 5 fully-reserved stories
+PER_STORY_MAX_USD = Decimal("1.234389")  # text 0.746389 + one OpenAI visual 0.488 (provisional cap)
+BATCH_HARD_CAP_USD = Decimal("6.18")  # >= 5 x 1.234389, rounded up: 5 fully-reserved stories
 # Natural waiting window for the whole batch: 12h covers a full daytime news cycle without leaving
 # an unattended process running overnight into a second one. Fewer than MIN_DESIRED_ATTEMPTS
 # eligible events inside it ends cleanly as INSUFFICIENT_NATURAL_VOLUME.
@@ -281,6 +281,10 @@ class BoundedNaturalBatch:
     async def _check_story(self, event_id: UUID, outcome: dict, record: dict, cost: Decimal, gap: bool) -> None:
         if gap:
             raise BatchStop("COST_ACCOUNTING_FAILURE", f"dispatch without actual cost for {event_id}")
+        exceeded = [d.get("stage") for d in outcome.get("provider_dispatches") or []
+                    if d.get("status") == "ACTUAL_EXCEEDED_RESERVATION"]
+        if exceeded:  # a provisional per-call cap was wrong: stop before any further spend
+            raise BatchStop("HARD_BUDGET_VIOLATION", f"actual cost exceeded reservation at {exceeded}")
         if cost > self.limits.per_story_max_usd or self.spent > self.limits.batch_cap_usd:
             raise BatchStop("HARD_BUDGET_VIOLATION", f"story ${cost}, cumulative ${self.spent}")
         cycle = outcome.get("cycle") or {}

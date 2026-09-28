@@ -4,7 +4,7 @@ Covers, per that phase's own Stage 11 groups: A) the locked Candidate C contract
 production overlay-aware prompt, C) the two-level collision classifier, D) runtime mode/fallback
 policy, E) telemetry propagation, F) the source-bytes/storage fix, G) branding suppression. No
 real network call anywhere in this file - LIVE-path tests inject a fake `ImageGenerationGateway`-
-shaped double, never a real `GeminiImageAdapter`."""
+shaped double, never a real `OpenAIImageAdapter`."""
 from __future__ import annotations
 
 import ast
@@ -81,7 +81,7 @@ class _FakeGateway:
 
 _DEFAULT_RESPONSE = ImageGenerationResponse(
     image_bytes=b"placeholder",
-    mime_type="image/jpeg", model_used="gemini-3.1-flash-image", provider="gemini",
+    mime_type="image/jpeg", model_used="gpt-image-2.5-sunburst", provider="openai",
     usage=CapabilityUsage(input_tokens=744, output_tokens=1441, units=1, unit_type="image"),
     request_id="v1_test-request-id",
     cost_usd=None,
@@ -166,7 +166,7 @@ def test_hand_and_product_treated_as_one_factual_group() -> None:
     assert "iPhone" in combined and "hand" in combined
 
 
-def test_gemini_never_instructed_to_draw_branding() -> None:
+def test_image_model_never_instructed_to_draw_branding() -> None:
     combined = build_overlay_aware_recomposition_prompt()
     assert "NNJ BRAND RULE" in combined
     assert "Do not generate NNJ branding, the NNJ logo, or the pulse line" in combined
@@ -248,22 +248,22 @@ async def test_mode_dry_run_zero_provider_calls(monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.asyncio
-async def test_live_success_calls_flash_exactly_once_with_overlay_aware_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_live_success_calls_sunburst_exactly_once_with_overlay_aware_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "editorial_recomposition_mode", "live")
     gateway = _FakeGateway(response=_valid_response())
     result = await maybe_recompose(source_image_bytes=_jpeg_bytes(), gateway=gateway)
     assert result.used_recomposed_image is True
     assert len(gateway.calls) == 1
     assert gateway.calls[0].prompt == build_overlay_aware_recomposition_prompt()
-    assert result.model == "gemini-3.1-flash-image"
+    assert result.model == "gpt-image-2.5-sunburst" and result.provider == "openai"
 
 
 @pytest.mark.asyncio
 async def test_provider_failure_fails_open_to_original_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
-    from integrations.llm_gateway.providers.gemini_image_adapter import GeminiImageAdapterError
+    from integrations.llm_gateway.providers.openai_image_adapter import OpenAIImageAdapterError
 
     monkeypatch.setattr(settings, "editorial_recomposition_mode", "live")
-    gateway = _FakeGateway(exc=GeminiImageAdapterError("HTTP 500"))
+    gateway = _FakeGateway(exc=OpenAIImageAdapterError("HTTP 500"))
     source = _jpeg_bytes()
     result = await maybe_recompose(source_image_bytes=source, gateway=gateway)
     assert result.used_recomposed_image is False
@@ -271,24 +271,23 @@ async def test_provider_failure_fails_open_to_original_bytes(monkeypatch: pytest
 
 
 @pytest.mark.asyncio
-async def test_no_automatic_pro_or_gpt_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
-    from integrations.llm_gateway.providers.gemini_image_adapter import GeminiImageAdapterError
+async def test_no_automatic_second_model_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    from integrations.llm_gateway.providers.openai_image_adapter import OpenAIImageAdapterError
 
     monkeypatch.setattr(settings, "editorial_recomposition_mode", "live")
-    gateway = _FakeGateway(exc=GeminiImageAdapterError("boom"))
+    gateway = _FakeGateway(exc=OpenAIImageAdapterError("boom"))
     result = await maybe_recompose(source_image_bytes=_jpeg_bytes(), gateway=gateway)
-    assert result.model in (None, "gemini-3.1-flash-image")
-    assert result.model != "gemini-3-pro-image"
+    assert result.model in (None, "gpt-image-2.5-sunburst")
+    assert result.used_recomposed_image is False and len(gateway.calls) == 1
 
 
-def test_no_pro_or_gpt_import_anywhere_in_editorial_recomposition() -> None:
+def test_no_gemini_import_anywhere_in_editorial_recomposition() -> None:
     tree = ast.parse(Path("services/editorial_recomposition.py").read_text(encoding="utf-8"))
-    source_text = Path("services/editorial_recomposition.py").read_text(encoding="utf-8")
-    assert "gemini-3-pro-image" not in source_text or "GEMINI_3_PRO_IMAGE" not in source_text
     imported = {
         (node.module or "") for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
     }
-    assert not any("openai" in m.lower() for m in imported)
+    assert not any("gemini" in m.lower() for m in imported)
+    assert "integrations.llm_gateway.providers.openai_image_adapter" in imported
 
 
 # ---------------------------------------------------------------------------
@@ -329,10 +328,10 @@ async def test_missing_metadata_remains_none_when_mode_off(monkeypatch: pytest.M
 
 @pytest.mark.asyncio
 async def test_missing_metadata_remains_none_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    from integrations.llm_gateway.providers.gemini_image_adapter import GeminiImageAdapterError
+    from integrations.llm_gateway.providers.openai_image_adapter import OpenAIImageAdapterError
 
     monkeypatch.setattr(settings, "editorial_recomposition_mode", "live")
-    gateway = _FakeGateway(exc=GeminiImageAdapterError("boom"))
+    gateway = _FakeGateway(exc=OpenAIImageAdapterError("boom"))
     result = await maybe_recompose(source_image_bytes=_jpeg_bytes(), gateway=gateway)
     assert result.request_id is None
     assert result.input_tokens is None
@@ -342,7 +341,7 @@ def test_repr_never_exposes_image_bytes_or_secrets() -> None:
     result = RecompositionResult(
         used_recomposed_image=True, image_bytes=b"\xff\xd8\xff" * 5000, mode="live",
         eligibility=__import__("services.editorial_recomposition", fromlist=["EligibilityDecision"]).EligibilityDecision(True, "ok"),
-        provider="gemini", model="gemini-3.1-flash-image", source_sha256="a" * 64, result_sha256="b" * 64,
+        provider="openai", model="gpt-image-2.5-sunburst", source_sha256="a" * 64, result_sha256="b" * 64,
         fallback_reason=None, latency_ms=100.0, request_id="v1_x", input_tokens=1, output_tokens=1, units=1, unit_type="image",
     )
     text = repr(result)

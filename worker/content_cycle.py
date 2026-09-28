@@ -2511,7 +2511,7 @@ async def _run_content_cycle_impl(
                                 # Phase V2.7 §8: ORIGINAL_SOURCE is a first-class successful outcome,
                                 # never merely an error fallback - a candidate whose own already-
                                 # computed warnings flag logo/banner/watermark/lower-third/branded-
-                                # screenshot risk skips the Gemini call entirely (same reused signal
+                                # screenshot risk skips the OpenAI image-edit call (the same reused signal
                                 # services/media_ranking.py already derives from this exact field).
                                 recomposition_source_risk = assess_recomposition_source_risk(resolved_photo_candidate)
                                 if recomposition_source_risk is not None:
@@ -2572,7 +2572,7 @@ async def _run_content_cycle_impl(
 
                                 # Phase V2.16: MASTER NEWS branding must still receive the already-
                                 # selected candidate's real original bytes when photo_input resolved to
-                                # a cached Telegram file_id and Gemini did not produce a new image
+                                # a cached Telegram file_id and the edit produced no replacement image
                                 # (skipped/ineligible/failed/off, or the source-risk gate above skipped
                                 # recomposition entirely) - recomposition_source_bytes already resolved
                                 # them above via the exact same storage read, no new fetch/call here.
@@ -2619,7 +2619,7 @@ async def _run_content_cycle_impl(
                                     # Phase V2.10H: the locked MASTER NEWS visual contract
                                     # (services.nnj_master_news_overlay) is now the production
                                     # branding path for every NEWS image with real source bytes -
-                                    # whether Gemini successfully recomposed it or not. Supersedes
+                                    # whether the OpenAI edit recomposed it successfully or not. Supersedes
                                     # Phase V2.9's Candidate C path (services.nnj_adaptive_overlay,
                                     # apply_adaptive_nnj_branding) - that module and its locked asset
                                     # remain in the repository as historical/fallback evidence, never
@@ -2775,7 +2775,7 @@ async def _run_content_cycle_impl(
                                     # branded") forbids. Independently re-resolves and brands every
                                     # remaining photo using the SAME deterministic function and the
                                     # SAME per-image recomposition-source-risk gate the primary image
-                                    # already receives above - never re-running Gemini recomposition
+                                    # already receives above - without rerunning the recomposition edit
                                     # (out of this phase's scope; only the primary image, already
                                     # resolved earlier, may carry a recomposed image).
                                     if (

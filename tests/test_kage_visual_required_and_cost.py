@@ -62,15 +62,16 @@ NINJA_FOOTER_TEXT = "\U0001F977 KAGE"
 
 def test_new_per_story_hard_max_is_text_plus_one_bounded_visual_dispatch():
     assert maximum_text_canary_cost() == Decimal("0.746389")
-    # gemini-3.1-flash-image standard 1K edit: $0.067/image + 131,072 in x $0.50/M + 32,768 out x $3/M
-    assert visual_recomposition_worst_case() == Decimal("0.067") + Decimal("0.065536") + Decimal("0.098304")
-    assert maximum_canary_cost() == Decimal("0.977229")
+    # gpt-image-2.5-sunburst high 1536x1024 edit (PROVISIONAL caps): 16,000 text x $5/M,
+    # 6,000 image input x $8/M, plus 12,000 image output x $30/M. It dominates flare (0.440).
+    assert visual_recomposition_worst_case() == Decimal("0.080") + Decimal("0.048") + Decimal("0.360")
+    assert maximum_canary_cost() == Decimal("1.234389")
     assert canary.MAX_COST == batch.PER_STORY_MAX_USD == maximum_canary_cost()
 
 
 def test_five_fully_reserved_stories_need_a_larger_batch_cap_than_today():
     required = (5 * maximum_canary_cost()).quantize(Decimal("0.01"), rounding=ROUND_CEILING)
-    assert required == Decimal("4.89") == batch.BATCH_HARD_CAP_USD  # 5 fully-reserved worst-case stories
+    assert required == Decimal("6.18") == batch.BATCH_HARD_CAP_USD  # 5 fully-reserved worst-case stories
 
 
 def _all_text_stages_worst_case(envelope: TelegramCanaryEnvelope) -> None:
@@ -147,7 +148,7 @@ class _FakeImageGateway:
 
 def _response(cost: str | None) -> ImageGenerationResponse:
     return ImageGenerationResponse(image_bytes=_landscape_png(), mime_type="image/png",
-                                   model_used="gemini-3.1-flash-image", provider="gemini",
+                                   model_used="gpt-image-2.5-sunburst", provider="openai",
                                    usage=CapabilityUsage(units=1, unit_type="image"), cost_usd=cost)
 
 
