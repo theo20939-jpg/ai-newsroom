@@ -129,7 +129,7 @@ async def _run(tmp_path: Path, specs: list[dict], limits: BatchLimits = BatchLim
 
 def test_release_constants_are_the_accepted_bounds():
     assert (batch.MAX_ATTEMPTS, batch.MAX_DELIVERIES, batch.MIN_DESIRED_ATTEMPTS) == (10, 10, 5)
-    assert batch.BATCH_HARD_CAP_USD == Decimal("3.74")
+    assert batch.BATCH_HARD_CAP_USD == Decimal("4.89")
     assert batch.PER_STORY_MAX_USD == Decimal("0.977229")  # text 0.746389 + visual 0.230840
     assert batch.NATURAL_WINDOW_SECONDS == 12 * 3600
 
@@ -164,17 +164,17 @@ async def test_never_more_than_ten_deliveries(tmp_path):
 @pytest.mark.asyncio
 async def test_reserve_before_next_claim(tmp_path):
     manifest, world = await _run(tmp_path, [{"cost": "0.70"} for _ in range(10)])
-    # after 4 stories: 2.80 spent; 2.80 + 0.977229 (text+visual worst case) > 3.74 -> no 5th claim
+    # after 6 stories: 4.20 spent; 4.20 + 0.977229 (text+visual worst case) > 4.89 -> no 7th claim
     assert manifest["terminal_reason"] == "BUDGET_RESERVATION_EXHAUSTED" and manifest["clean"]
-    assert len(world.claims) == 4 and Decimal(manifest["cumulative_cost_usd"]) == Decimal("2.80")
+    assert len(world.claims) == 6 and Decimal(manifest["cumulative_cost_usd"]) == Decimal("4.20")
 
 
 @pytest.mark.asyncio
 async def test_worst_case_every_story_cannot_exceed_the_cap(tmp_path):
     manifest, world = await _run(tmp_path, [{"cost": "0.977229"} for _ in range(10)])
-    # the unchanged $3.74 cap guarantees only 3 fully-reserved worst-case stories (5 needs $4.89)
-    assert len(world.claims) == 3
-    assert Decimal(manifest["cumulative_cost_usd"]) == Decimal("2.931687") <= Decimal("3.74")
+    # the $4.89 cap guarantees exactly 5 fully-reserved worst-case stories, never a 6th
+    assert len(world.claims) == 5
+    assert Decimal(manifest["cumulative_cost_usd"]) == Decimal("4.886145") <= Decimal("4.89")
 
 
 @pytest.mark.asyncio

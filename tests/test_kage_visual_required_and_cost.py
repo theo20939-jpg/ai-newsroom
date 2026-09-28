@@ -70,7 +70,7 @@ def test_new_per_story_hard_max_is_text_plus_one_bounded_visual_dispatch():
 
 def test_five_fully_reserved_stories_need_a_larger_batch_cap_than_today():
     required = (5 * maximum_canary_cost()).quantize(Decimal("0.01"), rounding=ROUND_CEILING)
-    assert required == Decimal("4.89") and batch.BATCH_HARD_CAP_USD == Decimal("3.74")  # cap deliberately unchanged
+    assert required == Decimal("4.89") == batch.BATCH_HARD_CAP_USD  # 5 fully-reserved worst-case stories
 
 
 def _all_text_stages_worst_case(envelope: TelegramCanaryEnvelope) -> None:
