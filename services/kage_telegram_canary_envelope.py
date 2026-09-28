@@ -137,8 +137,35 @@ def _per_dispatch_cost(stage: str, model: ModelDescriptor) -> Decimal:
     ) / million
 
 
-def maximum_canary_cost(models: tuple[ModelDescriptor, ...] = (GPT_5_6_LUNA, GPT_5_6_TERRA)) -> Decimal:
-    """All six stages once; each eligible model at most once per stage."""
+# The only billable visual call reachable on the KAGE Telegram NEWS path: the legacy router's
+# Gemini source-photo recomposition (services/editorial_recomposition.py::maybe_recompose). One
+# dispatch at most, on one priced model, reserved at its deterministic worst case. Vision subject
+# matching is not a stage here: under this envelope it is rejected before dispatch (unknown stage).
+VISUAL_RECOMPOSITION_STAGE = "news_recomposition"
+VISUAL_RECOMPOSITION_MODEL = "gemini-3.1-flash-image"
+VISUAL_RECOMPOSITION_MAX_DISPATCHES = 1
+
+
+def visual_recomposition_worst_case() -> Decimal:
+    """Worst case of one recomposition dispatch, from the existing image pricing catalog."""
+    from integrations.llm_gateway.image_protocol import (
+        ImageGenerationOperation, ImageGenerationRequest, ReferenceImage,
+    )
+    from services.image_pricing import ImageExecutionProfile, ImagePricingCatalog
+
+    profile = ImageExecutionProfile(
+        provider="gemini", model=VISUAL_RECOMPOSITION_MODEL, quality="standard", size="1K",
+        operation=ImageGenerationOperation.IMAGE_EDIT,
+    )
+    probe = ImageGenerationRequest(
+        prompt="worst-case pricing probe", operation=ImageGenerationOperation.IMAGE_EDIT,
+        reference_images=(ReferenceImage(data=b"\x00", mime_type="image/png"),),
+    )
+    return ImagePricingCatalog().quote(profile, probe).worst_case_cost_usd * VISUAL_RECOMPOSITION_MAX_DISPATCHES
+
+
+def maximum_text_canary_cost(models: tuple[ModelDescriptor, ...] = (GPT_5_6_LUNA, GPT_5_6_TERRA)) -> Decimal:
+    """All six text stages once; each eligible model at most once per stage."""
     by_id = {model.model_id: model for model in models}
     if set(by_id) != set(CANARY_MODEL_ROUTE):
         raise CanaryPreDispatchSafetyRejection("telegram canary: model route is incomplete or unexpected")
@@ -146,6 +173,11 @@ def maximum_canary_cost(models: tuple[ModelDescriptor, ...] = (GPT_5_6_LUNA, GPT
         (_per_dispatch_cost(stage, by_id[model_id]) for stage in CANARY_STAGE_ORDER for model_id in CANARY_MODEL_ROUTE),
         Decimal("0"),
     )
+
+
+def maximum_canary_cost(models: tuple[ModelDescriptor, ...] = (GPT_5_6_LUNA, GPT_5_6_TERRA)) -> Decimal:
+    """Per-story hard maximum: every text stage plus the one bounded visual dispatch."""
+    return maximum_text_canary_cost(models) + visual_recomposition_worst_case()
 
 
 @dataclass
@@ -258,6 +290,37 @@ class TelegramCanaryEnvelope:
             "status": "SUCCEEDED",
         })
 
+    def authorize_visual_dispatch(self, *, stage: str, model_id: str, reserved_usd: Decimal) -> None:
+        """Reserve the one bounded visual dispatch inside this same per-story ledger, or refuse."""
+        if stage != VISUAL_RECOMPOSITION_STAGE or model_id != VISUAL_RECOMPOSITION_MODEL:
+            raise CanaryPreDispatchSafetyRejection("telegram canary: visual call is outside the bounded visual stage")
+        assert self.dispatch_records is not None
+        if sum(1 for r in self.dispatch_records if r["stage"] == stage) >= VISUAL_RECOMPOSITION_MAX_DISPATCHES:
+            raise CanaryPreDispatchSafetyRejection("telegram canary: repeated visual dispatch denied")
+        if reserved_usd <= 0 or reserved_usd > visual_recomposition_worst_case():
+            raise CanaryPreDispatchSafetyRejection("telegram canary: visual reservation is not the priced worst case")
+        if self._spent_reserved + reserved_usd > self.hard_cap_usd:
+            raise CanaryPreDispatchSafetyRejection("telegram canary: remaining hard envelope is insufficient")
+        self._spent_reserved += reserved_usd
+        self.dispatch_records.append({
+            "stage": stage, "model": model_id, "input_token_upper_bound": None, "output_token_cap": None,
+            "reserved_max_cost_usd": str(reserved_usd),
+            "remaining_hard_envelope_usd": str(self.hard_cap_usd - self._spent_reserved),
+            "actual_input_tokens": None, "actual_output_tokens": None, "actual_cost_usd": None,
+            "status": "DISPATCH_AUTHORIZED",
+        })
+
+    def record_visual_result(self, *, stage: str, actual_cost_usd: Decimal | None, status: str) -> None:
+        """Attach the provider-accounted cost; an unknown cost stays None (fails closed downstream)."""
+        record = next((r for r in reversed(self.dispatch_records or []) if r["stage"] == stage), None)
+        if record is None:
+            raise ProviderPermanentIncompatibleError("telegram canary: visual result without dispatch record")
+        record.update({
+            "actual_cost_usd": str(actual_cost_usd) if actual_cost_usd is not None else None,
+            "status": status if actual_cost_usd is None or actual_cost_usd <= Decimal(str(record["reserved_max_cost_usd"]))
+            else "ACTUAL_EXCEEDED_RESERVATION",
+        })
+
     def record_failure(self, stage: str, model: ModelDescriptor, failure_type: str) -> None:
         if not self.dispatch_records:
             return
@@ -287,7 +350,8 @@ class TelegramCanaryEnvelope:
             pending += _per_dispatch_cost(stage, models[CANARY_MODEL_ROUTE[1]])
         for later_stage in CANARY_STAGE_ORDER[current_index + 1 :]:
             pending += sum((_per_dispatch_cost(later_stage, models[mid]) for mid in CANARY_MODEL_ROUTE), Decimal("0"))
-        return pending
+        # The visual dispatch follows every text stage; text must never consume its reservation.
+        return pending + visual_recomposition_worst_case()
 
 
 _active_envelope: ContextVar[TelegramCanaryEnvelope | None] = ContextVar("telegram_canary_envelope", default=None)

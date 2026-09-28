@@ -130,7 +130,7 @@ async def _run(tmp_path: Path, specs: list[dict], limits: BatchLimits = BatchLim
 def test_release_constants_are_the_accepted_bounds():
     assert (batch.MAX_ATTEMPTS, batch.MAX_DELIVERIES, batch.MIN_DESIRED_ATTEMPTS) == (10, 10, 5)
     assert batch.BATCH_HARD_CAP_USD == Decimal("3.74")
-    assert batch.PER_STORY_MAX_USD == Decimal("0.746389")
+    assert batch.PER_STORY_MAX_USD == Decimal("0.977229")  # text 0.746389 + visual 0.230840
     assert batch.NATURAL_WINDOW_SECONDS == 12 * 3600
 
 
@@ -164,21 +164,22 @@ async def test_never_more_than_ten_deliveries(tmp_path):
 @pytest.mark.asyncio
 async def test_reserve_before_next_claim(tmp_path):
     manifest, world = await _run(tmp_path, [{"cost": "0.70"} for _ in range(10)])
-    # after 5 stories: 3.50 spent; 3.50 + 0.746389 > 3.74 -> no 6th claim at all
+    # after 4 stories: 2.80 spent; 2.80 + 0.977229 (text+visual worst case) > 3.74 -> no 5th claim
     assert manifest["terminal_reason"] == "BUDGET_RESERVATION_EXHAUSTED" and manifest["clean"]
-    assert len(world.claims) == 5 and Decimal(manifest["cumulative_cost_usd"]) == Decimal("3.50")
+    assert len(world.claims) == 4 and Decimal(manifest["cumulative_cost_usd"]) == Decimal("2.80")
 
 
 @pytest.mark.asyncio
 async def test_worst_case_every_story_cannot_exceed_the_cap(tmp_path):
-    manifest, world = await _run(tmp_path, [{"cost": "0.746389"} for _ in range(10)])
-    assert len(world.claims) == 5
-    assert Decimal(manifest["cumulative_cost_usd"]) == Decimal("3.731945") <= Decimal("3.74")
+    manifest, world = await _run(tmp_path, [{"cost": "0.977229"} for _ in range(10)])
+    # the unchanged $3.74 cap guarantees only 3 fully-reserved worst-case stories (5 needs $4.89)
+    assert len(world.claims) == 3
+    assert Decimal(manifest["cumulative_cost_usd"]) == Decimal("2.931687") <= Decimal("3.74")
 
 
 @pytest.mark.asyncio
 async def test_story_above_per_story_max_is_a_hard_budget_violation(tmp_path):
-    manifest, _ = await _run(tmp_path, [{"cost": "0.80"}, {}])
+    manifest, _ = await _run(tmp_path, [{"cost": "1.00"}, {}])
     assert manifest["terminal_reason"] == "HARD_BUDGET_VIOLATION" and not manifest["clean"]
     assert manifest["attempts"] == 1
 

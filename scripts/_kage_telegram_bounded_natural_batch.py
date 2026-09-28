@@ -25,7 +25,7 @@ from uuid import UUID
 MIN_DESIRED_ATTEMPTS = 5
 MAX_ATTEMPTS = 10
 MAX_DELIVERIES = 10
-PER_STORY_MAX_USD = Decimal("0.746389")
+PER_STORY_MAX_USD = Decimal("0.977229")  # text 0.746389 + visual 0.230840 (one ledger)
 BATCH_HARD_CAP_USD = Decimal("3.74")
 # Natural waiting window for the whole batch: 12h covers a full daytime news cycle without leaving
 # an unattended process running overnight into a second one. Fewer than MIN_DESIRED_ATTEMPTS

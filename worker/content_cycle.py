@@ -614,10 +614,10 @@ async def _hold_for_visual_recovery(
     """Persist an undeliverable-media hold without leaking operations into the editorial feed.
 
     The founder-facing NEWS destination receives finished editorial objects only. Recovery state
-    belongs in the durable draft status and structured logs, not in a warning post. A candidate
-    with no suitable visual is handled upstream as a deliberate text-only post; this terminal
-    hold is reserved for an ambiguous/failed media delivery where a text retry could duplicate a
-    post Telegram may already have accepted.
+    belongs in the durable draft status and structured logs, not in a warning post. Used both when
+    no usable visual resolved (KAGE NEWS is visual-first: never a silent text-only card) and for an
+    ambiguous/failed media delivery, where a text retry could duplicate a post Telegram may already
+    have accepted.
     """
     if dry_run:
         return
@@ -1986,6 +1986,7 @@ async def _run_content_cycle_impl(
         send_attempted_at: datetime | None = None
         notification_failed_before = result.notification_failed
         visual_hold_before = result.visual_required_held
+        visual_hold_reason: str | None = None
         if settings.editorial_delivery_mode == "router":
             # Phase 23.1A canary delivery adapter (docs/phase23_1a_canary_delivery_adapter_
             # report.md) - an explicit, separate mode, checked first, never a replacement for the
@@ -2896,34 +2897,32 @@ async def _run_content_cycle_impl(
                             show_caption_above_media=show_caption_above_media,
                         )
                     else:
-                        # PRODUCT-QUALITY-RESET: a missing visual is a pipeline condition, never an
-                        # editor-facing warning. At this point the existing source/contextual/
-                        # generated-media resolution paths have produced no usable asset. Preserve
-                        # the finished copy as a deliberate text-only editorial object and record
-                        # the fallback in structured telemetry. A real media-send failure below is
-                        # different: it remains a silent hold because Telegram may have accepted the
-                        # media before the response was lost, so a text retry could create a duplicate.
+                        # KAGE visual-first (Founder invariant, restored after message 2865): when the
+                        # accepted source/contextual/media resolution produced no usable visual, the
+                        # story HOLDS (durable VISUAL_HOLD, no send) - never a silent text-only NEWS
+                        # card. The only remaining text send below is the caption-budget case, where a
+                        # visual exists but the finished copy does not fit a caption.
                         had_any_visual = (
                             photo_input is not None or bool(media_group_items) or video_only_input is not None
                         )
                         if not had_any_visual:
-                            used_text_fallback = True
-                            logger.info(
-                                "editorial_text_only_after_visual_exhaustion",
-                                extra={
-                                    "draft_id": str(outcome.content_draft.id),
-                                    "event_id": str(event.id),
-                                    "presentation_type": original_presentation_type_for_hold,
-                                    "reason": HOLD_REASON_NO_VISUAL_RESOLVED,
-                                },
+                            await _hold_for_visual_recovery(
+                                session_factory, bot,
+                                draft_id=outcome.content_draft.id, event=event,
+                                presentation_type=original_presentation_type_for_hold,
+                                reason=HOLD_REASON_NO_VISUAL_RESOLVED, dry_run=effective_dry_run,
                             )
-                        send_boundary_reached = True
-                        send_attempted_at = datetime.now(timezone.utc)
-                        _mark_kage_send_boundary(send_attempted_at)
-                        routing_outcome = await send_to_editorial_destination(
-                            bot, EditorialDestination.NEWS, html, dry_run=effective_dry_run, reply_markup=keyboard,
-                            reply_to_message_id=reply_to_message_id,
-                        )
+                            result.visual_required_held += 1
+                            visual_hold_reason = HOLD_REASON_NO_VISUAL_RESOLVED
+                            routing_outcome = None
+                        else:
+                            send_boundary_reached = True
+                            send_attempted_at = datetime.now(timezone.utc)
+                            _mark_kage_send_boundary(send_attempted_at)
+                            routing_outcome = await send_to_editorial_destination(
+                                bot, EditorialDestination.NEWS, html, dry_run=effective_dry_run, reply_markup=keyboard,
+                                reply_to_message_id=reply_to_message_id,
+                            )
 
                     # Delivery-gap fix (2026-08-16 production forensic): a real photo/media-group
                     # send timing out (or any other live TelegramAPIError) previously dropped a fully
@@ -2965,6 +2964,7 @@ async def _run_content_cycle_impl(
                             reason=HOLD_REASON_MEDIA_SEND_FAILED, dry_run=effective_dry_run,
                         )
                         result.visual_required_held += 1
+                        visual_hold_reason = HOLD_REASON_MEDIA_SEND_FAILED
                         routing_outcome = None
 
                     if routing_outcome is None:
@@ -3091,7 +3091,8 @@ async def _run_content_cycle_impl(
                     session_factory, task_id=outcome.task_id,
                     draft_id=outcome.content_draft.id,
                     status=terminal_status,
-                    reason=("send_not_confirmed" if send_boundary_reached
+                    reason=(visual_hold_reason if terminal_status == "VISUAL_HOLD" and visual_hold_reason
+                            else "send_not_confirmed" if send_boundary_reached
                             else "publication_path_ended_without_send"),
                     error_class=("DeliveryOutcomeNotSent" if terminal_status == "DELIVERY_FAILED"
                                  else None),

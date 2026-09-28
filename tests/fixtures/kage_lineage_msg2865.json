@@ -48,5 +48,138 @@
   "material_qualifiers": [],
   "rule": "Preserve each core meaning, not every word; optional cards may be deleted. Stop at the shortest complete post."
  },
- "publication_outcome": "DELIVERED"
+ "publication_outcome": "DELIVERED",
+ "saved_image_candidates": [
+  {
+   "status": "validated",
+   "caption": null,
+   "alt_text": null,
+   "event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+   "telegram": null,
+   "warnings": [],
+   "remote_url": "https://lh3.googleusercontent.com/J6_coFbogxhRI9iM864NL_liGXvsQp2AupsKei7z0cNNfDvGUmWUy20nuUhkREQyrpY4bEeIBuc=s0-w300",
+   "source_url": "https://news.google.com/rss/articles/CBMivAFBVV95cUxNdmhabDZfN1ZHQXprdWJ4QThjNFVRWTU3ODlmakJmcy1iVGpZakJpMGZULVhSaWZod29QaXdtNTkwTXV1T3lWVm1GTTk5Q2hZRG5CLW1DYTVheGt4ZnF5cnIxamlsaE1WeGlZV0pxTWxPZ3NLWEgzMGlERlc4WFJoa0h6enN1dUQ1dTdYaHZTOER2SU1uUUFTazNtNW5hdGJkYVJ5MjduZ1dkWEFEQ3BuVHVMZkozM3lySHZIbg?oc=5&ucbcb=1&hl=en-US&gl=US&ceid=US:en",
+   "source_type": "RSS",
+   "candidate_id": "e5881782910995572e9f4079ff3973d85ada462d9a6b8029ceeb329d0ff19128",
+   "discovered_at": "2026-09-27T22:15:28.824106Z",
+   "declared_width": 300,
+   "schema_version": "m4",
+   "declared_height": 300,
+   "discovery_order": 0,
+   "discovery_method": "open_graph_image",
+   "rejection_reasons": [],
+   "declared_mime_type": null,
+   "quality_validation": {
+    "status": "accepted",
+    "signals": {
+     "possible_icon": false,
+     "possible_logo": false,
+     "possible_avatar": false,
+     "possible_banner": false,
+     "resolution_band": "adequate",
+     "aspect_ratio_band": "square",
+     "possible_watermark": false,
+     "possible_placeholder": false,
+     "possible_tracking_pixel": false,
+     "possible_tv_lower_third": false,
+     "possible_branded_screenshot": true
+    },
+    "version": "m3",
+    "duration_ms": 2,
+    "deduplication": {
+     "exact_hash": "872cdca296d04a7be7cba2f91f6825164499491bbbec26e2c6dcadb43859c7b0",
+     "duplicate_of": null,
+     "perceptual_hash": "330e0f573717232b",
+     "exact_cluster_id": "93579c37e44a6a6e",
+     "hamming_distance": null,
+     "is_representative": true,
+     "perceptual_cluster_id": "70a2d96043e0ef1d"
+    },
+    "quality_score": 66,
+    "quality_warnings": [
+     "possible_branded_screenshot"
+    ],
+    "quality_penalties": {
+     "possible_branded_screenshot": -15
+    },
+    "quality_components": {
+     "resolution": 28,
+     "aspect_ratio": 15,
+     "metadata_confidence": 18,
+     "technical_integrity": 20
+    },
+    "hard_rejection_reasons": []
+   },
+   "relevance_validation": {
+    "rank": null,
+    "reason": null,
+    "status": "ineligible",
+    "version": "m4",
+    "coverage": {},
+    "penalties": {},
+    "components": {},
+    "duration_ms": null,
+    "relevance_score": 0,
+    "eligibility_reason": "generic_aggregator_asset",
+    "source_relationship": null,
+    "eligible_for_editorial": false
+   },
+   "technical_validation": {
+    "width": 300,
+    "format": "PNG",
+    "height": 300,
+    "sha256": "872cdca296d04a7be7cba2f91f6825164499491bbbec26e2c6dcadb43859c7b0",
+    "version": "m2",
+    "animated": false,
+    "byte_size": 18288,
+    "final_url": "https://lh3.googleusercontent.com/J6_coFbogxhRI9iM864NL_liGXvsQp2AupsKei7z0cNNfDvGUmWUy20nuUhkREQyrpY4bEeIBuc=s0-w300",
+    "error_code": null,
+    "duration_ms": 31,
+    "frame_count": 1,
+    "http_status": 200,
+    "pixel_count": 90000,
+    "aspect_ratio": 1.0,
+    "observed_mime": "image/png",
+    "redirect_count": 0
+   }
+  },
+  {
+   "status": "rejected_metadata",
+   "caption": null,
+   "alt_text": null,
+   "event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+   "telegram": null,
+   "warnings": [],
+   "remote_url": "https://lh3.googleusercontent.com/J6_coFbogxhRI9iM864NL_liGXvsQp2AupsKei7z0cNNfDvGUmWUy20nuUhkREQyrpY4bEeIBuc=s0-w300",
+   "source_url": "https://news.google.com/rss/articles/CBMivAFBVV95cUxNdmhabDZfN1ZHQXprdWJ4QThjNFVRWTU3ODlmakJmcy1iVGpZakJpMGZULVhSaWZod29QaXdtNTkwTXV1T3lWVm1GTTk5Q2hZRG5CLW1DYTVheGt4ZnF5cnIxamlsaE1WeGlZV0pxTWxPZ3NLWEgzMGlERlc4WFJoa0h6enN1dUQ1dTdYaHZTOER2SU1uUUFTazNtNW5hdGJkYVJ5MjduZ1dkWEFEQ3BuVHVMZkozM3lySHZIbg?oc=5&ucbcb=1&hl=en-US&gl=US&ceid=US:en",
+   "source_type": "RSS",
+   "candidate_id": "43054f7dd02c0b8d458ecec3db8f6f7da0f6f5fc325aaa3f8be9f2aa114badb8",
+   "discovered_at": "2026-09-27T22:15:28.824106Z",
+   "declared_width": null,
+   "schema_version": "m4",
+   "declared_height": null,
+   "discovery_order": 1,
+   "discovery_method": "twitter_image",
+   "rejection_reasons": [
+    "duplicate_within_event"
+   ],
+   "declared_mime_type": null,
+   "quality_validation": null,
+   "relevance_validation": {
+    "rank": null,
+    "reason": null,
+    "status": "ineligible",
+    "version": "m4",
+    "coverage": {},
+    "penalties": {},
+    "components": {},
+    "duration_ms": null,
+    "relevance_score": 0,
+    "eligibility_reason": "not_technically_validated:rejected_metadata",
+    "source_relationship": null,
+    "eligible_for_editorial": false
+   },
+   "technical_validation": null
+  }
+ ]
 }

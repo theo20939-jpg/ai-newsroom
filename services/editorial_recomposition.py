@@ -33,6 +33,7 @@ import hashlib
 import io
 import time
 from dataclasses import dataclass
+from decimal import Decimal
 
 from PIL import Image, ImageFilter, ImageStat, UnidentifiedImageError
 
@@ -367,10 +368,39 @@ async def maybe_recompose(
             max_attempts=1,
         )
 
+    # KAGE per-story ledger: while a Telegram canary/batch envelope is active, this paid call must be
+    # reserved inside that same envelope first; a refusal means no call (original source photo kept).
+    from services.kage_telegram_canary_envelope import (
+        VISUAL_RECOMPOSITION_STAGE, CanaryPreDispatchSafetyRejection, current_telegram_canary_envelope,
+        visual_recomposition_worst_case,
+    )
+
+    envelope = current_telegram_canary_envelope()
+    if envelope is not None:
+        try:
+            envelope.authorize_visual_dispatch(
+                stage=VISUAL_RECOMPOSITION_STAGE, model_id=GEMINI_3_1_FLASH_IMAGE,
+                reserved_usd=visual_recomposition_worst_case(),
+            )
+        except CanaryPreDispatchSafetyRejection as exc:
+            return _fail_open(
+                mode="live", eligibility=eligibility, source_image_bytes=source_image_bytes,
+                source_sha256=source_sha256, provider="gemini", model=GEMINI_3_1_FLASH_IMAGE,
+                fallback_reason=f"cost_envelope_refused:{exc}",
+            )
+
+    def _record_visual_cost(response_cost: object, status: str) -> None:
+        if envelope is None:
+            return
+        cost = None if response_cost is None else Decimal(str(response_cost))
+        envelope.record_visual_result(stage=VISUAL_RECOMPOSITION_STAGE, actual_cost_usd=cost,
+                                      status=status if cost is not None else "COST_UNKNOWN")
+
     started = time.monotonic()
     try:
         response = await adapter.generate_image(request)
     except GeminiImageAdapterError as exc:
+        _record_visual_cost(None, "FAILED")
         return _fail_open(
             mode="live", eligibility=eligibility, source_image_bytes=source_image_bytes,
             source_sha256=source_sha256, provider="gemini", model=GEMINI_3_1_FLASH_IMAGE,
@@ -379,12 +409,14 @@ async def maybe_recompose(
     except Exception as exc:  # noqa: BLE001 - Stage 8's own explicit "catch failures only at the
         # appropriate recomposition boundary" - this IS that boundary; never lets an unexpected
         # provider/gateway exception escape and block the NEWS send path.
+        _record_visual_cost(None, "FAILED")
         return _fail_open(
             mode="live", eligibility=eligibility, source_image_bytes=source_image_bytes,
             source_sha256=source_sha256, provider="gemini", model=GEMINI_3_1_FLASH_IMAGE,
             fallback_reason=f"unexpected_error:{type(exc).__name__}", latency_ms=(time.monotonic() - started) * 1000,
         )
     latency_ms = (time.monotonic() - started) * 1000
+    _record_visual_cost(getattr(response, "cost_usd", None), "SUCCEEDED")
 
     if not response.image_bytes:
         return _fail_open(
