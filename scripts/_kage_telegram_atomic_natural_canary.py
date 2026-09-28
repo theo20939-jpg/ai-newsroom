@@ -54,7 +54,7 @@ from services.pricing_catalog import ModelRegistryPricingCatalog
 from services.telegram_routing import RouteTarget, resolve_route
 from worker.content_cycle import _extract_scoring_result, _select_eligible_events, run_content_cycle
 
-MAX_COST = Decimal("1.234389")  # 0.746389 text + 0.488 one OpenAI visual (provisional cap)
+MAX_COST = Decimal("1.234389")  # 0.746389 text + max(0.488 edit, 0.440 generation + 0.00168 compliance)
 EXPECTED_ROUTE = RouteTarget(chat_id=-1004297182444, topic_id=2)
 PROMPTS_ROOT = Path("/app/prompts")
 POLL_SECONDS = 15

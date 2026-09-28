@@ -25,7 +25,7 @@ from uuid import UUID
 MIN_DESIRED_ATTEMPTS = 5
 MAX_ATTEMPTS = 10
 MAX_DELIVERIES = 10
-PER_STORY_MAX_USD = Decimal("1.234389")  # text 0.746389 + one OpenAI visual 0.488 (provisional cap)
+PER_STORY_MAX_USD = Decimal("1.234389")  # text + max(source edit, generation + visual compliance)
 BATCH_HARD_CAP_USD = Decimal("6.18")  # >= 5 x 1.234389, rounded up: 5 fully-reserved stories
 # Natural waiting window for the whole batch: 12h covers a full daytime news cycle without leaving
 # an unattended process running overnight into a second one. Fewer than MIN_DESIRED_ATTEMPTS

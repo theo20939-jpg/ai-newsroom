@@ -1,8 +1,7 @@
-"""One-shot, no-Telegram OpenAI image acceptance for the saved message-2865 lineage.
+"""One-shot, no-Telegram OpenAI image/compliance acceptance for message 2865.
 
-Requires a fresh isolated Redis database and an explicit confirmation flag. It makes at most one
-paid image dispatch, never retries, never sends Telegram, and writes a self-contained manifest plus
-the raw provider image and the final KAGE-branded image when successful.
+Requires fresh isolated Redis and explicit confirmation. It makes one image dispatch and at most
+one raw-pixel compliance dispatch, never retries, never sends Telegram, and preserves all outcomes.
 """
 from __future__ import annotations
 
@@ -27,6 +26,7 @@ from services.kage_telegram_canary_envelope import (
     TelegramCanaryEnvelope,
     telegram_canary_envelope,
 )
+from services.kage_visual_compliance import inspect_generated_visual
 from services.kage_visual_fallback import (
     GENERATION_MAX_DISPATCHES,
     GENERATION_MODEL,
@@ -34,6 +34,7 @@ from services.kage_visual_fallback import (
     GENERATION_SIZE,
     build_generation_brief,
     generate_editorial_image,
+    render_typography_card,
 )
 
 REPO = Path(__file__).resolve().parents[1]
@@ -84,18 +85,25 @@ async def _run(output_dir: Path) -> dict[str, Any]:
     started = time.perf_counter()
     with telegram_canary_envelope(envelope):
         raw, reason = await generate_editorial_image(prompt)
+        compliance = (
+            await inspect_generated_visual(raw, safe_visual_concept=brief["safe_visual_concept"])
+            if raw is not None else None
+        )
     duration_seconds = time.perf_counter() - started
 
     accounting_key = image_execution_key(namespace, execution_id)
     accounting_record = await redis.hgetall(accounting_key)
     ledger_after = await redis.get(ledger_key)
-    dispatch = (envelope.dispatch_records or [{}])[-1]
+    dispatches = envelope.dispatch_records or []
+    image_dispatch = next((row for row in dispatches if row.get("stage") == "news_generated_image"), {})
+    compliance_dispatch = next((row for row in dispatches if row.get("stage") == "news_visual_compliance"), {})
     real_call_count = int(accounting_record.get("status") in {"success", "failed", "cost_bound_exceeded"})
 
     manifest: dict[str, Any] = {
         "fixture": "telegram_message_2865",
         "telegram_send": False,
-        "real_openai_call_count": real_call_count,
+        "real_image_call_count": real_call_count,
+        "real_compliance_call_count": int(bool(compliance_dispatch)),
         "request": {
             "model": GENERATION_MODEL,
             "size": GENERATION_SIZE,
@@ -106,43 +114,71 @@ async def _run(output_dir: Path) -> dict[str, Any]:
             "partial_images": "omitted_default_off",
             "sdk_retries": 0,
             "prompt": prompt,
+            "safe_visual_concept": brief["safe_visual_concept"],
+            "masked_entity_surfaces": brief["masked_entity_surfaces"],
             "prompt_utf8_bytes": len(prompt.encode("utf-8")),
             "prompt_sha256": prompt_sha,
         },
         "duration_seconds": round(duration_seconds, 3),
         "result_reason": reason,
-        "provider_response_status": dispatch.get("provider_status_code"),
-        "provider_request_id": dispatch.get("provider_request_id"),
+        "provider_response_status": image_dispatch.get("provider_status_code"),
+        "provider_request_id": image_dispatch.get("provider_request_id"),
         "usage": {
-            "input_tokens": dispatch.get("actual_input_tokens"),
-            "text_input_tokens": dispatch.get("actual_text_input_tokens"),
-            "image_input_tokens": dispatch.get("actual_image_input_tokens"),
-            "output_tokens": dispatch.get("actual_output_tokens"),
+            "input_tokens": image_dispatch.get("actual_input_tokens"),
+            "text_input_tokens": image_dispatch.get("actual_text_input_tokens"),
+            "image_input_tokens": image_dispatch.get("actual_image_input_tokens"),
+            "output_tokens": image_dispatch.get("actual_output_tokens"),
         },
-        "actual_cost_usd": dispatch.get("actual_cost_usd"),
-        "story_ledger_record": dispatch,
+        "actual_image_cost_usd": image_dispatch.get("actual_cost_usd"),
+        "actual_compliance_cost_usd": compliance_dispatch.get("actual_cost_usd"),
+        "story_ledger_records": dispatches,
         "redis_accounting_key": accounting_key,
         "redis_accounting_record": accounting_record,
         "isolated_ledger_before_usd": ledger_before or "0",
         "isolated_ledger_after_usd": ledger_after or "0",
         "raw_image": None,
+        "compliance": compliance.audit() if compliance is not None else None,
         "final_kage_image": None,
+        "typography_fallback": None,
     }
 
     if raw is not None:
         raw_path = output_dir / "message_2865_openai_raw.jpg"
         raw_path.write_bytes(raw)
-        final = render_news_hero(raw, category="AI", editorial_code="NP-2865", branding_strength="MINIMAL")
-        final_path = output_dir / "message_2865_kage_final.jpg"
-        final_path.write_bytes(final)
         manifest["raw_image"] = {
             "path": str(raw_path.resolve()), "bytes": len(raw),
             "dimensions": _dimensions(raw_path), "sha256": _sha256(raw),
         }
-        manifest["final_kage_image"] = {
-            "path": str(final_path.resolve()), "bytes": len(final),
-            "dimensions": _dimensions(final_path), "sha256": _sha256(final),
-        }
+        compliance_path = output_dir / "message_2865_visual_compliance.json"
+        compliance_path.write_text(json.dumps(compliance.audit(), ensure_ascii=False, indent=2) + "\n",
+                                   encoding="utf-8")
+        manifest["compliance_artifact_path"] = str(compliance_path.resolve())
+        if compliance.compliant:
+            final = render_news_hero(raw, category="AI", editorial_code="NP-2865", branding_strength="MINIMAL")
+            final_path = output_dir / "message_2865_kage_final.jpg"
+            final_path.write_bytes(final)
+            manifest["final_kage_image"] = {
+                "path": str(final_path.resolve()), "bytes": len(final),
+                "dimensions": _dimensions(final_path), "sha256": _sha256(final),
+            }
+        else:
+            card = render_typography_card(title)
+            if card is not None:
+                card_path = output_dir / "message_2865_typography_fallback.png"
+                card_path.write_bytes(card)
+                manifest["typography_fallback"] = {
+                    "path": str(card_path.resolve()), "bytes": len(card),
+                    "dimensions": _dimensions(card_path), "sha256": _sha256(card),
+                }
+    else:
+        card = render_typography_card(title)
+        if card is not None:
+            card_path = output_dir / "message_2865_typography_fallback.png"
+            card_path.write_bytes(card)
+            manifest["typography_fallback"] = {
+                "path": str(card_path.resolve()), "bytes": len(card),
+                "dimensions": _dimensions(card_path), "sha256": _sha256(card),
+            }
 
     manifest_path = output_dir / "acceptance_manifest.json"
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

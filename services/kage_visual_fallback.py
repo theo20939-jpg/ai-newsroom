@@ -47,6 +47,13 @@ Donald Joe Kamala Vladimir Emmanuel Olaf Xi Narendra Kevin Sean Michael David Ja
 Richard Thomas Chris Andrew Mustafa Reid Brad Larry Sergey Jack Evan Pavel Masayoshi Arvind Alexandr
 """.split())
 _NAME_PAIR = re.compile(r"\b([A-ZА-ЯЁ][a-zа-яё]+)\s+([A-ZА-ЯЁ][a-zа-яё]+(?:-[A-ZА-ЯЁ][a-zа-яё]+)?)")
+# Conservative visual-only projection. Mixed-case/all-caps Latin marks and multi-token Latin
+# proper names are semantic context in the caption, not instructions to reproduce their branding.
+_LATIN_ENTITY_SURFACE = re.compile(
+    r"\b(?:[A-Z]{2,}(?:\s+[A-Z][A-Za-z0-9.&+-]+)*|"
+    r"[A-Z][a-z]+(?:[A-Z][A-Za-z0-9]+)+|"
+    r"[A-Z][A-Za-z0-9.&+-]+(?:\s+[A-Z][A-Za-z0-9.&+-]+)+)\b"
+)
 
 _STYLE_AND_SAFETY = (
     "Create ONE realistic, cinematic editorial news photograph (16:9) that conveys the story's concept "
@@ -78,6 +85,51 @@ def mask_person_names(text: str) -> tuple[str, bool]:
     return _NAME_PAIR.sub(_replace, text), found
 
 
+def _structured_entity_surfaces(*payloads: Mapping[str, Any]) -> tuple[str, ...]:
+    """Read only explicit entity metadata when upstream provides it; never infer new facts."""
+    found: list[str] = []
+    for payload in payloads:
+        for key in ("entities", "named_entities", "organizations", "companies", "products"):
+            values = payload.get(key, [])
+            if isinstance(values, (str, Mapping)):
+                values = [values]
+            if not isinstance(values, list):
+                continue
+            for value in values:
+                candidate = value if isinstance(value, str) else next(
+                    (value.get(field) for field in ("name", "text", "label")
+                     if isinstance(value, Mapping) and isinstance(value.get(field), str)), None,
+                )
+                if isinstance(candidate, str) and candidate.strip() and candidate.strip() not in found:
+                    found.append(candidate.strip())
+    return tuple(found)
+
+
+def safe_visual_projection(
+    text: str, *, structured_entities: tuple[str, ...] = (),
+) -> tuple[str, tuple[str, ...]]:
+    """Remove brand/proper-name surface forms from the pixel prompt without changing journalism.
+
+    The exact caption remains untouched. This bounded projection only turns recognizable Latin
+    organization/product/source names into a generic role before image generation.
+    """
+    masked: list[str] = []
+
+    def _replace(match: re.Match[str]) -> str:
+        surface = match.group(0)
+        if surface not in masked:
+            masked.append(surface)
+        return "an unnamed organization"
+
+    projected = text
+    for surface in sorted(structured_entities, key=len, reverse=True):
+        if surface in projected:
+            projected = projected.replace(surface, "an unnamed organization or product")
+            if surface not in masked:
+                masked.append(surface)
+    return _LATIN_ENTITY_SURFACE.sub(_replace, projected), tuple(masked)
+
+
 def build_generation_brief(
     *, title: str, body: str, research: Mapping[str, Any], intelligence: Mapping[str, Any],
     source_headline: str = "",
@@ -94,11 +146,16 @@ def build_generation_brief(
     used_optional = [card_id for card_id in communicated_fact_ids(body, substantive) if card_id not in core_ids]
     fact_ids = [*core_ids, *used_optional]
     by_id = {card["id"]: card["fact"] for card in cards}
+    structured_entities = _structured_entity_surfaces(research, intelligence)
     headline, person_in_title = mask_person_names(title.strip())
+    headline, headline_entities = safe_visual_projection(headline, structured_entities=structured_entities)
     facts, person_flags = [], [person_in_title]
+    protected_entities = list(headline_entities)
     for fact_id in fact_ids:
         masked, flagged = mask_person_names(by_id[fact_id])
-        facts.append(masked)
+        projected, entities = safe_visual_projection(masked, structured_entities=structured_entities)
+        facts.append(projected)
+        protected_entities.extend(entity for entity in entities if entity not in protected_entities)
         person_flags.append(flagged)
     named_person = any(person_flags)
     lines = ["KAGE EDITORIAL NEWS IMAGE", f"Story headline: {headline}", "Verified facts:"]
@@ -107,7 +164,13 @@ def build_generation_brief(
     if named_person:
         lines.append("This story names a real person: show no person at all - depict objects, "
                      "devices or an environment connected to the facts.")
-    return {"prompt": "\n".join(lines), "fact_ids": fact_ids, "named_person_detected": named_person}
+    lines.append("Any named organization, product or source in the journalism is semantic context only. "
+                 "Depict only generic, unbranded objects and environments; never reproduce a brand identity.")
+    concept = "\n".join([f"Story concept: {headline}", *[f"Supported fact: {fact}" for fact in facts]])
+    return {
+        "prompt": "\n".join(lines), "safe_visual_concept": concept, "fact_ids": fact_ids,
+        "named_person_detected": named_person, "masked_entity_surfaces": protected_entities,
+    }
 
 
 # --- generated output validation ------------------------------------------------------------------------
@@ -223,7 +286,7 @@ async def generate_editorial_image(prompt: str, *, gateway: Any | None = None) -
     from integrations.llm_gateway.image_protocol import ImageGenerationOperation, ImageGenerationRequest
     from services.kage_telegram_canary_envelope import (
         VISUAL_GENERATION_STAGE, CanaryPreDispatchSafetyRejection, current_telegram_canary_envelope,
-        visual_recomposition_worst_case,
+        visual_generation_worst_case,
     )
 
     request = ImageGenerationRequest(prompt=prompt, operation=ImageGenerationOperation.TEXT_TO_IMAGE,
@@ -256,7 +319,7 @@ async def generate_editorial_image(prompt: str, *, gateway: Any | None = None) -
     if envelope is not None:
         try:
             envelope.authorize_visual_dispatch(stage=VISUAL_GENERATION_STAGE, model_id=GENERATION_MODEL,
-                                               reserved_usd=visual_recomposition_worst_case())
+                                               reserved_usd=visual_generation_worst_case())
         except CanaryPreDispatchSafetyRejection as exc:
             return None, f"cost_envelope_refused:{exc}"
 
@@ -310,6 +373,7 @@ class VisualFallbackResult:
     brief: dict[str, Any] | None = None
     generation_reason: str | None = None
     typography_reason: str | None = None
+    compliance: Any | None = None
 
     def audit(self) -> dict[str, Any]:
         return {
@@ -317,7 +381,9 @@ class VisualFallbackResult:
             "generation_reason": self.generation_reason, "typography_reason": self.typography_reason,
             "brief_fact_ids": (self.brief or {}).get("fact_ids"),
             "named_person_detected": (self.brief or {}).get("named_person_detected"),
+            "masked_entity_surfaces": (self.brief or {}).get("masked_entity_surfaces"),
             "brief_prompt": (self.brief or {}).get("prompt"),
+            "visual_compliance": self.compliance.audit() if self.compliance is not None else None,
             "image_sha256": hashlib.sha256(self.image_bytes).hexdigest() if self.image_bytes else None,
             "typography_provider_cost_usd": "0" if self.tier == TIER_TYPOGRAPHY else None,
         }
@@ -325,7 +391,8 @@ class VisualFallbackResult:
 
 async def resolve_visual_fallback(
     *, title: str, body: str, research: Mapping[str, Any], intelligence: Mapping[str, Any],
-    source_headline: str = "", gateway: Any | None = None, category: str = "AI", editorial_code: str = "",
+    source_headline: str = "", gateway: Any | None = None, compliance_gateway: Any | None = None,
+    category: str = "AI", editorial_code: str = "",
     allow_generation: bool = True,
 ) -> VisualFallbackResult:
     """Tier 2 then Tier 3, each at most once. Returns TIER_HOLD when both fail. `allow_generation=False`
@@ -341,6 +408,15 @@ async def resolve_visual_fallback(
         else:
             generated, generation_reason = None, "generation_not_allowed_dry_run"
         if generated is not None:
+            from services.kage_visual_compliance import inspect_generated_visual
+
+            compliance = await inspect_generated_visual(
+                generated, safe_visual_concept=brief["safe_visual_concept"], gateway=compliance_gateway,
+            )
+            if not compliance.compliant:
+                generation_reason = f"compliance_rejected:{compliance.failure_reason or 'forbidden_pixels'}"
+                generated = None
+        if generated is not None:
             try:
                 from services.brand_renderer import render_news_hero
 
@@ -349,13 +425,16 @@ async def resolve_visual_fallback(
             except Exception as exc:  # noqa: BLE001 - an unbrandable image is not published
                 generation_reason = f"branding_failed:{type(exc).__name__}"
             else:
-                return VisualFallbackResult(TIER_GENERATED, branded, "ok", brief, generation_reason)
+                return VisualFallbackResult(TIER_GENERATED, branded, "ok", brief, generation_reason,
+                                            compliance=compliance)
     try:
         card = render_typography_card(title)
         typography_reason = "ok" if card is not None else "headline_does_not_fit"
     except Exception as exc:  # noqa: BLE001
         card, typography_reason = None, f"render_error:{type(exc).__name__}"
     if card is not None:
-        return VisualFallbackResult(TIER_TYPOGRAPHY, card, "ok", brief, generation_reason, typography_reason)
+        return VisualFallbackResult(TIER_TYPOGRAPHY, card, "ok", brief, generation_reason, typography_reason,
+                                    compliance if 'compliance' in locals() else None)
     return VisualFallbackResult(TIER_HOLD, None, HOLD_REASON_VISUAL_FALLBACK_EXHAUSTED, brief,
-                                generation_reason, typography_reason)
+                                generation_reason, typography_reason,
+                                compliance if 'compliance' in locals() else None)

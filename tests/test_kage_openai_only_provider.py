@@ -28,6 +28,7 @@ from services.budget_guard import ImageBudgetReservation
 from services.budgeted_image_execution import BudgetedImageExecutor
 from services.image_pricing import ImageExecutionProfile, ImagePricingCatalog, UnknownImagePricingError
 from services.kage_telegram_canary_envelope import (
+    VISUAL_COMPLIANCE_STAGE,
     VISUAL_GENERATION_STAGE,
     VISUAL_RECOMPOSITION_STAGE,
     TelegramCanaryEnvelope,
@@ -152,7 +153,7 @@ def test_gpt_image_2_5_worst_cases_are_official_rates_times_provisional_caps():
     assert edit.worst_case_cost_usd == Decimal("0.488")  # + 6,000 reference-image tokens x $8/M
     assert gen.requires_reported_usage and edit.requires_reported_usage
     assert gen.cost_semantics == edit.cost_semantics == "official_token_rates_provisional_per_call_caps"
-    # the per-story visual max is the larger of the two mutually exclusive paths, never their sum
+    # Source edit is still larger than generation plus its separately priced compliance call.
     assert visual_recomposition_worst_case() == max(gen.worst_case_cost_usd, edit.worst_case_cost_usd)
     assert maximum_canary_cost() == Decimal("0.746389") + Decimal("0.488") == Decimal("1.234389")
     assert canary.MAX_COST == batch.PER_STORY_MAX_USD == Decimal("1.234389")
@@ -196,7 +197,8 @@ async def test_generation_is_one_openai_flare_call_reserved_then_costed_from_usa
     assert openai_world.guard.completed[0]["accounted_cost"] == actual
     record = envelope.dispatch_records[-1]
     assert record["stage"] == VISUAL_GENERATION_STAGE and record["model"] == FLARE
-    assert record["reserved_max_cost_usd"] == "0.488" and Decimal(record["actual_cost_usd"]) == actual
+    assert Decimal(record["reserved_max_cost_usd"]) == Decimal("0.440")
+    assert Decimal(record["actual_cost_usd"]) == actual
     assert (record["actual_input_tokens"], record["actual_output_tokens"]) == (1_200, 6_000)
     assert (record["actual_text_input_tokens"], record["actual_image_input_tokens"]) == (1_200, 0)
     assert (record["provider_request_id"], record["provider_status_code"]) == ("req_fake", 200)
@@ -207,7 +209,7 @@ async def test_generation_is_one_openai_flare_call_reserved_then_costed_from_usa
 
 @pytest.mark.asyncio
 async def test_generation_above_its_provisional_reservation_is_flagged_for_the_batch_stop(openai_world):
-    openai_world.make_api(_jpeg(1536, 1024), usage=(1_000, 0, 20_000))  # 0.605 > 0.488 reserved
+    openai_world.make_api(_jpeg(1536, 1024), usage=(1_000, 0, 20_000))  # 0.605 > 0.440 reserved
     envelope = TelegramCanaryEnvelope(hard_cap_usd=canary.MAX_COST)
     with telegram_canary_envelope(envelope):
         image, reason = await vf.generate_editorial_image("brief")
@@ -341,7 +343,11 @@ def test_kage_starts_and_builds_its_env_without_any_gemini_key(monkeypatch):
 def test_visual_provider_constants_are_openai_only():
     from services.kage_telegram_canary_envelope import VISUAL_STAGE_MODELS
 
-    assert VISUAL_STAGE_MODELS == {VISUAL_RECOMPOSITION_STAGE: SUNBURST, VISUAL_GENERATION_STAGE: FLARE}
+    assert VISUAL_STAGE_MODELS == {
+        VISUAL_RECOMPOSITION_STAGE: SUNBURST,
+        VISUAL_GENERATION_STAGE: FLARE,
+        VISUAL_COMPLIANCE_STAGE: "gpt-5.6-luna",
+    }
     assert (vf.GENERATION_MODEL, vf.GENERATION_QUALITY, vf.GENERATION_SIZE) == (FLARE, "high", "1536x1024")
     assert (editorial_recomposition.RECOMPOSITION_PROVIDER, editorial_recomposition.RECOMPOSITION_MODEL) == (
         "openai", SUNBURST)

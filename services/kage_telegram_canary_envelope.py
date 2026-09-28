@@ -17,7 +17,7 @@ from integrations.llm_gateway.models.catalog import GPT_5_6_LUNA, GPT_5_6_TERRA
 from integrations.llm_gateway.models.registry import ModelDescriptor
 from integrations.llm_gateway.protocol import GenerateRequest
 
-CANARY_HARD_CAP_USD = Decimal("1.24")  # >= text 0.746389 + one OpenAI visual 0.488 (provisional), rounded up
+CANARY_HARD_CAP_USD = Decimal("1.24")  # >= text 0.746389 + visual pipeline 0.488 (provisional), rounded up
 CANARY_MODEL_ROUTE = ("gpt-5.6-luna", "gpt-5.6-terra")
 CANARY_MAX_DISPATCHES_PER_STAGE = 2
 CANARY_WORKFLOW_STEP_ATTEMPTS = 1
@@ -142,41 +142,70 @@ def _per_dispatch_cost(stage: str, model: ModelDescriptor) -> Decimal:
 #   gpt-image-2.5-sunburst image edit, only when a usable source photo exists;
 # - Tier 2 generated editorial image (services/kage_visual_fallback.py) with gpt-image-2.5-flare
 #   text-to-image, only when none exists.
-# They are mutually exclusive per story, so at most ONE visual dispatch is allowed in total and it is
-# reserved once, at the larger worst case - never both. Vision subject matching is not a stage here:
-# under this envelope it is rejected before dispatch (unknown stage).
+# Source-photo recomposition and generated imagery are mutually exclusive. A generated image is
+# followed by exactly one narrow pixel-compliance call; this is separately reserved and recorded.
 VISUAL_RECOMPOSITION_STAGE = "news_recomposition"
 VISUAL_GENERATION_STAGE = "news_generated_image"
-VISUAL_STAGES = (VISUAL_RECOMPOSITION_STAGE, VISUAL_GENERATION_STAGE)
+VISUAL_COMPLIANCE_STAGE = "news_visual_compliance"
+IMAGE_VISUAL_STAGES = (VISUAL_RECOMPOSITION_STAGE, VISUAL_GENERATION_STAGE)
+VISUAL_STAGES = (*IMAGE_VISUAL_STAGES, VISUAL_COMPLIANCE_STAGE)
 VISUAL_RECOMPOSITION_MODEL = "gpt-image-2.5-sunburst"
 VISUAL_GENERATION_MODEL = "gpt-image-2.5-flare"
+VISUAL_COMPLIANCE_MODEL = "gpt-5.6-luna"
 VISUAL_STAGE_MODELS = {VISUAL_RECOMPOSITION_STAGE: VISUAL_RECOMPOSITION_MODEL,
-                       VISUAL_GENERATION_STAGE: VISUAL_GENERATION_MODEL}
+                       VISUAL_GENERATION_STAGE: VISUAL_GENERATION_MODEL,
+                       VISUAL_COMPLIANCE_STAGE: VISUAL_COMPLIANCE_MODEL}
 VISUAL_QUALITY, VISUAL_SIZE = "high", "1536x1024"
-VISUAL_RECOMPOSITION_MAX_DISPATCHES = 1  # total visual dispatches per story, across both stages
+VISUAL_RECOMPOSITION_MAX_DISPATCHES = 1  # image dispatches per story: edit OR generation
+VISUAL_COMPLIANCE_MAX_DISPATCHES = 1
+VISUAL_COMPLIANCE_INPUT_TOKEN_CAP = 6_000
+VISUAL_COMPLIANCE_OUTPUT_TOKEN_CAP = 400
+# Current official Standard prices for gpt-5.6-luna (2026-09-28), USD per 1M tokens.
+VISUAL_COMPLIANCE_INPUT_PRICE_PER_MILLION = Decimal("0.20")
+VISUAL_COMPLIANCE_OUTPUT_PRICE_PER_MILLION = Decimal("1.20")
+
+
+def _image_visual_cost(*, model: str, operation: object, references: tuple[object, ...] = ()) -> Decimal:
+    from integrations.llm_gateway.image_protocol import ImageGenerationRequest
+    from services.image_pricing import ImageExecutionProfile, ImagePricingCatalog
+
+    profile = ImageExecutionProfile(provider="openai", model=model, quality=VISUAL_QUALITY,
+                                    size=VISUAL_SIZE, operation=operation)
+    probe = ImageGenerationRequest(prompt="worst-case pricing probe", operation=operation,
+                                   reference_images=references)
+    return ImagePricingCatalog().quote(profile, probe).worst_case_cost_usd
+
+
+def visual_generation_worst_case() -> Decimal:
+    from integrations.llm_gateway.image_protocol import ImageGenerationOperation
+
+    return _image_visual_cost(model=VISUAL_GENERATION_MODEL,
+                              operation=ImageGenerationOperation.TEXT_TO_IMAGE)
+
+
+def source_recomposition_worst_case() -> Decimal:
+    from integrations.llm_gateway.image_protocol import ImageGenerationOperation, ReferenceImage
+
+    return _image_visual_cost(model=VISUAL_RECOMPOSITION_MODEL,
+                              operation=ImageGenerationOperation.IMAGE_EDIT,
+                              references=(ReferenceImage(data=b"\x00", mime_type="image/png"),))
+
+
+def visual_compliance_worst_case() -> Decimal:
+    million = Decimal(1_000_000)
+    return (
+        Decimal(VISUAL_COMPLIANCE_INPUT_TOKEN_CAP) * VISUAL_COMPLIANCE_INPUT_PRICE_PER_MILLION
+        + Decimal(VISUAL_COMPLIANCE_OUTPUT_TOKEN_CAP) * VISUAL_COMPLIANCE_OUTPUT_PRICE_PER_MILLION
+    ) / million
+
+
+def generated_visual_pipeline_worst_case() -> Decimal:
+    return visual_generation_worst_case() + visual_compliance_worst_case()
 
 
 def visual_recomposition_worst_case() -> Decimal:
-    """Worst case of the one visual dispatch a story may make (recomposition edit OR generated
-    text-to-image, whichever prices higher), from the existing image pricing catalog."""
-    from integrations.llm_gateway.image_protocol import (
-        ImageGenerationOperation, ImageGenerationRequest, ReferenceImage,
-    )
-    from services.image_pricing import ImageExecutionProfile, ImagePricingCatalog
-
-    catalog = ImagePricingCatalog()
-    worst = Decimal("0")
-    for model, operation, references in (
-        (VISUAL_RECOMPOSITION_MODEL, ImageGenerationOperation.IMAGE_EDIT,
-         (ReferenceImage(data=b"\x00", mime_type="image/png"),)),
-        (VISUAL_GENERATION_MODEL, ImageGenerationOperation.TEXT_TO_IMAGE, ()),
-    ):
-        profile = ImageExecutionProfile(
-            provider="openai", model=model, quality=VISUAL_QUALITY, size=VISUAL_SIZE, operation=operation,
-        )
-        probe = ImageGenerationRequest(prompt="worst-case pricing probe", operation=operation, reference_images=references)
-        worst = max(worst, catalog.quote(profile, probe).worst_case_cost_usd)
-    return worst * VISUAL_RECOMPOSITION_MAX_DISPATCHES
+    """Provisional visual branch maximum: source edit OR generation plus compliance."""
+    return max(source_recomposition_worst_case(), generated_visual_pipeline_worst_case())
 
 
 def maximum_text_canary_cost(models: tuple[ModelDescriptor, ...] = (GPT_5_6_LUNA, GPT_5_6_TERRA)) -> Decimal:
@@ -191,7 +220,7 @@ def maximum_text_canary_cost(models: tuple[ModelDescriptor, ...] = (GPT_5_6_LUNA
 
 
 def maximum_canary_cost(models: tuple[ModelDescriptor, ...] = (GPT_5_6_LUNA, GPT_5_6_TERRA)) -> Decimal:
-    """Per-story hard maximum: every text stage plus the one bounded visual dispatch."""
+    """Per-story provisional maximum: every text stage plus the costliest visual branch."""
     return maximum_text_canary_cost(models) + visual_recomposition_worst_case()
 
 
@@ -306,19 +335,32 @@ class TelegramCanaryEnvelope:
         })
 
     def authorize_visual_dispatch(self, *, stage: str, model_id: str, reserved_usd: Decimal) -> None:
-        """Reserve the one bounded visual dispatch inside this same per-story ledger, or refuse."""
+        """Reserve one bounded visual stage inside this same per-story ledger, or refuse."""
         if VISUAL_STAGE_MODELS.get(stage) != model_id:
             raise CanaryPreDispatchSafetyRejection("telegram canary: visual call is outside the bounded visual stage")
         assert self.dispatch_records is not None
-        if sum(1 for r in self.dispatch_records if r["stage"] in VISUAL_STAGES) >= VISUAL_RECOMPOSITION_MAX_DISPATCHES:
-            raise CanaryPreDispatchSafetyRejection("telegram canary: repeated visual dispatch denied")
-        if reserved_usd <= 0 or reserved_usd > visual_recomposition_worst_case():
+        same_stage = sum(1 for r in self.dispatch_records if r["stage"] == stage)
+        if stage in IMAGE_VISUAL_STAGES:
+            image_calls = sum(1 for r in self.dispatch_records if r["stage"] in IMAGE_VISUAL_STAGES)
+            if image_calls >= VISUAL_RECOMPOSITION_MAX_DISPATCHES:
+                raise CanaryPreDispatchSafetyRejection("telegram canary: repeated image dispatch denied")
+            expected = (source_recomposition_worst_case() if stage == VISUAL_RECOMPOSITION_STAGE
+                        else visual_generation_worst_case())
+        else:
+            if same_stage >= VISUAL_COMPLIANCE_MAX_DISPATCHES:
+                raise CanaryPreDispatchSafetyRejection("telegram canary: repeated compliance dispatch denied")
+            if not any(r["stage"] == VISUAL_GENERATION_STAGE for r in self.dispatch_records):
+                raise CanaryPreDispatchSafetyRejection("telegram canary: compliance requires a generated image")
+            expected = visual_compliance_worst_case()
+        if reserved_usd != expected:
             raise CanaryPreDispatchSafetyRejection("telegram canary: visual reservation is not the priced worst case")
         if self._spent_reserved + reserved_usd > self.hard_cap_usd:
             raise CanaryPreDispatchSafetyRejection("telegram canary: remaining hard envelope is insufficient")
         self._spent_reserved += reserved_usd
         self.dispatch_records.append({
-            "stage": stage, "model": model_id, "input_token_upper_bound": None, "output_token_cap": None,
+            "stage": stage, "model": model_id,
+            "input_token_upper_bound": VISUAL_COMPLIANCE_INPUT_TOKEN_CAP if stage == VISUAL_COMPLIANCE_STAGE else None,
+            "output_token_cap": VISUAL_COMPLIANCE_OUTPUT_TOKEN_CAP if stage == VISUAL_COMPLIANCE_STAGE else None,
             "reserved_max_cost_usd": str(reserved_usd),
             "remaining_hard_envelope_usd": str(self.hard_cap_usd - self._spent_reserved),
             "actual_input_tokens": None, "actual_output_tokens": None, "actual_cost_usd": None,

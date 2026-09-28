@@ -396,7 +396,7 @@ async def maybe_recompose(
     # reserved inside that same envelope first; a refusal means no call (original source photo kept).
     from services.kage_telegram_canary_envelope import (
         VISUAL_RECOMPOSITION_STAGE, CanaryPreDispatchSafetyRejection, current_telegram_canary_envelope,
-        visual_recomposition_worst_case,
+        source_recomposition_worst_case,
     )
 
     envelope = current_telegram_canary_envelope()
@@ -404,7 +404,7 @@ async def maybe_recompose(
         try:
             envelope.authorize_visual_dispatch(
                 stage=VISUAL_RECOMPOSITION_STAGE, model_id=RECOMPOSITION_MODEL,
-                reserved_usd=visual_recomposition_worst_case(),
+                reserved_usd=source_recomposition_worst_case(),
             )
         except CanaryPreDispatchSafetyRejection as exc:
             return _fail_open(

@@ -22,6 +22,7 @@ from database.models.editorial_task import EditorialTask, TaskPriority
 from database.models.kage_content_lineage_audit import KageContentLineageAudit
 from database.models.story_telegram_delivery import StoryTelegramDelivery
 from integrations.llm_gateway.image_protocol import ImageGenerationOperation, ImageGenerationResponse
+from integrations.llm_gateway.protocol import GenerateResponse
 from schemas.capability import CapabilityUsage
 from schemas.content_draft import ContentDraftRead
 from schemas.editorial_task import EditorialTaskCreate
@@ -31,13 +32,16 @@ from scripts import _kage_telegram_atomic_natural_canary as canary
 from scripts import _kage_telegram_bounded_natural_batch as batch
 from services import kage_visual_fallback as vf
 from services import workflow_service
+from services.kage_visual_compliance import VisualComplianceResult
 from services.editorial_treatment import STANDARD, EditorialTreatmentDecision
 from services.image_relevance import evaluate_eligibility
 from services.kage_content_lineage_audit import create_attempt_audit
 from services.kage_publication_worker_gate import WorkerGateResult
 from services.kage_telegram_canary_envelope import (
-    VISUAL_GENERATION_STAGE, VISUAL_RECOMPOSITION_MODEL, VISUAL_RECOMPOSITION_STAGE, CanaryPreDispatchSafetyRejection,
-    TelegramCanaryEnvelope, maximum_canary_cost, telegram_canary_envelope, visual_recomposition_worst_case,
+    VISUAL_COMPLIANCE_STAGE, VISUAL_GENERATION_STAGE, VISUAL_RECOMPOSITION_MODEL, VISUAL_RECOMPOSITION_STAGE,
+    CanaryPreDispatchSafetyRejection, TelegramCanaryEnvelope, generated_visual_pipeline_worst_case,
+    maximum_canary_cost, source_recomposition_worst_case, telegram_canary_envelope,
+    visual_compliance_worst_case, visual_generation_worst_case, visual_recomposition_worst_case,
 )
 from tests.test_content_worker_cycle import _make_event, factory, test_source  # noqa: F401
 from tests.test_router_media_integration import _fake_candidate
@@ -78,6 +82,31 @@ class FakeGateway:
                                        provider="openai", usage=CapabilityUsage(units=1, unit_type="image"), cost_usd=self.cost)
 
 
+class FakeComplianceGateway:
+    def __init__(self, *, flags: dict[str, bool] | None = None, malformed: bool = False,
+                 error: Exception | None = None, accounted: bool = True):
+        self.calls = 0
+        self.flags, self.malformed, self.error, self.accounted = flags or {}, malformed, error, accounted
+
+    async def generate(self, request):
+        self.calls += 1
+        if self.error:
+            raise self.error
+        checks = {name: False for name in (
+            "readable_text_present", "logo_or_wordmark_present", "interface_or_webpage_present",
+            "document_or_fake_evidence_present", "chart_or_data_graphic_present",
+            "identifiable_real_person_present", "named_person_likeness_risk",
+            "unsupported_branded_product_present", "obvious_visual_story_mismatch",
+        )}
+        checks.update(self.flags)
+        output = {**checks, "decision": "REJECT" if any(checks.values()) else "COMPLIANT", "reasons": []}
+        if self.malformed:
+            output.pop("readable_text_present")
+        usage = CapabilityUsage(input_tokens=900, output_tokens=80) if self.accounted else CapabilityUsage()
+        return GenerateResponse(text=None, structured_output=output, finish_reason="stop",
+                                model_used="gpt-5.6-luna", usage=usage)
+
+
 # --- generation brief -------------------------------------------------------------------------------
 
 def _brief(fixture=M2865, title=TITLE_2865, body=USEFUL_2865_BODY):
@@ -89,7 +118,9 @@ def test_brief_uses_only_the_headline_and_verified_contract_facts():
     brief = _brief()
     facts = M2865["research"]["facts"]
     assert brief["fact_ids"] == [1, 2]
-    assert f"- {facts[0]}" in brief["prompt"] and f"- {facts[1]}" in brief["prompt"]
+    assert all(fact not in brief["prompt"] for fact in facts)  # protected names are projected out
+    assert "приостановила обучение своих последних моделей" in brief["prompt"]
+    assert "выполняли поиск на сайтах правительства США" in brief["prompt"]
     assert "news.google.com" not in brief["prompt"] and "<a href" not in brief["prompt"]  # no raw source noise
     assert M2865["source_headline"] not in brief["prompt"]
 
@@ -114,17 +145,23 @@ def test_named_real_person_is_masked_and_depiction_avoided():
     assert "show no person at all" in brief["prompt"]
 
 
-def test_company_names_are_kept():
-    assert "OpenAI" in _brief()["prompt"] and _brief()["named_person_detected"] is False
+def test_named_organizations_are_semantic_context_not_pixel_instructions():
+    brief = _brief()
+    assert "OpenAI" not in brief["prompt"] and "NBC News" not in brief["prompt"]
+    assert brief["masked_entity_surfaces"] == ["OpenAI", "NBC News"]
+    assert "generic, unbranded" in brief["prompt"] and brief["named_person_detected"] is False
 
 
 # --- Tier 2 / Tier 3 ladder ---------------------------------------------------------------------------
 
-async def _ladder(gateway, *, title=TITLE_2865, allow_generation=True):
-    return await vf.resolve_visual_fallback(
-        title=title, body=USEFUL_2865_BODY, research=M2865["research"], intelligence=M2865["intelligence"],
-        source_headline=M2865["source_headline"], gateway=gateway, editorial_code="NP-0001",
-        allow_generation=allow_generation)
+async def _ladder(gateway, *, title=TITLE_2865, allow_generation=True, compliance=None):
+    envelope = TelegramCanaryEnvelope()
+    with telegram_canary_envelope(envelope):
+        return await vf.resolve_visual_fallback(
+            title=title, body=USEFUL_2865_BODY, research=M2865["research"], intelligence=M2865["intelligence"],
+            source_headline=M2865["source_headline"], gateway=gateway,
+            compliance_gateway=compliance or FakeComplianceGateway(), editorial_code="NP-0001",
+            allow_generation=allow_generation)
 
 
 @pytest.mark.asyncio
@@ -137,6 +174,32 @@ async def test_generation_is_text_to_image_16x9_and_called_exactly_once():
     assert request.reference_images == ()
     with Image.open(io.BytesIO(result.image_bytes)) as im:  # KAGE-branded hero of the generated image
         assert im.size == (1600, 900)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("flag", [
+    "logo_or_wordmark_present", "interface_or_webpage_present", "readable_text_present",
+    "identifiable_real_person_present",
+])
+async def test_forbidden_generated_pixels_are_rejected_to_typography_without_regeneration(flag):
+    image, compliance = FakeGateway(_photo()), FakeComplianceGateway(flags={flag: True})
+    result = await _ladder(image, compliance=compliance)
+    assert image.calls == 1 and compliance.calls == 1
+    assert result.tier == vf.TIER_TYPOGRAPHY
+    assert result.compliance.decision == "REJECT" and result.compliance.checks[flag] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("compliance, reason", [
+    (FakeComplianceGateway(error=RuntimeError("down")), "provider_error:RuntimeError"),
+    (FakeComplianceGateway(malformed=True), "malformed_result"),
+    (FakeComplianceGateway(accounted=False), "missing_usage_accounting"),
+], ids=["provider_failure", "malformed", "missing_accounting"])
+async def test_compliance_failures_fail_closed_to_typography(compliance, reason):
+    image = FakeGateway(_photo())
+    result = await _ladder(image, compliance=compliance)
+    assert image.calls == 1 and compliance.calls == 1 and result.tier == vf.TIER_TYPOGRAPHY
+    assert result.compliance.failure_reason == reason
 
 
 @pytest.mark.asyncio
@@ -191,12 +254,16 @@ def test_typography_card_refuses_a_headline_that_cannot_fit():
 # --- cost envelope --------------------------------------------------------------------------------------
 
 def test_visual_branches_are_mutually_exclusive_so_the_hard_max_does_not_double_reserve():
-    assert visual_recomposition_worst_case() == Decimal("0.488")  # max(OpenAI edit 0.488, generation 0.440)
+    assert source_recomposition_worst_case() == Decimal("0.488")
+    assert visual_generation_worst_case() == Decimal("0.440")
+    assert visual_compliance_worst_case() == Decimal("0.00168")
+    assert generated_visual_pipeline_worst_case() == Decimal("0.44168")
+    assert visual_recomposition_worst_case() == Decimal("0.488")
     assert maximum_canary_cost() == Decimal("1.234389") == canary.MAX_COST == batch.PER_STORY_MAX_USD
     assert (5 * maximum_canary_cost()).quantize(Decimal("0.01"), rounding=ROUND_CEILING) == Decimal("6.18")
     envelope = TelegramCanaryEnvelope()
     envelope.authorize_visual_dispatch(stage=VISUAL_RECOMPOSITION_STAGE, model_id=VISUAL_RECOMPOSITION_MODEL,
-                                       reserved_usd=visual_recomposition_worst_case())
+                                       reserved_usd=source_recomposition_worst_case())
     with pytest.raises(CanaryPreDispatchSafetyRejection):  # never both paid visuals on one story
         envelope.authorize_visual_dispatch(stage=VISUAL_GENERATION_STAGE, model_id=VISUAL_RECOMPOSITION_MODEL,
                                            reserved_usd=visual_recomposition_worst_case())
@@ -209,7 +276,22 @@ async def test_generation_cost_is_reserved_and_recorded_in_the_story_ledger():
         await vf.generate_editorial_image("brief", gateway=FakeGateway(_photo(), cost="0.0702"))
     record = envelope.dispatch_records[-1]
     assert record["stage"] == VISUAL_GENERATION_STAGE and record["actual_cost_usd"] == "0.0702"
-    assert record["reserved_max_cost_usd"] == str(visual_recomposition_worst_case())
+    assert record["reserved_max_cost_usd"] == str(visual_generation_worst_case())
+
+
+@pytest.mark.asyncio
+async def test_compliance_is_separately_reserved_and_recorded_once():
+    envelope = TelegramCanaryEnvelope()
+    with telegram_canary_envelope(envelope):
+        result = await vf.resolve_visual_fallback(
+            title=TITLE_2865, body=USEFUL_2865_BODY, research=M2865["research"],
+            intelligence=M2865["intelligence"], source_headline=M2865["source_headline"],
+            gateway=FakeGateway(_photo()), compliance_gateway=FakeComplianceGateway(),
+        )
+    assert result.tier == vf.TIER_GENERATED
+    rows = [row for row in envelope.dispatch_records if row["stage"] == VISUAL_COMPLIANCE_STAGE]
+    assert len(rows) == 1 and rows[0]["reserved_max_cost_usd"] == "0.00168"
+    assert rows[0]["actual_cost_usd"] == "0.000276"
 
 
 @pytest.mark.asyncio
@@ -282,6 +364,15 @@ async def _cycle(factory_, source, monkeypatch, fixture, body, candidates, *, ge
         {"gate_version": "1", "execution_id": "fixture", "structured_result": {
             "FACTUAL_SAFETY": "PASS", "HEADLINE_SAFETY": "PASS", "BODY_SAFETY": "PASS", "UNSUPPORTED_CLAIMS": []}}))
     generate = AsyncMock(return_value=(generated, "ok") if generated else (None, generation_error or "generation_error:X"))
+    compliance = AsyncMock(return_value=VisualComplianceResult(
+        "COMPLIANT", {
+            "readable_text_present": False, "logo_or_wordmark_present": False,
+            "interface_or_webpage_present": False, "document_or_fake_evidence_present": False,
+            "chart_or_data_graphic_present": False, "identifiable_real_person_present": False,
+            "named_person_likeness_risk": False, "unsupported_branded_product_present": False,
+            "obvious_visual_story_mismatch": False,
+        }, (), input_tokens=900, output_tokens=80, actual_cost_usd=Decimal("0.000276"),
+    ))
     fake_bot = AsyncMock()
     fake_bot.send_photo.return_value.message_id = 7001
     fake_bot.send_photo.return_value.chat.id = CHAT
@@ -296,6 +387,7 @@ async def _cycle(factory_, source, monkeypatch, fixture, body, candidates, *, ge
               new=AsyncMock(return_value=EditorialTreatmentDecision(STANDARD, human_review_required=False, reason="t"))),
         patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=candidates)),
         patch("services.kage_visual_fallback.generate_editorial_image", new=generate),
+        patch("services.kage_visual_compliance.inspect_generated_visual", new=compliance),
     ]
     if not typography:
         patches.append(patch("services.kage_visual_fallback.render_typography_card", return_value=None))
@@ -315,7 +407,8 @@ async def _cycle(factory_, source, monkeypatch, fixture, body, candidates, *, ge
                                         .where(StoryTelegramDelivery.content_draft_id == draft_id))
         await session.execute(delete(KageContentLineageAudit).where(KageContentLineageAudit.task_id == task.id))
         await session.commit()
-    return SimpleNamespace(result=result, bot=fake_bot, gate=gate, generate=generate, lineage=lineage,
+    return SimpleNamespace(result=result, bot=fake_bot, gate=gate, generate=generate, compliance=compliance,
+                           lineage=lineage,
                            outcome=task_row.workflow["publication_outcome"], draft_status=draft_row.status,
                            receipts=receipts)
 
