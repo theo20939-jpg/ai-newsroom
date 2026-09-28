@@ -1,0 +1,127 @@
+{
+ "controlled_run": true,
+ "natural_canary": false,
+ "source_canary": "viral_nominated_canary10_20260928 (55016a4)",
+ "event": "OpenAI, Anthropic CEOs called to appear at Australian AI probe",
+ "evidence_copy": {
+  "event_id": "cd5d5f1e-d874-4202-b8d9-95979d5f10f3",
+  "title": "Anthropic will not appear at Senate inquiry into AI and datacentres amid fallout from OpenAI hack",
+  "url": "https://www.theguardian.com/australia-news/2026/sep/28/anthropic-will-not-appear-at-senate-inquiry-into-ai-and-datacentres-amid-fallout-from-openai-hack-ntwnfb"
+ },
+ "director_facts": [
+  "Anthropic will not appear at Senate inquiry into AI and datacentres amid fallout from OpenAI hack",
+  "Photograph: Carlos Barría/Reuters View image in fullscreen Anthropic co-founder and CEO, Dario Amodei, will not appear at the Greens-led Senate inquiry into AI and datacentres, but representatives are expected at a joint standing committee hearing.",
+  "Photograph: Carlos Barría/Reuters AI (artificial intelligence)",
+  "Anthropic will not appear at Senate inquiry into AI and datacentres amid fallout from OpenAI hack Company behind Claude chatbot expected to attend separate Australian government hearing on AI next week Get our new political email, free app or daily news podcast Josh Taylor and Tom McIlroy",
+  "Last modified on Mon 28 Sep 2026 04.35 EDT Share Prefer the Guardian on Google The chief executive of Anthropic will turn down an invitation to appear at a Senate committee hearing on AI this week, in the wake of the revelation that OpenAI agents had breached Australian government websites.",
+  "However, the company will make an appearance before another committee early next week.",
+  "The chair of the Senate inquiry into AI and datacentres, Greens senator Sarah Hanson-Young, wrote to OpenAI and Anthropic last week asking for their US-based chief executives to appear before the committee on Thursday this week.",
+  "SOURCE MEDIA: 1200x630 source image available"
+ ],
+ "treatment": {
+  "treatment": "BRIEF",
+  "reason": "no Intelligence significance available - conservative default, never MAJOR/STANDARD blind",
+  "canary10": {
+   "treatment": "BRIEF",
+   "reason": "no Intelligence significance available - conservative default, never MAJOR/STANDARD blind"
+  }
+ },
+ "reason": "creative_director_failed:EditorialCorrectionRequired",
+ "gate": null,
+ "delivery": null,
+ "chosen_format": null,
+ "replay": {
+  "replayed": [
+   {
+    "kind": "PHASE_A",
+    "saved_call": "01_phase_a.json",
+    "request_identical": false,
+    "diff_lines": [
+     "-BUSINESS CONTEXT AS OF: 2026-09-28T11:47:46.380482+00:00",
+     "+BUSINESS CONTEXT AS OF: 2026-09-28T15:48:00.484892+00:00"
+    ],
+    "historical_cost_usd": "0.008407"
+   },
+   {
+    "kind": "VISION",
+    "saved_call": "canary9_02_vision.json",
+    "request_identical": true,
+    "diff_lines": [],
+    "historical_cost_usd": "0.001207"
+   },
+   {
+    "kind": "DIRECTOR",
+    "saved_call": "02_director.json",
+    "request_identical": false,
+    "diff_lines": [
+     "-BUSINESS CONTEXT AS OF: 2026-09-28T11:47:46.380482+00:00",
+     "+BUSINESS CONTEXT AS OF: 2026-09-28T15:48:00.484892+00:00"
+    ],
+    "historical_cost_usd": "0.051047"
+   },
+   {
+    "kind": "SEMANTIC_JUDGE",
+    "saved_call": "03_semantic_judge.json",
+    "request_identical": true,
+    "diff_lines": [],
+    "historical_cost_usd": "0.005492"
+   },
+   {
+    "kind": "DIRECTOR",
+    "saved_call": "04_director.json",
+    "request_identical": false,
+    "diff_lines": [
+     "-BUSINESS CONTEXT AS OF: 2026-09-28T11:47:46.380482+00:00",
+     "+BUSINESS CONTEXT AS OF: 2026-09-28T15:48:00.484892+00:00"
+    ],
+    "historical_cost_usd": "0.0487"
+   }
+  ],
+  "live": [
+   {
+    "kind": "SEMANTIC_JUDGE",
+    "post": "post",
+    "model": "gpt-5.6-luna",
+    "max_tokens": 1500,
+    "worst_case_usd": "0.01082600",
+    "status": "OK",
+    "finish_reason": "stop",
+    "input_tokens": 1831,
+    "output_tokens": 352,
+    "reasoning_tokens": 230,
+    "cost_usd": "0.003943"
+   }
+  ],
+  "refused": []
+ },
+ "vision_verdicts": [
+  {
+   "subject_key": "source",
+   "suitable": false,
+   "image_kind": "photograph",
+   "baked_in_text_prominent": true,
+   "reason": "A photograph shows a person speaking against a purple background, with a prominent “The Guardian” wordmark overlaid in the lower right.",
+   "error": null
+  }
+ ],
+ "generated": [],
+ "live_llm_calls": [
+  {
+   "post": "post",
+   "kind": "SEMANTIC_JUDGE",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.01082600",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1831,
+   "output_tokens": 352,
+   "reasoning_tokens": 230,
+   "cost_usd": "0.003943"
+  }
+ ],
+ "new_llm_spent_usd": "0.003943",
+ "llm_ledger_usd": "0.003943",
+ "image_ledger_usd": null,
+ "historical_canary10_llm_usd": "0.113646"
+}

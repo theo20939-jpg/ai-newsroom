@@ -1,0 +1,27 @@
+{
+ "new_llm_usd": "0.003943",
+ "new_image_usd": "0",
+ "live_calls": [
+  {
+   "kind": "SEMANTIC_JUDGE",
+   "post": "post",
+   "model": "gpt-5.6-luna",
+   "max_tokens": 1500,
+   "worst_case_usd": "0.01082600",
+   "status": "OK",
+   "finish_reason": "stop",
+   "input_tokens": 1831,
+   "output_tokens": 352,
+   "reasoning_tokens": 230,
+   "cost_usd": "0.003943"
+  }
+ ],
+ "replayed_calls_no_cost": [
+  "01_phase_a.json",
+  "canary9_02_vision.json",
+  "02_director.json",
+  "03_semantic_judge.json",
+  "04_director.json"
+ ],
+ "historical_canary10_llm_usd": "0.113646"
+}

@@ -1,0 +1,27 @@
+{
+ "verdict": {
+  "slide_roles": [
+   "HOOK",
+   "EVENT_ACTION",
+   "TARGET_STATUS",
+   "DETAIL",
+   "CHRONOLOGY"
+  ],
+  "same_thesis_pairs": [],
+  "caption_repeats_slides": {
+   "present": false,
+   "reason": "The caption retells the story's concrete facts but contains neither a bare list matching a slide nor a word-for-word copied sentence."
+  },
+  "caption_aphorism": {
+   "present": false,
+   "sentence": "",
+   "reason": "The caption ends with a concrete summary of Anthropic's attendance at two hearings, not a generalised lesson or rhetorical payoff."
+  },
+  "unsupported_interpretation": []
+ },
+ "semantic_findings": [],
+ "deterministic_findings": [
+  "[advisory] body_repeats_headline (card 4): the body restates the headline instead of developing it: 'История с Anthropic появилась после сообщения о том, что агенты OpenAI проникли на австралийские правительственные сайты.' - a viral slide's body must add a new grounded fact"
+ ],
+ "role_guard_dropped": []
+}

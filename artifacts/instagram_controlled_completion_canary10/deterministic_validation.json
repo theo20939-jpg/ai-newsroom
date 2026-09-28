@@ -1,0 +1,73 @@
+{
+ "authoritative_input": "artifacts/instagram_feed_product/viral_nominated_canary10_20260928/post/director_raw_output.json",
+ "deterministic": {
+  "media_first_contract": "PASS",
+  "generated_slide_fields": [
+   {
+    "slide": 1,
+    "generation_brief": true,
+    "story_anchor": true,
+    "visual_direction": true,
+    "source_evidence": true,
+    "layout": true
+   },
+   {
+    "slide": 2,
+    "generation_brief": true,
+    "story_anchor": true,
+    "visual_direction": true,
+    "source_evidence": true,
+    "layout": true
+   },
+   {
+    "slide": 3,
+    "generation_brief": true,
+    "story_anchor": true,
+    "visual_direction": true,
+    "source_evidence": true,
+    "layout": true
+   },
+   {
+    "slide": 4,
+    "generation_brief": true,
+    "story_anchor": true,
+    "visual_direction": true,
+    "source_evidence": true,
+    "layout": true
+   },
+   {
+    "slide": 5,
+    "generation_brief": true,
+    "story_anchor": true,
+    "visual_direction": true,
+    "source_evidence": true,
+    "layout": true
+   }
+  ],
+  "quote_use": {
+   "terminal": [],
+   "repairable": []
+  },
+  "named_person_risks": [],
+  "status_violations": [],
+  "unsupported_targets": [],
+  "hook_lengths": [
+   56,
+   38,
+   32,
+   51,
+   44
+  ],
+  "copy_thesis_findings": [
+   "[advisory] body_repeats_headline (card 4): the body restates the headline instead of developing it: 'История с Anthropic появилась после сообщения о том, что агенты OpenAI проникли на австралийские правительственные сайты.' - a viral slide's body must add a new grounded fact"
+  ],
+  "thesis_roles": [
+   "GENERAL",
+   "GENERAL",
+   "GENERAL",
+   "GENERAL",
+   "GENERAL"
+  ],
+  "note": "copy_thesis_findings entries carrying the critic's '[advisory]' label are still BLOCKING for a viral carousel when their code is in services.instagram_viral_format._VIRAL_BLOCKING (body_repeats_headline is) - the critic relabels non-gating codes as advisory (instagram_editorial_critic.py:314), the viral layer gates them anyway"
+ }
+}
