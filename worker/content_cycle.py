@@ -1125,21 +1125,42 @@ async def _feed_evidence_package(session: AsyncSession, event_id: UUID, event_ro
     )
 
 
+def _order_evidence_copies(event_id: UUID, rows: dict[UUID, Any], candidate_ids: list[str]) -> list[UUID]:
+    """The order a nominated event's copies are tried for body evidence (founder decision 2026-09-28, after the canary-8 copy-limit
+    diagnostic): the planned copy first, then direct publisher copies in nomination order, then Google News redirect copies NEWEST FIRST
+    by `collected_at` (the timestamp the 24-hour window is defined on) - for an evolving story the freshest copy carries the current,
+    most complete follow-up. Ties: nomination order, then the copy id. Only the order changes: which copies are eligible and how many are
+    tried (_VIRAL_EVIDENCE_COPIES) stay exactly as they were."""
+    from services.text_normalization import is_google_news_redirect_host
+
+    nomination = {cid: i for i, cid in enumerate(candidate_ids)}
+    others = [cid for cid in rows if cid != event_id]
+    direct = [cid for cid in others if not is_google_news_redirect_host(rows[cid].url or "")]
+    shells = [cid for cid in others if is_google_news_redirect_host(rows[cid].url or "")]
+
+    def freshness(cid: UUID) -> float:
+        collected = getattr(rows[cid], "collected_at", None)
+        return -collected.timestamp() if collected is not None else float("inf")  # newest first; an unknown time goes last
+
+    direct.sort(key=lambda cid: (nomination.get(str(cid), len(nomination)), str(cid)))
+    shells.sort(key=lambda cid: (freshness(cid), nomination.get(str(cid), len(nomination)), str(cid)))
+    return [event_id, *direct, *shells]
+
+
 async def _viral_evidence_copy(session: AsyncSession, viral_event: Any, event_id: UUID, event_row: Any, *, slot_format: Any,
                                now: datetime) -> tuple[UUID, Any, Any, Any]:
     """The first copy of a nominated viral event whose ACQUIRED body passes the evidence preflight (services/instagram_viral_nomination
     .viral_evidence_preflight) - the planned copy first, then up to _VIRAL_EVIDENCE_COPIES - 1 other copies of the SAME event. Returns
     (event id, row, package, preflight) of the passing copy, or of the last one tried (then status PENDING / FAIL). Copies with a direct
-    publisher URL go before aggregator redirect shells (a Google News shell often cannot be resolved to its article)."""
-    from services.text_normalization import is_google_news_redirect_host
-
+    publisher URL go before aggregator redirect shells (a Google News shell often cannot be resolved to its article); the shells go newest
+    first (_order_evidence_copies)."""
     rows = {event_id: event_row}
-    for cid in (viral_event.candidate_ids if viral_event is not None else ()):
+    candidate_ids = list(viral_event.candidate_ids if viral_event is not None else ())
+    for cid in candidate_ids:
         if cid != str(event_id) and (row := await session.get(NewsEvent, UUID(cid))) is not None:
             rows[UUID(cid)] = row
-    others = sorted((cid for cid in rows if cid != event_id), key=lambda cid: is_google_news_redirect_host(rows[cid].url or ""))
     result = None
-    for copy_id in [event_id, *others][:_VIRAL_EVIDENCE_COPIES]:
+    for copy_id in _order_evidence_copies(event_id, rows, candidate_ids)[:_VIRAL_EVIDENCE_COPIES]:
         row = rows[copy_id]
         package = await _feed_evidence_package(session, copy_id, row, slot_format)
         preflight = viral_evidence_preflight(

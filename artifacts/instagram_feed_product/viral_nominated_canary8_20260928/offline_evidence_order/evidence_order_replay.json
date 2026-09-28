@@ -1,0 +1,212 @@
+{
+ "provider_calls": 0,
+ "image_calls": 0,
+ "clock": "2026-09-27T21:27:34.410547+00:00",
+ "event": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+ "max_copies": 4,
+ "old_order": [
+  {
+   "position": 1,
+   "copy_id": "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+   "source_type": "direct",
+   "collected_at": "2026-09-27T17:56:52.805865+00:00",
+   "age_hours": 3.5,
+   "publisher": "The Verge AI",
+   "host": "www.theverge.com",
+   "ordering_key": "planned"
+  },
+  {
+   "position": 2,
+   "copy_id": "0ad4f236-27d6-4937-914c-0806dee22239",
+   "source_type": "google_news",
+   "collected_at": "2026-09-26T21:53:03.809309+00:00",
+   "age_hours": 23.6,
+   "publisher": "Google News: Artificial Intelligence",
+   "host": "news.google.com",
+   "ordering_key": "google_news, nomination #1 (stable)"
+  },
+  {
+   "position": 3,
+   "copy_id": "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+   "source_type": "google_news",
+   "collected_at": "2026-09-26T23:12:09.461388+00:00",
+   "age_hours": 22.3,
+   "publisher": "Google News: Artificial Intelligence",
+   "host": "news.google.com",
+   "ordering_key": "google_news, nomination #2 (stable)"
+  },
+  {
+   "position": 4,
+   "copy_id": "273dc8ad-c786-4c17-88a3-d5b7cc0c48a2",
+   "source_type": "google_news",
+   "collected_at": "2026-09-27T00:31:32.562723+00:00",
+   "age_hours": 20.9,
+   "publisher": "Google News: Artificial Intelligence",
+   "host": "news.google.com",
+   "ordering_key": "google_news, nomination #3 (stable)"
+  },
+  {
+   "position": 5,
+   "copy_id": "10856ebf-530f-41b4-80ea-2c7592cca2b8",
+   "source_type": "google_news",
+   "collected_at": "2026-09-26T23:52:23.128162+00:00",
+   "age_hours": 21.6,
+   "publisher": "Google News: Artificial Intelligence",
+   "host": "news.google.com",
+   "ordering_key": "google_news, nomination #4 (stable)"
+  },
+  {
+   "position": 6,
+   "copy_id": "d08eaab6-90a6-48d1-b99f-fef7f059e01f",
+   "source_type": "google_news",
+   "collected_at": "2026-09-27T10:20:55.154911+00:00",
+   "age_hours": 11.1,
+   "publisher": "Google News: Artificial Intelligence",
+   "host": "news.google.com",
+   "ordering_key": "google_news, nomination #5 (stable)"
+  },
+  {
+   "position": 7,
+   "copy_id": "a6b32ec3-2697-432c-ae6e-c175c496b6e0",
+   "source_type": "google_news",
+   "collected_at": "2026-09-27T20:45:37.124125+00:00",
+   "age_hours": 0.7,
+   "publisher": "Google News: Artificial Intelligence",
+   "host": "news.google.com",
+   "ordering_key": "google_news, nomination #6 (stable)"
+  }
+ ],
+ "new_order": [
+  {
+   "position": 1,
+   "copy_id": "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+   "source_type": "direct",
+   "collected_at": "2026-09-27T17:56:52.805865+00:00",
+   "age_hours": 3.5,
+   "publisher": "The Verge AI",
+   "host": "www.theverge.com",
+   "ordering_key": "planned"
+  },
+  {
+   "position": 2,
+   "copy_id": "a6b32ec3-2697-432c-ae6e-c175c496b6e0",
+   "source_type": "google_news",
+   "collected_at": "2026-09-27T20:45:37.124125+00:00",
+   "age_hours": 0.7,
+   "publisher": "Google News: Artificial Intelligence",
+   "host": "news.google.com",
+   "ordering_key": "google_news, collected_at DESC 2026-09-27T20:45:37.124125+00:00, nomination #6"
+  },
+  {
+   "position": 3,
+   "copy_id": "d08eaab6-90a6-48d1-b99f-fef7f059e01f",
+   "source_type": "google_news",
+   "collected_at": "2026-09-27T10:20:55.154911+00:00",
+   "age_hours": 11.1,
+   "publisher": "Google News: Artificial Intelligence",
+   "host": "news.google.com",
+   "ordering_key": "google_news, collected_at DESC 2026-09-27T10:20:55.154911+00:00, nomination #5"
+  },
+  {
+   "position": 4,
+   "copy_id": "273dc8ad-c786-4c17-88a3-d5b7cc0c48a2",
+   "source_type": "google_news",
+   "collected_at": "2026-09-27T00:31:32.562723+00:00",
+   "age_hours": 20.9,
+   "publisher": "Google News: Artificial Intelligence",
+   "host": "news.google.com",
+   "ordering_key": "google_news, collected_at DESC 2026-09-27T00:31:32.562723+00:00, nomination #3"
+  },
+  {
+   "position": 5,
+   "copy_id": "10856ebf-530f-41b4-80ea-2c7592cca2b8",
+   "source_type": "google_news",
+   "collected_at": "2026-09-26T23:52:23.128162+00:00",
+   "age_hours": 21.6,
+   "publisher": "Google News: Artificial Intelligence",
+   "host": "news.google.com",
+   "ordering_key": "google_news, collected_at DESC 2026-09-26T23:52:23.128162+00:00, nomination #4"
+  },
+  {
+   "position": 6,
+   "copy_id": "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+   "source_type": "google_news",
+   "collected_at": "2026-09-26T23:12:09.461388+00:00",
+   "age_hours": 22.3,
+   "publisher": "Google News: Artificial Intelligence",
+   "host": "news.google.com",
+   "ordering_key": "google_news, collected_at DESC 2026-09-26T23:12:09.461388+00:00, nomination #2"
+  },
+  {
+   "position": 7,
+   "copy_id": "0ad4f236-27d6-4937-914c-0806dee22239",
+   "source_type": "google_news",
+   "collected_at": "2026-09-26T21:53:03.809309+00:00",
+   "age_hours": 23.6,
+   "publisher": "Google News: Artificial Intelligence",
+   "host": "news.google.com",
+   "ordering_key": "google_news, collected_at DESC 2026-09-26T21:53:03.809309+00:00, nomination #1"
+  }
+ ],
+ "attempts_new_order": [
+  {
+   "copy_id": "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+   "title": "OpenAI agents tried to ‘bruteforce’ a UN website",
+   "collected_at": "2026-09-27T17:56:52.805865+00:00",
+   "original_url": "https://www.theverge.com/ai-artificial-intelligence/1001178/openai-agents-bruteforce-un-website",
+   "resolution_status": null,
+   "resolution_method": null,
+   "resolved_url": null,
+   "publisher_domain": null,
+   "resolution_metadata": {},
+   "acquisition_status": "FULL_TEXT",
+   "acquisition_error": null,
+   "extracted_chars": 7256,
+   "content_sha256": null,
+   "evidence_source_url": "https://www.theverge.com/ai-artificial-intelligence/1001178/openai-agents-bruteforce-un-website",
+   "evidence_source_original_url": null,
+   "package_quality": "STRONG",
+   "body_chars": 767,
+   "preflight": "FAIL",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "UNSUPPORTED"
+   },
+   "preflight_reason": "the body evidence does not support: chronology"
+  },
+  {
+   "copy_id": "a6b32ec3-2697-432c-ae6e-c175c496b6e0",
+   "title": "OpenAI pauses training of latest models after AI agents probed U.S. government sites in unexpected ways - CBC",
+   "collected_at": "2026-09-27T20:45:37.124125+00:00",
+   "original_url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxObEFoTklmUEQ2aVdLVFhuZl8tNTBYNXZoOGpFODY4N2ZLNXA2WWc2dDlGb1QtcG9vR1ZRa2N3cWJqbVA5MGVWYzJmT2p6ZGczMFQyU1lRSGk1VC0wejJ2ZURCWGE1MHhQOWpmcWVfcVg5QUxYaXhYdTZxdVRmRl9HSUpqTQ?oc=5",
+   "resolution_status": "RESOLVED",
+   "resolution_method": "google_news_article_token",
+   "resolved_url": "https://www.cbc.ca/news/business/openai-pause-training-after-probes-9.7360166",
+   "publisher_domain": "www.cbc.ca",
+   "resolution_metadata": {
+    "endpoint_status": 200,
+    "endpoint_bytes": 208,
+    "publisher_domain": "www.cbc.ca"
+   },
+   "acquisition_status": "FULL_TEXT",
+   "acquisition_error": null,
+   "extracted_chars": 6583,
+   "content_sha256": "ba52b66e12f2abe727fac01340c6d0e15b05c7508067ac1b19e77b37bf7a402f",
+   "evidence_source_url": "https://www.cbc.ca/news/business/openai-pause-training-after-probes-9.7360166",
+   "evidence_source_original_url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxObEFoTklmUEQ2aVdLVFhuZl8tNTBYNXZoOGpFODY4N2ZLNXA2WWc2dDlGb1QtcG9vR1ZRa2N3cWJqbVA5MGVWYzJmT2p6ZGczMFQyU1lRSGk1VC0wejJ2ZURCWGE1MHhQOWpmcWVfcVg5QUxYaXhYdTZxdVRmRl9HSUpqTQ?oc=5",
+   "package_quality": "STRONG",
+   "body_chars": 716,
+   "preflight": "PASS",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "SUPPORTED"
+   },
+   "preflight_reason": "every claim the hook makes is in the stored body evidence"
+  }
+ ],
+ "passing_copy": "a6b32ec3-2697-432c-ae6e-c175c496b6e0"
+}
