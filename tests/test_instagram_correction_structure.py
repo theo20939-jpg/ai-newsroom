@@ -133,8 +133,11 @@ def test_the_structurally_valid_fixture_passes_the_real_correction_mode_path_wit
 
 
 def test_no_previous_version_keeps_the_note_exactly_as_before():
+    from services.instagram_viral_format import VIRAL_COPY_CONTRACT
+
     note = EditorialCorrectionRequired(["slide 2: x"]).correction_note
-    assert "STRUCTURAL PRESERVATION" not in note and "PREVIOUS VERSION" not in note and note.endswith("1. slide 2: x")
+    assert "STRUCTURAL PRESERVATION" not in note and "PREVIOUS VERSION" not in note
+    assert note.endswith("1. slide 2: x" + VIRAL_COPY_CONTRACT)  # the findings, then the viral copy contract (2026-09-28)
 
 
 def test_the_correction_note_is_what_the_trigger_sends(monkeypatch):

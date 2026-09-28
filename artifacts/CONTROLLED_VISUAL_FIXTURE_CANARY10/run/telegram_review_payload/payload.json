@@ -1,0 +1,16 @@
+{
+ "LABEL": "REVIEW ARTIFACT - NOT SENT - NO INSTAGRAM PUBLICATION",
+ "kind": "carousel",
+ "version_label": "v1",
+ "media_in_order": [
+  "media_01.png",
+  "media_02.png",
+  "media_03.png",
+  "media_04.png",
+  "media_05.png"
+ ],
+ "gate_decision": "ready_for_editor",
+ "hold_or_block_reason": "passed with non-blocking warnings",
+ "package_identity": "5d504b5c9db7db8fcfcd3892169ece00",
+ "destination": "NONE - no send authorized for this task"
+}

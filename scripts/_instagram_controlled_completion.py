@@ -43,6 +43,9 @@ def _request_text(request) -> list[dict]:
     return [{"role": m.role, "text": [part.text for part in m.content if getattr(part, "type", None) == "text"]} for m in request.messages]
 
 
+FIXTURE: dict | None = None  # CONTROLLED_VISUAL_FIXTURE (optional 2nd argument): replaces ONLY the replayed correction's output
+
+
 def install_replay(out: Path) -> dict:
     """Wraps the (already guarded) provider: saved canary-10 responses first, in call order per kind; then the allowed live calls."""
     from integrations.llm_gateway.protocol import GenerateResponse
@@ -63,8 +66,13 @@ def install_replay(out: Path) -> dict:
     def lines(request_text: list[dict]) -> list[str]:
         return "\n".join(t for m in request_text for t in m["text"]).splitlines()
 
-    def normalized(request_text: list[dict]) -> list[str]:  # the only line that legitimately differs: the prompt's own clock
-        return [line for line in lines(request_text) if not line.startswith("BUSINESS CONTEXT AS OF:")]
+    def normalized(request_text: list[dict]) -> list[str]:
+        # the lines that legitimately differ from canary 10's saved requests (both stay visible in the recorded diff):
+        #  - the prompt's own clock;
+        #  - the VIRAL COPY CONTRACT the correction note carries since 2026-09-28 (added AFTER canary 10's correction was paid for - the
+        #    saved correction response was produced without it, and the controlled fixture replaces that output anyway)
+        return [line for line in lines(request_text)
+                if not line.startswith("BUSINESS CONTEXT AS OF:") and not line.startswith("VIRAL COPY CONTRACT (binding")]
 
     async def replay_or_live(self, request):
         kind = harness._call_kind(request)
@@ -82,7 +90,12 @@ def install_replay(out: Path) -> dict:
                                     "historical_cost_usd": saved["record"].get("cost_usd")})
             harness._write(out / "post" / "calls" / f"replayed_{saved['file']}", {"saved_call": saved["file"], "request_identical": not diff,
                                                                                  "diff_lines": diff, "request_now": now_text})
-            return GenerateResponse.model_validate(saved["response"])
+            response = GenerateResponse.model_validate(saved["response"])
+            if FIXTURE is not None and saved["file"] == "04_director.json":
+                # the controlled visual fixture: the saved correction's output with ONLY the declared change (see the fixture file)
+                log["replayed"][-1]["fixture_substituted"] = FIXTURE["only_change"]
+                response = response.model_copy(update={"structured_output": FIXTURE["structured_output"]})
+            return response
         if LIVE_ALLOWED.get(kind, 0) <= 0:
             log["refused"].append({"kind": kind})
             raise harness.SafeStop(f"controlled run: a {kind} request canary 10 never made - refused before sending (divergence)")
@@ -107,8 +120,39 @@ def install_replay(out: Path) -> dict:
     return log
 
 
+def install_review_payload_capture(out: Path) -> None:
+    """The EXACT Telegram review payload the founder would receive (media in order, control text, overflow) - written to disk, never sent."""
+    import services.instagram_automatic_trigger as trigger
+
+    recorded = trigger.deliver_instagram_package  # the harness's no-Telegram recorder
+
+    async def capture(bot, session, *, presentation, **kw):
+        target = out / "telegram_review_payload"
+        target.mkdir(parents=True, exist_ok=True)
+        files = []
+        for i, media in enumerate(presentation.media, 1):
+            path = target / f"media_{i:02d}.png"
+            path.write_bytes(media)
+            files.append(path.name)
+        (target / "control_text.html").write_text(presentation.control_text, encoding="utf-8")
+        if presentation.overflow_text:
+            (target / "overflow_text.html").write_text(presentation.overflow_text, encoding="utf-8")
+        harness._write(target / "payload.json", {"LABEL": "REVIEW ARTIFACT - NOT SENT - NO INSTAGRAM PUBLICATION", "kind": presentation.kind,
+                                                "version_label": presentation.version_label, "media_in_order": files,
+                                                "gate_decision": kw.get("gate_decision").value if kw.get("gate_decision") else None,
+                                                "hold_or_block_reason": kw.get("hold_or_block_reason"), "package_identity": kw.get("package_identity"),
+                                                "destination": "NONE - no send authorized for this task"})
+        return await recorded(bot, session, presentation=presentation, **kw)
+
+    trigger.deliver_instagram_package = capture
+
+
 async def main() -> None:
+    global FIXTURE
     out = Path(sys.argv[1])
+    if len(sys.argv) > 2:
+        FIXTURE = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+        assert FIXTURE["LABEL"].startswith("CONTROLLED_VISUAL_FIXTURE"), "not a controlled visual fixture"
     if (out / "manifest.json").exists():
         raise SystemExit(f"{out} already holds a controlled run - never run twice into the same directory")
     out.mkdir(parents=True, exist_ok=True)
@@ -156,6 +200,7 @@ async def main() -> None:
     harness._install_provider_guard(pricing, CostEstimator(pricing), models, RedisCostTracker(diag, pricing, ledger_namespace=LLM_NAMESPACE))
     replay_log = install_replay(out)
     suit = harness._install_capture()
+    install_review_payload_capture(out)
     image_guard = RedisBudgetGuard(diag, settings.model_copy(update={"llm_budget_mode": "enforce", "llm_daily_budget_usd": float(IMAGE_CAP),
                                                                      "redis_unavailable_policy": "fail_closed"}), ledger_namespace=IMAGE_NAMESPACE)
     media_mod.build_budgeted_image_executor = lambda: BudgetedImageExecutor(budget_guard=image_guard)
@@ -184,7 +229,7 @@ async def main() -> None:
     harness.STATE["post"], harness.STATE["post_dir"] = "post", out / "post"
     verdicts: list = []
     suit.set_verdict_sink(verdicts)
-    run: dict = {"controlled_run": True, "natural_canary": False, "source_canary": "viral_nominated_canary10_20260928 (55016a4)",
+    run: dict = {"fixture": (FIXTURE or {}).get("LABEL"), "fixture_change": (FIXTURE or {}).get("only_change"), "controlled_run": True, "natural_canary": False, "source_canary": "viral_nominated_canary10_20260928 (55016a4)",
                  "event": canary["selected_event"], "evidence_copy": canary["evidence_copy"], "director_facts": canary["director_facts"]}
     async with factory() as session:
         event_id = UUID(canary["evidence_copy"]["event_id"])

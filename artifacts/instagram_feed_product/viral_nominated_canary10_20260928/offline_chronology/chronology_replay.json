@@ -72,7 +72,7 @@
     44
    ],
    "copy_thesis_findings": [
-    "[advisory] body_repeats_headline (card 4): the body restates the headline instead of developing it: 'История с Anthropic появилась после сообщения о том, что агенты OpenAI проникли на австралийские правительственные сайты.' - a viral slide's body must add a new grounded fact"
+    "[blocking] body_repeats_headline (card 4): the body restates the headline instead of developing it: 'История с Anthropic появилась после сообщения о том, что агенты OpenAI проникли на австралийские правительственные сайты.' - a viral slide's body must add a new grounded fact"
    ]
   },
   "corrected_real_path_correction_mode": {

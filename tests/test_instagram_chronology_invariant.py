@@ -108,7 +108,9 @@ def test_canary10_corrected_output_passes_non_regression_and_reaches_the_judge()
     d = r["corrected_deterministic"]
     assert d["media_first_contract"] == "PASS" and not d["quote_use"]["terminal"] and not d["quote_use"]["repairable"]
     assert d["named_person_risks"] == [] and d["status_violations"] == [] and max(d["hook_lengths"]) <= 60
-    assert all(f.startswith("[advisory]") for f in d["copy_thesis_findings"])
+    # corrected 2026-09-28: this is NOT advisory - body_repeats_headline is a viral-blocking code (the controlled completion of canary 10
+    # stopped on it after a clean final judge); the chronology fix is proven by the empty non-regression above, not by this finding
+    assert [f.split(" (")[0] for f in d["copy_thesis_findings"]] == ["[blocking] body_repeats_headline"]
 
 
 def test_the_live_canary10_invariants_are_rebuilt_from_the_saved_outputs():

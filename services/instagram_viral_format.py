@@ -14,7 +14,7 @@ EVERGREEN_VALUE single on a NEWS_INSIGHT or AI_HACK post remains a Single."""
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from services.instagram_media_first import MediaFirstContractError
@@ -63,6 +63,19 @@ VIRAL_CAROUSEL_NOTE = (
 )
 
 
+# founder task 2026-09-28 (controlled completion of canary 10): there is exactly ONE correction, so it must know the deterministic viral
+# rules that make a corrected version terminal - canary 10's correction fixed the judge's finding but rewrote a slide body into a restatement
+# of its own headline (body_repeats_headline, a _VIRAL_BLOCKING code). The rules are stated, never loosened: the same validators run after.
+VIRAL_COPY_CONTRACT = (
+    "\nVIRAL COPY CONTRACT (binding - the corrected version is checked again by the same deterministic editor and the semantic judge; any "
+    "of these after this one correction stops the post): every slide's body adds information its headline does not already state - "
+    "never restate, paraphrase or expand the headline's own claim in the body (a body that repeats the headline is rejected); every "
+    "rewritten sentence brings a new grounded fact from the evidence; no two slides make the same point (merge or drop instead of "
+    "rewording); the caption adds context and never repeats the slides' sentences or lists; no interpretation, cause or motive the "
+    "evidence does not state (write 'after' only where the evidence gives the order, never 'because of' unless it says so); keep every "
+    "supported fact, target status and chronology exactly; keep every hook within the display limit.")
+
+
 class EditorialCorrectionRequired(MediaFirstContractError):
     """Founder decision 2026-09-26: correctable COPY problems of a viral carousel (language, clipped hook, product-name lists, redundancy,
     filler, anglicisms, ...) are collected - never fail-fast on the first - and sent back as ONE structured correction to the trigger's one
@@ -102,7 +115,8 @@ class EditorialCorrectionRequired(MediaFirstContractError):
                 "count; never strengthen a verb (interaction or access is not 'взлом'); never remove the chronology (when it happened, when it "
                 "was disclosed); keep short exact status wording ('подтвердила доступ', 'расследование продолжается', names, dates) instead of "
                 "paraphrasing it only to avoid overlap with the source; a closing slide stays a grounded fact, the company's response or the "
-                "open factual question - never an invented debate or poll." + ledger + "\n" + lines + self._structural_block())
+                "open factual question - never an invented debate or poll." + ledger + "\n" + lines + VIRAL_COPY_CONTRACT
+                + self._structural_block())
 
     def _structural_block(self) -> str:
         if not self.previous_output:
@@ -691,7 +705,7 @@ def generated_person_risks(slides: list[Any], evidence: list[str]) -> list[str]:
 def viral_copy_findings(slides: list[Any], evidence: list[str], *, caption: str = "", include_quotes: bool = True) -> list[str]:
     """NATURAL RUSSIAN + CONCRETE FACT + OPTIONAL DRY PUNCH, as far as a deterministic editor can prove it without a phrase list.
     `include_quotes=False`: the Director validation treats an invented quote as a HARD grounding failure of its own, not a copy finding."""
-    from services.instagram_editorial_critic import critique
+    from services.instagram_editorial_critic import BLOCKING, critique
 
     texts = [*(_copy(s) for s in slides), *(_body(s) for s in slides), caption]
     problems = [f"invented quote (not in the evidence): '{q}' - retell it as narration without quotation marks"
@@ -717,8 +731,10 @@ def viral_copy_findings(slides: list[Any], evidence: list[str], *, caption: str 
         for match in _ANGLICISM.finditer(text or ""):
             word = match.group(1).lower()
             problems.append(f"anglicism '{match.group(0)}' where Russian has a natural word ({_ANGLICISMS[word]}): {text.strip()[:80]!r}")
-    problems += [f.render() + (" - state the slide's own fact instead of a teaser" if f.code == "label_headline"
-                                else " - a viral slide's body must add a new grounded fact")
+    # founder task 2026-09-28: these critic codes GATE a viral carousel, so they are reported with their EFFECTIVE severity - the critic
+    # itself labels non-GATING codes 'advisory' (services.instagram_editorial_critic.critique), which stays true in non-viral contexts
+    problems += [replace(f, severity=BLOCKING).render() + (" - state the slide's own fact instead of a teaser" if f.code == "label_headline"
+                                                           else " - a viral slide's body must add a new grounded fact")
                  for f in critique(slides, evidence, caption=caption) if f.code in _VIRAL_BLOCKING]
     if slides and (meta := _DISTRIBUTION_META.search(_copy(slides[0]))):
         problems.append(f"hook describes how the story spread ('{meta.group(0)}'), not the event - lead with its strangest concrete fact")
