@@ -207,10 +207,10 @@ def assert_media_first(
         fillable = set(available_subjects) - set(unsuitable_subjects) | ({GENERATED_SUBJECT_KEY} if generated_media_available else set())
         if any(_get(r, "kind") == "graphic" and _get(r, "graphic_type") == "ui_frame" for r in regions) and not (media_refs_on_slide & fillable):
             raise MediaFirstContractError(
-                f"slide {index}: ui_frame renders only an empty window frame and this slide has no real UI image inside it - use "
+                f"slide {index + 1}: ui_frame renders only an empty window frame and this slide has no real UI image inside it - use "
                 "flow_diagram (2-4 flow_steps), poll_cards (2-4 options in the copy), a listed source subject, or text")
         source = _get(slide, "media_source")
-        where = f"slide {index}"
+        where = f"slide {index + 1}"  # human-facing, 1-based like every other finding (reporting only - the checks are unchanged)
         if source not in ("source", "generated", "graphic"):
             raise MediaFirstContractError(f"{where}: media_source must be source, generated or graphic (typographic-only slides are not allowed)")
         refs = media_refs(slide)

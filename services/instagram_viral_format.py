@@ -69,8 +69,12 @@ class EditorialCorrectionRequired(MediaFirstContractError):
     existing correction retry. A MediaFirstContractError, so exactly that retry path applies; a second failure is terminal."""
 
     def __init__(self, findings: list[str], *, factual_contract: list[str] | None = None, factual_invariants: dict | None = None,
-                 factual_repair: list[str] | None = None):
+                 factual_repair: list[str] | None = None, previous_output: dict | None = None):
         self.findings = list(findings)
+        # founder task 2026-09-28 (canary 9): the correction used to be a FRESH regeneration from the note alone - the model never saw the
+        # version it was correcting, so a text-only repair re-wrote the whole carousel and dropped a generated slide's story_anchor. The
+        # rejected version now travels with the correction as the object to edit (same single call, no second correction).
+        self.previous_output = dict(previous_output) if previous_output else None
         # founder task 2026-09-27: what the version sent to the correction got right factually - the correction may not lose it
         self.factual_contract = list(factual_contract or [])
         self.factual_invariants = dict(factual_invariants or {})
@@ -98,7 +102,28 @@ class EditorialCorrectionRequired(MediaFirstContractError):
                 "count; never strengthen a verb (interaction or access is not 'взлом'); never remove the chronology (when it happened, when it "
                 "was disclosed); keep short exact status wording ('подтвердила доступ', 'расследование продолжается', names, dates) instead of "
                 "paraphrasing it only to avoid overlap with the source; a closing slide stays a grounded fact, the company's response or the "
-                "open factual question - never an invented debate or poll." + ledger + "\n" + lines)
+                "open factual question - never an invented debate or poll." + ledger + "\n" + lines + self._structural_block())
+
+    def _structural_block(self) -> str:
+        if not self.previous_output:
+            return ""
+        import json
+
+        return (
+            "\nSTRUCTURAL PRESERVATION (binding - the corrected version is checked by the same media-first contract, and a violation after "
+            "this one correction stops the post): the PREVIOUS VERSION below is the object you correct - edit it, do not write a new "
+            "carousel. Keep every slide object, field and value the findings above do not require you to change exactly as it is (role, "
+            "media_source, source_evidence, layout, visual_family, media_subject / media_need / media_function, generation_brief, "
+            "story_anchor, visual_direction, hook_emotion, hook_mechanic, final_cta and the rest). Preserve every already-valid factual "
+            "statement unless a finding requires changing it, and never strengthen a claim. Every slide you rewrite, merge or add must still "
+            "carry the COMPLETE contract of its media_source: a generated slide needs a concrete generation_brief, a story_anchor (the "
+            "story-specific thing that makes the image belong to THIS story), a visual_direction (what is visible, the story-specific "
+            "subject, the relationship shown and why it supports the slide), a source_evidence handle and a layout media region with "
+            "content_ref 'generated'; a source slide keeps its listed subject key in its layout; a graphic slide keeps its substantive "
+            "graphic. Never emit null or an empty value for a field the previous version had filled; when two slides are merged, the "
+            "surviving slide keeps its visual fields (or states new complete ones for the merged content) - it never loses them. Keep every "
+            "hook within the display limit.\nPREVIOUS VERSION (JSON):\n"
+            + json.dumps(self.previous_output, ensure_ascii=False, separators=(",", ":"), default=str))
 
 
 class ViralCopyQualityError(MediaFirstContractError):

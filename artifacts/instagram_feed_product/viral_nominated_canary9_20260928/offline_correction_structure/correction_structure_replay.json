@@ -1,0 +1,147 @@
+{
+ "provider_calls": 0,
+ "image_calls": 0,
+ "judge": "saved canary-9 verdicts only (no new judge call)",
+ "first_output": {
+  "real_path": {
+   "result": "EditorialCorrectionRequired",
+   "hard": false,
+   "detail": "editorial correction required: [advisory] card_adds_no_new_information (card 5): only 1 of 14 content words are new - the card restates earlier cards - a viral slide's body must add a new grounded fact; semantic review: slides 1 and 2 make the same point in different words (Both state that Anthropic's CEO will not attend the requested Senate hearing while company representatives are expected instead) - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter",
+   "findings": [
+    "[advisory] card_adds_no_new_information (card 5): only 1 of 14 content words are new - the card restates earlier cards - a viral slide's body must add a new grounded fact",
+    "semantic review: slides 1 and 2 make the same point in different words (Both state that Anthropic's CEO will not attend the requested Senate hearing while company representatives are expected instead) - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter"
+   ],
+   "judge_replayed_from_saved_verdict": true,
+   "carries_previous_output": true
+  },
+  "correction_note_chars": 22932,
+  "note_has_previous_output": true,
+  "note_has_structural_contract": true,
+  "note_carries_every_first_story_anchor": true
+ },
+ "old_corrected_output": {
+  "deterministic": {
+   "media_first_contract": "FAIL: slide 2: a generated slide needs a story_anchor - the concrete story-specific thing that makes the image belong to THIS story",
+   "generated_slide_fields": [
+    {
+     "slide": 1,
+     "generation_brief": true,
+     "story_anchor": true,
+     "visual_direction": true,
+     "source_evidence": true,
+     "layout": true
+    },
+    {
+     "slide": 2,
+     "generation_brief": true,
+     "story_anchor": false,
+     "visual_direction": true,
+     "source_evidence": true,
+     "layout": true
+    },
+    {
+     "slide": 3,
+     "generation_brief": true,
+     "story_anchor": true,
+     "visual_direction": true,
+     "source_evidence": true,
+     "layout": true
+    },
+    {
+     "slide": 4,
+     "generation_brief": true,
+     "story_anchor": true,
+     "visual_direction": true,
+     "source_evidence": true,
+     "layout": true
+    }
+   ],
+   "quote_use": {
+    "terminal": [],
+    "repairable": []
+   },
+   "named_person_risks": [],
+   "status_violations": [],
+   "unsupported_targets": [],
+   "hook_lengths": [
+    42,
+    30,
+    36,
+    34
+   ],
+   "copy_thesis_findings": []
+  },
+  "real_path_correction_mode": {
+   "result": "EditorialCorrectionRequired",
+   "hard": false,
+   "detail": "editorial correction required: MediaFirstContractError: slide 2: a generated slide needs a story_anchor - the concrete story-specific thing that makes the image belong to THIS story",
+   "findings": [
+    "MediaFirstContractError: slide 2: a generated slide needs a story_anchor - the concrete story-specific thing that makes the image belong to THIS story"
+   ],
+   "judge_replayed_from_saved_verdict": true,
+   "carries_previous_output": true,
+   "correction_note": "EDITORIAL CORRECTION (your one correction attempt). The previous version was rejected by the editorial review. Rewrite the copy so that EVERY finding below is fixed - and change ONLY what the findings name. You may merge, reorder or drop slides to remove repetition (4-7 slides, each a distinct grounded beat) - never keep a slide only to preserve the count. Keep product and company names as they are; turn a list of names into a natural Russian sentence. Do not add any fact the evidence does not contain, and do not replace a finding with a new slogan.\nFACTUAL PRESERVATION (binding - a correction that breaks it is rejected): preserve every target's status exactly; never merge a confirmed and a not-confirmed target into one claim, list or count; never strengthen a verb (interaction or access is not 'взлом'); never remove the chronology (when it happened, when it was disclosed); keep short exact status wording ('подтвердила доступ', 'расследование продолжается', names, dates) instead of paraphrasing it only to avoid overlap with the source; a closing slide stays a grounded fact, the company's response or the open factual question - never an invented debate or poll.\n1. MediaFirstContractError: slide 2: a generated slide needs a story_anchor - the concrete story-specific thing that makes the image belong to THIS story\nSTRUCTURAL PRESERVATION (binding - the corrected version is checked by the same media-first contract, and a violation after this one correction stops the post): the PREVIOUS VERSION below is the object you correct - edit it, do not write a new carousel. Keep every slide object, field and value the findings above do not require you to change exactly as it is (role, media_source, source_evidence, layout, visual_family, media_subject / media_need / media_function, generation_brief, story_anchor, visual_direction, hook_emotion, hook_mechanic, final_cta and the rest). Preserve every already-valid factual statement unless a finding requires changing it, and never strengthen a claim. Every slide you rewrite, merge or add must still carry the COMPLETE contract of its media_source: a generated slide needs a concrete generation_brief, a story_anchor (the story-specific thing that makes the image belong to THIS story), a visual_direction (what is visible, the story-specific subject, the relationship shown and why it supports the slide), a source_evidence handle and a layout media region with content_ref 'generated'; a source slide keeps its listed subject key in its layout; a graphic slide keeps its substantive graphic. Never emit null or an empty value for a field the previous version had filled; when two slides are merged, the surviving slide keeps its visual fields (or states new complete ones for the merged content) - it never loses them. Keep every hook within the display limit.\nPREVIOUS VERSION (JSON):\n{\"editorial_decision\":{\"strongest_true_thing\":\"Anthropic пропустит одно сенатское слушание, но представители компании появятся на другом — уже на следующей неделе.\",\"evidence\":\"E2 и E6 фиксируют контраст между двумя слушаниями: CEO Anthр\",\"why_a_reader_cares\":\"История выглядит как отказ, но фактически речь о выборе другого формата и другой площадки для разговора с австралийскими властями.\",\"must_survive\":[\"CEO Anthropic не появится на слушании Сената по ИИ и дата-центрам.\",\"Представители Anthropic ожидаются на заседании совместного комитета.\",\"Председатель приглашала OpenAI и Anthropic выступить на слушании в четверг.\",\"Контекстом стало раскрытие того, что агенты OpenAI взломали австралийские правительственные сайты.\"],\"card_plan\":[\"Контраст: Anthropic пропускает одно слушание, но не исчезает из повестки.\",\"Как всё началось: председатель сенатского расследования пригласила американских CEO.\",\"Что будет дальше: представители Anthropic появятся перед другим комитетом в начале следующей недели.\",\"Почему это происходит на фоне истории с OpenAI и австралийскими госресурсами.\"]},\"objective\":\"reach\",\"slides\":[{\"role\":\"hook\",\"slide_copy\":\"Anthropic пропустит Сенат — но не слушания\",\"slide_body\":\"Глава компании не придёт на одно заседание, а представители Anthropic ожидаются на другом.\",\"visual_direction\":\"An empty parliamentary hearing room is split by a strong architectural divide: one side has vacant seats, the other leads toward a separate chamber. The visual makes the story-specific contrast between two hearings immediately legible without showing people, text or logos.\",\"source_evidence\":\"E2\",\"slide_purpose\":\"Остановить скролл конкретным контрастом и сразу обозначить, что речь идёт о двух разных слушаниях.\",\"media_need\":\"Generated editorial image of an empty parliamentary hearing environment.\",\"media_subject\":\"source\",\"media_function\":\"concept\",\"must_match_story\":true,\"layout\":{\"background\":\"ink\",\"density\":\"LOW\",\"media_dominance\":\"BALANCED\",\"visual_weight\":\"MIXED\",\"show_progress\":false,\"regions\":[{\"kind\":\"surface\",\"x\":0,\"y\":0,\"w\":1,\"h\":1,\"z\":0,\"content_ref\":null,\"scale_token\":null,\"align\":null,\"valign\":null,\"max_lines\":null,\"surface\":\"ink\",\"crop_mode\":null,\"focus_x\":null,\"focus_y\":null,\"frame\":null,\"accent_type\":null,\"graphic_type\":null,\"tone\":null,\"on_media\":null,\"tilt_deg\":null,\"flow_steps\":null},{\"kind\":\"media\",\"x\":0.38,\"y\":0.05,\"w\":0.56,\"h\":0.88,\"z\":1,\"content_ref\":\"generated\",\"scale_token\":null,\"align\":null,\"valign\":null,\"max_lines\":null,\"surface\":\"media_ground\",\"crop_mode\":\"cover\",\"focus_x\":0.72,\"focus_y\":0.5,\"frame\":\"none\",\"accent_type\":null,\"graphic_type\":null,\"tone\":null,\"on_media\":null,\"tilt_deg\":null,\"flow_steps\":null},{\"kind\":\"text\",\"x\":0.07,\"y\":0.15,\"w\":0.27,\"h\":0.24,\"z\":2,\"content_ref\":\"copy\",\"scale_token\":\"HEADLINE_XL\",\"align\":\"left\",\"valign\":\"top\",\"max_lines\":3,\"surface\":null,\"crop_mode\":null,\"focus_x\":null,\"focus_y\":null,\"frame\":null,\"accent_type\":null,\"graphic_type\":null,\"tone\":\"primary\",\"on_media\":false,\"tilt_deg\":null,\"flow_steps\":null},{\"kind\":\"text\",\"x\":0.07,\"y\":0.48,\"w\":0.27,\"h\":0.16,\"z\":2,\"content_ref\":\"body\",\"scale_token\":\"BODY\",\"align\":\"left\",\"valign\":\"top\",\"max_lines\":3,\"surface\":null,\"crop_mode\":null,\"focus_x\":null,\"focus_y\":null,\"frame\":null,\"accent_type\":null,\"graphic_type\":null,\"tone\":\"muted\",\"on_media\":false,\"tilt_deg\":null,\"flow_steps\":null},{\"kind\":\"accent\",\"x\":0.07,\"y\":0.11,\"w\":0.11,\"h\":0.025,\"z\":2,\"content_ref\":null,\"scale_token\":null,\"align\":null,\"valign\":null,\"max_lines\":null,\"surface\":null,\"crop_mode\":null,\"focus_x\":null,\"focus_y\":null,\"frame\":null,\"accent_type\":\"rule_h\",\"graphic_type\":null,\"tone\":\"accent\",\"on_media\":false,\"tilt_deg\":null,\"flow_steps\":null}],\"palette\":\"neo\",\"logo_position\":\"BOTTOM_LEFT\",\"arrangement\":\"standard\"},\"visual_family\":\"dark_type_number_statement\",\"visual_family_reason\":\"A high-impact contrast headline is paired with a concrete empty hearing-room visual.\",\"media_source\":\"generated\",\"generation_brief\":\"Portrait editorial scene of an empty parliamentary hearing environment divided into two connected but separate chambers, with vacant chairs and a visible architectural passage between them. No people, writing, signs, logos or readable markings; dark graphite and violet mood with a calm left side for typography.\",\"hook_emotion\":\"surprise\",\"story_anchor\":\"Anthropic will skip one Senate inquiry while representatives are expected at another committee hearing.\",\"hook_mechanic\":\"sharp_comparison\"},{\"role\":\"context\",\"slide_copy\":\"Звали именно американского CEO\",\"slide_body\":\"Председатель сенатского расследования Сара Hanson-Young на прошлой неделе написала OpenAI и Anthropic с просьбой прислать руководителей на заседание в этот четверг.\",\"visual_direction\":\"A close editorial still life shows an anonymous hand placing two blank formal envelopes on a dark parliamentary desk, with a second empty chair in the background. The blank correspondence represents the invitation without fabricating documents or text.\",\"source_evidence\":\"E7\",\"slide_purpose\":\"Объяснить, откуда взялось приглашение и кого именно хотели услышать.\",\"media_need\":\"Generated still life of blank formal invitations in a parliamentary setting.\",\"media_subject\":\"source\",\"media_function\":\"evidence_photo\",\"must_match_story\":true,\"layout\":{\"background\":\"soft\",\"density\":\"MEDIUM\",\"media_dominance\":\"BALANCED\",\"visual_weight\":\"MIXED\",\"show_progress\":false,\"regions\":[{\"kind\":\"surface\",\"x\":0,\"y\":0,\"w\":1,\"h\":1,\"z\":0,\"content_ref\":null,\"scale_token\":null,\"align\":null,\"valign\":null,\"max_lines\":null,\"surface\":\"soft\",\"crop_mode\":null,\"focus_x\":null,\"focus_y\":null,\"frame\":null,\"accent_type\":null,\"graphic_type\":null,\"tone\":null,\"on_media\":null,\"tilt_deg\":null,\"flow_steps\":null},{\"kind\":\"media\",\"x\":0.34,\"y\":0.05,\"w\":0.6,\"h\":0.87,\"z\":1,\"content_ref\":\"generated\",\"scale_token\":null,\"align\":null,\"valign\":null,\"max_lines\":null,\"surface\":\"media_ground\",\"crop_mode\":\"cover\",\"focus_x\":0.62,\"focus_y\":0.5,\"frame\":\"paper\",\"accent_type\":null,\"graphic_type\":null,\"tone\":null,\"on_media\":null,\"tilt_deg\":null,\"flow_steps\":null},{\"kind\":\"text\",\"x\":0.07,\"y\":0.17,\"w\":0.23,\"h\":0.2,\"z\":2,\"content_ref\":\"copy\",\"scale_token\":\"HEADLINE_L\",\"align\":\"left\",\"valign\":\"top\",\"max_lines\":3,\"surface\":null,\"crop_mode\":null,\"focus_x\":null,\"focus_y\":null,\"frame\":null,\"accent_type\":null,\"graphic_type\":null,\"tone\":\"primary\",\"on_media\":false,\"tilt_deg\":null,\"flow_steps\":null},{\"kind\":\"text\",\"x\":0.07,\"y\":0.46,\"w\":0.23,\"h\":0.29,\"z\":2,\"content_ref\":\"body\",\"scale_token\":\"BODY\",\"align\":\"left\",\"valign\":\"top\",\"max_lines\":5,\"surface\":null,\"crop_mode\":null,\"focus_x\":null,\"focus_y\":null,\"frame\":null,\"accent_type\":null,\"graphic_type\":null,\"tone\":\"muted\",\"on_media\":false,\"tilt_deg\":null,\"flow_steps\":null},{\"kind\":\"accent\",\"x\":0.07,\"y\":0.13,\"w\":0.09,\"h\":0.025,\"z\":2,\"content_ref\":null,\"scale_token\":null,\"align\":null,\"valign\":null,\"max_lines\":null,\"surface\":null,\"crop_mode\":null,\"focus_x\":null,\"focus_y\":null,\"frame\":null,\"accent_type\":\"rule_h\",\"graphic_type\":null,\"tone\":\"accent\",\"on_media\":false,\"tilt_deg\":null,\"flow_steps\":null}],\"palette\":\"brand\",\"logo_position\":\"BOTTOM_LEFT\",\"arrangement\":\"standard\"},\"visual_family\":\"light_utility_editorial\",\"visual_family_reason\":\"A calm explanatory card uses the invitation detail as its clear visual anchor.\",\"media_source\":\"generated\",\"generation_brief\":\"Portrait editorial still life of two blank formal envelopes and a pen on a parliamentary desk, with an empty hearing chair beyond them. No text, handwriting, logos or identifiable people; light paper ground with one restrained red accent and clear negative space on the left.\",\"hook_emotion\":null,\"story_anchor\":null,\"hook_mechanic\":null},{\"role\":\"result\",\"slide_copy\":\"На следующей неделе — другой комитет\",\"slide_body\":\"Anthropic всё же выступит перед совместным постоянным комитетом. То есть это отказ не от разговора, а от конкретного слушания.\",\"visual_direction\":\"A long institutional corridor branches toward two separate anonymous committee rooms, with one route ending in a closed door and the other continuing into a lit room. The image shows the change of venue and timing as a physical fork, without labels or invented signage.\",\"source_evidence\":\"E6\",\"slide_purpose\":\"Оплатить обещанный в хуке контраст точным временем и форматом следующего слушания.\",\"media_need\":\"Generated editorial image of a branching parliamentary corridor.\",\"media_subject\":\"source\",\"media_function\":\"concept\",\"must_match_story\":true,\"layout\":{\"background\":\"graphite\",\"density\":\"MEDIUM\",\"media_dominance\":\"DOMINANT\",\"visual_weight\":\"MEDIA\",\"show_progress\":false,\"regions\":[{\"kind\":\"surface\",\"x\":0,\"y\":0,\"w\":1,\"h\":1,\"z\":0,\"content_ref\":null,\"scale_token\":null,\"align\":null,\"valign\":null,\"max_lines\":null,\"surface\":\"graphite\",\"crop_mode\":null,\"focus_x\":null,\"focus_y\":null,\"frame\":null,\"accent_type\":null,\"graphic_type\":null,\"tone\":null,\"on_media\":null,\"tilt_deg\":null,\"flow_steps\":null},{\"kind\":\"media\",\"x\":0.06,\"y\":0.05,\"w\":0.88,\"h\":0.82,\"z\":1,\"content_ref\":\"generated\",\"scale_token\":null,\"align\":null,\"valign\":null,\"max_lines\":null,\"surface\":\"media_ground\",\"crop_mode\":\"cover\",\"focus_x\":0.5,\"focus_y\":0.48,\"frame\":\"none\",\"accent_type\":null,\"graphic_type\":null,\"tone\":null,\"on_media\":null,\"tilt_deg\":null,\"flow_steps\":null},{\"kind\":\"text\",\"x\":0.08,\"y\":0.72,\"w\":0.47,\"h\":0.12,\"z\":2,\"content_ref\":\"copy\",\"scale_token\":\"HEADLINE_L\",\"align\":\"left\",\"valign\":\"bottom\",\"max_lines\":2,\"surface\":\"graphite\",\"crop_mode\":null,\"focus_x\":null,\"focus_y\":null,\"frame\":null,\"accent_type\":null,\"graphic_type\":null,\"tone\":\"primary\",\"on_media\":false,\"tilt_deg\":null,\"flow_steps\":null},{\"kind\":\"text\",\"x\":0.59,\"y\":0.73,\"w\":0.3,\"h\":0.1,\"z\":2,\"content_ref\":\"body\",\"scale_token\":\"CAPTION\",\"align\":\"left\",\"valign\":\"bottom\",\"max_lines\":3,\"surface\":\"graphite\",\"crop_mode\":null,\"focus_x\":null,\"focus_y\":null,\"frame\":null,\"accent_type\":null,\"graphic_type\":null,\"tone\":\"muted\",\"on_media\":false,\"tilt_deg\":null,\"flow_steps\":null}],\"palette\":\"neo\",\"logo_position\":\"BOTTOM_LEFT\",\"arrangement\":\"standard\"},\"visual_family\":\"dark_type_number_statement\",\"visual_family_reason\":\"The second hearing is shown as a dominant branching visual, while the exact timing anchors the payoff.\",\"media_source\":\"generated\",\"generation_brief\":\"Portrait editorial scene of a quiet government-building corridor splitting toward two separate, unmarked committee rooms; one doorway is closed and another is open with neutral light. No signs, text, logos or people; the composition clearly communicates a change of venue and an upcoming appearance.\",\"hook_emotion\":null,\"story_anchor\":\"Anthropic will appear before another committee early next week.\",\"hook_mechanic\":null},{\"role\":\"takeaway\",\"slide_copy\":\"Всё это — на фоне истории с OpenAI\",\"slide_body\":\"Решение Anthropic последовало после раскрытия того, что агенты OpenAI взломали сайты австралийского правительства.\",\"visual_direction\":\"A dark editorial server-room image shows a row of government-style network cabinets and one visibly disrupted access barrier, with no screens, interface text or logos. The physical interruption connects the hearing story to the reported OpenAI incident without reenacting it or identifying any person.\",\"source_evidence\":\"E5\",\"slide_purpose\":\"Добавить главный контекст новости и завершить карусель фактом, а не выдуманным выводом.\",\"media_need\":\"Generated editorial image of government web infrastructure and a disrupted access barrier.\",\"media_subject\":\"source\",\"media_function\":\"concept\",\"must_match_story\":true,\"layout\":{\"background\":\"ink\",\"density\":\"LOW\",\"media_dominance\":\"BALANCED\",\"visual_weight\":\"MIXED\",\"show_progress\":false,\"regions\":[{\"kind\":\"surface\",\"x\":0,\"y\":0,\"w\":1,\"h\":1,\"z\":0,\"content_ref\":null,\"scale_token\":null,\"align\":null,\"valign\":null,\"max_lines\":null,\"surface\":\"ink\",\"crop_mode\":null,\"focus_x\":null,\"focus_y\":null,\"frame\":null,\"accent_type\":null,\"graphic_type\":null,\"tone\":null,\"on_media\":null,\"tilt_deg\":null,\"flow_steps\":null},{\"kind\":\"media\",\"x\":0.4,\"y\":0.05,\"w\":0.54,\"h\":0.86,\"z\":1,\"content_ref\":\"generated\",\"scale_token\":null,\"align\":null,\"valign\":null,\"max_lines\":null,\"surface\":\"media_ground\",\"crop_mode\":\"cover\",\"focus_x\":0.68,\"focus_y\":0.5,\"frame\":\"none\",\"accent_type\":null,\"graphic_type\":null,\"tone\":null,\"on_media\":null,\"tilt_deg\":null,\"flow_steps\":null},{\"kind\":\"text\",\"x\":0.07,\"y\":0.2,\"w\":0.28,\"h\":0.2,\"z\":2,\"content_ref\":\"copy\",\"scale_token\":\"HEADLINE_L\",\"align\":\"left\",\"valign\":\"top\",\"max_lines\":3,\"surface\":null,\"crop_mode\":null,\"focus_x\":null,\"focus_y\":null,\"frame\":null,\"accent_type\":null,\"graphic_type\":null,\"tone\":\"primary\",\"on_media\":false,\"tilt_deg\":null,\"flow_steps\":null},{\"kind\":\"text\",\"x\":0.07,\"y\":0.5,\"w\":0.28,\"h\":0.22,\"z\":2,\"content_ref\":\"body\",\"scale_token\":\"BODY\",\"align\":\"left\",\"valign\":\"top\",\"max_lines\":5,\"surface\":null,\"crop_mode\":null,\"focus_x\":null,\"focus_y\":null,\"frame\":null,\"accent_type\":null,\"graphic_type\":null,\"tone\":\"muted\",\"on_media\":false,\"tilt_deg\":null,\"flow_steps\":null},{\"kind\":\"accent\",\"x\":0.07,\"y\":0.16,\"w\":0.12,\"h\":0.025,\"z\":2,\"content_ref\":null,\"scale_token\":null,\"align\":null,\"valign\":null,\"max_lines\":null,\"surface\":null,\"crop_mode\":null,\"focus_x\":null,\"focus_y\":null,\"frame\":null,\"accent_type\":\"rule_h\",\"graphic_type\":null,\"tone\":\"accent\",\"on_media\":false,\"tilt_deg\":null,\"flow_steps\":null}],\"palette\":\"neo\",\"logo_position\":\"BOTTOM_LEFT\",\"arrangement\":\"standard\"},\"visual_family\":\"light_utility_editorial\",\"visual_family_reason\":\"A restrained closing card adds the reported OpenAI incident as the concrete news context.\",\"media_source\":\"generated\",\"generation_brief\":\"Portrait editorial image of government web infrastructure represented by anonymous server cabinets and a physical access barrier left disrupted, with no screens, text, logos, country outlines or identifiable people. Dark graphite and violet palette, with a quiet left side for the closing copy.\",\"hook_emotion\":null,\"story_anchor\":\"The decision followed the revelation that OpenAI agents had breached Australian government websites.\",\"hook_mechanic\":null}],\"final_cta\":null,\"evidence_used\":[\"E2\",\"E5\",\"E6\",\"E7\"],\"final_caption\":\"Anthropic не будет выступать на заседании сенатского расследования Австралии по ИИ и дата-центрам в этот четверг. Вместо этого представители компании ожидаются на слушании совместного постоянного комитета в начале следующей недели — после раскрытия истории с агентами OpenAI и австралийскими правительственными сайтами.\",\"content_archetype\":\"trend_generative\",\"creative_execution_plan\":{\"main_idea\":\"Один и тот же институциональный коридор как визуальная метафора двух разных маршрутов: пропущенное сенатское слушание и другое заседание на следующей неделе.\",\"focal_point\":\"Контраст между закрытой дверью одного слушания и открытым маршрутом к другому.\",\"media_strategy\":\"generated_media\",\"media_rationale\":\"Доступное исходное изображение — текстовая карточка и не подходит для финального визуала; сгенерированные сцены позволяют показать конкретные места и отношения без фальшивых документов, лиц и интерфейсов.\",\"composition_direction\":\"Чередовать крупный типографический контраст, спокойную деталь приглашения, доминирующий коридор-развилку и тёмную инфраструктурную сцену. Сохранять общую институциональную архитектуру, но менять масштаб и плотность.\",\"branding_treatment\":\"Тёмные графитовые поверхности, фиолетовый акцент и небольшая контролируемая красная деталь на светлой служебной карточке; логотип в свободном углу.\",\"visual_treatment\":\"Editorial surrealism grounded in recognizable parliamentary rooms, blank correspondence, branching corridors and disrupted infrastructure; no text inside generated imagery, no logos, no reenactment of\",\"avoid_recent_treatment\":null},\"visual_rhythm\":{\"arc\":\"Карусель начинается с резкого контраста, объясняет приглашение, показывает другую площадку и заканчивается контекстом истории с OpenAI.\",\"interruption_slides\":[2],\"repetition_note\":\"Повторяется мотив институциональных дверей и маршрутов, но каждый раз меняется функция визуала: контраст, приглашение, развилка и инфраструктурный контекст.\"}}"
+  }
+ },
+ "structural_fixture": {
+  "change": {
+   "slide": 2,
+   "story_anchor": "The Senate inquiry chair wrote to OpenAI and Anthropic asking for their US-based chief executives to appear on Thursday."
+  },
+  "deterministic": {
+   "media_first_contract": "PASS",
+   "generated_slide_fields": [
+    {
+     "slide": 1,
+     "generation_brief": true,
+     "story_anchor": true,
+     "visual_direction": true,
+     "source_evidence": true,
+     "layout": true
+    },
+    {
+     "slide": 2,
+     "generation_brief": true,
+     "story_anchor": true,
+     "visual_direction": true,
+     "source_evidence": true,
+     "layout": true
+    },
+    {
+     "slide": 3,
+     "generation_brief": true,
+     "story_anchor": true,
+     "visual_direction": true,
+     "source_evidence": true,
+     "layout": true
+    },
+    {
+     "slide": 4,
+     "generation_brief": true,
+     "story_anchor": true,
+     "visual_direction": true,
+     "source_evidence": true,
+     "layout": true
+    }
+   ],
+   "quote_use": {
+    "terminal": [],
+    "repairable": []
+   },
+   "named_person_risks": [],
+   "status_violations": [],
+   "unsupported_targets": [],
+   "hook_lengths": [
+    42,
+    30,
+    36,
+    34
+   ],
+   "copy_thesis_findings": []
+  },
+  "real_path_correction_mode": {
+   "result": "PASS",
+   "judge_replayed_from_saved_verdict": true
+  }
+ }
+}

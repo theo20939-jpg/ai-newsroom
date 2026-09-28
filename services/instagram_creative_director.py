@@ -1240,7 +1240,8 @@ async def _validate_viral_carousel(
             # the ONE correction repairs the status wording (plus the editorial findings already collected); the judge waits for a factual PASS
             raise EditorialCorrectionRequired(
                 list(dict.fromkeys([*(v.render() for v in violations), *deterministic])), factual_contract=ledger_lines(ledger),
-                factual_invariants=invariants, factual_repair=repair_contract(violations, ledger, evidence, invariants))
+                factual_invariants=invariants, factual_repair=repair_contract(violations, ledger, evidence, invariants),
+                previous_output=output)
         verdict = await judge_viral_copy(gateway, prompt_repository, slides=slides, caption=caption, allowed_evidence=evidence)
         semantic = verdict.findings()
         _emit_diagnostic("semantic_judge_correction" if correcting else "semantic_judge_initial",
@@ -1248,8 +1249,10 @@ async def _validate_viral_carousel(
                           "role_guard_dropped": verdict.dropped_pairs})
         combined = list(dict.fromkeys([*deterministic, *semantic]))
         if combined:
+            # founder task 2026-09-28 (canary 9): the rejected version travels with the ONE correction as the object to edit, so a text
+            # repair cannot silently drop valid structure (the corrected version is still fully re-validated; a violation is terminal)
             raise EditorialCorrectionRequired(combined, factual_contract=ledger_lines(ledger),
-                                              factual_invariants=factual_invariants(slides, caption, ledger, evidence))
+                                              factual_invariants=factual_invariants(slides, caption, ledger, evidence), previous_output=output)
         assert outcome is not None
         return outcome
     except Exception as exc:
