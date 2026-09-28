@@ -1,0 +1,15 @@
+{
+ "ledger": [],
+ "violations": [],
+ "non_regression": [
+  "correction removed the chronology: the earlier version said the facts were disclosed now, the correction does not"
+ ],
+ "repairability": null,
+ "baseline_invariants": {
+  "violations": [],
+  "underlying_time": false,
+  "disclosure": true,
+  "action_strength": 3,
+  "ledger": []
+ }
+}

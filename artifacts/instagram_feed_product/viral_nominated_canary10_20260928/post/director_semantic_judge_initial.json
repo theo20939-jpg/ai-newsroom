@@ -1,0 +1,33 @@
+{
+ "verdict": {
+  "slide_roles": [
+   "HOOK",
+   "EVENT_ACTION",
+   "TARGET_STATUS",
+   "DETAIL",
+   "CHRONOLOGY"
+  ],
+  "same_thesis_pairs": [],
+  "caption_repeats_slides": {
+   "present": false,
+   "reason": "The caption retells the story in ordinary sentences and does not copy a slide sentence or consist of a bare list."
+  },
+  "caption_aphorism": {
+   "present": false,
+   "sentence": "",
+   "reason": "The caption ends with a concrete summary of Anthropic's attendance at specific hearings, not a generalised lesson or rhetorical payoff."
+  },
+  "unsupported_interpretation": [
+   {
+    "where": "caption",
+    "sentence": "На решение повлиял и отдельный контекст — сообщение о том, что агенты OpenAI проникли на сайты австралийского правительства.",
+    "reason": "The evidence places the decision in the wake of that report but does not state that the report influenced the decision."
+   }
+  ]
+ },
+ "semantic_findings": [
+  "semantic review: unsupported interpretation in caption ('На решение повлиял и отдельный контекст — сообщение о том, что агенты OpenAI проникли на сайты австралийского правительства.': The evidence places the decision in the wake of that report but does not state that the report influenced the decision) - say only what the evidence supports"
+ ],
+ "deterministic_findings": [],
+ "role_guard_dropped": []
+}
