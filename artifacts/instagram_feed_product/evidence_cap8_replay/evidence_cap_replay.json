@@ -1,0 +1,766 @@
+{
+ "provider_calls": 0,
+ "image_calls": 0,
+ "replayed_at": "2026-09-28T04:22:14.553075+03:00",
+ "canaries": [
+  {
+   "canary": "canary",
+   "clock": "2026-09-26T18:04:01.575346+00:00",
+   "eligible_copies": 19,
+   "cap": 8,
+   "attempts": [
+    {
+     "position": 1,
+     "copy_id": "070feacc-88f7-4b75-817a-77effc45c266",
+     "source": "3DNews",
+     "age_hours": 11.1,
+     "google_news": false,
+     "evidence_url": "https://3dnews.ru/1149086",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 1.92,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 2,
+     "copy_id": "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+     "source": "Engadget",
+     "age_hours": 5.5,
+     "google_news": false,
+     "evidence_url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 0.89,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 3,
+     "copy_id": "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+     "source": "Techmeme",
+     "age_hours": 17.6,
+     "google_news": false,
+     "evidence_url": "https://www.techmeme.com/260925/p25#a260925p25",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 5.67,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 4,
+     "copy_id": "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+     "source": "iXBT News",
+     "age_hours": 13.1,
+     "google_news": false,
+     "evidence_url": "https://www.ixbt.com/news/2026/09/26/438377-neozidannye-i-trevoznye-anomalii-ii-openai-sam-polucil-dostup-k-pravitelstvennym-saitam-ssa.html",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 2.23,
+     "preflight": "PASS"
+    }
+   ],
+   "copies_fetched": 4,
+   "first_pass_position": 4,
+   "result": "PASS",
+   "result_copy": "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "SUPPORTED"
+   },
+   "reason": "every claim the hook makes is in the stored body evidence",
+   "elapsed_seconds": 10.76,
+   "original_run": [
+    [
+     "070feacc-88f7-4b75-817a-77effc45c266",
+     "FAIL"
+    ],
+    [
+     "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+     "FAIL"
+    ],
+    [
+     "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+     "FAIL"
+    ],
+    [
+     "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+     "PASS"
+    ]
+   ],
+   "original_passing": [
+    "8164a3d7-e826-43e9-9dd6-96babe0c71aa"
+   ]
+  },
+  {
+   "canary": "canary2",
+   "clock": "2026-09-26T22:45:04.821426+00:00",
+   "eligible_copies": 22,
+   "cap": 8,
+   "attempts": [
+    {
+     "position": 1,
+     "copy_id": "070feacc-88f7-4b75-817a-77effc45c266",
+     "source": "3DNews",
+     "age_hours": 15.8,
+     "google_news": false,
+     "evidence_url": "https://3dnews.ru/1149086",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 2.88,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 2,
+     "copy_id": "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+     "source": "Engadget",
+     "age_hours": 10.2,
+     "google_news": false,
+     "evidence_url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 1.55,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 3,
+     "copy_id": "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+     "source": "Techmeme",
+     "age_hours": 22.3,
+     "google_news": false,
+     "evidence_url": "https://www.techmeme.com/260925/p25#a260925p25",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 2.06,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 4,
+     "copy_id": "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+     "source": "iXBT News",
+     "age_hours": 17.8,
+     "google_news": false,
+     "evidence_url": "https://www.ixbt.com/news/2026/09/26/438377-neozidannye-i-trevoznye-anomalii-ii-openai-sam-polucil-dostup-k-pravitelstvennym-saitam-ssa.html",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 3.34,
+     "preflight": "PASS"
+    }
+   ],
+   "copies_fetched": 4,
+   "first_pass_position": 4,
+   "result": "PASS",
+   "result_copy": "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "SUPPORTED"
+   },
+   "reason": "every claim the hook makes is in the stored body evidence",
+   "elapsed_seconds": 9.86,
+   "original_run": [
+    [
+     "070feacc-88f7-4b75-817a-77effc45c266",
+     "FAIL"
+    ],
+    [
+     "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+     "FAIL"
+    ],
+    [
+     "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+     "FAIL"
+    ],
+    [
+     "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+     "PASS"
+    ]
+   ],
+   "original_passing": [
+    "8164a3d7-e826-43e9-9dd6-96babe0c71aa"
+   ]
+  },
+  {
+   "canary": "canary3",
+   "clock": "2026-09-26T23:41:20.946837+00:00",
+   "eligible_copies": 23,
+   "cap": 8,
+   "attempts": [
+    {
+     "position": 1,
+     "copy_id": "070feacc-88f7-4b75-817a-77effc45c266",
+     "source": "3DNews",
+     "age_hours": 16.8,
+     "google_news": false,
+     "evidence_url": "https://3dnews.ru/1149086",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 0.9,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 2,
+     "copy_id": "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+     "source": "Engadget",
+     "age_hours": 11.1,
+     "google_news": false,
+     "evidence_url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 0.81,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 3,
+     "copy_id": "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+     "source": "Techmeme",
+     "age_hours": 23.3,
+     "google_news": false,
+     "evidence_url": "https://www.techmeme.com/260925/p25#a260925p25",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 2.93,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 4,
+     "copy_id": "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+     "source": "iXBT News",
+     "age_hours": 18.8,
+     "google_news": false,
+     "evidence_url": "https://www.ixbt.com/news/2026/09/26/438377-neozidannye-i-trevoznye-anomalii-ii-openai-sam-polucil-dostup-k-pravitelstvennym-saitam-ssa.html",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 2.23,
+     "preflight": "PASS"
+    }
+   ],
+   "copies_fetched": 4,
+   "first_pass_position": 4,
+   "result": "PASS",
+   "result_copy": "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "SUPPORTED"
+   },
+   "reason": "every claim the hook makes is in the stored body evidence",
+   "elapsed_seconds": 6.89,
+   "original_run": [
+    [
+     "070feacc-88f7-4b75-817a-77effc45c266",
+     "FAIL"
+    ],
+    [
+     "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+     "FAIL"
+    ],
+    [
+     "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+     "FAIL"
+    ],
+    [
+     "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+     "PASS"
+    ]
+   ],
+   "original_passing": [
+    "8164a3d7-e826-43e9-9dd6-96babe0c71aa"
+   ]
+  },
+  {
+   "canary": "canary4",
+   "clock": "2026-09-27T00:25:01.636467+00:00",
+   "eligible_copies": 23,
+   "cap": 8,
+   "attempts": [
+    {
+     "position": 1,
+     "copy_id": "070feacc-88f7-4b75-817a-77effc45c266",
+     "source": "3DNews",
+     "age_hours": 17.5,
+     "google_news": false,
+     "evidence_url": "https://3dnews.ru/1149086",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 3.11,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 2,
+     "copy_id": "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+     "source": "Engadget",
+     "age_hours": 11.9,
+     "google_news": false,
+     "evidence_url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 0.9,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 3,
+     "copy_id": "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+     "source": "Techmeme",
+     "age_hours": 24.0,
+     "google_news": false,
+     "evidence_url": "https://www.techmeme.com/260925/p25#a260925p25",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 3.25,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 4,
+     "copy_id": "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+     "source": "iXBT News",
+     "age_hours": 19.5,
+     "google_news": false,
+     "evidence_url": "https://www.ixbt.com/news/2026/09/26/438377-neozidannye-i-trevoznye-anomalii-ii-openai-sam-polucil-dostup-k-pravitelstvennym-saitam-ssa.html",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 1.48,
+     "preflight": "PASS"
+    }
+   ],
+   "copies_fetched": 4,
+   "first_pass_position": 4,
+   "result": "PASS",
+   "result_copy": "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "SUPPORTED"
+   },
+   "reason": "every claim the hook makes is in the stored body evidence",
+   "elapsed_seconds": 8.76,
+   "original_run": [
+    [
+     "070feacc-88f7-4b75-817a-77effc45c266",
+     "FAIL"
+    ],
+    [
+     "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+     "FAIL"
+    ],
+    [
+     "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+     "FAIL"
+    ],
+    [
+     "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+     "PASS"
+    ]
+   ],
+   "original_passing": [
+    "8164a3d7-e826-43e9-9dd6-96babe0c71aa"
+   ]
+  },
+  {
+   "canary": "canary5",
+   "clock": "2026-09-27T11:14:31.893685+00:00",
+   "eligible_copies": 13,
+   "cap": 8,
+   "attempts": [
+    {
+     "position": 1,
+     "copy_id": "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+     "source": "Engadget",
+     "age_hours": 22.7,
+     "google_news": false,
+     "evidence_url": "https://www.engadget.com/2269776/openai-agents-targeted-us-government-websites/",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 0.78,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 2,
+     "copy_id": "fb04cb7c-7484-4a1f-b97f-092755e096d6",
+     "source": "Hacker News Front Page",
+     "age_hours": 17.0,
+     "google_news": false,
+     "evidence_url": "https://www.bbc.com/news/articles/cw62jje658dlo",
+     "resolution_method": null,
+     "package_quality": "THIN",
+     "seconds": 11.08,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 3,
+     "copy_id": "16cc9f34-2380-4f9b-8c56-a2195a0841ed",
+     "source": "Google News: Artificial Intelligence",
+     "age_hours": 22.0,
+     "google_news": true,
+     "evidence_url": "https://news.sky.com/story/openai-models-accessed-us-government-data-and-tried-to-hack-education-site-13591998",
+     "resolution_method": "google_news_article_token",
+     "package_quality": "THIN",
+     "seconds": 7.01,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 4,
+     "copy_id": "bbc0b825-bc3e-46d2-9af8-49582f03fc03",
+     "source": "Google News: Artificial Intelligence",
+     "age_hours": 19.9,
+     "google_news": true,
+     "evidence_url": "https://www.cbc.ca/news/world/openai-rogue-us-sites-activity-9.7359673",
+     "resolution_method": "google_news_article_token",
+     "package_quality": "STRONG",
+     "seconds": 7.25,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 5,
+     "copy_id": "8d8d157d-f62c-4181-bf9c-067208225ec1",
+     "source": "Google News: Artificial Intelligence",
+     "age_hours": 22.7,
+     "google_news": true,
+     "evidence_url": "https://thefederal.com/category/international/openai-says-ai-agents-unexpectedly-accessed-us-government-websites-257740",
+     "resolution_method": "google_news_article_token",
+     "package_quality": "STRONG",
+     "seconds": 7.14,
+     "preflight": "PASS"
+    }
+   ],
+   "copies_fetched": 5,
+   "first_pass_position": 5,
+   "result": "PASS",
+   "result_copy": "8d8d157d-f62c-4181-bf9c-067208225ec1",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "SUPPORTED"
+   },
+   "reason": "every claim the hook makes is in the stored body evidence",
+   "elapsed_seconds": 33.29,
+   "original_run": [
+    [
+     "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+     "FAIL"
+    ],
+    [
+     "fb04cb7c-7484-4a1f-b97f-092755e096d6",
+     "PENDING"
+    ],
+    [
+     "16cc9f34-2380-4f9b-8c56-a2195a0841ed",
+     "PENDING"
+    ],
+    [
+     "bbc0b825-bc3e-46d2-9af8-49582f03fc03",
+     "PENDING"
+    ]
+   ],
+   "original_passing": []
+  },
+  {
+   "canary": "canary6",
+   "clock": "2026-09-27T18:37:57.825368+00:00",
+   "eligible_copies": 7,
+   "cap": 8,
+   "attempts": [
+    {
+     "position": 1,
+     "copy_id": "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+     "source": "The Verge AI",
+     "age_hours": 0.7,
+     "google_news": false,
+     "evidence_url": "https://www.theverge.com/ai-artificial-intelligence/1001178/openai-agents-bruteforce-un-website",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 2.28,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 2,
+     "copy_id": "0ad4f236-27d6-4937-914c-0806dee22239",
+     "source": "Google News: Artificial Intelligence",
+     "age_hours": 20.7,
+     "google_news": true,
+     "evidence_url": "https://www.cnn.com/2026/09/26/tech/openai-agents-rogue-government-websites",
+     "resolution_method": "google_news_article_token",
+     "package_quality": "THIN",
+     "seconds": 6.1,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 3,
+     "copy_id": "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+     "source": "Google News: Artificial Intelligence",
+     "age_hours": 19.4,
+     "google_news": true,
+     "evidence_url": "https://www.npr.org/2026/09/26/nx-s1-5981979/openai-us-government-websites-misbehavior",
+     "resolution_method": "google_news_article_token",
+     "package_quality": "STRONG",
+     "seconds": 7.05,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 4,
+     "copy_id": "4371aba5-6ff7-4b6d-b38c-df16b0e104b2",
+     "source": "Google News: Artificial Intelligence",
+     "age_hours": 22.8,
+     "google_news": true,
+     "evidence_url": "https://www.bostonherald.com/2026/09/26/openai-says-its-models-unexpectedly-engaged-with-us-government-websites/",
+     "resolution_method": "google_news_article_token",
+     "package_quality": "STRONG",
+     "seconds": 5.44,
+     "preflight": "PASS"
+    }
+   ],
+   "copies_fetched": 4,
+   "first_pass_position": 4,
+   "result": "PASS",
+   "result_copy": "4371aba5-6ff7-4b6d-b38c-df16b0e104b2",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "SUPPORTED"
+   },
+   "reason": "every claim the hook makes is in the stored body evidence",
+   "elapsed_seconds": 20.89,
+   "original_run": [
+    [
+     "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+     "FAIL"
+    ],
+    [
+     "0ad4f236-27d6-4937-914c-0806dee22239",
+     "PENDING"
+    ],
+    [
+     "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+     "FAIL"
+    ],
+    [
+     "4371aba5-6ff7-4b6d-b38c-df16b0e104b2",
+     "PASS"
+    ]
+   ],
+   "original_passing": [
+    "4371aba5-6ff7-4b6d-b38c-df16b0e104b2"
+   ]
+  },
+  {
+   "canary": "canary7",
+   "clock": "2026-09-27T19:36:41.215660+00:00",
+   "eligible_copies": 7,
+   "cap": 8,
+   "attempts": [
+    {
+     "position": 1,
+     "copy_id": "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+     "source": "The Verge AI",
+     "age_hours": 1.7,
+     "google_news": false,
+     "evidence_url": "https://www.theverge.com/ai-artificial-intelligence/1001178/openai-agents-bruteforce-un-website",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 1.21,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 2,
+     "copy_id": "0ad4f236-27d6-4937-914c-0806dee22239",
+     "source": "Google News: Artificial Intelligence",
+     "age_hours": 21.7,
+     "google_news": true,
+     "evidence_url": "https://www.cnn.com/2026/09/26/tech/openai-agents-rogue-government-websites",
+     "resolution_method": "google_news_article_token",
+     "package_quality": "THIN",
+     "seconds": 5.26,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 3,
+     "copy_id": "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+     "source": "Google News: Artificial Intelligence",
+     "age_hours": 20.4,
+     "google_news": true,
+     "evidence_url": "https://www.npr.org/2026/09/26/nx-s1-5981979/openai-us-government-websites-misbehavior",
+     "resolution_method": "google_news_article_token",
+     "package_quality": "STRONG",
+     "seconds": 4.91,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 4,
+     "copy_id": "4371aba5-6ff7-4b6d-b38c-df16b0e104b2",
+     "source": "Google News: Artificial Intelligence",
+     "age_hours": 23.8,
+     "google_news": true,
+     "evidence_url": "https://www.bostonherald.com/2026/09/26/openai-says-its-models-unexpectedly-engaged-with-us-government-websites/",
+     "resolution_method": "google_news_article_token",
+     "package_quality": "STRONG",
+     "seconds": 5.29,
+     "preflight": "PASS"
+    }
+   ],
+   "copies_fetched": 4,
+   "first_pass_position": 4,
+   "result": "PASS",
+   "result_copy": "4371aba5-6ff7-4b6d-b38c-df16b0e104b2",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "SUPPORTED"
+   },
+   "reason": "every claim the hook makes is in the stored body evidence",
+   "elapsed_seconds": 16.69,
+   "original_run": [
+    [
+     "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+     "FAIL"
+    ],
+    [
+     "0ad4f236-27d6-4937-914c-0806dee22239",
+     "PENDING"
+    ],
+    [
+     "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+     "FAIL"
+    ],
+    [
+     "4371aba5-6ff7-4b6d-b38c-df16b0e104b2",
+     "PASS"
+    ]
+   ],
+   "original_passing": [
+    "4371aba5-6ff7-4b6d-b38c-df16b0e104b2"
+   ]
+  },
+  {
+   "canary": "canary8",
+   "clock": "2026-09-27T21:27:34.410547+00:00",
+   "eligible_copies": 7,
+   "cap": 8,
+   "attempts": [
+    {
+     "position": 1,
+     "copy_id": "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+     "source": "The Verge AI",
+     "age_hours": 3.5,
+     "google_news": false,
+     "evidence_url": "https://www.theverge.com/ai-artificial-intelligence/1001178/openai-agents-bruteforce-un-website",
+     "resolution_method": null,
+     "package_quality": "STRONG",
+     "seconds": 1.65,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 2,
+     "copy_id": "0ad4f236-27d6-4937-914c-0806dee22239",
+     "source": "Google News: Artificial Intelligence",
+     "age_hours": 23.6,
+     "google_news": true,
+     "evidence_url": "https://www.cnn.com/2026/09/26/tech/openai-agents-rogue-government-websites",
+     "resolution_method": "google_news_article_token",
+     "package_quality": "THIN",
+     "seconds": 8.78,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 3,
+     "copy_id": "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+     "source": "Google News: Artificial Intelligence",
+     "age_hours": 22.3,
+     "google_news": true,
+     "evidence_url": "https://www.npr.org/2026/09/26/nx-s1-5981979/openai-us-government-websites-misbehavior",
+     "resolution_method": "google_news_article_token",
+     "package_quality": "STRONG",
+     "seconds": 8.23,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 4,
+     "copy_id": "273dc8ad-c786-4c17-88a3-d5b7cc0c48a2",
+     "source": "Google News: Artificial Intelligence",
+     "age_hours": 20.9,
+     "google_news": true,
+     "evidence_url": "https://www.usnews.com/news/business/articles/2026-09-26/openai-pauses-training-of-latest-models-after-agents-probed-us-government-sites-in-unexpected-ways",
+     "resolution_method": "google_news_article_token",
+     "package_quality": "BLOCKING",
+     "seconds": 10.32,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 5,
+     "copy_id": "10856ebf-530f-41b4-80ea-2c7592cca2b8",
+     "source": "Google News: Artificial Intelligence",
+     "age_hours": 21.6,
+     "google_news": true,
+     "evidence_url": "https://www.wral.com/news/ap/2f8a2-openai-pauses-training-of-latest-models-after-agents-probed-us-government-sites-in-unexpected-ways/",
+     "resolution_method": "google_news_article_token",
+     "package_quality": "STRONG",
+     "seconds": 3.16,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 6,
+     "copy_id": "d08eaab6-90a6-48d1-b99f-fef7f059e01f",
+     "source": "Google News: Artificial Intelligence",
+     "age_hours": 11.1,
+     "google_news": true,
+     "evidence_url": "https://www.latimes.com/world-nation/story/2026-09-27/openai-pauses-training-of-models-after-agents-probed-u-s-government-sites",
+     "resolution_method": "google_news_article_token",
+     "package_quality": "STRONG",
+     "seconds": 4.02,
+     "preflight": "not PASS"
+    },
+    {
+     "position": 7,
+     "copy_id": "a6b32ec3-2697-432c-ae6e-c175c496b6e0",
+     "source": "Google News: Artificial Intelligence",
+     "age_hours": 0.7,
+     "google_news": true,
+     "evidence_url": "https://www.cbc.ca/news/business/openai-pause-training-after-probes-9.7360166",
+     "resolution_method": "google_news_article_token",
+     "package_quality": "STRONG",
+     "seconds": 3.61,
+     "preflight": "PASS"
+    }
+   ],
+   "copies_fetched": 7,
+   "first_pass_position": 7,
+   "result": "PASS",
+   "result_copy": "a6b32ec3-2697-432c-ae6e-c175c496b6e0",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "SUPPORTED",
+    "chronology": "SUPPORTED"
+   },
+   "reason": "every claim the hook makes is in the stored body evidence",
+   "elapsed_seconds": 39.81,
+   "original_run": [
+    [
+     "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+     "FAIL"
+    ],
+    [
+     "0ad4f236-27d6-4937-914c-0806dee22239",
+     "PENDING"
+    ],
+    [
+     "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+     "FAIL"
+    ],
+    [
+     "273dc8ad-c786-4c17-88a3-d5b7cc0c48a2",
+     "PENDING"
+    ]
+   ],
+   "original_passing": []
+  }
+ ],
+ "max_copies_attempted": 7,
+ "max_elapsed_seconds": 39.81,
+ "mean_copies_before_pass": 4.5
+}

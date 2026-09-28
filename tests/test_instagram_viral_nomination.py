@@ -383,7 +383,8 @@ async def test_the_worker_tries_other_copies_of_the_event_until_one_body_passes(
 async def test_copy_attempts_are_bounded_and_all_failing_copies_block(monkeypatch: pytest.MonkeyPatch):
     built: list = []
     assert await _run_cycle(monkeypatch, [], built=built) == []
-    assert len(built) == cc._VIRAL_EVIDENCE_COPIES
+    # every copy up to the bound (the fixture has 5 copies; the bound is 8 since 2026-09-28) - never more
+    assert len(built) == min(len(us_gov_copies()), cc._VIRAL_EVIDENCE_COPIES)
 
 
 @pytest.mark.asyncio

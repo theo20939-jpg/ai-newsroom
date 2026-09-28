@@ -1110,7 +1110,9 @@ _INSTAGRAM_TRIGGER_MAX_PER_CYCLE = 3
 
 
 # a nominated viral event's copies tried for BODY evidence before it is skipped: acquisition only (the existing path), never a model call
-_VIRAL_EVIDENCE_COPIES = 4
+# (founder decision 2026-09-28, after canary 8: 4 -> 8 - the passing copy was newest, oldest or mid-age in the eight frozen canaries, so the
+# accepted order is kept and the bound is raised; the search still stops at the first PASS and never goes past this bound)
+_VIRAL_EVIDENCE_COPIES = 8
 
 
 async def _feed_evidence_package(session: AsyncSession, event_id: UUID, event_row: Any, slot_format: Any) -> Any:
