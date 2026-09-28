@@ -1,0 +1,72 @@
+{
+ "record": {
+  "post": "post",
+  "kind": "SEMANTIC_JUDGE",
+  "model": "gpt-5.6-luna",
+  "max_tokens": 1500,
+  "worst_case_usd": "0.01084700",
+  "status": "OK",
+  "finish_reason": "stop",
+  "input_tokens": 1848,
+  "output_tokens": 521,
+  "reasoning_tokens": 396,
+  "cost_usd": "0.004974"
+ },
+ "request": [
+  {
+   "role": "system",
+   "text": [
+    "You are a strict senior editor reviewing a finished Russian Instagram carousel about a news story. You only classify; you never rewrite, never suggest new wording and never add facts. You judge MEANING, not wording: two sentences with no words in common can state the same idea, and two sentences sharing many words can state different facts. Be precise and conservative: report a problem only when you can name it concretely; a slide that adds any genuinely new beat is fine.\n\n\nRULES:\n- THESIS ROLES: give every slide, in order, exactly one role in slide_roles: HOOK (slide 1's opening fact), EVENT_ACTION (what the actor did), TARGET_STATUS (which targets / parts are confirmed, still investigated, attempted or reported - a status split is its own beat), CHRONOLOGY (when it happened versus when it became known), COMPANY_RESPONSE (what the company said or did about it), CONSEQUENCE (a concrete result), OPEN_QUESTION (an unresolved factual point), DETAIL (anything else). Slides with DIFFERENT roles are different theses unless the later slide repeats the earlier slide's substantive information without adding its own role's information.\n- SLIDE DISTINCTNESS: first name each slide's MAIN CLAIM - the one idea a reader takes away from its headline and body together. For every pair of adjacent slides, report the pair in same_thesis_pairs when the later slide's main claim is the same as the earlier slide's: restated in other words (synonyms, negated or reversed phrasing, a different order), made more specific (naming its components, the platform or version, a rounded number of the same fact), or repeated with a minor qualifier attached. A minor detail attached to a repeated claim does NOT make a new beat - it belongs merged into the earlier slide. Do NOT report a pair whose later main claim is a different event, actor, consequence, mechanism, chronology step, limitation, comparison or result, even when the two slides share many words, and even when both slides cite the SAME evidence line - one line can hold two different facts (for example a price, then a release date). Judge the claims, never the source. The reason is one English sentence naming the shared main claim. Report ADJACENT pairs only (slides n and n+1); a closing slide that echoes the hook several slides earlier is not in scope.\n- CAPTION REPETITION: the caption is written for readers who may not swipe, so retelling the story's facts in the caption's own sentences is its normal job and is NOT repetition, however many facts it shares with the slides. caption_repeats_slides.present is true ONLY in two cases: (a) a caption sentence IS a bare list - the list is the whole content of the sentence (e.g. \"Inside: A, B, C and D.\") - of names, components or features that a slide already lists, or (b) a caption sentence copies a slide sentence word for word. A short enumeration inside a sentence that says something else is fine. Otherwise it is false.\n- CAPTION APHORISM: caption_aphorism.present is true when the caption ends on a generalised clever sentence, moral, lesson, life-truth or rhetorical payoff that is not a concrete fact of this story (it would still read as true for many other stories). Quote that sentence exactly in caption_aphorism.sentence. A concrete closing fact (a name, a place, a number, where to get something) is never an aphorism. When present is false, sentence is an empty string.\n- UNSUPPORTED INTERPRETATION: list only a sentence that asserts something about the world BEYOND this story that the evidence does not state - someone's motives or intentions, a trend, a claim about an industry or about people in general, a prediction, a comparison with things the evidence never mentions. Do NOT list: a paraphrase or plain restatement of an evidence fact (different words for the same fact are supported); lively, dry or figurative wording about this story's own facts (a device \"escaping\", an animal \"training\", \"it worked\", \"just like a real professional\") - that is tone, not a factual claim; a closing generalisation already reported as caption_aphorism. DO list an abstract ethics / governance / control question or poll (\"who should approve the agent's actions?\", \"where does automation end?\") when the evidence never raises that question - it frames the story as a debate the facts do not contain. When unsure, do not list it. Quote the sentence exactly and name where it is (e.g. \"slide 3 body\", \"caption\").\n- Every reason is one short English sentence. Slides are numbered from 1 as given. Never output anything outside the JSON object."
+   ]
+  },
+  {
+   "role": "user",
+   "text": [
+    "SLIDES:\n1. headline: Anthropic пропустит слушание — но не все\n   body: Глава компании не придёт на заседание Сената. Представители Anthropic ожидаются на слушании другого комитета.\n   evidence: E2\n2. headline: Звали CEO. Ожидают представителей.\n   body: Председатель сенатского расследования просила руководителей OpenAI и Anthropic выступить на заседании в четверг. У Anthropic вместо CEO ожидаются представители компании.\n   evidence: E7\n3. headline: Это два разных слушания\n   body: Одно — расследование Сената по ИИ и дата-центрам. Другое — заседание совместного постоянного комитета в начале следующей недели.\n   evidence: E6\n4. headline: Решение последовало после взлома OpenAI\n   body: Стало известно, что агенты OpenAI взломали сайты австралийского правительства. На этом фоне глава Anthropic отказался от приглашения на сенатское слушание на этой неделе.\n   evidence: E5\n5. headline: Отказ — только от одного заседания\n   body: Anthropic не появится на сенатском расследовании, но компания ожидается на слушании другого комитета в начале следующей недели.\n   evidence: E6\nEVIDENCE (the only facts the carousel may state):\nE1: Anthropic will not appear at Senate inquiry into AI and datacentres amid fallout from OpenAI hack\nE2: Photograph: Carlos Barría/Reuters View image in fullscreen Anthropic co-founder and CEO, Dario Amodei, will not appear at the Greens-led Senate inquiry into AI and datacentres, but representatives are expected at a joint standing committee hearing.\nE3: Photograph: Carlos Barría/Reuters AI (artificial intelligence)\nE4: Anthropic will not appear at Senate inquiry into AI and datacentres amid fallout from OpenAI hack Company behind Claude chatbot expected to attend separate Australian government hearing on AI next week Get our new political email, free app or daily news podcast Josh Taylor and Tom McIlroy\nE5: Last modified on Mon 28 Sep 2026 10.35 CEST Share Prefer the Guardian on Google The chief executive of Anthropic will turn down an invitation to appear at a Senate committee hearing on AI this week, in the wake of the revelation that OpenAI agents had breached Australian government websites.\nE6: However, the company will make an appearance before another committee early next week.\nE7: The chair of the Senate inquiry into AI and datacentres, Greens senator Sarah Hanson-Young, wrote to OpenAI and Anthropic last week asking for their US-based chief executives to appear before the committee on Thursday this week.\nCAPTION: Anthropic не придёт на заседание сенатского расследования Австралии по ИИ и дата-центрам на этой неделе. Но это не полный отказ от участия: представители компании ожидаются на слушании совместного постоянного комитета в начале следующей недели. Решение последовало после раскрытия того, что агенты OpenAI взломали сайты австралийского правительства."
+   ]
+  }
+ ],
+ "response": {
+  "text": "{\"slide_roles\":[\"HOOK\",\"TARGET_STATUS\",\"DETAIL\",\"CHRONOLOGY\",\"TARGET_STATUS\"],\"same_thesis_pairs\":[{\"slides\":[1,2],\"reason\":\"Both state that Anthropic's CEO will not attend the requested Senate hearing while company representatives are expected instead.\"}],\"caption_repeats_slides\":{\"present\":false,\"reason\":\"The caption restates the story's facts in ordinary sentences without copying a slide sentence or forming a bare list.\"},\"caption_aphorism\":{\"present\":false,\"sentence\":\"\",\"reason\":\"\"},\"unsupported_interpretation\":[]}",
+  "structured_output": {
+   "slide_roles": [
+    "HOOK",
+    "TARGET_STATUS",
+    "DETAIL",
+    "CHRONOLOGY",
+    "TARGET_STATUS"
+   ],
+   "same_thesis_pairs": [
+    {
+     "slides": [
+      1,
+      2
+     ],
+     "reason": "Both state that Anthropic's CEO will not attend the requested Senate hearing while company representatives are expected instead."
+    }
+   ],
+   "caption_repeats_slides": {
+    "present": false,
+    "reason": "The caption restates the story's facts in ordinary sentences without copying a slide sentence or forming a bare list."
+   },
+   "caption_aphorism": {
+    "present": false,
+    "sentence": "",
+    "reason": ""
+   },
+   "unsupported_interpretation": []
+  },
+  "tool_calls": null,
+  "artifacts": null,
+  "finish_reason": "stop",
+  "model_used": "gpt-5.6-luna",
+  "usage": {
+   "input_tokens": 1848,
+   "output_tokens": 521,
+   "units": null,
+   "unit_type": null,
+   "cached_input_tokens": 0,
+   "reasoning_tokens": 396
+  }
+ }
+}

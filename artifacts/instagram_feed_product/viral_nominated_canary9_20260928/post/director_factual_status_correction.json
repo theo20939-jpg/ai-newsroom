@@ -1,0 +1,13 @@
+{
+ "ledger": [],
+ "violations": [],
+ "non_regression": [],
+ "repairability": null,
+ "baseline_invariants": {
+  "violations": [],
+  "underlying_time": false,
+  "disclosure": true,
+  "action_strength": 3,
+  "ledger": []
+ }
+}

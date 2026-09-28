@@ -1,0 +1,4 @@
+{
+ "error_type": "EditorialCorrectionRequired",
+ "error": "editorial correction required: MediaFirstContractError: slide 1: a generated slide needs a story_anchor - the concrete story-specific thing that makes the image belong to THIS story"
+}
