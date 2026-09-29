@@ -1,0 +1,73 @@
+{
+  "status": "STOPPED_AMBIGUOUS_TELEGRAM_NETWORK_FAILURE",
+  "event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+  "story_id": "12ded5ee-0f8c-54f7-9e62-b6169114198b",
+  "task_id": "7c3586aa-76a3-41c2-ba51-44a8c124a73b",
+  "draft_id": "48b5d317-bb43-4c7b-8e6c-16b5569bd445",
+  "code_commit": "a869ec0",
+  "pre_send_acceptance": {
+    "result": "PASS",
+    "editorial_usefulness": "PASS",
+    "factual_gate": "PASS",
+    "unsupported_claim_count": 0,
+    "duplicate_state": "CLEAR",
+    "natural_selection_calls": 0
+  },
+  "final_copy": {
+    "headline": "OpenAI приостановила обучение последних моделей",
+    "body": "По данным NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.",
+    "forbidden_historical_body_present": false,
+    "caption_html": "<b>OpenAI приостановила обучение последних моделей</b>\n\nПо данным NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.\n\n🥷 <a href=\"https://t.me/kage_journal\">KAGE</a>",
+    "caption_utf16_units": 203,
+    "buttons": [
+      {
+        "text": "🔗 Источник",
+        "url": "https://news.google.com/rss/articles/CBMivAFBVV95cUxNdmhabDZfN1ZHQXprdWJ4QThjNFVRWTU3ODlmakJmcy1iVGpZakJpMGZULVhSaWZod29QaXdtNTkwTXV1T3lWVm1GTTk5Q2hZRG5CLW1DYTVheGt4ZnF5cnIxamlsaE1WeGlZV0pxTWxPZ3NLWEgzMGlERlc4WFJoa0h6enN1dUQ1dTdYaHZTOER2SU1uUUFTazNtNW5hdGJkYVJ5MjduZ1dkWEFEQ3BuVHVMZkozM3lySHZIbg?oc=5&ucbcb=1&hl=en-US&gl=US&ceid=US:en"
+      }
+    ]
+  },
+  "visual": {
+    "artifact": "message_2865_kage_final.jpg",
+    "sha256": "d9bbbfb914b79b9c994865d3bb27bc75b5ea03223a51c45899a89166fd0d4e8c",
+    "width": 1536,
+    "height": 1024,
+    "byte_size": 242326,
+    "compliance": "COMPLIANT",
+    "new_image_generation_calls": 0
+  },
+  "provider_accounting": {
+    "allowed_providers": ["openai"],
+    "successful_responses": 5,
+    "persisted_ai_executions": 4,
+    "persisted_capabilities": ["RESEARCH", "INTELLIGENCE", "COPYWRITING", "QUALITY"],
+    "factual_gate_response": 1,
+    "http_attempts_observed": 6,
+    "transient_retries_observed": 1,
+    "persisted_cost_usd_excluding_factual_gate": "0.010470"
+  },
+  "telegram": {
+    "route_chat_id": -1004297182444,
+    "route_topic_id": 2,
+    "send_photo_attempts": 1,
+    "send_photo_confirmed_successes": 0,
+    "send_message_attempts": 0,
+    "message_id": null,
+    "error": "TelegramNetworkError: ClientConnectorError connecting to api.telegram.org:443",
+    "retry_performed": false,
+    "delivery_receipt_rows": 0
+  },
+  "persistence": {
+    "draft_status": "hold_for_visual",
+    "publication_outcome_status": "VISUAL_HOLD",
+    "publication_outcome_reason": "media_send_failed",
+    "send_attempted_at": "2026-09-29T00:20:58.918660+00:00",
+    "failure_observed_at": "2026-09-29T00:21:53.844124+00:00",
+    "lineage_visual_reason": "controlled_accepted_visual_reuse",
+    "lineage_image_generation_calls": 0
+  },
+  "duplicate_rerun": {
+    "executed": false,
+    "reason": "Required only after confirmed successful send; forbidden after ambiguous Telegram transport failure"
+  },
+  "production_changed": false
+}
