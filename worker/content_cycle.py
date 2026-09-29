@@ -9,7 +9,7 @@ import time
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Mapping
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -108,7 +108,7 @@ from services.director_editorial_gate_shadow import (
 from services.telegram_channel_director_shadow import run_channel_director_shadow
 from services.telegram_notifier import send_editorial_card, to_editorial_card
 from services.telegram_radar_evidence import evaluate_origin_before_generation
-from services.kage_publication_worker_gate import evaluate_worker_publication_gate
+from services.kage_publication_worker_gate import WorkerGateResult, evaluate_worker_publication_gate
 from services.kage_content_lineage_audit import update_attempt_audit
 from services.kage_editorial_usefulness import evaluate_editorial_usefulness
 from services.kage_delivery_truth import (
@@ -609,9 +609,21 @@ HOLD_REASON_PHOTO_CAPTION_OVERFLOW = "photo_caption_overflow"
 HOLD_REASON_VISUAL_NOT_SENDABLE = "visual_not_sendable"
 
 
+@dataclass(frozen=True)
+class AcceptedVisualArtifact:
+    """Founder-approved bytes for a bounded controlled-delivery invocation only."""
+
+    image_bytes: bytes
+    filename: str
+    sha256: str
+    width: int
+    height: int
+    compliance_decision: str
+
+
 async def _kage_visual_fallback_photo(
     *, outcome: Any, event: NewsEvent, session_factory: async_sessionmaker[AsyncSession],
-    caption_fits: bool, dry_run: bool,
+    caption_fits: bool, dry_run: bool, accepted_visual: AcceptedVisualArtifact | None = None,
 ) -> tuple[BufferedInputFile | None, str]:
     """KAGE NEWS Tier 2 (one generated editorial image) then Tier 3 (local typography card) for a
     story with no usable source photo. Returns (photo, "ok") or (None, hold_reason). A caption that
@@ -621,6 +633,31 @@ async def _kage_visual_fallback_photo(
 
     if not caption_fits:
         return None, HOLD_REASON_PHOTO_CAPTION_OVERFLOW
+    if accepted_visual is not None:
+        audit = {
+            "name": "visual_fallback",
+            "tier": "generated_image",
+            "reason": "controlled_accepted_visual_reuse",
+            "generation_reason": "not_called_existing_accepted_artifact",
+            "typography_reason": None,
+            "visual_compliance": {"decision": accepted_visual.compliance_decision},
+            "image_sha256": accepted_visual.sha256,
+            "image_width": accepted_visual.width,
+            "image_height": accepted_visual.height,
+            "artifact_filename": accepted_visual.filename,
+            "new_image_generation_calls": 0,
+        }
+        try:
+            async with session_factory() as audit_session:
+                await update_attempt_audit(
+                    audit_session, task_id=outcome.task_id, section="stage", value=audit,
+                )
+                await audit_session.commit()
+        except Exception:  # noqa: BLE001 - same best-effort audit boundary as the normal tier ladder
+            logger.warning("kage_accepted_visual_audit_failed", exc_info=True)
+        return BufferedInputFile(
+            accepted_visual.image_bytes, filename=accepted_visual.filename,
+        ), "ok"
     copy = outcome.copywriting_output or {}
     body = str(copy.get("main_body") or "")
     if isinstance(copy.get("ending"), str) and copy["ending"].strip():
@@ -1425,6 +1462,8 @@ async def run_content_cycle(
     pricing_catalog: PricingCatalog | None = None,
     event_ids_override: list[UUID] | None = None,
     precomputed_outcomes: dict[UUID, ContentGenerationOutcome] | None = None,
+    accepted_visuals: Mapping[UUID, AcceptedVisualArtifact] | None = None,
+    precomputed_publication_gates: Mapping[UUID, WorkerGateResult] | None = None,
     gate_gateway: object | None = None,
     gate_prompt_repository: object | None = None,
 ) -> ContentCycleResult:
@@ -1441,6 +1480,8 @@ async def run_content_cycle(
             cost_tracker=cost_tracker, pricing_catalog=pricing_catalog,
             event_ids_override=event_ids_override,
             precomputed_outcomes=precomputed_outcomes,
+            accepted_visuals=accepted_visuals,
+            precomputed_publication_gates=precomputed_publication_gates,
             gate_gateway=gate_gateway, gate_prompt_repository=gate_prompt_repository,
         )
     except Exception as exc:
@@ -1475,6 +1516,8 @@ async def _run_content_cycle_impl(
     pricing_catalog: PricingCatalog | None = None,
     event_ids_override: list[UUID] | None = None,
     precomputed_outcomes: dict[UUID, ContentGenerationOutcome] | None = None,
+    accepted_visuals: Mapping[UUID, AcceptedVisualArtifact] | None = None,
+    precomputed_publication_gates: Mapping[UUID, WorkerGateResult] | None = None,
     # DIRECTOR-CONTROL-PLANE-1B §2: the real LLMGateway + PromptRepository, threaded straight
     # through to services/director_editorial_gate_shadow.py::run_pre_generation_gate() for its
     # bounded Stage 2 Director judgment. Deliberately typed `object | None` here (never the real
@@ -1738,15 +1781,20 @@ async def _run_content_cycle_impl(
         # The frozen 11.10 stack is authoritative for Telegram delivery. Both the legacy
         # and unified send branches are below this point; neither can bypass a missing gate.
         if settings.copywriting_prompt_version == "11.10":
-            gate_result = await evaluate_worker_publication_gate(
-                gateway=gate_gateway, prompt_repository=gate_prompt_repository,
-                draft=outcome.copywriting_output,
-                research=outcome.research_output,
-                intelligence=outcome.intelligence_output,
-                source_headline=event.title, event_id=event_id,
-                draft_id=outcome.content_draft.id, task_id=outcome.task_id,
-                cost_tracker=cost_tracker, pricing_catalog=pricing_catalog,
-                quality_result=outcome.quality_output,
+            gate_result = (
+                precomputed_publication_gates[outcome.task_id]
+                if precomputed_publication_gates is not None
+                and outcome.task_id in precomputed_publication_gates
+                else await evaluate_worker_publication_gate(
+                    gateway=gate_gateway, prompt_repository=gate_prompt_repository,
+                    draft=outcome.copywriting_output,
+                    research=outcome.research_output,
+                    intelligence=outcome.intelligence_output,
+                    source_headline=event.title, event_id=event_id,
+                    draft_id=outcome.content_draft.id, task_id=outcome.task_id,
+                    cost_tracker=cost_tracker, pricing_catalog=pricing_catalog,
+                    quality_result=outcome.quality_output,
+                )
             )
             result.publication_gate_records.append(gate_result.record)
             if gate_result.technical_block:
@@ -2952,6 +3000,7 @@ async def _run_content_cycle_impl(
                             fallback_photo, fallback_hold_reason = await _kage_visual_fallback_photo(
                                 outcome=outcome, event=event, session_factory=session_factory,
                                 caption_fits=fits_caption_budget, dry_run=effective_dry_run,
+                                accepted_visual=(accepted_visuals or {}).get(event_id),
                             )
                         if not had_any_visual and fallback_photo is not None:
                             # KAGE Tier 2/3 visual: a generated editorial image or the typography card.

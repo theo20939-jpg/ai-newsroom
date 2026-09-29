@@ -45,7 +45,7 @@ from services.kage_telegram_canary_envelope import (
 )
 from tests.test_content_worker_cycle import _make_event, factory, test_source  # noqa: F401
 from tests.test_router_media_integration import _fake_candidate
-from worker.content_cycle import HOLD_FOR_VISUAL_STATUS, run_content_cycle
+from worker.content_cycle import AcceptedVisualArtifact, HOLD_FOR_VISUAL_STATUS, run_content_cycle
 
 FIXTURES = Path(__file__).parent / "fixtures"
 M2865 = json.loads((FIXTURES / "kage_lineage_msg2865.json").read_text(encoding="utf-8"))
@@ -381,7 +381,7 @@ def test_message_2865_google_news_logos_remain_rejected():
 
 
 async def _cycle(factory_, source, monkeypatch, fixture, body, candidates, *, generated=None, generation_error=None,
-                 typography=True, mode="live"):
+                 typography=True, mode="live", accepted_visual=None, precomputed_gate=None):
     for key, value in (("copywriting_prompt_version", "11.10"), ("editorial_delivery_mode", "router"),
                        ("unified_editorial_pipeline_enabled", False), ("content_generation_dry_run", False),
                        ("telegram_story_reply_mode", "off"), ("instagram_automatic_generation_enabled", False),
@@ -444,7 +444,10 @@ async def _cycle(factory_, source, monkeypatch, fixture, body, candidates, *, ge
         item.start()
     try:
         result = await run_content_cycle(AsyncMock(), fake_bot, session_factory=factory_,
-                                         event_ids_override=[event.id], precomputed_outcomes={event.id: outcome})
+                                         event_ids_override=[event.id], precomputed_outcomes={event.id: outcome},
+                                         accepted_visuals=({event.id: accepted_visual} if accepted_visual else None),
+                                         precomputed_publication_gates=({task.id: precomputed_gate}
+                                                                        if precomputed_gate else None))
     finally:
         for item in patches:
             item.stop()
@@ -462,14 +465,14 @@ async def _cycle(factory_, source, monkeypatch, fixture, body, candidates, *, ge
                            receipts=receipts)
 
 
-def _assert_photo_post(run):
+def _assert_photo_post(run, *, gate_calls=1):
     run.bot.send_message.assert_not_called()
     run.bot.send_photo.assert_called_once()
     args, kwargs = run.bot.send_photo.call_args
     assert args[0] == CHAT and kwargs["message_thread_id"] == TOPIC
     assert kwargs["caption"].endswith(FOOTER_HTML)
     assert [b.text for row in kwargs["reply_markup"].inline_keyboard for b in row] == ["🔗 Источник", "😂 Сгенерировать мем"]
-    assert run.outcome["status"] == "DELIVERED" and run.gate.await_count == 1
+    assert run.outcome["status"] == "DELIVERED" and run.gate.await_count == gate_calls
     return kwargs["photo"]
 
 
@@ -481,6 +484,38 @@ async def test_2865_no_source_photo_generated_image_is_sent_as_photo(factory, te
     assert photo.filename == "kage-generated_image.jpg"
     audit = run.lineage["stages"]["visual_fallback"]
     assert audit["tier"] == vf.TIER_GENERATED and audit["brief_fact_ids"] == [1, 2]
+
+
+@pytest.mark.asyncio
+async def test_2865_controlled_accepted_visual_reuses_bytes_without_generation(
+    factory, test_source, monkeypatch,
+):
+    image = _photo(width=1536, height=1024)
+    accepted = AcceptedVisualArtifact(
+        image_bytes=image,
+        filename="message_2865_kage_final.jpg",
+        sha256=__import__("hashlib").sha256(image).hexdigest(),
+        width=1536,
+        height=1024,
+        compliance_decision="COMPLIANT",
+    )
+    precomputed_gate = WorkerGateResult(
+        False, False, False, False,
+        {"final_publication_block": False, "unsupported_claim_count": 0},
+        {"gate_version": "1", "execution_id": "controlled-precomputed-gate",
+         "structured_result": {"FACTUAL_SAFETY": "PASS", "UNSUPPORTED_CLAIMS": []}},
+    )
+    run = await _cycle(
+        factory, test_source, monkeypatch, M2865, USEFUL_2865_BODY, [],
+        generated=_photo(), accepted_visual=accepted, precomputed_gate=precomputed_gate,
+    )
+    photo = _assert_photo_post(run, gate_calls=0)
+    assert photo.data == image
+    assert run.generate.await_count == 0
+    audit = run.lineage["stages"]["visual_fallback"]
+    assert audit["reason"] == "controlled_accepted_visual_reuse"
+    assert audit["image_sha256"] == accepted.sha256
+    assert audit["new_image_generation_calls"] == 0
 
 
 @pytest.mark.asyncio
