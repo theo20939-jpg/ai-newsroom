@@ -1,0 +1,20 @@
+{
+ "ledger": [],
+ "violations": [],
+ "non_regression": [],
+ "repairability": null,
+ "baseline_invariants": {
+  "violations": [],
+  "underlying_time": false,
+  "disclosure": false,
+  "disclosure_marker": true,
+  "chronology": "CURRENT_EVENT",
+  "underlying_time_values": [],
+  "disclosure_dates": [
+   "10 сентябр",
+   "18 июн"
+  ],
+  "action_strength": 2,
+  "ledger": []
+ }
+}

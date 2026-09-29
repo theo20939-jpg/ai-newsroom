@@ -1,0 +1,160 @@
+{
+ "now": "2026-09-29T11:46:25.890059+00:00",
+ "pool": 744,
+ "distinct_events": 590,
+ "eligible_events": [
+  "Батарея на 11 000 мА·ч, прошлогодний Snapdragon и камера на 200 Мп: Honor представила геймерский смартфон Magic 9 Super",
+  "Anthropic upgrades Claude with new Sonnet 5.5 model, details here",
+  "OpenAI and Anthropic are skipping Australia's Senate AI hearing after the Medicare hack",
+  "Leak reveals new iPhone Duo features not yet announced",
+  "OpenAI and Anthropic are reportedly investigating tens of thousands of AI security incidents; OpenAI pauses testing",
+  "On the 29th, physical artificial intelligence (AI) company Newbility unveiled a hybrid humanoid \"Bil..",
+  "Apple Notes keeps getting better, here’s what’s new in iOS 27",
+  "Apple Releases iOS 27.0.1 With Face ID Bug Fix",
+  "ИИ-агенты OpenAI вышли из-под контроля: попытки взлома госсайтов США, реакция Конгресса",
+  "Nvidia Says New Safety Platform Would Have Halted Hugging Face Hack",
+  "UK Games Expo bans games and art made mostly using AI"
+ ],
+ "selected_event": "Anthropic upgrades Claude with new Sonnet 5.5 model, details here",
+ "copies": [
+  "c728f8d6-248a-4ea0-83bf-20a9520d4007",
+  "10906658-9628-4699-ae52-2f93d0c11f4c"
+ ],
+ "planned_copy": {
+  "id": "c728f8d6-248a-4ea0-83bf-20a9520d4007",
+  "source": "9to5Mac",
+  "title": "Anthropic upgrades Claude with new Sonnet 5.5 model, details here"
+ },
+ "verdict": {
+  "actuality": "CURRENT_EVENT",
+  "actuality_reason": "coverage: 2 independent outlets since 2026-09-28 18:07 UTC",
+  "underlying_time": null,
+  "disclosed_at": "None",
+  "newly_disclosed": [],
+  "kage": [
+   "ai",
+   "software_platform_security_gaming"
+  ],
+  "broad": "BROAD",
+  "strength": "STRONG",
+  "mechanisms": [
+   "ai_launch"
+  ],
+  "momentum": "WEAK",
+  "momentum_evidence": [
+   "2 independent outlets carried this same event in the last 72 hours"
+  ],
+  "hook": "Anthropic выпустила нейросеть Claude Sonnet 5.5",
+  "reason": "current (coverage: 2 independent outlets since 2026-09-28 18:07 UTC); broad (a new flagship AI model release); strong mechanisms ['ai_launch']; momentum weak (2 independent outlets carried this same event in the last 72 hours)"
+ },
+ "outlets": [
+  "9to5mac",
+  "hightech.fm"
+ ],
+ "first_seen": "2026-09-28 18:07:55+00:00",
+ "evidence_attempts": [
+  {
+   "order": 1,
+   "event_id": "c728f8d6-248a-4ea0-83bf-20a9520d4007",
+   "source": "9to5Mac",
+   "title": "Anthropic upgrades Claude with new Sonnet 5.5 model, details here",
+   "url": "https://9to5mac.com/2026/09/28/anthropic-upgrades-claude-with-new-sonnet-5-5-model-details-here/",
+   "acquisition": [
+    {
+     "type": "STORED_BODY",
+     "status": "OK",
+     "chars": 114
+    },
+    {
+     "type": "STORED_BODY",
+     "status": "OK",
+     "chars": 5
+    },
+    {
+     "type": "ORIGINAL_ARTICLE",
+     "status": "FULL_TEXT",
+     "chars": 4580
+    }
+   ],
+   "package_quality": "STRONG",
+   "body_chars": 631,
+   "preflight": "FAIL",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "UNSUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "SUPPORTED",
+    "chronology": "SUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "reason": "the body evidence does not support: action"
+  },
+  {
+   "order": 2,
+   "event_id": "10906658-9628-4699-ae52-2f93d0c11f4c",
+   "source": "Google News RU: ИИ",
+   "title": "Anthropic выпустила нейросеть Claude Sonnet 5.5 - hightech.fm",
+   "url": "https://news.google.com/rss/articles/CBMiXkFVX3lxTFBxSGZ3eW5FblctU0s2TmhwVUFZd3Y2TUpGMGR0QVc4RlItS2tnWDNHUVYxRFk1c1ZSWV9kMFlqSFRvZUIwajM1SVUzemRWbmtHSVNJNUtWeHlhV0ZSRVE?oc=5",
+   "acquisition": [
+    {
+     "type": "STORED_BODY",
+     "status": "OK",
+     "chars": 59
+    },
+    {
+     "type": "ORIGINAL_ARTICLE",
+     "status": "FULL_TEXT",
+     "chars": 3279
+    }
+   ],
+   "package_quality": "STRONG",
+   "body_chars": 923,
+   "preflight": "FAIL",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "UNSUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "SUPPORTED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "reason": "the body evidence does not support: action, chronology"
+  }
+ ],
+ "evidence_copy": {
+  "event_id": "10906658-9628-4699-ae52-2f93d0c11f4c",
+  "title": "Anthropic выпустила нейросеть Claude Sonnet 5.5 - hightech.fm",
+  "url": "https://news.google.com/rss/articles/CBMiXkFVX3lxTFBxSGZ3eW5FblctU0s2TmhwVUFZd3Y2TUpGMGR0QVc4RlItS2tnWDNHUVYxRFk1c1ZSWV9kMFlqSFRvZUIwajM1SVUzemRWbmtHSVNJNUtWeHlhV0ZSRVE?oc=5"
+ },
+ "preflight": {
+  "status": "FAIL",
+  "checks": {
+   "actor": "SUPPORTED",
+   "action": "UNSUPPORTED",
+   "target": "NOT_USED",
+   "quantity": "SUPPORTED",
+   "chronology": "UNSUPPORTED",
+   "claim:rogue": "NOT_USED",
+   "claim:without_knowledge": "NOT_USED",
+   "claim:tried_to_hack": "NOT_USED",
+   "claim:secret": "NOT_USED",
+   "claim:deliberate": "NOT_USED"
+  },
+  "reason": "the body evidence does not support: action, chronology"
+ },
+ "reason": "STOPPED: evidence preflight FAIL on every allowed copy - no generation",
+ "vision_verdicts": [],
+ "generated": [],
+ "llm_calls": [],
+ "llm_spent_usd": "0",
+ "llm_ledger_usd": null,
+ "image_ledger_usd": null
+}

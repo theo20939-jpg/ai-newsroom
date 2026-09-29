@@ -1,0 +1,95 @@
+{
+ "post_id": "c728f8d6-248a-4ea0-83bf-20a9520d4007",
+ "format": "meme_trend",
+ "premise": "Anthropic upgrades Claude with new Sonnet 5.5 model, details here",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Anthropic is upgrading Claude Sonnet, replacing Sonnet 5 from June with Sonnet 5.5 as the best medium-sized model.",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "more…",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": "https://9to5mac.com/2026/09/28/anthropic-upgrades-claude-with-new-sonnet-5-5-model-details-here/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "Anthropic upgrades Claude with new Sonnet 5.5 model, details here - 9to5Mac\nSkip to main content\nToggle main menu\nGo to the 9to5Mac home page\nSwitch site\n9to5Toys\n9to5Google\nElectrek\nDroneDJ\nSpace Explored\nAbout\nPrivacy\nToggle social menu\nToggle dark mode\nSearch for:\nSubmit\nToggle search form\nForums\nStore\nPodcasts\nApple@Work\nHappy Hour\n9to5Mac Daily\nOvertime\niPhone\niPhone\nMac\nMac\nMacBook Pro\nMacBook Air\niMac\nMac mini\nMac Studio\nMac Pro\niPad\niPad Pro\niPad Air\niPad mini\niPad\niPadOS\nWatch\nApple Watch\nApple Watch Ultra\nApple Health\nApple Watch SE\nVision\nVision Pro\nvisionOS\nMusic and TV\nApple Music\nAirPods\nHomePod\nApple TV\nGuides\nReviews\nHow Tos\nAAPL\nApple Store\nApple Arcade\nApple Card\nApple Silicon\nApple One\nApple Fitness+\nCarPlay\nSiri\nHomeKit\nToggle dark mode\nApps\nAI\nClaude\nAnthropic\nAnthropic upgrades Claude with new Sonnet 5.5 model, details here\nZac Hall\n| Sep 28 2026 - 11:07 am PT\n0 Comments\nAnthropic is upgrading Claude Sonnet, replacing Sonnet 5 from June with Sonnet 5.5 as the best medium-sized model.\nClaude Sonnet 5.5 upgrades Anthropic’s medium model\nAnthropic currently offers a few AI models under the Claude umbrella.\nThe three main models are Haiku (smallest and cheapest), Sonnet (medium size and price), and Opus (largest and most expensive of the three).\nThere’s also Fable/Mythos, which is even more capable and costly, which represents Anthropic’s highest tier.\nToday’s new Claude model follows the arrival of Opus 5.5\nlast week\n. Anthropic promised to upgrade Sonnet and Haiku “in the coming weeks” at the time.\nIntroducing Claude Sonnet 5.5, the second model in the Claude 5.5 family.\nIt’s a clear upgrade over Sonnet 5, runs more than 30% faster, and costs up to 30% less for most work.\npic.twitter.com/UvXD8mDTF1\n— Claude (@claudeai)\nSeptember 28, 2026\nAnthropic says Sonnet 5.5 is strongest at everyday tasks with a clear scope, including fixing bugs and creating polished documents, slides, and spreadsheets.\nThe company also highlights its design capabilities, from refining user interfaces to producing slides that follow templates and need minimal editing.\nEarly testers described it as a better collaborator than Sonnet 5, Anthropic says, with clearer writing and speed suited to quick iteration on less complex tasks.\nSonnet 5.5 is now live in Claude Code! 🎉\nhttps://t.co/bU5dcnKQyl\n— Lydia Hallie ✨ (@lydiahallie)\nSeptember 28, 2026\nSonnet 5.5 keeps Sonnet 5’s pricing: $2 per million input tokens, $10 per million output tokens, and $0.20 per million cache reads.\nAnthropic says it typically uses far fewer tokens to complete the same work, while generating output more than 30% faster than Sonnet 5, making it the fastest Sonnet model to date.\nWith cybersecurity capabilities comparable to Opus 5, Sonnet 5.5 is the first Sonnet model to launch with cyber safeguards and fallbacks similar to those used for Anthropic’s most capable models.\nIts biology safeguards remain unchanged from Sonnet 5. Anthropic says both target a narrow set of high-risk requests, leaving routine software development and most life sciences work unaffected.\nYou can read the full announcement post\nhere\n.\nDo more with your Apple products\nAirPods 5 | Apple’s newest wireless headphones\nApple AirTag 2 | Add Find My tracking to keys, bags, bikes, more\nAirPods Pro 3 | Apple’s best wireless headphones\nWireless CarPlay Adapter | No more plugging in required\nBeats USB-A to USB-C Cable | The official CarPlay cable\nFTC: We use income earning auto affiliate links.\nMore.\nYou’re reading 9to5Mac — experts who break news about Apple and its surrounding ecosystem, day after day. Be sure to check out\nour homepage\nfor all the latest news, and follow 9to5Mac on\nTwitter\n,\nFacebook\n, and\nLinkedIn\nto stay in the loop. Don’t know where to start? Check out our\nexclusive stories\n,\nreviews\n,\nhow-tos\n, and\nsubscribe to our YouTube channel\nFeatured\nfrom\n9to5Mac\nReport: Apple working on new Vision Pro, with different form factors on the table\nMichael Burkhardt\nSep 27 2026\nThese are my favorite iPhone 18 Pro & Pro Max cases so far [Video]\nFernando Silva\nSep 26 2026\nApple Watch Series 12 one week later: There’s so much more than meets the eye\nMichael Burkhardt\nSep 26 2026\nmacOS 27 adds new Apple Intelligence features to your favorite apps\nChance Miller\nSep 25 2026\nPodcast\nCheck out 9to5Mac on YouTube for more Apple news:\nComments\nExpand\nClose\ncomments\nExpand\nClose\ncomments\nGuides\nApps\nLead the curve on tomorrow’s iOS and Mac app h…\nAI\nClaude\nAnthropic\nAuthor\nZac Hall\napollozac\nZac Hall is a Senior Editor, covering Apple, apps, and AI. He joined 9to5Mac in 2013.",
+   "status": "FULL_TEXT",
+   "original_url": null,
+   "resolution_method": null
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "Anthropic is upgrading Claude Sonnet, replacing Sonnet 5 from June with Sonnet 5.5 as the best medium-sized model.",
+   "source_url": "https://9to5mac.com/2026/09/28/anthropic-upgrades-claude-with-new-sonnet-5-5-model-details-here/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Anthropic is upgrading Claude Sonnet, replacing Sonnet 5 from June with Sonnet 5.5 as the best medium-sized model."
+  },
+  {
+   "kind": "FACT",
+   "text": "Claude Sonnet 5.5 upgrades Anthropic’s medium model Anthropic currently offers a few AI models under the Claude umbrella.",
+   "source_url": "https://9to5mac.com/2026/09/28/anthropic-upgrades-claude-with-new-sonnet-5-5-model-details-here/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Claude Sonnet 5.5 upgrades Anthropic’s medium model Anthropic currently offers a few AI models under the Claude umbrella."
+  },
+  {
+   "kind": "FACT",
+   "text": "The three main models are Haiku (smallest and cheapest), Sonnet (medium size and price), and Opus (largest and most expensive of the three).",
+   "source_url": "https://9to5mac.com/2026/09/28/anthropic-upgrades-claude-with-new-sonnet-5-5-model-details-here/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "The three main models are Haiku (smallest and cheapest), Sonnet (medium size and price), and Opus (largest and most expensive of the three)."
+  },
+  {
+   "kind": "FACT",
+   "text": "There’s also Fable/Mythos, which is even more capable and costly, which represents Anthropic’s highest tier.",
+   "source_url": "https://9to5mac.com/2026/09/28/anthropic-upgrades-claude-with-new-sonnet-5-5-model-details-here/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "There’s also Fable/Mythos, which is even more capable and costly, which represents Anthropic’s highest tier."
+  },
+  {
+   "kind": "FACT",
+   "text": "Today’s new Claude model follows the arrival of Opus 5.5 last week.",
+   "source_url": "https://9to5mac.com/2026/09/28/anthropic-upgrades-claude-with-new-sonnet-5-5-model-details-here/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Today’s new Claude model follows the arrival of Opus 5.5 last week."
+  },
+  {
+   "kind": "FACT",
+   "text": "Anthropic promised to upgrade Sonnet and Haiku “in the coming weeks” at the time.",
+   "source_url": "https://9to5mac.com/2026/09/28/anthropic-upgrades-claude-with-new-sonnet-5-5-model-details-here/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Anthropic promised to upgrade Sonnet and Haiku “in the coming weeks” at the time."
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "AVAILABLE",
+  "url": "https://9to5mac.com/wp-content/uploads/sites/6/2026/07/claude.webp?w=1600",
+  "width": 1600,
+  "height": 800,
+  "mime_type": "image/jpeg",
+  "source": "rss_inline_image",
+  "reason": "validated source image"
+ },
+ "quality": "STRONG",
+ "why": "6 premise facts from 1 fetched source(s)",
+ "excluded_bodies": []
+}

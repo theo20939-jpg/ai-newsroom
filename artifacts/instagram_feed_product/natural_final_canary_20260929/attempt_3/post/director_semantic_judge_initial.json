@@ -1,0 +1,30 @@
+{
+ "verdict": {
+  "slide_roles": [
+   "HOOK",
+   "COMPANY_RESPONSE",
+   "CHRONOLOGY",
+   "DETAIL",
+   "CONSEQUENCE"
+  ],
+  "same_thesis_pairs": [],
+  "caption_repeats_slides": {
+   "present": true,
+   "reason": "The caption's first sentence copies slide 2's headline word for word."
+  },
+  "caption_aphorism": {
+   "present": false,
+   "sentence": "",
+   "reason": ""
+  },
+  "unsupported_interpretation": []
+ },
+ "semantic_findings": [
+  "semantic review: the caption only restates the slides (The caption's first sentence copies slide 2's headline word for word) - keep it short and add context the slides do not give, or one factual summary sentence"
+ ],
+ "deterministic_findings": [
+  "CopyLanguageLeakError: audience copy is Russian: ordinary English words were left in {'slide_2_body': ['inbox'], 'slide_3_body': ['inbox'], 'final_caption': ['inbox']} - say them in natural Russian with the same meaning; keep company, product, model and game names as they are, and put genuine UI labels, menu items and config keys in «quotes»",
+  "slides 3 and 4: the second slide restates the first slide's thesis (отправ, публичн) without a new concrete fact - merge them into one slide, then use the freed slide for another distinct grounded fact or make the carousel shorter"
+ ],
+ "role_guard_dropped": []
+}

@@ -1,0 +1,111 @@
+{
+ "post_id": "01c007ff-f291-4592-9cd2-e08ddb7b410a",
+ "format": "meme_trend",
+ "premise": "OpenAI ‘sorry and working to do better’ after hack of Medicare and other Australian government websites",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Artificial intelligence firm to front parliament as it apologises to Australians for agent attack",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "OpenAI has apologised to Australians for its agent attack on Medicare , and will front parliament next week, as the tech company revealed more details about its June hack of Australian government websites.",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "In a blog post released on Tuesday, OpenAI said it should have handled its response better.",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Continue reading...",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": "https://www.theguardian.com/technology/2026/sep/29/openai-apology-rogue-agent-hacked-medicare-australian-government-websites",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "Revealed: the five-paragraph email OpenAI used to inform Australia about agent attack | OpenAI | The Guardian\nSkip to main content\nSkip to navigation\nClose dialogue\n1\n/\n1\nNext image\nPrevious image\nToggle caption\nPrint subscriptions\nSearch jobs\nSign in\nEur\nEurope edition\nUK edition\nUS edition\nAustralia edition\nInternational edition\nThe Guardian - Back to home\nThe Guardian\nNews\nOpinion\nSport\nCulture\nLifestyle\nShow more\nHide expanded menu\nNews\nView all News\nWorld news\nUK news\nClimate crisis\nUkraine\nEnvironment\nScience\nGlobal development\nFootball\nTech\nBusiness\nObituaries\nOpinion\nView all Opinion\nThe Guardian view\nColumnists\nCartoons\nOpinion videos\nLetters\nSport\nView all Sport\nFootball\nCricket\nRugby union\nTennis\nCycling\nF1\nGolf\nUS sports\nCulture\nView all Culture\nBooks\nMusic\nTV & radio\nArt & design\nFilm\nGames\nClassical\nStage\nLifestyle\nView all Lifestyle\nFashion\nFood\nRecipes\nLove & sex\nHealth & fitness\nHome & garden\nWomen\nMen\nFamily\nTravel\nMoney\nSearch input\ngoogle-search\nSearch\nSupport us\nPrint subscriptions\nSearch jobs\nHolidays\nDigital Archive\nGuardian Licensing\nLive events\nAbout Us\nThe Guardian app\nVideo\nPodcasts\nPictures\nNewsletters\nToday's paper\nInside the Guardian\nGuardian Weekly\nCrosswords\nWordiply\nCorrections\nTips\nSearch input\ngoogle-search\nSearch\nSearch jobs\nHolidays\nDigital Archive\nGuardian Licensing\nLive events\nAbout Us\nAustralia\nWorld\nAU politics\nEnvironment\nClimate crisis\nIndigenous Australia\nImmigration\nMedia\nBusiness\nHealth\nScience\nTech\nPodcasts\nNewsletters\nPrime minister Anthony Albanese (left) previously said he had expressed ‘Australia’s extreme concern about the incident’ to OpenAI CEO Sam Altman.\nPhotograph: Getty Images\nView image in fullscreen\nPrime minister Anthony Albanese (left) previously said he had expressed ‘Australia’s extreme concern about the incident’ to OpenAI CEO Sam Altman.\nPhotograph: Getty Images\nOpenAI\nRevealed: the five-paragraph email OpenAI used to inform Australia about agent attack\nExecutive to front parliamentary committee on AI as ministers reveal how brief message telling them about hack was signed off ‘best’\nFollow our Australia news live blog for latest updates\nGet our\nbreaking news email\n,\nfree app\nor\ndaily news podcast\nJosh Taylor\nTechnology reporter\nTue 29 Sep 2026 13.04 CEST\nFirst published on Tue 29 Sep 2026 04.10 CEST\nShare\nPrefer the Guardian on Google\nOpenAI has apologised to Australians for its\nagent attack on Medicare\n, and will front parliament next week as the tech company revealed more details about its June hack of Australian government websites.\nMinisters on Tuesday evening released a brief, five paragraph email which\nOpenAI\nused to inform the Australian government about the attack. The email was sent to a public inbox monitored by Services Australia on 10 September – nearly three months after the AI agent accessed the website on 18 June – and was signed off with the closing “best”.\nThe Labor government has publicly voiced its fury at the manner in which OpenAI disclosed the incident. The email itself, obtained by Guardian Australia, advised Services Australia that “an OpenAI model identified a way to make the server carry out instructions sent through the public reporting interface, without a private account or password”.\nIn a\nblog post\nreleased on Tuesday morning (Aest), OpenAI said it should have handled its response better.\n“We also should have handled our response better. We are sorry and working to do better in the future.”\nThe company also provided more detail on the incident\nrevealed by the Australian prime minister, Anthony Albanese\n, last week.\nOpenAI said it became aware of agent activity on Australian government websites in mid-August after the company reviewed earlier training incidents after the\nHugging Face attack\nin July.\nThe agents gained non-public access to a Services Australia portal for Medicare statistics, and OpenAI said the agent was able to run commands, retrieve internal files, credentials, and write files, but no patient or client records were accessed.\n12:23\nRogue AI hacks government system for first time - The Latest\nOpenAI’s email to Services Australia pointed the government to the “affected URL”, a Medicare statistics page on the human services website, as well as specifying an “affected report” – a CSV file, commonly used for spreadsheets.\n“We recommend that the team responsible for the service investigate the vulnerability and assess the changes needed to prevent it. We would be glad to brief your security team and provide supporting evidence as available,” OpenAI wrote.\n“Best, OpenAl Security Team”.\nOpenAI was contacted for comment.\nThe NSW Bureau of Crime Statistics and Research’s public crime mapping tool was also accessed, with application configuration, operational jobs and logs and website metadata provided to the agency.\nThe agent discovered an exposed access key to query the Victorian agency for health information’s reporting system to access aggregate survey statistics.\nFor the Australian Institute of Health and Welfare, OpenAI agents retrieved aggregate statistics, but separate attempts to bypass access controls were unsuccessful and the information obtained was publicly available.\nServices Australia and the Victorian health department were informed on 10 September, while the NSW bureau of crime stastistics was informed on 18 September.\nThe Australian Institute of Health and Welfare was not informed until 24 September, as OpenAI deemed it did not meet disclosure thresholds.\n“Since then we’ve worked closely with Australian government agencies to share what we’ve learned to date,” OpenAI said. “If we identify any additional affected agencies, we will notify them promptly and directly with the information available and provide updates as further facts emerge.”\nThe incident occurred after one model was tasked to research government spending per person on medicines for skin conditions in Victoria. The model had difficulty obtaining that information, and OpenAI said “it took actions that we had not authorised it to take” including accessing Services Australia’s Medicare statistics reporting service.\nOpenAI hack on Australian government reveals anxiety at heart of global artificial intelligence dilemma\nRead more\nOpenAI said it would commit resources and expertise to affected agencies, and provide Australian government agencies with support to build cyberdefences on critical infrastructure.\nAustralian government agencies and industries will also be given credits out of OpenAI’s US$1bn (AU$1.4bn) Daybreak fund, which lets those organisations use frontier AI for cyberdefence, and to harden their systems by reviewing code and system configurations for potential vulnerabilities that can then be patched.\nThe company said it would also establish a taskforce with Australian expertise to develop practical policy recommendations on managing risk with AI agents.\nOpenAI’s chief strategy officer, Jason Kwon, will appear at the joint select committee on AI on Tuesday 6 October. Guardian Australia\nreported on Monday\nthat Anthropic would also appear at this hearing, but not at a Senate inquiry into AI and datacentres this week.\nAlbanese, who was in the United States last week when he announced the hack, said at the time he had spoken with OpenAI’s chief executive,\nSam Altman\n, “to express Australia’s extreme concern about this incident”.\nOn Tuesday, Albanese said OpenAI had been “very constructive and open in engaging” since the incident, as had Anthropic. He said AI can improve economic growth and productivity but it also carries risks.\n“And we’ve seen those risks exposed – not just in what occurred in Australia, but the revelation that has occurred in the United States and other countries as well.”\nThe federal government has flagged it could introduce mandatory reporting rules for AI-related data breaches, after the revelation OpenAI used\na public-facing email address\nthree months after the hack to report the incident to Services Australia.\nThe company said on Tuesday it had “a lot of work ahead” to rebuild trust with Australians but said it was making “meaningful changes”.\nExplore more on these topics\nOpenAI\nAI (artificial intelligence)\nAustralian politics\nMedicare Australia\nAnthony Albanese\nSam Altman\nnews\nShare\nReuse this content\nMore on this story\nMore on this story\nDanger zone: why war in the Middle East has landed the RBA’s inflation fight in tricky territory\n3h ago\nRBA interest rates: Reserve Bank raises cash rate to highest level in 15 years and warns of more hikes ‘if needed’\n4h ago\nLabor claims Victoria’s new datacentre rules are strongest in Australia but critics point to ‘huge loophole’\n21 Sept 2026\nAlbanese government considers ‘world-leading’ ban on smart glasses in public offices and buildings\n17 Sept 2026\nSarah Hanson-Young and Mehreen Faruqi announce Greens leadership tilt after Larissa Waters’ shock resignation\n5h ago\nEverything Australians put online could be scraped for AI under proposed new rules. How will you be affected?\n16 Sept 2026\nThe RBA has hiked interest rates. Use our loan calculator to check how it affects you\n7h ago\nThe dominance of AI is not inevitable. We can choose to change things for the better\n16 Sept 2026\n…\n…\ncomments\nAustralia’s outdated technology is vulnerable to AI hacking attacks, signals chief says\n14 Sept 2026\nVietnamese government accused of abducting human rights activists\n11h ago\nMost viewed\nMost viewed\nAustralia\nWorld\nAU politics\nEnvironment\nClimate crisis\nIndigenous Australia\nImmigration\nMedia\nBusiness\nHealth\nScience\nTech\nPodcasts\nNewsletters\nNews\nOpinion\nSport\nCulture\nLifestyle\nOriginal reporting and incisive analysis, direct from the Guardian every morning\nSign up for our email\nAbout us\nHelp\nComplaints & corrections\nContact us\nTip us off\nSecureDrop\nPrivacy policy\nCookie policy\nTax strategy\nTerms & conditions\nAll topics\nAll writers\nNewsletters\nDigital newspaper archive\nBluesky\nFacebook\nInstagram\nLinkedIn\nThreads\nTikTok\nYouTube\nAdvertise with us\nSearch UK jobs\nTips\nAccessibility settings\nWork with us\nBack to top\n©\n2026\nGuardian News & Media Limited or its affiliated companies. All rights reserved.\n(dcr)",
+   "status": "FULL_TEXT",
+   "original_url": null,
+   "resolution_method": null
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "Prime minister Anthony Albanese (left) previously said he had expressed ‘Australia’s extreme concern about the incident’ to OpenAI CEO Sam Altman.",
+   "source_url": "https://www.theguardian.com/technology/2026/sep/29/openai-apology-rogue-agent-hacked-medicare-australian-government-websites",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Prime minister Anthony Albanese (left) previously said he had expressed ‘Australia’s extreme concern about the incident’ to OpenAI CEO Sam Altman."
+  },
+  {
+   "kind": "FACT",
+   "text": "Photograph: Getty Images View image in fullscreen Prime minister Anthony Albanese (left) previously said he had expressed ‘Australia’s extreme concern about the incident’ to OpenAI CEO Sam Altman.",
+   "source_url": "https://www.theguardian.com/technology/2026/sep/29/openai-apology-rogue-agent-hacked-medicare-australian-government-websites",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Photograph: Getty Images View image in fullscreen Prime minister Anthony Albanese (left) previously said he had expressed ‘Australia’s extreme concern about the incident’ to OpenAI CEO Sam Altman."
+  },
+  {
+   "kind": "FACT",
+   "text": "Revealed: the five-paragraph email OpenAI used to inform Australia about agent attack Executive to front parliamentary committee on AI as ministers reveal how brief message telling them about hack was signed off ‘best’",
+   "source_url": "https://www.theguardian.com/technology/2026/sep/29/openai-apology-rogue-agent-hacked-medicare-australian-government-websites",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Revealed: the five-paragraph email OpenAI used to inform Australia about agent attack Executive to front parliamentary committee on AI as ministers reveal how brief message telling them about hack was signed off ‘best’"
+  },
+  {
+   "kind": "FACT",
+   "text": "First published on Tue 29 Sep 2026 04.10 CEST Share Prefer the Guardian on Google OpenAI has apologised to Australians for its agent attack on Medicare, and will front parliament next week as the tech company revealed more details about its June hack of Australian government websites.",
+   "source_url": "https://www.theguardian.com/technology/2026/sep/29/openai-apology-rogue-agent-hacked-medicare-australian-government-websites",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "First published on Tue 29 Sep 2026 04.10 CEST Share Prefer the Guardian on Google OpenAI has apologised to Australians for its agent attack on Medicare, and will front parliament next week as the tech company revealed more details about its June hack of Australian government websites."
+  },
+  {
+   "kind": "FACT",
+   "text": "Ministers on Tuesday evening released a brief, five paragraph email which OpenAI used to inform the Australian government about the attack.",
+   "source_url": "https://www.theguardian.com/technology/2026/sep/29/openai-apology-rogue-agent-hacked-medicare-australian-government-websites",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Ministers on Tuesday evening released a brief, five paragraph email which OpenAI used to inform the Australian government about the attack."
+  },
+  {
+   "kind": "FACT",
+   "text": "The email was sent to a public inbox monitored by Services Australia on 10 September – nearly three months after the AI agent accessed the website on 18 June – and was signed off with the closing “best”.",
+   "source_url": "https://www.theguardian.com/technology/2026/sep/29/openai-apology-rogue-agent-hacked-medicare-australian-government-websites",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "The email was sent to a public inbox monitored by Services Australia on 10 September – nearly three months after the AI agent accessed the website on 18 June – and was signed off with the closing “best”."
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "AVAILABLE",
+  "url": "https://i.guim.co.uk/img/media/382f5ce9a99ca59f0295e666583b6b694b2ebb34/0_0_5000_4000/master/5000.jpg?width=1200&height=630&quality=85&auto=format&fit=crop&precrop=40:21,offset-x50,offset-y0&overlay-align=bottom%2Cleft&overlay-width=100p&overlay-base64=L2ltZy9zdGF0aWMvb3ZlcmxheXMvdGctZGVmYXVsdC5wbmc&enable=upscale&s=435f58910e5a84c536fbcac0c3f4571f",
+  "width": 1200,
+  "height": 630,
+  "mime_type": "image/jpeg",
+  "source": "open_graph_image",
+  "reason": "validated source image"
+ },
+ "quality": "STRONG",
+ "why": "6 premise facts from 1 fetched source(s)",
+ "excluded_bodies": []
+}

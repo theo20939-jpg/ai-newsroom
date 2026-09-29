@@ -1,0 +1,35 @@
+[
+ {
+  "planned_id": "da549220-9650-4e69-9b3d-ba4dd856db0e",
+  "source": "3DNews",
+  "title": "Батарея на 11 000 мА·ч, прошлогодний Snapdragon и камера на 200 Мп: Honor представила геймерский смартфон Magic 9 Super",
+  "event": "Батарея на 11 000 мА·ч, прошлогодний Snapdragon и камера на 200 Мп: Honor представила геймерский смартфон Magic 9 Super",
+  "candidate_ids": [
+   "da549220-9650-4e69-9b3d-ba4dd856db0e"
+  ]
+ },
+ {
+  "planned_id": "c728f8d6-248a-4ea0-83bf-20a9520d4007",
+  "source": "9to5Mac",
+  "title": "Anthropic upgrades Claude with new Sonnet 5.5 model, details here",
+  "event": "Anthropic upgrades Claude with new Sonnet 5.5 model, details here",
+  "candidate_ids": [
+   "c728f8d6-248a-4ea0-83bf-20a9520d4007",
+   "10906658-9628-4699-ae52-2f93d0c11f4c"
+  ]
+ },
+ {
+  "planned_id": "01c007ff-f291-4592-9cd2-e08ddb7b410a",
+  "source": "The Guardian Technology",
+  "title": "OpenAI ‘sorry and working to do better’ after hack of Medicare and other Australian government websites",
+  "event": "OpenAI and Anthropic are skipping Australia's Senate AI hearing after the Medicare hack",
+  "candidate_ids": [
+   "2fae4e62-9a7a-4fe2-8488-d6f8ab161ec5",
+   "01c007ff-f291-4592-9cd2-e08ddb7b410a",
+   "f01f1c1e-fecb-4c48-a096-96d10d251114",
+   "da730f46-baa0-4538-bb51-882339e46b0a",
+   "d954fa94-323c-411f-baa2-cc6b26f851d5",
+   "f73d3ebe-37ed-45e2-963c-fd33b8392bd8"
+  ]
+ }
+]

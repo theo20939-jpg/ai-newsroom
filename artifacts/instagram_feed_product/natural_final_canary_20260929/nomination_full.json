@@ -1,0 +1,241 @@
+{
+ "now": "2026-09-29T11:46:25.890059+00:00",
+ "rows_48h": 3201,
+ "current_24h": 2043,
+ "kage_relevant": 744,
+ "distinct_events": 590,
+ "eligible_count": 11,
+ "eligible": [
+  {
+   "rank": 1,
+   "event": "Батарея на 11 000 мА·ч, прошлогодний Snapdragon и камера на 200 Мп: Honor представила геймерский смартфон Magic 9 Super",
+   "copies": 1,
+   "outlets": [
+    "3d",
+    "ixbt"
+   ],
+   "actuality": "CURRENT_EVENT",
+   "strength": "STRONG",
+   "points": 4,
+   "mechanisms": [
+    "device_launch"
+   ],
+   "momentum": "WEAK",
+   "broad": "a consumer device launch or leak",
+   "hook": "Батарея на 11 000 мА·ч, прошлогодний Snapdragon и камера на 200 Мп: Honor представила геймерский смартфон Magic 9 Super",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-28 10:47 UTC); broad (a consumer device launch or leak); strong mechanisms ['device_launch']; momentum weak (2 independent outlets carried this same event in the last 72 hours)",
+   "first_seen": "2026-09-28 10:47:51+00:00"
+  },
+  {
+   "rank": 2,
+   "event": "Anthropic upgrades Claude with new Sonnet 5.5 model, details here",
+   "copies": 2,
+   "outlets": [
+    "9to5mac",
+    "hightech.fm"
+   ],
+   "actuality": "CURRENT_EVENT",
+   "strength": "STRONG",
+   "points": 4,
+   "mechanisms": [
+    "ai_launch"
+   ],
+   "momentum": "WEAK",
+   "broad": "a new flagship AI model release",
+   "hook": "Anthropic выпустила нейросеть Claude Sonnet 5.5",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-28 18:07 UTC); broad (a new flagship AI model release); strong mechanisms ['ai_launch']; momentum weak (2 independent outlets carried this same event in the last 72 hours)",
+   "first_seen": "2026-09-28 18:07:55+00:00"
+  },
+  {
+   "rank": 3,
+   "event": "OpenAI and Anthropic are skipping Australia's Senate AI hearing after the Medicare hack",
+   "copies": 6,
+   "outlets": [
+    "3d",
+    "mlex",
+    "qz.com",
+    "reuters",
+    "techmeme",
+    "the guardian",
+    "wired",
+    "ведомости"
+   ],
+   "actuality": "UNCERTAIN",
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "unexpected_ai_behaviour",
+    "security_surprise"
+   ],
+   "momentum": "STRONG",
+   "broad": "everyday-life / mass-product / security anchor ('OpenAI')",
+   "hook": "OpenAI извинилась перед Австралией за взлом правительственных сайтов ИИ‑агентом — OpenAI извинилась перед Австралией за взлом правительственных сайтов ИИ‑агентом Хабр",
+   "reason": "current (article timestamp only - the event date is not stated and no independent source corroborates it); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour', 'security_surprise']; momentum strong (9 independent outlets carried this same e",
+   "first_seen": "2026-09-24 01:24:00+00:00"
+  },
+  {
+   "rank": 4,
+   "event": "Leak reveals new iPhone Duo features not yet announced",
+   "copies": 2,
+   "outlets": [
+    "9to5mac",
+    "macrumors"
+   ],
+   "actuality": "CURRENT_EVENT",
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "device_launch"
+   ],
+   "momentum": "WEAK",
+   "broad": "everyday-life / mass-product / security anchor ('iPhone')",
+   "hook": "Leak reveals new iPhone Duo features not yet announced — iPhone Duo is coming October 23 , but there are several unannounced features coming to its StandBy mode that were just discovered hidden in Apple code.",
+   "reason": "current (text: explicit recent time expression 'today'); broad (everyday-life / mass-product / security anchor ('iPhone')); strong mechanisms ['device_launch']; momentum weak (2 independent outlets carried this same event in the last 72 hours)",
+   "first_seen": "2026-09-28 14:41:27+00:00"
+  },
+  {
+   "rank": 5,
+   "event": "OpenAI and Anthropic are reportedly investigating tens of thousands of AI security incidents; OpenAI pauses testing",
+   "copies": 2,
+   "outlets": [
+    "google",
+    "tom's hardware"
+   ],
+   "actuality": "CURRENT_EVENT",
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "unexpected_ai_behaviour",
+    "security_surprise"
+   ],
+   "momentum": "WEAK",
+   "broad": "everyday-life / mass-product / security anchor ('OpenAI')",
+   "hook": "OpenAI and Anthropic are reportedly investigating tens of thousands of AI security incidents; OpenAI pauses testing — OpenAI and Anthropic are reviewing tens of thousands of AI safety incidents after frontier models bypa",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-28 12:50 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour', 'security_surprise']; momentum weak (2 independent outlets carried this same event in the last 72 hours)",
+   "first_seen": "2026-09-28 12:50:00+00:00"
+  },
+  {
+   "rank": 6,
+   "event": "On the 29th, physical artificial intelligence (AI) company Newbility unveiled a hybrid humanoid \"Bil..",
+   "copies": 2,
+   "outlets": [
+    "mk.co.kr",
+    "매일경제"
+   ],
+   "actuality": "CURRENT_EVENT",
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "device_launch"
+   ],
+   "momentum": "WEAK",
+   "broad": "a consumer device launch or leak",
+   "hook": "On the 29th, physical artificial intelligence (AI) company Newbility unveiled a hybrid humanoid \"Bil..",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-29 06:06 UTC); broad (a consumer device launch or leak); strong mechanisms ['device_launch']; momentum weak (2 independent outlets carried this same event in the last 72 hours)",
+   "first_seen": "2026-09-29 06:06:23+00:00"
+  },
+  {
+   "rank": 7,
+   "event": "Apple Notes keeps getting better, here’s what’s new in iOS 27",
+   "copies": 2,
+   "outlets": [
+    "9to5mac"
+   ],
+   "actuality": "CURRENT_EVENT",
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "device_launch"
+   ],
+   "momentum": "NONE",
+   "broad": "everyday-life / mass-product / security anchor ('Apple')",
+   "hook": "Apple releases iOS 27.0.1 for iPhone, here’s what’s new",
+   "reason": "current (text: explicit recent time expression 'just released'); broad (everyday-life / mass-product / security anchor ('Apple')); strong mechanisms ['device_launch']; momentum none (single source, no engagement signal)",
+   "first_seen": "2026-09-28 13:20:43+00:00"
+  },
+  {
+   "rank": 8,
+   "event": "Apple Releases iOS 27.0.1 With Face ID Bug Fix",
+   "copies": 1,
+   "outlets": [
+    "macrumors"
+   ],
+   "actuality": "CURRENT_EVENT",
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "device_launch"
+   ],
+   "momentum": "NONE",
+   "broad": "everyday-life / mass-product / security anchor ('Apple')",
+   "hook": "Apple Releases iOS 27.0.1 With Face ID Bug Fix — Apple has also released iPadOS 27.0.1 and visionOS 27.0.1 updates, as well as iOS and i",
+   "reason": "current (text: explicit recent time expression 'today'); broad (everyday-life / mass-product / security anchor ('Apple')); strong mechanisms ['device_launch']; momentum none (single source, no engagement signal)",
+   "first_seen": "2026-09-28 17:09:47+00:00"
+  },
+  {
+   "rank": 9,
+   "event": "ИИ-агенты OpenAI вышли из-под контроля: попытки взлома госсайтов США, реакция Конгресса",
+   "copies": 2,
+   "outlets": [
+    "cbc",
+    "democracy now!",
+    "финансы mail"
+   ],
+   "actuality": "CURRENT_EVENT",
+   "strength": "STRONG",
+   "points": 2,
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "momentum": "MODERATE",
+   "broad": "everyday-life / mass-product / security anchor ('OpenAI')",
+   "hook": "ИИ-агенты OpenAI вышли из-под контроля: попытки взлома госсайтов США, реакция Конгресса",
+   "reason": "current (coverage: 3 independent outlets since 2026-09-27 14:16 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour']; momentum moderate (3 independent outlets carried this same event in the last 72 hours)",
+   "first_seen": "2026-09-27 14:16:04+00:00"
+  },
+  {
+   "rank": 10,
+   "event": "Nvidia Says New Safety Platform Would Have Halted Hugging Face Hack",
+   "copies": 2,
+   "outlets": [
+    "pymnts.com",
+    "reuters"
+   ],
+   "actuality": "CURRENT_EVENT",
+   "strength": "STRONG",
+   "points": 2,
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "momentum": "WEAK",
+   "broad": "everyday-life / mass-product / security anchor ('hack')",
+   "hook": "Nvidia releases AI safety software it says could have stopped Hugging Face hack",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-28 14:13 UTC); broad (everyday-life / mass-product / security anchor ('hack')); strong mechanisms ['unexpected_ai_behaviour']; momentum weak (2 independent outlets carried this same event in the last 72 hours)",
+   "first_seen": "2026-09-28 14:13:49+00:00"
+  },
+  {
+   "rank": 11,
+   "event": "UK Games Expo bans games and art made mostly using AI",
+   "copies": 2,
+   "outlets": [
+    "google",
+    "tom's hardware"
+   ],
+   "actuality": "CURRENT_EVENT",
+   "strength": "STRONG",
+   "points": 2,
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "momentum": "WEAK",
+   "broad": "unexpected behaviour of an AI system, stated in the headline",
+   "hook": "UK Games Expo bans games and art made mostly using AI — UKGE enforces booth shutdowns and bans after deleted-comment",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-28 14:00 UTC); broad (unexpected behaviour of an AI system, stated in the headline); strong mechanisms ['unexpected_ai_behaviour']; momentum weak (2 independent outlets carried this same event in the last 72 hours)",
+   "first_seen": "2026-09-28 14:00:00+00:00"
+  }
+ ],
+ "best_key": "Батарея на 11 000 мА·ч, прошлогодний Snapdragon и камера на 200 Мп: Honor представила геймерский смартфон Magic 9 Super",
+ "candidate_ids": [
+  "da549220-9650-4e69-9b3d-ba4dd856db0e"
+ ]
+}

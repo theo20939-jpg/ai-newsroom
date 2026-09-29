@@ -1,0 +1,24 @@
+{
+ "verdict": {
+  "slide_roles": [
+   "HOOK",
+   "COMPANY_RESPONSE",
+   "CHRONOLOGY",
+   "CONSEQUENCE"
+  ],
+  "same_thesis_pairs": [],
+  "caption_repeats_slides": {
+   "present": false,
+   "reason": "The caption restates story facts in ordinary sentences without copying a slide sentence or consisting solely of a list already given on a slide."
+  },
+  "caption_aphorism": {
+   "present": false,
+   "sentence": "",
+   "reason": ""
+  },
+  "unsupported_interpretation": []
+ },
+ "semantic_findings": [],
+ "deterministic_findings": [],
+ "role_guard_dropped": []
+}

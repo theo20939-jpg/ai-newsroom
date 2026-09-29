@@ -1,0 +1,119 @@
+{
+ "now": "2026-09-29T11:46:25.890059+00:00",
+ "pool": 744,
+ "distinct_events": 590,
+ "eligible_events": [
+  "Батарея на 11 000 мА·ч, прошлогодний Snapdragon и камера на 200 Мп: Honor представила геймерский смартфон Magic 9 Super",
+  "Anthropic upgrades Claude with new Sonnet 5.5 model, details here",
+  "OpenAI and Anthropic are skipping Australia's Senate AI hearing after the Medicare hack",
+  "Leak reveals new iPhone Duo features not yet announced",
+  "OpenAI and Anthropic are reportedly investigating tens of thousands of AI security incidents; OpenAI pauses testing",
+  "On the 29th, physical artificial intelligence (AI) company Newbility unveiled a hybrid humanoid \"Bil..",
+  "Apple Notes keeps getting better, here’s what’s new in iOS 27",
+  "Apple Releases iOS 27.0.1 With Face ID Bug Fix",
+  "ИИ-агенты OpenAI вышли из-под контроля: попытки взлома госсайтов США, реакция Конгресса",
+  "Nvidia Says New Safety Platform Would Have Halted Hugging Face Hack",
+  "UK Games Expo bans games and art made mostly using AI"
+ ],
+ "selected_event": "Батарея на 11 000 мА·ч, прошлогодний Snapdragon и камера на 200 Мп: Honor представила геймерский смартфон Magic 9 Super",
+ "copies": [
+  "da549220-9650-4e69-9b3d-ba4dd856db0e"
+ ],
+ "planned_copy": {
+  "id": "da549220-9650-4e69-9b3d-ba4dd856db0e",
+  "source": "3DNews",
+  "title": "Батарея на 11 000 мА·ч, прошлогодний Snapdragon и камера на 200 Мп: Honor представила геймерский смартфон Magic 9 Super"
+ },
+ "verdict": {
+  "actuality": "CURRENT_EVENT",
+  "actuality_reason": "coverage: 2 independent outlets since 2026-09-28 10:47 UTC",
+  "underlying_time": null,
+  "disclosed_at": "None",
+  "newly_disclosed": [],
+  "kage": [
+   "gadget",
+   "software_platform_security_gaming"
+  ],
+  "broad": "BROAD",
+  "strength": "STRONG",
+  "mechanisms": [
+   "device_launch"
+  ],
+  "momentum": "WEAK",
+  "momentum_evidence": [
+   "2 independent outlets carried this same event in the last 72 hours"
+  ],
+  "hook": "Батарея на 11 000 мА·ч, прошлогодний Snapdragon и камера на 200 Мп: Honor представила геймерский смартфон Magic 9 Super",
+  "reason": "current (coverage: 2 independent outlets since 2026-09-28 10:47 UTC); broad (a consumer device launch or leak); strong mechanisms ['device_launch']; momentum weak (2 independent outlets carried this same event in the last 72 hours)"
+ },
+ "outlets": [
+  "3d",
+  "ixbt"
+ ],
+ "first_seen": "2026-09-28 10:47:51+00:00",
+ "evidence_attempts": [
+  {
+   "order": 1,
+   "event_id": "da549220-9650-4e69-9b3d-ba4dd856db0e",
+   "source": "3DNews",
+   "title": "Батарея на 11 000 мА·ч, прошлогодний Snapdragon и камера на 200 Мп: Honor представила геймерский смартфон Magic 9 Super",
+   "url": "https://3dnews.ru/1149142",
+   "acquisition": [
+    {
+     "type": "STORED_BODY",
+     "status": "OK",
+     "chars": 261
+    },
+    {
+     "type": "ORIGINAL_ARTICLE",
+     "status": "FULL_TEXT",
+     "chars": 9269
+    }
+   ],
+   "package_quality": "STRONG",
+   "body_chars": 1183,
+   "preflight": "FAIL",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "UNSUPPORTED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "reason": "the body evidence does not support: quantity, chronology"
+  }
+ ],
+ "evidence_copy": {
+  "event_id": "da549220-9650-4e69-9b3d-ba4dd856db0e",
+  "title": "Батарея на 11 000 мА·ч, прошлогодний Snapdragon и камера на 200 Мп: Honor представила геймерский смартфон Magic 9 Super",
+  "url": "https://3dnews.ru/1149142"
+ },
+ "preflight": {
+  "status": "FAIL",
+  "checks": {
+   "actor": "SUPPORTED",
+   "action": "SUPPORTED",
+   "target": "NOT_USED",
+   "quantity": "UNSUPPORTED",
+   "chronology": "UNSUPPORTED",
+   "claim:rogue": "NOT_USED",
+   "claim:without_knowledge": "NOT_USED",
+   "claim:tried_to_hack": "NOT_USED",
+   "claim:secret": "NOT_USED",
+   "claim:deliberate": "NOT_USED"
+  },
+  "reason": "the body evidence does not support: quantity, chronology"
+ },
+ "reason": "STOPPED: evidence preflight FAIL on every allowed copy - no generation",
+ "vision_verdicts": [],
+ "generated": [],
+ "llm_calls": [],
+ "llm_spent_usd": "0",
+ "llm_ledger_usd": null,
+ "image_ledger_usd": null
+}
