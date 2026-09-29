@@ -36,6 +36,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from services.instagram_evidence_package import number_values
 from services.instagram_feed_product import FeedCandidate, _clean_title, kage_core
 from services.instagram_viral_story_gate import (
     CURRENT_WINDOW,
@@ -376,7 +377,6 @@ _LOADED: dict[str, re.Pattern[str]] = {  # causal / intent / secrecy claims a ho
     "secret": _rx(r"\bsecret(ly)?\b", r"\bтайно\b"),
     "deliberate": _rx(r"\bdeliberate(ly)?\b", r"\bintentional(ly)?\b", r"\bнамеренно\b"),
 }
-_NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
 _DASH = re.compile(r"\s+[—–]\s+")
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?…])\s+(?=[A-ZА-ЯЁ«\"“])")
 _ABBREVIATION = re.compile(r"(?:\b[A-Z]\.){2,}$|\b(?:Dept|Inc|Corp|Co|Mr|Ms|Mrs|Dr|St|No|vs|Jr|Sr|Gov|Sen|Rep|Gen|Lt|Col)\.$")
@@ -407,6 +407,93 @@ _TIME_EXPR = _rx(r"\btoday\b", r"\byesterday\b", r"\bthis (week|month|summer|spr
                  r"\bвчера\b", r"\bлетом\b", r"\bна этой неделе\b", r"\bв (прошлом|этом) месяце\b")
 
 
+# a numeric full date (the article's own dateline: '28.09.2026', '2026-09-28'); a future one is a plan, never chronology evidence
+_NUMERIC_DATE = re.compile(r"\b(\d{1,2})[./](\d{1,2})[./]((?:19|20)\d\d)\b|\b((?:19|20)\d\d)-(\d{2})-(\d{2})\b")
+
+
+def _numeric_dates(text: str, *, now: datetime) -> list[datetime]:
+    out = []
+    for m in _NUMERIC_DATE.finditer(text):
+        day, month, year = (m.group(1), m.group(2), m.group(3)) if m.group(1) else (m.group(6), m.group(5), m.group(4))
+        try:
+            date = datetime(int(year), int(month), int(day), tzinfo=UTC)
+        except ValueError:
+            continue
+        if date <= now + timedelta(days=1):
+            out.append(date)
+    return out
+
+
+# LAUNCH ACTION (founder task 2026-09-29, after the natural canary): a hook that says a product / model was released is supported by any
+# ordinary wording that the release HAPPENED - released, launched, introduced, unveiled, presented, is now available, replaces the previous
+# model - not only by the hook's own verb. A plan, rumour, leak, roadmap, promise, future tense or negation in the same sentence is not a
+# launch. The sentence must also name the hook's own product when the hook names one (a distinctive name or a model number).
+_LAUNCH_DONE = _rx(
+    r"\b(?:has |have |had )?(?:launch(?:ed|es)|releas(?:ed|es)|unveil(?:ed|s)|introduc(?:ed|es)|present(?:ed|s)|debut(?:ed|s)|"
+    r"announc(?:ed|es)|roll(?:ed|s) out|rolling out|ship(?:ped|s))\b",
+    r"\b(?:is|are) (?:now )?(?:out|here|live|available)\b", r"\bnow available\b", r"\bavailable (?:today|now|to (?:order|buy|pre-?order))\b",
+    r"\b(?:go|goes|went) on sale\b", r"\bon sale now\b", r"\bpre-?orders? (?:are |is )?(?:now )?open\b", r"\btoday['’]s new\b",
+    r"\breplac(?:es|ed|ing)\b[^.!?]{0,80}\bwith\b", r"\bintroducing\b",
+    r"\b(?:представил|презентовал|выпустил|запустил|анонсировал|показал)[аои]?\b",
+    r"\b(?:представлен|выпущен|запущен|анонсирован|презентован)[аоы]?\b", r"\bвыш(?:ел|ла|ло|ли)\b", r"\bдебютировал[аои]?\b",
+    r"\b(?:уже |теперь )?доступ(?:ен|на|но|ны) (?:для )?(?:предзаказа|заказа|покупки|в продаже)\b", r"\b(?:уже|теперь) доступ(?:ен|на|но|ны)\b",
+    r"\bстал[аои]? доступ\w+\b", r"\bпоступил[аои]? в продажу\b", r"\bстартовал[аои]? (?:продажи|предзаказ)\w*\b",
+    r"\bоткрыт[аоы]? предзаказ\w*\b", r"\b(?:заменил|сменил)[аои]?\b", r"\bприш(?:ёл|ел|ла|ло|ли) на смену\b",
+)
+_LAUNCH_NOT_DONE = _rx(
+    r"\bplan(?:s|ned|ning)?\b", r"\bwill\b", r"\bwould\b", r"\bcould\b", r"(?-i:\b(?:may|May(?= (?:be|launch|arrive|come|debut|release|ship)))\b)",
+    r"\bmight\b", r"\bexpect\w*", r"\brumou?r\w*",
+    r"\bleak\w*", r"\breportedly\b", r"\broadmap\w*", r"\bconsider\w*", r"\bupcoming\b", r"\bsoon\b", r"\bnext (?:week|month|year|quarter)\b",
+    r"\b(?:in the )?coming (?:days|weeks|months)\b", r"\blater this (?:week|month|year)\b", r"\b(?:is|are) (?:set|due|going|poised|slated) to\b",
+    r"\b(?:hopes?|aims?|intends?|wants?) to\b", r"\bpromis\w*", r"\bteas\w*", r"\bprepar\w*", r"\bpossibl\w*", r"\blikely\b",
+    r"\bdelay\w*", r"\bpostpon\w*", r"\bcancel\w*", r"\bscrapp\w*", r"\bnot yet\b", r"\bunannounced\b", r"\bnever\b", r"n['’]t\b",
+    r"\bnot\b(?! only)",
+    r"\bпланир\w*", r"\bв планах\b", r"\bсобира\w*с[яь]\b", r"\bнамерен\w*", r"\bбуд(?:ет|ут)\b", r"\bмо(?:жет|гут|гла?|гли)\b",
+    r"\bвозможн(?:о|ый|ая|ое|ые|ого|ой|ым)\b", r"\bвероятн(?:о|ый|ая|ое|ые|ого|ой|ым)\b", r"\bслух\w*", r"\bутечк\w*", r"\bинсайд\w*", r"\bожида\w*", r"\bскоро\b", r"\bв ближайш\w*",
+    r"\bв следующ\w*", r"\bв будущем\b", r"\bготов(?:ит|ят|ится|ятся)\b", r"\bрассматрива\w*", r"\bобещ\w*", r"\bотмен\w*", r"\bотлож\w*",
+    r"\b(?:представит|выпустит|запустит|анонсирует|покажет|презентует)\b", r"\bне\b(?! только)", r"\bещё не\b|\bеще не\b|\bпока не\b",
+)
+# a product name is a run of consecutive Latin-capitalised words / numbers ('Magic 9 Super', 'Claude Sonnet 5.5', 'Model X')
+_NAME_TOKEN = re.compile(r"(?<![\w.])(?:[A-Z][A-Za-z0-9+\-]*|\d{1,3}(?:[ \u00a0\u202f]\d{3})+(?!\d)|\d+(?:[.,]\d+)?)(?![\w])")
+_WORD_TOKEN = re.compile(r"[A-Za-z][A-Za-z0-9+\-]*|\d{1,3}(?:[ \u00a0\u202f]\d{3})+(?!\d)|\d+(?:[.,]\d+)?")
+
+
+def _norm(token: str) -> str:
+    return next(iter(number_values(token))) if token[:1].isdigit() else token.lower()
+
+
+def product_names(hook: str) -> list[tuple[str, ...]]:
+    """The hook's own product names: maximal runs of name tokens separated only by spaces. A run of two or more tokens, or one that
+    carries a number, is DISTINCTIVE; a lone company word ('Nimbus', 'Honor') is not a product. Without a distinctive run, the lone
+    non-company words are the names."""
+    text = _KEYCAP.sub("", hook)
+    runs: list[list[str]] = []
+    last_end = None
+    for m in _NAME_TOKEN.finditer(text):
+        if last_end is not None and text[last_end:m.start()].strip(" \u00a0") == "" and runs:
+            runs[-1].append(m.group())
+        else:
+            runs.append([m.group()])
+        last_end = m.end()
+    names = [tuple(_norm(t) for t in run) for run in runs]
+    distinctive = [n for n in names if len(n) >= 2 or any(t[:1].isdigit() for t in n)]
+    distinctive = [n for n in distinctive if not all(t[:1].isdigit() for t in n)]  # a bare quantity is checked as a quantity, not a name
+    return distinctive or [n for n in names if not event_signature(" ".join(n)).actors]
+
+
+def launch_established(hook: str, segments: list[str]) -> bool:
+    """A body segment states that the hook's product WAS released / introduced / made available - not planned, rumoured or denied - and
+    names that product (every token of one of the hook's product names) when the hook names one."""
+    names = product_names(hook)
+    for segment in segments:
+        if not _LAUNCH_DONE.search(segment) or _LAUNCH_NOT_DONE.search(segment):
+            continue
+        tokens = {_norm(t) for t in _WORD_TOKEN.findall(_KEYCAP.sub("", segment))}
+        if not names or any(set(name) <= tokens for name in names):
+            return True
+    return False
+
+
 @dataclass(frozen=True)
 class EvidencePreflight:
     status: str  # PASS / FAIL / PENDING
@@ -432,7 +519,8 @@ def evidence_preflight(hook: str, body_lines: list[str], *, actuality: Actuality
     # read per SEGMENT: an aggregator line glues a headline to its lede ('Headline — The company did not learn ...'); only the lede is
     # evidence - a claim that appears only in the headline part stays unproven
     segments = [seg for line in body_lines for seg in _segments(" ".join(plain_text(line).split()))]
-    body = " ".join(dict.fromkeys(seg for seg in segments if not is_headline(seg)))
+    body_segments = list(dict.fromkeys(seg for seg in segments if not is_headline(seg)))
+    body = " ".join(body_segments)
     if len(body) < MIN_BODY_CHARS:
         return EvidencePreflight("PENDING", {}, f"only {len(body)} characters of stored body evidence - the article itself must be acquired "
                                                 "before any claim can be checked")
@@ -443,11 +531,18 @@ def evidence_preflight(hook: str, body_lines: list[str], *, actuality: Actuality
         checks[name] = "NOT_USED" if not used else "SUPPORTED" if ok else "UNSUPPORTED"
 
     check("actor", True, bool(hook_sig.actors <= body_sig.actors and (body_sig.actors or not hook_sig.actors)))
-    check("action", True, bool(hook_sig.actions & body_sig.actions) if hook_sig.actions else bool(body_sig.actions))
+    if "launch" in hook_sig.actions:
+        # a release hook needs a sentence saying the release HAPPENED (any ordinary wording, never a plan / rumour); the hook's other
+        # action families keep their family match
+        action_ok = launch_established(hook, body_segments) or bool((hook_sig.actions - {"launch"}) & body_sig.actions)
+    else:
+        action_ok = bool(hook_sig.actions & body_sig.actions) if hook_sig.actions else bool(body_sig.actions)
+    check("action", True, action_ok)
     check("target", bool(hook_sig.anchors), hook_sig.anchors <= body_sig.anchors)
-    numbers = set(_NUMBER.findall(hook))
-    check("quantity", bool(numbers), all(n in body for n in numbers))
-    dated = bool(stated_event_dates(body, now=now) or _TIME_EXPR.search(body))
+    # every number the hook states is a WHOLE number of the body ('11 000' is 11000, never '11' and '000' found anywhere)
+    numbers = number_values(_KEYCAP.sub("", hook))
+    check("quantity", bool(numbers), numbers <= number_values(_KEYCAP.sub("", body)))
+    dated = bool(stated_event_dates(body, now=now) or _numeric_dates(body, now=now) or _TIME_EXPR.search(body))
     if actuality is not None and actuality.type == "CURRENT_DISCLOSURE":
         # a new disclosure of an older event: the body must show BOTH that it became known now and that the behaviour came before
         dated = bool(_DISCLOSED.search(body)) and (dated or bool(_EARLIER.search(body)))

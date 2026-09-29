@@ -45,6 +45,7 @@ OFFICIAL_DOC_HOSTS = (
 )
 MAX_OFFICIAL_DOCS = 2
 MAX_STEPS, MAX_FACTS, MAX_LIMITATIONS = 10, 6, 3
+MAX_PREMISE_FACTS = 3  # of MAX_FACTS: slots kept for the article sentences that carry the premise's own quantities (launch-evidence fix)
 ITEM_CHARS = 300  # display preview length only
 MAX_EXACT_CHARS = 700  # a longer exact line is left out of the Director's evidence, never shortened
 RECAP_EXCERPTS_PER_STORY = 3
@@ -133,6 +134,9 @@ class InstagramEvidencePackage:
     quality: str
     why: str
     excluded_bodies: tuple[str, ...] = field(default=())
+    # the article's OWN dateline (the short date line right under its title), verbatim - chronology evidence for the viral preflight only;
+    # it is not a fact and never reaches the Director
+    dateline: str | None = None
 
     @property
     def primary_sources(self) -> tuple[EvidenceSource, ...]:
@@ -141,6 +145,10 @@ class InstagramEvidencePackage:
     @property
     def supporting_sources(self) -> tuple[EvidenceSource, ...]:
         return tuple(s for s in self.sources if s.source_type in (OFFICIAL_DOC, STORED_BODY) and s.text)
+
+    def preflight_lines(self) -> list[str]:
+        """What the viral evidence preflight reads: the verbatim STEP / FACT / LIMITATION texts and the article's own dateline."""
+        return [item.exact_text for item in (*self.steps, *self.facts, *self.limitations)] + ([self.dateline] if self.dateline else [])
 
     def director_evidence(self) -> list[str]:
         """What the Director may cite: the premise, then the verbatim STEP / FACT / LIMITATION texts, then the media truth. Each item is
@@ -279,6 +287,85 @@ def _dedupe(items: Iterable[EvidenceItem], limit: int) -> tuple[EvidenceItem, ..
     return tuple(out[:limit])
 
 
+_GROUPED_NUMBER = re.compile(r"(?<![\d.,])\d{1,3}(?:[ \u00a0\u202f]\d{3})+(?![\d])|(?<![\d.,])\d{1,3}(?:,\d{3})+(?![\d.,])|\d+(?:[.,]\d+)?")
+
+
+def number_values(text: str) -> set[str]:
+    """Every number in the text as ONE normalised value: '11 000' / '11,000' / '11000' -> '11000', '4,6' -> '4.6', '5.5' -> '5.5'. A number
+    written with thousands groups is one number, never its pieces ('11' and '000')."""
+    out: set[str] = set()
+    for raw in _GROUPED_NUMBER.findall(text or ""):
+        if re.fullmatch(r"\d{1,3}(?:[ \u00a0\u202f,]\d{3})+", raw):
+            out.add(re.sub(r"\D", "", raw))
+        else:
+            out.add(raw.replace(",", "."))
+    return out
+
+
+def premise_quantities(premise: str) -> list[str]:
+    """The premise's concrete quantities in its own order (a capacity, a resolution, a price, a count): values of 10 and more, or with a
+    fraction; never a year, never a bare model digit ('Magic 9')."""
+    out: list[str] = []
+    for raw in _GROUPED_NUMBER.findall(premise or ""):
+        value = next(iter(number_values(raw)))
+        try:
+            number = float(value)
+        except ValueError:
+            continue
+        if number < 10 or (number.is_integer() and 1900 <= number <= 2100) or value in out:
+            continue
+        out.append(value)
+    return out
+
+
+def _select_facts(items: Iterable[EvidenceItem], premise: str, limit: int) -> tuple[EvidenceItem, ...]:
+    """The package's facts. With no more candidates than `limit` nothing changes. Otherwise (the launch-evidence fix, 2026-09-29: a
+    spec-heavy article's own battery sentence fell behind a glued 'related articles' line):
+      1. up to MAX_PREMISE_FACTS slots go to the FIRST complete sentence carrying each premise quantity - the facts the story is about;
+      2. the rest is filled in the accepted order, complete sentences before unpunctuated lines (glued menus / related-article runs);
+    the kept facts keep that accepted order."""
+    ordered = _dedupe(items, 10**6)
+    if len(ordered) <= limit:
+        return ordered
+    complete = [bool(_COMPLETE_SENTENCE.search(item.text)) for item in ordered]
+    chosen: list[int] = []
+    for quantity in premise_quantities(premise):
+        if len(chosen) >= min(MAX_PREMISE_FACTS, limit):
+            break
+        index = next((i for i, item in enumerate(ordered) if complete[i] and quantity in number_values(item.text)), None)
+        if index is not None and index not in chosen:
+            chosen.append(index)
+    for want_complete in (True, False):
+        for i in range(len(ordered)):
+            if len(chosen) >= limit:
+                break
+            if complete[i] is want_complete and i not in chosen:
+                chosen.append(i)
+    return tuple(ordered[i] for i in sorted(chosen))
+
+
+_DATE_LINE = re.compile(r"\b\d{1,2}[./]\d{1,2}[./](?:19|20)\d\d\b|\b(?:19|20)\d\d-\d{2}-\d{2}\b|"
+                        r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+(?:19|20)\d\d\b|"
+                        r"\b\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|январ|феврал|март|апрел|ма[яй]|июн|июл|август|"
+                        r"сентябр|октябр|ноябр|декабр)[a-zа-яё]*\.?\s+(?:19|20)\d\d\b", re.IGNORECASE)
+DATELINE_WINDOW = 8  # lines under the article's own title
+DATELINE_CHARS = 60
+
+
+def article_dateline(text: str, title: str) -> str | None:
+    """The article's own dateline: a short line with a full date (day, month and year) among the first lines under the article's own
+    title, before its first prose sentence. The site's header date ('Сегодня 29 сентября') is above the title, so it is never read."""
+    span = article_span(text, title)
+    if span is text:  # the article's own title was not found: no position to trust
+        return None
+    for line in [ln.strip() for ln in span.splitlines() if ln.strip()][:DATELINE_WINDOW]:
+        if len(line) >= 120 or classify_line(line) == FACT:
+            return None  # the prose began without a dateline
+        if len(line) <= DATELINE_CHARS and _DATE_LINE.search(line):
+            return line
+    return None
+
+
 def _has_location(steps: Sequence[EvidenceItem]) -> bool:
     return any(_PATH_RX.search(s.text) or _COMMAND_RX.search(s.text) or re.search(r"\b(?:settings|menu|preferences|button|icon|tab|"
                                                                                       r"настройк|меню|кнопк|вкладк)\w*", s.text, re.I)
@@ -310,12 +397,14 @@ def assemble_package(*, post_id: str, fmt: str, premise: str, sources: Sequence[
                      excluded_bodies: Sequence[str] = ()) -> InstagramEvidencePackage:
     items = [item for source in sources if source.text for item in extract_items(source, premise=premise, how_to=fmt == "ai_hack")]
     steps = _dedupe((i for i in items if i.kind == STEP), MAX_STEPS) if fmt == "ai_hack" else ()
-    facts = _dedupe((i for i in items if i.kind == FACT), MAX_FACTS)
+    facts = _select_facts((i for i in items if i.kind == FACT), premise, MAX_FACTS)
     limitations = _dedupe((i for i in items if i.kind == LIMITATION), MAX_LIMITATIONS)
     quality, why = grade(fmt, steps, facts, sources)
+    dateline = next((d for source in sources if source.text and source.source_type in (ORIGINAL_ARTICLE, LINKED_ARTICLE)
+                     and (d := article_dateline(source.text, premise))), None)
     return InstagramEvidencePackage(post_id=post_id, format=fmt, premise=premise, sources=tuple(sources), steps=steps, facts=facts,
                                     limitations=limitations, media=media, quality=quality, why=why,
-                                    excluded_bodies=tuple(excluded_bodies))
+                                    excluded_bodies=tuple(excluded_bodies), dateline=dateline)
 
 
 # --- links ----------------------------------------------------------------------------------------------------------------------------

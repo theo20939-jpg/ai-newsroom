@@ -87,7 +87,7 @@ async def acquire(event: ViralEvent, by_id: dict[str, dict]) -> dict:
             post_id=cid, fmt=FeedFormat.MEME_TREND.value, title=row["title"] or "", url=row.get("url"), source_type=row["source_type"] or "RSS",
             source_name=row["source_name"], stored_body=row.get("summary"), event=None, event_id=UUID(cid), session=None,
             acquisition_enabled=True, media_mode="off")
-        body = [item.exact_text for item in (*package.steps, *package.facts, *package.limitations)]
+        body = package.preflight_lines()
         preflight = viral_evidence_preflight(event, title=row["title"] or "", body_lines=body, published_at=_dt(row["published_at"]))
         statuses = [s.status for s in package.sources if s.source_type in ("original_article", "linked_article", "ORIGINAL_ARTICLE", "LINKED_ARTICLE")]
         tried.append({"source": row["source_name"], "headline": row["title"], "url_host": (row.get("url") or "").split("/")[2] if row.get("url") else None,

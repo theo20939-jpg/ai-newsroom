@@ -1146,7 +1146,8 @@ async def _viral_evidence_copy(session: AsyncSession, viral_event: Any, event_id
         package = await _feed_evidence_package(session, copy_id, row, slot_format)
         preflight = viral_evidence_preflight(
             viral_event, title=row.title or "", published_at=getattr(row, "published_at", None), now=now,
-            body_lines=[item.exact_text for item in (*package.steps, *package.facts, *package.limitations)])
+            body_lines=[item.exact_text for item in (*package.steps, *package.facts, *package.limitations)]
+            + ([package.dateline] if getattr(package, "dateline", None) else []))  # + the article's own dateline (chronology)
         result = (copy_id, row, package, preflight)
         if preflight.status == "PASS":
             break

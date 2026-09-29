@@ -60,7 +60,7 @@ async def replay_copy(row: dict, event, now) -> dict:
         post_id=ev["id"], fmt="meme_trend", title=ev["title"] or "", url=ev["url"], source_type=src.get("type") or "RSS",
         source_name=src.get("name"), stored_body=ev.get("summary") or ev.get("content"), event=None, event_id=UUID(ev["id"]), session=None,
         acquisition_enabled=True, media_mode="off")
-    body = [item.exact_text for item in (*package.steps, *package.facts, *package.limitations)]
+    body = package.preflight_lines()
     published = ev.get("published_at")
     from datetime import datetime
     preflight = viral_evidence_preflight(event, title=ev["title"] or "", body_lines=body,

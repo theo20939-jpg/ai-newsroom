@@ -152,7 +152,7 @@ async def main() -> None:
 
     async def record_package(session, copy_id, row, slot_format):
         package = await real_package(session, copy_id, row, slot_format)
-        body = [item.exact_text for item in (*package.steps, *package.facts, *package.limitations)]
+        body = package.preflight_lines()
         pf = viral_evidence_preflight(event, title=row.title or "", body_lines=body, published_at=getattr(row, "published_at", None), now=now)
         n = len(attempts) + 1
         harness._write(out / "post" / "evidence_attempts" / f"{n:02d}_package.json", package)
