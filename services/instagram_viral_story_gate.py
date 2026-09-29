@@ -168,6 +168,25 @@ def _sentence_with(text: str, fragment: str) -> str:
     return next((s for s in _SENTENCE.split(text) if fragment in s), text)
 
 
+# HISTORICAL CONTEXT vs AN OLD EVENT (founder decision 2026-09-29): 'ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days' was
+# read as OLD because its lead says 'A German Army Enigma transmission from 85 years ago' - the age of the OBJECT, not of the event. A
+# NUMERIC age cue ('N years ago', 'N лет назад', 'back in 19xx') attached to a noun - 'from / of N years ago', or after an origin participle
+# ('sent / written / encrypted / built ... N years ago') - is historical context and does not date the event. The event's own verb carrying
+# the age ('AI decoded the message 85 years ago') stays OLD; media participles (filmed / taken / recorded) stay old-event evidence (the
+# resurfaced-video case); every other cue (resurfaced, anniversary, retrospective, old video ...) and the time window are unchanged.
+_NUMERIC_AGE = re.compile(r"(?i)^(\d|back in)")
+_OBJECT_AGE_BEFORE = re.compile(
+    r"(?i)(?:\b(?:from|of|dating from|dating back|dated)\s+|\b(?:sent|written|encrypted|encoded|enciphered|built|created|made|lost|hidden|"
+    r"buried|intercepted|designed|invented|discovered|posed|proposed|formulated|conceived|отправленн\w*|написанн\w*|зашифрованн\w*|"
+    r"созданн\w*|потерянн\w*|сделанн\w*|спрятанн\w*|построенн\w*|изобретенн\w*|изобретённ\w*|поставленн\w*|сформулированн\w*|"
+    r"предложенн\w*)\s+(?:\w+\s+){0,2})$")
+
+
+def _object_age(head: str, cue: re.Match[str]) -> bool:
+    """True when a numeric age cue describes the age / origin of an object in the story, not when the event happened."""
+    return bool(_NUMERIC_AGE.search(cue.group(0)) and _OBJECT_AGE_BEFORE.search(head[max(0, cue.start() - 60):cue.start()]))
+
+
 def assess_actuality(title: str, text: str, *, published_at: datetime | None, story_first_seen: datetime | None,
                      independent_sources: int, now: datetime) -> Actuality:
     """The age of the EVENT (article recency is not event recency). `story_first_seen` is the first coverage of this same FACTUAL event
@@ -175,7 +194,7 @@ def assess_actuality(title: str, text: str, *, published_at: datetime | None, st
     happened earlier ('in May ... the analysis published on 30 July'); when the latest stated date is the disclosure's OWN date, that
     date is the disclosure's age."""
     head = f"{title}. {text[:1500]}"
-    cue = _OLD_CUES.search(head)
+    cue = next((m for m in _OLD_CUES.finditer(head) if not _object_age(head, m)), None)
     if cue:
         return Actuality("OLD_EVENT", f"text: retrospective / resurfacing cue {cue.group(0)!r}")
     if story_first_seen is not None and now - story_first_seen > OLD_CLUSTER_AGE:
@@ -269,6 +288,9 @@ def assess_broad_interest(title: str, lead: str) -> tuple[str, str]:
     head = f"{title} {lead[:300]}"
     niche = _NICHE.search(head)
     consequence = _CONSEQUENCE.search(head)
+    if _MECHANISMS["ai_launch"].search(title) and _VERSIONED_MODEL.search(title) and not _NOT_A_LAUNCH.search(title):
+        # a flagship model release ('GPT-6 Sol and GPT-6 Luna in the API') - the API / SDK it ships through is its channel, not a niche
+        return "BROAD", "a new flagship AI model release"
     if niche and not consequence:
         return "NARROW", f"specialist / niche subject ({niche.group(0)!r}) with no real-world consequence in the headline or lead"
     procedural = _PROCEDURAL.search(title)
@@ -281,6 +303,13 @@ def assess_broad_interest(title: str, lead: str) -> tuple[str, str]:
     if _MECHANISMS["unexpected_ai_behaviour"].search(title):
         # 'AI' alone proves nothing, but an AI system DOING something unexpected is understood from one sentence without any niche context
         return "BROAD", "unexpected behaviour of an AI system, stated in the headline"
+    # founder decision 2026-09-29: a real launch (a new AI model / product, a consumer device), an unusual device someone built, or a tech
+    # moment in mass pop culture is understood from one sentence - the EVENT is the anchor, not a famous name (953e77d stays: a name alone
+    # never counts)
+    family = next((m for m in ("ai_launch", "device_launch", "device_novelty", "pop_culture_crossover") if _MECHANISMS[m].search(head)), None)
+    if family and not (family in ("ai_launch", "device_launch") and _NOT_A_LAUNCH.search(head)):
+        return "BROAD", {"ai_launch": "a new AI model / product launch", "device_launch": "a consumer device launch or leak",
+                         "device_novelty": "an unusual device and what it does", "pop_culture_crossover": "a tech moment in mass pop culture"}[family]
     if consequence:
         return "BROAD", f"a real-world consequence ({consequence.group(0)!r})"
     return "UNCLEAR", "no everyday-life, mass-product or consequence anchor a general reader would recognise"
@@ -325,7 +354,76 @@ _MECHANISMS: dict[str, re.Pattern[str]] = {
                          r"\b(уволил\w*|засудил\w*|арестова\w*|заменил\w*)\b.*\b(ии|робот\w*|алгоритм\w*)\b"),
     "controversy": _rx(r"\bbacklash\b", r"\boutrage\b", r"\bboycott\b", r"\bвозмущ\w*", r"\bскандал\w*", r"\bбойкот\w*", r"\beveryone hates\b",
                        r"\bextreme concern\b"),
+    # founder decision 2026-09-29 (DAILY STORY SELECTION): major AI launches, devices and pop-culture moments are story families of their
+    # own - they compete for the daily post on what happened, not through a weekly-only bucket. A LAUNCH is a real product being released
+    # (a named AI model / product, a consumer device) - never a plan, a roadmap, a deal or a sale (see _NOT_A_LAUNCH).
+    "ai_launch": _rx(
+        r"\b(launch(es|ed)?|unveil(s|ed)?|releas(es|ed)|introduc(es|ed)|debut(s|ed)?|rolls? out|rolled out|ships?|shipped|выпустил\w*|"
+        r"представил\w*|запустил\w*|анонсировал\w*|релиз\w*)\b[^!?]{0,80}\b(gpt[- ]?\d[\w.]*|chatgpt|gemini|claude|llama|grok|copilot|sora|"
+        r"midjourney|deepseek|qwen|mistral|kimi|apple intelligence|galaxy ai|notebooklm|perplexity)\b",  # a NAMED AI product - 'models' alone is not one
+        r"\b(gpt[- ]?\d[\w.]*|gemini \d[\w.]*|claude \w+ \d[\w.]*|llama \d[\w.]*|grok \d[\w.]*)\b[^!?]{0,40}\b(is out|arrives|launch\w*|"
+        r"вышл\w*|вышел|доступн\w*)"),
+    "device_launch": _rx(
+        r"\b(launch(es|ed)?|unveil(s|ed)?|releas(es|ed)|introduc(es|ed)|debut(s|ed)?|announc(es|ed)|rolls? out|выпустил\w*|представил\w*|"
+        r"запустил\w*|анонсировал\w*|показал\w*)\b[^!?]{0,80}\b(iphone\w*|ipad\w*|macbook\w*|pixel \d\w*|galaxy \w+|smartphones?|phones?|"
+        r"смартфон\w*|laptops?|ноутбук\w*|glasses|очк(и|ов)|smart ?watch\w*|часы|headsets?|гарнитур\w*|consoles?|консол\w*|tablets?|"
+        r"планшет\w*|robots?|робот\w*|drones?|дрон\w*|humanoids?|гуманоид\w*|gadgets?|гаджет\w*)\b",
+        r"\b(iphone \d+\w*|pixel \d+\w*|galaxy s\d+\w*|vision pro|quest \d)\b[^!?]{0,60}\b(leak\w*|утечк\w*|слив\w*|запустил\w*|запустили|runs?)\b"),
+    # an unusual device someone BUILT and what it does ('запилили робота-паука, который занимается сваркой ... хоть по потолку')
+    "device_novelty": _rx(
+        r"\b(built|made|created|developed|запилил\w*|собрал\w*|создал\w*|разработал\w*|сделал\w*)\b[^!?]{0,60}\b(robots?|робот\w*|drones?|"
+        r"дрон\w*|humanoids?|гуманоид\w*|exoskeleton\w*|экзоскелет\w*|машин\w*-\w+)\b",
+        r"\b(robots?|робот\w*|drones?|дрон\w*|humanoids?|гуманоид\w*)\b[^!?]{0,80}\b(crawls?|climbs?|walks? on|ползат\w*|лаза\w*|по потолку|"
+        r"сварк\w*|welds?|cooks?|готовит|folds?|играет|plays?|dances?|танцу\w*)\b"),
+    # an AI system achieving something astonishing - cracking, solving, deciphering, beating, a record (founder: unexpected tech records)
+    "ai_feat": _rx(_AI_ACTOR_RX + r"[^!?]{0,60}\b(crack(s|ed)|solv(es|ed)|decod(es|ed)|deciphe\w*|beat(s)?|won|wins|broke (the |a )?record|"
+                   r"расшифровал\w*|разгадал\w*|обыграл\w*|побил\w* рекорд\w*)\b"),
+    # a tech figure / product crossing into mass pop culture - a sketch, a parody, a meme the whole internet quotes
+    "pop_culture_crossover": _rx(r"\b(snl|saturday night live|the simpsons|симпсон\w*|south park|parod(y|ies|ied)|пароди\w*|спародировал\w*)\b",
+                                 r"\bgets? the \w+ treatment\b"),
 }
+# a 'launch' that is not one: a plan, a roadmap, a partnership, a funding round, a deal / sale / discount
+_NOT_A_LAUNCH = _rx(r"\bplans?\b", r"\bwill\b", r"\broadmap\b", r"\bexpansion\b", r"\bdeals?\b", r"\bsale\b", r"\bdiscount\w*",
+                    r"\bpartnership\b", r"\bfunding\b", r"\bplanned\b", r"\bскидк\w*", r"\bпланиру\w*", r"\bраунд\w*", r"\bпартн[её]рств\w*",
+                    r"\bфинансировани\w*")
+# a GENERIC release - 'a new <product> model / feature / update / version' with nothing named - is weak for ANY audience; a named or
+# versioned model / product launch is strong for any audience (founder 2026-09-29: an enterprise label alone never excludes a launch)
+_GENERIC_RELEASE = _rx(r"\b(?:a|an) new \w+ (?:model|feature|update|version|tool|option|setting)s?\b",
+                       r"\bнов(?:ую|ая|ый|ое|ые) (?:функци\w*|модел\w*|верси\w*|настройк\w*|обновлени\w*)\b")
+_LAUNCH_FAMILIES = ("ai_launch", "device_launch", "device_novelty")
+# how much each kind of reason to care weighs for a social-first feed (founder decision 2026-09-29): relatable / absurd / surprising events
+# and real launches weigh 2, institutional signals 1 - wider coverage (momentum) only breaks ties AFTER this, so a clearly stronger story
+# is never beaten merely by being less covered
+SHAREABLE_MECHANISMS = frozenset({"unexpected_ai_behaviour", "real_failure", "absurd_measurable_outcome", "bizarre_event", "unlikely_pairing",
+                                  "measurable_contradiction", "pop_culture_crossover", "ai_feat"})
+_WEIGHT = {**{m: 2 for m in SHAREABLE_MECHANISMS}, **{m: 2 for m in _LAUNCH_FAMILIES},
+           "security_surprise": 1, "consumer_consequence": 1, "controversy": 1, "human_vs_tech": 1}
+# a flagship model release named with its version ('GPT-6 Sol', 'Claude Opus 5.5', 'Gemini 4') is the biggest kind of AI launch
+_VERSIONED_MODEL = _rx(r"\bgpt[- ]?\d", r"\bclaude (opus|sonnet|haiku|fable)\b", r"\bgemini \d", r"\bllama \d", r"\bgrok \d", r"\bflagship\b",
+                       r"\bфлагманск\w*")
+_LARGE_MAGNITUDE = _rx(r"\d[\d\s.,]*\s?(million|billion|trillion|млн|млрд|трлн|миллион\w*|миллиард\w*|триллион\w*)\b",
+                       r"(?<![\d.,])\d{1,3}(?:[\s,.]\d{3})+(?![\d.,])", r"(?<![\d.,])\d{5,}(?![\d.,])")
+_ANY_NUMBER = re.compile(r"\d")
+
+
+def story_points(mechanisms: list[str], hook: str) -> int:
+    """The story's own editorial strength: weighted reasons to care (launch families of one event never add up - one launch is one
+    launch), plus a concrete magnitude (a large one - millions, 48 000 files, 17 trillion rows - counts double)."""
+    text = hook.replace("\ufe0f\u20e3", "").replace("\u20e3", "")  # keycap digits ('4️⃣8️⃣ 0️⃣0️⃣0️⃣') are digits
+    launch = [m for m in mechanisms if m in _LAUNCH_FAMILIES]
+    points = sum(_WEIGHT.get(m, 1) for m in mechanisms if m not in _LAUNCH_FAMILIES)
+    if launch:
+        if "ai_launch" in launch and _VERSIONED_MODEL.search(text):
+            points += 3  # a flagship, versioned model release
+        elif launch == ["ai_launch"] and _GENERIC_RELEASE.search(text):
+            points += 1  # 'a new ChatGPT model' with nothing named: a routine release, whoever it is for
+        else:
+            points += 2
+    if _LARGE_MAGNITUDE.search(text):
+        points += 2
+    elif _ANY_NUMBER.search(text):
+        points += 1
+    return points
 HOOK_LEAD_SENTENCES = 12  # every sentence of the stored lead (itself capped at the summary + 1,500 chars of article text)
 _SENTENCE = re.compile(r"(?<=[.!?…])\s+")
 
@@ -341,7 +439,17 @@ def _hook_sentences(title: str, lead: str) -> list[str]:
 _COMMENTARY = _rx(r"\braises? (\w+ )?questions\b", r"\bis a warning\b", r"\breveals? (\w+ )?anxiety\b", r"\bwhat (it|this) means\b",
                   r"\bwhy (it|this) matters\b", r"^\s*(opinion|analysis|explainer|editorial)\b", r"\bheres? what\b",
                   r"\bbigger than (it|they|we) (let on|thought)\b", r"\bвызывает вопрос\w*", r"\bэто предупреждение\b", r"\bчто это значит\b",
-                  r"\bпочему это важно\b", r"\bмнение\b", r"\bколонка\b")
+                  r"\bпочему это важно\b", r"\bмнение\b", r"\bколонка\b",
+                  # a roundup / digest bundles several items - it is not one event (founder daily selection review 2026-09-29)
+                  r"^\s*top stories\b", r"\band more\s*$", r"\broundup\b", r"\bthis week in\b", r"\bweek in review\b", r"\bдайджест\w*",
+                  r"\bитоги недели\b",
+                  # a headline that only denies a phenomenon ('There are no rogue AI agents') argues a view, it reports no event
+                  r"^\s*there (?:is|are) no\b")
+# an AI actor DOING something (the action form of unexpected_ai_behaviour) - a lone mechanism qualifies only as an event, never as the
+# bare topic word 'rogue' ('Nvidia's answer to rogue agents' is a product story, 'There are no rogue agents' an opinion)
+_AI_EVENT = _rx(_AI_ACTOR_RX + r"[^!?]{0,80}\b(hack(ed|s|ing)?|deleted|escaped|lied|cheated|refused|faked|colluded|invented|went rogue|"
+                r"meddl\w*|probed|infiltrat\w*|взлом\w*|удалил\w*|сбежал\w*|обманул\w*|изобрел\w*|сговор\w*|отказал\w*|подставил\w*|хакнул\w*|"
+                r"проник\w*)")
 
 
 def assess_inherent_strength(title: str, lead: str) -> tuple[str, list[str], str]:
@@ -354,10 +462,21 @@ def assess_inherent_strength(title: str, lead: str) -> tuple[str, list[str], str
     for sentence in _hook_sentences(title, lead):
         text = _ACTOR_ONLY.sub(" ", sentence)
         found = [name for name, pattern in _MECHANISMS.items() if pattern.search(text)]
-        if len(found) > best[0]:
-            best = (len(found), found, sentence)
-    count, found, hook = best
-    strength = "STRONG" if count >= 2 or "measurable_contradiction" in found else "MODERATE" if count == 1 else "NONE"
+        if _NOT_A_LAUNCH.search(text):
+            found = [m for m in found if m not in ("ai_launch", "device_launch")]
+        points = story_points(found, sentence)
+        if points > best[0]:
+            best = (points, found, sentence)
+    points, found, hook = best
+    # founder decision 2026-09-29: ONE clearly strong idea is enough - a relatable / absurd / surprising event, a real launch, or any
+    # signal carried by a large concrete magnitude - it no longer needs two separate formal mechanisms (every earlier STRONG stays STRONG)
+    # a magnitude only AMPLIFIES a reason to care - '$11.6 billion cloud deal' has none, so it never qualifies on its number alone
+    single_strong = bool(found) and points >= 2 and (bool(set(found) & (SHAREABLE_MECHANISMS | set(_LAUNCH_FAMILIES))) or bool(
+        _LARGE_MAGNITUDE.search(hook.replace("\ufe0f\u20e3", "").replace("\u20e3", ""))))
+    if found == ["unexpected_ai_behaviour"] and not _AI_EVENT.search(_ACTOR_ONLY.sub(" ", hook)):
+        single_strong = False  # the bare topic word ('rogue agents'), not an AI actor doing something
+    strong = len(found) >= 2 or "measurable_contradiction" in found or single_strong
+    strength = "STRONG" if strong else "MODERATE" if found else "NONE"
     return strength, found, hook
 
 
@@ -465,12 +584,16 @@ class ViralVerdict:
     visual_potential: str
     good_kage_news: bool  # relevant and current: usable as ordinary news even when it is not viral
     details: dict = field(default_factory=dict)
+    points: int = 0  # story_points: the story's own weighted editorial strength (founder decision 2026-09-29)
 
     @property
-    def score(self) -> tuple[int, int, int]:
+    def score(self) -> tuple[int, int, int, int]:
+        """Ranking among eligible stories: strength band, then the story's own editorial points, then momentum (wider coverage only
+        breaks ties - founder decision 2026-09-29: a clearly more surprising / relatable / shareable story may beat a more covered one),
+        then visual potential."""
         strength = {"STRONG": 2, "MODERATE": 1, "NONE": 0}
         momentum = {"STRONG": 3, "MODERATE": 2, "WEAK": 1, "NONE": 0}
-        return strength[self.strength], momentum[self.momentum], 1 if self.visual_potential == "HIGH" else 0
+        return strength[self.strength], self.points, momentum[self.momentum], 1 if self.visual_potential == "HIGH" else 0
 
 
 def assess_viral_story(candidate: Any, evidence: str = "", *, now: datetime | None = None,
@@ -488,6 +611,7 @@ def assess_viral_story(candidate: Any, evidence: str = "", *, now: datetime | No
                                  independent_sources=int(getattr(candidate, "independent_sources", 1) or 1), now=now)
     broad, broad_reason = assess_broad_interest(title, lead)
     strength, mechanisms, hook = assess_inherent_strength(title, lead)
+    points = story_points(list(mechanisms), hook)
     momentum, signals = assess_momentum(independent_sources=int(getattr(candidate, "independent_sources", 1) or 1),
                                         story_events_24h=int(getattr(candidate, "story_events_24h", 1) or 1),
                                         on_hacker_news=bool(getattr(candidate, "on_hacker_news", False)),
@@ -497,7 +621,7 @@ def assess_viral_story(candidate: Any, evidence: str = "", *, now: datetime | No
     def verdict(failed: str | None, reason: str) -> ViralVerdict:
         return ViralVerdict(eligible=failed is None, failed_gate=failed, reason=reason, kage_core=core, actuality=actuality,
                             broad_interest=broad, broad_reason=broad_reason, strength=strength, mechanisms=tuple(mechanisms), hook=hook,
-                            momentum=momentum, momentum_signals=tuple(signals), visual_potential=visual,
+                            momentum=momentum, momentum_signals=tuple(signals), visual_potential=visual, points=points,
                             good_kage_news=bool(core) and actuality.status != "OLD",  # RECENT is still usable news
                             details={"actuality_type": actuality.type, "underlying_time": actuality.underlying_time,
                                      "disclosed_at": actuality.disclosed_at.isoformat() if actuality.disclosed_at else None,

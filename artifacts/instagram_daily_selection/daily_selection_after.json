@@ -1,0 +1,1416 @@
+{
+ "canary": {
+  "pool": "canary",
+  "now": "2026-09-26T18:04:01.575346+00:00",
+  "events": 339,
+  "eligible_count": 5,
+  "winner": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+  "eligible": [
+   {
+    "event": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+    "family": "viral / meme",
+    "points": 6,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "real_failure"
+    ],
+    "momentum": "STRONG",
+    "outlets": 3,
+    "broad_reason": "unexpected behaviour of an AI system, stated in the headline",
+    "hook": "Claude вместо копии проекта удалил 48 218 файлов за полторы минуты и потом признался, что «что‑то сломал»"
+   },
+   {
+    "event": "OpenAI's agents targeted and infiltrated US government websites",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "security_surprise"
+    ],
+    "momentum": "STRONG",
+    "outlets": 19,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI's agents targeted and infiltrated US government websites"
+   },
+   {
+    "event": "OpenAI says agents leaked 53 images from ChatGPT users in latest example of rogue activity",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "MODERATE",
+    "outlets": 3,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI says agents leaked 53 images from ChatGPT users in latest example of rogue activity — Disclosure reveals ⁠new area of privacy risk for the company and illustrates ​how difficult it is to invent"
+   },
+   {
+    "event": "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "ai_feat"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "everyday-life / mass-product / security anchor ('ChatGPT')",
+    "hook": "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days"
+   },
+   {
+    "event": "OpenAI says it paused training, evaluation, and inference with tool-use of its most capable models after a model",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI pauses training of its ‘most capable models’ — As reports of OpenAI's models breaking containment, hacking sites, and generally getting out of control pile up, the company has made the decision"
+   }
+  ],
+  "daily_sequence": [
+   "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+   "OpenAI's agents targeted and infiltrated US government websites",
+   "OpenAI says agents leaked 53 images from ChatGPT users in latest example of rogue activity",
+   "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days",
+   "OpenAI says it paused training, evaluation, and inference with tool-use of its most capable models after a model"
+  ],
+  "named": {
+   "claude_48000_files": {
+    "title": "Анекдот: **Claude снес разрабу ****4️⃣****8️⃣**** ****0️⃣****0️⃣****0️⃣**** файлов за полторы минуты.**",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 6,
+     "mechanisms": [
+      "unexpected_ai_behaviour",
+      "real_failure"
+     ],
+     "broad": "BROAD",
+     "momentum": "STRONG",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 1,
+     "reason": "current (coverage: 3 independent outlets since 2026-09-26 14:37 UTC); broad (unexpected behaviour of an AI system, stated in the headline); strong mechanisms ['unexpected_ai_behaviour', 'real_failure']; momentum strong ("
+    }
+   },
+   "enigma_astra": {
+    "title": "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 3,
+     "mechanisms": [
+      "ai_feat"
+     ],
+     "broad": "BROAD",
+     "momentum": "WEAK",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 4,
+     "reason": "current (coverage: 2 independent outlets since 2026-09-26 10:00 UTC); broad (everyday-life / mass-product / security anchor ('ChatGPT')); strong mechanisms ['ai_feat']; momentum weak (2 independent outlets carried this s"
+    }
+   }
+  }
+ },
+ "canary2": {
+  "pool": "canary2",
+  "now": "2026-09-26T22:45:04.821426+00:00",
+  "events": 279,
+  "eligible_count": 4,
+  "winner": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+  "eligible": [
+   {
+    "event": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+    "family": "viral / meme",
+    "points": 6,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "real_failure"
+    ],
+    "momentum": "STRONG",
+    "outlets": 3,
+    "broad_reason": "unexpected behaviour of an AI system, stated in the headline",
+    "hook": "Claude вместо копии проекта удалил 48 218 файлов за полторы минуты и потом признался, что «что‑то сломал»"
+   },
+   {
+    "event": "OpenAI's agents targeted and infiltrated US government websites",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "security_surprise"
+    ],
+    "momentum": "STRONG",
+    "outlets": 21,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI's agents targeted and infiltrated US government websites"
+   },
+   {
+    "event": "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "ai_feat"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "everyday-life / mass-product / security anchor ('ChatGPT')",
+    "hook": "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days"
+   },
+   {
+    "event": "OpenAI says it paused training, evaluation, and inference with tool-use of its most capable models after a model",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI pauses training of its ‘most capable models’ — As reports of OpenAI's models breaking containment, hacking sites, and generally getting out of control pile up, the company has made the decision"
+   }
+  ],
+  "daily_sequence": [
+   "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+   "OpenAI's agents targeted and infiltrated US government websites",
+   "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days",
+   "OpenAI says it paused training, evaluation, and inference with tool-use of its most capable models after a model"
+  ],
+  "named": {
+   "claude_48000_files": {
+    "title": "Анекдот: **Claude снес разрабу ****4️⃣****8️⃣**** ****0️⃣****0️⃣****0️⃣**** файлов за полторы минуты.**",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 6,
+     "mechanisms": [
+      "unexpected_ai_behaviour",
+      "real_failure"
+     ],
+     "broad": "BROAD",
+     "momentum": "STRONG",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 1,
+     "reason": "current (coverage: 3 independent outlets since 2026-09-26 14:37 UTC); broad (unexpected behaviour of an AI system, stated in the headline); strong mechanisms ['unexpected_ai_behaviour', 'real_failure']; momentum strong ("
+    }
+   },
+   "enigma_astra": {
+    "title": "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 3,
+     "mechanisms": [
+      "ai_feat"
+     ],
+     "broad": "BROAD",
+     "momentum": "WEAK",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 3,
+     "reason": "current (coverage: 2 independent outlets since 2026-09-26 10:00 UTC); broad (everyday-life / mass-product / security anchor ('ChatGPT')); strong mechanisms ['ai_feat']; momentum weak (2 independent outlets carried this s"
+    }
+   }
+  }
+ },
+ "canary3": {
+  "pool": "canary3",
+  "now": "2026-09-26T23:41:20.946837+00:00",
+  "events": 271,
+  "eligible_count": 4,
+  "winner": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+  "eligible": [
+   {
+    "event": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+    "family": "viral / meme",
+    "points": 6,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "real_failure"
+    ],
+    "momentum": "STRONG",
+    "outlets": 3,
+    "broad_reason": "unexpected behaviour of an AI system, stated in the headline",
+    "hook": "Claude вместо копии проекта удалил 48 218 файлов за полторы минуты и потом признался, что «что‑то сломал»"
+   },
+   {
+    "event": "OpenAI's agents targeted and infiltrated US government websites",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "security_surprise"
+    ],
+    "momentum": "STRONG",
+    "outlets": 22,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI's agents targeted and infiltrated US government websites"
+   },
+   {
+    "event": "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "ai_feat"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "everyday-life / mass-product / security anchor ('ChatGPT')",
+    "hook": "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days"
+   },
+   {
+    "event": "OpenAI says it paused training, evaluation, and inference with tool-use of its most capable models after a model",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI pauses training of its ‘most capable models’ — As reports of OpenAI's models breaking containment, hacking sites, and generally getting out of control pile up, the company has made the decision"
+   }
+  ],
+  "daily_sequence": [
+   "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+   "OpenAI's agents targeted and infiltrated US government websites",
+   "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days",
+   "OpenAI says it paused training, evaluation, and inference with tool-use of its most capable models after a model"
+  ],
+  "named": {
+   "claude_48000_files": {
+    "title": "Анекдот: **Claude снес разрабу ****4️⃣****8️⃣**** ****0️⃣****0️⃣****0️⃣**** файлов за полторы минуты.**",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 6,
+     "mechanisms": [
+      "unexpected_ai_behaviour",
+      "real_failure"
+     ],
+     "broad": "BROAD",
+     "momentum": "STRONG",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 1,
+     "reason": "current (coverage: 3 independent outlets since 2026-09-26 14:37 UTC); broad (unexpected behaviour of an AI system, stated in the headline); strong mechanisms ['unexpected_ai_behaviour', 'real_failure']; momentum strong ("
+    }
+   },
+   "enigma_astra": {
+    "title": "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 3,
+     "mechanisms": [
+      "ai_feat"
+     ],
+     "broad": "BROAD",
+     "momentum": "WEAK",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 3,
+     "reason": "current (coverage: 2 independent outlets since 2026-09-26 10:00 UTC); broad (everyday-life / mass-product / security anchor ('ChatGPT')); strong mechanisms ['ai_feat']; momentum weak (2 independent outlets carried this s"
+    }
+   }
+  }
+ },
+ "canary4": {
+  "pool": "canary4",
+  "now": "2026-09-27T00:25:01.636467+00:00",
+  "events": 271,
+  "eligible_count": 4,
+  "winner": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+  "eligible": [
+   {
+    "event": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+    "family": "viral / meme",
+    "points": 6,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "real_failure"
+    ],
+    "momentum": "STRONG",
+    "outlets": 3,
+    "broad_reason": "unexpected behaviour of an AI system, stated in the headline",
+    "hook": "Claude вместо копии проекта удалил 48 218 файлов за полторы минуты и потом признался, что «что‑то сломал»"
+   },
+   {
+    "event": "OpenAI's agents targeted and infiltrated US government websites",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "security_surprise"
+    ],
+    "momentum": "STRONG",
+    "outlets": 23,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI's agents targeted and infiltrated US government websites"
+   },
+   {
+    "event": "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "ai_feat"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "everyday-life / mass-product / security anchor ('ChatGPT')",
+    "hook": "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days"
+   },
+   {
+    "event": "OpenAI says it paused training, evaluation, and inference with tool-use of its most capable models after a model",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI pauses training of its ‘most capable models’ — As reports of OpenAI's models breaking containment, hacking sites, and generally getting out of control pile up, the company has made the decision"
+   }
+  ],
+  "daily_sequence": [
+   "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+   "OpenAI's agents targeted and infiltrated US government websites",
+   "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days",
+   "OpenAI says it paused training, evaluation, and inference with tool-use of its most capable models after a model"
+  ],
+  "named": {
+   "claude_48000_files": {
+    "title": "Анекдот: **Claude снес разрабу ****4️⃣****8️⃣**** ****0️⃣****0️⃣****0️⃣**** файлов за полторы минуты.**",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 6,
+     "mechanisms": [
+      "unexpected_ai_behaviour",
+      "real_failure"
+     ],
+     "broad": "BROAD",
+     "momentum": "STRONG",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 1,
+     "reason": "current (coverage: 3 independent outlets since 2026-09-26 14:37 UTC); broad (unexpected behaviour of an AI system, stated in the headline); strong mechanisms ['unexpected_ai_behaviour', 'real_failure']; momentum strong ("
+    }
+   },
+   "enigma_astra": {
+    "title": "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 3,
+     "mechanisms": [
+      "ai_feat"
+     ],
+     "broad": "BROAD",
+     "momentum": "WEAK",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 3,
+     "reason": "current (coverage: 2 independent outlets since 2026-09-26 10:00 UTC); broad (everyday-life / mass-product / security anchor ('ChatGPT')); strong mechanisms ['ai_feat']; momentum weak (2 independent outlets carried this s"
+    }
+   }
+  }
+ },
+ "canary5": {
+  "pool": "canary5",
+  "now": "2026-09-27T11:14:31.893685+00:00",
+  "events": 246,
+  "eligible_count": 5,
+  "winner": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+  "eligible": [
+   {
+    "event": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+    "family": "viral / meme",
+    "points": 6,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "real_failure"
+    ],
+    "momentum": "STRONG",
+    "outlets": 3,
+    "broad_reason": "unexpected behaviour of an AI system, stated in the headline",
+    "hook": "Claude вместо копии проекта удалил 48 218 файлов за полторы минуты и потом признался, что «что‑то сломал»"
+   },
+   {
+    "event": "OpenAI's agents targeted and infiltrated US government websites",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "security_surprise"
+    ],
+    "momentum": "STRONG",
+    "outlets": 23,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI's agents targeted and infiltrated US government websites"
+   },
+   {
+    "event": "Искусственный интеллект от создателей ChatGPT взломал сайт правительства",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "security_surprise"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "everyday-life / mass-product / security anchor ('ChatGPT')",
+    "hook": "Искусственный интеллект от создателей ChatGPT взломал сайт правительства"
+   },
+   {
+    "event": "⚡️OpenAI экстренно приостановила обучение своих самых мощных ИИ-моделей после ряда инцидентов и взломов, —",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "STRONG",
+    "outlets": 8,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "⚡️OpenAI экстренно приостановила обучение своих самых мощных ИИ-моделей после ряда инцидентов и взломов, —"
+   },
+   {
+    "event": "OpenAI pauses training of its ‘most capable models’",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI pauses training of its ‘most capable models’ — As reports of OpenAI's models breaking containment, hacking sites, and generally getting out of control pile up, the company has made the decision"
+   }
+  ],
+  "daily_sequence": [
+   "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+   "OpenAI's agents targeted and infiltrated US government websites",
+   "Искусственный интеллект от создателей ChatGPT взломал сайт правительства",
+   "⚡️OpenAI экстренно приостановила обучение своих самых мощных ИИ-моделей после ряда инцидентов и взломов, —",
+   "OpenAI pauses training of its ‘most capable models’"
+  ],
+  "named": {
+   "claude_48000_files": {
+    "title": "**Мем дня: Claude удалил разработчику 48000 файлов за полторы минуты.**",
+    "feed_read": "meme_trend",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 6,
+     "mechanisms": [
+      "unexpected_ai_behaviour",
+      "real_failure"
+     ],
+     "broad": "BROAD",
+     "momentum": "STRONG",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 1,
+     "reason": "current (coverage: 3 independent outlets since 2026-09-26 14:37 UTC); broad (unexpected behaviour of an AI system, stated in the headline); strong mechanisms ['unexpected_ai_behaviour', 'real_failure']; momentum strong ("
+    }
+   },
+   "un_bruteforce": {
+    "title": "OpenAI agents tried to bruteforce a UN website's API fields",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": false,
+     "failed_gate": "3_broad_interest",
+     "strength": "NONE",
+     "points": 0,
+     "mechanisms": [],
+     "broad": "NARROW",
+     "momentum": "MODERATE",
+     "actuality": "UNCERTAIN",
+     "rank_among_eligible": null,
+     "reason": "specialist / niche subject ('API') with no real-world consequence in the headline or lead"
+    }
+   }
+  }
+ },
+ "canary6": {
+  "pool": "canary6",
+  "now": "2026-09-27T18:37:57.825368+00:00",
+  "events": 232,
+  "eligible_count": 6,
+  "winner": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+  "eligible": [
+   {
+    "event": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "security_surprise"
+    ],
+    "momentum": "STRONG",
+    "outlets": 24,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI Pauses Training of Latest Models After Agents Probed US Government Sites in Unexpected Ways"
+   },
+   {
+    "event": "Red Dead Redemption 2 запустили на iPhone 18 Pro — c почти 30 FPS",
+    "family": "gadget / device",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "device_launch"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "everyday-life / mass-product / security anchor ('iPhone')",
+    "hook": "Red Dead Redemption 2 запустили на iPhone 18 Pro — c почти 30 FPS"
+   },
+   {
+    "event": "Искусственный интеллект от создателей ChatGPT взломал сайт правительства",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "security_surprise"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "everyday-life / mass-product / security anchor ('ChatGPT')",
+    "hook": "Искусственный интеллект от создателей ChatGPT взломал сайт правительства"
+   },
+   {
+    "event": "⚡️OpenAI экстренно приостановила обучение своих самых мощных ИИ-моделей после ряда инцидентов и взломов, —",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "STRONG",
+    "outlets": 12,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "⚡️OpenAI экстренно приостановила обучение своих самых мощных ИИ-моделей после ряда инцидентов и взломов, —"
+   },
+   {
+    "event": "OpenAI приостановила обучение ИИ-моделей — расследуются десятки тысяч инцидентов с выходом ИИ из-под контроля",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "MODERATE",
+    "outlets": 3,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI приостановила обучение ИИ-моделей — расследуются десятки тысяч инцидентов с выходом ИИ из-под контроля — Выяснилось, что нейросети массово обходят защитные барьеры и предпринимают попытки взлом"
+   },
+   {
+    "event": "Anthropic’s Dario Amodei gets the SNL treatment",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "pop_culture_crossover"
+    ],
+    "momentum": "MODERATE",
+    "outlets": 2,
+    "broad_reason": "a tech moment in mass pop culture",
+    "hook": "Anthropic’s Dario Amodei gets the SNL treatment"
+   }
+  ],
+  "daily_sequence": [
+   "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+   "Red Dead Redemption 2 запустили на iPhone 18 Pro — c почти 30 FPS",
+   "Искусственный интеллект от создателей ChatGPT взломал сайт правительства",
+   "⚡️OpenAI экстренно приостановила обучение своих самых мощных ИИ-моделей после ряда инцидентов и взломов, —",
+   "OpenAI приостановила обучение ИИ-моделей — расследуются десятки тысяч инцидентов с выходом ИИ из-под контроля"
+  ],
+  "named": {
+   "gemini_gems_skills": {
+    "title": "Gemini app replacing Gems with skills in November",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": false,
+     "failed_gate": "4_inherent_virality",
+     "strength": "NONE",
+     "points": 1,
+     "mechanisms": [],
+     "broad": "BROAD",
+     "momentum": "NONE",
+     "actuality": "UNCERTAIN",
+     "rank_among_eligible": null,
+     "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+    }
+   },
+   "amodei_snl": {
+    "title": "Anthropic’s Dario Amodei gets the SNL treatment",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 2,
+     "mechanisms": [
+      "pop_culture_crossover"
+     ],
+     "broad": "BROAD",
+     "momentum": "MODERATE",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 6,
+     "reason": "current (coverage: 2 independent outlets since 2026-09-27 16:30 UTC); broad (a tech moment in mass pop culture); strong mechanisms ['pop_culture_crossover']; momentum moderate (2 independent outlets carried this same eve"
+    }
+   },
+   "un_bruteforce": {
+    "title": "OpenAI agents tried to ‘bruteforce’ a UN website",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 3,
+     "mechanisms": [
+      "unexpected_ai_behaviour",
+      "security_surprise"
+     ],
+     "broad": "BROAD",
+     "momentum": "STRONG",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 1,
+     "reason": "current (text: the behaviour is dated 'this summer'; the disclosure ('Researchers:') is new - first covered 2026-09-25 23:16 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['un"
+    }
+   }
+  }
+ },
+ "canary7": {
+  "pool": "canary7",
+  "now": "2026-09-27T19:36:41.21566+00:00",
+  "events": 240,
+  "eligible_count": 6,
+  "winner": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+  "eligible": [
+   {
+    "event": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "security_surprise"
+    ],
+    "momentum": "STRONG",
+    "outlets": 24,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI Pauses Training of Latest Models After Agents Probed US Government Sites in Unexpected Ways"
+   },
+   {
+    "event": "Red Dead Redemption 2 запустили на iPhone 18 Pro — c почти 30 FPS",
+    "family": "gadget / device",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "device_launch"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "everyday-life / mass-product / security anchor ('iPhone')",
+    "hook": "Red Dead Redemption 2 запустили на iPhone 18 Pro — c почти 30 FPS"
+   },
+   {
+    "event": "Искусственный интеллект от создателей ChatGPT взломал сайт правительства",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "security_surprise"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "everyday-life / mass-product / security anchor ('ChatGPT')",
+    "hook": "Искусственный интеллект от создателей ChatGPT взломал сайт правительства"
+   },
+   {
+    "event": "⚡️OpenAI экстренно приостановила обучение своих самых мощных ИИ-моделей после ряда инцидентов и взломов, —",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "STRONG",
+    "outlets": 13,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "⚡️OpenAI экстренно приостановила обучение своих самых мощных ИИ-моделей после ряда инцидентов и взломов, —"
+   },
+   {
+    "event": "OpenAI приостановила обучение ИИ-моделей — расследуются десятки тысяч инцидентов с выходом ИИ из-под контроля",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "MODERATE",
+    "outlets": 3,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI приостановила обучение ИИ-моделей — расследуются десятки тысяч инцидентов с выходом ИИ из-под контроля — Выяснилось, что нейросети массово обходят защитные барьеры и предпринимают попытки взлом"
+   },
+   {
+    "event": "Anthropic’s Dario Amodei gets the SNL treatment",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "pop_culture_crossover"
+    ],
+    "momentum": "MODERATE",
+    "outlets": 2,
+    "broad_reason": "a tech moment in mass pop culture",
+    "hook": "Anthropic’s Dario Amodei gets the SNL treatment"
+   }
+  ],
+  "daily_sequence": [
+   "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+   "Red Dead Redemption 2 запустили на iPhone 18 Pro — c почти 30 FPS",
+   "Искусственный интеллект от создателей ChatGPT взломал сайт правительства",
+   "⚡️OpenAI экстренно приостановила обучение своих самых мощных ИИ-моделей после ряда инцидентов и взломов, —",
+   "OpenAI приостановила обучение ИИ-моделей — расследуются десятки тысяч инцидентов с выходом ИИ из-под контроля"
+  ],
+  "named": {
+   "gemini_gems_skills": {
+    "title": "Gemini app replacing Gems with skills in November",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": false,
+     "failed_gate": "4_inherent_virality",
+     "strength": "NONE",
+     "points": 1,
+     "mechanisms": [],
+     "broad": "BROAD",
+     "momentum": "NONE",
+     "actuality": "UNCERTAIN",
+     "rank_among_eligible": null,
+     "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+    }
+   },
+   "amodei_snl": {
+    "title": "Anthropic’s Dario Amodei gets the SNL treatment",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 2,
+     "mechanisms": [
+      "pop_culture_crossover"
+     ],
+     "broad": "BROAD",
+     "momentum": "MODERATE",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 6,
+     "reason": "current (coverage: 2 independent outlets since 2026-09-27 16:30 UTC); broad (a tech moment in mass pop culture); strong mechanisms ['pop_culture_crossover']; momentum moderate (2 independent outlets carried this same eve"
+    }
+   },
+   "un_bruteforce": {
+    "title": "OpenAI agents tried to ‘bruteforce’ a UN website",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 3,
+     "mechanisms": [
+      "unexpected_ai_behaviour",
+      "security_surprise"
+     ],
+     "broad": "BROAD",
+     "momentum": "STRONG",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 1,
+     "reason": "current (text: the behaviour is dated 'this summer'; the disclosure ('Researchers:') is new - first covered 2026-09-25 23:16 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['un"
+    }
+   }
+  }
+ },
+ "canary8": {
+  "pool": "canary8",
+  "now": "2026-09-27T21:27:34.410547+00:00",
+  "events": 247,
+  "eligible_count": 6,
+  "winner": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+  "eligible": [
+   {
+    "event": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "security_surprise"
+    ],
+    "momentum": "STRONG",
+    "outlets": 24,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI Pauses Training of Latest Models After Agents Probed US Government Sites in Unexpected Ways"
+   },
+   {
+    "event": "Red Dead Redemption 2 запустили на iPhone 18 Pro — c почти 30 FPS",
+    "family": "gadget / device",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "device_launch"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "everyday-life / mass-product / security anchor ('iPhone')",
+    "hook": "Red Dead Redemption 2 запустили на iPhone 18 Pro — c почти 30 FPS"
+   },
+   {
+    "event": "ИИ-детектор жизни обманули на 100% за 150 мутаций: эксперимент с цифровыми организмами поставил под вопрос поиск",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "unexpected behaviour of an AI system, stated in the headline",
+    "hook": "ИИ-детектор жизни обманули на 100% за 150 мутаций: эксперимент с цифровыми организмами поставил под вопрос поиск"
+   },
+   {
+    "event": "⚡️OpenAI экстренно приостановила обучение своих самых мощных ИИ-моделей после ряда инцидентов и взломов, —",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "STRONG",
+    "outlets": 13,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "⚡️OpenAI экстренно приостановила обучение своих самых мощных ИИ-моделей после ряда инцидентов и взломов, —"
+   },
+   {
+    "event": "OpenAI приостановила обучение ИИ-моделей — расследуются десятки тысяч инцидентов с выходом ИИ из-под контроля",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "MODERATE",
+    "outlets": 3,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI приостановила обучение ИИ-моделей — расследуются десятки тысяч инцидентов с выходом ИИ из-под контроля — Выяснилось, что нейросети массово обходят защитные барьеры и предпринимают попытки взлом"
+   },
+   {
+    "event": "Anthropic’s Dario Amodei gets the SNL treatment",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "pop_culture_crossover"
+    ],
+    "momentum": "MODERATE",
+    "outlets": 2,
+    "broad_reason": "a tech moment in mass pop culture",
+    "hook": "Anthropic’s Dario Amodei gets the SNL treatment"
+   }
+  ],
+  "daily_sequence": [
+   "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+   "Red Dead Redemption 2 запустили на iPhone 18 Pro — c почти 30 FPS",
+   "ИИ-детектор жизни обманули на 100% за 150 мутаций: эксперимент с цифровыми организмами поставил под вопрос поиск",
+   "⚡️OpenAI экстренно приостановила обучение своих самых мощных ИИ-моделей после ряда инцидентов и взломов, —",
+   "OpenAI приостановила обучение ИИ-моделей — расследуются десятки тысяч инцидентов с выходом ИИ из-под контроля"
+  ],
+  "named": {
+   "gemini_gems_skills": {
+    "title": "Gemini app replacing Gems with skills in November",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": false,
+     "failed_gate": "4_inherent_virality",
+     "strength": "NONE",
+     "points": 1,
+     "mechanisms": [],
+     "broad": "BROAD",
+     "momentum": "NONE",
+     "actuality": "UNCERTAIN",
+     "rank_among_eligible": null,
+     "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+    }
+   },
+   "amodei_snl": {
+    "title": "Anthropic’s Dario Amodei gets the SNL treatment",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 2,
+     "mechanisms": [
+      "pop_culture_crossover"
+     ],
+     "broad": "BROAD",
+     "momentum": "MODERATE",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 6,
+     "reason": "current (coverage: 2 independent outlets since 2026-09-27 16:30 UTC); broad (a tech moment in mass pop culture); strong mechanisms ['pop_culture_crossover']; momentum moderate (2 independent outlets carried this same eve"
+    }
+   },
+   "un_bruteforce": {
+    "title": "OpenAI agents tried to ‘bruteforce’ a UN website",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 3,
+     "mechanisms": [
+      "unexpected_ai_behaviour",
+      "security_surprise"
+     ],
+     "broad": "BROAD",
+     "momentum": "STRONG",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 1,
+     "reason": "current (text: the behaviour is dated 'this summer'; the disclosure ('Researchers:') is new - first covered 2026-09-25 23:16 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['un"
+    }
+   }
+  }
+ },
+ "canary9": {
+  "pool": "canary9",
+  "now": "2026-09-28T10:47:35.816364+00:00",
+  "events": 356,
+  "eligible_count": 5,
+  "winner": "OpenAI agents tried to ‘bruteforce’ a UN website",
+  "eligible": [
+   {
+    "event": "OpenAI agents tried to ‘bruteforce’ a UN website",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "security_surprise"
+    ],
+    "momentum": "STRONG",
+    "outlets": 16,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI pauses training of latest models after AI agents probed U.S. government sites in unexpected ways"
+   },
+   {
+    "event": "ИИ-детектор жизни обманули на 100% за 150 мутаций: эксперимент с цифровыми организмами поставил под вопрос поиск",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "unexpected behaviour of an AI system, stated in the headline",
+    "hook": "ИИ-детектор жизни обманули на 100% за 150 мутаций: эксперимент с цифровыми организмами поставил под вопрос поиск"
+   },
+   {
+    "event": "OpenAI приостановила обучение ИИ-моделей — расследуются десятки тысяч инцидентов с выходом ИИ из-под контроля",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "STRONG",
+    "outlets": 11,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI приостановила обучение ИИ-моделей — расследуются десятки тысяч инцидентов с выходом ИИ из-под контроля — Выяснилось, что нейросети массово обходят защитные барьеры и предпринимают попытки взлом"
+   },
+   {
+    "event": "Anthropic’s Dario Amodei gets the SNL treatment",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "pop_culture_crossover"
+    ],
+    "momentum": "MODERATE",
+    "outlets": 2,
+    "broad_reason": "a tech moment in mass pop culture",
+    "hook": "Anthropic’s Dario Amodei gets the SNL treatment"
+   },
+   {
+    "event": "Спутниковую мобильную связь Starlink mobile запустили в Казахстане",
+    "family": "gadget / device",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "device_launch"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "everyday-life / mass-product / security anchor ('Starlink')",
+    "hook": "Спутниковую мобильную связь Starlink mobile запустили в Казахстане — Beeline Казахстан совместно со Starlink Mobile запустил сервис Direct to Cell, который позволяет совместимым смартфонам напрямую по"
+   }
+  ],
+  "daily_sequence": [
+   "OpenAI agents tried to ‘bruteforce’ a UN website",
+   "ИИ-детектор жизни обманули на 100% за 150 мутаций: эксперимент с цифровыми организмами поставил под вопрос поиск",
+   "OpenAI приостановила обучение ИИ-моделей — расследуются десятки тысяч инцидентов с выходом ИИ из-под контроля",
+   "Anthropic’s Dario Amodei gets the SNL treatment",
+   "Спутниковую мобильную связь Starlink mobile запустили в Казахстане"
+  ],
+  "named": {
+   "blackjack_collusion": {
+    "title": "AI Agents Secretly Colluded to Count Cards in Blackjack Experiment - Casino.org",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": false,
+     "failed_gate": "5_momentum",
+     "strength": "STRONG",
+     "points": 2,
+     "mechanisms": [
+      "unexpected_ai_behaviour"
+     ],
+     "broad": "BROAD",
+     "momentum": "NONE",
+     "actuality": "UNCERTAIN",
+     "rank_among_eligible": null,
+     "reason": "single source, no momentum, and nothing in the text dates it as current (UNCERTAIN: article timestamp only - the event date is not stated and no independent source corroborates it)"
+    }
+   },
+   "gemini_gems_skills": {
+    "title": "Gemini app replacing Gems with skills in November",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": false,
+     "failed_gate": "4_inherent_virality",
+     "strength": "NONE",
+     "points": 1,
+     "mechanisms": [],
+     "broad": "BROAD",
+     "momentum": "NONE",
+     "actuality": "UNCERTAIN",
+     "rank_among_eligible": null,
+     "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+    }
+   },
+   "amodei_snl": {
+    "title": "SNL Weekend Update: Anthropic CEO Dario Amodei on A.I.'S Threat to Humanity [video]",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 2,
+     "mechanisms": [
+      "pop_culture_crossover"
+     ],
+     "broad": "BROAD",
+     "momentum": "MODERATE",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 4,
+     "reason": "current (coverage: 2 independent outlets since 2026-09-27 16:30 UTC); broad (a tech moment in mass pop culture); strong mechanisms ['pop_culture_crossover']; momentum moderate (2 independent outlets carried this same eve"
+    }
+   },
+   "un_bruteforce": {
+    "title": "OpenAI agents tried to ‘bruteforce’ a UN website",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 3,
+     "mechanisms": [
+      "unexpected_ai_behaviour",
+      "security_surprise"
+     ],
+     "broad": "BROAD",
+     "momentum": "STRONG",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 1,
+     "reason": "current (coverage: 16 independent outlets since 2026-09-26 05:56 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour', 'security_surprise']; momentum stron"
+    }
+   },
+   "canary10_procedural": {
+    "title": "Anthropic will not appear at Senate inquiry into AI and datacentres amid fallout from OpenAI hack",
+    "feed_read": "meme_trend",
+    "verdict": {
+     "eligible": false,
+     "failed_gate": "3_broad_interest",
+     "strength": "STRONG",
+     "points": 2,
+     "mechanisms": [
+      "unexpected_ai_behaviour"
+     ],
+     "broad": "NARROW",
+     "momentum": "STRONG",
+     "actuality": "CURRENT",
+     "rank_among_eligible": null,
+     "reason": "procedural event ('вызвали в парламент') with no real-world consequence - a famous company or institution named in it is not, by itself, a reason for a reader to care"
+    }
+   }
+  }
+ },
+ "canary10": {
+  "pool": "canary10",
+  "now": "2026-09-28T11:41:07.564855+00:00",
+  "events": 373,
+  "eligible_count": 6,
+  "winner": "OpenAI agents tried to ‘bruteforce’ a UN website",
+  "eligible": [
+   {
+    "event": "OpenAI agents tried to ‘bruteforce’ a UN website",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour",
+     "security_surprise"
+    ],
+    "momentum": "STRONG",
+    "outlets": 16,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI pauses training of latest models after AI agents probed U.S. government sites in unexpected ways"
+   },
+   {
+    "event": "ИИ-детектор жизни обманули на 100% за 150 мутаций: эксперимент с цифровыми организмами поставил под вопрос поиск",
+    "family": "viral / meme",
+    "points": 3,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "unexpected behaviour of an AI system, stated in the headline",
+    "hook": "ИИ-детектор жизни обманули на 100% за 150 мутаций: эксперимент с цифровыми организмами поставил под вопрос поиск"
+   },
+   {
+    "event": "Работа на заводе тоже ВСЁ: корейцы из стартапа Diden Robotics запилили робота-паука, который занимается сваркой 😬",
+    "family": "gadget / device",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "device_novelty"
+    ],
+    "momentum": "STRONG",
+    "outlets": 1,
+    "broad_reason": "an unusual device and what it does",
+    "hook": "Работа на заводе тоже ВСЁ: корейцы из стартапа Diden Robotics запилили робота-паука, который занимается сваркой 😬"
+   },
+   {
+    "event": "OpenAI приостановила обучение ИИ-моделей — расследуются десятки тысяч инцидентов с выходом ИИ из-под контроля",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "unexpected_ai_behaviour"
+    ],
+    "momentum": "STRONG",
+    "outlets": 11,
+    "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+    "hook": "OpenAI приостановила обучение ИИ-моделей — расследуются десятки тысяч инцидентов с выходом ИИ из-под контроля — Выяснилось, что нейросети массово обходят защитные барьеры и предпринимают попытки взлом"
+   },
+   {
+    "event": "Anthropic’s Dario Amodei gets the SNL treatment",
+    "family": "viral / meme",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "pop_culture_crossover"
+    ],
+    "momentum": "MODERATE",
+    "outlets": 2,
+    "broad_reason": "a tech moment in mass pop culture",
+    "hook": "Anthropic’s Dario Amodei gets the SNL treatment"
+   },
+   {
+    "event": "Спутниковую мобильную связь Starlink mobile запустили в Казахстане",
+    "family": "gadget / device",
+    "points": 2,
+    "strength": "STRONG",
+    "mechanisms": [
+     "device_launch"
+    ],
+    "momentum": "WEAK",
+    "outlets": 2,
+    "broad_reason": "everyday-life / mass-product / security anchor ('Starlink')",
+    "hook": "Спутниковую мобильную связь Starlink mobile запустили в Казахстане — Beeline Казахстан совместно со Starlink Mobile запустил сервис Direct to Cell, который позволяет совместимым смартфонам напрямую по"
+   }
+  ],
+  "daily_sequence": [
+   "OpenAI agents tried to ‘bruteforce’ a UN website",
+   "ИИ-детектор жизни обманули на 100% за 150 мутаций: эксперимент с цифровыми организмами поставил под вопрос поиск",
+   "Работа на заводе тоже ВСЁ: корейцы из стартапа Diden Robotics запилили робота-паука, который занимается сваркой 😬",
+   "OpenAI приостановила обучение ИИ-моделей — расследуются десятки тысяч инцидентов с выходом ИИ из-под контроля",
+   "Anthropic’s Dario Amodei gets the SNL treatment"
+  ],
+  "named": {
+   "blackjack_collusion": {
+    "title": "AI Agents Secretly Colluded to Count Cards in Blackjack Experiment - Casino.org",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": false,
+     "failed_gate": "5_momentum",
+     "strength": "STRONG",
+     "points": 2,
+     "mechanisms": [
+      "unexpected_ai_behaviour"
+     ],
+     "broad": "BROAD",
+     "momentum": "NONE",
+     "actuality": "UNCERTAIN",
+     "rank_among_eligible": null,
+     "reason": "single source, no momentum, and nothing in the text dates it as current (UNCERTAIN: article timestamp only - the event date is not stated and no independent source corroborates it)"
+    }
+   },
+   "microsoft_17_trillion": {
+    "title": "Teenager hacks open Microsoft database with 17 trillion total rows and 25,000 user accounts",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": false,
+     "failed_gate": "5_momentum",
+     "strength": "STRONG",
+     "points": 3,
+     "mechanisms": [
+      "security_surprise"
+     ],
+     "broad": "BROAD",
+     "momentum": "NONE",
+     "actuality": "UNCERTAIN",
+     "rank_among_eligible": null,
+     "reason": "single source, no momentum, and nothing in the text dates it as current (UNCERTAIN: article timestamp only - the event date is not stated and no independent source corroborates it)"
+    }
+   },
+   "gemini_gems_skills": {
+    "title": "Gemini app replacing Gems with skills in November",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": false,
+     "failed_gate": "4_inherent_virality",
+     "strength": "NONE",
+     "points": 1,
+     "mechanisms": [],
+     "broad": "BROAD",
+     "momentum": "NONE",
+     "actuality": "UNCERTAIN",
+     "rank_among_eligible": null,
+     "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+    }
+   },
+   "robot_spider_welding": {
+    "title": "**Работа на заводе тоже ВСЁ**: корейцы из стартапа Diden Robotics запилили робота-паука, который занимается сваркой 😬",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 2,
+     "mechanisms": [
+      "device_novelty"
+     ],
+     "broad": "BROAD",
+     "momentum": "STRONG",
+     "actuality": "UNCERTAIN",
+     "rank_among_eligible": 3,
+     "reason": "current (article timestamp only - the event date is not stated and no independent source corroborates it); broad (an unusual device and what it does); strong mechanisms ['device_novelty']; momentum strong (132 Telegram f"
+    }
+   },
+   "amodei_snl": {
+    "title": "Anthropic’s Dario Amodei gets the SNL treatment",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 2,
+     "mechanisms": [
+      "pop_culture_crossover"
+     ],
+     "broad": "BROAD",
+     "momentum": "MODERATE",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 5,
+     "reason": "current (coverage: 2 independent outlets since 2026-09-27 16:30 UTC); broad (a tech moment in mass pop culture); strong mechanisms ['pop_culture_crossover']; momentum moderate (2 independent outlets carried this same eve"
+    }
+   },
+   "un_bruteforce": {
+    "title": "OpenAI agents tried to ‘bruteforce’ a UN website",
+    "feed_read": "weekly_news",
+    "verdict": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "points": 3,
+     "mechanisms": [
+      "unexpected_ai_behaviour",
+      "security_surprise"
+     ],
+     "broad": "BROAD",
+     "momentum": "STRONG",
+     "actuality": "CURRENT",
+     "rank_among_eligible": 1,
+     "reason": "current (coverage: 16 independent outlets since 2026-09-26 05:56 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour', 'security_surprise']; momentum stron"
+    }
+   },
+   "canary10_procedural": {
+    "title": "Anthropic will not appear at Senate inquiry into AI and datacentres amid fallout from OpenAI hack",
+    "feed_read": "meme_trend",
+    "verdict": {
+     "eligible": false,
+     "failed_gate": "3_broad_interest",
+     "strength": "STRONG",
+     "points": 2,
+     "mechanisms": [
+      "unexpected_ai_behaviour"
+     ],
+     "broad": "NARROW",
+     "momentum": "STRONG",
+     "actuality": "CURRENT",
+     "rank_among_eligible": null,
+     "reason": "procedural event ('вызвали в парламент') with no real-world consequence - a famous company or institution named in it is not, by itself, a reason for a reader to care"
+    }
+   }
+  }
+ }
+}
