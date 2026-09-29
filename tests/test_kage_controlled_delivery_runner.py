@@ -18,6 +18,10 @@ def test_runner_is_bound_to_one_event_and_never_invokes_natural_selection() -> N
     assert "_select_eligible_events" not in source
     assert "send_to_editorial_destination" not in source
     assert "bot.send_photo(" not in source
+    assert "async def run_delivery_only_retry" in source
+    assert "assemble_ai_integration_layer" not in source.split(
+        "async def run_delivery_only_retry", 1,
+    )[1].split("async def main", 1)[0]
 
 
 def test_visual_loader_accepts_only_the_frozen_founder_reviewed_artifact() -> None:

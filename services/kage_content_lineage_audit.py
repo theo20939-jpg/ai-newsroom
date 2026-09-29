@@ -142,6 +142,27 @@ async def update_attempt_audit(
     return row
 
 
+async def archive_publication_outcome_for_retry(
+    session: AsyncSession, *, task_id: UUID, outcome: Mapping[str, Any],
+    authorization: Mapping[str, Any],
+) -> None:
+    """Preserve one failed transport outcome before an explicitly authorized retry."""
+    row = await session.get(KageContentLineageAudit, task_id)
+    if row is None:
+        raise ValueError(f"lineage audit missing for retry attempt {task_id}")
+    audit = dict(row.audit or {})
+    history = list(audit.get("publication_outcome_history") or [])
+    history.append(bounded_audit(dict(outcome)))
+    authorizations = list(audit.get("publication_retry_authorizations") or [])
+    authorizations.append(bounded_audit(dict(authorization)))
+    audit["publication_outcome_history"] = history
+    audit["publication_retry_authorizations"] = authorizations
+    audit["publication_outcome"] = None
+    row.audit = bounded_audit(audit)
+    row.updated_at = datetime.now(timezone.utc)
+    await session.flush()
+
+
 async def link_draft(session: AsyncSession, *, task_id: UUID, draft_id: UUID) -> None:
     row = await session.get(KageContentLineageAudit, task_id)
     if row is None:

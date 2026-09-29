@@ -21,12 +21,13 @@ from uuid import UUID, uuid5, NAMESPACE_URL
 from aiogram.types import BufferedInputFile
 from PIL import Image
 from redis.asyncio import Redis
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from bot.loader import create_bot
 from core.config import settings
 from core.logging import setup_logging
+from database.models.ai_execution import AIExecution
 from database.models.content_draft import ContentDraft
 from database.models.content_draft_story_link import ContentDraftStoryLink
 from database.models.editorial_task import EditorialTask, TaskPriority, TaskStatus
@@ -39,11 +40,14 @@ from integrations.llm_gateway.boot import assemble_ai_integration_layer
 from integrations.llm_gateway.models.catalog import build_model_registry
 from integrations.prompts.file_repository import FilePromptRepository
 from schemas.editorial_route import EditorialDestination
+from schemas.content_draft import ContentDraftRead
+from bot.keyboards.image_preview import build_editorial_send_keyboard
 from scripts._canary_delivery_cap import HardDeliveryCap, wrap_bot_with_hard_cap
-from scripts.run_content_generation import run_content_generation_for_event
-from services.kage_delivery_truth import event_publication_state
+from scripts.run_content_generation import ContentGenerationOutcome, run_content_generation_for_event
+from services.editorial_treatment import STANDARD
+from services.kage_delivery_truth import authorize_failed_transport_retry, event_publication_state
 from services.kage_editorial_usefulness import evaluate_editorial_usefulness
-from services.kage_publication_worker_gate import evaluate_worker_publication_gate
+from services.kage_publication_worker_gate import WorkerGateResult, evaluate_worker_publication_gate
 from services.kage_telegram_canary_envelope import (
     IMAGE_VISUAL_STAGES,
     TelegramCanaryEnvelope,
@@ -51,17 +55,25 @@ from services.kage_telegram_canary_envelope import (
     validate_request_envelope_contracts,
 )
 from services.kage_content_lineage_audit import reconstruct_lineage
-from services.news_telegram_presentation import build_ninja_pulse_footer_html
+from services.news_telegram_presentation import (
+    build_ninja_pulse_footer_html,
+    render_v81_news_card_html,
+)
 from services.pricing_catalog import ModelRegistryPricingCatalog
 from services.telegram_routing import RouteTarget, resolve_route
 from worker.content_cycle import AcceptedVisualArtifact, run_content_cycle
 
 EVENT_ID = UUID("db748bb0-b41b-4a21-9679-7bd3262a749c")
+STORY_ID = UUID("12ded5ee-0f8c-54f7-9e62-b6169114198b")
+TASK_ID = UUID("7c3586aa-76a3-41c2-ba51-44a8c124a73b")
+DRAFT_ID = UUID("48b5d317-bb43-4c7b-8e6c-16b5569bd445")
 EXPECTED_ROUTE = RouteTarget(chat_id=-1004297182444, topic_id=2)
 EXPECTED_VISUAL_SHA256 = "d9bbbfb914b79b9c994865d3bb27bc75b5ea03223a51c45899a89166fd0d4e8c"
 EXPECTED_VISUAL_SIZE = (1536, 1024)
 SCRATCH_DATABASE = "ai_newsroom_kage_controlled_2865"
 FORBIDDEN_BODY = "OpenAI приостановила его."
+EXPECTED_HEADLINE = "OpenAI приостановила обучение последних моделей"
+EXPECTED_BODY = "По данным NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США."
 PROMPTS_ROOT = Path(__file__).resolve().parents[1] / "prompts"
 FIXTURE_PATH = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "kage_lineage_msg2865.json"
 VISUAL_PATH = (
@@ -90,6 +102,7 @@ def _configure() -> None:
     settings.meme_opportunity_mode = "off"
     settings.telegram_story_reply_mode = "off"
     settings.telegram_editorial_gate_enabled = False
+    settings.telegram_channel_director_shadow_enabled = False
     settings.story_memory_mode = "shadow"
     settings.article_acquisition_mode = "off"
     settings.image_intelligence_mode = "off"
@@ -236,6 +249,113 @@ def _copy_body(copy: dict[str, Any]) -> str:
     body = str(copy.get("main_body") or "")
     ending = copy.get("ending")
     return "\n\n".join((body, ending.strip())) if isinstance(ending, str) and ending.strip() else body
+
+
+async def _load_delivery_retry_state(
+    factory: async_sessionmaker[AsyncSession], visual: AcceptedVisualArtifact,
+) -> tuple[ContentGenerationOutcome, WorkerGateResult, dict[str, Any]]:
+    """Rehydrate the persisted result without constructing any provider dependency."""
+    async with factory() as session:
+        task = await session.get(EditorialTask, TASK_ID)
+        draft = await session.get(ContentDraft, DRAFT_ID)
+        link = await session.get(ContentDraftStoryLink, DRAFT_ID)
+        event = await session.get(NewsEvent, EVENT_ID)
+        lineage = await reconstruct_lineage(session, TASK_ID)
+        receipt_count = await session.scalar(
+            select(func.count()).select_from(StoryTelegramDelivery).where(
+                StoryTelegramDelivery.content_draft_id == DRAFT_ID,
+            )
+        )
+        publication = await event_publication_state(session, EVENT_ID)
+        ai_execution_count = await session.scalar(select(func.count()).select_from(AIExecution))
+    if task is None or task.event_id != EVENT_ID:
+        raise RuntimeError("controlled retry task/event mismatch")
+    if draft is None or draft.task_id != TASK_ID or draft.id != DRAFT_ID:
+        raise RuntimeError("controlled retry draft/task mismatch")
+    if link is None or link.story_id != STORY_ID or link.source_event_id != EVENT_ID:
+        raise RuntimeError("controlled retry story relation mismatch")
+    if event is None:
+        raise RuntimeError("controlled retry event missing")
+    if draft.title != EXPECTED_HEADLINE or draft.body != EXPECTED_BODY:
+        raise RuntimeError("persisted controlled copy changed")
+    if receipt_count != 0 or publication["already_delivered"]:
+        raise RuntimeError("successful delivery already exists; retry refused")
+    terminal = (task.workflow or {}).get("publication_outcome")
+    if not isinstance(terminal, dict) or terminal.get("status") != "VISUAL_HOLD" \
+            or terminal.get("reason") != "media_send_failed":
+        raise RuntimeError("controlled retry requires the persisted media_send_failed VISUAL_HOLD")
+    if lineage is None:
+        raise RuntimeError("controlled retry lineage missing")
+    step_results = {
+        row.get("step_name"): row.get("result")
+        for row in (task.workflow or {}).get("step_results", [])
+        if isinstance(row, dict) and row.get("status") == "SUCCESS" and isinstance(row.get("result"), dict)
+    }
+    required_steps = {"research", "intelligence", "copywriting", "quality"}
+    if not required_steps.issubset(step_results):
+        raise RuntimeError("persisted controlled stage outputs incomplete")
+    copy = step_results["copywriting"]
+    if copy.get("title") != EXPECTED_HEADLINE or _copy_body(copy) != EXPECTED_BODY:
+        raise RuntimeError("persisted structured copy changed")
+    factual_audit = lineage.get("publication_factual_gate")
+    structured = factual_audit.get("structured_result") if isinstance(factual_audit, dict) else None
+    if not isinstance(structured, dict) or structured.get("FACTUAL_SAFETY") != "PASS" \
+            or structured.get("HEADLINE_SAFETY") != "PASS" \
+            or structured.get("BODY_SAFETY") != "PASS" \
+            or structured.get("UNSUPPORTED_CLAIMS") != []:
+        raise RuntimeError("persisted factual gate is not an exact zero-claim PASS")
+    caption = render_v81_news_card_html(
+        copy, treatment=STANDARD, include_ninja_pulse_footer=True,
+    )
+    footer = build_ninja_pulse_footer_html()
+    keyboard = build_editorial_send_keyboard(event.url, event.id, label="🔗 Источник")
+    buttons = _buttons(keyboard)
+    if not caption.endswith(footer) or len(caption.encode("utf-16-le")) // 2 > 1024:
+        raise RuntimeError("persisted controlled caption failed footer/length preflight")
+    if not any(button["text"] == "🔗 Источник" and button["url"] for button in buttons):
+        raise RuntimeError("persisted controlled source button missing")
+    if visual.sha256 != EXPECTED_VISUAL_SHA256:
+        raise RuntimeError("accepted controlled visual changed")
+    quality = step_results["quality"]
+    fact_safety = quality.get("fact_safety") if isinstance(quality, dict) else None
+    outcome = ContentGenerationOutcome(
+        task_id=TASK_ID,
+        workflow_status="COMPLETED",
+        content_draft=ContentDraftRead.model_validate(draft, from_attributes=True),
+        fact_safety_status=fact_safety.get("status") if isinstance(fact_safety, dict) else None,
+        copywriting_output=copy,
+        research_output=step_results["research"],
+        intelligence_output=step_results["intelligence"],
+        quality_output=quality,
+    )
+    gate = WorkerGateResult(
+        publication_block=False,
+        technical_block=False,
+        factual_block=False,
+        guard_block=False,
+        record={
+            "final_publication_block": False,
+            "unsupported_claim_count": 0,
+            "reused_persisted_gate": True,
+        },
+        audit_payload=factual_audit,
+    )
+    return outcome, gate, {
+        "task_id": str(TASK_ID),
+        "draft_id": str(DRAFT_ID),
+        "story_id": str(STORY_ID),
+        "event_id": str(EVENT_ID),
+        "headline": draft.title,
+        "body": draft.body,
+        "draft_status": draft.status,
+        "caption": caption,
+        "caption_utf16_units": len(caption.encode("utf-16-le")) // 2,
+        "buttons": buttons,
+        "receipt_count": receipt_count,
+        "publication_state": publication,
+        "previous_publication_outcome": terminal,
+        "ai_execution_count": ai_execution_count,
+    }
 
 
 def _buttons(markup: Any) -> list[dict[str, str | None]]:
@@ -493,17 +613,119 @@ async def run_once() -> dict[str, Any]:
         await engine.dispose()
 
 
+async def run_delivery_only_retry() -> dict[str, Any]:
+    """Retry only the persisted transport payload; never construct or call a provider."""
+    _configure()
+    validate_request_envelope_contracts()
+    visual = _load_visual()
+    route = resolve_route(EditorialDestination.NEWS)
+    if route != EXPECTED_ROUTE:
+        raise RuntimeError(f"NEWS route mismatch: {route!r}")
+    engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    bot = None
+    try:
+        async with factory() as session:
+            publication_before = await event_publication_state(session, EVENT_ID)
+            ai_count_before = await session.scalar(select(func.count()).select_from(AIExecution))
+        if publication_before["already_delivered"]:
+            return {
+                "status": "DUPLICATE_BLOCKED",
+                "block_point": "event_publication_state_before_retry_authorization",
+                "event_id": str(EVENT_ID),
+                "publication_state": publication_before,
+                "provider_calls": 0,
+                "telegram_api_send_attempts": 0,
+                "confirmed_telegram_deliveries": 0,
+                "image_generation_calls": 0,
+            }
+        outcome, gate, preflight = await _load_delivery_retry_state(factory, visual)
+        async with factory() as session:
+            authorization = await authorize_failed_transport_retry(
+                session,
+                task_id=TASK_ID,
+                draft_id=DRAFT_ID,
+                authorized_by="founder_manual_topic_inspection",
+            )
+            await session.commit()
+
+        envelope = TelegramCanaryEnvelope()
+        bot = create_bot()
+        delivery_cap, sends = _instrument_bot(bot, visual)
+        with telegram_canary_envelope(envelope):
+            cycle = await run_content_cycle(
+                None,  # provider registry deliberately absent in delivery-only mode
+                bot,
+                session_factory=factory,
+                event_ids_override=[EVENT_ID],
+                precomputed_outcomes={EVENT_ID: outcome},
+                accepted_visuals={EVENT_ID: visual},
+                precomputed_publication_gates={TASK_ID: gate},
+                gate_gateway=None,
+                gate_prompt_repository=None,
+            )
+        if delivery_cap.attempted != 1 or len(sends) != 1 or sends[0].get("status") != "accepted":
+            raise RuntimeError(f"delivery-only retry was not one confirmed send_photo: {sends}")
+        if cycle.notified != 1:
+            raise RuntimeError("normal content cycle did not confirm one retry notification")
+        if envelope.dispatch_records:
+            raise RuntimeError("provider dispatch occurred during delivery-only retry")
+        persisted = await _persisted_result(factory, task_id=TASK_ID, draft_id=DRAFT_ID)
+        async with factory() as session:
+            ai_count_after = await session.scalar(select(func.count()).select_from(AIExecution))
+        if ai_count_after != ai_count_before:
+            raise RuntimeError("AI execution count changed during delivery-only retry")
+        return {
+            "status": "DELIVERED",
+            "mode": "delivery_only_retry",
+            "event_id": str(EVENT_ID),
+            "story_id": str(STORY_ID),
+            "task_id": str(TASK_ID),
+            "draft_id": str(DRAFT_ID),
+            "preflight": preflight,
+            "retry_authorization": authorization,
+            "visual": {
+                "path": str(VISUAL_PATH),
+                "sha256": visual.sha256,
+                "width": visual.width,
+                "height": visual.height,
+                "compliance": visual.compliance_decision,
+            },
+            "route": {"chat_id": route.chat_id, "topic_id": route.topic_id},
+            "send": sends[0],
+            "provider_dispatches": [],
+            "provider_calls": 0,
+            "provider_cost_usd": "0",
+            "image_generation_calls": 0,
+            "natural_selection_calls": 0,
+            "telegram_api_send_attempts": 1,
+            "confirmed_telegram_deliveries": 1,
+            "persisted": persisted,
+        }
+    finally:
+        if bot is not None:
+            await bot.session.close()
+        await engine.dispose()
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--event-id", required=True, type=UUID)
     parser.add_argument("--confirm-live-send", action="store_true")
+    parser.add_argument("--delivery-only-retry", action="store_true")
+    parser.add_argument("--confirm-founder-no-message", action="store_true")
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
     if args.event_id != EVENT_ID:
         raise SystemExit(f"refusing unsupported event id: {args.event_id}")
     if not args.confirm_live_send:
         raise SystemExit("refusing live execution without --confirm-live-send")
-    result = await run_once()
+    if args.delivery_only_retry:
+        if not args.confirm_founder_no_message:
+            raise SystemExit("delivery-only retry requires --confirm-founder-no-message")
+        result = await run_delivery_only_retry()
+    else:
+        result = await run_once()
     rendered = json.dumps(result, ensure_ascii=False, indent=2, default=str)
     if args.report is not None:
         if args.report.exists():

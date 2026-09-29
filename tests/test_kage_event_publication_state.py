@@ -10,11 +10,13 @@ from sqlalchemy.exc import IntegrityError
 
 from database.models.content_draft import ContentDraft, ContentType
 from database.models.editorial_task import EditorialTask, TaskPriority, TaskStatus
+from database.models.kage_content_lineage_audit import KageContentLineageAudit
 from database.models.news_event import EventCategory, NewsEvent
 from database.models.story import Story
 from database.models.story_link import NewsEventStoryLink
 from database.models.story_telegram_delivery import DeliveryStatus, DeliveryType, StoryTelegramDelivery
-from services.kage_delivery_truth import event_publication_state
+from services.kage_content_lineage_audit import create_attempt_audit
+from services.kage_delivery_truth import authorize_failed_transport_retry, event_publication_state
 from services.story_telegram_delivery import record_delivery
 from tests.test_content_worker_cycle import factory, test_source  # noqa: F401
 
@@ -195,3 +197,46 @@ async def test_source_event_id_column_alone_would_have_missed_the_delivery(facto
                                .where(StoryTelegramDelivery.source_event_id == event.id))).all()
         assert old == []
         assert (await event_publication_state(s, event.id))["already_delivered"] is True
+
+
+@pytest.mark.asyncio
+async def test_founder_authorized_retry_archives_failed_transport_without_erasing_history(
+    factory, test_source,
+):
+    async with factory() as session:
+        event = await _event(session, test_source)
+        task, draft = await _attempt(session, event)
+        failed = {
+            "status": "VISUAL_HOLD",
+            "reason": "media_send_failed",
+            "task_id": str(task.id),
+            "event_id": str(event.id),
+            "draft_id": str(draft.id),
+            "message_id": None,
+            "observed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        task.workflow = {**task.workflow, "publication_outcome": failed}
+        draft.status = "hold_for_visual"
+        await create_attempt_audit(
+            session, task_id=task.id, event_id=event.id, story_id=None,
+            source_snapshot={"event_title": event.title},
+        )
+        await session.commit()
+        await authorize_failed_transport_retry(
+            session, task_id=task.id, draft_id=draft.id,
+            authorized_by="founder_manual_topic_inspection",
+        )
+        await session.commit()
+
+    async with factory() as session:
+        saved_task = await session.get(EditorialTask, task.id)
+        saved_draft = await session.get(ContentDraft, draft.id)
+        saved_audit = await session.get(KageContentLineageAudit, task.id)
+    assert saved_task.workflow["publication_outcome"] is None
+    assert saved_task.workflow["publication_outcome_history"] == [failed]
+    assert saved_task.workflow["publication_retry_authorizations"][0]["reason"] == (
+        "founder_confirmed_message_absent"
+    )
+    assert saved_draft.status == "draft"
+    assert saved_audit.audit["publication_outcome"] is None
+    assert saved_audit.audit["publication_outcome_history"] == [failed]

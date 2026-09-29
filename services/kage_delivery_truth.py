@@ -18,7 +18,10 @@ from database.models.editorial_task import EditorialTask
 from database.models.content_draft import ContentDraft
 from database.models.news_event import NewsEvent
 from database.models.story_telegram_delivery import DeliveryStatus, StoryTelegramDelivery
-from services.kage_content_lineage_audit import update_attempt_audit
+from services.kage_content_lineage_audit import (
+    archive_publication_outcome_for_retry,
+    update_attempt_audit,
+)
 
 TerminalStatus = Literal[
     "DELIVERED", "BLOCKED_FACTUAL_GATE", "BLOCKED_LOCAL_GUARD", "BLOCKED_BOTH",
@@ -97,6 +100,58 @@ async def record_terminal_outcome(
         session, task_id=task_id, section="publication_outcome", value=candidate,
     )
     return candidate
+
+
+async def authorize_failed_transport_retry(
+    session: AsyncSession, *, task_id: UUID, draft_id: UUID,
+    authorized_by: str,
+) -> dict:
+    """Open exactly one founder-authorized retry while retaining the failed attempt."""
+    task = await session.get(EditorialTask, task_id, with_for_update=True)
+    if task is None:
+        raise ValueError(f"generation task missing: {task_id}")
+    draft = await session.get(ContentDraft, draft_id, with_for_update=True)
+    if draft is None or draft.task_id != task_id:
+        raise ValueError("retry draft does not belong to the controlled generation task")
+    workflow = dict(task.workflow or {})
+    existing = workflow.get("publication_outcome")
+    if not isinstance(existing, dict):
+        raise ValueError("retry requires a persisted failed publication outcome")
+    if existing.get("status") != "VISUAL_HOLD" or existing.get("reason") != "media_send_failed":
+        raise ValueError("retry is permitted only for VISUAL_HOLD/media_send_failed")
+    if existing.get("message_id") is not None:
+        raise ValueError("retry refused because the failed outcome contains a message id")
+    receipt = (await session.execute(
+        select(StoryTelegramDelivery.id).where(
+            StoryTelegramDelivery.content_draft_id == draft_id,
+            StoryTelegramDelivery.delivery_status == DeliveryStatus.SENT,
+            StoryTelegramDelivery.telegram_message_id.is_not(None),
+        ).limit(1)
+    )).scalar_one_or_none()
+    if receipt is not None:
+        raise ValueError("retry refused because a successful delivery receipt exists")
+    authorization = {
+        "authorized_by": authorized_by,
+        "reason": "founder_confirmed_message_absent",
+        "authorized_at": datetime.now(timezone.utc).isoformat(),
+        "previous_status": existing.get("status"),
+        "previous_observed_at": existing.get("observed_at"),
+    }
+    history = list(workflow.get("publication_outcome_history") or [])
+    history.append(existing)
+    authorizations = list(workflow.get("publication_retry_authorizations") or [])
+    authorizations.append(authorization)
+    task.workflow = {
+        **workflow,
+        "publication_outcome": None,
+        "publication_outcome_history": history,
+        "publication_retry_authorizations": authorizations,
+    }
+    draft.status = "draft"
+    await archive_publication_outcome_for_retry(
+        session, task_id=task_id, outcome=existing, authorization=authorization,
+    )
+    return authorization
 
 
 async def event_publication_state(session: AsyncSession, event_id: UUID) -> dict:
