@@ -43,7 +43,9 @@
     "factual_gate_response": 1,
     "http_attempts_observed": 6,
     "transient_retries_observed": 1,
-    "persisted_cost_usd_excluding_factual_gate": "0.010470"
+    "persisted_cost_usd_excluding_factual_gate": "0.010470",
+    "factual_gate_cost_usd": "0.002030",
+    "isolated_cost_ledger_total_usd": "0.012500"
   },
   "telegram": {
     "route_chat_id": -1004297182444,
