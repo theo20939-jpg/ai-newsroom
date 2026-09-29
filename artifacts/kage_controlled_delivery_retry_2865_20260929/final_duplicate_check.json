@@ -1,0 +1,20 @@
+{
+  "status": "DUPLICATE_BLOCKED",
+  "block_point": "event_publication_state_before_retry_authorization",
+  "event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+  "publication_state": {
+    "event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+    "already_delivered": true,
+    "delivered_task_ids": [
+      "7c3586aa-76a3-41c2-ba51-44a8c124a73b"
+    ],
+    "sent_receipt_ids": [
+      "d00a0bd7-709c-40b4-8687-74ef94a0be7f"
+    ],
+    "in_flight_task_ids": []
+  },
+  "provider_calls": 0,
+  "telegram_api_send_attempts": 0,
+  "confirmed_telegram_deliveries": 0,
+  "image_generation_calls": 0
+}

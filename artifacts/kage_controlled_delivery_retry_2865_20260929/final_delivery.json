@@ -1,0 +1,1051 @@
+{
+  "status": "DELIVERED",
+  "mode": "delivery_only_retry",
+  "event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+  "story_id": "12ded5ee-0f8c-54f7-9e62-b6169114198b",
+  "task_id": "7c3586aa-76a3-41c2-ba51-44a8c124a73b",
+  "draft_id": "48b5d317-bb43-4c7b-8e6c-16b5569bd445",
+  "preflight": {
+    "task_id": "7c3586aa-76a3-41c2-ba51-44a8c124a73b",
+    "draft_id": "48b5d317-bb43-4c7b-8e6c-16b5569bd445",
+    "story_id": "12ded5ee-0f8c-54f7-9e62-b6169114198b",
+    "event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+    "headline": "OpenAI приостановила обучение последних моделей",
+    "body": "По данным NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.",
+    "draft_status": "hold_for_visual",
+    "caption": "<b>OpenAI приостановила обучение последних моделей</b>\n\nПо данным NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.\n\n🥷 <a href=\"https://t.me/kage_journal\">KAGE</a>",
+    "caption_utf16_units": 203,
+    "buttons": [
+      {
+        "text": "🔗 Источник",
+        "url": "https://news.google.com/rss/articles/CBMivAFBVV95cUxNdmhabDZfN1ZHQXprdWJ4QThjNFVRWTU3ODlmakJmcy1iVGpZakJpMGZULVhSaWZod29QaXdtNTkwTXV1T3lWVm1GTTk5Q2hZRG5CLW1DYTVheGt4ZnF5cnIxamlsaE1WeGlZV0pxTWxPZ3NLWEgzMGlERlc4WFJoa0h6enN1dUQ1dTdYaHZTOER2SU1uUUFTazNtNW5hdGJkYVJ5MjduZ1dkWEFEQ3BuVHVMZkozM3lySHZIbg?oc=5&ucbcb=1&hl=en-US&gl=US&ceid=US:en"
+      },
+      {
+        "text": "😂 Сгенерировать мем",
+        "url": null
+      }
+    ],
+    "receipt_count": 0,
+    "publication_state": {
+      "event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+      "already_delivered": false,
+      "delivered_task_ids": [],
+      "sent_receipt_ids": [],
+      "in_flight_task_ids": []
+    },
+    "previous_publication_outcome": {
+      "status": "VISUAL_HOLD",
+      "task_id": "7c3586aa-76a3-41c2-ba51-44a8c124a73b",
+      "event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+      "draft_id": "48b5d317-bb43-4c7b-8e6c-16b5569bd445",
+      "story_id": "12ded5ee-0f8c-54f7-9e62-b6169114198b",
+      "chat_id": null,
+      "topic_id": null,
+      "message_id": null,
+      "error_class": null,
+      "reason": "media_send_failed",
+      "send_attempted_at": "2026-09-29T00:43:27.885934+00:00",
+      "started_at": "2026-09-29T00:43:27.699480+00:00",
+      "observed_at": "2026-09-29T00:43:41.273646+00:00"
+    },
+    "ai_execution_count": 4
+  },
+  "retry_authorization": {
+    "authorized_by": "founder_manual_topic_inspection",
+    "reason": "founder_confirmed_message_absent",
+    "authorized_at": "2026-09-29T12:01:18.976682+00:00",
+    "previous_status": "VISUAL_HOLD",
+    "previous_observed_at": "2026-09-29T00:43:41.273646+00:00"
+  },
+  "visual": {
+    "path": "/app/artifacts/kage_openai_2865_scene_grammar_20260929/message_2865_kage_final.jpg",
+    "sha256": "d9bbbfb914b79b9c994865d3bb27bc75b5ea03223a51c45899a89166fd0d4e8c",
+    "width": 1536,
+    "height": 1024,
+    "compliance": "COMPLIANT"
+  },
+  "route": {
+    "chat_id": -1004297182444,
+    "topic_id": 2
+  },
+  "send": {
+    "method": "send_photo",
+    "status": "accepted",
+    "chat_id": -1004297182444,
+    "topic_id": 2,
+    "message_id": 2867,
+    "telegram_chat_id": -1004297182444,
+    "caption": "<b>OpenAI приостановила обучение последних моделей</b>\n\nПо данным NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.\n\n🥷 <a href=\"https://t.me/kage_journal\">KAGE</a>",
+    "buttons": [
+      {
+        "text": "🔗 Источник",
+        "url": "https://news.google.com/rss/articles/CBMivAFBVV95cUxNdmhabDZfN1ZHQXprdWJ4QThjNFVRWTU3ODlmakJmcy1iVGpZakJpMGZULVhSaWZod29QaXdtNTkwTXV1T3lWVm1GTTk5Q2hZRG5CLW1DYTVheGt4ZnF5cnIxamlsaE1WeGlZV0pxTWxPZ3NLWEgzMGlERlc4WFJoa0h6enN1dUQ1dTdYaHZTOER2SU1uUUFTazNtNW5hdGJkYVJ5MjduZ1dkWEFEQ3BuVHVMZkozM3lySHZIbg?oc=5&ucbcb=1&hl=en-US&gl=US&ceid=US:en"
+      },
+      {
+        "text": "😂 Сгенерировать мем",
+        "url": null
+      }
+    ],
+    "photo_sha256": "d9bbbfb914b79b9c994865d3bb27bc75b5ea03223a51c45899a89166fd0d4e8c"
+  },
+  "provider_dispatches": [],
+  "provider_calls": 0,
+  "provider_cost_usd": "0",
+  "image_generation_calls": 0,
+  "natural_selection_calls": 0,
+  "telegram_api_send_attempts": 1,
+  "confirmed_telegram_deliveries": 1,
+  "persisted": {
+    "task_id": "7c3586aa-76a3-41c2-ba51-44a8c124a73b",
+    "draft_id": "48b5d317-bb43-4c7b-8e6c-16b5569bd445",
+    "draft_status": "draft",
+    "story_id": "12ded5ee-0f8c-54f7-9e62-b6169114198b",
+    "source_event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+    "publication_outcome": {
+      "status": "DELIVERED",
+      "task_id": "7c3586aa-76a3-41c2-ba51-44a8c124a73b",
+      "event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+      "draft_id": "48b5d317-bb43-4c7b-8e6c-16b5569bd445",
+      "story_id": "12ded5ee-0f8c-54f7-9e62-b6169114198b",
+      "chat_id": -1004297182444,
+      "topic_id": 2,
+      "message_id": 2867,
+      "error_class": null,
+      "reason": null,
+      "send_attempted_at": "2026-09-29T12:01:19.645883+00:00",
+      "started_at": "2026-09-29T12:01:19.416426+00:00",
+      "observed_at": "2026-09-29T12:01:20.470685+00:00"
+    },
+    "delivery_receipt": {
+      "id": "d00a0bd7-709c-40b4-8687-74ef94a0be7f",
+      "status": "sent",
+      "chat_id": -1004297182444,
+      "message_id": 2867
+    },
+    "lineage": {
+      "source": {
+        "category": "AI",
+        "source_id": "dedd82b6-09d1-53aa-883d-2c8aaa6b8cc3",
+        "source_url": "https://news.google.com/rss/articles/CBMivAFBVV95cUxNdmhabDZfN1ZHQXprdWJ4QThjNFVRWTU3ODlmakJmcy1iVGpZakJpMGZULVhSaWZod29QaXdtNTkwTXV1T3lWVm1GTTk5Q2hZRG5CLW1DYTVheGt4ZnF5cnIxamlsaE1WeGlZV0pxTWxPZ3NLWEgzMGlERlc4WFJoa0h6enN1dUQ1dTdYaHZTOER2SU1uUUFTazNtNW5hdGJkYVJ5MjduZ1dkWEFEQ3BuVHVMZkozM3lySHZIbg?oc=5&ucbcb=1&hl=en-US&gl=US&ceid=US:en",
+        "event_title": "OpenAI pauses training of latest models after agents searched U.S. government sites in unexpected ways - NBC News",
+        "source_name": "NBC News (saved #2865 fixture)",
+        "collected_at": "2026-09-29T00:20:24.795614+00:00",
+        "published_at": "2026-09-29T00:20:24.832578+00:00",
+        "article_evidence": "captured as the exact Research user_input in stage audit",
+        "news_event_content_sha256": "cd975ce9a5e98e058c51fcb31436c052d798742dd1778ca1caf34c88fb4d0035"
+      },
+      "stages": {
+        "quality": {
+          "name": "quality",
+          "input": {
+            "user_input": "CONTEXT:\nTitle: OpenAI pauses training of latest models after agents searched U.S. government sites in unexpected ways - NBC News\nCategory: AI\nSummary: OpenAI приостановила обучение своих последних моделей.\nПричиной, согласно заголовку NBC News, стало то, что агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.\nTarget output language: ru\n\nCopywriting draft:\nTitle: OpenAI приостановила обучение последних моделей\nBody: По данным NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.\n\nResearch facts (only these plus the source text establish claims):\n['OpenAI приостановила обучение своих последних моделей.', 'Согласно заголовку NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.', 'В тексте это названо причиной приостановки обучения.']\n\nSource excerpt:\nOpenAI приостановила обучение своих последних моделей.\nПричиной, согласно заголовку NBC News, стало то, что агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.\n\nMINIMUM STORY CONTRACT (judge core meaning, not article completeness):\n{\"selected_premise\": {\"kind\": \"supported_fact_with_premise_context\", \"lead_fact_card_id\": 1, \"lead_fact_text\": \"OpenAI приостановила обучение своих последних моделей.\"}, \"core_facts\": [{\"id\": 1, \"minimum_meaning\": \"meaning of this core Research card\", \"why_core\": \"Required to complete the selected premise\"}, {\"id\": 2, \"minimum_meaning\": \"meaning of this core Research card\", \"why_core\": \"Supported reason/context the selected premise depends on\"}], \"optional_facts\": [{\"id\": 3, \"status\": \"may_drop\"}], \"material_qualifiers\": [], \"rule\": \"Preserve each core meaning, not every word; optional cards may be deleted. State what happened and preserve the supported reason/context that makes the selected premise meaningful. Short is still preferred: no filler, generic significance, opinion or padding.\"}\n\nEDITORIAL TAKE CONTRACT (diagnose voice separately from publication safety):\n{\"editorial_presence_target\": \"NONE\", \"reaction_type\": \"NONE\", \"reaction_basis\": [], \"reaction_intent\": \"No added editorial reaction; let the precise selected fact carry the post.\", \"reaction_boundary\": [\"Do not add a joke or a new factual proposition to fill a voice quota.\"], \"why\": \"The selected premise does not need a separate reaction.\"}\n\nTASK:\nAssess whether the generated draft above (if present) meets basic editorial quality standards, in light of the underlying event.",
+            "prompt_name": "quality",
+            "prompt_version": "9.2",
+            "user_input_sha256": "18ae832483e85ad399c93bbee8a2662b5d74fddfaf8e73037755220d3d03cb8a"
+          },
+          "model": "gpt-5.6-luna",
+          "attempt": 1,
+          "provider": null,
+          "started_at": "2026-09-29T00:20:51.657321+00:00",
+          "finished_at": "2026-09-29T00:20:55.400661+00:00",
+          "prompt_name": "quality",
+          "execution_id": "786a571e-f458-4dd7-8ee8-a443252b65db",
+          "prompt_version": "9.2",
+          "provider_output": {
+            "issues": [
+              "MISSING_CORE_FACT: core fact 2 is incomplete. The draft mentions the agents’ unexpected searches on U.S. government websites but does not state that this was the reason OpenAI paused training."
+            ],
+            "passed": false,
+            "editorial_presence_diagnostic": {
+              "reason": "The contract requests no added editorial reaction; the draft appropriately stays factual.",
+              "status": "NOT_APPLICABLE",
+              "target": "NONE",
+              "observed": "NONE"
+            }
+          },
+          "effective_output": {
+            "issues": [
+              "MISSING_CORE_FACT: core fact 2 is incomplete. The draft mentions the agents’ unexpected searches on U.S. government websites but does not state that this was the reason OpenAI paused training."
+            ],
+            "passed": false,
+            "fact_safety": {
+              "mode": "shadow",
+              "status": "pass",
+              "version": "v1",
+              "findings": [],
+              "supported": 4,
+              "uncertain": 0,
+              "unsupported": 0,
+              "highest_risk": null,
+              "claims_checked": 4
+            },
+            "editorial_presence_diagnostic": {
+              "reason": "The contract requests no added editorial reaction; the draft appropriately stays factual.",
+              "status": "NOT_APPLICABLE",
+              "target": "NONE",
+              "observed": "NONE"
+            }
+          },
+          "available_fact_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        "research": {
+          "name": "research",
+          "input": {
+            "user_input": "CONTEXT:\nTitle: OpenAI pauses training of latest models after agents searched U.S. government sites in unexpected ways - NBC News\nCategory: AI\nContent: OpenAI приостановила обучение своих последних моделей.\nПричиной, согласно заголовку NBC News, стало то, что агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.\nTarget output language: ru\n\nTASK:\nExtract the structured factual content actually present in the text above.",
+            "prompt_name": "research",
+            "prompt_version": "5",
+            "user_input_sha256": "56b2f13f8b4ddd8850de6ce5c6f989d03efce94ae37c7bfff48cabe543070ffa"
+          },
+          "model": "gpt-5.6-luna",
+          "attempt": 1,
+          "provider": null,
+          "started_at": "2026-09-29T00:20:26.146817+00:00",
+          "finished_at": "2026-09-29T00:20:42.639166+00:00",
+          "prompt_name": "research",
+          "execution_id": "d0d64e75-eb12-4d21-b0dc-f16fe33af4db",
+          "prompt_version": "5",
+          "provider_output": {
+            "gaps": [
+              "Не указаны названия моделей и агентов.",
+              "Не описано, каким именно был неожиданный способ поиска.",
+              "Не приведены дата, масштаб или дополнительные последствия события."
+            ],
+            "facts": [
+              "OpenAI приостановила обучение своих последних моделей.",
+              "Согласно заголовку NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.",
+              "В тексте это названо причиной приостановки обучения."
+            ],
+            "confidence": 0.98
+          },
+          "effective_output": {
+            "gaps": [
+              "Не указаны названия моделей и агентов.",
+              "Не описано, каким именно был неожиданный способ поиска.",
+              "Не приведены дата, масштаб или дополнительные последствия события."
+            ],
+            "facts": [
+              "OpenAI приостановила обучение своих последних моделей.",
+              "Согласно заголовку NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.",
+              "В тексте это названо причиной приостановки обучения."
+            ],
+            "confidence": 0.98
+          },
+          "available_fact_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        "copywriting": {
+          "name": "copywriting",
+          "input": {
+            "user_input": "KAGE VOICE (shared brand voice, source of truth docs/brand/kage_voice_v1.md, sha256 88af245bb3ef):\n# KAGE voice v1\n\nStatus: SHARED SOURCE OF TRUTH for KAGE audience-facing copy. Every platform prompt (Instagram Creative Director v10 today; Telegram Copywriting when it adopts KAGE)\nloads THIS file. A platform prompt may add only platform-specific adaptation rules - it must never copy or fork this text.\n\n## Core voice\n\nKAGE writes like a smart person who lives on the internet and reads the news for you.\n\n- smart - knows the subject, gets to the point, never explains what the reader already sees\n- internet-native - fluent in how people actually talk and joke online, without performing it\n- bold - takes a position on what matters instead of hedging\n- conversational - speaks to one person (\"ты\"), in plain natural Russian\n- emotionally sharp - finds the human reaction inside the fact: surprise, tension, relief, absurdity\n- dryly funny - understated humour, never a joke bolted on\n- slightly provocative - a sharp angle, never an insult and never a dare\n\nKAGE is not:\n\n- corporate - no press-release phrasing, no \"компания представила\", no brand-speak\n- fake youth slang - no forced memes, no slang the writer does not own\n- clickbait - no withheld facts, no manufactured outrage\n\n## Truth boundary\n\nEmotion can be stronger than a plain news headline. Facts cannot. A sharper framing is allowed only when the supplied evidence supports it: never claim a\nconsequence, a cost, a threat, a failure or an \"everyone\" that the evidence does not state. When the evidence is modest, be sharp about what is really there.\n\n## Editorial presence\n\nKAGE may have an opinion about a supported fact. KAGE may not invent a fact to make that opinion work.\n\nKeep three layers distinct: the fact (what happened), the framing (why this is the interesting part), and an optional KAGE take (what a person makes of it).\nThe take can be dry irony, surprise, practical judgment or a small human reaction. It should be visibly editorial, not dressed up as a new mechanism,\ncause, comparison, actor, motive, measurable result or historical first. A reader should be able to tell the reaction from a reported claim.\n\nOne clause can be enough, in a headline or body. Sometimes no reaction is right, especially when a security or safety condition needs the space.\nNever add a mandatory joke, extra paragraph or closing line. Vary the mode across the feed; do not turn opinion cues into a canned phrase library.\n\n## Platform adaptation\n\nSame personality, different medium. Each platform adapts length, pace and pressure; the personality and the truth boundary do not change. The rules for a\nplatform live in that platform's own prompt.\n\nEVIDENCE-FIRST TASK:\n{\"source_headline_not_evidence\": \"OpenAI pauses training of latest models after agents searched U.S. government sites in unexpected ways - NBC News\", \"category\": \"AI\", \"target_language\": \"ru\", \"selected_story_angle\": {\"lead_fact_card_id\": 1, \"lead_fact_text\": \"OpenAI приостановила обучение своих последних моделей.\"}, \"selected_research_fact_cards\": [{\"id\": 1, \"fact\": \"OpenAI приостановила обучение своих последних моделей.\", \"protected_cues\": []}, {\"id\": 2, \"fact\": \"Согласно заголовку NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.\", \"protected_cues\": []}, {\"id\": 3, \"fact\": \"В тексте это названо причиной приостановки обучения.\", \"protected_cues\": []}], \"excluded_research_fact_ids\": [], \"research_gaps_not_evidence\": [\"Не указаны названия моделей и агентов.\", \"Не описано, каким именно был неожиданный способ поиска.\", \"Не приведены дата, масштаб или дополнительные последствия события.\"], \"task\": \"Write only the selected premise, preserving every CORE_FACT meaning and material qualifier; OPTIONAL_FACTS may drop. The EDITORIAL_TAKE_CONTRACT has already decided whether and how much to react: NONE means no manufactured take; LIGHT means one small perceptible take; GOOD means one recognizable take from the supplied basis. Never cross its boundary or change a factual proposition. If safety conflicts, shrink the reaction. Headline and one or two small paragraphs, normally ending=null; no extra paragraph or ending for voice. quote=null.\", \"minimum_story_contract\": {\"selected_premise\": {\"kind\": \"supported_fact_with_premise_context\", \"lead_fact_card_id\": 1, \"lead_fact_text\": \"OpenAI приостановила обучение своих последних моделей.\"}, \"core_facts\": [{\"id\": 1, \"minimum_meaning\": \"meaning of this core Research card\", \"why_core\": \"Required to complete the selected premise\"}, {\"id\": 2, \"minimum_meaning\": \"meaning of this core Research card\", \"why_core\": \"Supported reason/context the selected premise depends on\"}], \"optional_facts\": [{\"id\": 3, \"status\": \"may_drop\"}], \"material_qualifiers\": [], \"rule\": \"Preserve each core meaning, not every word; optional cards may be deleted. State what happened and preserve the supported reason/context that makes the selected premise meaningful. Short is still preferred: no filler, generic significance, opinion or padding.\"}, \"editorial_take_contract\": {\"editorial_presence_target\": \"NONE\", \"reaction_type\": \"NONE\", \"reaction_basis\": [], \"reaction_intent\": \"No added editorial reaction; let the precise selected fact carry the post.\", \"reaction_boundary\": [\"Do not add a joke or a new factual proposition to fill a voice quota.\"], \"why\": \"The selected premise does not need a separate reaction.\"}}",
+            "prompt_name": "copywriting",
+            "prompt_version": "11.10",
+            "user_input_sha256": "f620b8529c3f9aed29d3210815dab362243ca98c095e9d3b526b2eb8fb514c59"
+          },
+          "model": "gpt-5.6-luna",
+          "attempt": 1,
+          "provider": null,
+          "started_at": "2026-09-29T00:20:48.224875+00:00",
+          "finished_at": "2026-09-29T00:20:51.614285+00:00",
+          "prompt_name": "copywriting",
+          "execution_id": "3fe34b5e-84b7-4bd8-b709-c7315c6b563e",
+          "prompt_version": "11.10",
+          "provider_output": {
+            "quote": null,
+            "title": "OpenAI приостановила обучение последних моделей",
+            "ending": null,
+            "main_body": "По данным NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.",
+            "story_led": false,
+            "meme_potential": "NONE",
+            "viral_potential": "LOW"
+          },
+          "effective_output": {
+            "quote": null,
+            "title": "OpenAI приостановила обучение последних моделей",
+            "ending": null,
+            "main_body": "По данным NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.",
+            "story_led": false,
+            "meme_potential": "NONE",
+            "viral_potential": "LOW",
+            "adaptive_length_plan": {
+              "max_words": 220,
+              "min_words": 140,
+              "complexity": "normal",
+              "confidence": "medium",
+              "reason_codes": [
+                "base_from_recommended_format=short_update",
+                "why_it_matters_present",
+                "what_next_present",
+                "regulation_legal_signal",
+                "technical_jargon_signal",
+                "enriched_signals_upgrade_simple_to_normal",
+                "partial_source_target_lowered_from_180_to_160",
+                "delivery_mode_unknown_conservative_budget"
+              ],
+              "target_words": 160,
+              "delivery_mode": "unknown",
+              "detail_target": 3,
+              "policy_version": "v1",
+              "schema_version": "v1",
+              "omitted_sections": [
+                "subject_explanation",
+                "background_context"
+              ],
+              "paragraph_target": 2,
+              "optional_sections": [
+                "why_it_matters",
+                "what_next",
+                "uncertainty_note"
+              ],
+              "required_sections": [
+                "lead",
+                "event_details"
+              ],
+              "recommended_format": "short_update",
+              "safety_constraints": [
+                "no_padding_partial_source"
+              ],
+              "source_sufficiency": "partial",
+              "hard_character_limit": 664
+            },
+            "beginner_friendly_plan": {
+              "safe_range": {
+                "max_words": 140,
+                "min_words": 90,
+                "target_words": 115
+              },
+              "ideal_range": {
+                "max_words": 220,
+                "min_words": 140,
+                "target_words": 160
+              },
+              "jargon_risk": "medium",
+              "reason_codes": [
+                "base_complexity=normal",
+                "unexplainable_subjects_present",
+                "unexplainable_terms_present",
+                "safe_range_constrained_by_evidence_units=5"
+              ],
+              "detail_target": 3,
+              "audience_level": "tech_interested",
+              "context_budget": 0,
+              "policy_version": "v1",
+              "schema_version": "v1",
+              "paragraph_target": 2,
+              "terms_to_explain": [],
+              "assumed_knowledge": [],
+              "what_next_allowed": true,
+              "explanation_budget": 0,
+              "subjects_to_explain": [],
+              "unexplainable_terms": [
+                "NBC",
+                "News"
+              ],
+              "evidence_constraints": [
+                "no_invented_company_description",
+                "no_unverified_market_claims",
+                "no_superlatives_without_evidence",
+                "explanation_only_from_glossary_or_evidence"
+              ],
+              "explanation_required": false,
+              "uncertainty_required": true,
+              "why_it_matters_required": true
+            }
+          },
+          "available_fact_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        "intelligence": {
+          "name": "intelligence",
+          "input": {
+            "user_input": "CONTEXT:\nTitle: OpenAI pauses training of latest models after agents searched U.S. government sites in unexpected ways - NBC News\nCategory: AI\nTarget output language: ru\n\nResearch output:\nFacts: ['OpenAI приостановила обучение своих последних моделей.', 'Согласно заголовку NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.', 'В тексте это названо причиной приостановки обучения.']\nConfidence: 0.98\nGaps: ['Не указаны названия моделей и агентов.', 'Не описано, каким именно был неожиданный способ поиска.', 'Не приведены дата, масштаб или дополнительные последствия события.']\n\nTASK:\nAssess the editorial significance, angle, audience relevance, and recommendation for the event above, based only on the given title/category and Research's facts.",
+            "prompt_name": "intelligence",
+            "prompt_version": "4",
+            "user_input_sha256": "da5b7513f0581cf080cba77fecc1655638741ea58f792f49c6d42619903e348f"
+          },
+          "model": "gpt-5.6-luna",
+          "attempt": 1,
+          "provider": null,
+          "started_at": "2026-09-29T00:20:42.710208+00:00",
+          "finished_at": "2026-09-29T00:20:48.181628+00:00",
+          "prompt_name": "intelligence",
+          "execution_id": "345880ff-a57b-4f33-8788-32b622bf654b",
+          "prompt_version": "4",
+          "provider_output": {
+            "angle": "OpenAI приостановила обучение последних моделей после того, как её агенты, по данным NBC News, неожиданным образом искали информацию на сайтах правительства США. Главный конкретный повод для внимания — непредусмотренное поведение агентов оказалось связано с остановкой обучения.",
+            "significance": 8,
+            "recommendation": "PUBLISH — есть подтверждённый Research конкретный payoff: обучение последних моделей OpenAI приостановили из-за неожиданного поиска агентов на сайтах правительства США. Формулировку нужно атрибутировать NBC News и не выдавать за установленный факт детали поведения, которых в Research нет.",
+            "audience_relevance": "Это важно для пользователей и разработчиков ИИ: автономные агенты уже могут вести поиск по государственным ресурсам, а неожиданное поведение способно остановить обучение новых моделей. Однако Research не уточняет, что именно искали агенты и в чём состояло отклонение от ожидаемого сценария."
+          },
+          "effective_output": {
+            "angle": "OpenAI приостановила обучение последних моделей после того, как её агенты, по данным NBC News, неожиданным образом искали информацию на сайтах правительства США. Главный конкретный повод для внимания — непредусмотренное поведение агентов оказалось связано с остановкой обучения.",
+            "significance": 8,
+            "recommendation": "PUBLISH — есть подтверждённый Research конкретный payoff: обучение последних моделей OpenAI приостановили из-за неожиданного поиска агентов на сайтах правительства США. Формулировку нужно атрибутировать NBC News и не выдавать за установленный факт детали поведения, которых в Research нет.",
+            "editorial_brief": {
+              "what_next": [
+                "PUBLISH — есть подтверждённый Research конкретный payoff: обучение последних моделей OpenAI приостановили из-за неожиданного поиска агентов на сайтах правительства США. Формулировку нужно атрибутировать NBC News и не выдавать за установленный факт детали поведения, которых в Research нет."
+              ],
+              "event_details": [
+                "OpenAI приостановила обучение своих последних моделей.",
+                "Согласно заголовку NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.",
+                "В тексте это названо причиной приостановки обучения."
+              ],
+              "headline_fact": "OpenAI приостановила обучение своих последних моделей.",
+              "uncertainties": [
+                "Не указаны названия моделей и агентов.",
+                "Не описано, каким именно был неожиданный способ поиска.",
+                "Не приведены дата, масштаб или дополнительные последствия события."
+              ],
+              "evidence_notes": {
+                "what_next": {
+                  "source": "intelligence",
+                  "confidence": "confirmed",
+                  "reason_codes": []
+                },
+                "event_details": {
+                  "source": "research",
+                  "confidence": "confirmed",
+                  "reason_codes": []
+                },
+                "headline_fact": {
+                  "source": "research",
+                  "confidence": "confirmed",
+                  "reason_codes": [
+                    "research_facts_0"
+                  ]
+                },
+                "uncertainties": {
+                  "source": "research",
+                  "confidence": "confirmed",
+                  "reason_codes": [
+                    "research_gaps"
+                  ]
+                },
+                "why_it_matters": {
+                  "source": "intelligence",
+                  "confidence": "confirmed",
+                  "reason_codes": []
+                },
+                "target_word_range": {
+                  "source": "derived",
+                  "confidence": "inferred",
+                  "reason_codes": [
+                    "partial_source_short_update"
+                  ]
+                },
+                "background_context": {
+                  "source": "none",
+                  "confidence": "unavailable",
+                  "reason_codes": [
+                    "requires_llm_not_available_in_m1"
+                  ]
+                },
+                "recommended_format": {
+                  "source": "derived",
+                  "confidence": "inferred",
+                  "reason_codes": [
+                    "partial_source_short_update"
+                  ]
+                },
+                "source_sufficiency": {
+                  "source": "derived",
+                  "confidence": "inferred",
+                  "reason_codes": [
+                    "word_count=24",
+                    "sentence_count=2",
+                    "concrete_details=1",
+                    "below_sufficient_threshold"
+                  ]
+                },
+                "subject_explanation": {
+                  "source": "none",
+                  "confidence": "unavailable",
+                  "reason_codes": [
+                    "requires_llm_not_available_in_m1"
+                  ]
+                },
+                "difference_or_change": {
+                  "source": "none",
+                  "confidence": "unavailable",
+                  "reason_codes": [
+                    "no_storyline_memory_m1"
+                  ]
+                }
+              },
+              "schema_version": "v1",
+              "why_it_matters": [
+                "OpenAI приостановила обучение последних моделей после того, как её агенты, по данным NBC News, неожиданным образом искали информацию на сайтах правительства США. Главный конкретный повод для внимания — непредусмотренное поведение агентов оказалось связано с остановкой обучения."
+              ],
+              "target_word_range": {
+                "max_words": 140,
+                "min_words": 90
+              },
+              "background_context": [],
+              "recommended_format": "short_update",
+              "source_sufficiency": "partial",
+              "subject_explanation": null,
+              "difference_or_change": null,
+              "source_sufficiency_reason_codes": [
+                "word_count=24",
+                "sentence_count=2",
+                "concrete_details=1",
+                "below_sufficient_threshold"
+              ]
+            },
+            "channel_relevance": {
+              "shadow_decision": {
+                "decision": "REVIEW",
+                "confidence": "medium",
+                "reason_codes": [
+                  "matched_topic_but_confidence_not_high"
+                ],
+                "schema_version": "v1",
+                "classifier_version": "v1"
+              },
+              "channel_fit_assessment": {
+                "evidence": [
+                  "AI:openai"
+                ],
+                "fit_score": 0.65,
+                "confidence": "medium",
+                "fit_decision": "REVIEW",
+                "reason_codes": [
+                  "matched_topic_but_confidence_not_high"
+                ],
+                "matched_topics": [
+                  "AI"
+                ],
+                "schema_version": "v1",
+                "excluded_topics": [],
+                "channel_profile_id": "ai_gadgets_channel",
+                "conditional_matches": [],
+                "human_review_required": true
+              },
+              "article_topic_assessment": {
+                "confidence": "medium",
+                "reason_codes": [],
+                "primary_topic": "AI",
+                "category_match": true,
+                "schema_version": "v1",
+                "topic_evidence": {
+                  "AI": [
+                    "openai"
+                  ]
+                },
+                "source_category": "AI",
+                "secondary_topics": [],
+                "detected_entities": [
+                  "OpenAI"
+                ],
+                "normalized_category": "AI"
+              }
+            },
+            "audience_relevance": "Это важно для пользователей и разработчиков ИИ: автономные агенты уже могут вести поиск по государственным ресурсам, а неожиданное поведение способно остановить обучение новых моделей. Однако Research не уточняет, что именно искали агенты и в чём состояло отклонение от ожидаемого сценария."
+          },
+          "available_fact_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        "visual_fallback": {
+          "name": "visual_fallback",
+          "tier": "generated_image",
+          "reason": "controlled_accepted_visual_reuse",
+          "image_width": 1536,
+          "image_height": 1024,
+          "image_sha256": "d9bbbfb914b79b9c994865d3bb27bc75b5ea03223a51c45899a89166fd0d4e8c",
+          "artifact_filename": "message_2865_kage_final.jpg",
+          "generation_reason": "not_called_existing_accepted_artifact",
+          "typography_reason": null,
+          "visual_compliance": {
+            "decision": "COMPLIANT"
+          },
+          "new_image_generation_calls": 0
+        },
+        "editorial_usefulness": {
+          "name": "editorial_usefulness",
+          "passed": true,
+          "reason": null,
+          "applicable": true,
+          "body_fact_ids": [
+            2
+          ],
+          "core_fact_ids": [
+            1,
+            2
+          ],
+          "guard_version": "1",
+          "headline_fact_ids": [
+            1
+          ],
+          "new_body_fact_ids": [
+            2
+          ]
+        }
+      },
+      "identity": {
+        "draft_id": "48b5d317-bb43-4c7b-8e6c-16b5569bd445",
+        "event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+        "story_id": "12ded5ee-0f8c-54f7-9e62-b6169114198b",
+        "attempt_id": "7c3586aa-76a3-41c2-ba51-44a8c124a73b",
+        "generation_task_id": "7c3586aa-76a3-41c2-ba51-44a8c124a73b",
+        "delivery_receipt_id": "d00a0bd7-709c-40b4-8687-74ef94a0be7f",
+        "telegram_message_id": 2867,
+        "publication_outcome_id": "7c3586aa-76a3-41c2-ba51-44a8c124a73b"
+      },
+      "created_at": "2026-09-29T00:20:26.085528+00:00",
+      "schema_version": 1,
+      "publication_outcome": {
+        "reason": null,
+        "status": "DELIVERED",
+        "chat_id": -1004297182444,
+        "task_id": "7c3586aa-76a3-41c2-ba51-44a8c124a73b",
+        "draft_id": "48b5d317-bb43-4c7b-8e6c-16b5569bd445",
+        "event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+        "story_id": "12ded5ee-0f8c-54f7-9e62-b6169114198b",
+        "topic_id": 2,
+        "message_id": 2867,
+        "started_at": "2026-09-29T12:01:19.416426+00:00",
+        "error_class": null,
+        "observed_at": "2026-09-29T12:01:20.470685+00:00",
+        "send_attempted_at": "2026-09-29T12:01:19.645883+00:00"
+      },
+      "publication_factual_gate": {
+        "model": "gpt-5.6-luna",
+        "draft_id": "48b5d317-bb43-4c7b-8e6c-16b5569bd445",
+        "event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+        "attempt_id": "7c3586aa-76a3-41c2-ba51-44a8c124a73b",
+        "gate_input": {
+          "CORE_FACTS": [
+            {
+              "id": 1,
+              "fact": "OpenAI приостановила обучение своих последних моделей.",
+              "why_core": "Required to complete the selected premise",
+              "minimum_meaning": "meaning of this core Research card"
+            },
+            {
+              "id": 2,
+              "fact": "Согласно заголовку NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.",
+              "why_core": "Supported reason/context the selected premise depends on",
+              "minimum_meaning": "meaning of this core Research card"
+            }
+          ],
+          "REACTION_TYPE": "NONE",
+          "GENERATED_BODY": "По данным NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.",
+          "OPTIONAL_FACTS": [
+            {
+              "id": 3,
+              "fact": "В тексте это названо причиной приостановки обучения.",
+              "status": "may_drop"
+            }
+          ],
+          "REACTION_BASIS": [],
+          "SELECTED_PREMISE": {
+            "kind": "supported_fact_with_premise_context",
+            "lead_fact_text": "OpenAI приостановила обучение своих последних моделей.",
+            "lead_fact_card_id": 1
+          },
+          "REACTION_BOUNDARY": [
+            "Do not add a joke or a new factual proposition to fill a voice quota."
+          ],
+          "GENERATED_HEADLINE": "OpenAI приостановила обучение последних моделей",
+          "MATERIAL_QUALIFIERS": [],
+          "EDITORIAL_PRESENCE_TARGET": "NONE"
+        },
+        "evaluated_at": "2026-09-29T00:20:58.225377+00:00",
+        "execution_id": "f5d4f23d-e463-4a10-937b-37a9e2a4a161",
+        "gate_version": "1",
+        "structured_result": {
+          "BODY_SAFETY": "PASS",
+          "FACTUAL_SAFETY": "PASS",
+          "HEADLINE_SAFETY": "PASS",
+          "UNSUPPORTED_CLAIMS": [],
+          "EDITORIAL_OPINION_SPANS": [],
+          "EDITORIAL_PRESENCE_DIAGNOSTIC": "NOT_REQUIRED"
+        },
+        "generation_task_id": "7c3586aa-76a3-41c2-ba51-44a8c124a73b"
+      },
+      "publication_outcome_history": [
+        {
+          "reason": "media_send_failed",
+          "status": "VISUAL_HOLD",
+          "chat_id": null,
+          "task_id": "7c3586aa-76a3-41c2-ba51-44a8c124a73b",
+          "draft_id": "48b5d317-bb43-4c7b-8e6c-16b5569bd445",
+          "event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+          "story_id": "12ded5ee-0f8c-54f7-9e62-b6169114198b",
+          "topic_id": null,
+          "message_id": null,
+          "started_at": "2026-09-29T00:20:58.680195+00:00",
+          "error_class": null,
+          "observed_at": "2026-09-29T00:21:53.844124+00:00",
+          "send_attempted_at": "2026-09-29T00:20:58.918660+00:00"
+        },
+        {
+          "reason": "media_send_failed",
+          "status": "VISUAL_HOLD",
+          "chat_id": null,
+          "task_id": "7c3586aa-76a3-41c2-ba51-44a8c124a73b",
+          "draft_id": "48b5d317-bb43-4c7b-8e6c-16b5569bd445",
+          "event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+          "story_id": "12ded5ee-0f8c-54f7-9e62-b6169114198b",
+          "topic_id": null,
+          "message_id": null,
+          "started_at": "2026-09-29T00:43:27.699480+00:00",
+          "error_class": null,
+          "observed_at": "2026-09-29T00:43:41.273646+00:00",
+          "send_attempted_at": "2026-09-29T00:43:27.885934+00:00"
+        }
+      ],
+      "workflow_stage_results": {
+        "research": {
+          "step_name": "research",
+          "status": "SUCCESS",
+          "attempt": 1,
+          "started_at": "2026-09-29T00:20:26.123919Z",
+          "finished_at": "2026-09-29T00:20:42.693978Z",
+          "error": null,
+          "result": {
+            "facts": [
+              "OpenAI приостановила обучение своих последних моделей.",
+              "Согласно заголовку NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.",
+              "В тексте это названо причиной приостановки обучения."
+            ],
+            "confidence": 0.98,
+            "gaps": [
+              "Не указаны названия моделей и агентов.",
+              "Не описано, каким именно был неожиданный способ поиска.",
+              "Не приведены дата, масштаб или дополнительные последствия события."
+            ]
+          }
+        },
+        "intelligence": {
+          "step_name": "intelligence",
+          "status": "SUCCESS",
+          "attempt": 1,
+          "started_at": "2026-09-29T00:20:42.703840Z",
+          "finished_at": "2026-09-29T00:20:48.214753Z",
+          "error": null,
+          "result": {
+            "significance": 8,
+            "angle": "OpenAI приостановила обучение последних моделей после того, как её агенты, по данным NBC News, неожиданным образом искали информацию на сайтах правительства США. Главный конкретный повод для внимания — непредусмотренное поведение агентов оказалось связано с остановкой обучения.",
+            "audience_relevance": "Это важно для пользователей и разработчиков ИИ: автономные агенты уже могут вести поиск по государственным ресурсам, а неожиданное поведение способно остановить обучение новых моделей. Однако Research не уточняет, что именно искали агенты и в чём состояло отклонение от ожидаемого сценария.",
+            "recommendation": "PUBLISH — есть подтверждённый Research конкретный payoff: обучение последних моделей OpenAI приостановили из-за неожиданного поиска агентов на сайтах правительства США. Формулировку нужно атрибутировать NBC News и не выдавать за установленный факт детали поведения, которых в Research нет.",
+            "editorial_brief": {
+              "schema_version": "v1",
+              "headline_fact": "OpenAI приостановила обучение своих последних моделей.",
+              "subject_explanation": null,
+              "event_details": [
+                "OpenAI приостановила обучение своих последних моделей.",
+                "Согласно заголовку NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.",
+                "В тексте это названо причиной приостановки обучения."
+              ],
+              "background_context": [],
+              "difference_or_change": null,
+              "why_it_matters": [
+                "OpenAI приостановила обучение последних моделей после того, как её агенты, по данным NBC News, неожиданным образом искали информацию на сайтах правительства США. Главный конкретный повод для внимания — непредусмотренное поведение агентов оказалось связано с остановкой обучения."
+              ],
+              "what_next": [
+                "PUBLISH — есть подтверждённый Research конкретный payoff: обучение последних моделей OpenAI приостановили из-за неожиданного поиска агентов на сайтах правительства США. Формулировку нужно атрибутировать NBC News и не выдавать за установленный факт детали поведения, которых в Research нет."
+              ],
+              "uncertainties": [
+                "Не указаны названия моделей и агентов.",
+                "Не описано, каким именно был неожиданный способ поиска.",
+                "Не приведены дата, масштаб или дополнительные последствия события."
+              ],
+              "recommended_format": "short_update",
+              "target_word_range": {
+                "min_words": 90,
+                "max_words": 140
+              },
+              "source_sufficiency": "partial",
+              "source_sufficiency_reason_codes": [
+                "word_count=24",
+                "sentence_count=2",
+                "concrete_details=1",
+                "below_sufficient_threshold"
+              ],
+              "evidence_notes": {
+                "headline_fact": {
+                  "confidence": "confirmed",
+                  "source": "research",
+                  "reason_codes": [
+                    "research_facts_0"
+                  ]
+                },
+                "event_details": {
+                  "confidence": "confirmed",
+                  "source": "research",
+                  "reason_codes": []
+                },
+                "subject_explanation": {
+                  "confidence": "unavailable",
+                  "source": "none",
+                  "reason_codes": [
+                    "requires_llm_not_available_in_m1"
+                  ]
+                },
+                "background_context": {
+                  "confidence": "unavailable",
+                  "source": "none",
+                  "reason_codes": [
+                    "requires_llm_not_available_in_m1"
+                  ]
+                },
+                "difference_or_change": {
+                  "confidence": "unavailable",
+                  "source": "none",
+                  "reason_codes": [
+                    "no_storyline_memory_m1"
+                  ]
+                },
+                "why_it_matters": {
+                  "confidence": "confirmed",
+                  "source": "intelligence",
+                  "reason_codes": []
+                },
+                "what_next": {
+                  "confidence": "confirmed",
+                  "source": "intelligence",
+                  "reason_codes": []
+                },
+                "uncertainties": {
+                  "confidence": "confirmed",
+                  "source": "research",
+                  "reason_codes": [
+                    "research_gaps"
+                  ]
+                },
+                "recommended_format": {
+                  "confidence": "inferred",
+                  "source": "derived",
+                  "reason_codes": [
+                    "partial_source_short_update"
+                  ]
+                },
+                "target_word_range": {
+                  "confidence": "inferred",
+                  "source": "derived",
+                  "reason_codes": [
+                    "partial_source_short_update"
+                  ]
+                },
+                "source_sufficiency": {
+                  "confidence": "inferred",
+                  "source": "derived",
+                  "reason_codes": [
+                    "word_count=24",
+                    "sentence_count=2",
+                    "concrete_details=1",
+                    "below_sufficient_threshold"
+                  ]
+                }
+              }
+            },
+            "channel_relevance": {
+              "article_topic_assessment": {
+                "schema_version": "v1",
+                "primary_topic": "AI",
+                "secondary_topics": [],
+                "normalized_category": "AI",
+                "detected_entities": [
+                  "OpenAI"
+                ],
+                "topic_evidence": {
+                  "AI": [
+                    "openai"
+                  ]
+                },
+                "source_category": "AI",
+                "category_match": true,
+                "confidence": "medium",
+                "reason_codes": []
+              },
+              "channel_fit_assessment": {
+                "schema_version": "v1",
+                "channel_profile_id": "ai_gadgets_channel",
+                "fit_decision": "REVIEW",
+                "fit_score": 0.65,
+                "confidence": "medium",
+                "matched_topics": [
+                  "AI"
+                ],
+                "excluded_topics": [],
+                "conditional_matches": [],
+                "evidence": [
+                  "AI:openai"
+                ],
+                "reason_codes": [
+                  "matched_topic_but_confidence_not_high"
+                ],
+                "human_review_required": true
+              },
+              "shadow_decision": {
+                "schema_version": "v1",
+                "decision": "REVIEW",
+                "reason_codes": [
+                  "matched_topic_but_confidence_not_high"
+                ],
+                "confidence": "medium",
+                "classifier_version": "v1"
+              }
+            }
+          }
+        },
+        "copywriting": {
+          "step_name": "copywriting",
+          "status": "SUCCESS",
+          "attempt": 1,
+          "started_at": "2026-09-29T00:20:48.221464Z",
+          "finished_at": "2026-09-29T00:20:51.638894Z",
+          "error": null,
+          "result": {
+            "title": "OpenAI приостановила обучение последних моделей",
+            "main_body": "По данным NBC News, агенты OpenAI неожиданным образом выполняли поиск на сайтах правительства США.",
+            "ending": null,
+            "quote": null,
+            "story_led": false,
+            "viral_potential": "LOW",
+            "meme_potential": "NONE",
+            "adaptive_length_plan": {
+              "schema_version": "v1",
+              "policy_version": "v1",
+              "recommended_format": "short_update",
+              "complexity": "normal",
+              "source_sufficiency": "partial",
+              "min_words": 140,
+              "target_words": 160,
+              "max_words": 220,
+              "hard_character_limit": 664,
+              "delivery_mode": "unknown",
+              "paragraph_target": 2,
+              "detail_target": 3,
+              "required_sections": [
+                "lead",
+                "event_details"
+              ],
+              "optional_sections": [
+                "why_it_matters",
+                "what_next",
+                "uncertainty_note"
+              ],
+              "omitted_sections": [
+                "subject_explanation",
+                "background_context"
+              ],
+              "reason_codes": [
+                "base_from_recommended_format=short_update",
+                "why_it_matters_present",
+                "what_next_present",
+                "regulation_legal_signal",
+                "technical_jargon_signal",
+                "enriched_signals_upgrade_simple_to_normal",
+                "partial_source_target_lowered_from_180_to_160",
+                "delivery_mode_unknown_conservative_budget"
+              ],
+              "confidence": "medium",
+              "safety_constraints": [
+                "no_padding_partial_source"
+              ]
+            },
+            "beginner_friendly_plan": {
+              "schema_version": "v1",
+              "policy_version": "v1",
+              "audience_level": "tech_interested",
+              "explanation_required": false,
+              "subjects_to_explain": [],
+              "terms_to_explain": [],
+              "assumed_knowledge": [],
+              "unexplainable_terms": [
+                "NBC",
+                "News"
+              ],
+              "explanation_budget": 0,
+              "context_budget": 0,
+              "detail_target": 3,
+              "paragraph_target": 2,
+              "why_it_matters_required": true,
+              "what_next_allowed": true,
+              "uncertainty_required": true,
+              "jargon_risk": "medium",
+              "ideal_range": {
+                "min_words": 140,
+                "target_words": 160,
+                "max_words": 220
+              },
+              "safe_range": {
+                "min_words": 90,
+                "target_words": 115,
+                "max_words": 140
+              },
+              "reason_codes": [
+                "base_complexity=normal",
+                "unexplainable_subjects_present",
+                "unexplainable_terms_present",
+                "safe_range_constrained_by_evidence_units=5"
+              ],
+              "evidence_constraints": [
+                "no_invented_company_description",
+                "no_unverified_market_claims",
+                "no_superlatives_without_evidence",
+                "explanation_only_from_glossary_or_evidence"
+              ]
+            }
+          }
+        },
+        "quality": {
+          "step_name": "quality",
+          "status": "SUCCESS",
+          "attempt": 1,
+          "started_at": "2026-09-29T00:20:51.654880Z",
+          "finished_at": "2026-09-29T00:20:55.446047Z",
+          "error": null,
+          "result": {
+            "passed": false,
+            "issues": [
+              "MISSING_CORE_FACT: core fact 2 is incomplete. The draft mentions the agents’ unexpected searches on U.S. government websites but does not state that this was the reason OpenAI paused training."
+            ],
+            "editorial_presence_diagnostic": {
+              "target": "NONE",
+              "observed": "NONE",
+              "status": "NOT_APPLICABLE",
+              "reason": "The contract requests no added editorial reaction; the draft appropriately stays factual."
+            },
+            "fact_safety": {
+              "version": "v1",
+              "status": "pass",
+              "mode": "shadow",
+              "claims_checked": 4,
+              "supported": 4,
+              "uncertain": 0,
+              "unsupported": 0,
+              "highest_risk": null,
+              "findings": []
+            }
+          }
+        }
+      }
+    },
+    "event_publication_state": {
+      "event_id": "db748bb0-b41b-4a21-9679-7bd3262a749c",
+      "already_delivered": true,
+      "delivered_task_ids": [
+        "7c3586aa-76a3-41c2-ba51-44a8c124a73b"
+      ],
+      "sent_receipt_ids": [
+        "d00a0bd7-709c-40b4-8687-74ef94a0be7f"
+      ],
+      "in_flight_task_ids": []
+    }
+  }
+}
