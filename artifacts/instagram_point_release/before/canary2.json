@@ -1,0 +1,359 @@
+{
+ "pool": "canary2",
+ "now": "2026-09-26T22:45:04.821426+00:00",
+ "code_root": "C:\\Users\\Theodor\\AppData\\Local\\Temp\\claude\\C--Users-Theodor-ai-newsroom\\210dcfdd-ae57-40a9-a29c-f2b5fb18b9e3\\scratchpad\\before_a4e9dd4",
+ "candidates": 384,
+ "events": 279,
+ "eligible": [
+  {
+   "rank": 1,
+   "event": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+   "copies": [
+    "1704df67-7fbc-4402-b40e-9982ea2077a5",
+    "18ff0c25-46f3-4a02-8ef8-240f223ece6e",
+    "463eac4f-3861-4bee-a753-d40cb0c659bd"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 6,
+   "mechanisms": [
+    "unexpected_ai_behaviour",
+    "real_failure"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "unexpected behaviour of an AI system, stated in the headline",
+   "momentum": "STRONG",
+   "actuality": "CURRENT",
+   "hook": "Claude вместо копии проекта удалил 48 218 файлов за полторы минуты и потом признался, что «что‑то сломал»",
+   "reason": "current (coverage: 3 independent outlets since 2026-09-26 14:37 UTC); broad (unexpected behaviour of an AI system, stated in the headline); strong mechanisms ['unexpected_ai_behaviour', 'real_failure']; momentum strong (3 independent outlets carried this same event in the last 72 hours; 3 articles on it in the last 24 hours; 243 Telegram forwards; 153 Telegram reactions)"
+  },
+  {
+   "rank": 2,
+   "event": "OpenAI's agents targeted and infiltrated US government websites",
+   "copies": [
+    "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+    "f408be6b-7ab0-4a49-9926-69a66ddf93f5",
+    "070feacc-88f7-4b75-817a-77effc45c266",
+    "16cc9f34-2380-4f9b-8c56-a2195a0841ed",
+    "bbc0b825-bc3e-46d2-9af8-49582f03fc03",
+    "c10dbf38-0299-4d78-a548-ebce9289f8bc",
+    "e5443cbf-01a4-4110-8faf-b8b0276d3ac8",
+    "89fbed07-6321-42ce-a9d8-47a3006681cb",
+    "a5760260-9242-49a3-9ec8-5f8d5fe4e74f",
+    "8164a3d7-e826-43e9-9dd6-96babe0c71aa",
+    "0b5b886f-6f57-4ff1-abd5-a6333beba202",
+    "8d8d157d-f62c-4181-bf9c-067208225ec1",
+    "cce4f2c2-2fba-44c5-9c5c-b0852a3bd1c2",
+    "d9441893-9704-41de-afff-21d20831c8e6",
+    "70003fe6-3960-476e-97cd-452140628404",
+    "744af497-674d-43eb-a841-8e57b56c71a8",
+    "28f32558-8922-480f-a343-8382e7165ea4",
+    "fb04cb7c-7484-4a1f-b97f-092755e096d6",
+    "0ad4f236-27d6-4937-914c-0806dee22239",
+    "f26f3073-2aa7-43b0-b249-9361aecd79d8",
+    "8828a79a-1a0c-4301-9433-3e5fb87c7464",
+    "4371aba5-6ff7-4b6d-b38c-df16b0e104b2"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "unexpected_ai_behaviour",
+    "security_surprise"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+   "momentum": "STRONG",
+   "actuality": "CURRENT",
+   "hook": "OpenAI's agents targeted and infiltrated US government websites",
+   "reason": "current (text: the behaviour is dated 'this summer'; the disclosure ('Researchers:') is new - first covered 2026-09-25 23:16 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour', 'security_surprise']; momentum strong (21 independent outlets carried this same event in the last 72 hours; 22 articles on it in the last 24 hours; on the H"
+  },
+  {
+   "rank": 3,
+   "event": "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days",
+   "copies": [
+    "bb2b396e-7984-4d74-99c5-be905b26cf27",
+    "3b914802-7372-4fcc-b6cf-46c91b042f1d"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "ai_feat"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('ChatGPT')",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "ChatGPT-6 Astra cracks 1941 Enigma-coded message in two days",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-26 10:00 UTC); broad (everyday-life / mass-product / security anchor ('ChatGPT')); strong mechanisms ['ai_feat']; momentum weak (2 independent outlets carried this same event in the last 72 hours)"
+  },
+  {
+   "rank": 4,
+   "event": "OpenAI says it paused training, evaluation, and inference with tool-use of its most capable models after a model",
+   "copies": [
+    "435e8bd7-913b-477e-885c-f25fd88263b3",
+    "34bacfed-f41a-4448-a011-0a2d52e35b5c"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 2,
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "OpenAI pauses training of its ‘most capable models’ — As reports of OpenAI's models breaking containment, hacking sites, and generally getting out of control pile up, the company has made the decision to pause training of its most powerful models.",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-26 04:10 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour']; momentum weak (2 independent outlets carried this same event in the last 72 hours)"
+  }
+ ],
+ "winner": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+ "software_release_events": [
+  {
+   "event": "⚡️ Новое измерение завезли в Minecraft — это первое масштабное обновление почти за 1️⃣5️⃣ лет!",
+   "copies": [
+    "ad9fbbf3-6857-4259-868c-6c2a26efd977"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "UNCLEAR",
+   "broad_reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise",
+   "momentum": "STRONG",
+   "actuality": "UNCERTAIN",
+   "hook": "⚡️ Новое измерение завезли в Minecraft — это первое масштабное обновление почти за 1️⃣5️⃣ лет!",
+   "reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise"
+  },
+  {
+   "event": "Экран 120 Гц, HyperOS 3, камера 50 Мп, батарея 6000 мА•ч и защита IP64. Смартфон Redmi 17C 5G выходит на рынок Индии",
+   "copies": [
+    "a3997b58-e240-46bc-8b71-9208933ffe48"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "UNCLEAR",
+   "broad_reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Экран 120 Гц, HyperOS 3, камера 50 Мп, батарея 6000 мА•ч и защита IP64. Смартфон Redmi 17C 5G выходит на рынок Индии",
+   "reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise"
+  },
+  {
+   "event": "watchOS 27: 12 New Things To Check Out on Your Apple Watch",
+   "copies": [
+    "f4da3feb-d748-47d0-8909-7a24da0d6aff"
+   ],
+   "eligible": false,
+   "failed_gate": "2_event_actuality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Apple')",
+   "momentum": "NONE",
+   "actuality": "OLD",
+   "hook": "watchOS 27: 12 New Things To Check Out on Your Apple Watch",
+   "reason": "not a current event - text: the latest date the text gives for the event is 'September 14' (11 days ago)"
+  },
+  {
+   "event": "My favorite Pixel 11 Pro feature is something no other Android phone can match",
+   "copies": [
+    "8a1ee7cd-96fe-403b-a9d2-57bf06a1ea05"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Android')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "My favorite Pixel 11 Pro feature is something no other Android phone can match",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "Claude Code 2.1.282 исправил ошибки разрешений, восстановления сессий и симлинков в macOS",
+   "copies": [
+    "8a28b53a-415a-4456-8c88-5dba3c21692c"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "UNCLEAR",
+   "broad_reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Claude Code 2.1.282 исправил ошибки разрешений, восстановления сессий и симлинков в macOS",
+   "reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise"
+  },
+  {
+   "event": "Cline CLI 3.0.63 устранил подмену системных утилит в Windows",
+   "copies": [
+    "7bea9f3b-a418-4cec-b1eb-afc64b0d341a"
+   ],
+   "eligible": false,
+   "failed_gate": "2_event_actuality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "NARROW",
+   "broad_reason": "specialist / niche subject ('CLI') with no real-world consequence in the headline or lead",
+   "momentum": "NONE",
+   "actuality": "OLD",
+   "hook": "Cline CLI 3.0.63 устранил подмену системных утилит в Windows",
+   "reason": "not a current event - article: published 2026-09-22 15:05 UTC, older than 72 hours"
+  },
+  {
+   "event": "OpenClaw 2026.9.6 для macOS пересобрали из-за сбоя при запуске",
+   "copies": [
+    "9cbd2dd5-3363-41b7-875b-2d4f22c40601"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "UNCLEAR",
+   "broad_reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "OpenClaw 2026.9.6 для macOS пересобрали из-за сбоя при запуске",
+   "reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise"
+  },
+  {
+   "event": "My favorite $6 RPG on Steam just got a beastmode free 'Enhanced Edition' update",
+   "copies": [
+    "39ea263d-d401-40fc-88c7-e12f2c8e3a30"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('$6')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "My favorite $6 RPG on Steam just got a beastmode free 'Enhanced Edition' update",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "macOS 27 adds new Apple Intelligence features to your favorite apps",
+   "copies": [
+    "c87f1084-fd92-4ffb-9df5-b09d534356e3"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Apple')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "macOS 27 adds new Apple Intelligence features to your favorite apps",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "9 excellent iOS apps I wish would come to Android (but probably never will)",
+   "copies": [
+    "5b5fb174-d1fc-457a-b84f-eca0bb4bc9f9"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Android')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "9 excellent iOS apps I wish would come to Android (but probably never will)",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "The MacBook models that macOS 27 Golden Gate does not support",
+   "copies": [
+    "903456f5-9b41-4a12-bf90-689215083ad9"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "UNCLEAR",
+   "broad_reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "The MacBook models that macOS 27 Golden Gate does not support",
+   "reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise"
+  },
+  {
+   "event": "workerd 1.20260924.1 добавил веб-поиск для Workers AI и обновил обработку байтовых потоков",
+   "copies": [
+    "c3ff1f1b-e127-469d-891a-dfef9898aa30"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "UNCLEAR",
+   "broad_reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "workerd 1.20260924.1 добавил веб-поиск для Workers AI и обновил обработку байтовых потоков",
+   "reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise"
+  },
+  {
+   "event": "Hermes Agent 0.21.5 получил SDK для десктопных плагинов и обновлённые коннекторы",
+   "copies": [
+    "695dda59-7c02-45f3-83b2-93558cac6e2b"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "NARROW",
+   "broad_reason": "specialist / niche subject ('SDK') with no real-world consequence in the headline or lead",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Hermes Agent 0.21.5 получил SDK для десктопных плагинов и обновлённые коннекторы",
+   "reason": "specialist / niche subject ('SDK') with no real-world consequence in the headline or lead"
+  },
+  {
+   "event": "This app lets you use an Apple Watch with an Android phone",
+   "copies": [
+    "21e3c3d5-c3e3-4671-b707-b895fbecd7e8"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Apple')",
+   "momentum": "WEAK",
+   "actuality": "UNCERTAIN",
+   "hook": "This app lets you use an Apple Watch with an Android phone",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  }
+ ],
+ "provider_calls": 0,
+ "image_calls": 0
+}

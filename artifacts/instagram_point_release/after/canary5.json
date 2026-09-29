@@ -1,0 +1,257 @@
+{
+ "pool": "canary5",
+ "now": "2026-09-27T11:14:31.893685+00:00",
+ "code_root": "C:\\Users\\Theodor\\ai-newsroom\\.worktrees\\instagram-b61",
+ "candidates": 324,
+ "events": 246,
+ "eligible": [
+  {
+   "rank": 1,
+   "event": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+   "copies": [
+    "1704df67-7fbc-4402-b40e-9982ea2077a5",
+    "18ff0c25-46f3-4a02-8ef8-240f223ece6e",
+    "463eac4f-3861-4bee-a753-d40cb0c659bd"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 6,
+   "mechanisms": [
+    "unexpected_ai_behaviour",
+    "real_failure"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "unexpected behaviour of an AI system, stated in the headline",
+   "momentum": "STRONG",
+   "actuality": "CURRENT",
+   "hook": "Claude вместо копии проекта удалил 48 218 файлов за полторы минуты и потом признался, что «что‑то сломал»",
+   "reason": "current (coverage: 3 independent outlets since 2026-09-26 14:37 UTC); broad (unexpected behaviour of an AI system, stated in the headline); strong mechanisms ['unexpected_ai_behaviour', 'real_failure']; momentum strong (3 independent outlets carried this same event in the last 72 hours; 3 articles on it in the last 24 hours; 243 Telegram forwards; 153 Telegram reactions)"
+  },
+  {
+   "rank": 2,
+   "event": "OpenAI's agents targeted and infiltrated US government websites",
+   "copies": [
+    "6429ccc5-9952-4160-aebe-5b3dda6808d8",
+    "16cc9f34-2380-4f9b-8c56-a2195a0841ed",
+    "bbc0b825-bc3e-46d2-9af8-49582f03fc03",
+    "8d8d157d-f62c-4181-bf9c-067208225ec1",
+    "fb04cb7c-7484-4a1f-b97f-092755e096d6",
+    "0ad4f236-27d6-4937-914c-0806dee22239",
+    "f26f3073-2aa7-43b0-b249-9361aecd79d8",
+    "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+    "8828a79a-1a0c-4301-9433-3e5fb87c7464",
+    "4371aba5-6ff7-4b6d-b38c-df16b0e104b2",
+    "273dc8ad-c786-4c17-88a3-d5b7cc0c48a2",
+    "10856ebf-530f-41b4-80ea-2c7592cca2b8",
+    "d08eaab6-90a6-48d1-b99f-fef7f059e01f"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "unexpected_ai_behaviour",
+    "security_surprise"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+   "momentum": "STRONG",
+   "actuality": "CURRENT",
+   "hook": "OpenAI's agents targeted and infiltrated US government websites",
+   "reason": "current (text: the behaviour is dated 'this summer'; the disclosure ('Researchers:') is new - first covered 2026-09-25 23:16 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour', 'security_surprise']; momentum strong (23 independent outlets carried this same event in the last 72 hours; 11 articles on it in the last 24 hours; on the H"
+  },
+  {
+   "rank": 3,
+   "event": "Искусственный интеллект от создателей ChatGPT взломал сайт правительства",
+   "copies": [
+    "b4df6631-aee9-4d08-840f-590fb320d1df"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "unexpected_ai_behaviour",
+    "security_surprise"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('ChatGPT')",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "Искусственный интеллект от создателей ChatGPT взломал сайт правительства",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-25 18:22 UTC); broad (everyday-life / mass-product / security anchor ('ChatGPT')); strong mechanisms ['unexpected_ai_behaviour', 'security_surprise']; momentum weak (2 independent outlets carried this same event in the last 72 hours)"
+  },
+  {
+   "rank": 4,
+   "event": "⚡️OpenAI экстренно приостановила обучение своих самых мощных ИИ-моделей после ряда инцидентов и взломов, —",
+   "copies": [
+    "ab354ef6-159c-4111-a395-bbbc98554297",
+    "6eea4488-7f92-4083-8639-7ad4e96aae59",
+    "ee5409be-14b7-4a7c-aff3-a3c68a774cfc",
+    "24aa906f-f537-4c50-8c66-3c741b75b860",
+    "f7324c21-151d-498c-b0bf-c8c1ccac6505",
+    "e070454f-cd1f-4d85-a759-d2b0b5f7550e",
+    "4d1e6ee7-758f-4975-958f-a99fd992be25",
+    "8377acc1-8df5-46de-a3aa-3d2b66e6c616"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 2,
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+   "momentum": "STRONG",
+   "actuality": "CURRENT",
+   "hook": "⚡️OpenAI экстренно приостановила обучение своих самых мощных ИИ-моделей после ряда инцидентов и взломов, —",
+   "reason": "current (coverage: 8 independent outlets since 2026-09-27 05:33 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour']; momentum strong (8 independent outlets carried this same event in the last 72 hours; 8 articles on it in the last 24 hours; 706 Telegram forwards; 401 Telegram reactions)"
+  },
+  {
+   "rank": 5,
+   "event": "OpenAI pauses training of its ‘most capable models’",
+   "copies": [
+    "34bacfed-f41a-4448-a011-0a2d52e35b5c"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 2,
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "OpenAI pauses training of its ‘most capable models’ — As reports of OpenAI's models breaking containment, hacking sites, and generally getting out of control pile up, the company has made the decision to pause training of its most powerful models.",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-26 04:10 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour']; momentum weak (2 independent outlets carried this same event in the last 72 hours)"
+  }
+ ],
+ "winner": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+ "software_release_events": [
+  {
+   "event": "⚡️ Новое измерение завезли в Minecraft — это первое масштабное обновление почти за 1️⃣5️⃣ лет!",
+   "copies": [
+    "ad9fbbf3-6857-4259-868c-6c2a26efd977"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "UNCLEAR",
+   "broad_reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise",
+   "momentum": "STRONG",
+   "actuality": "UNCERTAIN",
+   "hook": "⚡️ Новое измерение завезли в Minecraft — это первое масштабное обновление почти за 1️⃣5️⃣ лет!",
+   "reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise"
+  },
+  {
+   "event": "5 of my favorite Android features you won’t find on Samsung or Pixel phones",
+   "copies": [
+    "e35b840a-ba61-4f41-b286-64937d4d14b0"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Android')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "5 of my favorite Android features you won’t find on Samsung or Pixel phones",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "Claude Code 2.1.283 получил аудит устаревших промптов и точную фиксацию моделей",
+   "copies": [
+    "f127ed3c-23ef-4435-8c76-c237cdde8d35"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "UNCLEAR",
+   "broad_reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Claude Code 2.1.283 получил аудит устаревших промптов и точную фиксацию моделей",
+   "reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise"
+  },
+  {
+   "event": "The MacBook models that macOS 27 Golden Gate does not support",
+   "copies": [
+    "903456f5-9b41-4a12-bf90-689215083ad9"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "UNCLEAR",
+   "broad_reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "The MacBook models that macOS 27 Golden Gate does not support",
+   "reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise"
+  },
+  {
+   "event": "Qwen Code 0.24.6 получил управляемую среду выполнения и восстановление сессий",
+   "copies": [
+    "dfee4043-3ae7-4792-bca5-e0c6a57aeaf4"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "NARROW",
+   "broad_reason": "specialist / niche subject ('API') with no real-world consequence in the headline or lead",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Qwen Code 0.24.6 получил управляемую среду выполнения и восстановление сессий",
+   "reason": "specialist / niche subject ('API') with no real-world consequence in the headline or lead"
+  },
+  {
+   "event": "protoAgent 0.183.1 устранил повторные ревью PR и дублирование команд агентам",
+   "copies": [
+    "7f0be3d6-9a52-46aa-b1d3-2fb43a1c4b92"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "UNCLEAR",
+   "broad_reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "protoAgent 0.183.1 устранил повторные ревью PR и дублирование команд агентам",
+   "reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise"
+  },
+  {
+   "event": "This app lets you use an Apple Watch with an Android phone",
+   "copies": [
+    "21e3c3d5-c3e3-4671-b707-b895fbecd7e8"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Apple')",
+   "momentum": "WEAK",
+   "actuality": "UNCERTAIN",
+   "hook": "This app lets you use an Apple Watch with an Android phone",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  }
+ ],
+ "provider_calls": 0,
+ "image_calls": 0
+}

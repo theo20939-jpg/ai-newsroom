@@ -1,0 +1,211 @@
+{
+ "natural": {
+  "winner_before": "Батарея на 11 000 мА·ч, прошлогодний Snapdragon и камера на 200 Мп: Honor представила геймерский смартфон Magic 9 Super",
+  "winner_after": "Батарея на 11 000 мА·ч, прошлогодний Snapdragon и камера на 200 Мп: Honor представила геймерский смартфон Magic 9 Super",
+  "winner_same": true,
+  "eligible_before": 11,
+  "eligible_after": 9,
+  "removed": [
+   "Apple Notes keeps getting better, here’s what’s new in iOS 27",
+   "Apple Releases iOS 27.0.1 With Face ID Bug Fix"
+  ],
+  "added": [],
+  "order_same_otherwise": true,
+  "software_verdicts_changed": [
+   {
+    "event": "Apple Notes keeps getting better, here’s what’s new in iOS 27",
+    "before": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "mechanisms": [
+      "device_launch"
+     ],
+     "points": 3,
+     "broad_reason": "everyday-life / mass-product / security anchor ('Apple')"
+    },
+    "after": {
+     "eligible": false,
+     "failed_gate": "4_inherent_virality",
+     "strength": "NONE",
+     "mechanisms": [],
+     "points": 1,
+     "broad_reason": "everyday-life / mass-product / security anchor ('Apple')"
+    }
+   },
+   {
+    "event": "Apple Releases iOS 27.0.1 With Face ID Bug Fix",
+    "before": {
+     "eligible": true,
+     "failed_gate": null,
+     "strength": "STRONG",
+     "mechanisms": [
+      "device_launch"
+     ],
+     "points": 3,
+     "broad_reason": "everyday-life / mass-product / security anchor ('Apple')"
+    },
+    "after": {
+     "eligible": false,
+     "failed_gate": "4_inherent_virality",
+     "strength": "NONE",
+     "mechanisms": [],
+     "points": 1,
+     "broad_reason": "everyday-life / mass-product / security anchor ('Apple')"
+    }
+   },
+   {
+    "event": "Apple выпустила срочное обновление iOS 27.0.1: исправлена критическая ошибка Face ID в iPhone 18 Pro",
+    "before": {
+     "eligible": false,
+     "failed_gate": "5_momentum",
+     "strength": "STRONG",
+     "mechanisms": [
+      "device_launch"
+     ],
+     "points": 3,
+     "broad_reason": "everyday-life / mass-product / security anchor ('Apple')"
+    },
+    "after": {
+     "eligible": false,
+     "failed_gate": "4_inherent_virality",
+     "strength": "NONE",
+     "mechanisms": [],
+     "points": 1,
+     "broad_reason": "everyday-life / mass-product / security anchor ('Apple')"
+    }
+   },
+   {
+    "event": "iOS 27.0.1 released: Apple fixes annoying iPhone 18 Pro restart and freezing issues",
+    "before": {
+     "eligible": false,
+     "failed_gate": "5_momentum",
+     "strength": "STRONG",
+     "mechanisms": [
+      "device_launch"
+     ],
+     "points": 3,
+     "broad_reason": "everyday-life / mass-product / security anchor ('Apple')"
+    },
+    "after": {
+     "eligible": false,
+     "failed_gate": "4_inherent_virality",
+     "strength": "NONE",
+     "mechanisms": [],
+     "points": 1,
+     "broad_reason": "everyday-life / mass-product / security anchor ('Apple')"
+    }
+   }
+  ]
+ },
+ "canary": {
+  "winner_before": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+  "winner_after": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+  "winner_same": true,
+  "eligible_before": 5,
+  "eligible_after": 5,
+  "removed": [],
+  "added": [],
+  "order_same_otherwise": true,
+  "software_verdicts_changed": []
+ },
+ "canary2": {
+  "winner_before": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+  "winner_after": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+  "winner_same": true,
+  "eligible_before": 4,
+  "eligible_after": 4,
+  "removed": [],
+  "added": [],
+  "order_same_otherwise": true,
+  "software_verdicts_changed": []
+ },
+ "canary3": {
+  "winner_before": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+  "winner_after": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+  "winner_same": true,
+  "eligible_before": 4,
+  "eligible_after": 4,
+  "removed": [],
+  "added": [],
+  "order_same_otherwise": true,
+  "software_verdicts_changed": []
+ },
+ "canary4": {
+  "winner_before": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+  "winner_after": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+  "winner_same": true,
+  "eligible_before": 4,
+  "eligible_after": 4,
+  "removed": [],
+  "added": [],
+  "order_same_otherwise": true,
+  "software_verdicts_changed": []
+ },
+ "canary5": {
+  "winner_before": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+  "winner_after": "Анекдот: Claude снес разрабу 4️⃣8️⃣ 0️⃣0️⃣0️⃣ файлов за полторы минуты.",
+  "winner_same": true,
+  "eligible_before": 5,
+  "eligible_after": 5,
+  "removed": [],
+  "added": [],
+  "order_same_otherwise": true,
+  "software_verdicts_changed": []
+ },
+ "canary6": {
+  "winner_before": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+  "winner_after": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+  "winner_same": true,
+  "eligible_before": 6,
+  "eligible_after": 6,
+  "removed": [],
+  "added": [],
+  "order_same_otherwise": true,
+  "software_verdicts_changed": []
+ },
+ "canary7": {
+  "winner_before": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+  "winner_after": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+  "winner_same": true,
+  "eligible_before": 6,
+  "eligible_after": 6,
+  "removed": [],
+  "added": [],
+  "order_same_otherwise": true,
+  "software_verdicts_changed": []
+ },
+ "canary8": {
+  "winner_before": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+  "winner_after": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+  "winner_same": true,
+  "eligible_before": 6,
+  "eligible_after": 6,
+  "removed": [],
+  "added": [],
+  "order_same_otherwise": true,
+  "software_verdicts_changed": []
+ },
+ "canary9": {
+  "winner_before": "OpenAI agents tried to ‘bruteforce’ a UN website",
+  "winner_after": "OpenAI agents tried to ‘bruteforce’ a UN website",
+  "winner_same": true,
+  "eligible_before": 5,
+  "eligible_after": 5,
+  "removed": [],
+  "added": [],
+  "order_same_otherwise": true,
+  "software_verdicts_changed": []
+ },
+ "canary10": {
+  "winner_before": "OpenAI agents tried to ‘bruteforce’ a UN website",
+  "winner_after": "OpenAI agents tried to ‘bruteforce’ a UN website",
+  "winner_same": true,
+  "eligible_before": 6,
+  "eligible_after": 6,
+  "removed": [],
+  "added": [],
+  "order_same_otherwise": true,
+  "software_verdicts_changed": []
+ }
+}

@@ -1,0 +1,367 @@
+{
+ "pool": "canary8",
+ "now": "2026-09-27T21:27:34.410547+00:00",
+ "code_root": "C:\\Users\\Theodor\\ai-newsroom\\.worktrees\\instagram-b61",
+ "candidates": 320,
+ "events": 247,
+ "eligible": [
+  {
+   "rank": 1,
+   "event": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+   "copies": [
+    "d4ef74d3-1eef-4544-818a-1b8d24d8fa18",
+    "0ad4f236-27d6-4937-914c-0806dee22239",
+    "77d178d8-9ef2-4a7b-a91e-4eee4eb6fff5",
+    "273dc8ad-c786-4c17-88a3-d5b7cc0c48a2",
+    "10856ebf-530f-41b4-80ea-2c7592cca2b8",
+    "d08eaab6-90a6-48d1-b99f-fef7f059e01f",
+    "a6b32ec3-2697-432c-ae6e-c175c496b6e0"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "unexpected_ai_behaviour",
+    "security_surprise"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+   "momentum": "STRONG",
+   "actuality": "CURRENT",
+   "hook": "OpenAI Pauses Training of Latest Models After Agents Probed US Government Sites in Unexpected Ways",
+   "reason": "current (text: the behaviour is dated 'this summer'; the disclosure ('Researchers:') is new - first covered 2026-09-25 23:16 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour', 'security_surprise']; momentum strong (24 independent outlets carried this same event in the last 72 hours; 5 articles on it in the last 24 hours; on the Ha"
+  },
+  {
+   "rank": 2,
+   "event": "Red Dead Redemption 2 запустили на iPhone 18 Pro — c почти 30 FPS",
+   "copies": [
+    "5b494432-bf0f-491f-b08b-fdc471aad4af"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "device_launch"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('iPhone')",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "Red Dead Redemption 2 запустили на iPhone 18 Pro — c почти 30 FPS",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-26 07:54 UTC); broad (everyday-life / mass-product / security anchor ('iPhone')); strong mechanisms ['device_launch']; momentum weak (2 independent outlets carried this same event in the last 72 hours)"
+  },
+  {
+   "rank": 3,
+   "event": "ИИ-детектор жизни обманули на 100% за 150 мутаций: эксперимент с цифровыми организмами поставил под вопрос поиск",
+   "copies": [
+    "ff958e33-090c-491a-8c4d-0ae9a905e321",
+    "63f4bbd7-c9bf-49fd-a4f9-99f9dd571a86"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "unexpected behaviour of an AI system, stated in the headline",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "ИИ-детектор жизни обманули на 100% за 150 мутаций: эксперимент с цифровыми организмами поставил под вопрос поиск",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-27 19:14 UTC); broad (unexpected behaviour of an AI system, stated in the headline); strong mechanisms ['unexpected_ai_behaviour']; momentum weak (2 independent outlets carried this same event in the last 72 hours)"
+  },
+  {
+   "rank": 4,
+   "event": "⚡️OpenAI экстренно приостановила обучение своих самых мощных ИИ-моделей после ряда инцидентов и взломов, —",
+   "copies": [
+    "ab354ef6-159c-4111-a395-bbbc98554297",
+    "6eea4488-7f92-4083-8639-7ad4e96aae59",
+    "ee5409be-14b7-4a7c-aff3-a3c68a774cfc",
+    "24aa906f-f537-4c50-8c66-3c741b75b860",
+    "f7324c21-151d-498c-b0bf-c8c1ccac6505",
+    "e070454f-cd1f-4d85-a759-d2b0b5f7550e",
+    "4d1e6ee7-758f-4975-958f-a99fd992be25",
+    "8377acc1-8df5-46de-a3aa-3d2b66e6c616",
+    "2e5de36c-3702-4d7b-8ea4-0e44160b34fa",
+    "7da7d07d-ef39-45b2-8f47-642c9bc4b25a",
+    "ab3e0a20-5792-46c2-af4e-37a01d26df67",
+    "a730ac1d-2898-4fb4-bca3-6bbb6f3ab460",
+    "57d48e5b-3dac-4b34-9f55-ae4caa892c72"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 2,
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+   "momentum": "STRONG",
+   "actuality": "CURRENT",
+   "hook": "⚡️OpenAI экстренно приостановила обучение своих самых мощных ИИ-моделей после ряда инцидентов и взломов, —",
+   "reason": "current (coverage: 13 independent outlets since 2026-09-27 05:33 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour']; momentum strong (13 independent outlets carried this same event in the last 72 hours; 14 articles on it in the last 24 hours; 706 Telegram forwards; 401 Telegram reactions)"
+  },
+  {
+   "rank": 5,
+   "event": "OpenAI приостановила обучение ИИ-моделей — расследуются десятки тысяч инцидентов с выходом ИИ из-под контроля",
+   "copies": [
+    "217a5d86-ca0c-42f9-953e-d52e532a45d4",
+    "e8c10dab-7fa2-4550-b306-9bc2a34b98dd",
+    "40bbddd3-800a-4aab-b18d-a127219c8b8e",
+    "3deab429-ecf5-4422-b5d5-2ae2222a5fe0",
+    "1b46d64c-0228-47a2-8e04-9510cfa94586",
+    "28832183-0e68-43ba-b446-64a22d5444e8"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 2,
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+   "momentum": "MODERATE",
+   "actuality": "CURRENT",
+   "hook": "OpenAI приостановила обучение ИИ-моделей — расследуются десятки тысяч инцидентов с выходом ИИ из-под контроля — Выяснилось, что нейросети массово обходят защитные барьеры и предпринимают попытки взлома внешних систем, что указывает на фундаментальные сложности контроля технологии.",
+   "reason": "current (coverage: 3 independent outlets since 2026-09-27 04:11 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour']; momentum moderate (3 independent outlets carried this same event in the last 72 hours; 3 articles on it in the last 24 hours)"
+  },
+  {
+   "rank": 6,
+   "event": "Anthropic’s Dario Amodei gets the SNL treatment",
+   "copies": [
+    "058eb1fd-a60d-44de-b47f-03997fd35664",
+    "dc5a4dc2-23cc-4fb9-bc09-0c876251b044"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 2,
+   "mechanisms": [
+    "pop_culture_crossover"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "a tech moment in mass pop culture",
+   "momentum": "MODERATE",
+   "actuality": "CURRENT",
+   "hook": "Anthropic’s Dario Amodei gets the SNL treatment",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-27 16:30 UTC); broad (a tech moment in mass pop culture); strong mechanisms ['pop_culture_crossover']; momentum moderate (2 independent outlets carried this same event in the last 72 hours; on the Hacker News front page)"
+  }
+ ],
+ "winner": "Researchers: OpenAI's agents meddled with the US Commerce Dept. and SEC sites this summer without OpenAI's knowledge",
+ "software_release_events": [
+  {
+   "event": "Anthropic’s Dario Amodei gets the SNL treatment",
+   "copies": [
+    "058eb1fd-a60d-44de-b47f-03997fd35664",
+    "dc5a4dc2-23cc-4fb9-bc09-0c876251b044"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 2,
+   "mechanisms": [
+    "pop_culture_crossover"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "a tech moment in mass pop culture",
+   "momentum": "MODERATE",
+   "actuality": "CURRENT",
+   "hook": "Anthropic’s Dario Amodei gets the SNL treatment",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-27 16:30 UTC); broad (a tech moment in mass pop culture); strong mechanisms ['pop_culture_crossover']; momentum moderate (2 independent outlets carried this same event in the last 72 hours; on the Hacker News front page)"
+  },
+  {
+   "event": "⚡️Purble Place возвращается: в Steam появилась страница 3D-версии легендарной игры из Windows.",
+   "copies": [
+    "3886a2bd-d1e3-47fb-8ea4-852f26a1b76f"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Windows')",
+   "momentum": "STRONG",
+   "actuality": "UNCERTAIN",
+   "hook": "⚡️Purble Place возвращается: в Steam появилась страница 3D-версии легендарной игры из Windows.",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "5 of my favorite Android features you won’t find on Samsung or Pixel phones",
+   "copies": [
+    "e35b840a-ba61-4f41-b286-64937d4d14b0"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Android')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "5 of my favorite Android features you won’t find on Samsung or Pixel phones",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "Claude Code 2.1.283 получил аудит устаревших промптов и точную фиксацию моделей",
+   "copies": [
+    "f127ed3c-23ef-4435-8c76-c237cdde8d35"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "UNCLEAR",
+   "broad_reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Claude Code 2.1.283 получил аудит устаревших промптов и точную фиксацию моделей",
+   "reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise"
+  },
+  {
+   "event": "Qwen Code 0.24.6 получил управляемую среду выполнения и восстановление сессий",
+   "copies": [
+    "dfee4043-3ae7-4792-bca5-e0c6a57aeaf4"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "NARROW",
+   "broad_reason": "specialist / niche subject ('API') with no real-world consequence in the headline or lead",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Qwen Code 0.24.6 получил управляемую среду выполнения и восстановление сессий",
+   "reason": "specialist / niche subject ('API') with no real-world consequence in the headline or lead"
+  },
+  {
+   "event": "protoAgent 0.183.1 устранил повторные ревью PR и дублирование команд агентам",
+   "copies": [
+    "7f0be3d6-9a52-46aa-b1d3-2fb43a1c4b92"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "UNCLEAR",
+   "broad_reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "protoAgent 0.183.1 устранил повторные ревью PR и дублирование команд агентам",
+   "reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise"
+  },
+  {
+   "event": "Buda 1.29.1 добавила редактирование публикаций через API",
+   "copies": [
+    "06677dbb-a68f-4a99-9470-c856aa2755ba"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "NARROW",
+   "broad_reason": "specialist / niche subject ('API') with no real-world consequence in the headline or lead",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Buda 1.29.1 добавила редактирование публикаций через API",
+   "reason": "specialist / niche subject ('API') with no real-world consequence in the headline or lead"
+  },
+  {
+   "event": "I turned my Android phone’s annoying AI button into its most powerful shortcut key",
+   "copies": [
+    "45a22eee-677d-4c12-91dd-a57ee720065c"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Android')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "I turned my Android phone’s annoying AI button into its most powerful shortcut key",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "How to use Android's Desktop mode to turn your phone into a tiny PC",
+   "copies": [
+    "89b1c85e-cd58-4aa5-9253-9373b31c9f8b"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Android')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "How to use Android's Desktop mode to turn your phone into a tiny PC",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "How to use Android apps on your Windows PC (and why you might want to)",
+   "copies": [
+    "edae4f1a-cb42-4f9a-8ab0-7dfe37a8eabb"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Android')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "How to use Android apps on your Windows PC (and why you might want to)",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "Windows Wrap: Microsoft just tore up its Surface and Copilot+ PC playbook",
+   "copies": [
+    "1c602ff0-256f-4e01-bb36-65021d7857c8"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Windows')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Windows Wrap: Microsoft just tore up its Surface and Copilot+ PC playbook",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "How to use Spotify's Running Mode on iOS and Android",
+   "copies": [
+    "ede4233b-b839-4d7c-a4ff-b3299669f842"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Spotify')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "How to use Spotify's Running Mode on iOS and Android",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  }
+ ],
+ "provider_calls": 0,
+ "image_calls": 0
+}

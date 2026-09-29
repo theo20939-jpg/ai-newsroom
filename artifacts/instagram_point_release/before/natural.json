@@ -1,0 +1,914 @@
+{
+ "pool": "natural",
+ "now": "2026-09-29T11:46:25.890059+00:00",
+ "code_root": "C:\\Users\\Theodor\\AppData\\Local\\Temp\\claude\\C--Users-Theodor-ai-newsroom\\210dcfdd-ae57-40a9-a29c-f2b5fb18b9e3\\scratchpad\\before_a4e9dd4",
+ "candidates": 744,
+ "events": 590,
+ "eligible": [
+  {
+   "rank": 1,
+   "event": "Батарея на 11 000 мА·ч, прошлогодний Snapdragon и камера на 200 Мп: Honor представила геймерский смартфон Magic 9 Super",
+   "copies": [
+    "da549220-9650-4e69-9b3d-ba4dd856db0e"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 4,
+   "mechanisms": [
+    "device_launch"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "a consumer device launch or leak",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "Батарея на 11 000 мА·ч, прошлогодний Snapdragon и камера на 200 Мп: Honor представила геймерский смартфон Magic 9 Super",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-28 10:47 UTC); broad (a consumer device launch or leak); strong mechanisms ['device_launch']; momentum weak (2 independent outlets carried this same event in the last 72 hours)"
+  },
+  {
+   "rank": 2,
+   "event": "Anthropic upgrades Claude with new Sonnet 5.5 model, details here",
+   "copies": [
+    "c728f8d6-248a-4ea0-83bf-20a9520d4007",
+    "10906658-9628-4699-ae52-2f93d0c11f4c"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 4,
+   "mechanisms": [
+    "ai_launch"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "a new flagship AI model release",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "Anthropic выпустила нейросеть Claude Sonnet 5.5",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-28 18:07 UTC); broad (a new flagship AI model release); strong mechanisms ['ai_launch']; momentum weak (2 independent outlets carried this same event in the last 72 hours)"
+  },
+  {
+   "rank": 3,
+   "event": "OpenAI and Anthropic are skipping Australia's Senate AI hearing after the Medicare hack",
+   "copies": [
+    "2fae4e62-9a7a-4fe2-8488-d6f8ab161ec5",
+    "01c007ff-f291-4592-9cd2-e08ddb7b410a",
+    "f01f1c1e-fecb-4c48-a096-96d10d251114",
+    "da730f46-baa0-4538-bb51-882339e46b0a",
+    "d954fa94-323c-411f-baa2-cc6b26f851d5",
+    "f73d3ebe-37ed-45e2-963c-fd33b8392bd8"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "unexpected_ai_behaviour",
+    "security_surprise"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+   "momentum": "STRONG",
+   "actuality": "UNCERTAIN",
+   "hook": "OpenAI извинилась перед Австралией за взлом правительственных сайтов ИИ‑агентом — OpenAI извинилась перед Австралией за взлом правительственных сайтов ИИ‑агентом Хабр",
+   "reason": "current (article timestamp only - the event date is not stated and no independent source corroborates it); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour', 'security_surprise']; momentum strong (9 independent outlets carried this same event in the last 72 hours; 6 articles on it in the last 24 hours)"
+  },
+  {
+   "rank": 4,
+   "event": "Leak reveals new iPhone Duo features not yet announced",
+   "copies": [
+    "740172f0-3029-4687-9706-891a4a1ff7f4",
+    "f9c0f3ba-5725-45dc-a81e-ff4c77bac6b7"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "device_launch"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('iPhone')",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "Leak reveals new iPhone Duo features not yet announced — iPhone Duo is coming October 23 , but there are several unannounced features coming to its StandBy mode that were just discovered hidden in Apple code.",
+   "reason": "current (text: explicit recent time expression 'today'); broad (everyday-life / mass-product / security anchor ('iPhone')); strong mechanisms ['device_launch']; momentum weak (2 independent outlets carried this same event in the last 72 hours)"
+  },
+  {
+   "rank": 5,
+   "event": "OpenAI and Anthropic are reportedly investigating tens of thousands of AI security incidents; OpenAI pauses testing",
+   "copies": [
+    "e3a51ea0-5726-4237-be12-d49a84ab7cca",
+    "955f2492-690b-4cc3-8825-64b71305e840"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "unexpected_ai_behaviour",
+    "security_surprise"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "OpenAI and Anthropic are reportedly investigating tens of thousands of AI security incidents; OpenAI pauses testing — OpenAI and Anthropic are reviewing tens of thousands of AI safety incidents after frontier models bypassed guardrails, escaped sandboxes, and accessed real websites.",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-28 12:50 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour', 'security_surprise']; momentum weak (2 independent outlets carried this same event in the last 72 hours)"
+  },
+  {
+   "rank": 6,
+   "event": "On the 29th, physical artificial intelligence (AI) company Newbility unveiled a hybrid humanoid \"Bil..",
+   "copies": [
+    "d43d9b41-bf51-4381-81b6-1a6d8fcad4bc",
+    "a5611d5c-0628-4a88-8a82-2f3b609aef61"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "device_launch"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "a consumer device launch or leak",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "On the 29th, physical artificial intelligence (AI) company Newbility unveiled a hybrid humanoid \"Bil..",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-29 06:06 UTC); broad (a consumer device launch or leak); strong mechanisms ['device_launch']; momentum weak (2 independent outlets carried this same event in the last 72 hours)"
+  },
+  {
+   "rank": 7,
+   "event": "Apple Notes keeps getting better, here’s what’s new in iOS 27",
+   "copies": [
+    "418bd5b6-6476-47d7-9127-0ed9aa68108b",
+    "786f08cd-f6fe-4597-ad8f-09234aa5b1f4"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "device_launch"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Apple')",
+   "momentum": "NONE",
+   "actuality": "CURRENT",
+   "hook": "Apple releases iOS 27.0.1 for iPhone, here’s what’s new",
+   "reason": "current (text: explicit recent time expression 'just released'); broad (everyday-life / mass-product / security anchor ('Apple')); strong mechanisms ['device_launch']; momentum none (single source, no engagement signal)"
+  },
+  {
+   "rank": 8,
+   "event": "Apple Releases iOS 27.0.1 With Face ID Bug Fix",
+   "copies": [
+    "49ab24e0-54cb-43cf-98d0-c88ab00155ba"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "device_launch"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Apple')",
+   "momentum": "NONE",
+   "actuality": "CURRENT",
+   "hook": "Apple Releases iOS 27.0.1 With Face ID Bug Fix — Apple has also released iPadOS 27.0.1 and visionOS 27.0.1 updates, as well as iOS and i",
+   "reason": "current (text: explicit recent time expression 'today'); broad (everyday-life / mass-product / security anchor ('Apple')); strong mechanisms ['device_launch']; momentum none (single source, no engagement signal)"
+  },
+  {
+   "rank": 9,
+   "event": "ИИ-агенты OpenAI вышли из-под контроля: попытки взлома госсайтов США, реакция Конгресса",
+   "copies": [
+    "9c28a7f2-4f30-451a-933a-71120ccab069",
+    "90ac6874-fd7b-49c6-a2ba-0571ff690f73"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 2,
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('OpenAI')",
+   "momentum": "MODERATE",
+   "actuality": "CURRENT",
+   "hook": "ИИ-агенты OpenAI вышли из-под контроля: попытки взлома госсайтов США, реакция Конгресса",
+   "reason": "current (coverage: 3 independent outlets since 2026-09-27 14:16 UTC); broad (everyday-life / mass-product / security anchor ('OpenAI')); strong mechanisms ['unexpected_ai_behaviour']; momentum moderate (3 independent outlets carried this same event in the last 72 hours)"
+  },
+  {
+   "rank": 10,
+   "event": "Nvidia Says New Safety Platform Would Have Halted Hugging Face Hack",
+   "copies": [
+    "79adae2b-f1e6-4899-be23-ca5ac4c6a106",
+    "49ba9495-9456-4639-88db-2381f496d601"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 2,
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('hack')",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "Nvidia releases AI safety software it says could have stopped Hugging Face hack",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-28 14:13 UTC); broad (everyday-life / mass-product / security anchor ('hack')); strong mechanisms ['unexpected_ai_behaviour']; momentum weak (2 independent outlets carried this same event in the last 72 hours)"
+  },
+  {
+   "rank": 11,
+   "event": "UK Games Expo bans games and art made mostly using AI",
+   "copies": [
+    "b9e74dbd-f7da-4c09-b8db-84ee6aaddcfc",
+    "1591f380-3359-4e5d-adce-7279ba114500"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 2,
+   "mechanisms": [
+    "unexpected_ai_behaviour"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "unexpected behaviour of an AI system, stated in the headline",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "UK Games Expo bans games and art made mostly using AI — UKGE enforces booth shutdowns and bans after deleted-comment",
+   "reason": "current (coverage: 2 independent outlets since 2026-09-28 14:00 UTC); broad (unexpected behaviour of an AI system, stated in the headline); strong mechanisms ['unexpected_ai_behaviour']; momentum weak (2 independent outlets carried this same event in the last 72 hours)"
+  }
+ ],
+ "winner": "Батарея на 11 000 мА·ч, прошлогодний Snapdragon и камера на 200 Мп: Honor представила геймерский смартфон Magic 9 Super",
+ "software_release_events": [
+  {
+   "event": "Apple Notes keeps getting better, here’s what’s new in iOS 27",
+   "copies": [
+    "418bd5b6-6476-47d7-9127-0ed9aa68108b",
+    "786f08cd-f6fe-4597-ad8f-09234aa5b1f4"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "device_launch"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Apple')",
+   "momentum": "NONE",
+   "actuality": "CURRENT",
+   "hook": "Apple releases iOS 27.0.1 for iPhone, here’s what’s new",
+   "reason": "current (text: explicit recent time expression 'just released'); broad (everyday-life / mass-product / security anchor ('Apple')); strong mechanisms ['device_launch']; momentum none (single source, no engagement signal)"
+  },
+  {
+   "event": "Apple Releases iOS 27.0.1 With Face ID Bug Fix",
+   "copies": [
+    "49ab24e0-54cb-43cf-98d0-c88ab00155ba"
+   ],
+   "eligible": true,
+   "failed_gate": null,
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "device_launch"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Apple')",
+   "momentum": "NONE",
+   "actuality": "CURRENT",
+   "hook": "Apple Releases iOS 27.0.1 With Face ID Bug Fix — Apple has also released iPadOS 27.0.1 and visionOS 27.0.1 updates, as well as iOS and i",
+   "reason": "current (text: explicit recent time expression 'today'); broad (everyday-life / mass-product / security anchor ('Apple')); strong mechanisms ['device_launch']; momentum none (single source, no engagement signal)"
+  },
+  {
+   "event": "iOS 27.0.1 released: Apple fixes annoying iPhone 18 Pro restart and freezing issues",
+   "copies": [
+    "c2b6dd01-044b-4b9f-89c1-c140fcd33717"
+   ],
+   "eligible": false,
+   "failed_gate": "5_momentum",
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "device_launch"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Apple')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "iOS 27.0.1 released: Apple fixes annoying iPhone 18 Pro restart and freezing issues",
+   "reason": "single source, no momentum, and nothing in the text dates it as current (UNCERTAIN: article timestamp only - the event date is not stated and no independent source corroborates it)"
+  },
+  {
+   "event": "Apple выпустила срочное обновление iOS 27.0.1: исправлена критическая ошибка Face ID в iPhone 18 Pro",
+   "copies": [
+    "2ac62ef3-3e98-4971-89fc-bd3f6fc77ad1"
+   ],
+   "eligible": false,
+   "failed_gate": "5_momentum",
+   "strength": "STRONG",
+   "points": 3,
+   "mechanisms": [
+    "device_launch"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Apple')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Apple выпустила срочное обновление iOS 27.0.1: исправлена критическая ошибка Face ID в iPhone 18 Pro",
+   "reason": "single source, no momentum, and nothing in the text dates it as current (UNCERTAIN: article timestamp only - the event date is not stated and no independent source corroborates it)"
+  },
+  {
+   "event": "This Android browser now doubles as a travel eSIM",
+   "copies": [
+    "6a12c31a-5af5-4ced-94ef-a69a8037428b"
+   ],
+   "eligible": false,
+   "failed_gate": "5_momentum",
+   "strength": "STRONG",
+   "points": 2,
+   "mechanisms": [
+    "bizarre_event"
+   ],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Android')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "This Android browser now doubles as a travel eSIM",
+   "reason": "single source, no momentum, and nothing in the text dates it as current (UNCERTAIN: article timestamp only - the event date is not stated and no independent source corroborates it)"
+  },
+  {
+   "event": "The road to the agentic browser: A Kitesurf update",
+   "copies": [
+    "665fc51d-627f-4e94-9db8-2b8961b4f22c"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 2,
+   "mechanisms": [],
+   "broad": "UNCLEAR",
+   "broad_reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "The road to the agentic browser: A Kitesurf update — With over 730,000 Web Platform subtests passing, agents can now navigate complex sites faster.",
+   "reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise"
+  },
+  {
+   "event": "Pixel Watch update adds Google’s new 3D emoji",
+   "copies": [
+    "1008767f-e258-4f9b-919c-a719ab7e4ad5",
+    "d7bc0f72-e93c-446a-b91b-4892f1f1afd2"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Google')",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "Pixel Watch update adds Google’s new 3D emoji",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "Pixel Buds app update lets Gemini control audio and settings",
+   "copies": [
+    "015fa43c-5649-4ec7-b63a-501020981f92",
+    "8687e64d-134b-4422-8824-0148ab84a657"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Google')",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "Pixel Buds app update lets Gemini control audio and settings — With the Pixel 11 launch, Google promised a big Pixel Buds update in September.",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "Apple Releases macOS Golden Gate 27.0.1 With Bug Fixes",
+   "copies": [
+    "644f6d8d-25f1-4e22-ae81-111fa5ea8fbd",
+    "41ae86d2-507a-4af2-bcb7-86738cac9877"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Apple')",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "Apple Releases macOS Golden Gate 27.0.1 With Bug Fixes",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "Gemini fully replaces Google Assistant on Android",
+   "copies": [
+    "852afc71-26ad-449e-8bdf-0c8ead519cb1",
+    "63d4aea1-1200-4d69-977c-1c51a08b8075",
+    "cf370ea0-2f27-4196-989e-f5af07b34921"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Google')",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "Gemini полностью заменил «Google Ассистента» на Android — Gemini полностью заменил «Google Ассистента» на Android 3DNews",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "В России подскочили продажи восстановленных Android-смартфонов",
+   "copies": [
+    "041b41d0-b8bf-4779-b801-88345659109c"
+   ],
+   "eligible": false,
+   "failed_gate": "2_event_actuality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "NARROW",
+   "broad_reason": "specialist / niche subject ('драйвером') with no real-world consequence in the headline or lead",
+   "momentum": "NONE",
+   "actuality": "OLD",
+   "hook": "В России подскочили продажи восстановленных Android-смартфонов — Главным драйвером роста стали Android-смартфоны, доля которых в общих продажах восстановленных смартфонов выросла в августе 2026 года до 56 % с 51% в июле.",
+   "reason": "not a current event - text: the latest date the text gives for the event is 'в августе 2026' (28 days ago)"
+  },
+  {
+   "event": "iOS 26.7.1 available now for iPhone with security fixes",
+   "copies": [
+    "fb403f62-f4f0-4fb9-a019-e86cc59c56f0"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('iPhone')",
+   "momentum": "NONE",
+   "actuality": "CURRENT",
+   "hook": "iOS 26.7.1 available now for iPhone with security fixes",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "Apple Releases watchOS 27.0.1 for Additional Models",
+   "copies": [
+    "00c02457-e1f1-401b-84d1-3faefab137a4"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Apple')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Apple Releases watchOS 27.0.1 for Additional Models",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "watchOS 27.0.1 is now available for all compatible Apple Watch models",
+   "copies": [
+    "4d753e06-cf27-4355-8d6f-41e35516d9df"
+   ],
+   "eligible": false,
+   "failed_gate": "2_event_actuality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Apple')",
+   "momentum": "NONE",
+   "actuality": "OLD",
+   "hook": "watchOS 27.0.1 is now available for all compatible Apple Watch models",
+   "reason": "not a current event - coverage: this same factual event was first covered 2026-09-14 (14 days ago) - a rewrite, not a new fact"
+  },
+  {
+   "event": "You Should Download iOS 27.0.1 Now for These iPhone Fixes",
+   "copies": [
+    "6a983224-7378-42ac-993c-6e14d409dfe2"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('iPhone')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "You Should Download iOS 27.0.1 Now for These iPhone Fixes",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "Некоторые владельцы iPhone 18 Pro остались с багами: iOS 27.0.1 не исправила проблему с экраном",
+   "copies": [
+    "b4d92519-1af2-4ce8-b804-c022564fd6c3"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('iPhone')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Некоторые владельцы iPhone 18 Pro остались с багами: iOS 27.0.1 не исправила проблему с экраном",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "Samsung rolling out Android 17, One UI 9 for more Galaxy S26 users – here’s everything new",
+   "copies": [
+    "e249fd21-1fd6-4a0f-9fc1-96ab4a72e638"
+   ],
+   "eligible": false,
+   "failed_gate": "2_event_actuality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Samsung')",
+   "momentum": "NONE",
+   "actuality": "OLD",
+   "hook": "Samsung rolling out Android 17, One UI 9 for more Galaxy S26 users – here’s everything new",
+   "reason": "not a current event - coverage: this same factual event was first covered 2026-09-16 (12 days ago) - a rewrite, not a new fact"
+  },
+  {
+   "event": "Samsung Galaxy S26, Galaxy S26+ и Galaxy S26 Ultra в Европе получат финальную прошивку One UI 9 уже сегодня, 29 сентября",
+   "copies": [
+    "4c05b8b6-0f90-451a-af5f-7b6d29f7b5fe"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Samsung')",
+   "momentum": "NONE",
+   "actuality": "CURRENT",
+   "hook": "Samsung Galaxy S26, Galaxy S26+ и Galaxy S26 Ultra в Европе получат финальную прошивку One UI 9 уже сегодня, 29 сентября",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "The Galaxy S25 and Z7 series are joining Samsung’s stable One UI 9 rollout",
+   "copies": [
+    "f6f47f84-dad2-4565-bbd9-a9a2d04f2fa0"
+   ],
+   "eligible": false,
+   "failed_gate": "2_event_actuality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Samsung')",
+   "momentum": "NONE",
+   "actuality": "OLD",
+   "hook": "The Galaxy S25 and Z7 series are joining Samsung’s stable One UI 9 rollout",
+   "reason": "not a current event - coverage: this same factual event was first covered 2026-09-16 (12 days ago) - a rewrite, not a new fact"
+  },
+  {
+   "event": "iOS 26.7.1 Fixes Vulnerability Used in Targeted Attacks",
+   "copies": [
+    "32f3b0cf-e146-4593-afe4-d2e0a73f81f4"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Apple')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "iOS 26.7.1 Fixes Vulnerability Used in Targeted Attacks",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "macOS 27: How to use the new ‘Notify Me’ feature in Safari",
+   "copies": [
+    "f29a5243-4c74-499b-bf39-1dc452fe4bd4"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "UNCLEAR",
+   "broad_reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "macOS 27: How to use the new ‘Notify Me’ feature in Safari",
+   "reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise"
+  },
+  {
+   "event": "Opera for Android now comes with a free eSIM and 3GB of data",
+   "copies": [
+    "46036a0a-c750-43ea-b35d-7c2040e7e715"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Android')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Opera for Android now comes with a free eSIM and 3GB of data",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "How I replaced 4 popular Android apps with built-in Gboard features",
+   "copies": [
+    "a6130fb8-7b01-42ae-9ae5-4cbfffa570e4"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Android')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "How I replaced 4 popular Android apps with built-in Gboard features",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "This might be the most affordable Game Boy-style handheld running Android",
+   "copies": [
+    "96049d15-f09c-4d7d-8593-09ccd424a971"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Android')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "This might be the most affordable Game Boy-style handheld running Android — This Android handheld combines a sub-$100 price with a Game Boy-style form factor.",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "A 'fundamental' update for this 34-year-old survival game is coming in October",
+   "copies": [
+    "f418ec30-98c0-43ef-af75-56c7c0a57684"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 1,
+   "mechanisms": [],
+   "broad": "UNCLEAR",
+   "broad_reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "A 'fundamental' update for this 34-year-old survival game is coming in October",
+   "reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise"
+  },
+  {
+   "event": "Firebase SDK is CRASHING ALLLL iOS Apps, since today morning",
+   "copies": [
+    "2bb7cc25-63da-4a27-b643-b6c4a2d12d25"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "NARROW",
+   "broad_reason": "specialist / niche subject ('SDK') with no real-world consequence in the headline or lead",
+   "momentum": "MODERATE",
+   "actuality": "CURRENT",
+   "hook": "Firebase SDK is CRASHING ALLLL iOS Apps, since today morning",
+   "reason": "specialist / niche subject ('SDK') with no real-world consequence in the headline or lead"
+  },
+  {
+   "event": "Google оспорит требование ЕС открыть Android для альтернативных ИИ-помощников",
+   "copies": [
+    "03159420-f4cf-4442-92ad-cad3f731dd5f",
+    "2e5fcda9-6479-4dc3-bc5e-a92b3f53f336"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Google')",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "Google оспорит требование ЕС открыть Android для альтернативных ИИ-помощников",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "\"We are way too self-obsessed\": Nadella calls out AI hype, but will Microsoft listen?",
+   "copies": [
+    "37495cc7-718b-40b0-b74d-6848d44328c6",
+    "457104a3-c2ee-4566-83b8-1c1724744b45"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "UNCLEAR",
+   "broad_reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise",
+   "momentum": "WEAK",
+   "actuality": "CURRENT",
+   "hook": "\"We are way too self-obsessed\": Nadella calls out AI hype, but will Microsoft listen?",
+   "reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise"
+  },
+  {
+   "event": "How to improve sound quality on your Android phone during calls",
+   "copies": [
+    "951b93aa-3952-4d27-96e0-d4283df6ac8a",
+    "b7ec0a7b-6ef0-4a7b-8dd2-2beee8f279fb"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Android')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "How to improve sound quality on your Android phone during calls",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "This setting change can make your Android phone feel instantly faster",
+   "copies": [
+    "a831a297-9444-4cc3-9b79-c89cf8c81940"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Android')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "This setting change can make your Android phone feel instantly faster",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "Google Translate could soon auto-save transcripts of your Live conversations, but not on Android XR",
+   "copies": [
+    "9572ba18-30fe-46cb-a306-da81dded2cf4"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Google')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Google Translate could soon auto-save transcripts of your Live conversations, but not on Android XR",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "This beloved Android Auto app now offers a much better live TV and YouTube experience",
+   "copies": [
+    "cbb89bb6-137c-4b8c-9fd9-e2f7a5755289"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Android')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "This beloved Android Auto app now offers a much better live TV and YouTube experience",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "This iconic ad-free Android TV launcher is finally getting a makeover after nearly a decade",
+   "copies": [
+    "9495aede-c96e-4850-9910-0a90bd62fb63"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Android')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "This iconic ad-free Android TV launcher is finally getting a makeover after nearly a decade",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "Google quietly made Find Hub an Android app I can’t live without",
+   "copies": [
+    "58f061fd-88f5-44bd-bcd3-e9221329d7e0"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Google')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Google quietly made Find Hub an Android app I can’t live without",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "Google is pushing back against opening up Android AI and Search",
+   "copies": [
+    "f2db3a16-d7d2-40ff-97c8-b9b721d1a1e9"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Google')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Google is pushing back against opening up Android AI and Search",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "This BlackBerry Passport running Android could be yours soon, if you have a fat wallet",
+   "copies": [
+    "2c398889-127f-48c3-960e-bf65c104c1a6"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Android')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "This BlackBerry Passport running Android could be yours soon, if you have a fat wallet",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "Thousands of iOS apps started crashing because of Google (wait, what?)",
+   "copies": [
+    "047f089b-63c9-42f2-9038-e4ad0e40c5dd"
+   ],
+   "eligible": false,
+   "failed_gate": "4_inherent_virality",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "BROAD",
+   "broad_reason": "everyday-life / mass-product / security anchor ('Google')",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Thousands of iOS apps started crashing because of Google (wait, what?)",
+   "reason": "the strongest factual sentence carries no viral mechanism - the story would need invented framing"
+  },
+  {
+   "event": "Latest Galaxy Store update makes a key element easier to access",
+   "copies": [
+    "751671fe-2542-4537-827e-d904affb06a6"
+   ],
+   "eligible": false,
+   "failed_gate": "3_broad_interest",
+   "strength": "NONE",
+   "points": 0,
+   "mechanisms": [],
+   "broad": "UNCLEAR",
+   "broad_reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise",
+   "momentum": "NONE",
+   "actuality": "UNCERTAIN",
+   "hook": "Latest Galaxy Store update makes a key element easier to access",
+   "reason": "no everyday-life, mass-product or consequence anchor a general reader would recognise"
+  }
+ ],
+ "provider_calls": 0,
+ "image_calls": 0
+}

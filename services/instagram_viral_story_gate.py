@@ -306,9 +306,13 @@ def assess_broad_interest(title: str, lead: str) -> tuple[str, str]:
     # founder decision 2026-09-29: a real launch (a new AI model / product, a consumer device), an unusual device someone built, or a tech
     # moment in mass pop culture is understood from one sentence - the EVENT is the anchor, not a famous name (953e77d stays: a name alone
     # never counts)
-    family = next((m for m in ("ai_launch", "device_launch", "device_novelty", "pop_culture_crossover") if _MECHANISMS[m].search(head)), None)
-    if family and not (family in ("ai_launch", "device_launch") and _NOT_A_LAUNCH.search(head)):
+    routine = routine_software_release(title, lead)  # a bug-fix / security / stability release is no launch (point-release fix)
+    family = next((m for m in ("ai_launch", "device_launch", "software_launch", "device_novelty", "pop_culture_crossover")
+                   if mechanism_found(m, head) and not (routine and m in _LAUNCH_FAMILIES)), None)
+    if family and not (family in ("ai_launch", "device_launch", "software_launch") and _NOT_A_LAUNCH.search(head)):
         return "BROAD", {"ai_launch": "a new AI model / product launch", "device_launch": "a consumer device launch or leak",
+                         "software_launch": "a software release with a release-level change (a redesign, the biggest update, new AI "
+                                            "features)",
                          "device_novelty": "an unusual device and what it does", "pop_culture_crossover": "a tech moment in mass pop culture"}[family]
     if consequence:
         return "BROAD", f"a real-world consequence ({consequence.group(0)!r})"
@@ -318,6 +322,18 @@ def assess_broad_interest(title: str, lead: str) -> tuple[str, str]:
 # --- 4. inherent viral strength ------------------------------------------------------------------------------------------------------
 _ACTOR_ONLY = _rx(r"\bмоддер\w*", r"\bэнтузиаст\w*", r"\bmodder\w*", r"\benthusiast\w*", r"\bjust a guy\b", r"\bнеобычн\w*", r"\bunusual\b",
                   r"\bweird\b", r"\bстранн\w*", r"\bstrange\b")  # adjectives / actors that only CLAIM strangeness
+# POINT-RELEASE FALSE POSITIVE (founder task 2026-09-29, after the final natural canary): a software release is judged on WHAT CHANGED.
+# A release-level change a reader notices - a redesign / overhaul, the biggest / a major update, new AI features or capabilities, dozens of
+# new features - is a real software launch. A fix, a patch or a stability release is maintenance, never a launch.
+_SIGNIFICANT_CHANGE_RX = (
+    r"(?:\b(?:major|complete|full|total|big|huge|massive|dramatic)\s+(?:visual\s+)?(?:redesign|overhaul|revamp|makeover)\b|"
+    r"\b(?:redesigned|new)\s+(?:interface|design|look|home screen|user interface|ui)\b|\boverhaul\w*|\brevamp\w*|\breimagin\w*|"
+    r"\b(?:biggest|major|huge|massive)\s+(?:software\s+)?(?:update|upgrade|release)\b|\ball-new\b|\bbrand-new\b|"
+    r"\bnew\s+(?:generative\s+)?ai\s+(?:features?|capabilit\w*|tools?|assistant|agents?|mode)\b|\bai-powered\b|"
+    r"\b(?:dozens|hundreds|\d{2,})\s+(?:of\s+)?new\s+features\b|"
+    r"\bредизайн\w*|\bполностью\s+(?:переработ\w*|нов\w*)|\b(?:крупнейш|масштабн|крупн)\w*\s+обновлени\w*|"
+    r"\bнов\w*\s+(?:ии|ai)[- ]?(?:функци\w*|возможност\w*|инструмент\w*|ассистент\w*)|\b(?:десятк\w*|сотн\w*)\s+новых\s+функци\w*)"
+)
 _AI_ACTOR_RX = (r"(?:\ba\.i\.(?=\W|$)|\b(?:ai|agents?|bots?|chatbots?|models?|ии|нейросет\w*|агент(?!ств)\w*|бот\w*|chatgpt|claude|gemini|"
                 r"deepseek|grok)\b)")
 _MECHANISMS: dict[str, re.Pattern[str]] = {
@@ -375,6 +391,12 @@ _MECHANISMS: dict[str, re.Pattern[str]] = {
         r"дрон\w*|humanoids?|гуманоид\w*|exoskeleton\w*|экзоскелет\w*|машин\w*-\w+)\b",
         r"\b(robots?|робот\w*|drones?|дрон\w*|humanoids?|гуманоид\w*)\b[^!?]{0,80}\b(crawls?|climbs?|walks? on|ползат\w*|лаза\w*|по потолку|"
         r"сварк\w*|welds?|cooks?|готовит|folds?|играет|plays?|dances?|танцу\w*)\b"),
+    # a software release that carries a release-level change (a redesign, the biggest update, new AI features) - see _SIGNIFICANT_CHANGE_RX;
+    # a bug-fix / security / stability release never matches, and routine_software_release() removes every launch family from one
+    "software_launch": _rx(
+        r"\b(launch(es|ed)?|unveil(s|ed)?|releas(es|ed)|introduc(es|ed)|debut(s|ed)?|rolls? out|rolled out|arrives?|is out|выпустил\w*|"
+        r"представил\w*|запустил\w*|вышл\w*|вышел)\b[^!?]{0,100}" + _SIGNIFICANT_CHANGE_RX,
+        _SIGNIFICANT_CHANGE_RX + r"[^!?]{0,100}\b(updates?|upgrades?|releases?|versions?|обновлени\w*|верси\w*|\w+os)\b"),
     # an AI system achieving something astonishing - cracking, solving, deciphering, beating, a record (founder: unexpected tech records)
     "ai_feat": _rx(_AI_ACTOR_RX + r"[^!?]{0,60}\b(crack(s|ed)|solv(es|ed)|decod(es|ed)|deciphe\w*|beat(s)?|won|wins|broke (the |a )?record|"
                    r"расшифровал\w*|разгадал\w*|обыграл\w*|побил\w* рекорд\w*)\b"),
@@ -390,7 +412,51 @@ _NOT_A_LAUNCH = _rx(r"\bplans?\b", r"\bwill\b", r"\broadmap\b", r"\bexpansion\b"
 # versioned model / product launch is strong for any audience (founder 2026-09-29: an enterprise label alone never excludes a launch)
 _GENERIC_RELEASE = _rx(r"\b(?:a|an) new \w+ (?:model|feature|update|version|tool|option|setting)s?\b",
                        r"\bнов(?:ую|ая|ый|ое|ые) (?:функци\w*|модел\w*|верси\w*|настройк\w*|обновлени\w*)\b")
-_LAUNCH_FAMILIES = ("ai_launch", "device_launch", "device_novelty")
+# a software release: an '...OS' platform name (case-sensitive: a lower-case letter then 'OS' - never 'photos'), a dotted point version
+# (27.0.1), an update / firmware / patch / build
+_OS_NAME = re.compile(r"\b[A-Za-z]*[a-z]OS\b")
+_SOFTWARE_SIGNAL = _rx(r"\b\d+\.\d+\.\d+\b", r"\b(?:software|security|firmware|system|app)\s+update\w*", r"\bupdates?\b", r"\bfirmware\b",
+                       r"\bpatch(?:es|ed)?\b", r"\bbuild \d", r"\bобновлени\w*", r"\bпрошивк\w*", r"\bпатч\w*", r"\bверси[яиюей]\s+\d")
+# what a maintenance release changes: fixes, patches, stability, security
+_MAINTENANCE = _rx(r"\bbug[- ]?fix\w*", r"\bfix(?:es|ed)?\b", r"\bsquash\w*", r"\bbugs?\b", r"\bsecurity (?:fix\w*|patch\w*|update\w*|content)\b",
+                   r"\bvulnerabilit\w*", r"\bexploit\w*", r"\bpatch(?:es|ed)?\b", r"\bstability\b", r"\bperformance improvements?\b",
+                   r"\bminor (?:update|release|fix\w*)\b", r"\bmaintenance\b", r"\bissues?\b", r"\bисправ\w*", r"\bошибк\w*", r"\bбаг\w*",
+                   r"\bуязвимост\w*", r"\bстабильност\w*", r"\bзаплатк\w*", r"\bпатч\w*", r"\bпроблем\w*")
+_SIGNIFICANT_CHANGE = _rx(_SIGNIFICANT_CHANGE_RX)
+
+
+def _names_software(span: str) -> bool:
+    return bool(_SOFTWARE_SIGNAL.search(span) or _OS_NAME.search(span))
+
+
+def device_launch_found(text: str) -> bool:
+    """A consumer device launch - the released thing IS the device. 'releases iOS 27.0.1 for iPhone' / 'released iPadOS 27.0.1' release
+    software FOR a device: a software release, judged by routine_software_release() / software_launch, never a device launch."""
+    return any(not _names_software(m.group(0)) for m in _MECHANISMS["device_launch"].finditer(text))
+
+
+# what a software launch releases: an '...OS' platform, an app / software / operating system / browser, or a versioned product name
+_SOFTWARE_OBJECT = re.compile(r"\b[A-Za-z]*[a-z]OS\b|\b[A-Z][A-Za-z]+ \d+(?:\.\d+)*\b|(?i:\b(?:apps?|software|operating system|browser|"
+                              r"приложени\w*|программ\w* обеспечени\w*|операционн\w* систем\w*|браузер\w*)\b)")
+
+
+def mechanism_found(name: str, text: str) -> bool:
+    if name == "device_launch":
+        return device_launch_found(text)
+    if name == "software_launch":  # 'a certificate program undergoes a major update' is no software release
+        return bool(_MECHANISMS[name].search(text)) and bool(_SOFTWARE_OBJECT.search(text))
+    return bool(_MECHANISMS[name].search(text))
+
+
+def routine_software_release(title: str, lead: str) -> bool:
+    """The story's own text reports a software release whose change is maintenance only - a bug fix, a security patch, a stability or
+    minor update - with no release-level change anywhere in it and no flagship model named. Such a release is never a launch story."""
+    head = f"{title} {lead}"
+    return (_names_software(title) and bool(_MAINTENANCE.search(head)) and not _SIGNIFICANT_CHANGE.search(head)
+            and not _VERSIONED_MODEL.search(title))
+
+
+_LAUNCH_FAMILIES = ("ai_launch", "device_launch", "device_novelty", "software_launch")
 # how much each kind of reason to care weighs for a social-first feed (founder decision 2026-09-29): relatable / absurd / surprising events
 # and real launches weigh 2, institutional signals 1 - wider coverage (momentum) only breaks ties AFTER this, so a clearly stronger story
 # is never beaten merely by being less covered
@@ -458,12 +524,17 @@ def assess_inherent_strength(title: str, lead: str) -> tuple[str, list[str], str
     if _COMMENTARY.search(title):
         return "NONE", [], title
     title, lead = own_event_text(title), own_event_text(lead)  # mechanisms must belong to the story's own event, never to its background
+    # founder task 2026-09-29 (point-release false positive): judged on WHAT CHANGED - a release whose own text reports only fixes / patches /
+    # stability is maintenance, so no sentence of it counts as a launch (its other reasons to care, e.g. a real failure, are kept)
+    routine = routine_software_release(title, lead)
     best: tuple[int, list[str], str] = (0, [], _hook_sentences(title, lead)[0])
     for sentence in _hook_sentences(title, lead):
         text = _ACTOR_ONLY.sub(" ", sentence)
-        found = [name for name, pattern in _MECHANISMS.items() if pattern.search(text)]
+        found = [name for name in _MECHANISMS if mechanism_found(name, text)]
         if _NOT_A_LAUNCH.search(text):
-            found = [m for m in found if m not in ("ai_launch", "device_launch")]
+            found = [m for m in found if m not in ("ai_launch", "device_launch", "software_launch")]
+        if routine:
+            found = [m for m in found if m not in _LAUNCH_FAMILIES]
         points = story_points(found, sentence)
         if points > best[0]:
             best = (points, found, sentence)
