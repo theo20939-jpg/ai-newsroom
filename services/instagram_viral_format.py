@@ -520,6 +520,87 @@ def thesis_relation(prev: Any, cur: Any, *, earlier_slides: list[Any]) -> str | 
     return None
 
 
+# founder task 2026-09-30 (final natural acceptance, 4046376): the ONE correction replaced a slide blocked for adding no new information with
+# another restatement in fresh words ('несколько моделей под брендом' for an earlier 'не одна модель', 'обновление середины' for an earlier
+# 'обновляет ... середину') - the checks above compare a slide with its NEIGHBOUR only and count surface words, so it survived. A slide's
+# beat is compared with EVERYTHING the earlier slides already said, by proposition, not wording.
+PADDING_COVERED_SHARE = 0.5  # calibrated on every saved Director output (34 distinct): 0.4 already takes real beats
+VIRAL_MIN_SLIDES = 4  # the viral contract's own floor (VIRAL_CAROUSEL_NOTE: 'at least 4, at most 7')
+_NOT_ONE = re.compile(r"(?i)\bне\s+(?:один|одна|одно|одни|одной|одного|одну|одним)\b")
+_MANY = re.compile(r"^(?:нескольк|многи|много|множеств|ряд|several|multiple|many)")
+
+
+def _beat_tokens(text: str) -> set[str]:
+    """thesis_tokens with quantifier equivalents folded: 'не одна модель' and 'несколько моделей' state the same proposition."""
+    tokens = thesis_tokens(_NOT_ONE.sub(" несколько ", text or ""))
+    return {"MANY" if _MANY.search(t) else t for t in tokens}
+
+
+def _already_said(token: str, said: set[str]) -> bool:
+    """Same polarity and the same word: equal, or one derivation ('обновляет' / 'обновление' share a six-letter base)."""
+    neg, base = token.startswith("¬"), token.lstrip("¬")
+    for other in said:
+        if other.startswith("¬") != neg:
+            continue
+        o = other.lstrip("¬")
+        if o == base or (len(o) >= 6 and len(base) >= 6 and o[:6] == base[:6]):
+            return True
+    return False
+
+
+def restates_earlier_slides(cur: Any, earlier: list[Any]) -> str | None:
+    """Founder rule 2026-09-30: EVERY FINAL SLIDE ADDS A DISTINCT INFORMATIONAL BEAT. A slide is padding when, against the union of ALL
+    earlier slides (not only its neighbour): it brings no new name or number, it takes no specific editorial role no earlier slide already
+    had, and at least half of its propositions are already stated there - a rephrased summary, whatever its words or its judge role label.
+    Returns the explanation, or None when the slide is a new beat."""
+    from services.instagram_editorial_critic import anchors
+
+    if not earlier:
+        return None
+    text = _slide_text(cur)
+    said_anchors = set().union(*(anchors(_slide_text(s)) for s in earlier))
+    if {a for a in anchors(text) - said_anchors if a not in {"ai", "ai-"}}:
+        return None  # a new name / number is a new concrete detail
+    role = proposition_role(cur)
+    if role in SPECIFIC_THESIS_ROLES and role not in {proposition_role(s) for s in earlier}:
+        return None  # a new editorial role (chronology, status, statement, ...) is a new beat
+    mine = _beat_tokens(text)
+    if len(mine) < 3:
+        return None  # too little Russian text to judge a proposition
+    said = set().union(*(_beat_tokens(_slide_text(s)) for s in earlier))
+    covered = sorted(t for t in mine if _already_said(t, said))
+    if len(covered) < PADDING_COVERED_SHARE * len(mine):
+        return None
+    return (f"it adds no new beat: {len(covered)} of its {len(mine)} points ({', '.join(covered)}) and every name / number are already "
+            "on earlier slides - a rephrased summary is not new information")
+
+
+def drop_padding_slides(slides: list[Any], *, min_slides: int = VIRAL_MIN_SLIDES) -> tuple[list[Any], list[dict]]:
+    """After the ONE correction: a slide that only restates earlier slides is DROPPED - never kept to preserve the count, never rewritten
+    (no model call, no new copy). The hook is never dropped, and nothing is dropped below the viral floor: then the slide stays and its
+    finding stops the post exactly as before. The conclusion ROLE is a sequence position (schemas.instagram_creative.TERMINAL_ROLES: the
+    last slide ends the carousel): when the dropped padding was the last slide, the slide that now ends the carousel takes its role label -
+    its copy is untouched and it is validated as the last slide like any other. Returns (kept slides, [{index (1-based, original), headline,
+    reason, role_moved_to?}])."""
+    from schemas.instagram_creative import TERMINAL_ROLES
+
+    kept: list[Any] = []
+    dropped: list[dict] = []
+    for index, slide in enumerate(slides):
+        reason = restates_earlier_slides(slide, kept) if kept else None
+        if reason and len(slides) - len(dropped) - 1 >= min_slides:
+            dropped.append({"index": index + 1, "headline": _copy(slide), "reason": reason})
+            continue
+        kept.append(slide)
+    if dropped and dropped[-1]["index"] == len(slides):
+        ending = str(_get(slides[-1], "role") or "").strip().lower()
+        if ending in TERMINAL_ROLES and str(_get(kept[-1], "role") or "").strip().lower() not in TERMINAL_ROLES:
+            last = kept[-1]
+            kept[-1] = {**last, "role": ending} if isinstance(last, dict) else last.model_copy(update={"role": ending})
+            dropped[-1]["role_moved_to"] = {"slide": len(kept), "role": ending}
+    return kept, dropped
+
+
 _WORD_RE = re.compile(r"[A-Za-zА-Яа-яЁё0-9\-]+")
 
 
@@ -765,6 +846,11 @@ def viral_copy_findings(slides: list[Any], evidence: list[str], *, caption: str 
         same = same_proposition(prev, cur)
         if same:
             problems.append(f"slides {index} and {index + 1} make the same point ({same}) - merge them or give the second a new fact")
+    for index in range(1, len(slides)):
+        padding = restates_earlier_slides(slides[index], slides[:index])
+        if padding:
+            problems.append(f"slide {index + 1} restates earlier slides ({padding}) - drop it and make the carousel shorter, or give it a "
+                            "genuinely new grounded fact; never refill it with another summary")
     return list(dict.fromkeys(problems))
 
 

@@ -1212,6 +1212,16 @@ async def _validate_viral_carousel(
     deterministic: list[str] = []
     outcome: CreativeGenerationOutcome | None = None
     correcting = bool(director_input.contract_retry_note)
+    if correcting:
+        # founder task 2026-09-30: a corrected slide that only restates earlier slides is DROPPED, never kept to preserve the count (the
+        # carousel may shrink to the viral floor). No model call and no new copy - the shorter version passes every check below or stops.
+        from services.instagram_viral_format import drop_padding_slides
+
+        kept, dropped = drop_padding_slides(list(output.get("slides") or []))
+        if dropped:
+            _emit_diagnostic("correction_padding_dropped", {"dropped": dropped, "slides_before": len(kept) + len(dropped),
+                                                            "slides_after": len(kept)})
+            output = {**output, "slides": kept}
     slides, caption = list(output.get("slides") or []), str(output.get("final_caption") or "")
     evidence = list(director_input.allowed_evidence)
     if not correcting:
