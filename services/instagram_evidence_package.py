@@ -318,11 +318,81 @@ def premise_quantities(premise: str) -> list[str]:
     return out
 
 
-def _select_facts(items: Iterable[EvidenceItem], premise: str, limit: int) -> tuple[EvidenceItem, ...]:
+# founder task 2026-09-30 (final natural acceptance, Claude Sonnet 5.5): the article said the model runs 30% faster, costs up to 30% less,
+# is strongest at fixing bugs and documents / slides / spreadsheets and is the first Sonnet with cyber safeguards - but the 6 fact slots
+# were filled in PAGE order, and the page opened with the maker's product lineup. A LAUNCH story's facts are chosen by what they say
+# about the launch: measured quantities, capabilities, change against the predecessor. By form, never by product name or phrase list.
+LAUNCH_MECHANISMS = frozenset({"ai_launch", "device_launch", "software_launch"})
+_UNIT_QUANTITY = re.compile(
+    r"(?i)[$€£₽]\s?\d|\d(?:[\d.,   ]*\d)?\s?(?:%|процент\w*|\$|€|£|₽|руб\w*|долл\w*|mah\b|ма·?ч|мач\b|gb\b|гб\b|tb\b|тб\b|mp\b|мп\b|"
+    r"мегапиксел\w*|megapixel\w*|hz\b|гц\b|ghz\b|ггц\b|mm\b|мм\b|nm\b|нм\b|w\b|вт\b|kg\b|кг\b|g\b|г\b|inch\w*|дюйм\w*|hours?\b|час\w*|"
+    r"minutes?\b|минут\w*|seconds?\b|секунд\w*|fps\b|tokens?\b|токен\w*|x\b|times\b|раз(?:а)?\b|per (?:million|month|year)|в месяц)")
+_CAPABILITY = re.compile(
+    r"(?i)\b(?:can|able to|capabilit\w*|lets?|allows?|enables?|supports?|features?|strongest at|best at|good at|designed (?:to|for)|"
+    r"handles?|может|могут|умеет|позволя\w*|поддерж\w*|способ\w*|возможност\w*|функци\w*|оснащ\w*|подходит)\b")
+_CHANGE = re.compile(
+    r"(?i)\b(?:than|compared (?:to|with)|faster|slower|cheaper|lighter|thinner|longer|shorter|fewer|less|improv\w*|upgrade over|up from|"
+    r"down from|previous|predecessor|versus|vs\.?|keeps?|unchanged|чем|быстрее|медленнее|дешевле|легче|тоньше|дольше|меньше|улучш\w*|"
+    r"по сравнению|предшественни\w*|предыдущ\w*|сохранил\w*)\b")
+_NOVELTY = re.compile(r"(?i)\b(?:first|new|newly|introduc\w*|now (?:live|available)|adds?|added|впервые|перв\w*|нов\w*|добав\w*)\b")
+# a sentence that continues the article's own subject without naming it ('It runs ...', 'The company also highlights ...')
+_REFERRING_START = re.compile(r"^(?:It|Its|It[’']s|They|Their|This|These|The (?:company|firm|maker|model|device|phone|update|app|release|"
+                              r"new \w+)|Он[аио]?|Их|Это|Компания|Модель|Устройство|Смартфон|Обновление|Новинка)\b")
+
+
+def launch_story(premise: str, lead: str) -> bool:
+    """The accepted selection's own launch reading (services.instagram_viral_story_gate.assess_inherent_strength) - an AI model, device or
+    software launch; a routine point release / bug-fix update is never one (4046376)."""
+    from services.instagram_viral_story_gate import assess_inherent_strength
+
+    return bool(LAUNCH_MECHANISMS & set(assess_inherent_strength(premise, lead)[1]))
+
+
+_LATIN_NAME = re.compile(r"\b[A-Z][A-Za-z0-9+-]+")
+_MONTHS = frozenset("january february march april may june july august september october november december".split())
+
+
+def _names(text: str, *, skip_first: bool) -> set[str]:
+    """Capitalised Latin-script names (a product, a company, a chip); a sentence's first word is capitalised anyway."""
+    found = _LATIN_NAME.findall(text or "")
+    if skip_first and found and (text or "").lstrip().startswith(found[0]):
+        found = found[1:]
+    return {w.lower()[:6] for w in found if w.lower() not in _STOP and w.lower() not in _MONTHS}
+
+
+def _about_the_story(text: str, premise: str, lede: str = "") -> bool:
+    """The sentence is about the launch: it names the story (a headline word, or a name its lede gives), refers back to it ('It runs ...',
+    'The update brings ...'), or names nothing else at all ('Battery life improves by up to 2 hours'). A sentence about ANOTHER named thing
+    - a related headline, an accessory offer ('Save 20% on AirPods') - is not, whatever numbers it carries."""
+    story = _stems(premise) | _names(premise, skip_first=False) | _names(lede, skip_first=False)
+    if _stems(text) & story or _REFERRING_START.match(text) is not None:
+        return True
+    return not _names(text, skip_first=True) - story
+
+
+def launch_substance(text: str, premise: str, lede: str = "") -> bool:
+    """A sentence that says what the launch IS: a measured quantity, a capability, or a change against what came before - about the story's
+    own subject. Being 'new' alone, a product lineup or a date is not substance."""
+    return _about_the_story(text, premise, lede) and bool(_UNIT_QUANTITY.search(text) or _CAPABILITY.search(text) or _CHANGE.search(text))
+
+
+def _substance_score(text: str, premise: str, taken_quantities: set[str], lede: str = "") -> int:
+    if not _about_the_story(text, premise, lede):
+        return 0
+    quantities = {m.group(0) for m in _UNIT_QUANTITY.finditer(text)}
+    fresh = {q for q in quantities if not number_values(q) <= taken_quantities}  # a number already on a kept line is no new beat
+    return (2 * bool(fresh) + 2 * bool(_CAPABILITY.search(text)) + bool(_CHANGE.search(text))
+            + (bool(_NOVELTY.search(text)) if (fresh or _CAPABILITY.search(text) or _CHANGE.search(text)) else 0))
+
+
+def _select_facts(items: Iterable[EvidenceItem], premise: str, limit: int, *, launch: bool = False) -> tuple[EvidenceItem, ...]:
     """The package's facts. With no more candidates than `limit` nothing changes. Otherwise (the launch-evidence fix, 2026-09-29: a
     spec-heavy article's own battery sentence fell behind a glued 'related articles' line):
       1. up to MAX_PREMISE_FACTS slots go to the FIRST complete sentence carrying each premise quantity - the facts the story is about;
-      2. the rest is filled in the accepted order, complete sentences before unpunctuated lines (glued menus / related-article runs);
+      2. LAUNCH stories only (founder task 2026-09-30): the lede (the first complete sentence - what was introduced), then the complete
+         sentences that carry the most launch substance (a new measured quantity, a capability, a change against the predecessor), best
+         first - never page position;
+      3. the rest is filled in the accepted order, complete sentences before unpunctuated lines (glued menus / related-article runs);
     the kept facts keep that accepted order."""
     ordered = _dedupe(items, 10**6)
     if len(ordered) <= limit:
@@ -335,6 +405,30 @@ def _select_facts(items: Iterable[EvidenceItem], premise: str, limit: int) -> tu
         index = next((i for i, item in enumerate(ordered) if complete[i] and quantity in number_values(item.text)), None)
         if index is not None and index not in chosen:
             chosen.append(index)
+    if launch:
+        lede = next((i for i in range(len(ordered)) if complete[i]), None)
+        if lede is not None and lede not in chosen and len(chosen) < limit:
+            chosen.append(lede)
+        # every NAME the headline states (a chip, a platform, a partner - capitalised Latin-script, as its quantities above) keeps its first
+        # supporting sentence: 'прошлогодний Snapdragon' in a gadget headline needs the chip sentence, whatever its substance score
+        named = 0
+        for name in sorted(_names(premise, skip_first=False), key=lambda n: premise.lower().find(n)):
+            if len(chosen) >= limit or named >= MAX_PREMISE_FACTS - 1 or any(name in _stems(ordered[i].text) for i in chosen):
+                continue
+            index = next((i for i in range(len(ordered)) if complete[i] and i not in chosen and name in _stems(ordered[i].text)), None)
+            if index is not None:
+                chosen.append(index)
+                named += 1
+        lede_text = ordered[lede].text if lede is not None else ""
+        while len(chosen) < limit:
+            taken = set().union(set(), *(number_values(" ".join(m.group(0) for m in _UNIT_QUANTITY.finditer(ordered[i].text)))
+                                         for i in chosen))
+            scored = [(_substance_score(ordered[i].text, premise, taken, lede_text), -i) for i in range(len(ordered))
+                      if complete[i] and i not in chosen]
+            best = max(scored, default=(0, 0))
+            if best[0] <= 0:
+                break
+            chosen.append(-best[1])
     for want_complete in (True, False):
         for i in range(len(ordered)):
             if len(chosen) >= limit:
@@ -394,12 +488,23 @@ def grade(fmt: str, steps: Sequence[EvidenceItem], facts: Sequence[EvidenceItem]
 
 
 def assemble_package(*, post_id: str, fmt: str, premise: str, sources: Sequence[EvidenceSource], media: SourceMedia,
-                     excluded_bodies: Sequence[str] = ()) -> InstagramEvidencePackage:
+                     excluded_bodies: Sequence[str] = (), launch: bool | None = None) -> InstagramEvidencePackage:
+    """`launch`: the nominated EVENT's own launch reading (its verdict mechanisms, across all its copies - the Sonnet 5.5 event was read
+    as a launch from its Russian copy, its English copy supplied the evidence); None = no nominated event, read this copy itself."""
     items = [item for source in sources if source.text for item in extract_items(source, premise=premise, how_to=fmt == "ai_hack")]
     steps = _dedupe((i for i in items if i.kind == STEP), MAX_STEPS) if fmt == "ai_hack" else ()
-    facts = _select_facts((i for i in items if i.kind == FACT), premise, MAX_FACTS)
+    # the launch reading uses what the nomination read: the headline and the stored description (else the article's first facts)
+    lead = " ".join(s.text for s in sources if s.source_type in (STORED_BODY, TELEGRAM_POST) and s.text) or " ".join(
+        i.text for i in items[:3] if i.kind == FACT)
+    launch = fmt != "ai_hack" and (launch_story(premise, lead) if launch is None else launch)
+    facts = _select_facts((i for i in items if i.kind == FACT), premise, MAX_FACTS, launch=launch)
     limitations = _dedupe((i for i in items if i.kind == LIMITATION), MAX_LIMITATIONS)
     quality, why = grade(fmt, steps, facts, sources)
+    if launch and quality != BLOCKING and not any(launch_substance(f.text, premise, facts[0].text) for f in facts):
+        # founder task 2026-09-30: a launch whose sources never say what it can do, what changed or what it measures cannot become a post
+        # without manufacturing substance - hold it (the worker skips a BLOCKING package), never a product-lineup explainer
+        quality, why = BLOCKING, ("launch story without its substance: no source sentence says what is new, what it can do or what "
+                                  "changed - the Director would have to invent the launch")
     dateline = next((d for source in sources if source.text and source.source_type in (ORIGINAL_ARTICLE, LINKED_ARTICLE)
                      and (d := article_dateline(source.text, premise))), None)
     return InstagramEvidencePackage(post_id=post_id, format=fmt, premise=premise, sources=tuple(sources), steps=steps, facts=facts,
@@ -570,7 +675,7 @@ async def _own_article(session, event, url: str) -> tuple[str, str, str | None, 
 
 async def build_daily_evidence_package(
     *, post_id: str, fmt: str, title: str, url: str | None, source_type: str, source_name: str | None, stored_body: str | None,
-    event=None, event_id=None, session=None, acquisition_enabled: bool = True, media_mode: str = "shadow",
+    event=None, event_id=None, session=None, acquisition_enabled: bool = True, media_mode: str = "shadow", launch: bool | None = None,
 ) -> InstagramEvidencePackage:
     """ONE selected daily post: its own article (or, for a Telegram post, the article it explicitly links), official docs that article
     links, its stored body, and its source media - all through existing acquisition paths. Never raises: a failed fetch is just a
@@ -619,7 +724,7 @@ async def build_daily_evidence_package(
             media = media_from_image_intelligence(result)
         except Exception as exc:  # noqa: BLE001 - media is optional; the Director is told SOURCE MEDIA = NONE
             media = SourceMedia(status=NOT_AVAILABLE, reason=f"image discovery failed: {type(exc).__name__}")
-    return assemble_package(post_id=post_id, fmt=fmt, premise=title, sources=sources, media=media)
+    return assemble_package(post_id=post_id, fmt=fmt, premise=title, sources=sources, media=media, launch=launch)
 
 
 _HTML_BLOCK_END = re.compile(r"</(?:p|h[1-6]|li|div|blockquote|figcaption|tr)\s*>|<br\s*/?>", re.IGNORECASE)

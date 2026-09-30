@@ -258,9 +258,9 @@ async def test_the_worker_preflight_reads_the_packages_dateline(monkeypatch: pyt
         seen.append(list(body_lines))
         return SimpleNamespace(status="PASS")
 
-    async def package(session, event_id, row, slot_format):
+    async def package(session, event_id, row, slot_format, *, launch=None):
         return SimpleNamespace(steps=(), facts=(SimpleNamespace(exact_text="Nimbus released Model X."),), limitations=(),
-                               dateline="28.09.2026")
+                               dateline="28.09.2026", quality="STRONG")
 
     class Session:
         async def get(self, model, ident):

@@ -1115,15 +1115,16 @@ _INSTAGRAM_TRIGGER_MAX_PER_CYCLE = 3
 _VIRAL_EVIDENCE_COPIES = 8
 
 
-async def _feed_evidence_package(session: AsyncSession, event_id: UUID, event_row: Any, slot_format: Any) -> Any:
+async def _feed_evidence_package(session: AsyncSession, event_id: UUID, event_row: Any, slot_format: Any, *,
+                                 launch: bool | None = None) -> Any:
     """KAGE evidence package (services/instagram_evidence_package.py) for one selected event, through the existing acquisition / image
-    paths under their existing modes."""
+    paths under their existing modes. `launch`: the nominated event's own launch reading (None = the package reads its copy)."""
     source_row = await session.get(NewsSource, event_row.source_id)
     return await build_daily_evidence_package(
         post_id=str(event_id), fmt=slot_format.value, title=event_row.title or "", url=event_row.url,
         source_type=getattr(getattr(source_row, "type", None), "value", "RSS"), source_name=getattr(source_row, "name", None),
         stored_body=event_row.content or event_row.summary, event=event_row, event_id=event_id, session=session,
-        acquisition_enabled=settings.article_acquisition_mode != "off", media_mode=settings.image_intelligence_mode,
+        acquisition_enabled=settings.article_acquisition_mode != "off", media_mode=settings.image_intelligence_mode, launch=launch,
     )
 
 
@@ -1140,17 +1141,21 @@ async def _viral_evidence_copy(session: AsyncSession, viral_event: Any, event_id
         if cid != str(event_id) and (row := await session.get(NewsEvent, UUID(cid))) is not None:
             rows[UUID(cid)] = row
     others = sorted((cid for cid in rows if cid != event_id), key=lambda cid: is_google_news_redirect_host(rows[cid].url or ""))
+    from services.instagram_evidence_package import LAUNCH_MECHANISMS
+
+    # founder task 2026-09-30: the EVENT's launch reading (all its copies) decides how a copy's facts are chosen - a launch keeps its substance
+    launch = bool(LAUNCH_MECHANISMS & set(viral_event.verdict.mechanisms)) if viral_event is not None else None
     result = None
     for copy_id in [event_id, *others][:_VIRAL_EVIDENCE_COPIES]:
         row = rows[copy_id]
-        package = await _feed_evidence_package(session, copy_id, row, slot_format)
+        package = await _feed_evidence_package(session, copy_id, row, slot_format, launch=launch)
         preflight = viral_evidence_preflight(
             viral_event, title=row.title or "", published_at=getattr(row, "published_at", None), now=now,
             body_lines=[item.exact_text for item in (*package.steps, *package.facts, *package.limitations)]
             + ([package.dateline] if getattr(package, "dateline", None) else []))  # + the article's own dateline (chronology)
         result = (copy_id, row, package, preflight)
-        if preflight.status == "PASS":
-            break
+        if preflight.status == "PASS" and package.quality != EVIDENCE_BLOCKING:
+            break  # a copy that passes but cannot explain its launch (BLOCKING) gives way to the event's next copy; if none can, it is held
     assert result is not None  # the planned row itself always exists here
     return result
 

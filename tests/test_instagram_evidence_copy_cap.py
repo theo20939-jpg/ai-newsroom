@@ -40,10 +40,10 @@ async def _search(monkeypatch: pytest.MonkeyPatch, n_copies: int, passing_positi
 
     tried: list[str] = []
 
-    async def package(session, event_id, row, slot_format):
+    async def package(session, event_id, row, slot_format, *, launch=None):
         tried.append(str(event_id))
         lines = SUPPORTING_BODY if passing_position is not None and len(tried) == passing_position else []
-        return SimpleNamespace(steps=(), facts=tuple(SimpleNamespace(exact_text=t) for t in lines), limitations=())
+        return SimpleNamespace(steps=(), facts=tuple(SimpleNamespace(exact_text=t) for t in lines), limitations=(), quality="STRONG")
 
     monkeypatch.setattr(cc, "_feed_evidence_package", package)
     _id, _row, _pkg, preflight = await cc._viral_evidence_copy(Session(), event, UUID(ids[0]), rows[ids[0]],

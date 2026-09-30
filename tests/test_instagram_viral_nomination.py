@@ -402,9 +402,9 @@ async def test_direct_publisher_copies_are_acquired_before_redirect_shells(monke
 
     tried: list[str] = []
 
-    async def package(session, event_id, row, slot_format):
+    async def package(session, event_id, row, slot_format, *, launch=None):
         tried.append(str(event_id))
-        return SimpleNamespace(steps=(), facts=(), limitations=())
+        return SimpleNamespace(steps=(), facts=(), limitations=(), quality="STRONG")
 
     monkeypatch.setattr(cc, "_feed_evidence_package", package)
     _id, _row, _pkg, preflight = await cc._viral_evidence_copy(Session(), event, UUID(planned), rows[planned],
