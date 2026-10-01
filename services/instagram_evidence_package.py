@@ -433,9 +433,14 @@ def _select_facts(items: Iterable[EvidenceItem], premise: str, limit: int, *, la
         # a rumour, a teaser or a denial) keeps a slot, whatever its substance score - a package that keeps the specs and drops it is incomplete
         from services.instagram_viral_nomination import launch_established
 
-        if limit and not any(launch_established(premise, [ordered[i].text]) for i in chosen):
+        def states_launch_at(index: int) -> bool:
+            # A source can name the product, then use a tightly constrained pronoun in the realised-action sentence
+            # ("Gemini 4 Argon ... So far, it has been made available ..."). Keep exact source sentences; resolve only that anaphora.
+            return launch_established(premise, [item.text for item in ordered[:index + 1]])
+
+        if limit and not launch_established(premise, [ordered[i].text for i in sorted(chosen)]):
             happened = next((i for i in range(len(ordered)) if complete[i] and i not in chosen
-                             and launch_established(premise, [ordered[i].text])), None)
+                             and states_launch_at(i)), None)
             if happened is not None:
                 if len(chosen) >= limit:
                     chosen.pop()  # the last-chosen slot (a premise / lede / name fact is never the one dropped: those were added first)

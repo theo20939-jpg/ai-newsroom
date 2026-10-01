@@ -436,11 +436,16 @@ _LAUNCH_DONE = _rx(
     r"\b(?:is|are) (?:now )?(?:out|here|live|available)\b", r"\bnow available\b", r"\bavailable (?:today|now|to (?:order|buy|pre-?order))\b",
     r"\b(?:go|goes|went) on sale\b", r"\bon sale now\b", r"\bpre-?orders? (?:are |is )?(?:now )?open\b", r"\btoday['’]s new\b",
     r"\breplac(?:es|ed|ing)\b[^.!?]{0,80}\bwith\b", r"\bintroducing\b",
-    r"\b(?:представил|презентовал|выпустил|запустил|анонсировал|показал)[аои]?\b",
+    r"\b(?:представил|презентовал|продемонстрировал|выпустил|запустил|анонсировал|показал)[аои]?\b",
     r"\b(?:представлен|выпущен|запущен|анонсирован|презентован)[аоы]?\b", r"\bвыш(?:ел|ла|ло|ли)\b", r"\bдебютировал[аои]?\b",
     r"\b(?:уже |теперь )?доступ(?:ен|на|но|ны) (?:для )?(?:предзаказа|заказа|покупки|в продаже)\b", r"\b(?:уже|теперь) доступ(?:ен|на|но|ны)\b",
     r"\bстал[аои]? доступ\w+\b", r"\bпоступил[аои]? в продажу\b", r"\bстартовал[аои]? (?:продажи|предзаказ)\w*\b",
     r"\bоткрыт[аоы]? предзаказ\w*\b", r"\b(?:заменил|сменил)[аои]?\b", r"\bприш(?:ёл|ел|ла|ло|ли) на смену\b",
+)
+_LAUNCH_ANAPHORIC_DONE = _rx(
+    r"^(?:so far,? )?(?:it|the (?:model|product|device|phone|software|service|update)) (?:has|have) been "
+    r"(?:launched|released|unveiled|introduced|presented|made available|rolled out|shipped)\b",
+    r"^(?:it|the (?:model|product|device|phone|software|service|update)) (?:is|are) now (?:live|available|out)\b",
 )
 _LAUNCH_NOT_DONE = _rx(
     r"\bplan(?:s|ned|ning)?\b", r"\bwill\b", r"\bwould\b", r"\bcould\b", r"(?-i:\b(?:may|May(?= (?:be|launch|arrive|come|debut|release|ship)))\b)",
@@ -487,12 +492,14 @@ def launch_established(hook: str, segments: list[str]) -> bool:
     """A body segment states that the hook's product WAS released / introduced / made available - not planned, rumoured or denied - and
     names that product (every token of one of the hook's product names) when the hook names one."""
     names = product_names(hook)
+    named_context = not names
     for segment in segments:
-        if not _LAUNCH_DONE.search(segment) or _LAUNCH_NOT_DONE.search(segment):
-            continue
         tokens = {_norm(t) for t in _WORD_TOKEN.findall(_KEYCAP.sub("", segment))}
-        if not names or any(set(name) <= tokens for name in names):
+        names_product = not names or any(set(name) <= tokens for name in names)
+        if not _LAUNCH_NOT_DONE.search(segment) and ((_LAUNCH_DONE.search(segment) and names_product)
+                                                      or (_LAUNCH_ANAPHORIC_DONE.search(segment) and named_context)):
             return True
+        named_context = named_context or names_product
     return False
 
 

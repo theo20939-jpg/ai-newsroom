@@ -32,6 +32,7 @@ from services.instagram_evidence_package import (
 from services.instagram_viral_nomination import evidence_preflight, launch_established
 
 SAVED = Path(__file__).resolve().parent.parent / "artifacts/instagram_launch_evidence/saved_sources.jsonl"
+ARGON = Path(__file__).resolve().parent.parent / "artifacts/instagram_feed_product/final_acceptance_20261001"
 NOW = datetime(2026, 9, 29, 11, 46, 25, tzinfo=UTC)  # the natural canary's clock
 CURRENT = SimpleNamespace(type="CURRENT_EVENT")
 # the nominated events' own hooks, exactly as the canary's nomination read them (attempt_1 / attempt_2 outcome.json)
@@ -60,6 +61,14 @@ def _check(hook: str, lines: list[str], headlines: list[str] = ()):
     return evidence_preflight(hook, lines, actuality=CURRENT, now=NOW, headlines=list(headlines))
 
 
+def _argon_package(relative: str):
+    saved = json.loads((ARGON / relative).read_text(encoding="utf-8"))
+    package = assemble_package(post_id="argon", fmt="meme_trend", premise=saved["premise"],
+                               sources=[EvidenceSource(**source) for source in saved["sources"]],
+                               media=SourceMedia(status=NOT_AVAILABLE), launch=True)
+    return saved, package
+
+
 # --- the saved natural-canary sources -------------------------------------------------------------------------------------------------
 
 def test_saved_gadget_launch_keeps_its_material_facts_and_passes():
@@ -82,6 +91,22 @@ def test_saved_model_launch_passes_on_its_first_copy():
     package = _package(saved)
     result = _check(MODEL_HOOK, package.preflight_lines(), [saved["title"]])
     assert result.status == "PASS", result.checks
+    assert result.checks["action"] == "SUPPORTED"
+
+
+def test_saved_argon_limited_availability_sentence_is_retained_with_its_product_context():
+    saved, package = _argon_package("attempt_1/post/evidence_attempts/02_package.json")
+    availability = "So far, it has been made available to trusted testers and cyber defenders (via Fairwind Program)."
+    assert availability in [fact.exact_text for fact in package.facts]
+    result = _check("Google представила Gemini 4 Argon с миллионом выходных токенов", package.preflight_lines(), [saved["premise"]])
+    assert result.checks["action"] == "SUPPORTED"
+
+
+def test_saved_argon_russian_realised_presentation_sentence_is_retained():
+    saved, package = _argon_package("attempt_2/post/evidence_attempts/02_package.json")
+    presentation = next(fact.exact_text for fact in package.facts if "Google продемонстрировала Gemini 4 Argon" in fact.exact_text)
+    assert "30 сентября" in presentation
+    result = _check("Google представила Gemini 4 Argon с миллионом выходных токенов", package.preflight_lines(), [saved["premise"]])
     assert result.checks["action"] == "SUPPORTED"
 
 
@@ -118,6 +143,7 @@ def test_saved_gadget_body_without_its_dateline_has_no_chronology():
     "Nimbus is replacing Model W with Model X as its default model, starting September 28.",
     "Nimbus представила Model X 28 сентября.",
     "Nimbus презентовала новую модель Model X 28 сентября.",
+    "Nimbus продемонстрировала новую модель Model X 28 сентября.",
     "Model X уже доступна для предзаказа с 28 сентября.",
 ])
 def test_ordinary_launch_wording_supports_a_release_hook(sentence):
@@ -166,6 +192,14 @@ def test_the_launch_sentence_must_itself_be_realised():
     """A realised launch elsewhere does not rescue a plan about the hook's product."""
     assert not launch_established("Nimbus выпустила Model X", ["Nimbus plans to release Model X next month."])
     assert launch_established("Nimbus выпустила Model X", ["Nimbus plans more.", "Nimbus released Model X today."])
+
+
+def test_realised_anaphoric_availability_requires_prior_product_identity():
+    done = "So far, it has been made available to trusted testers and cyber defenders."
+    assert launch_established("Nimbus выпустила Model X", ["Model X is Nimbus's frontier model.", done])
+    assert not launch_established("Nimbus выпустила Model X", [done])
+    assert not launch_established("Nimbus выпустила Model X", ["Model X is Nimbus's frontier model.",
+                                                                    "It will be made available next month."])
 
 
 def test_a_russian_launch_clause_is_not_cut_from_its_lowercase_dash_apposition():

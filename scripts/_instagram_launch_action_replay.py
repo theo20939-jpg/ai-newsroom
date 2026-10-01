@@ -50,14 +50,25 @@ def run_case(name: str, *, premise: str, sources: list[dict], hook: str, headlin
                                media=SourceMedia(status=NOT_AVAILABLE, reason="replay"))
     lines = [i.exact_text for i in (*package.steps, *package.facts, *package.limitations)] + ([package.dateline] if package.dateline else [])
     pre = evidence_preflight(hook, lines, actuality=SimpleNamespace(type=actuality), now=NOW, headlines=headlines)
-    article_sentences = [i.text for s in srcs if s.source_type == ORIGINAL_ARTICLE and s.text
-                         for i in extract_items(s, premise=premise, how_to=False) if launch_established(hook, [i.text])]
+    article_sentences = []
+    for source in (s for s in srcs if s.source_type == ORIGINAL_ARTICLE and s.text):
+        prefix: list[str] = []
+        for item in extract_items(source, premise=premise, how_to=False):
+            was_established = launch_established(hook, prefix)
+            prefix.append(item.text)
+            if not was_established and launch_established(hook, prefix):
+                article_sentences.append(item.text)
     lede = package.facts[0].text if package.facts else ""
+    retained_prefix: list[str] = []
+    retained = []
+    for fact in package.facts:
+        retained_prefix.append(fact.text)
+        retained.append({"text": fact.text[:260], "launch_established": launch_established(hook, retained_prefix),
+                         "substance": launch_substance(fact.text, premise, lede)})
     return {
         "name": name, "quality": package.quality, "preflight": pre.status, "action": pre.checks.get("action"), "checks": pre.checks,
         "full_article_launch_sentences": [s[:300] for s in article_sentences[:4]],
-        "retained_facts": [{"text": f.text[:260], "launch_established": launch_established(hook, [f.text]),
-                            "substance": launch_substance(f.text, premise, lede)} for f in package.facts],
+        "retained_facts": retained,
         "retained_chars": sum(len(f.text) for f in package.facts),
     }
 
@@ -129,7 +140,7 @@ def safety_cases() -> list[dict]:
 
 def _assert_expected(result: dict) -> None:
     gemini_actions = [case["action"] for case in result["gemini"]]
-    assert gemini_actions == ["SUPPORTED", "UNSUPPORTED", "UNSUPPORTED", "SUPPORTED", "UNSUPPORTED"], gemini_actions
+    assert gemini_actions == ["SUPPORTED", "SUPPORTED", "UNSUPPORTED", "SUPPORTED", "SUPPORTED"], gemini_actions
     saved = {case["name"]: case for case in result["saved"]}
     assert saved["saved/honor"]["preflight"] == "PASS"
     assert saved["saved/sonnet_en"]["preflight"] == "PASS"
