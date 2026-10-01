@@ -159,7 +159,9 @@ async def _make_completed_news_analysis_event(
 ) -> NewsEvent:
     event = NewsEvent(
         source_id=source.id,
-        title=f"Phase 14 M5 integration test event {uuid4()}",
+        title=f"Steam Deck adds control remapping feature {uuid4()}",
+        content=("Valve added control remapping to Steam Deck. Players can change button "
+                 "assignments for supported games in device settings."),
         category=EventCategory.AI,
         hash=f"phase14-m5-integration-test-{uuid4()}",
         published_at=datetime.now(timezone.utc),

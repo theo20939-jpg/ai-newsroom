@@ -197,6 +197,57 @@ async def test_cross_provider_fallback_transient_failure_moves_to_next_candidate
 
 
 @pytest.mark.asyncio
+async def test_telegram_canary_scope_disables_same_model_retry() -> None:
+    from integrations.llm_gateway.models.catalog import GPT_5_6_LUNA
+    from services.kage_telegram_canary_envelope import TelegramCanaryEnvelope, telegram_canary_envelope
+
+    failing = FakeProviderAdapter(provider_id="openai", model_id=GPT_5_6_LUNA.model_id, behavior="transient_failure")
+    policy, _, _, _ = _build_policy([GPT_5_6_LUNA], {"openai": failing}, max_same_candidate_retries=1)
+    request = GenerateRequest(
+        messages=[Message(role="user", content=[ContentPart(type="text", text="short grounded fixture")])],
+        max_tokens=1_000,
+        metadata={"capability_name": "research"},
+    )
+    envelope = TelegramCanaryEnvelope()
+    with telegram_canary_envelope(envelope):
+        envelope.begin_stage(request)
+        with pytest.raises(AllProvidersFailedError):
+            await policy.dispatch(request, [GPT_5_6_LUNA], _criteria())
+    assert failing.call_count == 1
+    assert len(envelope.dispatch_records or []) == 1
+    assert envelope.dispatch_records[0]["status"] == "FAILED"  # type: ignore[index]
+
+
+@pytest.mark.asyncio
+async def test_canary_pre_dispatch_guard_rejection_never_reaches_provider_adapter(monkeypatch) -> None:
+    from integrations.llm_gateway.models.catalog import GPT_5_6_LUNA
+    from services.kage_telegram_canary_envelope import (
+        CanaryPreDispatchSafetyRejection, TelegramCanaryEnvelope, telegram_canary_envelope,
+    )
+
+    adapter = FakeProviderAdapter(provider_id="openai", model_id=GPT_5_6_LUNA.model_id, behavior="success")
+    policy, health_store, _, _ = _build_policy([GPT_5_6_LUNA], {"openai": adapter})
+    request = GenerateRequest(
+        messages=[Message(role="user", content=[ContentPart(type="text", text="bounded fixture")])],
+        max_tokens=1400, metadata={"capability_name": "research"},
+    )
+    envelope = TelegramCanaryEnvelope()
+    envelope.begin_stage(request)
+
+    def reject_before_dispatch(_request, _model):
+        raise CanaryPreDispatchSafetyRejection("telegram canary: hard envelope exhausted")
+
+    monkeypatch.setattr(envelope, "authorize_dispatch", reject_before_dispatch)
+    with telegram_canary_envelope(envelope):
+        with pytest.raises(CanaryPreDispatchSafetyRejection, match="hard envelope exhausted"):
+            await policy.dispatch(request, [GPT_5_6_LUNA], _criteria())
+
+    assert adapter.call_count == 0
+    assert envelope.dispatch_records == []
+    assert health_store.runtime_unavailable_marks == []
+
+
+@pytest.mark.asyncio
 async def test_permanent_incompatible_marks_runtime_unavailable_and_continues() -> None:
     failing = FakeProviderAdapter(provider_id="fake-provider-a", model_id="model-a", behavior="permanent_incompatible")
     succeeding = FakeProviderAdapter(provider_id="fake-provider-b", model_id="model-b", behavior="success")

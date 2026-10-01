@@ -6,9 +6,10 @@ import html
 import logging
 import re
 import time
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Mapping
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -109,10 +110,16 @@ from services.director_editorial_gate_shadow import (
 from services.telegram_channel_director_shadow import run_channel_director_shadow
 from services.telegram_notifier import send_editorial_card, to_editorial_card
 from services.telegram_radar_evidence import evaluate_origin_before_generation
+from services.kage_publication_worker_gate import WorkerGateResult, evaluate_worker_publication_gate
+from services.kage_content_lineage_audit import update_attempt_audit
+from services.kage_editorial_usefulness import evaluate_editorial_usefulness
+from services.kage_delivery_truth import (
+    TerminalStatus, mark_publication_started, record_terminal_outcome,
+)
 from services.telegram_routing import (
     send_media_group_to_editorial_destination,
     send_photo_to_editorial_destination,
-    send_to_editorial_destination,
+    send_to_editorial_destination,  # noqa: F401 - no NEWS text send remains; kept as a patchable name
     send_video_to_editorial_destination,
 )
 from services.instagram_automatic_trigger import (
@@ -141,6 +148,18 @@ from services.director_execution_service import run_instagram_growth_strategist
 # delivery - "1 strong image for ordinary stories; 2-3 images only when additional images
 # materially add useful visual information" (not to be raised without authorization).
 _MAX_ROUTER_IMAGES = 3
+
+# Process-local context only; the durable IN_FLIGHT marker lives on EditorialTask.
+_kage_active_attempt: ContextVar[dict[str, Any] | None] = ContextVar(
+    "kage_active_publication_attempt", default=None,
+)
+
+
+def _mark_kage_send_boundary(attempted_at: datetime) -> None:
+    active = _kage_active_attempt.get()
+    if active is not None:
+        active["send_started"] = True
+        active["send_attempted_at"] = attempted_at
 
 
 # NEWS Output Stability Fix (Case E, docs/news_output_stability_forensic_report.md §6): the real
@@ -603,36 +622,101 @@ HOLD_FOR_VISUAL_STATUS = "hold_for_visual"
 # NEWS_BRANDING_NO_SOURCE_BYTES below).
 HOLD_REASON_NO_VISUAL_RESOLVED = "no_visual_resolved"
 HOLD_REASON_MEDIA_SEND_FAILED = "media_send_failed"
+HOLD_REASON_PHOTO_CAPTION_OVERFLOW = "photo_caption_overflow"
+HOLD_REASON_VISUAL_NOT_SENDABLE = "visual_not_sendable"
+
+
+@dataclass(frozen=True)
+class AcceptedVisualArtifact:
+    """Founder-approved bytes for a bounded controlled-delivery invocation only."""
+
+    image_bytes: bytes
+    filename: str
+    sha256: str
+    width: int
+    height: int
+    compliance_decision: str
+
+
+async def _kage_visual_fallback_photo(
+    *, outcome: Any, event: NewsEvent, session_factory: async_sessionmaker[AsyncSession],
+    caption_fits: bool, dry_run: bool, accepted_visual: AcceptedVisualArtifact | None = None,
+) -> tuple[BufferedInputFile | None, str]:
+    """KAGE NEWS Tier 2 (one generated editorial image) then Tier 3 (local typography card) for a
+    story with no usable source photo. Returns (photo, "ok") or (None, hold_reason). A caption that
+    cannot fit a photo is held BEFORE any paid call. Never a text-only post."""
+    from services.kage_telegram_canary_envelope import current_telegram_canary_envelope
+    from services.kage_visual_fallback import TIER_TYPOGRAPHY, resolve_visual_fallback
+
+    if not caption_fits:
+        return None, HOLD_REASON_PHOTO_CAPTION_OVERFLOW
+    if accepted_visual is not None:
+        audit = {
+            "name": "visual_fallback",
+            "tier": "generated_image",
+            "reason": "controlled_accepted_visual_reuse",
+            "generation_reason": "not_called_existing_accepted_artifact",
+            "typography_reason": None,
+            "visual_compliance": {"decision": accepted_visual.compliance_decision},
+            "image_sha256": accepted_visual.sha256,
+            "image_width": accepted_visual.width,
+            "image_height": accepted_visual.height,
+            "artifact_filename": accepted_visual.filename,
+            "new_image_generation_calls": 0,
+        }
+        try:
+            async with session_factory() as audit_session:
+                await update_attempt_audit(
+                    audit_session, task_id=outcome.task_id, section="stage", value=audit,
+                )
+                await audit_session.commit()
+        except Exception:  # noqa: BLE001 - same best-effort audit boundary as the normal tier ladder
+            logger.warning("kage_accepted_visual_audit_failed", exc_info=True)
+        return BufferedInputFile(
+            accepted_visual.image_bytes, filename=accepted_visual.filename,
+        ), "ok"
+    copy = outcome.copywriting_output or {}
+    body = str(copy.get("main_body") or "")
+    if isinstance(copy.get("ending"), str) and copy["ending"].strip():
+        body = "\n\n".join((body, copy["ending"]))
+    fallback = await resolve_visual_fallback(
+        title=str(copy.get("title") or ""), body=body,
+        research=outcome.research_output or {}, intelligence=outcome.intelligence_output or {},
+        source_headline=event.title, category=str(getattr(event.category, "value", event.category) or "NEWS"),
+        editorial_code=build_editorial_code(outcome.task_id), allow_generation=not dry_run,
+    )
+    envelope = current_telegram_canary_envelope()
+    if envelope is not None and fallback.tier == TIER_TYPOGRAPHY:
+        envelope.record_local_visual(stage="news_typography_card", detail=fallback.typography_reason or "ok")
+    try:
+        async with session_factory() as audit_session:
+            await update_attempt_audit(audit_session, task_id=outcome.task_id, section="stage", value=fallback.audit())
+            await audit_session.commit()
+    except Exception:  # noqa: BLE001 - audit is best-effort here; the outcome is still recorded terminally
+        logger.warning("kage_visual_fallback_audit_failed", exc_info=True)
+    logger.info("kage_visual_fallback", extra={"draft_id": str(outcome.content_draft.id), "tier": fallback.tier,
+                                                "generation_reason": fallback.generation_reason,
+                                                "typography_reason": fallback.typography_reason})
+    if fallback.image_bytes is None:
+        return None, fallback.reason
+    extension = "png" if fallback.tier == TIER_TYPOGRAPHY else "jpg"
+    return BufferedInputFile(fallback.image_bytes, filename=f"kage-{fallback.tier}.{extension}"), "ok"
 
 
 async def _hold_for_visual_recovery(
     session_factory: async_sessionmaker[AsyncSession], bot: Bot, *,
     draft_id: UUID, event: NewsEvent, presentation_type: str, reason: str, dry_run: bool,
 ) -> None:
-    """Founder invariant: HOLD instead of a normal finished text-only send (spec §9-D/§12/§13).
+    """Persist an undeliverable-media hold without leaking operations into the editorial feed.
 
-    Two, and only two, call sites use this (both already gated to the exact cases where a
-    router-mode V8-family NEWS/BREAKING/DATA/QUOTE post is about to complete via the plain-text
-    `send_to_editorial_destination()` path with no valid visual behind it):
-    1. no visual was ever resolved at all (no source media, no renderable fallback);
-    2. a visual WAS resolved and rendered, but the live Telegram photo/media-group/video send
-       itself failed (the pre-existing one-shot text-fallback site).
-
-    Does NOT touch the separate, pre-existing, disclosed caption-too-long-degrades-to-text
-    tradeoff (Phase 23.1H/23.1Q) - that path keeps sending its real photo-bearing text exactly as
-    before; a caption that does not fit a photo caption is a text-budget decision, not a missing
-    visual, and is out of this phase's scope.
-
-    Persists the failure (never loses the editorial content - `content_drafts.status` +
-    `content_drafts.body`/`title` remain fully intact, only `status` changes) and sends one
-    short, clearly non-editorial recovery notice to the same newsroom chat this draft would
-    otherwise have posted to - deliberately NO inline keyboard (no Source/Meme buttons) and a
-    distinct "⚠️" prefix, so it can never be mistaken for a real finished post. Reuses the
-    existing `send_to_editorial_destination()` transport - no new Telegram integration, no new
-    send path. Fully respects `dry_run` (never sends the recovery notice in dry-run, exactly
-    like every other send in this file) and is itself a single, bounded, one-shot notice - never
-    retried, never a loop.
+    The founder-facing NEWS destination receives finished editorial objects only. Recovery state
+    belongs in the durable draft status and structured logs, not in a warning post. Used both when
+    no usable visual resolved (KAGE NEWS is visual-first: never a silent text-only card) and for an
+    ambiguous/failed media delivery, where a text retry could duplicate a post Telegram may already
+    have accepted.
     """
+    if dry_run:
+        return
     async with session_factory() as session:
         await session.execute(
             update(ContentDraft).where(ContentDraft.id == draft_id).values(status=HOLD_FOR_VISUAL_STATUS)
@@ -644,16 +728,6 @@ async def _hold_for_visual_recovery(
             "draft_id": str(draft_id), "event_id": str(event.id),
             "presentation_type": presentation_type, "hold_reason": reason,
         },
-    )
-    if dry_run:
-        return
-    notice_html = (
-        "⚠️ <b>Требуется визуал — материал удержан для восстановления</b>\n"
-        f"{html.escape(event.title or '', quote=False)}\n"
-        f"Тип: {html.escape(presentation_type, quote=False)} · Причина: {html.escape(reason, quote=False)}"
-    )
-    await send_to_editorial_destination(
-        bot, EditorialDestination.NEWS, notice_html, dry_run=False, reply_markup=None,
     )
 
 
@@ -673,6 +747,14 @@ class ContentCycleResult:
     # separately so a cycle's own logs distinguish "global dry-run" from "fact safety intervened".
     # Always 0 outside "enforce" mode.
     fact_safety_suppressed: int = 0
+    factual_gate_pass: int = 0
+    factual_gate_block: int = 0
+    gate_technical_block: int = 0
+    local_guard_block: int = 0
+    both_block: int = 0
+    final_publication_pass: int = 0
+    editorial_usefulness_block: int = 0
+    publication_gate_records: list[dict[str, Any]] = field(default_factory=list)
     # Phase 16 M6 + UX fix (docs/phase16_m6_telegram_editorial_preview_report.md §7, docs/
     # phase16_ux_combined_preview_fix_report.md): a strict subset of `notified` - counts drafts
     # whose single delivered message actually had a photo attached (image_editorial_preview_
@@ -733,9 +815,9 @@ class ContentCycleResult:
     # delivered" counting convention.
     router_text_fallback_sent: int = 0
     # TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1: counts a router-mode V8-family NEWS/BREAKING/
-    # DATA/QUOTE post that would previously have completed as a normal finished text-only send
-    # (either "no visual was ever resolved" or "a resolved visual's live Telegram send failed")
-    # and was instead held for editor-visible recovery (see `_hold_for_visual_recovery()`).
+    # DATA/QUOTE post whose resolved visual failed during live Telegram delivery and was held for
+    # silent operational recovery (see `_hold_for_visual_recovery()`). A candidate for which no
+    # visual was resolved is now delivered as an explicit text fallback and does not increment it.
     # Disjoint from `notified`/`notification_failed` - a held draft is neither a successful send
     # nor a bare failure, it is a deliberate, audited non-send. Never counted in `notified`.
     visual_required_held: int = 0
@@ -976,6 +1058,15 @@ async def _select_eligible_events(
     tie-break for its own score-DESC ranking.
     """
     cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.content_generation_freshness_cutoff_hours)
+    # Product-loop lanes intentionally reject more generic stories than the legacy
+    # selector. A fixed 50-row newest-first window can therefore contain only
+    # rejections and starve an older-but-still-fresh product change. Widen only
+    # this opt-in selector's bounded zero-provider scan; preserve the legacy cap.
+    scan_limit = (
+        max(settings.content_generation_scan_limit, 150)
+        if settings.copywriting_prompt_version == "11.10"
+        else settings.content_generation_scan_limit
+    )
     ContentGenTask = aliased(EditorialTask)
     anchor = func.coalesce(NewsEvent.published_at, NewsEvent.collected_at)
 
@@ -1010,7 +1101,7 @@ async def _select_eligible_events(
             ),
         )
         .order_by(anchor.desc(), EditorialTask.id.asc())
-        .limit(settings.content_generation_scan_limit)
+        .limit(scan_limit)
     )
     rows = (await session.execute(stmt)).all()
 
@@ -1040,7 +1131,7 @@ async def _select_eligible_events(
     # genuinely technological small story without lowering the global score threshold. Both are
     # evaluated here, before Research/Copywriting, using only fields already persisted on the
     # NewsEvent/NewsSource. Missing visual/spread/origin evidence earns zero; nothing is guessed.
-    eligible: list[tuple[int, UUID]] = []
+    eligible: list[tuple[int, UUID, str, str | None]] = []
     for (
         _task_id, event_id, workflow, title, content, published_at, collected_at,
         views_count, forwards_count, reactions_count, source_name, source_reliability,
@@ -1060,6 +1151,11 @@ async def _select_eligible_events(
             forwards_count=forwards_count,
             reactions_count=reactions_count,
             primary_evidence=primary_evidence,
+            require_source_detail=(
+                settings.copywriting_prompt_version == "11.10"
+                and settings.article_acquisition_mode != "enforce"
+            ),
+            product_loop=settings.copywriting_prompt_version == "11.10",
         )
         logger.info(
             "pre_generation_editorial_decision",
@@ -1067,6 +1163,11 @@ async def _select_eligible_events(
                 "event_id": str(event_id),
                 "standard_score": decision.standard_score,
                 "editorial_relevance": decision.editorial_relevance.tier,
+                "product_lane": decision.product_quality.lane,
+                "product_target_profile": decision.product_quality.target_profile,
+                "product_business_noise": decision.product_quality.business_noise,
+                "product_interesting_change": decision.product_quality.interesting_change,
+                "product_quality_reason": decision.product_quality.reason,
                 "effective_standard_score": decision.effective_standard_score,
                 "standard_eligible": decision.standard_eligible,
                 "viral_score": decision.viral.total,
@@ -1084,9 +1185,71 @@ async def _select_eligible_events(
         )
         if not decision.final_eligible:
             continue
-        eligible.append((decision.rank_score, event_id))
+        eligible.append((decision.rank_score, event_id, title, content))
 
     eligible.sort(key=lambda candidate: candidate[0], reverse=True)
+    if settings.copywriting_prompt_version == "11.10":
+        from services.kage_event_dedup import collapse_ranked_events, same_underlying_change
+
+        # The within-cycle collapse alone lets a duplicate re-enter on the next
+        # cycle after its primary gets a CONTENT_GENERATION task. Consult a
+        # bounded recent attempt history before building this cycle's shortlist.
+        # This is read-only and uses the same attempt identity already used by
+        # the SQL eligibility exclusion for an identical event_id.
+        prior_attempts = (await session.execute(
+            select(NewsEvent.id, NewsEvent.title, NewsEvent.content)
+            .join(EditorialTask, EditorialTask.event_id == NewsEvent.id)
+            .where(
+                EditorialTask.workflow["workflow_name"].as_string() == WorkflowType.CONTENT_GENERATION.value,
+                EditorialTask.created_at >= cutoff,
+            )
+            .order_by(EditorialTask.created_at.desc())
+            .limit(300)
+        )).all()
+        prior_changes = [
+            {"event_id": row_id, "title": row_title, "lead": row_content or ""}
+            for row_id, row_title, row_content in prior_attempts
+        ]
+        remaining = []
+        for candidate in eligible:
+            prior_match = next(
+                (
+                    (prior["event_id"], feature)
+                    for prior in prior_changes
+                    if (feature := same_underlying_change(
+                        {"title": candidate[2], "lead": candidate[3] or ""}, prior,
+                    ))
+                ),
+                None,
+            )
+            if prior_match is not None:
+                logger.info(
+                    "kage_recent_change_candidate_suppressed",
+                    extra={
+                        "event_id": str(candidate[1]), "prior_event_id": str(prior_match[0]),
+                        "shared_feature": prior_match[1],
+                    },
+                )
+                continue
+            remaining.append(candidate)
+        eligible = remaining
+
+        ranked_rows = [
+            {"order": index, "title": title, "lead": content or "", "event_id": event_id}
+            for index, (_rank, event_id, title, content) in enumerate(eligible, start=1)
+        ]
+        kept, merged = collapse_ranked_events(ranked_rows)
+        for item in merged:
+            logger.info(
+                "kage_same_change_candidate_merged",
+                extra={
+                    "duplicate_order": item.duplicate_order,
+                    "primary_order": item.primary_order,
+                    "shared_feature": item.shared_feature,
+                },
+            )
+        kept_ids = {row["event_id"] for row in kept}
+        eligible = [candidate for candidate in eligible if candidate[1] in kept_ids]
 
     # Most callers retain the historical batch-sized result. The production content cycle asks
     # explicitly for the wider refill pool, which is still bounded by the SQL scan limit above;
@@ -1095,9 +1258,9 @@ async def _select_eligible_events(
     result_limit = (
         settings.content_generation_batch_size
         if max_results is None
-        else min(max_results, settings.content_generation_scan_limit)
+        else min(max_results, scan_limit)
     )
-    return [event_id for _rank, event_id in eligible[:result_limit]]
+    return [event_id for _rank, event_id, _title, _content in eligible[:result_limit]]
 
 
 # INSTAGRAM-AUTOMATIC-EDITORIAL-TRIGGER-1 §10 (KAGE feed product: now bounds Director decisions per cycle): a pure rollout-safety throughput cap, deliberately
@@ -1450,6 +1613,27 @@ async def _run_instagram_product_lane(
     return report
 
 
+async def _persist_kage_terminal(
+    session_factory: async_sessionmaker[AsyncSession], *, task_id: UUID,
+    status: TerminalStatus, draft_id: UUID | None = None,
+    reason: str | None = None, error_class: str | None = None,
+    send_attempted_at: datetime | None = None,
+) -> None:
+    """One short transaction for a pre-send or generation terminal outcome."""
+    async with session_factory() as terminal_session:
+        story_link = (
+            await terminal_session.get(ContentDraftStoryLink, draft_id)
+            if draft_id is not None else None
+        )
+        await record_terminal_outcome(
+            terminal_session, task_id=task_id, status=status, draft_id=draft_id,
+            story_id=story_link.story_id if story_link is not None else None,
+            reason=reason, error_class=error_class,
+            send_attempted_at=send_attempted_at,
+        )
+        await terminal_session.commit()
+
+
 async def run_content_cycle(
     capability_registry: CapabilityRegistry,
     bot: Bot,
@@ -1459,6 +1643,62 @@ async def run_content_cycle(
     pricing_catalog: PricingCatalog | None = None,
     event_ids_override: list[UUID] | None = None,
     precomputed_outcomes: dict[UUID, ContentGenerationOutcome] | None = None,
+    accepted_visuals: Mapping[UUID, AcceptedVisualArtifact] | None = None,
+    precomputed_publication_gates: Mapping[UUID, WorkerGateResult] | None = None,
+    gate_gateway: object | None = None,
+    gate_prompt_repository: object | None = None,
+) -> ContentCycleResult:
+    """Run the unchanged cycle and finalize unexpected post-generation errors.
+
+    A raised exception after a send boundary is *unconfirmed*, never mislabeled
+    DELIVERED or FAILED. A hard process kill can still leave the durable IN_FLIGHT
+    marker; no database transaction can be atomic with Telegram's external API.
+    """
+    token = _kage_active_attempt.set(None)
+    try:
+        return await _run_content_cycle_impl(
+            capability_registry, bot, session_factory,
+            cost_tracker=cost_tracker, pricing_catalog=pricing_catalog,
+            event_ids_override=event_ids_override,
+            precomputed_outcomes=precomputed_outcomes,
+            accepted_visuals=accepted_visuals,
+            precomputed_publication_gates=precomputed_publication_gates,
+            gate_gateway=gate_gateway, gate_prompt_repository=gate_prompt_repository,
+        )
+    except Exception as exc:
+        active = _kage_active_attempt.get()
+        if active is not None:
+            status: TerminalStatus = (
+                "DELIVERY_UNCONFIRMED" if active["send_started"] else
+                active.get("pending_status") or "OTHER_TERMINAL_FAILURE"
+            )
+            try:
+                await _persist_kage_terminal(
+                    session_factory, task_id=active["task_id"],
+                    draft_id=active["draft_id"], status=status,
+                    error_class=type(exc).__name__,
+                    reason=("exception_after_send_boundary" if active["send_started"]
+                            else "exception_before_send_boundary"),
+                    send_attempted_at=active.get("send_attempted_at"),
+                )
+            except Exception:
+                logger.critical("kage_terminal_outcome_persistence_failed", exc_info=True)
+        raise
+    finally:
+        _kage_active_attempt.reset(token)
+
+
+async def _run_content_cycle_impl(
+    capability_registry: CapabilityRegistry,
+    bot: Bot,
+    session_factory: async_sessionmaker[AsyncSession] = async_session_factory,
+    *,
+    cost_tracker: CostTracker | None = None,
+    pricing_catalog: PricingCatalog | None = None,
+    event_ids_override: list[UUID] | None = None,
+    precomputed_outcomes: dict[UUID, ContentGenerationOutcome] | None = None,
+    accepted_visuals: Mapping[UUID, AcceptedVisualArtifact] | None = None,
+    precomputed_publication_gates: Mapping[UUID, WorkerGateResult] | None = None,
     # DIRECTOR-CONTROL-PLANE-1B §2: the real LLMGateway + PromptRepository, threaded straight
     # through to services/director_editorial_gate_shadow.py::run_pre_generation_gate() for its
     # bounded Stage 2 Director judgment. Deliberately typed `object | None` here (never the real
@@ -1521,6 +1761,7 @@ async def run_content_cycle(
     # batch size. A failed generation still consumes its slot because the counter increments
     # immediately before the real call.
     for candidate_index, event_id in enumerate(event_ids):
+        _kage_active_attempt.set(None)
         if result.generation_attempts >= settings.content_generation_batch_size:
             break
         # Phase 2B provenance guard, separate from selector/VIRAL_TECH scoring. Only sources
@@ -1678,12 +1919,161 @@ async def run_content_cycle(
                # ContentGenerationOutcome with fact_safety_status; the call site here is unchanged)
         if outcome.content_draft is None:
             result.failed += 1
+            if settings.copywriting_prompt_version == "11.10":
+                failure_reason = "generation_produced_no_draft"
+                async with session_factory() as failure_session:
+                    failed_task = await failure_session.get(EditorialTask, outcome.task_id)
+                    failure = (failed_task.workflow or {}).get("failure") if failed_task is not None else None
+                    if isinstance(failure, dict) and failure.get("error_type") == "PRE_DISPATCH_SAFETY_REJECTION":
+                        failure_reason = "pre_dispatch_safety_rejection"
+                await _persist_kage_terminal(
+                    session_factory, task_id=outcome.task_id, status="GENERATION_FAILED",
+                    reason=failure_reason,
+                )
             continue
         result.completed += 1
+
+        if settings.copywriting_prompt_version == "11.10":
+            async with session_factory() as truth_session:
+                existing_task = await truth_session.get(EditorialTask, outcome.task_id)
+                existing_terminal = (
+                    (existing_task.workflow or {}).get("publication_outcome")
+                    if existing_task is not None else None
+                )
+            if existing_terminal is not None:
+                logger.warning(
+                    "kage_publication_attempt_already_terminal",
+                    extra={"task_id": str(outcome.task_id),
+                           "terminal_status": existing_terminal.get("status")},
+                )
+                continue
+            async with session_factory() as truth_session:
+                await mark_publication_started(
+                    truth_session, task_id=outcome.task_id,
+                    draft_id=outcome.content_draft.id,
+                )
+                await truth_session.commit()
+            _kage_active_attempt.set({
+                "task_id": outcome.task_id, "draft_id": outcome.content_draft.id,
+                "send_started": False, "send_attempted_at": None,
+            })
 
         async with session_factory() as session:
             event = await session.get(NewsEvent, event_id)
         assert event is not None  # guaranteed by the FK the selecting query itself already joined on
+
+        # The frozen 11.10 stack is authoritative for Telegram delivery. Both the legacy
+        # and unified send branches are below this point; neither can bypass a missing gate.
+        if settings.copywriting_prompt_version == "11.10":
+            gate_result = (
+                precomputed_publication_gates[outcome.task_id]
+                if precomputed_publication_gates is not None
+                and outcome.task_id in precomputed_publication_gates
+                else await evaluate_worker_publication_gate(
+                    gateway=gate_gateway, prompt_repository=gate_prompt_repository,
+                    draft=outcome.copywriting_output,
+                    research=outcome.research_output,
+                    intelligence=outcome.intelligence_output,
+                    source_headline=event.title, event_id=event_id,
+                    draft_id=outcome.content_draft.id, task_id=outcome.task_id,
+                    cost_tracker=cost_tracker, pricing_catalog=pricing_catalog,
+                    quality_result=outcome.quality_output,
+                )
+            )
+            result.publication_gate_records.append(gate_result.record)
+            if gate_result.technical_block:
+                result.gate_technical_block += 1
+            elif gate_result.factual_block:
+                result.factual_gate_block += 1
+            else:
+                result.factual_gate_pass += 1
+            if gate_result.guard_block:
+                result.local_guard_block += 1
+            if (gate_result.factual_block or gate_result.technical_block) and gate_result.guard_block:
+                result.both_block += 1
+            if gate_result.publication_block:
+                logger.warning("kage_publication_blocked", extra=gate_result.record)
+                if gate_result.technical_block:
+                    terminal_status: TerminalStatus = "GATE_TECHNICAL_BLOCK"
+                elif gate_result.factual_block and gate_result.guard_block:
+                    terminal_status = "BLOCKED_BOTH"
+                elif gate_result.factual_block:
+                    terminal_status = "BLOCKED_FACTUAL_GATE"
+                elif gate_result.guard_block:
+                    terminal_status = "BLOCKED_LOCAL_GUARD"
+                else:
+                    terminal_status = "OTHER_TERMINAL_FAILURE"
+                active_attempt = _kage_active_attempt.get()
+                if active_attempt is not None:
+                    active_attempt["pending_status"] = terminal_status
+                # Reuse the existing blocked-draft status; retain the original text for
+                # review, never substitute or send an unverified fallback.
+                async with session_factory() as blocked_session:
+                    await update_attempt_audit(
+                        blocked_session, task_id=outcome.task_id,
+                        section="publication_factual_gate", value=gate_result.audit_payload,
+                    )
+                    await blocked_session.execute(
+                        update(ContentDraft).where(ContentDraft.id == outcome.content_draft.id)
+                        .values(status="draft_blocked_fact_safety")
+                    )
+                    story_link_for_block = await blocked_session.get(
+                        ContentDraftStoryLink, outcome.content_draft.id
+                    )
+                    await record_terminal_outcome(
+                        blocked_session, task_id=outcome.task_id, status=terminal_status,
+                        draft_id=outcome.content_draft.id,
+                        story_id=(story_link_for_block.story_id if story_link_for_block else None),
+                        reason=gate_result.record.get("technical_error"),
+                    )
+                    await blocked_session.commit()
+                _kage_active_attempt.set(None)
+                continue
+            # Deterministic editorial-usefulness guard (no model call, not a factual verdict): a
+            # factually safe body that only restates the headline never reaches either send branch.
+            copy = outcome.copywriting_output or {}
+            copy_body = str(copy.get("main_body") or "")
+            if isinstance(copy.get("ending"), str) and copy["ending"].strip():
+                copy_body = "\n\n".join((copy_body, copy["ending"]))
+            try:
+                usefulness = evaluate_editorial_usefulness(
+                    title=str(copy.get("title") or ""), body=copy_body,
+                    research=outcome.research_output or {}, intelligence=outcome.intelligence_output or {},
+                    source_headline=event.title,
+                )
+            except Exception as exc:  # noqa: BLE001 - fail closed: an unevaluable post is not published
+                usefulness = {"passed": False, "applicable": True, "reason": f"guard_error:{type(exc).__name__}"}
+            async with session_factory() as gate_audit_session:
+                await update_attempt_audit(
+                    gate_audit_session, task_id=outcome.task_id,
+                    section="publication_factual_gate", value=gate_result.audit_payload,
+                )
+                await update_attempt_audit(
+                    gate_audit_session, task_id=outcome.task_id,
+                    section="stage", value={"name": "editorial_usefulness", **usefulness},
+                )
+                if not usefulness["passed"]:
+                    await gate_audit_session.execute(
+                        update(ContentDraft).where(ContentDraft.id == outcome.content_draft.id)
+                        .values(status="draft_blocked_editorial_usefulness")
+                    )
+                    usefulness_story_link = await gate_audit_session.get(
+                        ContentDraftStoryLink, outcome.content_draft.id
+                    )
+                    await record_terminal_outcome(
+                        gate_audit_session, task_id=outcome.task_id, status="BLOCKED_EDITORIAL_USEFULNESS",
+                        draft_id=outcome.content_draft.id,
+                        story_id=(usefulness_story_link.story_id if usefulness_story_link else None),
+                        reason=usefulness.get("reason"),
+                    )
+                await gate_audit_session.commit()
+            if not usefulness["passed"]:
+                result.editorial_usefulness_block += 1
+                logger.warning("kage_editorial_usefulness_blocked", extra={"task_id": str(outcome.task_id), **usefulness})
+                _kage_active_attempt.set(None)
+                continue
+            result.final_publication_pass += 1
+            logger.info("kage_publication_passed", extra=gate_result.record)
 
         # MEME PRODUCTION PIPELINE (overnight phase): the AUTOMATIC meme-generation trigger.
         # Byte-identical no-op unless settings.meme_opportunity_mode == "enforce" (default "off",
@@ -1733,9 +2123,13 @@ async def run_content_cycle(
         # notifier's own, already-established dry_run branch (renders and logs, never calls the
         # Telegram API) - reused verbatim here, never a new suppression code path. Inert (always
         # False) unless fact_safety_mode == "enforce"; a "pass" verdict never suppresses.
-        effective_dry_run, fact_safety_suppressed = _fact_safety_delivery_decision(
-            settings.content_generation_dry_run, settings.fact_safety_mode, outcome.fact_safety_status
-        )
+        if settings.copywriting_prompt_version == "11.10":
+            # Legacy status remains recorded, but is not a second publication authority.
+            effective_dry_run, fact_safety_suppressed = settings.content_generation_dry_run, False
+        else:
+            effective_dry_run, fact_safety_suppressed = _fact_safety_delivery_decision(
+                settings.content_generation_dry_run, settings.fact_safety_mode, outcome.fact_safety_status
+            )
         if fact_safety_suppressed:
             result.fact_safety_suppressed += 1
             logger.info(
@@ -1810,6 +2204,16 @@ async def run_content_cycle(
                             "story_id": str(story_link.story_id),
                         },
                     )
+                    if settings.copywriting_prompt_version == "11.10":
+                        active_attempt = _kage_active_attempt.get()
+                        if active_attempt is not None:
+                            active_attempt["pending_status"] = "ROUTING_HOLD"
+                        await _persist_kage_terminal(
+                            session_factory, task_id=outcome.task_id,
+                            draft_id=outcome.content_draft.id,
+                            status="ROUTING_HOLD", reason="story_update_missing_root_message",
+                        )
+                        _kage_active_attempt.set(None)
                     continue  # never sent as a standalone post - explicit, non-negotiable requirement
                 result.story_reply_would_fail_closed_shadow += 1
                 logger.info(
@@ -1852,6 +2256,11 @@ async def run_content_cycle(
         # environment other than this one).
         sent_message_id: int | None = None
         sent_chat_id: int | None = None
+        send_boundary_reached = False
+        send_attempted_at: datetime | None = None
+        notification_failed_before = result.notification_failed
+        visual_hold_before = result.visual_required_held
+        visual_hold_reason: str | None = None
         if settings.editorial_delivery_mode == "router":
             # Phase 23.1A canary delivery adapter (docs/phase23_1a_canary_delivery_adapter_
             # report.md) - an explicit, separate mode, checked first, never a replacement for the
@@ -1955,6 +2364,9 @@ async def run_content_cycle(
                     unified_research_facts, unified_presentation_score = await _fetch_router_presentation_signals(
                         unified_signals_session, event.id,
                     )
+                send_boundary_reached = True
+                send_attempted_at = datetime.now(timezone.utc)
+                _mark_kage_send_boundary(send_attempted_at)
                 unified_outcome = await run_unified_telegram_delivery(
                     session_factory=session_factory, bot=bot, event=event,
                     content_draft_id=outcome.content_draft.id, task_id=outcome.task_id,
@@ -2331,7 +2743,7 @@ async def run_content_cycle(
                                 # Phase V2.7 §8: ORIGINAL_SOURCE is a first-class successful outcome,
                                 # never merely an error fallback - a candidate whose own already-
                                 # computed warnings flag logo/banner/watermark/lower-third/branded-
-                                # screenshot risk skips the Gemini call entirely (same reused signal
+                                # screenshot risk skips the OpenAI image-edit call (the same reused signal
                                 # services/media_ranking.py already derives from this exact field).
                                 recomposition_source_risk = assess_recomposition_source_risk(resolved_photo_candidate)
                                 if recomposition_source_risk is not None:
@@ -2392,7 +2804,7 @@ async def run_content_cycle(
 
                                 # Phase V2.16: MASTER NEWS branding must still receive the already-
                                 # selected candidate's real original bytes when photo_input resolved to
-                                # a cached Telegram file_id and Gemini did not produce a new image
+                                # a cached Telegram file_id and the edit produced no replacement image
                                 # (skipped/ineligible/failed/off, or the source-risk gate above skipped
                                 # recomposition entirely) - recomposition_source_bytes already resolved
                                 # them above via the exact same storage read, no new fetch/call here.
@@ -2439,7 +2851,7 @@ async def run_content_cycle(
                                     # Phase V2.10H: the locked MASTER NEWS visual contract
                                     # (services.nnj_master_news_overlay) is now the production
                                     # branding path for every NEWS image with real source bytes -
-                                    # whether Gemini successfully recomposed it or not. Supersedes
+                                    # whether the OpenAI edit recomposed it successfully or not. Supersedes
                                     # Phase V2.9's Candidate C path (services.nnj_adaptive_overlay,
                                     # apply_adaptive_nnj_branding) - that module and its locked asset
                                     # remain in the repository as historical/fallback evidence, never
@@ -2595,7 +3007,7 @@ async def run_content_cycle(
                                     # branded") forbids. Independently re-resolves and brands every
                                     # remaining photo using the SAME deterministic function and the
                                     # SAME per-image recomposition-source-risk gate the primary image
-                                    # already receives above - never re-running Gemini recomposition
+                                    # already receives above - without rerunning the recomposition edit
                                     # (out of this phase's scope; only the primary image, already
                                     # resolved earlier, may carry a recomposed image).
                                     if (
@@ -2723,7 +3135,11 @@ async def run_content_cycle(
                             "send_as_video_only": send_as_video_only,
                         },
                     )
+                    used_text_fallback = False
                     if send_as_media_group:
+                        send_boundary_reached = True
+                        send_attempted_at = datetime.now(timezone.utc)
+                        _mark_kage_send_boundary(send_attempted_at)
                         routing_outcome = await send_media_group_to_editorial_destination(
                             bot, EditorialDestination.NEWS, media_group_items,
                             dry_run=effective_dry_run, reply_to_message_id=reply_to_message_id,
@@ -2731,6 +3147,9 @@ async def run_content_cycle(
                         )
                     elif send_as_video_only:
                         assert video_only_input is not None  # narrows for mypy; already checked above
+                        send_boundary_reached = True
+                        send_attempted_at = datetime.now(timezone.utc)
+                        _mark_kage_send_boundary(send_attempted_at)
                         routing_outcome = await send_video_to_editorial_destination(
                             bot, EditorialDestination.NEWS, video_only_input, html,
                             dry_run=effective_dry_run, reply_markup=keyboard,
@@ -2742,6 +3161,9 @@ async def run_content_cycle(
                         )
                     elif send_as_photo:
                         assert photo_input is not None  # narrows for mypy; already checked above
+                        send_boundary_reached = True
+                        send_attempted_at = datetime.now(timezone.utc)
+                        _mark_kage_send_boundary(send_attempted_at)
                         routing_outcome = await send_photo_to_editorial_destination(
                             bot, EditorialDestination.NEWS, photo_input, html,
                             dry_run=effective_dry_run, reply_markup=keyboard,
@@ -2749,38 +3171,56 @@ async def run_content_cycle(
                             show_caption_above_media=show_caption_above_media,
                         )
                     else:
-                        # TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1 (Founder product invariant):
-                        # this `else` is reached for two structurally different reasons, and only one
-                        # of them may still send plain text. (1) A real visual (photo_input/
-                        # media_group_items/video_only_input) WAS resolved, but `fits_caption_budget`
-                        # was False - the separate, pre-existing, disclosed Phase 23.1H/23.1Q caption-
-                        # length tradeoff (a text-budget decision, not a missing visual) - completely
-                        # UNCHANGED by this phase. (2) NO visual was resolved at all - previously
-                        # silently sent as an indistinguishable-from-normal finished text post; now
-                        # held for editor-visible recovery instead (spec §9-D/§12/§13).
+                        # KAGE visual-first (Founder invariant): this router branch has NO text send.
+                        # No usable visual -> Tier 2/3 visual fallback, else VISUAL_HOLD. A visual that
+                        # exists but cannot be sent with this caption (photo-caption overflow, or an
+                        # unsendable media combination) -> VISUAL_HOLD too. Never a text-only NEWS post.
                         had_any_visual = (
                             photo_input is not None or bool(media_group_items) or video_only_input is not None
                         )
-                        # `not effective_dry_run` guard mirrors every other real side effect in this
-                        # function (dry-run must stay exactly as side-effect-free as before this
-                        # phase - no content_drafts.status write, no notice send): a dry-run cycle
-                        # keeps falling through to the pre-existing send_to_editorial_destination(...,
-                        # dry_run=True) call below, which itself already no-ops safely and is counted
-                        # via the unchanged `dry_run_rendered` path further down.
-                        if not had_any_visual and not effective_dry_run:
+                        fallback_photo: BufferedInputFile | None = None
+                        fallback_hold_reason = HOLD_REASON_NO_VISUAL_RESOLVED
+                        if not had_any_visual and settings.kage_news_visual_fallback_mode == "live":
+                            fallback_photo, fallback_hold_reason = await _kage_visual_fallback_photo(
+                                outcome=outcome, event=event, session_factory=session_factory,
+                                caption_fits=fits_caption_budget, dry_run=effective_dry_run,
+                                accepted_visual=(accepted_visuals or {}).get(event_id),
+                            )
+                        if not had_any_visual and fallback_photo is not None:
+                            # KAGE Tier 2/3 visual: a generated editorial image or the typography card.
+                            send_as_photo = True
+                            send_boundary_reached = True
+                            send_attempted_at = datetime.now(timezone.utc)
+                            _mark_kage_send_boundary(send_attempted_at)
+                            routing_outcome = await send_photo_to_editorial_destination(
+                                bot, EditorialDestination.NEWS, fallback_photo, html,
+                                dry_run=effective_dry_run, reply_markup=keyboard,
+                                reply_to_message_id=reply_to_message_id,
+                            )
+                        elif not had_any_visual:
                             await _hold_for_visual_recovery(
                                 session_factory, bot,
                                 draft_id=outcome.content_draft.id, event=event,
                                 presentation_type=original_presentation_type_for_hold,
-                                reason=HOLD_REASON_NO_VISUAL_RESOLVED, dry_run=effective_dry_run,
+                                reason=fallback_hold_reason, dry_run=effective_dry_run,
                             )
                             result.visual_required_held += 1
+                            visual_hold_reason = fallback_hold_reason
                             routing_outcome = None
                         else:
-                            routing_outcome = await send_to_editorial_destination(
-                                bot, EditorialDestination.NEWS, html, dry_run=effective_dry_run, reply_markup=keyboard,
-                                reply_to_message_id=reply_to_message_id,
+                            unsendable_reason = (
+                                HOLD_REASON_PHOTO_CAPTION_OVERFLOW if not fits_caption_budget
+                                else HOLD_REASON_VISUAL_NOT_SENDABLE
                             )
+                            await _hold_for_visual_recovery(
+                                session_factory, bot,
+                                draft_id=outcome.content_draft.id, event=event,
+                                presentation_type=original_presentation_type_for_hold,
+                                reason=unsendable_reason, dry_run=effective_dry_run,
+                            )
+                            result.visual_required_held += 1
+                            visual_hold_reason = unsendable_reason
+                            routing_outcome = None
 
                     # Delivery-gap fix (2026-08-16 production forensic): a real photo/media-group
                     # send timing out (or any other live TelegramAPIError) previously dropped a fully
@@ -2811,8 +3251,6 @@ async def run_content_cycle(
                     # loop, never an unbounded generation attempt (MAX_VISUAL_FALLBACK_ATTEMPTS=0
                     # extra renders - this path never re-renders, it only changes whether the
                     # already-rendered result's failed send becomes a HOLD or a silent text send).
-                    used_text_fallback = False
-
                     if (
                         routing_outcome is not None and not effective_dry_run and not routing_outcome.sent
                         and (send_as_media_group or send_as_photo or send_as_video_only)
@@ -2824,6 +3262,7 @@ async def run_content_cycle(
                             reason=HOLD_REASON_MEDIA_SEND_FAILED, dry_run=effective_dry_run,
                         )
                         result.visual_required_held += 1
+                        visual_hold_reason = HOLD_REASON_MEDIA_SEND_FAILED
                         routing_outcome = None
 
                     if routing_outcome is None:
@@ -2847,6 +3286,9 @@ async def run_content_cycle(
         elif settings.image_editorial_preview_enabled and settings.image_candidate_persistence_mode != "off":
             try:
                 async with session_factory() as preview_session:
+                    send_boundary_reached = True
+                    send_attempted_at = datetime.now(timezone.utc)
+                    _mark_kage_send_boundary(send_attempted_at)
                     combined_outcome = await send_news_with_image_preview(
                         bot, settings.editorial_chat_id, preview_session,
                         draft=outcome.content_draft, event=event, dry_run=effective_dry_run,
@@ -2858,7 +3300,7 @@ async def run_content_cycle(
                 elif combined_outcome.sent:
                     result.notified += 1
                     sent_message_id = combined_outcome.message_id
-                    sent_chat_id = settings.editorial_chat_id
+                    sent_chat_id = getattr(combined_outcome, "chat_id", None) or settings.editorial_chat_id
                     if combined_outcome.has_image:
                         result.image_preview_sent += 1
                 else:
@@ -2870,6 +3312,9 @@ async def run_content_cycle(
                 )
                 result.notification_failed += 1
         else:
+            send_boundary_reached = True
+            send_attempted_at = datetime.now(timezone.utc)
+            _mark_kage_send_boundary(send_attempted_at)
             notification = await send_editorial_card(
                 bot, settings.editorial_chat_id, outcome.content_draft, event,
                 dry_run=effective_dry_run, reply_to_message_id=reply_to_message_id,
@@ -2880,12 +3325,79 @@ async def run_content_cycle(
             elif notification.sent:
                 result.notified += 1
                 sent_message_id = notification.message_id
-                sent_chat_id = settings.editorial_chat_id
+                sent_chat_id = notification.chat_id
             else:
                 result.notification_failed += 1
+                if not notification.rendered_html:
+                    send_boundary_reached = False  # render failed before a Telegram call
                 # ContentDraft already committed - a failed notification is never rolled back and
                 # never actively retried (no duplicate-notification protection for MVP; /news
                 # remains the durable fallback for a lost push notification).
+
+        # KAGE 11.10: write the send receipt and the one terminal attempt outcome in
+        # the same short transaction, immediately after the send branch returns.
+        # A physical send followed by a process/DB crash is still an unavoidable
+        # external-API ambiguity; it is never mislabeled DELIVERED without a receipt.
+        if settings.copywriting_prompt_version == "11.10":
+            if sent_message_id is not None:
+                if sent_chat_id is None:
+                    raise RuntimeError("Telegram send returned message_id without chat_id")
+                try:
+                    async with session_factory() as delivery_session:
+                        if story_link is not None:
+                            await record_delivery(
+                                delivery_session, story_id=story_link.story_id,
+                                content_draft_id=outcome.content_draft.id,
+                                telegram_chat_id=sent_chat_id,
+                                telegram_message_id=sent_message_id,
+                                reply_to_message_id=reply_to_message_id,
+                                delivery_type=(DeliveryType.REPLY if reply_to_message_id is not None
+                                               else DeliveryType.ROOT),
+                                delivery_status=DeliveryStatus.SENT,
+                                sent_at=datetime.now(timezone.utc),
+                            )
+                        await record_terminal_outcome(
+                            delivery_session, task_id=outcome.task_id, status="DELIVERED",
+                            draft_id=outcome.content_draft.id,
+                            story_id=story_link.story_id if story_link else None,
+                            chat_id=sent_chat_id,
+                            topic_id=(settings.news_topic_id if settings.editorial_delivery_mode == "router"
+                                      else None),
+                            message_id=sent_message_id,
+                            send_attempted_at=send_attempted_at,
+                        )
+                        await delivery_session.commit()
+                except Exception:
+                    result.story_delivery_persistence_failed += 1
+                    logger.critical(
+                        "kage_delivery_receipt_persistence_failed_after_real_send",
+                        extra={"event_id": str(event_id), "draft_id": str(outcome.content_draft.id),
+                               "task_id": str(outcome.task_id), "telegram_message_id": sent_message_id,
+                               "telegram_chat_id": sent_chat_id}, exc_info=True,
+                    )
+                    raise
+            else:
+                if result.visual_required_held > visual_hold_before:
+                    terminal_status = "VISUAL_HOLD"
+                elif effective_dry_run:
+                    terminal_status = "DRY_RUN"
+                elif result.notification_failed > notification_failed_before:
+                    terminal_status = "DELIVERY_FAILED" if send_boundary_reached else "PRE_SEND_FAILURE"
+                else:
+                    terminal_status = "OTHER_TERMINAL_FAILURE"
+                await _persist_kage_terminal(
+                    session_factory, task_id=outcome.task_id,
+                    draft_id=outcome.content_draft.id,
+                    status=terminal_status,
+                    reason=(visual_hold_reason if terminal_status == "VISUAL_HOLD" and visual_hold_reason
+                            else "send_not_confirmed" if send_boundary_reached
+                            else "publication_path_ended_without_send"),
+                    error_class=("DeliveryOutcomeNotSent" if terminal_status == "DELIVERY_FAILED"
+                                 else None),
+                    send_attempted_at=send_attempted_at,
+                )
+            _kage_active_attempt.set(None)
+            continue
 
         # Phase 18.10 M3: durably record this send for a story-linked draft - "a send is not
         # successful unless telegram_message_id is persisted" (explicit requirement). Only

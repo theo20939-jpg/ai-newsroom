@@ -15,6 +15,7 @@ never real backlog.
 """
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
+from inspect import getsource
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
@@ -235,6 +236,20 @@ async def test_source(factory: async_sessionmaker[AsyncSession]) -> AsyncIterato
                         delete(RecoveryJobRow).where(RecoveryJobRow.content_draft_id.in_(content_draft_ids))
                     )
 
+                # KAGE factual-lineage audit rows intentionally RESTRICT task deletion so that
+                # forensic history cannot disappear through an incidental task cleanup. Test
+                # teardown explicitly removes only rows belonging to this fixture's events.
+                if await _table_exists(session, "kage_content_lineage_audits"):
+                    from database.models.kage_content_lineage_audit import KageContentLineageAudit
+
+                    await session.execute(
+                        delete(KageContentLineageAudit).where(
+                            KageContentLineageAudit.task_id.in_(
+                                select(EditorialTask.id).where(EditorialTask.event_id.in_(event_ids))
+                            )
+                        )
+                    )
+
                 await session.execute(delete(ContentDraft).where(ContentDraft.id.in_(content_draft_ids)))
                 await session.execute(delete(EditorialTask).where(EditorialTask.event_id.in_(event_ids)))
 
@@ -294,9 +309,17 @@ async def _isolated_freshness_window() -> AsyncIterator[None]:
 
 
 async def _make_event(session: AsyncSession, source: NewsSource, *, published_at: datetime) -> NewsEvent:
+    # This shared fixture is used by delivery and ranking tests that require a genuinely
+    # eligible candidate. The old generic title had no product premise and the current,
+    # already-existing editorial classifier correctly rejected it before those tests
+    # reached generation. Keep a concrete synthetic tech story; no selector is bypassed.
     event = NewsEvent(
         source_id=source.id,
-        title=f"Content cycle test event {uuid4()}",
+        title=f"Steam Deck adds a control remapping feature {uuid4()}",
+        content=(
+            "Valve added control remapping to Steam Deck. Players can change button "
+            "assignments for supported games in the device settings."
+        ),
         category=EventCategory.AI,
         hash=f"content-cycle-test-{uuid4()}",
         published_at=published_at,
@@ -359,6 +382,46 @@ async def _make_content_generation_sibling(session: AsyncSession, event: NewsEve
     return task
 
 
+@pytest.mark.asyncio
+async def test_product_loop_suppresses_recent_same_change_across_cycles(
+    factory: async_sessionmaker[AsyncSession], test_source: NewsSource,
+    _isolated_freshness_window: None,
+) -> None:
+    """A cycle-local collapse must not let a second outlet re-enter next cycle."""
+    previous_version = settings.copywriting_prompt_version
+    previous_acquisition = settings.article_acquisition_mode
+    settings.copywriting_prompt_version = "11.10"
+    settings.article_acquisition_mode = "enforce"
+    try:
+        async with factory() as session:
+            first = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
+            second = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
+            distinct = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
+            unique_change = uuid4().hex[:10]
+            first.title = f"Microsoft Copilot adds spatial translation features {unique_change}"
+            first.content = f"Copilot adds spatial translation tools to the app. {unique_change}"
+            second.title = f"Microsoft Copilot launches spatial translation agents {unique_change}"
+            second.content = f"Copilot's spatial translation agents are in the app. {unique_change}"
+            distinct.title = "Microsoft Copilot adds a new image editor"
+            distinct.content = "The image editor changes how users crop and resize photos."
+            await session.commit()
+            for event in (first, second, distinct):
+                await _make_completed_news_analysis_task(session, event, score=80)
+
+            before = await _select_eligible_events(session, max_results=10)
+            assert len({first.id, second.id} & set(before)) == 1
+            assert distinct.id in before
+            primary = first if first.id in before else second
+            other = second if primary is first else first
+            await _make_content_generation_sibling(session, primary, TaskStatus.COMPLETED)
+            after = await _select_eligible_events(session, max_results=10)
+            assert other.id not in after
+            assert distinct.id in after
+    finally:
+        settings.copywriting_prompt_version = previous_version
+        settings.article_acquisition_mode = previous_acquisition
+
+
 # ---------------------------------------------------------------------------
 # _select_eligible_events() - SQL-side filtering
 # ---------------------------------------------------------------------------
@@ -384,7 +447,7 @@ async def test_below_threshold_score_is_excluded(
     async with factory() as session:
         event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
         await _make_completed_news_analysis_task(
-            session, event, score=settings.content_generation_min_score - 1
+            session, event, score=settings.content_generation_min_score - 20
         )
 
         eligible = await _select_eligible_events(session)
@@ -673,7 +736,7 @@ async def test_g_fresh_event_below_threshold_is_not_selected(
     priority is an ordering concern only, never a substitute for the eligibility/score gate."""
     async with factory() as session:
         event = await _make_event(session, test_source, published_at=datetime.now(timezone.utc))
-        await _make_completed_news_analysis_task(session, event, score=settings.content_generation_min_score - 1)
+        await _make_completed_news_analysis_task(session, event, score=settings.content_generation_min_score - 20)
 
         eligible = await _select_eligible_events(session)
 
@@ -683,7 +746,7 @@ async def test_g_fresh_event_below_threshold_is_not_selected(
 def test_h_ordering_contains_no_source_type_reference() -> None:
     """Structural: the M5.2 ordering fix is source-agnostic by construction - it reads only
     NewsEvent.published_at/.collected_at, never NewsSource.type or any per-source-type branch."""
-    source = Path("worker/content_cycle.py").read_text(encoding="utf-8")
+    source = getsource(_select_eligible_events)
     assert "SourceType" not in source
     assert "source.type" not in source
     assert "source_type" not in source
@@ -773,7 +836,7 @@ async def test_fewer_than_batch_size_eligible_returns_fewer_never_padded(
             )
             failing_event = await _make_event(session, test_source, published_at=now)
             await _make_completed_news_analysis_task(
-                session, failing_event, score=settings.content_generation_min_score - 1
+                session, failing_event, score=settings.content_generation_min_score - 20
             )
 
             eligible = await _select_eligible_events(session)

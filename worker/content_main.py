@@ -27,11 +27,31 @@ logger = logging.getLogger(__name__)
 _PROMPTS_ROOT = Path(__file__).resolve().parent.parent / "prompts"
 
 
+def _configure_telegram_copywriting_default() -> str:
+    """Use frozen KAGE; fail closed if an old explicit env would win at startup."""
+    if "copywriting_prompt_version" not in settings.model_fields_set:
+        settings.copywriting_prompt_version = "11.10"
+    if settings.copywriting_prompt_version != "11.10":
+        raise RuntimeError(
+            "clean Telegram RC requires copywriting_prompt_version=11.10; "
+            "refusing a silent legacy prompt/runtime path"
+        )
+    # KAGE NEWS is visual-first: only the router path is proven to never send text-only NEWS
+    # (send_photo or VISUAL_HOLD). The legacy editorial-card mode and the unified pipeline both
+    # contain text sends, so a KAGE worker refuses to start in either.
+    if settings.editorial_delivery_mode != "router":
+        raise RuntimeError("KAGE Telegram requires editorial_delivery_mode=router; legacy mode sends text-only cards")
+    if settings.unified_editorial_pipeline_enabled:
+        raise RuntimeError("KAGE Telegram requires unified_editorial_pipeline_enabled=false (accepted visual V1)")
+    return settings.copywriting_prompt_version
+
+
 async def _run_enabled_loop() -> None:
     """startup -> assemble AI layer + Bot once -> run one cycle -> cancellation-aware
     sleep(interval) -> next cycle. Cadence is cycle duration + configured interval (not
     wall-clock-fixed), mirroring worker/analysis_main.py's own disclosed, accepted behavior
     exactly."""
+    _configure_telegram_copywriting_default()
     prompt_repository = FilePromptRepository(_PROMPTS_ROOT)
     ai_layer = assemble_ai_integration_layer(settings, prompt_repository)  # constructed once
     bot = create_bot()  # constructed once, identically regardless of content_generation_dry_run

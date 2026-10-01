@@ -11,10 +11,12 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -22,6 +24,7 @@ from core.config import settings
 from database.models.editorial_task import EditorialTask, TaskPriority, TaskStatus
 from database.models.news_event import EventCategory, NewsEvent
 from database.models.news_source import NewsSource, SourceType
+from database.models.story_telegram_delivery import StoryTelegramDelivery
 from schemas.editorial_task import EditorialTaskCreate, EditorialTaskRead
 from schemas.workflow import (
     WorkflowDefinition,
@@ -64,6 +67,28 @@ class _AlwaysFailsPermanently:
 class _AlwaysFailsRetryably:
     async def execute(self, step: WorkflowStepDefinition) -> dict[str, Any]:
         raise StepExecutionError("always fails")
+
+
+@pytest.mark.asyncio
+async def test_telegram_canary_scope_limits_workflow_step_to_one_attempt() -> None:
+    from services.kage_telegram_canary_envelope import telegram_canary_envelope
+
+    class CountingFailure:
+        calls = 0
+
+        async def execute(self, step: WorkflowStepDefinition) -> dict[str, Any]:
+            self.calls += 1
+            raise StepExecutionError("transient")
+
+    executor = CountingFailure()
+    runner = WorkflowRunner(executor)
+    task = SimpleNamespace(retry_count=0, id=UUID("00000000-0000-0000-0000-000000000001"))
+    step = WorkflowStepDefinition(name="research", capability="research", timeout_seconds=1, max_attempts=3)
+    with telegram_canary_envelope():
+        result = await runner._run_step(task, "CONTENT_GENERATION", step, [])  # noqa: SLF001
+    assert result == "FAILED"
+    assert executor.calls == 1
+    assert task.retry_count == 0
 
 
 class _SlowThenFast:
@@ -136,7 +161,8 @@ async def test_successful_run_completes(db_session: AsyncSession, real_news_even
     assert len(result.step_results) == 4  # NEWS_ANALYSIS has 4 steps
     assert all(r.status == "SUCCESS" for r in result.step_results)
 
-    persisted = await workflow_service.get_task(db_session, task.id)
+    persisted = await db_session.get(EditorialTask, task.id)
+    assert persisted is not None
     assert persisted.status == TaskStatus.COMPLETED
 
 
@@ -179,6 +205,47 @@ async def test_permanent_failure_stops_immediately_without_retry(
     assert len(result.step_results) == 1  # failed on the first step, no further steps attempted
     persisted = await workflow_service.get_task(db_session, task.id)
     assert persisted.retry_count == 0  # no retries for a permanent failure
+
+
+@pytest.mark.asyncio
+async def test_canary_pre_dispatch_rejection_terminalizes_without_publication_receipt(
+    db_session: AsyncSession, real_news_event: NewsEvent,
+) -> None:
+    from services.kage_telegram_canary_envelope import CanaryPreDispatchSafetyRejection
+
+    class RejectBeforeDispatch:
+        calls = 0
+
+        async def execute(self, step: WorkflowStepDefinition) -> dict[str, Any]:
+            self.calls += 1
+            raise CanaryPreDispatchSafetyRejection("telegram canary: output cap mismatch")
+
+    task = await workflow_service.create_task(
+        db_session,
+        EditorialTaskCreate(
+            event_id=real_news_event.id, workflow_type=WorkflowType.CONTENT_GENERATION,
+            priority=TaskPriority.B,
+        ),
+    )
+    executor = RejectBeforeDispatch()
+    result = await WorkflowRunner(executor=executor).run(db_session, task.id)
+
+    persisted = await db_session.get(EditorialTask, task.id)
+    assert persisted is not None
+    assert result.status == "FAILED"
+    assert persisted.status == TaskStatus.FAILED
+    assert persisted.retry_count == 0
+    assert executor.calls == 1  # rejected before the provider-facing path
+    assert persisted.workflow["failure"]["error_type"] == "PRE_DISPATCH_SAFETY_REJECTION"
+    assert "output cap mismatch" in persisted.workflow["failure"]["message"]
+    assert persisted.workflow.get("publication_outcome") is None
+    assert result.step_results[0].status == "FAILED"
+    receipt_count = await db_session.scalar(
+        select(func.count()).select_from(StoryTelegramDelivery).where(
+            StoryTelegramDelivery.source_event_id == real_news_event.id,
+        )
+    )
+    assert receipt_count == 0
 
 
 @pytest.mark.asyncio

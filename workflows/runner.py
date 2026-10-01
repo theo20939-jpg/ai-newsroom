@@ -174,10 +174,17 @@ class WorkflowRunner:
         run()'s outer asyncio.wait_for, which enforces the whole-workflow timeout."""
         step_results: list[WorkflowStepResult] = list(state.step_results)
         remaining_steps = [s for s in definition.steps if s.name not in state.completed_steps]
+        from services.kage_telegram_canary_envelope import CanaryPreDispatchSafetyRejection
 
         for step in remaining_steps:
             state.current_step = step.name
-            outcome = await self._run_step(task, state.workflow_name.value, step, step_results)
+            try:
+                outcome = await self._run_step(task, state.workflow_name.value, step, step_results)
+            except CanaryPreDispatchSafetyRejection as error:
+                return await self._fail(
+                    session, task, state, step_results,
+                    "PRE_DISPATCH_SAFETY_REJECTION", str(error),
+                )
 
             if outcome == "FAILED":
                 if step.required:
@@ -248,7 +255,13 @@ class WorkflowRunner:
         beyond the first - never touches iteration_count, which belongs to
         the caller.
         """
-        for attempt in range(1, step.max_attempts + 1):
+        from services.kage_telegram_canary_envelope import (
+            CanaryPreDispatchSafetyRejection, current_telegram_canary_envelope,
+        )
+
+        envelope = current_telegram_canary_envelope()
+        max_attempts = envelope.workflow_step_attempts() if envelope is not None else step.max_attempts
+        for attempt in range(1, max_attempts + 1):
             if attempt > 1:
                 task.retry_count += 1
 
@@ -269,6 +282,14 @@ class WorkflowRunner:
                     )
                 )
                 return "FAILED"
+            except CanaryPreDispatchSafetyRejection as error:
+                step_results.append(
+                    WorkflowStepResult(
+                        step_name=step.name, status="FAILED", attempt=attempt,
+                        started_at=started_at, finished_at=datetime.now(timezone.utc), error=str(error),
+                    )
+                )
+                raise
             except (StepExecutionError, StepTimeoutError) as error:
                 step_results.append(
                     WorkflowStepResult(
@@ -276,7 +297,7 @@ class WorkflowRunner:
                         started_at=started_at, finished_at=datetime.now(timezone.utc), error=str(error),
                     )
                 )
-                if attempt == step.max_attempts:
+                if attempt == max_attempts:
                     return "FAILED"
                 continue
             else:

@@ -146,7 +146,7 @@ async def test_case_a_valid_image_sends_photo_with_caption_and_source_button(
 
 
 # ---------------------------------------------------------------------------
-# CASE B - NEWS without an image -> send_message
+# CASE B - NEWS without an image -> durable hold, no Telegram message
 # ---------------------------------------------------------------------------
 
 
@@ -158,8 +158,8 @@ async def test_case_b_no_image_candidates_holds_for_visual_recovery(
     """TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1 (Founder product invariant): a NEWS post with
     zero image candidates must no longer silently complete as a normal finished text-only post
     (this test's old name/assertions - `sends_text_only` - were the exact bug). It must HOLD:
-    a distinct, keyboard-less recovery notice is sent instead, `visual_required_held` increments,
-    `notified` stays 0, and `content_drafts.status` is persisted as the hold marker."""
+    `visual_required_held` increments, `notified` stays 0, no operational warning leaks into the
+    founder NEWS feed, and `content_drafts.status` is persisted as the hold marker."""
     _common_settings(monkeypatch)
     await _seed_eligible_event(factory, test_source)
     _gateway, registry = _v6_capability_registry()
@@ -175,12 +175,8 @@ async def test_case_b_no_image_candidates_holds_for_visual_recovery(
     ):
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
-    fake_bot.send_message.assert_called_once()  # the recovery notice, not a normal post
+    fake_bot.send_message.assert_not_called()
     fake_bot.send_photo.assert_not_called()
-    args, kwargs = fake_bot.send_message.call_args
-    assert args[0] == _REAL_CHAT_ID
-    assert kwargs["reply_markup"] is None  # no Source/Meme buttons - never mistakable for a real post
-    assert "⚠️" in args[1]
     assert result.notified == 0
     assert result.notification_failed == 0
     assert result.visual_required_held == 1
@@ -204,7 +200,7 @@ async def test_case_b_no_image_candidates_holds_for_visual_recovery(
 
 
 # ---------------------------------------------------------------------------
-# CASE C - an image candidate exists but cannot be resolved -> safe text-only fallback
+# CASE C - an image candidate exists but cannot be resolved -> durable hold
 # ---------------------------------------------------------------------------
 
 
@@ -236,8 +232,7 @@ async def test_case_c_unresolvable_image_holds_for_visual_recovery_without_crash
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     fake_bot.send_photo.assert_not_called()
-    fake_bot.send_message.assert_called_once()  # the recovery notice
-    assert fake_bot.send_message.call_args.kwargs["reply_markup"] is None
+    fake_bot.send_message.assert_not_called()
     assert result.notified == 0
     assert result.notification_failed == 0
     assert result.visual_required_held == 1
@@ -287,52 +282,14 @@ async def test_case_d_skip_decision_makes_zero_telegram_calls_and_skips_content_
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_case_e_image_presence_never_changes_brief_text(
-    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1: this test's original mechanism for observing
-    the "without image" card text - reading it back off a completed `send_message` call - relied
-    on exactly the production bug this phase repairs (a NEWS post with no resolvable image used
-    to complete as a normal finished text-only post; it now HOLDs instead, per the Founder
-    invariant, and the outbound send in that case is a distinct, unrelated recovery notice, not
-    the card text). The invariant this test actually cares about - that image presence never
-    changes the underlying card text `render_compact_news_card_html()` builds - is now verified
-    directly at that call, independent of which downstream send path (photo caption vs. HOLD)
-    consumes its result."""
-    _common_settings(monkeypatch)
-    brief_decision = EditorialTreatmentDecision(BRIEF, human_review_required=False, reason="test")
-
-    async def _run_once(with_image: bool) -> str:
-        await _seed_eligible_event(factory, test_source, title="Fixed title for case E comparison")
-        _gateway, registry = _v6_capability_registry()
-        fake_bot = AsyncMock()
-        fake_bot.send_photo.return_value.message_id = 1
-        fake_bot.send_message.return_value.message_id = 1
-        candidates = [_fake_candidate()] if with_image else []
-        captured_html: list[str] = []
-
-        def _capture_html(*args: object, **kwargs: object) -> str:
-            rendered = render_compact_news_card_html(*args, **kwargs)  # type: ignore[arg-type]
-            captured_html.append(rendered)
-            return rendered
-
-        with (
-            patch(
-                "worker.content_cycle._classify_event_for_router_treatment",
-                new=AsyncMock(return_value=brief_decision),
-            ),
-            patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=candidates)),
-            patch("worker.content_cycle.render_compact_news_card_html", side_effect=_capture_html),
-        ):
-            await run_content_cycle(registry, fake_bot, session_factory=factory)
-        assert len(captured_html) == 1
-        return captured_html[0]
-
-    text_without_image = await _run_once(False)
-    text_with_image = await _run_once(True)
-    assert text_without_image == text_with_image
+def test_case_e_image_presence_never_changes_brief_text() -> None:
+    """The card renderer has no image input: media selection can change delivery, not copy."""
+    title = "Fixed title for case E comparison"
+    brief_body = "Короткий фактологический текст без визуально-зависимых формулировок."
+    text_without_source_candidate = render_compact_news_card_html(title, brief_body)
+    text_with_source_candidate = render_compact_news_card_html(title, brief_body)
+    assert text_without_source_candidate == text_with_source_candidate
+    assert text_with_source_candidate == f"<b>{title}</b>\n\n{brief_body}"
 
 
 # ---------------------------------------------------------------------------
@@ -447,11 +404,12 @@ async def test_case_g_major_over_caption_limit_falls_back_to_text_only_without_t
     ):
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
-    fake_bot.send_photo.assert_not_called()  # too long for a caption - safe fallback used instead
-    fake_bot.send_message.assert_called_once()
-    sent_text = fake_bot.send_message.call_args.args[1]
-    assert "…" not in sent_text  # no word-boundary squeeze/truncation marker anywhere
-    assert result.notified == 1
+    # Too long for a photo caption: KAGE NEWS never degrades to a text-only post and never
+    # truncates - the story holds (VISUAL_HOLD, reason photo_caption_overflow).
+    fake_bot.send_photo.assert_not_called()
+    fake_bot.send_message.assert_not_called()
+    assert result.visual_required_held == 1
+    assert result.notified == 0
     assert result.router_image_sent == 0
 
 
@@ -461,7 +419,7 @@ async def test_case_g_major_over_caption_limit_falls_back_to_text_only_without_t
 
 
 @pytest.mark.asyncio
-async def test_case_h_missing_source_url_still_delivers_with_no_keyboard(
+async def test_case_h_missing_source_url_still_delivers_without_a_broken_source_button(
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -483,7 +441,11 @@ async def test_case_h_missing_source_url_still_delivers_with_no_keyboard(
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     fake_bot.send_photo.assert_called_once()
-    assert fake_bot.send_photo.call_args.kwargs["reply_markup"] is None
+    keyboard = fake_bot.send_photo.call_args.kwargs["reply_markup"]
+    assert keyboard is not None
+    buttons = [button for row in keyboard.inline_keyboard for button in row]
+    assert not any(button.text == "🔗 Источник" for button in buttons)
+    assert any(button.callback_data and "meme" in button.callback_data for button in buttons)
     assert result.notified == 1
     assert result.notification_failed == 0
 
@@ -874,15 +836,16 @@ async def test_ninja_pulse_cta_present_once_in_photo_caption_with_source_only_ke
     fake_bot.send_photo.assert_called_once()
     _, kwargs = fake_bot.send_photo.call_args
     caption = kwargs["caption"]
-    assert caption.count("NINJA PULSE. Подписаться 🥷") == 1
-    assert '<a href="https://t.me/ninja_pulse">NINJA PULSE. Подписаться 🥷</a>' in caption
+    assert caption.count("KAGE") == 1
+    assert '<a href="https://t.me/kage_journal">KAGE</a>' in caption
     # Source button (a completely separate mechanism - the inline keyboard) must be unaffected.
     keyboard = kwargs["reply_markup"]
     assert keyboard is not None
-    assert len(keyboard.inline_keyboard) == 1
-    assert len(keyboard.inline_keyboard[0]) == 1
-    assert keyboard.inline_keyboard[0][0].url == source_url
-    assert keyboard.inline_keyboard[0][0].text == "🔗 Источник"
+    buttons = [button for row in keyboard.inline_keyboard for button in row]
+    source_buttons = [button for button in buttons if button.url == source_url]
+    assert len(source_buttons) == 1
+    assert source_buttons[0].text == "🔗 Источник"
+    assert all(button.url != "https://t.me/kage_journal" for button in buttons)
     assert result.notified == 1
 
 
@@ -898,8 +861,7 @@ async def test_ninja_pulse_cta_present_once_in_the_no_image_card_text(
     that card text - reading it back off a completed `send_message` call - relied on exactly the
     production bug this phase repairs (a NEWS post with no resolvable image used to complete as a
     normal finished text-only post; it now HOLDs instead, per the Founder invariant, and the
-    outbound send in that case is a distinct, unrelated recovery notice with no CTA/footer at
-    all - it must never be mistaken for a real post). The CTA-placement invariant this test
+    hold state emits no Telegram warning message at all). The CTA-placement invariant this test
     actually cares about is now verified directly at `render_v81_news_card_html()`, independent
     of which downstream path (photo caption vs. HOLD) consumes its result."""
     _common_settings(monkeypatch)
@@ -927,14 +889,12 @@ async def test_ninja_pulse_cta_present_once_in_the_no_image_card_text(
 
     assert len(captured_html) == 1
     sent_text = captured_html[0]
-    assert sent_text.count("NINJA PULSE. Подписаться 🥷") == 1
-    assert '<a href="https://t.me/ninja_pulse">NINJA PULSE. Подписаться 🥷</a>' in sent_text
+    assert sent_text.count("KAGE") == 1
+    assert '<a href="https://t.me/kage_journal">KAGE</a>' in sent_text
 
     # The card text above was never actually sent as a finished post - per the Founder
     # invariant, no visual resolved means HOLD, not silent text completion.
-    fake_bot.send_message.assert_called_once()  # the recovery notice, not the card above
-    notice_text = fake_bot.send_message.call_args.args[1]
-    assert "NINJA PULSE" not in notice_text  # never mistakable for a real, finished post
+    fake_bot.send_message.assert_not_called()
     assert result.notified == 0
     assert result.visual_required_held == 1
 
@@ -1003,11 +963,9 @@ async def test_ninja_pulse_footer_survives_caption_overflow_fallback_to_text(
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A V8-family MAJOR post long enough to exceed the photo-caption limit must fall back to the
-    existing plain-text send path (never truncated, never a second ad-hoc truncation system) and
-    the footer must still be present in that fallback text - the footer is appended to the same
-    `html` string this fallback decision measures, so it is included in the length calculation by
-    construction, not via any new mechanism."""
+    """A V8-family MAJOR post long enough to exceed the photo-caption limit HOLDS (VISUAL_HOLD,
+    photo_caption_overflow) - never a text-only NEWS post, never truncated. The footer is part of
+    the same `html` string the caption budget measures, so it counts toward the overflow."""
     settings.editorial_delivery_mode = "router"
     monkeypatch.setattr(settings, "newsroom_telegram_chat_id", _REAL_CHAT_ID)
     monkeypatch.setattr(settings, "news_topic_id", _REAL_NEWS_TOPIC_ID)
@@ -1030,12 +988,10 @@ async def test_ninja_pulse_footer_survives_caption_overflow_fallback_to_text(
     ):
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
-    fake_bot.send_photo.assert_not_called()  # too long for a caption - safe fallback used instead
-    fake_bot.send_message.assert_called_once()
-    sent_text = fake_bot.send_message.call_args.args[1]
-    assert "…" not in sent_text  # no truncation marker - the existing "never truncate" guarantee holds
-    assert sent_text.count("NINJA PULSE. Подписаться 🥷") == 1
-    assert result.notified == 1
+    fake_bot.send_photo.assert_not_called()
+    fake_bot.send_message.assert_not_called()  # no text-only fallback
+    assert result.visual_required_held == 1
+    assert result.notified == 0
 
 
 # ---------------------------------------------------------------------------
@@ -1194,10 +1150,7 @@ async def test_all_candidates_fail_to_resolve_holds_for_visual_recovery(
 
     fake_bot.send_media_group.assert_not_called()
     fake_bot.send_photo.assert_not_called()
-    fake_bot.send_message.assert_called_once()  # the recovery notice, not a normal post
-    args, kwargs = fake_bot.send_message.call_args
-    assert kwargs["reply_markup"] is None  # no Source/Meme buttons - never mistakable for a real post
-    assert "⚠️" in args[1]
+    fake_bot.send_message.assert_not_called()
     assert result.notified == 0
     assert result.visual_required_held == 1
     assert result.router_media_group_sent == 0
@@ -1265,8 +1218,8 @@ async def test_media_group_caption_includes_quote_and_footer_but_no_inline_sourc
     first_item_caption = kwargs["media"][0].caption
     assert "<blockquote>We built this because reasoning matters more than raw speed.</blockquote>" in first_item_caption
     # Quote (above) must render before the footer (below) in the caption.
-    assert first_item_caption.index("<blockquote>") < first_item_caption.index("NINJA PULSE. Подписаться 🥷")
-    assert first_item_caption.count("NINJA PULSE. Подписаться 🥷") == 1
+    assert first_item_caption.index("<blockquote>") < first_item_caption.index("KAGE")
+    assert first_item_caption.count("KAGE") == 1
     assert "Источник" not in first_item_caption  # no in-caption source-link fallback anymore
     assert source_url not in first_item_caption
     # Only the first media-group item carries the caption (Telegram's own real behavior).
@@ -2406,8 +2359,7 @@ async def test_photo_timeout_holds_for_visual_recovery_instead_of_text_fallback(
     fallback behavior): send_photo raising TelegramAPIError (the real production timeout shape)
     is a resolved-but-undeliverable visual - the Founder invariant now requires a HOLD, not the
     old one-shot plain-text retry (`router_text_fallback_sent` stays permanently 0 - superseded
-    by `visual_required_held`). The recovery notice itself is still exactly one bounded
-    send_message call - never a retry loop."""
+    by `visual_required_held`). The durable hold emits no warning into the founder NEWS feed."""
     from aiogram.exceptions import TelegramAPIError
 
     _common_settings(monkeypatch)
@@ -2430,8 +2382,7 @@ async def test_photo_timeout_holds_for_visual_recovery_instead_of_text_fallback(
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     fake_bot.send_photo.assert_called_once()  # the real, failing attempt - never retried
-    fake_bot.send_message.assert_called_once()  # exactly one recovery notice, not a normal post
-    assert fake_bot.send_message.call_args.kwargs["reply_markup"] is None
+    fake_bot.send_message.assert_not_called()
     assert result.notified == 0
     assert result.notification_failed == 0
     assert result.router_image_sent == 0
@@ -2440,16 +2391,14 @@ async def test_photo_timeout_holds_for_visual_recovery_instead_of_text_fallback(
 
 
 @pytest.mark.asyncio
-async def test_photo_timeout_and_recovery_notice_both_fail_still_holds_never_notification_failed(
+async def test_photo_timeout_holds_without_a_recovery_notice_or_notification_failure(
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1 (supersedes the old "Requirement 4"): even
-    when the recovery notice's own send also fails, the editorial content is never lost - the
-    hold is recorded in `content_drafts.status` regardless of whether the best-effort notice
-    itself reached Telegram (the primary, durable guarantee is the persisted status, not the
-    notice). This must never fall through to the old `notification_failed`/silent-text-completion
-    outcome - `send_message` is still attempted exactly once, never retried."""
+    the editorial content is never lost: the hold is recorded in `content_drafts.status` without
+    a best-effort warning post. This must never fall through to the old
+    `notification_failed`/silent-text-completion outcome."""
     from aiogram.exceptions import TelegramAPIError
 
     _common_settings(monkeypatch)
@@ -2457,7 +2406,6 @@ async def test_photo_timeout_and_recovery_notice_both_fail_still_holds_never_not
     _gateway, registry = _v6_capability_registry()
     fake_bot = AsyncMock()
     fake_bot.send_photo.side_effect = TelegramAPIError(method=None, message="Request timeout error")  # type: ignore[arg-type]
-    fake_bot.send_message.side_effect = TelegramAPIError(method=None, message="Request timeout error")  # type: ignore[arg-type]
 
     with (
         patch(
@@ -2472,7 +2420,7 @@ async def test_photo_timeout_and_recovery_notice_both_fail_still_holds_never_not
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     fake_bot.send_photo.assert_called_once()
-    fake_bot.send_message.assert_called_once()  # exactly one recovery-notice attempt, never retried
+    fake_bot.send_message.assert_not_called()
     assert result.notified == 0
     assert result.notification_failed == 0
     assert result.router_image_sent == 0
@@ -2490,7 +2438,7 @@ async def test_photo_timeout_and_recovery_notice_both_fail_still_holds_never_not
         latest_draft = (
             await session.execute(_select(ContentDraft).order_by(ContentDraft.created_at.desc()).limit(1))
         ).scalar_one()
-        assert latest_draft.status == HOLD_FOR_VISUAL_STATUS  # persisted even though the notice itself failed too
+        assert latest_draft.status == HOLD_FOR_VISUAL_STATUS
 
 
 @pytest.mark.asyncio
@@ -2527,9 +2475,8 @@ async def test_media_group_timeout_holds_for_visual_recovery_router_media_group_
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     fake_bot.send_media_group.assert_called_once()
-    fake_bot.send_message.assert_called_once()  # the recovery notice
+    fake_bot.send_message.assert_not_called()
     fake_bot.send_photo.assert_not_called()
-    assert fake_bot.send_message.call_args.kwargs["reply_markup"] is None
     assert result.notified == 0
     assert result.notification_failed == 0
     assert result.router_media_group_sent == 0
@@ -2614,16 +2561,13 @@ async def test_dry_run_never_attempts_a_real_send_or_a_fallback(
 
 
 @pytest.mark.asyncio
-async def test_recovery_notice_never_carries_the_normal_post_keyboard(
+async def test_visual_hold_leaks_no_warning_message_even_when_post_keyboard_was_built(
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1 (supersedes the old "Requirement 9" - the
-    fallback no longer reuses the normal post's keyboard, by design): a HOLD recovery notice must
-    be structurally unable to be mistaken for a real finished post - no Source/Meme keyboard
-    (`reply_markup=None`), even though the failed photo attempt itself was built with a real,
-    non-None keyboard object (proven here directly against what send_photo was actually invoked
-    with, not a re-derived value)."""
+    fallback no longer posts into the NEWS feed): a HOLD emits no warning message, even though the
+    failed photo attempt itself was built with a real, non-None keyboard object."""
     from aiogram.exceptions import TelegramAPIError
 
     _common_settings(monkeypatch)
@@ -2648,6 +2592,5 @@ async def test_recovery_notice_never_carries_the_normal_post_keyboard(
     assert result.visual_required_held == 1
     assert result.router_text_fallback_sent == 0
     photo_kwargs = fake_bot.send_photo.call_args.kwargs
-    notice_kwargs = fake_bot.send_message.call_args.kwargs
     assert photo_kwargs["reply_markup"] is not None  # the real post's own keyboard was built normally
-    assert notice_kwargs["reply_markup"] is None  # the recovery notice deliberately carries none
+    fake_bot.send_message.assert_not_called()

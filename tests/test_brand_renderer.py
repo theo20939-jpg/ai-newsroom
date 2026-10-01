@@ -48,10 +48,10 @@ def _solid_jpeg(width: int = 1600, height: int = 900, color: tuple[int, int, int
 # ---------------------------------------------------------------------------
 
 
-def test_official_nnj_logo_png_loads():
+def test_canonical_kage_watermark_png_loads():
     assert _LOGO_PNG_PATH.exists()
     mark = load_brand_mark()
-    assert mark.size == (480, 480)  # official aspect ratio, never stretched
+    assert mark.size == (1254, 1254)  # supplied asset retained at native aspect ratio
 
 
 def test_brand_mark_is_used_unmodified_across_calls():
@@ -63,18 +63,11 @@ def test_brand_mark_is_used_unmodified_across_calls():
     assert first.tobytes() == second.tobytes()
 
 
-def test_brand_mark_contains_both_the_official_red_and_white_as_shipped():
-    """Confirms the asset is used as-is: both the official red badge background and the white
-    wordmark are present, unmodified - never flattened into a single recolored blob."""
+def test_brand_mark_matches_the_attached_kage_asset_as_shipped():
+    """The Telegram mark is the attached canonical KAGE asset, used without recoloring here."""
     mark = load_brand_mark().convert("RGBA")
-    colors = {
-        mark.getpixel((x, y))[:3]
-        for x in range(0, 480, 10)
-        for y in range(0, 480, 10)
-        if mark.getpixel((x, y))[3] > 200
-    }
-    assert _OFFICIAL_NNJ_RED in colors
-    assert (255, 255, 255) in colors
+    with Image.open(_LOGO_PNG_PATH) as source:
+        assert mark.tobytes() == source.convert("RGBA").tobytes()
 
 
 # ---------------------------------------------------------------------------
@@ -1007,7 +1000,7 @@ def test_data_lower_signature_never_generates_or_redraws_the_nnj_glyph():
     render function - the only mark-producing call is the real canonical SVG rasterizer."""
     signature_source = inspect.getsource(brand_renderer_module._build_data_lower_signature_image)
     render_source = inspect.getsource(brand_renderer_module.render_data_card)
-    assert "rasterize_nnj_mark(" in signature_source
+    assert "rasterize_kage_watermark(" in signature_source
     for source in (signature_source, render_source):
         assert "draw.polygon" not in source
         assert "NEWSROOM NINJA" not in source

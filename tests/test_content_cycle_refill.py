@@ -52,7 +52,10 @@ async def test_explicit_refill_pool_is_ranked_and_scan_bounded(
     created = []
     async with factory() as session:
         now = datetime.now(timezone.utc)
-        for offset, score in enumerate((71, 90, 80, 99)):
+        # Generic synthetic titles carry the existing -15 product-fit adjustment;
+        # keep every row above the actual eligibility threshold so this test still
+        # isolates bounded scanning and rank order rather than editorial taste.
+        for offset, score in enumerate((86, 98, 90, 99)):
             event = await _make_event(
                 session, test_source, published_at=now - timedelta(seconds=offset)
             )

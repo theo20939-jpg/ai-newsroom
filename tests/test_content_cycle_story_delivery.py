@@ -575,8 +575,8 @@ async def test_router_mode_story_update_with_existing_root_replies_to_it(
     # never about which renderer built the HTML - both use the identical render_v81_news_card_
     # html() output).
     sent_text = fake_bot.send_photo.call_args.kwargs["caption"]
-    assert sent_text.count("NINJA PULSE. Подписаться 🥷") == 1
-    assert '<a href="https://t.me/ninja_pulse">NINJA PULSE. Подписаться 🥷</a>' in sent_text
+    assert sent_text.count("KAGE") == 1
+    assert '<a href="https://t.me/kage_journal">KAGE</a>' in sent_text
 
     async with factory() as session:
         delivery = (
@@ -647,8 +647,8 @@ async def test_router_mode_verified_quote_renders_in_the_v8_family_card(
     assert "OpenAI released a new flagship model" in sent_text
     # Phase V2.12I: Phase 23.1Q's footer is the restored, approved contract - present here too,
     # quote or no quote, strictly after the quote block (headline -> body -> quote -> footer).
-    assert sent_text.count("NINJA PULSE. Подписаться 🥷") == 1
-    assert sent_text.index("</blockquote>") < sent_text.index("NINJA PULSE. Подписаться 🥷")
+    assert sent_text.count("KAGE") == 1
+    assert sent_text.index("</blockquote>") < sent_text.index("KAGE")
 
 
 @pytest.mark.asyncio
@@ -822,10 +822,9 @@ async def test_router_mode_photo_timeout_holds_for_visual_recovery_no_reply_deli
 ) -> None:
     """TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1 (supersedes this test's old name/premise): the
     real production gap this test reproduces - send_photo raising TelegramAPIError (the real
-    ~60s timeout shape) - now holds for visual recovery instead of silently completing via the
-    old plain-text fallback. Exactly one recovery notice is sent; NO new StoryTelegramDelivery
-    REPLY row is ever written for it (nothing was actually delivered as a real reply post), and
-    the pre-existing ROOT delivery (999) is completely untouched."""
+    ~60s timeout shape) - holds for visual recovery instead of silently completing via a
+    plain-text fallback. No operations notice enters the finished feed; no new delivery row
+    is written, and the pre-existing ROOT delivery (999) is untouched."""
     from aiogram.exceptions import TelegramAPIError
 
     _router_settings(monkeypatch)
@@ -879,8 +878,7 @@ async def test_router_mode_photo_timeout_holds_for_visual_recovery_no_reply_deli
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     fake_bot.send_photo.assert_called_once()  # the real, failing attempt - never retried
-    fake_bot.send_message.assert_called_once()  # exactly one recovery notice, not a normal reply post
-    assert fake_bot.send_message.call_args.kwargs["reply_markup"] is None
+    fake_bot.send_message.assert_not_called()  # held media failure never leaks an operations notice
     assert result.notified == 0
     assert result.notification_failed == 0
     assert result.router_image_sent == 0
@@ -916,10 +914,10 @@ async def test_router_mode_photo_and_recovery_notice_both_fail_still_holds_recor
     factory: async_sessionmaker[AsyncSession], test_source, _isolated_freshness_window: None,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1 (supersedes this test's old premise): even
-    when the recovery notice's own send also fails, this is a HOLD (visual_required_held), never
-    the old notification_failed/silent-text-completion outcome - no delivery row is ever written
-    either way (nothing was actually delivered)."""
+    """A failed photo send is held without a text fallback or operations notice.
+
+    Even a configured failure for send_message is never reached, and no delivery row is written.
+    """
     from aiogram.exceptions import TelegramAPIError
 
     _router_settings(monkeypatch)
@@ -973,7 +971,7 @@ async def test_router_mode_photo_and_recovery_notice_both_fail_still_holds_recor
         result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     fake_bot.send_photo.assert_called_once()
-    fake_bot.send_message.assert_called_once()  # exactly one recovery-notice attempt, never retried again
+    fake_bot.send_message.assert_not_called()  # held media failure never leaks an operations notice
     assert result.notified == 0
     assert result.notification_failed == 0
     assert result.router_image_sent == 0

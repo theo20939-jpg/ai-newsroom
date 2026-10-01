@@ -414,17 +414,16 @@ def test_resolve_default_gateway_fails_closed_even_when_only_gemini_key_is_confi
     assert gateway is None
 
 
-def test_editorial_recomposition_still_imports_gemini_adapter_unaffected() -> None:
-    """§7/§15: this phase only removes Gemini from the MEME image-generation seam - unrelated
-    Gemini functionality (live NEWS photo recomposition) must remain completely untouched.
-    Structural, source-level proof rather than exercising that whole separate module."""
+def test_editorial_recomposition_is_now_openai_only_too() -> None:
+    """The KAGE provider migration removes Gemini from the NEWS recomposition seam as well."""
     import inspect
 
     import services.editorial_recomposition as recomposition_module
 
     source = inspect.getsource(recomposition_module)
-    assert "GeminiImageAdapter" in source
-    assert "GEMINI_3_1_FLASH_IMAGE" in source
+    assert "OpenAIImageAdapter" in source
+    assert "GeminiImageAdapter" not in source
+    assert "GPT_IMAGE_2_5_SUNBURST" in source
 
 
 # ---------------------------------------------------------------------------

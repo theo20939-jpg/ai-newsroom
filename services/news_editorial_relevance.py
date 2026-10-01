@@ -71,6 +71,24 @@ class EditorialRelevanceDecision:
 
 
 @dataclass(frozen=True)
+class ProductQualityDecision:
+    """KAGE product-taste signal, separate from generic newsworthiness.
+
+    This remains deterministic and evidence-conservative: it only classifies wording already
+    present in the title/lead. It does not invent an angle, infer a capability, or impose category
+    quotas. The signal answers whether the candidate exposes a concrete user-facing change,
+    practical AI use, gaming/geek premise, or genuinely shareable internet-tech premise.
+    """
+
+    lane: str
+    rank_adjustment: int
+    target_profile: bool
+    business_noise: bool
+    interesting_change: bool
+    reason: str
+
+
+@dataclass(frozen=True)
 class ViralTechBreakdown:
     tech_relevance: int
     surprise_weirdness: int
@@ -123,6 +141,7 @@ class ViralTechDecision:
 class PreGenerationEditorialDecision:
     standard_score: int | None
     editorial_relevance: EditorialRelevanceDecision
+    product_quality: ProductQualityDecision
     effective_standard_score: int | None
     standard_eligible: bool
     viral: ViralTechDecision
@@ -213,9 +232,13 @@ _PERIPHERAL_PHRASES: tuple[str, ...] = (
     # acquisition (finance-first)
     "acquires", "acquired", "acquisition", "to acquire", "приобрела", "поглощение", "купит",
     # regulation / legal
-    "regulation", "regulatory", "lawsuit", "sues", "sued", "court ruling", "antitrust",
+    "regulation", "regulatory", "regulator", "regulators", "regulatory framework",
+    "lawsuit", "sues", "sued", "court ruling", "antitrust",
     "criminal probe", "criminal investigation",
-    "legal battle", "регулирование", "регулирования", "регулированию", "иск",
+    "legal battle", "регулирование", "регулирования", "регулированию", "регулятор",
+    "settlement", "lawsuit settlement", "submit claims", "claim for a payout",
+    "unit sales", "sales rose", "sales increased", "market share",
+    "регуляторы", "иск",
     "антимонопольное", "антимонопольный", "антимонопольного", "антимонопольным",
     "судебное разбирательство",
     # trade / policy
@@ -245,6 +268,84 @@ _OUT_OF_SCOPE_PHRASES: tuple[str, ...] = (
     "universal health coverage", "health coverage", "healthcare spending",
     "medicaid", "medicare", "здравоохранение",
     "shareholder dispute", "boardroom dispute", "boardroom row",
+)
+
+_AI_SUBJECT_PHRASES: tuple[str, ...] = (
+    "ai", "artificial intelligence", "llm", "chatgpt", "claude", "gemini", "copilot",
+    "sora", "grok", "openai", "anthropic", "нейросет*", "искусственный интеллект",
+    "ии-модель", "модель ии", "алиса ai",
+)
+_PRACTICAL_AI_PHRASES: tuple[str, ...] = (
+    "can now", "lets you", "allows users", "available to try", "try it", "workflow",
+    "don't need", "without its hardware", "operates locally", "use natural language",
+    "generates", "image generation", "video generation", "image editing", "video editing",
+    "code generation", "voice mode", "live translation", "reasoning mode", "open weights",
+    "можно попробовать", "можно использовать", "позвол*", "умеет", "агент", "агенты",
+    "генерац*", "редактир*", "перевод", "голосовой режим", "открыла веса", "открыл веса",
+    "открытые веса", "рабочий процесс",
+)
+_GADGET_PHRASES: tuple[str, ...] = (
+    "smartphone", "phone", "iphone", "galaxy", "pixel", "xiaomi", "laptop", "tablet",
+    "smartwatch", "watch", "earbuds", "headset", "console", "camera", "drone", "wearable",
+    "смартфон", "телефон", "айфон", "ноутбук", "планшет", "часы", "наушники",
+    "гарнитура", "консоль", "камера", "дрон", "гаджет",
+)
+_MATERIAL_CHANGE_PHRASES: tuple[str, ...] = (
+    "new feature", "adds support", "gains support", "first test", "hands-on", "hands on",
+    "review", "after 30 days", "what i learned after",
+    "firmware", "security update", "fixes", "battery", "camera", "foldable", "rollable",
+    "dual-screen", "form factor", "limitation", "upgrade", "now supports", "can now",
+    "новая функция", "добавила функцию", "добавил функцию", "поддержк*", "первый тест",
+    "обзор", "прошивк*", "исправ*", "батаре*", "камер*", "складн*", "форм-фактор",
+    "ограничен*", "обновлен*", "теперь умеет", "теперь можно",
+)
+_GAMING_GEEK_PHRASES: tuple[str, ...] = (
+    "game", "games", "gaming", "gta", "steam", "playstation", "xbox", "nintendo",
+    "console", "mods", "modding", "speedrun", "game developer", "comic", "sci-fi",
+    "science fiction", "adaptation", "anime", "manga", "fantasy", "minecraft", "valheim",
+    "cs2", "counter-strike", "league of legends", "riot", "halo", "resident evil",
+    "игр*", "steam", "playstation", "xbox", "nintendo", "консол*", "моды", "моддинг", "спидран*",
+    "комикс*", "фантаст*", "экранизац*", "аниме", "манга",
+)
+_USER_SOFTWARE_PRODUCT_PHRASES: tuple[str, ...] = (
+    "app", "apps", "android", "ios", "windows", "macos", "browser", "chrome", "firefox",
+    "maps", "messenger", "whatsapp", "telegram", "discord", "spotify", "youtube",
+    "приложен*", "android", "ios", "windows", "браузер", "карты", "мессенджер",
+)
+_USER_SOFTWARE_CHANGE_PHRASES: tuple[str, ...] = (
+    "adds", "added", "gets", "got", "brings", "links", "removes", "drops", "fixes",
+    "gives you", "giving you", "lets you", "reshape", "summarizes", "summary",
+    "now supports", "can now", "rolls out", "добавил*", "получил*", "убрал*", "удалил*",
+    "исправил*", "теперь поддерживает", "теперь можно",
+)
+_VIRAL_INTERNET_PHRASES: tuple[str, ...] = (
+    "bizarre", "weird", "absurd", "ridiculous", "glitch", "bug", "accidentally",
+    "by mistake", "refuses to", "won't die", "still going", "internet saga", "meme",
+    "strange gadget", "unexpected behavior", "what the hell", "goes viral", "went viral",
+    "remixed", "phonk", "exploit", "zero-day", "hijack", "accent, no matter", "fired for using ai",
+    "actually made by humans", "случайн*", "странн*",
+    "абсурд*", "нелеп*", "смешн*", "баг", "глюк", "отказывается", "до сих пор",
+    "интернет-саг", "мем", "неожиданное поведение",
+)
+_GENERIC_ANNOUNCEMENT_PHRASES: tuple[str, ...] = (
+    "will release", "plans to release", "coming next year", "expected next year", "unveil",
+    "unveils", "announce", "announces", "launch", "launches", "анонсировала", "анонсировал",
+    "представит", "выйдет в следующем году", "планирует выпустить",
+)
+_CONCRETE_LEAD_PHRASES: tuple[str, ...] = (
+    "replaceable", "battery", "lens", "lenses", "support", "available", "can now",
+    "lets you", "allows", "fixes", "bug", "notification", "download", "locally",
+    "tested", "test", "feature", "сменн*", "батаре*", "можно", "исправ*", "баг",
+)
+_DETAIL_PROMISE_PHRASES: tuple[str, ...] = (
+    "review", "after 30 days", "what i learned", "picks", "pros and cons",
+    "best games", "how to", "where can", "details surface", "new details",
+    "обзор", "лучшие игры", "плюсы и минусы",
+)
+_EDITORIAL_PROMO_PHRASES: tuple[str, ...] = (
+    "tickets", "save up to", "register by", "second pass", "agenda revealed",
+    "conference", "summit", "promo code", "on sale", "deal", "deals", "discount",
+    "off deal", "% off", "upgrade your", "скидк* на билет", "распродаж*",
 )
 
 
@@ -363,6 +464,310 @@ def classify_editorial_relevance(title: str, content: str | None = None) -> Edit
     )
 
 
+def classify_product_quality(
+    title: str, content: str | None = None, *, product_loop: bool = False,
+) -> ProductQualityDecision:
+    """Classify KAGE product fit without manufacturing facts or enforcing category quotas."""
+    normalized_title = _normalize(title)
+    normalized_lead = _normalize((content or "")[:_CONTENT_SCAN_CHARS])
+    combined = f"{normalized_title} {normalized_lead}".strip()
+
+    relevance = classify_editorial_relevance(title, content)
+    # The product lane must be visible in the headline itself. Feed summaries often contain
+    # navigation/related-story boilerplate; letting an incidental body token decide the lane
+    # recreated the exact generic-feed problem this layer is meant to solve. Once the headline
+    # establishes AI/gadget subject, the short lead may still confirm its practical change.
+    ai_as_context = re.search(
+        r"\b(?:to combat|against|amid|because of|due to)\s+ai(?:\b|-)", normalized_title
+    ) is not None
+    is_ai = _has_any(normalized_title, _AI_SUBJECT_PHRASES) and not ai_as_context
+    model_launch = is_ai and _has_any(normalized_title, _GENERIC_ANNOUNCEMENT_PHRASES)
+    headline_user_action = _has_any(
+        normalized_title,
+        ("can now", "lets you", "allows users", "you can", "try", "edit", "generate",
+         "create", "build", "don't need", "doesn't need", "no longer needs"),
+    )
+    practical_ai = (
+        is_ai and _has_any(combined, _PRACTICAL_AI_PHRASES)
+        and (not model_launch or headline_user_action)
+    )
+    ai_capability = model_launch and _has_any(
+        normalized_lead,
+        ("faster", "more accurate", "lower latency", "coding", "computer use",
+         "image editing", "video generation", "local inference", "longer context"),
+    )
+    title_gadget = _has_any(normalized_title, _GADGET_PHRASES)
+    material_change = _has_any(normalized_title, _MATERIAL_CHANGE_PHRASES)
+    gadget = title_gadget or (
+        material_change and _has_any(normalized_lead, _GADGET_PHRASES)
+    )
+    user_software_change = (
+        _has_any(normalized_title, _USER_SOFTWARE_PRODUCT_PHRASES)
+        and _has_any(normalized_title, _USER_SOFTWARE_CHANGE_PHRASES)
+    )
+    thin_future_software = (
+        product_loop and user_software_change
+        and _has_any(normalized_title, ("will soon", "upcoming update", "coming soon", "появится скоро"))
+        and len(re.findall(r"\w+", normalized_lead)) < 22
+    )
+    gaming_geek = _has_any(normalized_title, _GAMING_GEEK_PHRASES)
+    viral_internet = _has_any(normalized_title, _VIRAL_INTERNET_PHRASES)
+    peripheral_match = _PERIPHERAL_PATTERN.search(combined)
+    action_match = _GENERIC_ACTION_VERB_PATTERN.search(normalized_title)
+    product_action_leads = (
+        action_match is not None
+        and _PRODUCT_OBJECT_PATTERN.search(normalized_title) is not None
+        and (
+            peripheral_match is None
+            or action_match.start() < peripheral_match.start()
+        )
+    )
+    business_noise = (
+        not relevance.major_impact_override
+        and peripheral_match is not None
+        and not product_action_leads
+        and not material_change
+        and not viral_internet
+    )
+    if product_loop:
+        # The opt-in product loop judges the *change*, not merely the topic. A gaming
+        # noun or a meme is not a publication reason; conversely a serious space or
+        # product milestone is not weak just because it is neither playful nor viral.
+        def verdict(lane: str, adjustment: int, reason: str, *, target: bool = False,
+                    noise: bool = False) -> ProductQualityDecision:
+            return ProductQualityDecision(
+                lane=lane, rank_adjustment=adjustment, target_profile=target,
+                business_noise=noise, interesting_change=target, reason=reason,
+            )
+
+        if _has_any(normalized_title, _EDITORIAL_PROMO_PHRASES) or _has_any(
+            normalized_lead, ("save up to", "second pass", "ticket discount", "promo code")
+        ) or re.search(r"\bsave\s+\$\d|\brecord[- ]low\b|\bdrops? below\s+\$", normalized_title):
+            return verdict("PROMOTION", -35, "discount or event promotion is the payoff", noise=True)
+        if _has_any(normalized_title, ("podcast:", "daily:", "the macrumors show:", "show:", "interview:")):
+            return verdict("COMMENTARY", -28, "interview or show recap is not itself a technology change")
+        # A forecast in the headline can coexist with a real launch in the
+        # source lead. Judge the evidenced product event before rejecting the
+        # executive comparison; do not let a bare aspiration pass this guard.
+        evidenced_product_launch = (
+            _has_any(normalized_lead, (
+                "is officially unveiling it today", "has launched", "launched today",
+                "has released", "released today", "is rolling out", "rolls out",
+                "now available", "available today",
+            ))
+            and _has_any(normalized_lead, (
+                "app", "feature", "product", "device", "model", "software",
+            ))
+        )
+        if _has_any(normalized_title, ("thinks its", "believes its", "will be as influential", "could be as influential")) and not evidenced_product_launch:
+            return verdict("CORPORATE_CLAIM", -25, "company expectation rather than an evidenced product change")
+        if _has_any(normalized_title, (
+            "wishlist", "wish list", "most anticipated games", "gaming show", "show lineup",
+            "returns december", "returns november", "event lineup", "staff picks",
+        )):
+            return verdict("THIN_GAMING", -30, "staff list or future show lineup without a game change")
+        if thin_future_software:
+            return verdict("THIN_SOFTWARE", -22, "future software promise lacks a concrete current change")
+        if _has_any(normalized_title, (
+            "leaked", "per leak", "upcoming", "may soon", "could", "rumor", "working on",
+            "will release", "next year", "plans to release",
+        )) and not _has_any(
+            normalized_title, ("already available", "now available", "released", "rolling out")
+        ):
+            return verdict("UNRELEASED_PRODUCT", -22, "unreleased or speculative product detail")
+        if relevance.major_impact_override:
+            return verdict("MAJOR_IMPACT", 18, "exceptional legal or business action with material technology impact", target=True)
+        if business_noise:
+            return verdict("BUSINESS_NOISE", -35, "routine financial, legal or corporate premise", noise=True)
+
+        space_subject = _has_any(normalized_title, (
+            "spacex", "starship", "rocket", "spacecraft", "satellite", "orbital", "space telescope",
+            "mars rover", "rover", "ракета", "космический аппарат", "спутник",
+        ))
+        completed_milestone = _has_any(normalized_title, (
+            "successful", "successfully", "completed", "first orbital", "flight test",
+            "launch rehearsal", "landed", "launched", "reached orbit", "first flight",
+            "turned", "built", "tested", "успешн*", "завершил*", "первый полет", "вышел на орбиту",
+        ))
+        if space_subject and completed_milestone:
+            return verdict("MAJOR_TECH_MILESTONE", 22, "concrete space or hardware milestone", target=True)
+
+        product_incident = _has_any(normalized_title, (
+            "bug", "cellular issues", "connectivity issues", "unable to", "preventing users",
+            "not working", "outage", "service disruption",
+        )) and _has_any(normalized_title, (
+            "google photos", "iphone", "android", "app", "browser", "windows", "network",
+            "phone", "pixel", "service", "приложение", "телефон",
+        ))
+        if product_incident:
+            return verdict("PRODUCT_INCIDENT", 18, "concrete user-facing product breakage", target=True)
+
+        explicit_tech = (
+            is_ai or gadget or gaming_geek or user_software_change or space_subject
+            or _has_any(normalized_title, (
+                "software", "app", "browser", "internet", "algorithm", "robot", "chip",
+                "hack", "breach", "network", "platform", "device", "hardware", "google photos",
+                "приложение", "браузер", "интернет", "робот", "чип", "устройств*",
+            ))
+        )
+        if viral_internet and explicit_tech:
+            return verdict("VIRAL_TECH", 17, "shareable event has an explicit technology subject", target=True)
+        if viral_internet and not explicit_tech:
+            return verdict("NON_TECH_VIRAL", -35, "viral or political reaction has no technology event")
+
+        if is_ai and _has_any(normalized_title, (
+            "cheat", "collusion", "collude", "pretends", "actually humans",
+            "made by humans", "fired for using ai", "unexpected behavior",
+        )):
+            return verdict("UNUSUAL_AI", 17, "concrete surprising AI behavior with an explicit tech subject", target=True)
+
+        ai_subject = is_ai or _has_any(normalized_title, ("llms", "language models")) or (
+            _has_any(normalized_lead, ("ai chatbot", "ai assistant", "ai model"))
+            and len(set(re.findall(r"[a-z]{4,}", normalized_title)) &
+                    set(re.findall(r"[a-z]{4,}", normalized_lead))) >= 2
+        )
+        ai_feature = ai_subject and _has_any(normalized_title, (
+            "adds", "added", "introduces", "introduced", "rolls out", "gets", "gains",
+            "launches", "can now", "new", "brings", "offers", "ships", "release",
+            "gives", "makes", "let you", "lets you", "unveils",
+        )) and _has_any(normalized_title, (
+            "agent", "agents", "avatar", "avatars", "coding", "code", "image", "video",
+            "voice", "search", "memory", "integration", "workflow", "feature", "mode",
+            "chat", "app", "model", "llm", "filesystem", "game tools", "games", "tools",
+            "генерац*", "агент*", "функци*",
+        ))
+        named_model_release = ai_subject and _has_any(normalized_title, (
+            "launches", "released", "releases", "debuts", "rolls out", "представил*",
+        )) and re.search(r"\b(?:gpt|gemini|claude|grok|llama|qwen|deepseek)[ -]?[0-9]+(?:\.[0-9]+)?\b", normalized_title) is not None
+        if ai_feature or named_model_release or practical_ai or ai_capability:
+            return verdict("AI_PRODUCT", 18, "concrete AI model, feature or workflow change", target=True)
+
+        product_subject = gadget or user_software_change or _has_any(normalized_title, (
+            "smart glasses", "ai glasses", "glasses", "google messages", "pixel weather",
+            "widget", "grapheneos", "phone", "wearable", "headphones", "earbuds",
+            "gaming pc", "handheld", "steam deck", "smart lock", "google photos",
+        ))
+        product_change = material_change or user_software_change or _has_any(normalized_title, (
+            "supports", "support for", "confirmed to support", "new", "rolls out",
+            "redesign", "versus", " vs.", " vs ", "compare", "comparison", "launches",
+            "released", "available", "adds", "gets", "update", "upgrades", "brings",
+            "releases", "unfurl", "changes shape", "opens as", "expands when",
+            "issues", "not working", "preventing", "first uwb",
+        ))
+        if product_subject and product_change:
+            return verdict("CONSUMER_PRODUCT", 19, "concrete device or user-software change", target=True)
+
+        gaming_subject = gaming_geek or _has_any(normalized_title, (
+            "call of duty", "warzone", "arc raiders", "gameplay", "players", "game", "games",
+        ))
+        gaming_change = _has_any(normalized_title, (
+            "adds", "adding", "gets", "launches", "released", "releases", "update",
+            "patch", "new mode", "new feature", "button to", "players can", "giving players",
+            "lets players", "changes", "fixes", "available to play", "removes",
+            "unveils", "game tools", "build games",
+        ))
+        if gaming_subject and gaming_change:
+            return verdict("GAMING_CHANGE", 19, "specific playable game or gaming-product change", target=True)
+        if gaming_subject:
+            return verdict("GAMING_CONTEXT", -18, "gaming subject without a specific newsworthy change")
+
+        if _has_any(normalized_title, (
+            "hack", "hacked", "breach", "outage", "zero-day", "0-day",
+            "vulnerability", "compromised", "cyberattack",
+        )) and _has_any(
+            normalized_title, (
+                "software", "system", "data", "network", "app", "fbi", "service",
+                "database", "accounts", "assistant", "agent", "platform", "hacking",
+            )
+        ):
+            return verdict("MAJOR_TECH_EVENT", 16, "concrete cybersecurity or service event", target=True)
+        if is_ai:
+            return verdict("GENERAL_AI", -12, "AI mention without a concrete model or product change")
+        return verdict("GENERAL_TECH", -15, "no concrete KAGE technology change established")
+    if _has_any(normalized_title, _EDITORIAL_PROMO_PHRASES) or _has_any(
+        normalized_lead, ("save up to", "second pass", "ticket discount", "promo code")
+    ):
+        return ProductQualityDecision(
+            lane="PROMOTION", rank_adjustment=-35, target_profile=False,
+            business_noise=True, interesting_change=False,
+            reason="event or ticket promotion is the payoff, not a user-facing technology story",
+        )
+    if business_noise:
+        return ProductQualityDecision(
+            lane="BUSINESS_NOISE", rank_adjustment=-35, target_profile=False,
+            business_noise=True, interesting_change=False,
+            reason="finance/regulation/corporate subject without exceptional user impact",
+        )
+
+    if thin_future_software:
+        return ProductQualityDecision(
+            lane="THIN_SOFTWARE", rank_adjustment=-22, target_profile=False,
+            business_noise=False, interesting_change=False,
+            reason="future software change has only a headline-level behavior, not enough substance to reward opening",
+        )
+
+    if _has_any(normalized_title, ("release candidate", "release candidates", "rcs", "rc 1")):
+        return ProductQualityDecision(
+            lane="GENERIC_TECH", rank_adjustment=-20, target_profile=False,
+            business_noise=False, interesting_change=False,
+            reason="pre-release build without a concrete user-facing change",
+        )
+
+    if viral_internet and (is_ai or gadget or gaming_geek or relevance.tier in (CORE, ADJACENT)):
+        return ProductQualityDecision(
+            lane="VIRAL_INTERNET", rank_adjustment=16, target_profile=True,
+            business_noise=False, interesting_change=True,
+            reason="supported weird/shareable technology premise is explicit in the candidate",
+        )
+    if gaming_geek:
+        return ProductQualityDecision(
+            lane="GAMING_GEEK", rank_adjustment=14, target_profile=True,
+            business_noise=False, interesting_change=True,
+            reason="gaming/geek subject is explicit in the candidate",
+        )
+    if practical_ai:
+        return ProductQualityDecision(
+            lane="PRACTICAL_AI", rank_adjustment=14, target_profile=True,
+            business_noise=False, interesting_change=True,
+            reason="concrete AI capability or user workflow is explicit in the candidate",
+        )
+    if ai_capability:
+        return ProductQualityDecision(
+            lane="AI_CAPABILITY", rank_adjustment=6, target_profile=True,
+            business_noise=False, interesting_change=True,
+            reason="model launch includes a concrete speed, creation or workflow capability",
+        )
+    if gadget and material_change:
+        return ProductQualityDecision(
+            lane="GADGETS", rank_adjustment=12, target_profile=True,
+            business_noise=False, interesting_change=True,
+            reason="gadget story exposes a concrete feature, test, limitation or usage change",
+        )
+    if user_software_change:
+        return ProductQualityDecision(
+            lane="GADGETS", rank_adjustment=12, target_profile=True,
+            business_noise=False, interesting_change=True,
+            reason="user-facing software story exposes a concrete product behavior change",
+        )
+    if gadget and _has_any(normalized_title, _GENERIC_ANNOUNCEMENT_PHRASES):
+        return ProductQualityDecision(
+            lane="GENERIC_TECH", rank_adjustment=-20, target_profile=False,
+            business_noise=False, interesting_change=False,
+            reason="generic future product announcement without an explicit interesting change",
+        )
+    if is_ai:
+        return ProductQualityDecision(
+            lane="GENERAL_AI", rank_adjustment=-15, target_profile=False,
+            business_noise=False, interesting_change=False,
+            reason="AI is the subject but no practical capability or user use case is explicit",
+        )
+    return ProductQualityDecision(
+        lane="GENERAL_TECH", rank_adjustment=-15, target_profile=False,
+        business_noise=False, interesting_change=material_change,
+        reason="technology candidate without a strong KAGE product-profile signal",
+    )
+
+
 _VIRAL_TECH_STRONG: tuple[str, ...] = (
     "smartphone", "iphone", "galaxy", "pixel", "laptop", "wearable", "headset", "robot",
     "robotics", "prototype", "gadget", "device", "hardware", "chip", "gpu", "game physics",
@@ -371,10 +776,12 @@ _VIRAL_TECH_STRONG: tuple[str, ...] = (
     "прототип", "робот", "робототехника", "модель ии", "ии-модель", "ии-модели",
     "функция ии", "игровая физика",
     "модификация", "проект разработчика", "сбой сети", "network outage", "outage",
+    "steam", "playstation", "xbox", "nintendo", "console", "speedrun", "game developer",
+    "консоль", "спидран", "разработчик игры",
 )
 _VIRAL_TECH_GENERAL: tuple[str, ...] = (
-    "software", "app", "api", "browser", "internet", "technology", "технолог", "приложение",
-    "браузер", "интернет", "алгоритм", "нейросет", "искусственный интеллект", "gaming",
+    "software", "app", "api", "browser", "internet", "technology", "технолог*", "приложение",
+    "браузер", "интернет", "алгоритм", "нейросет*", "искусственный интеллект", "gaming",
     "valheim", "minecraft",
 )
 _STRONG_SURPRISE: tuple[str, ...] = (
@@ -382,17 +789,20 @@ _STRONG_SURPRISE: tuple[str, ...] = (
     "without a mod", "unexpected", "accidentally", "by mistake", "bizarre", "weird",
     "strange", "absurd", "uncanny", "record-breaking bug", "believed it was", "believes it is",
     "оказался в 2006", "решила, что сейчас", "без единого мода", "без модов", "случайно",
-    "неожидан", "странн", "абсурд", "необычн", "перепутал", "считала, что",
+    "неожидан*", "странн*", "абсурд*", "необычн*", "перепутал", "считала, что",
+    "won't die", "still going", "internet saga", "refuses to", "what the hell",
+    "до сих пор", "интернет-сага", "отказывается",
 )
 _MODERATE_SURPRISE: tuple[str, ...] = (
     "prototype", "experiment", "demo", "bug", "glitch", "failure", "outage", "trick",
     "hack", "customize", "color-coded", "creeper", "прототип", "эксперимент", "демо",
-    "ошибка", "баг", "сбой", "трюк", "лайфхак", "самодельн",
+    "ошибка", "баг", "сбой", "трюк", "лайфхак", "самодельн*", "glitch",
+    "unexpected behavior", "глюк", "неожиданное поведение",
 )
 _HUMOR_SIGNALS: tuple[str, ...] = (
     "decided the year", "year was 2006", "without downloading a single mod", "creeper",
     "bizarre", "absurd", "ridiculous", "решила, что сейчас", "без единого мода", "абсурд",
-    "нелеп", "смешн",
+    "нелеп*", "смешн*", "internet saga", "what the hell", "интернет-сага",
 )
 _CREATOR_SHARE_SIGNALS: tuple[str, ...] = (
     "developer project", "github project", "built", "created", "customize", "modding",
@@ -402,7 +812,49 @@ _CREATOR_SHARE_SIGNALS: tuple[str, ...] = (
 
 
 def _has_any(text: str, phrases: tuple[str, ...]) -> bool:
-    return any(phrase in text for phrase in phrases)
+    """Token/phrase-aware signal matching; `stem*` means a word-prefix match.
+
+    Plain substring matching made `ai` match inside unrelated English words and short Russian
+    stems match arbitrary surrounding text. Product-taste signals must be explicit, not lexical
+    accidents.
+    """
+    for phrase in phrases:
+        if phrase.endswith("*"):
+            pattern = rf"(?<!\w){re.escape(phrase[:-1])}\w*"
+        else:
+            pattern = rf"(?<!\w){re.escape(phrase)}(?!\w)"
+        if re.search(pattern, text):
+            return True
+    return False
+
+
+def source_has_publishable_detail(title: str, content: str | None) -> bool:
+    """Reject RSS teasers that cannot support the promised post without further acquisition."""
+    headline = _normalize(title)
+    lead = _normalize((content or "")[:_CONTENT_SCAN_CHARS])
+    if not lead or lead == headline:
+        return False
+    words = re.findall(r"\w+", lead)
+    if len(words) < 5:
+        return False
+    if lead.startswith(('"', '“', '«')) and len(words) < 55:
+        # An isolated reaction quote is not evidence for the event described by the headline.
+        return False
+    if _has_any(headline, _DETAIL_PROMISE_PHRASES) and not _has_any(
+        lead, _CONCRETE_LEAD_PHRASES
+    ):
+        return False
+    if len(words) < 16:
+        title_terms = {
+            word for word in re.findall(r"[a-zа-я0-9]+", headline)
+            if len(word) >= 4 and word not in {"with", "from", "that", "this", "into", "other", "more"}
+        }
+        lead_terms = set(re.findall(r"[a-zа-я0-9]+", lead))
+        if len(title_terms.intersection(lead_terms)) < 2 and not _has_any(
+            lead, _CONCRETE_LEAD_PHRASES
+        ):
+            return False
+    return True
 
 
 def _bounded_reliability_score(source_reliability: float | None, *, primary_evidence: bool,
@@ -521,21 +973,38 @@ def evaluate_pre_generation_candidate(
     reactions_count: int | None = None,
     primary_evidence: bool = False,
     credible_confirmations: int = 0,
+    require_source_detail: bool = True,
+    product_loop: bool = False,
 ) -> PreGenerationEditorialDecision:
     relevance = classify_editorial_relevance(title, content)
+    product_quality = classify_product_quality(title, content, product_loop=product_loop)
+    # Existing enforced article acquisition may rescue a thin RSS teaser before Research.
+    # RSS-only mode must fail closed before buying provider calls for an empty shell.
+    evidence_ready = not require_source_detail or source_has_publishable_detail(title, content)
     effective = (
-        standard_score + relevance.rank_adjustment if standard_score is not None else None
+        standard_score + relevance.rank_adjustment + product_quality.rank_adjustment
+        if standard_score is not None else None
     )
-    rescue_floor = max(0, standard_threshold - _STANDARD_EDITORIAL_RESCUE_MAX_DEFICIT)
+    rescue_deficit = (
+        10 if product_quality.target_profile else _STANDARD_EDITORIAL_RESCUE_MAX_DEFICIT
+    )
+    rescue_floor = max(0, standard_threshold - rescue_deficit)
     positive_editorial_rescue = (
         standard_score is not None
         and standard_score >= rescue_floor
-        and relevance.tier in (CORE, ADJACENT)
-        and relevance.rank_adjustment > 0
+        and not product_quality.business_noise
+        and evidence_ready
+        and product_quality.rank_adjustment >= 0
+        and (
+            product_quality.target_profile
+            or (relevance.tier in (CORE, ADJACENT) and relevance.rank_adjustment > 0)
+        )
     )
     standard_eligible = (
         standard_score is not None
         and relevance.tier != OUT_OF_SCOPE
+        and not product_quality.business_noise
+        and evidence_ready
         and effective is not None
         and effective >= standard_threshold
         and (standard_score >= standard_threshold or positive_editorial_rescue)
@@ -546,7 +1015,7 @@ def evaluate_pre_generation_candidate(
         forwards_count=forwards_count, reactions_count=reactions_count,
         primary_evidence=primary_evidence, credible_confirmations=credible_confirmations,
     )
-    viral_eligible = relevance.tier != OUT_OF_SCOPE and viral.eligible
+    viral_eligible = evidence_ready and relevance.tier != OUT_OF_SCOPE and viral.eligible
     final_eligible = standard_eligible or viral_eligible
     if standard_eligible and viral_eligible:
         path = "BOTH"
@@ -562,6 +1031,7 @@ def evaluate_pre_generation_candidate(
     return PreGenerationEditorialDecision(
         standard_score=standard_score,
         editorial_relevance=relevance,
+        product_quality=product_quality,
         effective_standard_score=effective,
         standard_eligible=standard_eligible,
         viral=viral,
@@ -569,7 +1039,8 @@ def evaluate_pre_generation_candidate(
         selection_path=path,
         rank_score=rank_score,
         reason=(
-            f"{path}: standard={standard_score}, effective={effective}, relevance={relevance.tier}; "
+            f"{path}: standard={standard_score}, effective={effective}, relevance={relevance.tier}, "
+            f"product_lane={product_quality.lane}; evidence_ready={evidence_ready}; "
             f"viral={viral.total} ({viral.reason})"
         ),
     )

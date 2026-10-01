@@ -1,6 +1,6 @@
 """Phase V2.3 - services/editorial_recomposition.py tests. No real network call anywhere in this
 file - LIVE-path tests inject a fake `ImageGenerationGateway`-shaped double, never a real
-`GeminiImageAdapter` with a real client."""
+`OpenAIImageAdapter` with a real client."""
 from __future__ import annotations
 
 import io
@@ -58,8 +58,8 @@ def _valid_response(image_bytes: bytes | None = None) -> ImageGenerationResponse
     return ImageGenerationResponse(
         image_bytes=image_bytes or _jpeg_bytes(1600, 900),
         mime_type="image/jpeg",
-        model_used="gemini-3.1-flash-image",
-        provider="gemini",
+        model_used="gpt-image-2.5-sunburst",
+        provider="openai",
         usage=CapabilityUsage(units=1, unit_type="image"),
         request_id="int-test-1",
         cost_usd=None,
@@ -116,8 +116,8 @@ async def test_dry_run_evaluates_eligibility_makes_zero_calls_returns_original_b
     assert result.image_bytes == _ELIGIBLE_PRODUCT_BYTES
     assert result.mode == "dry_run"
     assert result.eligibility.eligible is True
-    assert result.provider == "gemini"
-    assert result.model == "gemini-3.1-flash-image"
+    assert result.provider == "openai"
+    assert result.model == "gpt-image-2.5-sunburst"
 
 
 @pytest.mark.asyncio
@@ -141,7 +141,7 @@ async def test_dry_run_on_ineligible_image_is_still_zero_calls(monkeypatch: pyte
 
 
 @pytest.mark.asyncio
-async def test_live_success_calls_gateway_exactly_once_with_gemini_flash(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_live_success_calls_gateway_exactly_once_with_openai_sunburst(monkeypatch: pytest.MonkeyPatch) -> None:
     from core.config import settings
 
     monkeypatch.setattr(settings, "editorial_recomposition_mode", "live")
@@ -155,8 +155,8 @@ async def test_live_success_calls_gateway_exactly_once_with_gemini_flash(monkeyp
     assert request.operation == ImageGenerationOperation.IMAGE_EDIT
     assert result.used_recomposed_image is True
     assert result.image_bytes == recomposed
-    assert result.model == "gemini-3.1-flash-image"
-    assert result.provider == "gemini"
+    assert result.model == "gpt-image-2.5-sunburst"
+    assert result.provider == "openai"
     assert result.result_sha256 is not None
 
 
@@ -187,38 +187,38 @@ async def test_live_success_never_touches_media_selection_only_returns_bytes(mon
 @pytest.mark.asyncio
 async def test_live_provider_error_fails_open_to_original_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
     from core.config import settings
-    from integrations.llm_gateway.providers.gemini_image_adapter import GeminiImageAdapterError
+    from integrations.llm_gateway.providers.openai_image_adapter import OpenAIImageAdapterError
 
     monkeypatch.setattr(settings, "editorial_recomposition_mode", "live")
-    gateway = _FakeGateway(exc=GeminiImageAdapterError("Gemini interactions request returned HTTP 500"))
+    gateway = _FakeGateway(exc=OpenAIImageAdapterError("OpenAI images request returned HTTP 500"))
 
     result = await maybe_recompose(source_image_bytes=_ELIGIBLE_PRODUCT_BYTES, gateway=gateway)
 
     assert result.used_recomposed_image is False
     assert result.image_bytes == _ELIGIBLE_PRODUCT_BYTES
-    assert result.fallback_reason == "GeminiImageAdapterError"
-    assert result.provider == "gemini"
-    assert result.model == "gemini-3.1-flash-image"
+    assert result.fallback_reason == "OpenAIImageAdapterError"
+    assert result.provider == "openai"
+    assert result.model == "gpt-image-2.5-sunburst"
 
 
 @pytest.mark.asyncio
 async def test_live_timeout_fails_open_to_original_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
     from core.config import settings
-    from integrations.llm_gateway.providers.gemini_image_adapter import GeminiImageAdapterError
+    from integrations.llm_gateway.providers.openai_image_adapter import OpenAIImageAdapterError
 
     monkeypatch.setattr(settings, "editorial_recomposition_mode", "live")
-    gateway = _FakeGateway(exc=GeminiImageAdapterError("Gemini interaction int-x polling timed out after 90.0s"))
+    gateway = _FakeGateway(exc=OpenAIImageAdapterError("OpenAI images request timed out after 120.0s"))
 
     result = await maybe_recompose(source_image_bytes=_ELIGIBLE_PRODUCT_BYTES, gateway=gateway)
 
     assert result.used_recomposed_image is False
     assert result.image_bytes == _ELIGIBLE_PRODUCT_BYTES
-    assert "GeminiImageAdapterError" == result.fallback_reason
+    assert "OpenAIImageAdapterError" == result.fallback_reason
 
 
 @pytest.mark.asyncio
 async def test_live_unexpected_exception_still_fails_open(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A boundary error the typed GeminiImageAdapterError doesn't cover - the generic Exception
+    """A boundary error the typed OpenAIImageAdapterError doesn't cover - the generic Exception
     catch must still fail open, never propagate and block the send path."""
     from core.config import settings
 
@@ -238,7 +238,7 @@ async def test_live_empty_image_bytes_fails_open(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(settings, "editorial_recomposition_mode", "live")
     empty_response = ImageGenerationResponse(
-        image_bytes=b"x", mime_type="image/jpeg", model_used="gemini-3.1-flash-image", provider="gemini",
+        image_bytes=b"x", mime_type="image/jpeg", model_used="gpt-image-2.5-sunburst", provider="openai",
         usage=CapabilityUsage(units=1, unit_type="image"), request_id="int-empty", cost_usd=None,
     )
     gateway = _FakeGateway(response=empty_response)
@@ -257,7 +257,7 @@ async def test_live_undecodable_image_bytes_fails_open(monkeypatch: pytest.Monke
     monkeypatch.setattr(settings, "editorial_recomposition_mode", "live")
     malformed_response = ImageGenerationResponse(
         image_bytes=b"not-a-real-image-just-garbage-bytes", mime_type="image/jpeg",
-        model_used="gemini-3.1-flash-image", provider="gemini",
+        model_used="gpt-image-2.5-sunburst", provider="openai",
         usage=CapabilityUsage(units=1, unit_type="image"), request_id="int-bad", cost_usd=None,
     )
     gateway = _FakeGateway(response=malformed_response)
@@ -270,31 +270,31 @@ async def test_live_undecodable_image_bytes_fails_open(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
-async def test_live_failure_never_falls_back_to_pro_or_gpt(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No code path in this module ever references gemini-3-pro-image or gpt-image-2 - a live
-    failure's only possible outcome is the original bytes, never a second, more-creative model."""
+async def test_live_failure_never_falls_back_to_another_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    """OpenAI-only: a live sunburst failure's only possible outcome is the original bytes - never a
+    second model (gpt-image-2, flare) and never a Gemini provider."""
     from core.config import settings
-    from integrations.llm_gateway.providers.gemini_image_adapter import GeminiImageAdapterError
+    from integrations.llm_gateway.providers.openai_image_adapter import OpenAIImageAdapterError
 
     monkeypatch.setattr(settings, "editorial_recomposition_mode", "live")
-    gateway = _FakeGateway(exc=GeminiImageAdapterError("boom"))
+    gateway = _FakeGateway(exc=OpenAIImageAdapterError("boom"))
 
     result = await maybe_recompose(source_image_bytes=_ELIGIBLE_PRODUCT_BYTES, gateway=gateway)
 
-    assert result.model != "gemini-3-pro-image"
-    assert result.model != "gpt-image-2"
-    assert result.model == "gemini-3.1-flash-image"
+    assert result.used_recomposed_image is False and result.image_bytes == _ELIGIBLE_PRODUCT_BYTES
+    assert result.provider == "openai" and result.model == "gpt-image-2.5-sunburst"
+    assert len(gateway.calls) == 1
 
 
-def test_module_never_imports_pro_or_gpt_adapters() -> None:
-    """The docstring itself explains the no-escalation rule in prose (mentions both model names
-    deliberately, as a disclosure) - what must never appear is an actual import or usable
-    reference to either as a real code symbol."""
+def test_module_never_imports_gemini_or_a_second_openai_model() -> None:
+    """OpenAI-only migration: the module's only usable image symbols are the OpenAI adapter and
+    the sunburst edit model - no Gemini adapter/model and no escalation model as a code symbol."""
     import services.editorial_recomposition as mod
 
-    assert not hasattr(mod, "GEMINI_3_PRO_IMAGE")
-    assert not hasattr(mod, "OpenAIImageAdapter")
-    assert not hasattr(mod, "GPT_IMAGE_2")
+    assert mod.RECOMPOSITION_PROVIDER == "openai" and mod.RECOMPOSITION_MODEL == "gpt-image-2.5-sunburst"
+    for forbidden in ("GeminiImageAdapter", "GEMINI_3_1_FLASH_IMAGE", "GEMINI_3_PRO_IMAGE", "GPT_IMAGE_2",
+                      "GPT_IMAGE_2_5_FLARE"):
+        assert not hasattr(mod, forbidden), forbidden
     import ast
 
     tree = ast.parse(open(mod.__file__, encoding="utf-8").read())
@@ -304,9 +304,10 @@ def test_module_never_imports_pro_or_gpt_adapters() -> None:
         if isinstance(node, (ast.Import, ast.ImportFrom))
         for alias in node.names
     }
-    assert "GEMINI_3_PRO_IMAGE" not in imported_names
-    assert "OpenAIImageAdapter" not in imported_names
-    assert "GPT_IMAGE_2" not in imported_names
+    assert not any("gemini" in name.lower() for name in imported_names)
+    assert "GPT_IMAGE_2" not in imported_names and "GPT_IMAGE_2_5_FLARE" not in imported_names
+    modules = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)}
+    assert not any("gemini" in (m or "") for m in modules)
 
 
 # ---------------------------------------------------------------------------

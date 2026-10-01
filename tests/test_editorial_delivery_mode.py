@@ -95,6 +95,12 @@ async def test_case_1_legacy_mode_still_uses_editorial_chat_id(
 # ---------------------------------------------------------------------------
 
 
+def _photo_candidate():
+    from tests.test_router_media_integration import _fake_candidate
+
+    return _fake_candidate()
+
+
 @pytest.mark.asyncio
 async def test_case_2_router_mode_resolves_news_destination(
     factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
@@ -109,8 +115,9 @@ async def test_case_2_router_mode_resolves_news_destination(
     fake_bot = AsyncMock()
 
     with (
+        patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_photo_candidate()])),
         patch(
-            "worker.content_cycle.send_to_editorial_destination",
+            "worker.content_cycle.send_photo_to_editorial_destination",
             new=AsyncMock(return_value=RoutingOutcome(
                 destination=EditorialDestination.NEWS, chat_id=_REAL_CHAT_ID, topic_id=_REAL_NEWS_TOPIC_ID,
                 sent=False, reason="dry_run",
@@ -139,12 +146,9 @@ async def test_case_3_router_mode_live_send_includes_correct_chat_and_thread_id(
     runs, and the real card-rendering path runs - only the outermost `bot` is a fake. This is the
     strongest proof available that the actual outgoing aiogram call carries the right values.
 
-    TELEGRAM-TEXT-ONLY-VISUAL-FALLBACK-REPAIR-1: real candidate discovery against the test DB
-    finds no image for this event (nothing here mocks `get_editorial_image_candidates`), so this
-    now HOLDs for visual recovery rather than completing as a normal post - the exact production
-    defect this phase repairs. This test's own actual purpose - proving the real routing call
-    carries the correct chat id/thread id - is unaffected either way, since `_hold_for_visual_
-    recovery()`'s recovery notice reuses the exact same `send_to_editorial_destination()` call."""
+    A resolvable photo candidate is supplied (KAGE NEWS is visual-first: without a visual the
+    story HOLDS, see the test below), so the real photo routing call proves destination and topic.
+    """
     settings.editorial_delivery_mode = "router"
     monkeypatch.setattr(settings, "newsroom_telegram_chat_id", _REAL_CHAT_ID)
     monkeypatch.setattr(settings, "news_topic_id", _REAL_NEWS_TOPIC_ID)
@@ -153,15 +157,41 @@ async def test_case_3_router_mode_live_send_includes_correct_chat_and_thread_id(
 
     _gateway, registry = _real_capability_registry()
     fake_bot = AsyncMock()
-    fake_bot.send_message.return_value.message_id = 4242
+    fake_bot.send_photo.return_value.message_id = 4242
+
+    with patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_photo_candidate()])):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+
+    fake_bot.send_photo.assert_called_once()
+    fake_bot.send_message.assert_not_called()
+    args, kwargs = fake_bot.send_photo.call_args
+    assert args[0] == _REAL_CHAT_ID
+    assert kwargs["message_thread_id"] == _REAL_NEWS_TOPIC_ID
+    assert result.visual_required_held == 0
+    assert result.notified == 1
+
+
+@pytest.mark.asyncio
+async def test_case_3b_router_mode_without_any_visual_holds_and_sends_nothing(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No usable visual: the story HOLDS (durable hold_for_visual) - never a text-only NEWS post."""
+    settings.editorial_delivery_mode = "router"
+    monkeypatch.setattr(settings, "newsroom_telegram_chat_id", _REAL_CHAT_ID)
+    monkeypatch.setattr(settings, "news_topic_id", _REAL_NEWS_TOPIC_ID)
+    monkeypatch.setattr(settings, "content_generation_dry_run", False)
+    await _seed_eligible_event(factory, test_source)
+
+    _gateway, registry = _real_capability_registry()
+    fake_bot = AsyncMock()
 
     result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
-    fake_bot.send_message.assert_called_once()
-    args, kwargs = fake_bot.send_message.call_args
-    assert args[0] == _REAL_CHAT_ID
-    assert kwargs["message_thread_id"] == _REAL_NEWS_TOPIC_ID
+    fake_bot.send_message.assert_not_called()
+    fake_bot.send_photo.assert_not_called()
     assert result.visual_required_held == 1
+    assert result.notified == 0
 
 
 # ---------------------------------------------------------------------------
@@ -186,9 +216,11 @@ async def test_case_4_router_mode_dry_run_never_calls_bot_send_message(
     _gateway, registry = _real_capability_registry()
     fake_bot = AsyncMock()
 
-    result = await run_content_cycle(registry, fake_bot, session_factory=factory)
+    with patch("worker.content_cycle.get_editorial_image_candidates", new=AsyncMock(return_value=[_photo_candidate()])):
+        result = await run_content_cycle(registry, fake_bot, session_factory=factory)
 
     fake_bot.send_message.assert_not_called()
+    fake_bot.send_photo.assert_not_called()
     assert result.dry_run_rendered == 1
     assert result.notified == 0
 

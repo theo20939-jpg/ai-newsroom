@@ -433,3 +433,13 @@ def build_openai_provider_factory() -> ProviderFactory:
         build_credential=build_openai_credential,
         build_adapter=lambda credential: OpenAIAdapter(credential),
     )
+
+
+def build_bounded_openai_adapter(
+    credential: ProviderCredential, *, max_retries: int = 0, timeout_seconds: float = 60.0,
+) -> OpenAIAdapter:
+    """One-provider adapter with explicit transport bounds for controlled one-shot calls."""
+    api_key = credential.api_key.get_secret_value() if credential.api_key is not None else None
+    client = AsyncOpenAI(api_key=api_key, base_url=credential.base_url,
+                         max_retries=max_retries, timeout=timeout_seconds)
+    return OpenAIAdapter(credential, client=client)

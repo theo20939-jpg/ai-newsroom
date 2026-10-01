@@ -131,44 +131,32 @@ def test_watermark_works_on_small_image() -> None:
     assert out.size == (64, 64)
 
 
-def test_uses_the_canonical_svg_asset_not_the_png_badge(monkeypatch: pytest.MonkeyPatch) -> None:
-    """MEME-PROD-2.1: proves this module now sources the watermark from
-    services.nnj_master_news_mark.rasterize_nnj_mark() (the official SVG rasterizer) rather than
-    services.brand_renderer.load_brand_mark() (the old flat PNG badge) - no PNG fallback anywhere
-    in this call path. Monkeypatches rasterize_nnj_mark() itself and asserts it was actually
-    called, at least once for each of the two color variants the adaptive logic can request."""
+def test_uses_the_canonical_kage_png_asset(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The Telegram meme watermark comes from the attached KAGE PNG, not the legacy NNJ SVG."""
     import services.meme_watermark as watermark_module
 
-    calls: list[bool] = []
-    original = watermark_module.rasterize_nnj_mark
+    calls: list[int] = []
+    original = watermark_module.rasterize_kage_watermark
 
-    def _spy(*, target_width: int, red: bool = True):
-        calls.append(red)
-        return original(target_width=target_width, red=red)
+    def _spy(*, target_width: int, opacity: float = 1.0):
+        calls.append(target_width)
+        return original(target_width=target_width, opacity=opacity)
 
-    monkeypatch.setattr(watermark_module, "rasterize_nnj_mark", _spy)
+    monkeypatch.setattr(watermark_module, "rasterize_kage_watermark", _spy)
     apply_nnj_watermark(_solid_png())
-    assert calls  # rasterize_nnj_mark was actually invoked - never a PNG fallback
+    assert calls
 
 
-def test_light_background_picks_red_mark_dark_background_picks_white_mark(monkeypatch: pytest.MonkeyPatch) -> None:
-    """MEME-PROD-2.1 adaptive variant selection: mirrors brand_renderer.py's own luminance
-    threshold - a light background gets the red mark, a dark one gets the white mark, so the
-    watermark stays visible against the AI-generated image's own unpredictable background."""
+def test_light_background_picks_red_tint_dark_background_picks_white_tint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the existing adaptive contrast treatment over the canonical KAGE alpha mask."""
     import services.meme_watermark as watermark_module
 
-    calls: list[bool] = []
-    original = watermark_module.rasterize_nnj_mark
+    monkeypatch.setattr(
+        watermark_module, "rasterize_kage_watermark",
+        lambda *, target_width, opacity=1.0: Image.new("RGBA", (target_width, target_width), (255, 255, 255, 255)),
+    )
 
-    def _spy(*, target_width: int, red: bool = True):
-        calls.append(red)
-        return original(target_width=target_width, red=red)
-
-    monkeypatch.setattr(watermark_module, "rasterize_nnj_mark", _spy)
-
-    apply_nnj_watermark(_solid_png(color=(250, 250, 250)))
-    assert calls[-1] is True  # last variant rasterized (the one actually composited) is red
-
-    calls.clear()
-    apply_nnj_watermark(_solid_png(color=(5, 5, 5)))
-    assert calls[-1] is False  # white
+    light = Image.open(io.BytesIO(apply_nnj_watermark(_solid_png(color=(250, 250, 250))))).convert("RGB")
+    dark = Image.open(io.BytesIO(apply_nnj_watermark(_solid_png(color=(5, 5, 5))))).convert("RGB")
+    assert light.getpixel((716, 716)) == (237, 28, 36)
+    assert dark.getpixel((716, 716)) == (255, 255, 255)

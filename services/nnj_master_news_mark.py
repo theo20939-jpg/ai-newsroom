@@ -19,6 +19,26 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 NNJ_RED_SVG = _REPO_ROOT / "assets" / "brand" / "nnj_logo_red.svg"
 NNJ_WHITE_SVG = _REPO_ROOT / "assets" / "brand" / "nnj_logo.svg"
 NNJ_RED_FILL = (237, 28, 36, 255)  # #ED1C24 - read from the SVG's own fill attribute, not chosen here
+KAGE_WATERMARK_PNG = _REPO_ROOT / "assets" / "brand" / "kage_watermark.png"
+
+
+@lru_cache(maxsize=8)
+def _load_kage_watermark() -> Image.Image:
+    """Load the supplied canonical KAGE watermark without changing its pixels."""
+    with Image.open(KAGE_WATERMARK_PNG) as image:
+        return image.convert("RGBA").copy()
+
+
+def rasterize_kage_watermark(*, target_width: int, opacity: float = 1.0) -> Image.Image:
+    """Scale the canonical PNG proportionally; optional opacity only attenuates its alpha."""
+    assert target_width > 0
+    assert 0.0 <= opacity <= 1.0
+    source = _load_kage_watermark()
+    scale = target_width / source.width
+    mark = source.resize((target_width, max(1, round(source.height * scale))), Image.Resampling.LANCZOS)
+    if opacity != 1.0:
+        mark.putalpha(mark.getchannel("A").point(lambda alpha: round(alpha * opacity)))
+    return mark
 
 
 def _parse_path_polygons(d: str) -> list[list[tuple[float, float]]]:

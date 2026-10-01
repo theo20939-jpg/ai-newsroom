@@ -32,6 +32,7 @@ from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, LLMG
 from integrations.prompts.protocol import PromptRepository, RenderedPrompt
 from schemas.capability import CapabilityContext, CapabilityResult
 from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
+from services.kage_content_lineage_audit import kage_content_generation_input_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +168,10 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
     `_format_quote_source_excerpt()`), plus `context.business.workflow_state.step_results
     ["research"]`/`["intelligence"]` (§5's exact, already-frozen field paths - never a direct
     import or call of either upstream Capability)."""
+    if prompt.version == "11.10":
+        from services.kage_evidence_first import build_evidence_first_request
+
+        return build_evidence_first_request(context, prompt)
     news_event = context.business.news_event
     research_output = context.business.workflow_state.step_results.get("research", {})
     intelligence_output = context.business.workflow_state.step_results.get("intelligence", {})
@@ -194,7 +199,7 @@ def _build_request(context: CapabilityContext, prompt: RenderedPrompt) -> Genera
     # activation would otherwise have introduced. v8.3/v8.4 were already listed even though not
     # individually mentioned by name in this comment - v8.6+ follow the same "every v8-family
     # version accepts these blocks" pattern.
-    if prompt.version in ("6", "7", "8", "8.1", "8.2", "8.3", "8.4", "8.5", "8.6", "8.7", "8.8", "8.9"):
+    if prompt.version in ("6", "7", "8", "8.1", "8.2", "8.3", "8.4", "8.5", "8.6", "8.7", "8.8", "8.9", "9.0"):
         if context.business.editorial_plan_context is not None:
             context_text += f"\n\nEDITORIAL PLAN:\n{context.business.editorial_plan_context}"
         if context.business.prior_coverage_context is not None:
@@ -277,4 +282,7 @@ class CopywritingCapability:
             started_at=started_at,
             finished_at=finished_at,
             duration_seconds=(finished_at - started_at).total_seconds(),
+            metadata=kage_content_generation_input_metadata(
+                context, request, prompt_name=CAPABILITY_NAME, prompt_version=prompt.version,
+            ),
         )

@@ -155,6 +155,7 @@ class ImageGenerationResponse(BaseModel):
     # reports them directly (mirrors CapabilityUsage's own established "never invented" discipline
     # for cached_input_tokens/reasoning_tokens) - never fabricated, never estimated here.
     request_id: str | None = None
+    provider_status_code: int | None = Field(default=None, ge=100, le=599)
     cost_usd: str | None = None
 
     def __repr__(self) -> str:

@@ -7,7 +7,8 @@ now pointed at the isolated `ai_newsroom_test` database per Phase 23.1L Part B/C
 Telegram calls anywhere (fake `Bot`/`AsyncMock`, matching every other test in this suite).
 """
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -23,6 +24,7 @@ from tests.test_content_worker_cycle import (
     test_source,  # noqa: F401,F811
 )
 from tests.test_editorial_delivery_mode import _v6_capability_registry
+from tests.test_router_media_integration import _fake_candidate
 from worker.content_cycle import run_content_cycle
 
 _REAL_CHAT_ID = -1004297182444
@@ -178,10 +180,12 @@ async def test_case_1_integration_six_eligible_drafts_produce_exactly_five_real_
             await _make_completed_news_analysis_task(session, event, score=settings.content_generation_min_score)
 
     fake_bot = AsyncMock()
-    fake_bot.send_message.return_value.message_id = 1
-    underlying_mock = fake_bot.send_message  # captured before wrap_bot_with_hard_cap replaces
-    # fake_bot.send_message with a plain function - still the same AsyncMock the wrapper's
-    # `original_send_message` closes over, so its own call_count keeps counting real delegated
+    fake_bot.send_photo.return_value.message_id = 1
+    # Each draft has its own resolvable photo: KAGE NEWS is visual-first, so a draft without a
+    # visual now HOLDS instead of sending text-only - the cap is exercised on real photo sends.
+    underlying_mock = fake_bot.send_photo  # captured before wrap_bot_with_hard_cap replaces
+    # fake_bot.send_photo with a plain function - still the same AsyncMock the wrapper's
+    # `original_send_photo` closes over, so its own call_count keeps counting real delegated
     # calls (5), never the refused 6th (which raises before delegating).
     cap = HardDeliveryCap(max_deliveries=5)
     wrap_bot_with_hard_cap(fake_bot, cap)
@@ -193,7 +197,9 @@ async def test_case_1_integration_six_eligible_drafts_produce_exactly_five_real_
     _gateway, registry = _v6_capability_registry()
     _gateway._generate_responses = _gateway._generate_responses * 6  # type: ignore[attr-defined]
     try:
-        await run_content_cycle(registry, fake_bot, session_factory=factory)
+        with patch("worker.content_cycle.get_editorial_image_candidates",
+                   new=AsyncMock(side_effect=lambda *a, **k: [_fake_candidate(candidate_id=f"cand-{uuid4()}")])):
+            await run_content_cycle(registry, fake_bot, session_factory=factory)
     except Exception:
         pass  # the 6th candidate's send raises DeliveryCapExhaustedError inside the cycle - the
         # assertions below are what actually matters, not whether run_content_cycle() itself

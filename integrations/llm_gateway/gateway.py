@@ -33,6 +33,7 @@ instances for failing to structurally satisfy the Protocol. Fixed by adding the 
 stub methods, unchanged in shape from every other LLMGateway implementation in this codebase.
 """
 from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from database.models.editorial_task import TaskPriority
@@ -55,6 +56,9 @@ from integrations.llm_gateway.protocol import (
 from integrations.llm_gateway.routing.criteria import RoutingCriteria, RoutingObjective
 from integrations.llm_gateway.routing.engine import RoutingEngine
 
+if TYPE_CHECKING:
+    from services.kage_telegram_canary_envelope import TelegramCanaryEnvelope
+
 
 class RoutingGateway:
     """The composition root every LLMGateway call flows through. Holds RoutingEngine and
@@ -65,9 +69,25 @@ class RoutingGateway:
         self._fallback_policy = fallback_policy
 
     async def generate(self, request: GenerateRequest) -> GenerateResponse:
+        from services.kage_telegram_canary_envelope import current_telegram_canary_envelope
+
+        envelope = current_telegram_canary_envelope()
+        if envelope is not None:
+            stage = envelope.begin_stage(request)
+            try:
+                return await self._generate_for_scope(request, envelope)
+            finally:
+                envelope.end_stage(stage)
+        return await self._generate_for_scope(request, None)
+
+    async def _generate_for_scope(
+        self, request: GenerateRequest, envelope: "TelegramCanaryEnvelope | None"
+    ) -> GenerateResponse:
         observability = self._build_observability_context(request)
         criteria = self._build_routing_criteria(request)
         ranked_candidates = await self._routing_engine.route(criteria, observability)
+        if envelope is not None:
+            ranked_candidates = envelope.allowed_models(ranked_candidates)
         return await self._fallback_policy.dispatch(request, ranked_candidates, criteria, observability)
 
     async def generate_stream(self, request: GenerateRequest) -> AsyncIterator[GenerateChunk]:

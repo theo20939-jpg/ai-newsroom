@@ -18,6 +18,7 @@ unmodified WorkflowRunner/CapabilityExecutor/CapabilityRegistry/ContentDraftServ
 Milestones 1-3 already built them.
 """
 import asyncio
+import hashlib
 import logging
 import sys
 from dataclasses import dataclass
@@ -33,8 +34,11 @@ from core.config import settings
 from core.logging import setup_logging
 from database.models.editorial_task import TaskPriority
 from database.models.news_event import NewsEvent
-from database.models.news_event_article_acquisition import TRIGGERED_BY_CONTENT_GENERATION_SELECTED
+from database.models.news_event_article_acquisition import (
+    NewsEventArticleAcquisition, TRIGGERED_BY_CONTENT_GENERATION_SELECTED,
+)
 from database.models.news_source import NewsSource, SourceType
+from database.models.story_link import NewsEventStoryLink
 from database.session import async_session_factory
 from integrations.llm_gateway.boot import assemble_ai_integration_layer
 from integrations.prompts.file_repository import FilePromptRepository
@@ -46,6 +50,7 @@ from services.article_acquisition import get_or_acquire
 from services.content_draft_service import ContentDraftService
 from services.cost_tracker import CostTracker
 from services.image_persistence import link_candidates_to_content_draft
+from services.kage_content_lineage_audit import create_attempt_audit, link_draft, update_source_snapshot
 from services.pricing_catalog import PricingCatalog
 from workflows.runner import WorkflowRunner
 
@@ -136,6 +141,16 @@ class ContentGenerationOutcome:
     content_draft: ContentDraftRead | None
     fact_safety_status: str | None = None
     copywriting_output: dict[str, Any] | None = None
+    research_output: dict[str, Any] | None = None
+    intelligence_output: dict[str, Any] | None = None
+    quality_output: dict[str, Any] | None = None
+
+
+def _successful_step_output(result: WorkflowRunResult, name: str) -> dict[str, Any] | None:
+    for step in result.step_results:
+        if step.step_name == name and step.status == "SUCCESS" and isinstance(step.result, dict):
+            return step.result
+    return None
 
 
 async def run_content_generation_for_event(
@@ -180,6 +195,31 @@ async def run_content_generation_for_event(
             EditorialTaskCreate(event_id=event_id, workflow_type=WorkflowType.CONTENT_GENERATION, priority=priority),
         )
 
+        if settings.copywriting_prompt_version == "11.10":
+            source_event = await session.get(NewsEvent, event_id)
+            if source_event is None:
+                raise ValueError(f"NewsEvent {event_id} disappeared after task creation")
+            source = await session.get(NewsSource, source_event.source_id)
+            story_link = await session.get(NewsEventStoryLink, event_id)
+            await create_attempt_audit(
+                session, task_id=task.id, event_id=event_id,
+                story_id=story_link.story_id if story_link else None,
+                source_snapshot={
+                    "source_id": str(source_event.source_id),
+                    "source_name": source.name if source else None,
+                    "source_url": source_event.url,
+                    "event_title": source_event.title,
+                    "category": getattr(source_event.category, "value", source_event.category),
+                    "published_at": source_event.published_at.isoformat() if source_event.published_at else None,
+                    "collected_at": source_event.collected_at.isoformat() if source_event.collected_at else None,
+                    "news_event_content_sha256": hashlib.sha256(
+                        (source_event.content or "").encode("utf-8")
+                    ).hexdigest(),
+                    "article_evidence": "captured as the exact Research user_input in stage audit",
+                },
+            )
+            await session.commit()
+
         # Phase 19 M1 (docs/phase19_m0_audit.md): the verified, post-selection-only wiring
         # point - this event has already passed worker/content_cycle.py::_select_eligible_events()
         # and the CONTENT_GENERATION task above already exists, but WorkflowRunner has not started
@@ -191,6 +231,25 @@ async def run_content_generation_for_event(
         # defensive wrapper duplicating that guarantee.
         if settings.article_acquisition_mode != "off":
             await _run_article_acquisition(session, event_id)
+
+        if settings.copywriting_prompt_version == "11.10":
+            acquisition = await session.get(NewsEventArticleAcquisition, event_id)
+            if acquisition is not None:
+                await update_source_snapshot(
+                    session, task_id=task.id,
+                    additions={
+                        "article_acquisition": {
+                            "canonical_url": acquisition.canonical_url,
+                            "reused_from_event_id": str(acquisition.reused_from_news_event_id)
+                            if acquisition.reused_from_news_event_id else None,
+                            "effective_completeness_status": acquisition.effective_completeness_status,
+                            "selected_editorial_text_hash": acquisition.selected_editorial_text_hash,
+                            "cleaning_version": acquisition.cleaning_version,
+                            "created_at": acquisition.created_at.isoformat() if acquisition.created_at else None,
+                        },
+                    },
+                )
+                await session.commit()
 
         executor = CapabilityExecutor(
             session, task.id, registry, cost_tracker=cost_tracker, pricing_catalog=pricing_catalog
@@ -225,6 +284,9 @@ async def run_content_generation_for_event(
                 "image_candidate_content_draft_link_failed",
                 extra={"task_id": str(task.id), "draft_id": str(draft.id)},
             )
+        if settings.copywriting_prompt_version == "11.10":
+            await link_draft(session, task_id=task.id, draft_id=draft.id)
+            await session.commit()
 
         logger.info(
             "content_generation_succeeded",
@@ -234,6 +296,9 @@ async def run_content_generation_for_event(
             task_id=task.id, workflow_status=result.status, content_draft=draft,
             fact_safety_status=_fact_safety_status(result),
             copywriting_output=_copywriting_output_for_outcome(result),
+            research_output=_successful_step_output(result, "research"),
+            intelligence_output=_successful_step_output(result, "intelligence"),
+            quality_output=_successful_step_output(result, "quality"),
         )
 
 

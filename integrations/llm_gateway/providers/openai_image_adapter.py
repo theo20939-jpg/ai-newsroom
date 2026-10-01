@@ -75,9 +75,14 @@ from integrations.llm_gateway.image_protocol import (
 from schemas.capability import CapabilityUsage
 
 GPT_IMAGE_2 = "gpt-image-2"
+# KAGE OpenAI-only visual runtime (official model pages, 2026-09): Flare = fast small model for
+# generation, Sunburst = base model for edit fidelity. Both on /v1/images/generations + /edits.
+GPT_IMAGE_2_5_FLARE = "gpt-image-2.5-flare"
+GPT_IMAGE_2_5_SUNBURST = "gpt-image-2.5-sunburst"
+OutputFormat = Literal["png", "jpeg", "webp"]
 
 # The exact closed Literal set `AsyncImages.generate(size=...)` accepts for gpt-image-2, per direct
-# inspection of the installed `openai` package (`openai==2.45.0`) - a superset of `.edit()`'s own
+# inspection of the installed `openai` package (`openai==3.19.2`) - a superset of `.edit()`'s own
 # set (also includes the two square sizes below "1024x1024"), but this adapter only ever requests
 # the one meme-appropriate square size.
 _TEXT_TO_IMAGE_DEFAULT_SIZE: Literal["1024x1024"] = "1024x1024"
@@ -127,7 +132,9 @@ def _closest_supported_size(target_aspect_ratio: str | None) -> str:
     return "auto"
 
 
-def _parse_images_response(raw, *, operation: str) -> ImageGenerationResponse:
+def _parse_images_response(
+    raw, *, operation: str, model_used: str = GPT_IMAGE_2, output_format: str = "png",
+) -> ImageGenerationResponse:
     """Shared response parsing for both `.edit()` and `.generate()` - identical `ImagesResponse`
     shape (`data[].b64_json`, `usage.{input_tokens,output_tokens}`) for both, per direct
     inspection of the installed `openai` package (module docstring)."""
@@ -142,8 +149,11 @@ def _parse_images_response(raw, *, operation: str) -> ImageGenerationResponse:
     usage = CapabilityUsage(units=1, unit_type="image")
     cost_usd: str | None = None
     if parsed.usage is not None:
+        details = getattr(parsed.usage, "input_tokens_details", None)
         usage = CapabilityUsage(
             input_tokens=parsed.usage.input_tokens, output_tokens=parsed.usage.output_tokens,
+            text_input_tokens=getattr(details, "text_tokens", None),
+            image_input_tokens=getattr(details, "image_tokens", None),
             units=1, unit_type="image",
         )
         # Never invented: OpenAI's ImagesResponse.usage reports TOKENS, not a dollar amount -
@@ -151,8 +161,9 @@ def _parse_images_response(raw, *, operation: str) -> ImageGenerationResponse:
         # explicitly-sourced, non-stale pricing table (never a constant baked into this file).
 
     return ImageGenerationResponse(
-        image_bytes=image_bytes, mime_type="image/png", model_used=GPT_IMAGE_2, provider="openai",
-        usage=usage, request_id=request_id, cost_usd=cost_usd,
+        image_bytes=image_bytes, mime_type={"jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}[output_format],
+        model_used=model_used, provider="openai", usage=usage, request_id=request_id, cost_usd=cost_usd,
+        provider_status_code=getattr(raw, "status_code", None),
     )
 
 
@@ -169,10 +180,38 @@ class OpenAIImageAdapter:
         self, *, api_key: str, client: AsyncOpenAI | None = None,
         quality: ImageQuality = _DEFAULT_QUALITY,
         text_to_image_size: str = _TEXT_TO_IMAGE_DEFAULT_SIZE,
+        model_id: str = GPT_IMAGE_2,
+        output_format: OutputFormat = "png",
+        output_compression: int | None = None,
+        edit_size: str | None = None,
+        edit_quality: ImageQuality | None = None,
+        input_fidelity: Literal["high", "low"] | None = None,
+        max_retries: int | None = None,
+        timeout_seconds: float | None = None,
     ) -> None:
-        self._client = client or AsyncOpenAI(api_key=api_key)
+        """Defaults reproduce the MEME-PROD-2 gpt-image-2 profile exactly. The KAGE visual runtime
+        passes an explicit model, format, compression and edit settings; optional values are
+        sent only when set. `max_retries`/`timeout_seconds` bound the SDK client (KAGE: 0/120)."""
+        client_options: dict = {}
+        if max_retries is not None:
+            client_options["max_retries"] = max_retries
+        if timeout_seconds is not None:
+            client_options["timeout"] = timeout_seconds
+        self._client = client or AsyncOpenAI(api_key=api_key, **client_options)
         self._quality = quality
         self._text_to_image_size = text_to_image_size
+        self._model_id = model_id
+        self._output_format: OutputFormat = output_format
+        self._output_compression = output_compression
+        self._edit_size = edit_size
+        self._edit_quality = edit_quality
+        self._input_fidelity = input_fidelity
+
+    def _output_options(self) -> dict:
+        options: dict = {}
+        if self._output_compression is not None:
+            options["output_compression"] = self._output_compression
+        return options
 
     @property
     def CAPABILITIES(self) -> ImageAdapterCapabilities:  # noqa: N802 - matches the established class-attribute convention
@@ -194,33 +233,45 @@ class OpenAIImageAdapter:
         only ONE source image per meme request")."""
         try:
             raw = await self._client.images.with_raw_response.generate(
-                model=GPT_IMAGE_2,
+                model=self._model_id,
                 prompt=request.prompt,
                 size=self._text_to_image_size,  # type: ignore[arg-type]
                 quality=self._quality,  # type: ignore[arg-type]
                 n=1,
-                output_format="png",
+                output_format=self._output_format,
+                **self._output_options(),
                 # response_format deliberately NOT sent (V2.2A repair, still applies to .generate()
                 # too) - unsupported for GPT image models, which always return b64_json
                 # unconditionally; see module docstring.
             )
         except OpenAIError as exc:
             raise _wrap_openai_error(exc, operation="images.generate") from exc
-        return _parse_images_response(raw, operation="images.generate")
+        return _parse_images_response(raw, operation="images.generate", model_used=self._model_id,
+                                      output_format=self._output_format)
 
     async def _generate_image_edit(self, request: ImageGenerationRequest) -> ImageGenerationResponse:
         images = [(ref.data, ref.mime_type) for ref in request.reference_images]
-        size = _closest_supported_size(request.target_aspect_ratio)
+        size = self._edit_size or _closest_supported_size(request.target_aspect_ratio)
+        edit_options: dict = {}
+        if self._edit_quality is not None:
+            edit_options["quality"] = self._edit_quality
+        if self._input_fidelity is not None:
+            edit_options["input_fidelity"] = self._input_fidelity
+        if self._output_format != "png" or self._output_compression is not None:
+            edit_options["output_format"] = self._output_format
+            edit_options.update(self._output_options())
 
         try:
             raw = await self._client.images.with_raw_response.edit(
-                model=GPT_IMAGE_2,
+                model=self._model_id,
                 image=[(f"reference_{i}.{mime.split('/')[-1]}", data, mime) for i, (data, mime) in enumerate(images)],
                 prompt=request.prompt,
                 size=size,  # type: ignore[arg-type]
+                **edit_options,
                 # response_format deliberately NOT sent (V2.2A repair) - unsupported for GPT image
                 # models, which always return b64_json unconditionally; see module docstring.
             )
         except OpenAIError as exc:
             raise _wrap_openai_error(exc, operation="images.edit") from exc
-        return _parse_images_response(raw, operation="images.edit")
+        return _parse_images_response(raw, operation="images.edit", model_used=self._model_id,
+                                      output_format=self._output_format)

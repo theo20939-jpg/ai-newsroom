@@ -54,12 +54,10 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr | None = None
     openai_api_key: SecretStr | None = None
     anthropic_api_key: SecretStr | None = None
-    # Phase V2.1 (docs/nnj_source_faithful_editorial_visual_recomposition_v1.md): the Gemini image
-    # adapter's own credential, consumed by `services/editorial_recomposition.py` (live NEWS photo
-    # recomposition, gated by `editorial_recomposition_mode`) and, as of the REAL IMAGE PROVIDER
-    # FINALIZATION phase, also by `services/meme_generation_orchestrator.py` (gated by
-    # `meme_image_generation_mode == "enforce"`) - the same credential, two independent gated
-    # consumers, never a provider-specific key duplicated per feature.
+    # DORMANT since the KAGE OpenAI-only provider migration (2026-09-28): the Gemini image adapter's
+    # credential. No KAGE runtime path reads it any more (NEWS recomposition, NEWS generation and
+    # meme images are all OpenAI); only the offline bake-off tool and the dormant adapter's own
+    # tests reference it. Optional - KAGE starts without it.
     gemini_api_key: SecretStr | None = None
     max_daily_ai_cost: float | None = None
     max_monthly_ai_cost: float | None = None
@@ -572,7 +570,8 @@ class Settings(BaseSettings):
     # first-use jargon clarity and optional earned social-beat rules. Same output schema.
     # "8.8" (prompts/copywriting/v8.8.yaml): v8.7 plus one narrow optional human-ending
     # refinement. Same output schema and evidence contract.
-    copywriting_prompt_version: Literal["4", "5", "6", "7", "8", "8.1", "8.2", "8.3", "8.4", "8.5", "8.6", "8.7", "8.8", "8.9"] = "4"
+    # Clean Telegram RC: 11.10 is the only new accepted text-stack version.
+    copywriting_prompt_version: Literal["4", "5", "6", "7", "8", "8.1", "8.2", "8.3", "8.4", "8.5", "8.6", "8.7", "8.8", "8.9", "9.0", "11.10"] = "4"
 
     # Phase I.1.2 (Final Post Authoring editorial calibration): mirrors copywriting_prompt_version's
     # own established pattern exactly - v1 (prompts/final_post_authoring/v1.yaml) is Phase I.1's
@@ -773,9 +772,8 @@ class Settings(BaseSettings):
     # rather than a growing Gemini-specific prompt-rewrite/policy-recovery subsystem, the provider
     # was replaced). If `openai_api_key` is unset while this is "enforce", the orchestrator FAILS
     # CLOSED (`MemeGenerationOutcome.status == "provider_not_configured"`) rather than silently
-    # falling back to Mock. `GeminiImageAdapter` remains the live provider for NEWS photo
-    # recomposition (`services/editorial_recomposition.py`) - completely unaffected by this
-    # setting. Still defaults to "off" - flipping this to "enforce" is the explicit morning
+    # falling back to Mock. NEWS photo recomposition (`services/editorial_recomposition.py`) is a
+    # separate OpenAI consumer - completely unaffected by this setting. Still defaults to "off" - flipping this to "enforce" is the explicit morning
     # activation decision, not made by this phase.
     meme_image_generation_mode: Literal["off", "dry_run", "enforce"] = "off"
     meme_image_max_bytes: int = Field(default=10_000_000, gt=0)
@@ -902,16 +900,28 @@ class Settings(BaseSettings):
     # "off"/"dry_run"/"enforce" values). "off" (default): zero
     # ImageGenerationGateway calls, byte-identical to pre-V2.3 behavior. "dry_run": eligibility is
     # evaluated and the request that WOULD be sent is built, but no network call is made. "live":
-    # a real gemini-3.1-flash-image call is made when eligible; any failure fails open to the
-    # original source bytes (services/editorial_recomposition.py::maybe_recompose(), never a
-    # fallback to gemini-3-pro-image or gpt-image-2). "live" exists in this type after V2.3 but is
+    # a real OpenAI gpt-image-2.5-sunburst edit call is made when eligible; any failure fails open to
+    # the original source bytes (services/editorial_recomposition.py::maybe_recompose(), never a
+    # fallback to a second model or provider). "live" exists in this type after V2.3 but is
     # NOT exercised by any live call in that phase - a separate, explicitly-authorized canary
     # phase is required before this is ever set to "live" outside a test.
     editorial_recomposition_mode: Literal["off", "dry_run", "live"] = "off"
-    brand_asset_path: str = "assets/brand/nnj_logo.svg"
-    brand_red_asset_path: str = "assets/brand/nnj_logo_red.svg"
-    brand_raster_fallback_path: str = "assets/brand/nnj_logo.png"
+    # KAGE Telegram NEWS visual fallback (services/kage_visual_fallback.py): when no usable source
+    # photo resolved, "live" tries ONE evidence-grounded generated editorial image (OpenAI
+    # gpt-image-2.5-flare text-to-image, inside the per-story cost envelope), then a deterministic local KAGE typography
+    # card, then VISUAL_HOLD. "off" (default) keeps the plain VISUAL_HOLD. Never a text-only post.
+    kage_news_visual_fallback_mode: Literal["off", "live"] = "off"
+    brand_asset_path: str = "assets/brand/kage_watermark.png"
+    brand_red_asset_path: str = "assets/brand/kage_watermark.png"
+    brand_raster_fallback_path: str = "assets/brand/kage_watermark.png"
     brand_template_version: str = "v1"
+    # KAGE Telegram footer custom emoji (services/news_telegram_presentation.py::
+    # build_ninja_pulse_footer_html()). Presentation-only: both unset (the default) -> plain
+    # "KAGE" footer. The id is the numeric Telegram custom_emoji_id; the fallback is the regular
+    # Unicode emoji Telegram's <tg-emoji> markup requires as its inner text (the emoji the custom
+    # emoji is attached to in its sticker set). Both must be valid or the plain footer is used.
+    kage_telegram_custom_emoji_id: str | None = None
+    kage_telegram_custom_emoji_fallback: str | None = None
     # Unset by default - see services/brand_renderer.py's own module docstring for the OS-font
     # resolution fallback chain this drives (no font file is ever downloaded or shipped).
     brand_font_path: str | None = None

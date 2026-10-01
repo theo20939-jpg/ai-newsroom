@@ -42,15 +42,18 @@ from typing import Any
 
 from capabilities.errors import RetryableCapabilityError, ValidationCapabilityError
 from capabilities.gateway_call import call_generate
+from core.config import settings
 from integrations.llm_gateway.protocol import ContentPart, GenerateRequest, LLMGateway, Message
 from integrations.prompts.protocol import PromptRepository, RenderedPrompt
 from schemas.capability import CapabilityContext, CapabilityResult
 from schemas.capability_definition import CapabilityConfig, CapabilityDefinition
+from services.kage_content_lineage_audit import kage_content_generation_input_metadata
 
 logger = logging.getLogger(__name__)
 
 CAPABILITY_NAME = "research"
 PROMPT_VERSION = "2"
+PROMPT_VERSION_KAGE = "5"
 # TELEGRAPH Checkpoint 3 - see module docstring's addendum. Selected only when
 # context.business.telegraph_research_bundle_text is present.
 PROMPT_VERSION_TELEGRAPH_DEEP_RESEARCH = "3"
@@ -186,7 +189,8 @@ class ResearchCapability:
             prompt = self._prompt_repository.resolve(CAPABILITY_NAME, PROMPT_VERSION_TELEGRAPH_DEEP_RESEARCH)
             request = _build_deep_research_request(context, prompt)
         else:
-            prompt = self._prompt_repository.resolve(CAPABILITY_NAME, PROMPT_VERSION)
+            prompt_version = PROMPT_VERSION_KAGE if settings.copywriting_prompt_version == "11.10" else PROMPT_VERSION
+            prompt = self._prompt_repository.resolve(CAPABILITY_NAME, prompt_version)
             request = _build_request(context, prompt)
 
         # §6.4/§6.5/§6.7 via the centralized M1 mechanism (§6.8) - never reimplemented here.
@@ -246,4 +250,7 @@ class ResearchCapability:
             started_at=started_at,
             finished_at=finished_at,
             duration_seconds=(finished_at - started_at).total_seconds(),
+            metadata=kage_content_generation_input_metadata(
+                context, request, prompt_name=CAPABILITY_NAME, prompt_version=prompt.version,
+            ),
         )

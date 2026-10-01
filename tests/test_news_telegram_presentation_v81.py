@@ -143,7 +143,7 @@ def test_ninja_pulse_footer_is_disabled_by_default_for_v81() -> None:
 def test_ninja_pulse_footer_can_still_be_explicitly_enabled() -> None:
     output = _v81()
     html = render_v81_news_card_html(output, treatment=STANDARD, include_ninja_pulse_footer=True)
-    assert "NINJA PULSE. Подписаться 🥷" in html
+    assert '<a href="https://t.me/kage_journal">KAGE</a>' in html
 
 
 # ---------------------------------------------------------------------------

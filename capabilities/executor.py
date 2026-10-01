@@ -76,6 +76,10 @@ from services.editorial_scoring import apply_editorial_scoring_v2
 from services.fact_safety import apply_fact_safety
 from services.fact_safety_calibration import calibrate_fact_safety
 from services.image_intelligence import run_shadow_discovery
+from services.kage_editorial_contract import draft_issues as kage_draft_issues, pre_copy_issues as kage_pre_copy_issues
+from services.kage_draft_recovery import remove_unsupported_absence_sentence
+from services.kage_content_lineage_audit import update_attempt_audit
+from services.news_editorial_relevance import classify_product_quality
 from services.meme_opportunity import apply_meme_opportunity_shadow
 from services.meme_safety import apply_meme_safety_originality_shadow
 from services.pricing_catalog import PricingCatalog
@@ -135,6 +139,27 @@ _REASONING_EFFORT_BY_CAPABILITY: dict[str, Literal["none", "low", "medium", "hig
     # "article_generation" than to plain "copywriting" extraction from raw source text.
     "final_post_authoring": "medium",
 }
+
+# The frozen KAGE 11.10 CONTENT_GENERATION request contract. Kept in the same
+# module that constructs ExecutionContext so safety envelopes can validate
+# against the actual request values instead of maintaining stale copies.
+KAGE_11_10_CONTENT_OUTPUT_TOKENS: dict[str, int] = {
+    "research": 1400,
+    "intelligence": _MAX_OUTPUT_TOKENS_BY_CAPABILITY["intelligence"],
+    "copywriting": 900,
+    "quality": 700,
+}
+
+
+def content_generation_output_token_contract(*, kage_11_10: bool) -> dict[str, int]:
+    """Return output limits used by CONTENT_GENERATION request construction."""
+    contract = {
+        name: _MAX_OUTPUT_TOKENS_BY_CAPABILITY[name]
+        for name in ("research", "intelligence", "copywriting", "quality")
+    }
+    if kage_11_10:
+        contract.update(KAGE_11_10_CONTENT_OUTPUT_TOKENS)
+    return contract
 
 # TELEGRAPH Checkpoint 3: reasoned starting points for the "deep_research" step only (see
 # _build_context()'s own comment on why this can't live in the two dicts above, which are keyed
@@ -517,6 +542,26 @@ class CapabilityExecutor:
             meme_recent_diversity_context=meme_recent_diversity_context,
         )
 
+        # Opt-in KAGE product loop: an explicit negative Intelligence judgment must stop
+        # before Copywriting spends another call. The paid 11.1 shadow ignored this signal
+        # and drafted both Rabbit and the thin Copilot item anyway. All earlier versions
+        # retain their original workflow behavior.
+        kage_product_loop = (
+            settings.copywriting_prompt_version == "11.10"
+            and state_for_bundle.workflow_name == WorkflowType.CONTENT_GENERATION
+        )
+        kage_lane = (
+            classify_product_quality(news_event.title, news_event.content, product_loop=True).lane
+            if kage_product_loop else ""
+        )
+        if kage_product_loop and step.capability == "copywriting":
+            earlier = context.business.workflow_state.step_results
+            issues = kage_pre_copy_issues(
+                earlier.get("research", {}), earlier.get("intelligence", {}), lane=kage_lane,
+            )
+            if issues:
+                raise PermanentStepFailureError(f"KAGE pre-copy hold: {', '.join(issues)}")
+
         # API cost optimization (docs/api_cost_optimization_report.md): CONTENT_GENERATION's
         # "research"/"intelligence" steps reuse the same event's already-COMPLETED
         # NEWS_ANALYSIS task's own persisted results instead of paying for an identical call -
@@ -526,6 +571,7 @@ class CapabilityExecutor:
         # would defeat the retry's own purpose). Falls back to a real call (unchanged behavior)
         # whenever no valid prior result exists - never blocks, never raises.
         reused_output = await self._try_reuse(task, step, attempt)
+        capability_result = None
         if reused_output is not None:
             logger.info(
                 "capability_result_reused_from_news_analysis",
@@ -558,7 +604,34 @@ class CapabilityExecutor:
                 )
 
             structured_output = result.structured_output or {}
+            capability_result = result
             await self._record_cost(task, step, result.calls)
+
+        if kage_product_loop and step.capability == "intelligence":
+            issues = kage_pre_copy_issues(
+                context.business.workflow_state.step_results.get("research", {}),
+                structured_output, lane=kage_lane,
+            )
+            if issues:
+                raise PermanentStepFailureError(f"KAGE intelligence hold: {', '.join(issues)}")
+        if kage_product_loop and step.capability == "copywriting":
+            earlier = context.business.workflow_state.step_results
+            issues = kage_draft_issues(
+                earlier.get("research", {}), earlier.get("intelligence", {}),
+                structured_output, lane=kage_lane,
+            )
+            # A single unsupported absence sentence is a draft defect, not story death.
+            # This exact deletion introduces no new claim. The normal Quality step still
+            # receives and independently judges the corrected copy before publication.
+            if issues == ["absence_claim_without_explicit_research_fact"]:
+                candidate = remove_unsupported_absence_sentence(earlier.get("research", {}), structured_output)
+                if candidate is not None and not kage_draft_issues(
+                    earlier.get("research", {}), earlier.get("intelligence", {}), candidate, lane=kage_lane,
+                ):
+                    structured_output = candidate
+                    issues = []
+            if issues:
+                raise PermanentStepFailureError(f"KAGE draft hold: {', '.join(issues)}")
 
         # Phase 15 M4: deterministic Editorial Score V2 post-processing, only for the "scoring"
         # step, only after its own LLM call already succeeded above - see
@@ -689,6 +762,38 @@ class CapabilityExecutor:
         # Never blocks, never mutates the concept itself.
         if step.capability == "meme_concept" and settings.meme_safety_gate_mode == "shadow":
             structured_output = self._attach_meme_safety_originality(news_event, context, structured_output)
+
+        if (
+            state_for_bundle.workflow_name == WorkflowType.CONTENT_GENERATION
+            and settings.copywriting_prompt_version == "11.10"
+            and step.capability in {"research", "intelligence", "copywriting", "quality"}
+            and capability_result is not None
+        ):
+            call = capability_result.calls[0] if capability_result.calls else None
+            research_facts = (
+                capability_result.structured_output.get("facts", [])
+                if step.capability == "research" and capability_result.structured_output
+                else context.business.workflow_state.step_results.get("research", {}).get("facts", [])
+            )
+            await update_attempt_audit(
+                self._session, task_id=self._task_id, section="stage", required=True,
+                value={
+                    "name": step.capability,
+                    "attempt": attempt,
+                    "started_at": capability_result.started_at.isoformat(),
+                    "finished_at": capability_result.finished_at.isoformat(),
+                    "prompt_name": capability_result.metadata.get("prompt_name"),
+                    "prompt_version": capability_result.metadata.get("prompt_version"),
+                    "execution_id": str(call.call_id) if call else f"{self._task_id}:{step.capability}:{attempt}",
+                    "provider": call.provider if call else None,
+                    "model": call.model_used if call else None,
+                    "available_fact_ids": list(range(1, len(research_facts) + 1))
+                    if isinstance(research_facts, list) else [],
+                    "input": capability_result.metadata,
+                    "provider_output": capability_result.structured_output,
+                    "effective_output": structured_output,
+                },
+            )
 
         return structured_output
 
@@ -1285,6 +1390,14 @@ class CapabilityExecutor:
         if step.capability not in REUSABLE_CAPABILITIES or attempt != 1:
             return None
         state = WorkflowExecutionState.model_validate(task.workflow)
+        if (
+            settings.copywriting_prompt_version == "11.10"
+            and state.workflow_name == WorkflowType.CONTENT_GENERATION
+            and step.capability in ("research", "intelligence")
+        ):
+            # v5/v4 handoff contracts differ from the NEWS_ANALYSIS baseline; reusing an
+            # older step would silently bypass the interesting-part preservation loop.
+            return None
         # Phase 18 M2 (docs/phase18_m2_meme_concept_report.md): MEME_GENERATION's own "research"/
         # "intelligence" steps reuse the same source NEWS_ANALYSIS task's results for identical
         # reasons CONTENT_GENERATION already does (module docstring) - a meme concept is built
@@ -1367,6 +1480,11 @@ class CapabilityExecutor:
                 # only fires when telegraph_research_bundle_text is not None.
                 max_tokens=(
                     _TELEGRAPH_DEEP_RESEARCH_MAX_OUTPUT_TOKENS if is_telegraph_deep_research
+                    else KAGE_11_10_CONTENT_OUTPUT_TOKENS[step.capability] if (
+                        settings.copywriting_prompt_version == "11.10"
+                        and state.workflow_name == WorkflowType.CONTENT_GENERATION
+                        and step.capability in KAGE_11_10_CONTENT_OUTPUT_TOKENS
+                    )
                     else _MAX_OUTPUT_TOKENS_BY_CAPABILITY.get(step.capability)
                 ),
                 reasoning_effort=(
