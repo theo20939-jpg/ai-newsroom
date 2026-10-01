@@ -7,6 +7,8 @@ copy remain the deterministic renderer's responsibility.
 """
 from __future__ import annotations
 
+import logging
+
 import hashlib
 import re
 from dataclasses import dataclass, replace
@@ -343,11 +345,11 @@ def _mode_for_item(*, strategy: str, slide: Any | None, index: int) -> Instagram
 
 
 def _execution_items(
-    creative: Any, *, strategy: str, content_format: str,
+    creative: Any, *, strategy: str, content_format: str, slides: list[Any] | None = None,
 ) -> list[tuple[str, InstagramMediaMode, Any | None]]:
     if content_format != "carousel":
         return [("primary", _mode_for_item(strategy=strategy, slide=None, index=0), None)]
-    slides: Iterable[Any] = getattr(creative, "slides", ()) or ()
+    slides = slides if slides is not None else (getattr(creative, "slides", ()) or ())
     items = [
         (str(index), _mode_for_item(strategy=strategy, slide=slide, index=index), slide)
         for index, slide in enumerate(slides)
@@ -469,6 +471,14 @@ async def _execute_generated_asset(
     )
 
 
+def _scene_plan(plan: dict[str, Any], slides: list[Any] | None, asset_key: str) -> dict[str, Any]:
+    if not slides or not str(asset_key).isdigit():
+        return plan
+    from services.instagram_scene_diversity import slide_scene_plan
+
+    return slide_scene_plan(plan, slides, int(asset_key))
+
+
 async def execute_instagram_creative_media(
     *,
     creative: Any,
@@ -499,8 +509,17 @@ async def execute_instagram_creative_media(
 
     effective_mode = mode or settings.instagram_image_generation_mode
     assets: list[InstagramMediaExecutionAsset] = []
+    scene_slides: list[Any] | None = None
+    if content_format == "carousel":
+        # one carousel, several pictures: a physical concept every slide repeats is kept once as a connective motif, and each slide's prompt
+        # carries its own beat instead of the carousel-wide object metaphor (services.instagram_scene_diversity)
+        from services.instagram_scene_diversity import diversify_slide_briefs
+
+        scene_slides, scene_notes = diversify_slide_briefs(list(getattr(creative, "slides", ()) or ()))
+        if scene_notes:
+            logging.getLogger(__name__).info("instagram_scene_diversity_applied", extra={"opportunity_id": opportunity_id, "notes": scene_notes})
     for asset_key, media_mode, slide in _execution_items(
-        creative, strategy=strategy, content_format=content_format,
+        creative, strategy=strategy, content_format=content_format, slides=scene_slides,
     ):
         common = dict(
             asset_key=asset_key,
@@ -514,7 +533,7 @@ async def execute_instagram_creative_media(
         )
         if media_mode is InstagramMediaMode.GENERATED and _slide_value(slide, "media_source") == "generated":
             assets.append(await _execute_generated_asset(
-                asset_key=asset_key, slide=slide, plan=plan, opportunity_summary=opportunity_summary, evidence=_evidence_for_slide(evidence, slide, evidence_story_keys),
+                asset_key=asset_key, slide=slide, plan=_scene_plan(plan, scene_slides, asset_key), opportunity_summary=opportunity_summary, evidence=_evidence_for_slide(evidence, slide, evidence_story_keys),
                 content_format=content_format, creative_id=creative_id, opportunity_id=opportunity_id, effective_mode=effective_mode,
             ))
         elif slide_assets is not None:
@@ -555,7 +574,7 @@ async def execute_instagram_creative_media(
             assets.append(await _execute_generated_asset(
                 asset_key=asset_key,
                 slide=slide,
-                plan=plan,
+                plan=_scene_plan(plan, scene_slides, asset_key),
                 opportunity_summary=opportunity_summary,
                 evidence=evidence,
                 content_format=content_format,
