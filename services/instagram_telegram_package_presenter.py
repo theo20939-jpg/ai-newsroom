@@ -132,7 +132,7 @@ def _split_if_needed(header: str, caption_block: str, footer_lines: list[str]) -
 
 def present_single(package: InstagramContentPackage, render: InstagramRenderResult, *, version: int) -> InstagramTelegramPresentation:
     header = f"🖼 <b>{_FORMAT_LABEL[ContentFormat.SINGLE]}</b> · v{version}"
-    footer = _editorial_decision_lines(package) + _creative_execution_lines(package) + [line for line in (_truthfulness_line(package),) if line]
+    footer: list[str] = []  # founder review shows the caption + CTAs only; metadata stays in the stored package
     control_text, overflow = _split_if_needed(header, _caption_block(package), footer)
     return InstagramTelegramPresentation(
         kind="single", media=[render.image_bytes], control_text=control_text, overflow_text=overflow,
@@ -145,7 +145,7 @@ def present_carousel(package: InstagramContentPackage, renders: list[InstagramRe
     `services.instagram_platform_renderer.render_instagram_carousel()` returns) - this function
     never sorts, reverses, or re-selects them."""
     header = f"🖼 <b>{_FORMAT_LABEL[ContentFormat.CAROUSEL]}</b> · v{version} ({len(renders)} слайдов)"
-    footer = _editorial_decision_lines(package) + _creative_execution_lines(package) + [line for line in (_truthfulness_line(package),) if line]
+    footer: list[str] = []  # founder review shows the caption + CTAs only; metadata stays in the stored package
     control_text, overflow = _split_if_needed(header, _caption_block(package), footer)
     return InstagramTelegramPresentation(
         kind="carousel", media=[r.image_bytes for r in renders], control_text=control_text, overflow_text=overflow,
@@ -159,7 +159,7 @@ def present_caption_only(package: InstagramContentPackage, *, version: int) -> I
     fresh media for this presentation; it only sends `control_text`/`overflow_text` as a reply to
     the ALREADY-delivered image(s) from the previous version."""
     header = f"📝 <b>ОБНОВЛЁН ТЕКСТ</b> · v{version}"
-    footer = _editorial_decision_lines(package) + _creative_execution_lines(package) + [line for line in (_truthfulness_line(package),) if line]
+    footer: list[str] = []  # founder review shows the caption + CTAs only; metadata stays in the stored package
     control_text, overflow = _split_if_needed(header, _caption_block(package), footer)
     return InstagramTelegramPresentation(kind="text_update", media=[], control_text=control_text, overflow_text=overflow, version_label=f"v{version}")
 
@@ -236,7 +236,7 @@ def present_reel(package: InstagramContentPackage, cover: InstagramRenderResult,
     if asset_requirements:
         storyboard_lines.append("📦 <b>Нужно:</b> " + "; ".join(_esc(str(a)) for a in asset_requirements))
 
-    footer_lines = _editorial_decision_lines(package) + _creative_execution_lines(package) + storyboard_lines + [line for line in (_truthfulness_line(package),) if line]
+    footer_lines = storyboard_lines
     control_text, overflow = _split_if_needed(header, _caption_block(package), footer_lines)
     return InstagramTelegramPresentation(
         kind=kind, media=[cover.image_bytes], control_text=control_text, overflow_text=overflow,

@@ -183,7 +183,7 @@ def test_finished_reel_script_with_video_file_remains_compatible() -> None:
     assert "видео ещё не создано" not in presentation.control_text
 
 
-def test_presenter_discloses_normalized_trend_type_and_provenance() -> None:
+def test_presenter_keeps_internal_trend_metadata_out_of_founder_review_text() -> None:
     pkg, cover, _ = _ready_reel_package()
     decision = {
         "trend_signal_type": "discussion_momentum",
@@ -192,8 +192,9 @@ def test_presenter_discloses_normalized_trend_type_and_provenance() -> None:
     }
     pkg = replace(pkg, director_evidence={"editorial_decision": decision})
     presentation = present_reel(pkg, cover, version=1)
-    assert "discussion_momentum · STORY_MEMORY" in presentation.control_text
-    assert "ОБОСНОВАНИЕ СИГНАЛА" in presentation.control_text
+    assert "discussion_momentum" not in presentation.control_text
+    assert "STORY_MEMORY" not in presentation.control_text
+    assert "ОБОСНОВАНИЕ СИГНАЛА" not in presentation.control_text
 
 
 def test_null_hook_and_concept_readiness_hold_reel() -> None:
