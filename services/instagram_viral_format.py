@@ -82,8 +82,11 @@ class EditorialCorrectionRequired(MediaFirstContractError):
     existing correction retry. A MediaFirstContractError, so exactly that retry path applies; a second failure is terminal."""
 
     def __init__(self, findings: list[str], *, factual_contract: list[str] | None = None, factual_invariants: dict | None = None,
-                 factual_repair: list[str] | None = None, previous_output: dict | None = None):
+                 factual_repair: list[str] | None = None, previous_output: dict | None = None, first_judgement: dict | None = None):
         self.findings = list(findings)
+        # founder task 2026-10-01: what the FIRST judge read and said, so the correction round can tell a contradicting verdict on
+        # unchanged text from a real new finding (services.instagram_viral_editorial_judge.split_contradicting) - no second judge call
+        self.first_judgement = dict(first_judgement) if first_judgement else None
         # founder task 2026-09-28 (canary 9): the correction used to be a FRESH regeneration from the note alone - the model never saw the
         # version it was correcting, so a text-only repair re-wrote the whole carousel and dropped a generated slide's story_anchor. The
         # rejected version now travels with the correction as the object to edit (same single call, no second correction).
@@ -846,6 +849,10 @@ def viral_copy_findings(slides: list[Any], evidence: list[str], *, caption: str 
         same = same_proposition(prev, cur)
         if same:
             problems.append(f"slides {index} and {index + 1} make the same point ({same}) - merge them or give the second a new fact")
+    # founder task 2026-10-01: a date, comparison or number must stay attached to what it describes in the evidence
+    from services.instagram_fact_binding import fact_binding_findings
+
+    problems += fact_binding_findings(slides, evidence, caption=caption)
     for index in range(1, len(slides)):
         padding = restates_earlier_slides(slides[index], slides[:index])
         if padding:

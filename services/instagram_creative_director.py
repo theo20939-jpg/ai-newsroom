@@ -406,6 +406,8 @@ class CreativeDirectorInput:
     # founder task 2026-09-27: set ONLY with the one editorial correction - the factual invariants of the version being corrected
     # (services.instagram_factual_status.factual_invariants); the corrected version may not lose any of them
     factual_invariants: dict = field(default_factory=dict)
+    # founder task 2026-10-01: the first semantic judge's reading (judged_version) - only set on the one correction
+    first_judgement: dict = field(default_factory=dict)
     # Phase B.5: the STRUCTURED Visual DNA (stored once, reused per post) - rendered rules, never a path.
     visual_dna_context: str = ""
     visual_dna_version: str = ""
@@ -429,6 +431,8 @@ class CreativeGenerationOutcome:
     weak_hook_patterns: tuple = ()
     # 2026-09-25: advisory visual-repetition diagnostics for founder review (primitive / asset / layout reuse); never a hard failure itself.
     visual_repetition: dict | None = None
+    # 2026-10-01: final-round semantic verdicts that contradict the first judge on UNCHANGED text - advisory for founder review
+    editorial_advisories: tuple = ()
 
 
 def _without_prompt_bullet(value: str) -> str:
@@ -1206,7 +1210,7 @@ async def _validate_viral_carousel(
         status_violations,
         unsupported_target_violations,
     )
-    from services.instagram_viral_editorial_judge import judge_viral_copy
+    from services.instagram_viral_editorial_judge import judge_viral_copy, judged_version, split_contradicting
     from services.instagram_viral_format import EditorialCorrectionRequired
 
     deterministic: list[str] = []
@@ -1253,17 +1257,26 @@ async def _validate_viral_carousel(
                 factual_invariants=invariants, factual_repair=repair_contract(violations, ledger, evidence, invariants),
                 previous_output=output)
         verdict = await judge_viral_copy(gateway, prompt_repository, slides=slides, caption=caption, allowed_evidence=evidence)
+        contradicting: list[dict] = []
+        if correcting and director_input.first_judgement:
+            # founder task 2026-10-01: a final verdict that contradicts the first judge on byte-identical text is not a new conflict
+            verdict, contradicting = split_contradicting(verdict, director_input.first_judgement, slides, caption)
         semantic = verdict.findings()
         _emit_diagnostic("semantic_judge_correction" if correcting else "semantic_judge_initial",
                          {"verdict": verdict.raw, "semantic_findings": semantic, "deterministic_findings": deterministic,
-                          "role_guard_dropped": verdict.dropped_pairs})
+                          "role_guard_dropped": verdict.dropped_pairs, "contradicting_unchanged_text": contradicting})
         combined = list(dict.fromkeys([*deterministic, *semantic]))
         if combined:
             # founder task 2026-09-28 (canary 9): the rejected version travels with the ONE correction as the object to edit, so a text
             # repair cannot silently drop valid structure (the corrected version is still fully re-validated; a violation is terminal)
             raise EditorialCorrectionRequired(combined, factual_contract=ledger_lines(ledger),
-                                              factual_invariants=factual_invariants(slides, caption, ledger, evidence), previous_output=output)
+                                              factual_invariants=factual_invariants(slides, caption, ledger, evidence), previous_output=output,
+                                              first_judgement=None if correcting else judged_version(slides, caption, verdict))
         assert outcome is not None
+        if contradicting:
+            outcome = replace(outcome, editorial_advisories=tuple(
+                f"semantic judge disagreement on unchanged text ({c['category']}): {c.get('sentence') or c.get('slides')} - "
+                f"{c['reason']} (the first judge passed the identical text)" for c in contradicting))
         return outcome
     except Exception as exc:
         _emit_diagnostic("validation_error", {"error_type": type(exc).__name__, "error": str(exc)[:1500]})

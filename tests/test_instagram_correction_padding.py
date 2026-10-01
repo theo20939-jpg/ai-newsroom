@@ -148,16 +148,23 @@ def test_saved_run_first_version_names_the_padding_slide_for_the_one_correction(
 
 
 def test_saved_run_refilled_slide_does_not_survive_the_correction_and_the_carousel_ends_at_four(monkeypatch):
+    from services.instagram_viral_format import EditorialCorrectionRequired
+
     raw = SAVED["corrected_output"]
     assert len(raw["slides"]) == 5 and raw["slides"][4]["slide_copy"] == "Sonnet 5.5 — обновление середины"
     run, judged, diagnostics = _real_path(monkeypatch, raw, _director_input(note="EDITORIAL CORRECTION (replay)",
                                                                              invariants=SAVED["correction_baseline_invariants"]),
                                           SAVED["correction_verdict"])
-    outcome = asyncio.run(run)
-    slides = outcome.carousel.slides
+    # founder task 2026-10-01: this saved carousel also states a false chronology - its hook 'Sonnet 5.5 заменит Sonnet 5 с июня' turns the
+    # evidence's 'Sonnet 5 from June' into a June rollout (services.instagram_fact_binding). The padding result is unchanged; the post now
+    # stops for that factual error, and for nothing else
+    with pytest.raises(EditorialCorrectionRequired) as exc:
+        asyncio.run(run)
+    assert exc.value.findings and all(f.startswith("fact binding") and "sonnet 5" in f for f in exc.value.findings)
+    slides = exc.value.previous_output["slides"]  # the version that was judged: the padding already dropped
     assert len(slides) == 4
-    assert [s.slide_copy for s in slides] == [s["slide_copy"] for s in raw["slides"][:4]]  # no copy written or changed
-    assert [s.slide_body for s in slides] == [s["slide_body"] for s in raw["slides"][:4]]
-    assert slides[-1].role == "takeaway"
+    assert [s["slide_copy"] for s in slides] == [s["slide_copy"] for s in raw["slides"][:4]]  # no copy written or changed
+    assert [s["slide_body"] for s in slides] == [s["slide_body"] for s in raw["slides"][:4]]
+    assert slides[-1]["role"] == "takeaway"
     assert diagnostics["correction_padding_dropped"]["dropped"][0]["index"] == 5
     assert judged == [4]  # the one post-correction judge round, on the shorter carousel - no second correction, no model call

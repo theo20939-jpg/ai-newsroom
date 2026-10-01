@@ -1136,7 +1136,8 @@ async def evaluate_and_submit_instagram_opportunity(
             # chronology, action strength) - services.instagram_factual_status.non_regression_findings rejects a correction that drifts
             creative_outcome = await regenerator(
                 replace(retry.director_input, contract_retry_note=note, structured_output_recovery_note="",
-                        factual_invariants=dict(getattr(exc, "factual_invariants", None) or {})),
+                        factual_invariants=dict(getattr(exc, "factual_invariants", None) or {}),
+                        first_judgement=dict(getattr(exc, "first_judgement", None) or {})),
                 format_decision.recommended_format,
             )
             director_trace[-1]["result"] = "valid"
@@ -1358,6 +1359,7 @@ async def evaluate_and_submit_instagram_opportunity(
             archetype_correction_required=creative_outcome.archetype_correction_required,
             weak_hook_patterns=list(creative_outcome.weak_hook_patterns),
             visual_repetition=creative_outcome.visual_repetition,
+            editorial_advisories=list(creative_outcome.editorial_advisories),
         )
         pkg = replace(pkg, media_plan={**pkg.media_plan, "b4_observability": observability})
         logger.info("instagram_b4_carousel_observability", extra={

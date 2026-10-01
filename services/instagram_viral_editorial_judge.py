@@ -78,6 +78,69 @@ class JudgeVerdict:
         return out
 
 
+def judged_version(slides: list[Any], caption: str, verdict: JudgeVerdict) -> dict:
+    """What the FIRST judge read and said - carried to the one correction round (never a second judge call)."""
+    return {"slides": [[_get(s, "slide_copy"), _get(s, "slide_body")] for s in slides], "caption": caption or "", "verdict": verdict.raw}
+
+
+def split_contradicting(verdict: JudgeVerdict, first: dict, slides: list[Any], caption: str) -> tuple[JudgeVerdict, list[dict]]:
+    """Founder task 2026-10-01 (controlled Sonnet acceptance, 3f213cb): the final judge flagged a caption sentence that was BYTE-IDENTICAL to
+    the one the first judge had read and passed; the two requests differed only in two slide words the correction translated. A final-round
+    semantic finding is a CONTRADICTING VERDICT - reported as an advisory, not a terminal finding - only when the exact text it names is
+    unchanged at the same place since the first judge's round AND the first verdict, in the same category, found nothing there. A finding
+    on changed or moved text, and every deterministic / factual / hard check, is untouched. Returns (the verdict without the contradicting
+    findings, the contradicting findings)."""
+    if not first:
+        return verdict, []
+    prev_raw = first.get("verdict") or {}
+    prev_slides = [tuple(p) for p in first.get("slides") or []]
+    now_slides = [(_get(s, "slide_copy"), _get(s, "slide_body")) for s in slides]
+    same_caption = " ".join((caption or "").split()) == " ".join((first.get("caption") or "").split())
+
+    def slide_same(n: int) -> bool:
+        return 1 <= n <= min(len(prev_slides), len(now_slides)) and prev_slides[n - 1] == now_slides[n - 1]
+
+    def text_at(where: str, source: list[tuple[str, str]], cap: str) -> str | None:
+        if where.strip().lower() == "caption":
+            return cap
+        m = re.fullmatch(r"slide (\d+) (headline|body)", where.strip().lower())
+        if not m or not 1 <= int(m.group(1)) <= len(source):
+            return None
+        return source[int(m.group(1)) - 1][0 if m.group(2) == "headline" else 1]
+
+    def norm(text: str | None) -> str:
+        return " ".join((text or "").split())
+
+    prev_interpretations = {norm(i.get("sentence")) for i in prev_raw.get("unsupported_interpretation") or []}
+    prev_pairs = {tuple(sorted(int(x) for x in p.get("slides") or [])) for p in prev_raw.get("same_thesis_pairs") or []}
+    contradicting: list[dict] = []
+    kept_interpretations = []
+    for where, sentence, reason in verdict.unsupported_interpretation:
+        before, now = text_at(where, prev_slides, first.get("caption") or ""), text_at(where, now_slides, caption)
+        unchanged = before is not None and norm(before) == norm(now) and norm(sentence) in norm(now)
+        if unchanged and norm(sentence) not in prev_interpretations:
+            contradicting.append({"category": "unsupported_interpretation", "where": where, "sentence": sentence, "reason": reason})
+        else:
+            kept_interpretations.append((where, sentence, reason))
+    kept_pairs = []
+    for a, b, reason in verdict.same_thesis_pairs:
+        if slide_same(a) and slide_same(b) and (min(a, b), max(a, b)) not in prev_pairs:
+            contradicting.append({"category": "same_thesis_pair", "slides": [a, b], "reason": reason})
+        else:
+            kept_pairs.append((a, b, reason))
+    aphorism = verdict.caption_aphorism
+    if aphorism and same_caption and not (prev_raw.get("caption_aphorism") or {}).get("present"):
+        contradicting.append({"category": "caption_aphorism", "sentence": aphorism[0], "reason": aphorism[1]})
+        aphorism = None
+    repeats = verdict.caption_repeats_slides
+    if (repeats and same_caption and prev_slides == now_slides
+            and not (prev_raw.get("caption_repeats_slides") or {}).get("present")):
+        contradicting.append({"category": "caption_repeats_slides", "reason": repeats})
+        repeats = None
+    return replace(verdict, unsupported_interpretation=kept_interpretations, same_thesis_pairs=kept_pairs, caption_aphorism=aphorism,
+                   caption_repeats_slides=repeats), contradicting
+
+
 def _cut(text: str, limit: int) -> str:
     text = " ".join(str(text or "").split())
     return text if len(text) <= limit else text[: limit - 1] + "…"
