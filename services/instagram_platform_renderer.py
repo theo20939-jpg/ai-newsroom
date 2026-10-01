@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from PIL import Image
 
 from services.instagram_carousel_layouts import render_carousel_slide
+from services.instagram_brand_anchor import apply_brand_anchor, resolve_brand_anchor
 from services.instagram_content_package import InstagramContentPackage
 from services.instagram_data_layouts import render_data_layout
 from services.instagram_editorial_layouts import LayoutResult, render_breaking_layout, render_news_layout
@@ -267,6 +268,7 @@ def render_instagram_carousel(
         if isinstance(package.media_plan.get("media_execution"), dict)
         else []
     )
+    brand_anchor = resolve_brand_anchor(package)
     for slide in slides:
         index = int(slide["index"])
         role = str(slide.get("role", ""))
@@ -341,6 +343,13 @@ def render_instagram_carousel(
             FOCAL_FRAMING.reset(framing)
             BAND_MEDIA_ASPECT.reset(band)
             HERO_ZONE.reset(zone)
+        if index == 0:
+            layout = apply_brand_anchor(layout, brand_anchor)
+        else:
+            layout.notes["product_brand_anchor"] = {
+                "status": "COVER_ONLY", "identity": brand_anchor.identity,
+                "reason": "product brand anchor is deliberately limited to the hook slide",
+            }
         results.append(_result_from_layout(layout, package, profile=InstagramRenderProfile.CAROUSEL_SLIDE, slide_index=index, slide_count=total))
     return results
 

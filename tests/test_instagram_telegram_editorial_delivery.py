@@ -5,6 +5,7 @@ regeneration is a fake `CreativeRegenerator` - zero real LLM/network calls, mirr
 codebase's own "no real network in tests" convention."""
 from __future__ import annotations
 
+from dataclasses import replace
 from PIL import Image
 
 import uuid
@@ -121,6 +122,37 @@ def test_b_and_c_carousel_presentation_preserves_exact_slide_order() -> None:
     presentation = present_carousel(pkg, renders, version=1)
     assert presentation.kind == "carousel"
     assert presentation.media == [r.image_bytes for r in renders]  # CAROUSEL_ORDER_PRESERVED=true
+
+
+def test_saved_gemini_smoke_founder_visible_text_is_publishable_only() -> None:
+    _, _, pkg, renders, _ = _carousel_package()
+    caption = (
+        "Gemini 4 Argon представлена как новая передовая модель Google, а в тексте — как следующий этап "
+        "передового интеллекта. У неё новая схема названий: запуск последовал за отменой Gemini 3.5 Pro и "
+        "фокусом Google на Gemini 3.8 Flash."
+    )
+    internal = {
+        "editorial_decision": {"why_now": "internal why", "angle": "internal angle"},
+        "evidence": ["internal evidence"],
+    }
+    saved = replace(
+        pkg, caption=caption, caption_is_draft=False, cta=None, hashtags=[], director_evidence=internal,
+        media_subject_match="strong_context",
+    )
+    presentation = present_carousel(saved, renders, version=1)
+    assert presentation.control_text == (
+        f"{caption}\n\n"
+        "Что думаете про Gemini 4? Напишите в комментариях.\n\n"
+        "Подписывайтесь на KAGE, чтобы не пропускать такие разборы."
+    )
+    assert presentation.overflow_text is None
+    forbidden = (
+        "INSTAGRAM · КАРУСЕЛЬ", "ТИП", "ПОЧЕМУ СЕЙЧАС", "ЦЕННОСТЬ", "УГОЛ", "ФОРМАТ", "ПРОДУКТ",
+        "СИГНАЛ", "ОБОСНОВАНИЕ СИГНАЛА", "ДУБЛИКАТЫ", "КРЕАТИВНАЯ ИДЕЯ", "ФОКУС", "МЕДИА",
+        "ПОЧЕМУ ТАК", "КОМПОЗИЦИЯ", "ВИЗУАЛЬНЫЙ ПОДХОД", "БРЕНДИНГ", "Медиа проверено",
+    )
+    assert all(label not in presentation.control_text for label in forbidden)
+    assert saved.to_dict()["director_evidence"] == internal  # audit metadata remains stored
 
 
 def test_e_reel_without_video_is_never_labeled_a_finished_video() -> None:

@@ -4,6 +4,7 @@ verified by construction here - this file never imports services/brand_renderer.
 from __future__ import annotations
 
 import io
+from dataclasses import replace
 
 import pytest
 from PIL import Image, ImageDraw
@@ -130,6 +131,59 @@ def test_carousel_render_produces_one_slide_per_planned_slide_same_profile() -> 
         assert r.evidence.slide_index == i
         assert r.evidence.slide_count == 3
         assert r.evidence.visible_brand_mark_count == 1  # every slide carries the mark, never duplicated per-slide beyond 1
+
+
+def _gemini_brand_package() -> InstagramContentPackage:
+    slides = [
+        InstagramCarouselSlideCreative(role="hook", slide_copy="Gemini 4 Argon подняла лимит вывода", visual_direction="v1"),
+        InstagramCarouselSlideCreative(role="body", slide_copy="Что изменилось", visual_direction="v2"),
+    ]
+    pkg = build_instagram_content_package(
+        opportunity=_OPP, format_decision=FormatDecision(recommended_format=ContentFormat.CAROUSEL), shadow_plan=_SP,
+        creative_outcome=CreativeGenerationOutcome(carousel=InstagramCarouselCreative(objective="reach", slides=slides)),
+    )
+    return replace(pkg, director_evidence={
+        "evidence": ["Google announces Gemini 4 Argon as its new frontier model"],
+        "editorial_decision": {
+            "topic": "Gemini 4 Argon и новый этап гонки frontier-моделей",
+            "source_summary": "Google представила Gemini 4 Argon как новую модель.",
+            "angle": "Google меняет лимит модели Gemini 4 Argon.",
+        },
+    })
+
+
+def test_evidence_bound_gemini_story_gets_one_cover_only_deterministic_text_anchor() -> None:
+    renders = render_instagram_carousel(_gemini_brand_package())
+    cover = renders[0]
+    anchor = cover.evidence.notes["product_brand_anchor"]
+    assert anchor["status"] == "READY"
+    assert anchor["identity"] == "google_gemini"
+    assert anchor["label"] == "GOOGLE · GEMINI"
+    assert anchor["asset_kind"] == "deterministic_text"
+    assert anchor["asset_source"] == "renderer_text_fallback"
+    assert anchor["placement"] in {"TOP_LEFT", "TOP_RIGHT"}
+    assert any(region.kind == "product_brand_anchor" and not region.clipped for region in cover.evidence.text_regions)
+    assert cover.evidence.visible_brand_mark_count == 1  # canonical KAGE mark remains exactly one
+    assert cover.evidence.text_clipped is False
+    assert renders[1].evidence.notes["product_brand_anchor"]["status"] == "COVER_ONLY"
+
+
+def test_incidental_company_mention_without_hook_identity_never_adds_brand_anchor() -> None:
+    pkg = _gemini_brand_package()
+    slides = [dict(slide) for slide in pkg.media_plan["slides"]]
+    slides[0]["text"] = "Новые правила для разработчиков"
+    media_plan = {**pkg.media_plan, "slides": slides}
+    incidental = replace(pkg, media_plan=media_plan, director_evidence={
+        "evidence": ["The regulation mentions Google once among many companies."],
+        "editorial_decision": {
+            "topic": "Новые правила для технологического рынка",
+            "source_summary": "Регулятор обновил требования; среди примеров упомянута Google.",
+            "angle": "Что изменилось в правилах.",
+        },
+    })
+    cover = render_instagram_carousel(incidental)[0]
+    assert cover.evidence.notes["product_brand_anchor"]["status"] == "NOT_APPLICABLE"
+    assert not any(region.kind == "product_brand_anchor" for region in cover.evidence.text_regions)
 
 
 def test_carousel_slide_count_bound_is_enforced() -> None:
