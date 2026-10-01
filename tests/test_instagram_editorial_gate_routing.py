@@ -234,3 +234,29 @@ def test_reel_abbreviated_spoken_script_still_represents_long_subject() -> None:
     pkg = replace(pkg, media_plan=plan)
     outcome = evaluate_instagram_editorial_gate(pkg, art)
     assert outcome.decision is InstagramGateDecision.READY_FOR_EDITOR
+
+
+def test_founder_review_text_is_caption_plus_two_ctas_and_nothing_internal() -> None:
+    from services.instagram_telegram_package_presenter import present_carousel
+
+    pkg, _, _ = _ready_reel_package()
+    pkg = replace(
+        pkg, caption="Sonnet 5.5 заменит Sonnet 5 с июня.", cta=None, hashtags=[],
+        director_evidence={"editorial_decision": {"why_now": "internal", "angle": "internal"}},
+        media_subject_match="exact_subject",
+    )
+    text = present_carousel(pkg, [], version=1).control_text
+    assert text.startswith("Sonnet 5.5 заменит Sonnet 5 с июня.")
+    assert "Что думаете про Sonnet 5.5?" in text
+    assert "Подписывайтесь на KAGE" in text
+    for banned in ("INSTAGRAM", "КАРУСЕЛЬ", "ПОЧЕМУ СЕЙЧАС", "internal", "Медиа проверено", "ТИП", "КОМПОЗИЦИЯ"):
+        assert banned not in text
+
+
+def test_director_cta_is_used_as_the_comment_cta_when_present() -> None:
+    from services.instagram_telegram_package_presenter import present_carousel
+
+    pkg, _, _ = _ready_reel_package()
+    pkg = replace(pkg, caption="Caption.", cta="Какой тариф выберете?")
+    text = present_carousel(pkg, [], version=1).control_text
+    assert "Какой тариф выберете?" in text and "Что думаете" not in text

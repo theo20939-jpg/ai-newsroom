@@ -19,6 +19,7 @@ an independent disclosure.
 from __future__ import annotations
 
 import html
+import re
 from dataclasses import dataclass
 
 from services.instagram_content_package import InstagramContentPackage
@@ -60,15 +61,35 @@ def _truthfulness_line(package: InstagramContentPackage) -> str | None:
     return f"🔎 Медиа проверено: {label}"
 
 
+_SUBSCRIBE_CTA = "Подписывайтесь на KAGE, чтобы не пропускать такие разборы."
+_GENERIC_COMMENT_CTA = "Что думаете? Напишите в комментариях."
+# A product/model name as printed in the story: Latin capitalised word(s) with a version number.
+_STORY_NAME = re.compile(r"\b[A-Z][A-Za-z]+(?:\s[A-Z][A-Za-z]+)*\s\d+(?:\.\d+)*\b")
+
+
+def _comment_cta(package: InstagramContentPackage) -> str:
+    """The Director's own CTA when it wrote one; otherwise a short question that names the story's
+    own product exactly as the caption spells it (a Latin name needs no Russian inflection), or a
+    plain generic one when the caption names no versioned product. Never invents a fact."""
+    if package.cta and package.cta.strip() and package.cta.strip().lower() not in package.caption.lower():
+        return package.cta.strip()
+    match = _STORY_NAME.search(package.caption or "")
+    if match:
+        return f"Что думаете про {match.group(0)}? Напишите в комментариях."
+    return _GENERIC_COMMENT_CTA
+
+
 def _caption_block(package: InstagramContentPackage) -> str:
+    """What the founder sees is what the audience will read: the final caption, one short comment
+    CTA, one short KAGE subscription CTA - no internal labels."""
     lines = [_esc(package.caption) if package.caption else "(финальная подпись отсутствует)"]
     if package.caption_is_draft:
         lines.insert(0, "⚠️ ЧЕРНОВИК ПОДПИСИ")
+    lines.append(_esc(_comment_cta(package)))
+    if "подписыва" not in (package.caption or "").lower():
+        lines.append(_esc(_SUBSCRIBE_CTA))
     if package.hashtags:
         lines.append(" ".join(f"#{_esc(tag.lstrip('#'))}" for tag in package.hashtags))
-    if package.cta and package.cta.strip().lower() not in package.caption.lower():
-        # Audience-facing copy must never expose an internal/service label such as ``CTA:``.
-        lines.append(_esc(package.cta))
     return "\n\n".join(lines)
 
 
@@ -123,15 +144,16 @@ def _split_if_needed(header: str, caption_block: str, footer_lines: list[str]) -
     `control_text` and the COMPLETE caption moves to `overflow_text` as its own message - still
     directly usable by the editor, never lost, never abbreviated."""
     footer = ("\n\n" + "\n".join(footer_lines)) if footer_lines else ""
-    combined = f"{header}\n\n{caption_block}{footer}"
+    head = f"{header}\n\n" if header else ""
+    combined = f"{head}{caption_block}{footer}"
     if len(combined) <= _TELEGRAM_TEXT_LIMIT:
         return combined, None
-    short = f"{header}\n\n(Полный текст подписи ниже отдельным сообщением ⬇️){footer}"
+    short = f"{head}(Полный текст подписи ниже отдельным сообщением ⬇️){footer}"
     return short, caption_block[:_TELEGRAM_TEXT_LIMIT]
 
 
 def present_single(package: InstagramContentPackage, render: InstagramRenderResult, *, version: int) -> InstagramTelegramPresentation:
-    header = f"🖼 <b>{_FORMAT_LABEL[ContentFormat.SINGLE]}</b> · v{version}"
+    header = ""  # founder review reads like the post itself; the version lives in `version_label`
     footer: list[str] = []  # founder review shows the caption + CTAs only; metadata stays in the stored package
     control_text, overflow = _split_if_needed(header, _caption_block(package), footer)
     return InstagramTelegramPresentation(
@@ -144,7 +166,7 @@ def present_carousel(package: InstagramContentPackage, renders: list[InstagramRe
     """§15 CAROUSEL_ORDER_PRESERVED: `renders` must already be in final slide order (exactly what
     `services.instagram_platform_renderer.render_instagram_carousel()` returns) - this function
     never sorts, reverses, or re-selects them."""
-    header = f"🖼 <b>{_FORMAT_LABEL[ContentFormat.CAROUSEL]}</b> · v{version} ({len(renders)} слайдов)"
+    header = ""
     footer: list[str] = []  # founder review shows the caption + CTAs only; metadata stays in the stored package
     control_text, overflow = _split_if_needed(header, _caption_block(package), footer)
     return InstagramTelegramPresentation(
