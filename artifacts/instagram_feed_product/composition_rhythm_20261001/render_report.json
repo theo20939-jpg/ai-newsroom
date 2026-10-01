@@ -1,0 +1,82 @@
+[
+  {
+    "slide": 0,
+    "size": [
+      1080,
+      1350
+    ],
+    "layout_variant": "declared_bottom-center_middle-center_DOMINANT_3-4",
+    "layout_signature": "headline_zone=bottom-center|media_zone=middle-center|media_dominance=DOMINANT|density=LOW|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=dark",
+    "text_clipped": false,
+    "brand_marks": 1,
+    "adaptations": [
+      "progress_marker_hidden"
+    ]
+  },
+  {
+    "slide": 1,
+    "size": [
+      1080,
+      1350
+    ],
+    "layout_variant": "declared_bottom-center_top-center_BALANCED_3-4",
+    "layout_signature": "headline_zone=bottom-center|media_zone=top-center|media_dominance=BALANCED|density=LOW|asymmetry=centered|visual_weight=TEXT|region_count=3-4|surface=dark",
+    "text_clipped": false,
+    "brand_marks": 1,
+    "adaptations": [
+      "text_trimmed_clear_of_logo",
+      "progress_marker_hidden"
+    ]
+  },
+  {
+    "slide": 2,
+    "size": [
+      1080,
+      1350
+    ],
+    "layout_variant": "declared_middle-center_bottom-center_BALANCED_3-4",
+    "layout_signature": "headline_zone=middle-center|media_zone=bottom-center|media_dominance=BALANCED|density=LOW|asymmetry=centered|visual_weight=TEXT|region_count=3-4|surface=dark",
+    "text_clipped": false,
+    "brand_marks": 1,
+    "adaptations": []
+  },
+  {
+    "slide": 3,
+    "size": [
+      1080,
+      1350
+    ],
+    "layout_variant": "declared_bottom-center_top-center_DOMINANT_3-4",
+    "layout_signature": "headline_zone=bottom-center|media_zone=top-center|media_dominance=DOMINANT|density=LOW|asymmetry=centered|visual_weight=TEXT|region_count=3-4|surface=dark",
+    "text_clipped": false,
+    "brand_marks": 1,
+    "adaptations": [
+      "progress_marker_hidden",
+      "media_scale_adapted"
+    ]
+  },
+  {
+    "slide": 4,
+    "size": [
+      1080,
+      1350
+    ],
+    "layout_variant": "declared_bottom-center_middle-center_DOMINANT_3-4",
+    "layout_signature": "headline_zone=bottom-center|media_zone=middle-center|media_dominance=DOMINANT|density=LOW|asymmetry=centered|visual_weight=MEDIA|region_count=3-4|surface=dark",
+    "text_clipped": false,
+    "brand_marks": 1,
+    "adaptations": [
+      "progress_marker_hidden"
+    ]
+  },
+  {
+    "art_validation": {
+      "passed": false,
+      "blocking": [
+        "viral_copy_quality: fact binding (caption): the month in 'Sonnet 5.5 заменит Sonnet 5 с июня и займёт место средней модели — между самым доступным Haiku и более крупным Opus.' belongs to sonnet 5 in the evidence (the date describes that product, not the event) - the copy turns it into the time of the event; keep the date attached to what it describes, or drop it",
+        "viral_copy_quality: slide 5 restates earlier slides (it adds no new beat: 4 of its 6 points (MANY, модел, обновлен, середин) and every name / number are already on earlier slides - a rephrased summary is not new information) - drop it and make the carousel shorter, or give it a genuinely new grounded fact; never refill it with another summary"
+      ],
+      "warnings": []
+    }
+  }
+]

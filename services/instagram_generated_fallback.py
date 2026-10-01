@@ -103,22 +103,77 @@ def generation_brief(slide: Any, *, viral: bool = False) -> str:
     return f"{idea}. {tail}"
 
 
-def hero_layout(layout: Any, ref: str, zone: str = "bottom") -> dict[str, Any]:
-    """Photo-as-canvas: `ref` full bleed, the headline and its line over the picture's calmer end (`zone`, measured on the real pixels
-    by services.instagram_focal_crop.hero_copy_zone at render time) - the geometry of the accepted recap photo hero."""
+HERO = "hero"
+SPLIT_TOP = "split_top"
+TEXT_FIRST = "text_first"
+FRAMED = "framed"
+_RHYTHM_AFTER_HOOK = (FRAMED, TEXT_FIRST, HERO, SPLIT_TOP)
+
+
+_HERO_MAX_HEADLINE, _HERO_MAX_BODY = 36, 130  # copy beyond this cannot sit over a picture's calm third without clipping or shrinking
+
+
+def _fits_hero(headline: str, body: str) -> bool:
+    return len(headline.strip()) <= _HERO_MAX_HEADLINE and len(body.strip()) <= _HERO_MAX_BODY
+
+
+def rhythm_mode(index: int, total: int, *, headline: str = "", body: str = "", previous_headline: str = "", previous_body: str = "") -> str:
+    """The carousel's deliberate visual rhythm for a generated-picture slide: the hook is the full-bleed hero; the slides after it cycle
+    a framed picture on ink, text-first (copy on top, picture as a lower band), the measured full-bleed hero, and a top picture band over
+    a solid text panel. The closing slide of a 4+ slide carousel returns to a full-bleed hero when its copy fits one and the slide before
+    it was not one. Copy too long to sit over a picture's calm third never gets a hero (it would be rescued into a split anyway).
+    Deterministic from position and copy length only - never random, never scored - so one story reads as one carousel that is not one
+    template."""
+    if index <= 0:
+        return HERO
+    if total < 3:
+        return FRAMED
+    mode = _RHYTHM_AFTER_HOOK[(index - 1) % len(_RHYTHM_AFTER_HOOK)]
+    if mode == HERO and not _fits_hero(headline, body):
+        mode = SPLIT_TOP
+    if index == total - 1 and total >= 4 and mode != HERO and _fits_hero(headline, body):
+        before = rhythm_mode(index - 1, total, headline=previous_headline, body=previous_body)
+        if before != HERO:
+            return HERO
+    return mode
+
+
+def hero_layout(layout: Any, ref: str, zone: str = "bottom", mode: str = HERO) -> dict[str, Any]:
+    """Photo-as-canvas (`mode` HERO): `ref` full bleed, the headline and its line over the picture's calmer end (`zone`, measured on the
+    real pixels by services.instagram_focal_crop.hero_copy_zone at render time) - the geometry of the accepted recap photo hero.
+    SPLIT_TOP / TEXT_FIRST keep the same picture and exact copy but give the slide its own proportions (see `rhythm_mode`)."""
     base = layout.model_dump() if hasattr(layout, "model_dump") else dict(layout or {})
-    if zone == "top":
+    media = {"kind": "media", "x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0, "z": 1, "content_ref": ref, "crop_mode": "cover", "frame": "none"}
+    on_media = True
+    if mode == SPLIT_TOP:
+        media = {**media, "h": 0.54}
+        texts = [{"y": 0.585, "h": 0.2, "w": 0.86, "content_ref": "copy", "scale_token": "HEADLINE_XL"},
+                 {"y": 0.805, "h": 0.11, "w": 0.7, "content_ref": "body", "scale_token": "BODY"}]
+        on_media = False
+    elif mode == FRAMED:
+        media = {**media, "x": 0.05, "y": 0.04, "w": 0.9, "h": 0.57, "frame": "hairline"}
+        texts = [{"y": 0.635, "h": 0.2, "w": 0.86, "content_ref": "copy", "scale_token": "HEADLINE_XL"},
+                 {"y": 0.845, "h": 0.12, "w": 0.7, "content_ref": "body", "scale_token": "BODY"}]
+        on_media = False
+    elif mode == TEXT_FIRST:
+        media = {**media, "y": 0.5, "h": 0.5}
+        texts = [{"y": 0.07, "h": 0.25, "w": 0.86, "content_ref": "copy", "scale_token": "HEADLINE_XL"},
+                 {"y": 0.34, "h": 0.14, "w": 0.8, "content_ref": "body", "scale_token": "BODY"}]
+        on_media = False
+    elif zone == "top":
         texts = [{"y": 0.06, "h": 0.2, "w": 0.86, "content_ref": "copy", "scale_token": "HEADLINE_XL"},
                  {"y": 0.27, "h": 0.13, "w": 0.8, "content_ref": "body", "scale_token": "BODY"}]
     else:
-        texts = [{"y": 0.6, "h": 0.2, "w": 0.86, "content_ref": "copy", "scale_token": "HEADLINE_XL"},
+        texts = [{"y": 0.56, "h": 0.24, "w": 0.86, "content_ref": "copy", "scale_token": "HEADLINE_XL"},
                  {"y": 0.805, "h": 0.11, "w": 0.7, "content_ref": "body", "scale_token": "BODY"}]
+    full_bleed = mode == HERO
     return {
         "background": "ink", "palette": base.get("palette") or "brand", "logo_position": "BOTTOM_RIGHT", "arrangement": "standard",
-        "density": "LOW", "media_dominance": "DOMINANT", "visual_weight": "MEDIA", "show_progress": False,
+        "density": "LOW", "media_dominance": "DOMINANT" if full_bleed else "BALANCED", "visual_weight": "MEDIA" if full_bleed else "TEXT",
+        "show_progress": False,
         "regions": [
-            {"kind": "media", "x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0, "z": 1, "content_ref": ref, "crop_mode": "cover", "frame": "none"},
-            *({"kind": "text", "x": 0.07, "z": 5, "align": "left", "valign": "top", "max_lines": 3, "tone": "primary", "on_media": True, **t}
+            media,
+            *({"kind": "text", "x": 0.07, "z": 5, "align": "left", "valign": "top", "max_lines": 3, "tone": "primary", "on_media": on_media, **t}
               for t in texts),
         ],
     }

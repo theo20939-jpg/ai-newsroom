@@ -297,10 +297,15 @@ def render_instagram_carousel(
         generated = (((slide_subject_assets or {}).get(index) or {}).get(GENERATED_HERO_KEY)
                      if slide.get("media_source") == "generated" and slide.get("visual_family_reason") == "no_photo_generated_fallback" else None)
         generated_zone = (hero_copy_zone(generated[0]) or "bottom") if generated is not None else None
+        from services.instagram_generated_fallback import HERO, rhythm_mode
+
+        generated_mode = rhythm_mode(index, total, headline=slide_copy, body=str(slide.get("body") or ""),
+                                       previous_headline=str(slides[index - 1].get("text") or "") if index > 0 else "",
+                                       previous_body=str(slides[index - 1].get("body") or "") if index > 0 else "") if generated_zone is not None else HERO
         if generated_zone is not None:
             FOCAL_FRAMING.reset(framing)
             framing = FOCAL_FRAMING.set(True)  # the generated picture is framed and graded exactly like a recap hero photo
-        zone = HERO_ZONE.set(generated_zone or (hero_copy_zone(subject[0]) if recap and subject is not None and role == "story" else None))
+        zone = HERO_ZONE.set((generated_zone if generated_mode == HERO else None) or (hero_copy_zone(subject[0]) if recap and subject is not None and role == "story" else None))
         try:
             layout = render_carousel_slide(
                 spec=profile_spec(InstagramRenderProfile.CAROUSEL_SLIDE), role=role, index=index, total=total,
@@ -325,7 +330,7 @@ def render_instagram_carousel(
                 editorial_fallback=bool(package.media_plan.get("media_first")),
                 ui_paths=package.media_plan.get("content_archetype") == "ai_hack",
                 previous_variant=(results[-1].evidence.notes.get("editorial_variant") if results else None),
-                generated_zone=generated_zone,
+                generated_zone=generated_zone, generated_mode=generated_mode,
                 subject_assets=(
                     {k: v for k, v in this_slide_assets.items() if k != "source"}
                     if this_slide_assets and slide.get("media_function") in ("ui_screenshot", "result", "before_after", "concept")
