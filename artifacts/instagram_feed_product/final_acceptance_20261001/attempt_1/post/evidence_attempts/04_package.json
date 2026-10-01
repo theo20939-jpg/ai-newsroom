@@ -1,0 +1,88 @@
+{
+ "post_id": "5287c91e-62fc-449c-a4fb-627b05671b99",
+ "format": "meme_trend",
+ "premise": "Google releases Gemini 4 Argon, called its most powerful model yet",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Google has released its latest Gemini model, marketing it as a workhorse for coding and cybersecurity work.",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": "https://techcrunch.com/2026/09/30/google-releases-gemini-4-argon-called-its-most-powerful-model-yet/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "Google releases Gemini 4 Argon, called its most powerful model yet | TechCrunch\n–:–:–:–\nLast day to demo your breakthrough to 10,000+ tech leaders is on\nOct 2\n.\nBook Exhibit Table Now.\nDisrupt ticket savings of up to $200 + 50% off a second ends Sept 25, 11:59 p.m. PT.\nREGISTER HERE.\nClose\nTechCrunch Desktop Logo\nTechCrunch Mobile Logo\nLatest\nStartups\nVenture\nApple\nSecurity\nAI\nApps\nDisrupt 2026\nEvents\nPodcasts\nNewsletters\nSearch\nSubmit\nSite Search Toggle\nMega Menu Toggle\nTopics\nLatest\nAI\nAmazon\nApps\nBiotech & Health\nClimate\nCloud Computing\nCommerce\nCrypto\nEnterprise\nEVs\nFintech\nFundraising\nGadgets\nGaming\nGoogle\nGovernment & Policy\nHardware\nInstagram\nLayoffs\nMedia & Entertainment\nMeta\nMicrosoft\nPrivacy\nRobotics\nSecurity\nSocial\nSpace\nStartups\nTikTok\nTransportation\nVenture\nMore from TechCrunch\nStaff\nEvents\nStartup Battlefield\nStrictlyVC\nNewsletters\nPodcasts\nVideos\nPartner Content\nTechCrunch Brand Studio\nContact Us\nImage Credits:\nMatteo Della Torre/NurPhoto / Getty Images\nAI\nGoogle releases Gemini 4 Argon, called its most powerful model yet\nLucas Ropek\n4:43 PM PDT · September 30, 2026\nGoogle parent company Alphabet has\nlaunched\nGemini 4 Argon, a new AI model built to handle a variety of tasks such as coding, research, and writing. But it’s cybersecurity that Gemini 4 Argon is supposed to have a particular knack for, according to Google.\nArgon is only being rolled out to a select group of the company’s cyber partners through its Fairwind Program, Google’s security initiative. The model was trained specifically for defensive cyber work, and the company says it can “autonomously find, validate, and patch critical software vulnerabilities.”\nArgon is also said to be good at coding and engineering, with the company noting that its own staff have already been using the model for their daily work, including debugging and codebase migrations. Google also touts Argon’s ability to parse visuals — whether that’s analyzing the contents of long videos or charts.\n“Built to sustain deep reasoning across complex, long-horizon workflows, Argon is fundamentally changing the way we work and build at Google,” the company said\nin a blog post\nWednesday.\nTop AI labs have rushed to release increasingly powerful models, attempting to outdo each other even as those very same firms warn that AI could spin out of control. Not long ago, OpenAI\nreleased Astra\n— which it hailed as its best model yet. Earlier this year,\nAnthropic’s Fable\nwas also released with similar rhetoric from the company.\nFirms have done their best to market their services as superior to their competitors. In its blog, Google claims that Argon scored significantly higher than OpenAI’s GPT-6 Astra and Anthropic’s Fable and Opus models across a variety of AI benchmarks. It cites Vals — an increasingly popular\nAI benchmarking startup\n— to show that Argon is currently the leading model on the company’s AI model index.\nOnce considered “\nbehind\n” in the AI race, Google has recently enjoyed success with Gemini. The company announced in August that its app\nhad over a billion users per month\n, a metric that makes it competitive with OpenAI, which also recently\nannounced\nthat ChatGPT had reached a billion monthly users.\nTopics\nAI\n,\ngemini\n,\nGoogle\nWhen you purchase through links in our articles,\nwe may earn a small commission\n. This doesn’t affect our editorial independence.\nLucas Ropek\nSenior Writer, TechCrunch\nLucas is a senior writer at TechCrunch, where he covers artificial intelligence, consumer tech, and startups. He previously covered AI and cybersecurity at Gizmodo. \r\n\r\nYou can contact Lucas by emailing lucas.ropek@techcrunch.com.\nView Bio\nOctober 13 – 15\nSan Francisco\nGet 50% off a second pass\nThe Disrupt experience is meant to be shared. Get your pass and bring a colleague, partner, or peer at 50% off. Cover more ground by making connections, building momentum, and discovering what’s next in the startup ecosystem.\nBOOK NOW\nMost Popular\nAMD will acquire Fei-Fei Li’s World Labs for $8.2B\nTim Fernholz\nViral AI agent Instinct raises $1B Series C at a $10B valuation\nSarah Perez\nCrusoe abandons $1.25B plan to use Boom turbines at AI data centers\nKirsten Korosec\nUnsecured OpenAI agents posted 53 user images on the internet without the lab’s knowledge\nTim Fernholz\nAstra and Opus just passed Turing’s other test\nTim Fernholz\nKiteworks urges customers to shut down their servers amid ‘imminent’ threat of cyberattack\nZack Whittaker\nOracle sends force majeure notice on its New Mexico Stargate data center\nAditya Mehta\nLoading the next article\nError loading the next article\nX\nLinkedIn\nFacebook\nInstagram\nyouTube\nMastodon\nThreads\nBluesky\nTechCrunch\nStaff\nContact Us\nAdvertise\nSite Map\nTerms of Service\nPrivacy Policy\nRSS Terms of Use\nCode of Conduct\nOpenAI\nHugging Face\nFlock\nStartup Battlefield\nDisrupt 2026\nTech Layoffs\nChatGPT\n© 2026 TechCrunch Media LLC.",
+   "status": "FULL_TEXT",
+   "original_url": null,
+   "resolution_method": null
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "Gemini 4 Argon, a new AI model built to handle a variety of tasks such as coding, research, and writing.",
+   "source_url": "https://techcrunch.com/2026/09/30/google-releases-gemini-4-argon-called-its-most-powerful-model-yet/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Gemini 4 Argon, a new AI model built to handle a variety of tasks such as coding, research, and writing."
+  },
+  {
+   "kind": "FACT",
+   "text": "But it’s cybersecurity that Gemini 4 Argon is supposed to have a particular knack for, according to Google.",
+   "source_url": "https://techcrunch.com/2026/09/30/google-releases-gemini-4-argon-called-its-most-powerful-model-yet/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "But it’s cybersecurity that Gemini 4 Argon is supposed to have a particular knack for, according to Google."
+  },
+  {
+   "kind": "FACT",
+   "text": "Argon is only being rolled out to a select group of the company’s cyber partners through its Fairwind Program, Google’s security initiative.",
+   "source_url": "https://techcrunch.com/2026/09/30/google-releases-gemini-4-argon-called-its-most-powerful-model-yet/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Argon is only being rolled out to a select group of the company’s cyber partners through its Fairwind Program, Google’s security initiative."
+  },
+  {
+   "kind": "FACT",
+   "text": "The model was trained specifically for defensive cyber work, and the company says it can “autonomously find, validate, and patch critical software vulnerabilities.”",
+   "source_url": "https://techcrunch.com/2026/09/30/google-releases-gemini-4-argon-called-its-most-powerful-model-yet/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "The model was trained specifically for defensive cyber work, and the company says it can “autonomously find, validate, and patch critical software vulnerabilities.”"
+  },
+  {
+   "kind": "FACT",
+   "text": "Argon is also said to be good at coding and engineering, with the company noting that its own staff have already been using the model for their daily work, including debugging and codebase migrations.",
+   "source_url": "https://techcrunch.com/2026/09/30/google-releases-gemini-4-argon-called-its-most-powerful-model-yet/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Argon is also said to be good at coding and engineering, with the company noting that its own staff have already been using the model for their daily work, including debugging and codebase migrations."
+  },
+  {
+   "kind": "FACT",
+   "text": "In its blog, Google claims that Argon scored significantly higher than OpenAI’s GPT-6 Astra and Anthropic’s Fable and Opus models across a variety of AI benchmarks.",
+   "source_url": "https://techcrunch.com/2026/09/30/google-releases-gemini-4-argon-called-its-most-powerful-model-yet/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "In its blog, Google claims that Argon scored significantly higher than OpenAI’s GPT-6 Astra and Anthropic’s Fable and Opus models across a variety of AI benchmarks."
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "AVAILABLE",
+  "url": "https://techcrunch.com/wp-content/uploads/2026/06/gemini-app-GettyImages-2276204472-1.jpg?w=1024",
+  "width": 1024,
+  "height": 683,
+  "mime_type": "image/jpeg",
+  "source": "open_graph_image",
+  "reason": "validated source image"
+ },
+ "quality": "STRONG",
+ "why": "6 premise facts from 1 fetched source(s)",
+ "excluded_bodies": [],
+ "dateline": "4:43 PM PDT · September 30, 2026"
+}

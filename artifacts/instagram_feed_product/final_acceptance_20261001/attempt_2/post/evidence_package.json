@@ -1,0 +1,48 @@
+{
+ "post_id": "b99c79fd-2106-4677-bfea-d2f8493dd9cb",
+ "format": "meme_trend",
+ "premise": "Google представили Gemini 4 Argon: модель обошла GPT-6 Astra, Fable 5.1 и Opus 5.5 на DeepSWE - habr.com",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Google представили Gemini 4 Argon: модель обошла GPT-6 Astra, Fable 5.1 и Opus 5.5 на DeepSWE habr.com",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTE56MW1ySjBJSEk5a2RLanYtb1dVcXZ1QWMxSTVfNVBDV1cyRFA3SkMxWlJJbWFURzhkdXgtbi1zYXdPWG9MOU9nUtIBWEFVX3lxTE9Od0I0dFB4eVlGY1pMZFJnQ3A5elRwQXU2azFYdTc1bGVtS0xSNlUtRC1XdS1EMWtfUTBKTGxoWjVCZzlhbVVqaDZSOHRsTXlmakF1aVhjWGQ?oc=5",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "",
+   "status": "FETCH_FAILED",
+   "original_url": null,
+   "resolution_method": null
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "Google представили Gemini 4 Argon: модель обошла GPT-6 Astra, Fable 5.1 и Opus 5.5 на DeepSWE habr.com",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Google представили Gemini 4 Argon: модель обошла GPT-6 Astra, Fable 5.1 и Opus 5.5 на DeepSWE habr.com"
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "NOT_AVAILABLE",
+  "url": null,
+  "width": null,
+  "height": null,
+  "mime_type": null,
+  "source": null,
+  "reason": "connect_timeout"
+ },
+ "quality": "BLOCKING",
+ "why": "launch story without its substance: no source sentence says what is new, what it can do or what changed - the Director would have to invent the launch",
+ "excluded_bodies": [],
+ "dateline": null
+}

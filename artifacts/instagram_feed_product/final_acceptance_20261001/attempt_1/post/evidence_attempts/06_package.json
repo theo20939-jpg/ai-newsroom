@@ -1,0 +1,48 @@
+{
+ "post_id": "20f3ac5a-b64a-4aa6-a1c0-84766e776d0a",
+ "format": "meme_trend",
+ "premise": "Google announces Gemini 4 flagship AI model after months of delays - Reuters",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Google announces Gemini 4 flagship AI model after months of delays Reuters",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": "https://news.google.com/rss/articles/CBMitwFBVV95cUxPa0kxM3JDazhISnQtVGJ1Q2phRmxPR2Mtb2R4X1dQX0U3TkVZLWV0YUZNSnRfQ25OQnRuWHpNczNHSzhCZFFkdHFCWEVXYUhuazBDLWJ0eV92WU9nMDR6Nnl5ZDRCOG5UdWtwNnpTNkVtS2NLejVrX1Y3eXFvbDRMc0Y2Q2hvN0Q5YTEzTVA3NDFLaHprbnpuNWVBejNPVUlKemJCSHZUcHZSVE9iNmt3TWxXMXFBWkU?oc=5",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "",
+   "status": "FETCH_FAILED",
+   "original_url": null,
+   "resolution_method": null
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "Google announces Gemini 4 flagship AI model after months of delays Reuters",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Google announces Gemini 4 flagship AI model after months of delays Reuters"
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "NOT_AVAILABLE",
+  "url": null,
+  "width": null,
+  "height": null,
+  "mime_type": null,
+  "source": null,
+  "reason": "connect_timeout"
+ },
+ "quality": "BLOCKING",
+ "why": "launch story without its substance: no source sentence says what is new, what it can do or what changed - the Director would have to invent the launch",
+ "excluded_bodies": [],
+ "dateline": null
+}

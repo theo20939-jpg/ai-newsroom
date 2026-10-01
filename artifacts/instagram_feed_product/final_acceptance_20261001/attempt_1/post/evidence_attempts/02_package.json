@@ -1,0 +1,96 @@
+{
+ "post_id": "99ee374e-efdf-4493-8afc-be9431891314",
+ "format": "meme_trend",
+ "premise": "Google announces Gemini 4 Argon as its new frontier model",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Gemini 4 Argon is Google’s “next era of frontier intelligence” and built for “deep reasoning across complex, long-horizon workflows.” It follows the cancellation of Gemini 3.5 Pro and focus on 3.8 Flash .",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "more…",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": "https://9to5google.com/2026/09/30/gemini-4-argon-announcement/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "Google announces Gemini 4 Argon as its new frontier model\nSkip to main content\nToggle main menu\nGo to the 9to5Google home page\nSwitch site\n9to5Mac\n9to5Toys\nElectrek\nDroneDJ\nSpace Explored\nAbout\nPrivacy\nToggle social menu\nToggle dark mode\nSearch for:\nSubmit\nToggle search form\nForums\nExclusives\nGemini\nPixel\nGoogle Pixel 9 Pro Fold\nGoogle Pixel 9 Pro XL\nGoogle Pixel 9 Pro\nGoogle Pixel 9\nPixel 8 Pro\nPixel 8\nGoogle Pixel Watch 3\nPixel Watch\nGoogle Pixel Buds Pro 2\nPixel Buds Pro\nNest\nNest Hub\nNest Hub Max\nNest Mini\nNest Audio\nNest Thermostats\nNest Cam\nNest Doorbell\nAndroid\nAndroid 17\nAuto\nWear OS\nSamsung\nOnePlus\nOppo\nXiaomi\nChrome\nGoogle Chrome\nChromeOS\nTV\nGoogle TV\nAndroid TV\nChromecast\nChromecast with Google TV\nWorkspace\nGmail\nGoogle Meet\nGoogle Chat\nGoogle Calendar\nGoogle Keep\nGoogle Drive\nGoogle Docs\nYouTube\nYouTube\nYouTube Music\nYouTube TV\nReviews\nNewsletters\nVideos\nToggle dark mode\nGemini\nGoogle announces Gemini 4 Argon as its new frontier model\nAbner Li\n| Sep 30 2026 - 1:00 pm PT\n7 Comments\nGemini 4 Argon is Google’s “next era of frontier intelligence” and built for “deep reasoning across complex, long-horizon workflows.” It follows the cancellation of\nGemini 3.5 Pro\nand focus on\n3.8 Flash\n.\nWith this new model (which has a new naming scheme), Google wants to offer “frontier-level capabilities” across coding, knowledge work, cybersecurity defense, and creative writing.\nGemini 4 Argon’s output token limit is 1M tokens (up from 64K) to allow for longer and more complex use cases. This is paired with expanded coding, reasoning, and multimodal capabilities.\nWhen the model has the headroom to think deeply and generate hundreds of thousands of tokens in a single trajectory, it adds a new level of depth in reasoning to solve tough problems in one go.\nIn terms of benchmarks, Google touts a DeepSWE v1.1 score of 77.9%. Claude Opus 5.5 comes in at 74.2% followed by GPT-6 Astra’s 74.1%.\nAdvertisement - scroll for more content\nGoogle trained Gemini 4 Argon to be “highly capable at cybersecurity defense” with leaps over\n3.8 Flash Cyber\n. The model will be made available “without cyber guardrails” to trusted defenders and internal Google teams so that they can “leverage its full frontier-level cybersecurity defense capabilities.”\n“On CWE-bench v1, which evaluates the model’s ability to remediate security vulnerabilities, Argon ties for first place with a top score of 68%”\nOutside of coding, Gemini 4 Argon also has “leading performance across other domain specific evaluations,” such as Vals Finance Agent v2 (multi-step financial research) and Harvey’s Legal Agent Benchmark (legal research and drafting).\n“On AutomationBench, Zapier’s benchmark measuring end-to-end execution across core business functions, Argon ranks #1 with a score of 51.3%.”\n“…on LVBench, which measures long video understanding, Argon is state of the art with a score of 91.7%.”\nGemini 4 Argon is “rolling out soon,” starting with Google AI Ultra subscribers and paid API customers.\n“Argon will launch at an introductory price of $2 per million input tokens and $10 per million output tokens, with cached input tokens priced at 95% off input token price.”\n“After the introductory period expires, the price of $4 per 1M input tokens and $20 per 1M output tokens will apply.”\nSo far, it has been made available to trusted testers and cyber defenders (via\nFairwind Program\n). Before the broader release, Google is focusing on:\nDefending against misuse\nfrom cyber or chemical, biological, radiological, and nuclear (CBRN) attacks: Google has improved “techniques to monitor the model’s internal activations to spot misuse.”\nDefending against prompt injection attacks\n: Google’s “most resilient model yet against indirect prompt injections” with “leading in prompt injection robustness on the Gray Swan’s Indirect Prompt Injection (IPI) Benchmark.”\nHardening systems\n: “we are hardening our sandboxed environments by isolating and sealing them before high-risk training or evaluations begin.”\nMonitoring for misalignment\n: Google is “deploying misalignment mitigations that monitor Argon’s chain-of-thought and actions and stop execution when necessary.”\n“We used a similar system to monitor our training runs and send alerts to a dedicated incident response team, taking careful precautions against feeding the findings back into training so as to not risk shaping Argon’s reasoning to evade our monitoring.”\nInside Google, Gemini 4 Argon is already powering internal workflows with “thousands of Googlers highlighting the model’s strengths in specialized coding tasks, conducting deeper research, and writing quality.” The company shared some examples today:\nMemory efficiency:\nA team of Argon agents analyzed fleet-wide profiling telemetry to autonomously identify and apply memory optimizations across Google’s data centers, freeing up over 300 TiB of memory once rolled out, with an estimated 500 TiB to 1 PiB in total savings.\nLarge Scale Codebase Migrations and Optimizations:\nArgon agents are working on migrating C/C++ codebases to Rust across Google—scaling from tens of thousands of lines in core libraries like re2, libgav1 up to 800K+ lines for the Fuchsia OS Zircon kernel. Given the criticality of many of these systems, such large-scale rewrites are undergoing rigorous automated and manual auditing, emulation testing, and review before rolling out to production.\nFor libgav1, Google’s open source software for decoding video, Argon agents took an existing Rust port and replaced 32K lines of SIMD code by running many rounds of profile-guided experiments, studying the compiler’s output, producing safe Rust so the compiler would vectorize it automatically. The end result is a memory-safe video decoder that runs 2.7x faster than the Rust port, with identical video output, bringing it closer to the optimized C++.\nFTC: We use income earning auto affiliate links.\nMore.\nYou’re reading 9to5Google — experts who break news about Google and its surrounding ecosystem, day after day. Be sure to check out\nour homepage\nfor all the latest news, and follow 9to5Google on\nTwitter\n,\nFacebook\n, and\nLinkedIn\nto stay in the loop. Don’t know where to start? Check out our\nexclusive stories\n,\nreviews\n,\nhow-tos\n, and\nsubscribe to our YouTube channel\nFeatured\nfrom\n9to5Google\nGoogle announces Gemini 4 Argon as its new frontier model\nAbner Li\nSep 30 2026\nHere’s everything new in Android 17 QPR2 Beta 6 + 6.1 [Gallery]\nAbner Li\nSep 29 2026\nFacer revamps Wear OS watch face library, adding new styles from Timex and more\nBen Schoon\nSep 30 2026\nSamsung’s Galaxy Z Fold 7 is down to the price of a normal smartphone, today-only\nWill Sattelberg\nSep 30 2026\nPodcast\nCheck out 9to5Google on YouTube for more news:\nComments\nExpand\nClose\ncomments\nExpand\nClose\ncomments\nGuides\nGemini\nAuthor\nAbner Li\ntechnacity\nEditor-in-chief. Interested in the minutiae of Google and Alphabet. Tips/talk: abner@9to5g.com\nClose\nPrevious\nNext",
+   "status": "FULL_TEXT",
+   "original_url": null,
+   "resolution_method": null
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "Gemini 4 Argon is Google’s “next era of frontier intelligence” and built for “deep reasoning across complex, long-horizon workflows.” It follows the cancellation of Gemini 3.5 Pro and focus on 3.8 Flash.",
+   "source_url": "https://9to5google.com/2026/09/30/gemini-4-argon-announcement/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Gemini 4 Argon is Google’s “next era of frontier intelligence” and built for “deep reasoning across complex, long-horizon workflows.” It follows the cancellation of Gemini 3.5 Pro and focus on 3.8 Flash."
+  },
+  {
+   "kind": "FACT",
+   "text": "With this new model (which has a new naming scheme), Google wants to offer “frontier-level capabilities” across coding, knowledge work, cybersecurity defense, and creative writing.",
+   "source_url": "https://9to5google.com/2026/09/30/gemini-4-argon-announcement/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "With this new model (which has a new naming scheme), Google wants to offer “frontier-level capabilities” across coding, knowledge work, cybersecurity defense, and creative writing."
+  },
+  {
+   "kind": "FACT",
+   "text": "Gemini 4 Argon’s output token limit is 1M tokens (up from 64K) to allow for longer and more complex use cases.",
+   "source_url": "https://9to5google.com/2026/09/30/gemini-4-argon-announcement/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Gemini 4 Argon’s output token limit is 1M tokens (up from 64K) to allow for longer and more complex use cases."
+  },
+  {
+   "kind": "FACT",
+   "text": "This is paired with expanded coding, reasoning, and multimodal capabilities.",
+   "source_url": "https://9to5google.com/2026/09/30/gemini-4-argon-announcement/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "This is paired with expanded coding, reasoning, and multimodal capabilities."
+  },
+  {
+   "kind": "FACT",
+   "text": "In terms of benchmarks, Google touts a DeepSWE v1.1 score of 77.9%.",
+   "source_url": "https://9to5google.com/2026/09/30/gemini-4-argon-announcement/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "In terms of benchmarks, Google touts a DeepSWE v1.1 score of 77.9%."
+  },
+  {
+   "kind": "FACT",
+   "text": "“On AutomationBench, Zapier’s benchmark measuring end-to-end execution across core business functions, Argon ranks #1 with a score of 51.3%.” “…on LVBench, which measures long video understanding, Argon is state of the art with a score of 91.7%.”",
+   "source_url": "https://9to5google.com/2026/09/30/gemini-4-argon-announcement/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "“On AutomationBench, Zapier’s benchmark measuring end-to-end execution across core business functions, Argon ranks #1 with a score of 51.3%.” “…on LVBench, which measures long video understanding, Argon is state of the art with a score of 91.7%.”"
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "AVAILABLE",
+  "url": "https://9to5google.com/wp-content/uploads/sites/4/2026/09/Gemini-4-Argon-cover.webp",
+  "width": 1920,
+  "height": 1080,
+  "mime_type": "image/jpeg",
+  "source": "jsonld_article_image",
+  "reason": "validated source image"
+ },
+ "quality": "STRONG",
+ "why": "6 premise facts from 1 fetched source(s)",
+ "excluded_bodies": [],
+ "dateline": "| Sep 30 2026 - 1:00 pm PT"
+}

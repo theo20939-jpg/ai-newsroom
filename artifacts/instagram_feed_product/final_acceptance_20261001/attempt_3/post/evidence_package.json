@@ -1,0 +1,56 @@
+{
+ "post_id": "d301f076-f26c-4fa9-9fe0-dab3ebc5450a",
+ "format": "meme_trend",
+ "premise": "I made this for kids around 10 to 14. A robot called Errol solves a math problem step by step and one of the steps is",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "I made this for kids around 10 to 14. A robot called Errol solves a math problem step by step and one of the steps is wrong. The kid has to find it and say what's wrong with it. Sometimes nothing is wrong, so just saying \"there's a mistake\" every time doesn't work. The user needs to enter an explanation if she finds an error to gain more XP; speed matters also for more points. There is no direct interaction or chatting with an LLM. Lathoa's harness is stable and has many evaluation steps to catch inconsistencies and prompt injections. You can play one on the homepage without signing up. The part that surprised me: it's hard to get an LLM to be wrong on purpose. Half the time it gives you the right answer and calls it wrong, or a \"mistake\" that's actually correct. So every case gets checked before a kid sees it. Where it can, a plain arithmetic check redoes the math exactly. A second model also solves the problem without seeing Errol's work. If anything disagrees, the case is thrown away. The weak spot is that the second model can make the same mistake as the first. The arithmetic check is there for that, but it only works on English cases so far. German and Greek write decimals with a comma and I haven't got the parsing right yet. What I'd really like to know: does finding someone else's mistake teach anything that solving the problem yourself doesn't? I'm not sure, and I'd like to hear from people who teach.",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": "https://lathoa.ai/en",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "",
+   "status": "FETCH_FAILED",
+   "original_url": null,
+   "resolution_method": null
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "A robot called Errol solves a math problem step by step and one of the steps is wrong.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "A robot called Errol solves a math problem step by step and one of the steps is wrong."
+  },
+  {
+   "kind": "FACT",
+   "text": "A second model also solves the problem without seeing Errol's work.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "A second model also solves the problem without seeing Errol's work."
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "NOT_AVAILABLE",
+  "url": null,
+  "width": null,
+  "height": null,
+  "mime_type": null,
+  "source": null,
+  "reason": "read_timeout"
+ },
+ "quality": "THIN",
+ "why": "only 2 premise fact(s) - the shareable detail is missing",
+ "excluded_bodies": [],
+ "dateline": null
+}

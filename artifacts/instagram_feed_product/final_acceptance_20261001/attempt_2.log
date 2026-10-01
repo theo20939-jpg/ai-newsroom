@@ -1,0 +1,28 @@
+getMe preflight: {'ok': True, 'id': 7688429343, 'username': 'nnj_newsroombot'}
+{
+ "selected_event": "⚡️ Google снесла Astra и Opus 5.5 — компания неожиданно релизнула Gemini 4 Argon.",
+ "preflight": {
+  "status": "PENDING",
+  "checks": {},
+  "reason": "only 0 characters of stored body evidence - the article itself must be acquired before any claim can be checked"
+ },
+ "reason": "STOPPED: evidence preflight PENDING on every allowed copy - no generation",
+ "gate": null,
+ "chosen_format": null,
+ "llm_spent_usd": "0",
+ "image_ledger_usd": null,
+ "attempts": [
+  [
+   "Бэкдор",
+   "PENDING"
+  ],
+  [
+   "Habr: Artificial Intelligence",
+   "FAIL"
+  ],
+  [
+   "Google News RU: ИИ",
+   "PENDING"
+  ]
+ ]
+}

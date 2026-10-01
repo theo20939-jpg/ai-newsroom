@@ -1,0 +1,158 @@
+{
+ "now": "2026-10-01T10:14:10.785009+00:00",
+ "pool": 664,
+ "distinct_events": 536,
+ "eligible_events": [
+  "Google announces Gemini 4 Argon as its new frontier model",
+  "⚡️ Google снесла Astra и Opus 5.5 — компания неожиданно релизнула Gemini 4 Argon.",
+  "I made this for kids around 10 to 14. A robot called Errol solves a math problem step by step and one of the steps is",
+  "Samsung представила Galaxy SmartTag3 — трекер стал легче и компактнее, работает дольше и совместим с iPhone",
+  "AI agents tried to hack a Canadian government website, researchers say",
+  "Неизвестные ИИ-агенты атаковали сайт Правительства Канады",
+  "This Android brand just launched its own e-reader that lives on the back of your phone"
+ ],
+ "selected_event": "⚡️ Google снесла Astra и Opus 5.5 — компания неожиданно релизнула Gemini 4 Argon.",
+ "copies": [
+  "f9ccaca1-c76f-43e8-8524-8e5170e6aa98",
+  "b99c79fd-2106-4677-bfea-d2f8493dd9cb",
+  "b57513a9-af67-41c9-9b16-6e0556b3d4fe"
+ ],
+ "planned_copy": {
+  "id": "f9ccaca1-c76f-43e8-8524-8e5170e6aa98",
+  "source": "Бэкдор",
+  "title": "**⚡️**** Google снесла Astra и Opus 5.5 —** компания неожиданно релизнула Gemini 4 Argon."
+ },
+ "verdict": {
+  "actuality": "CURRENT_EVENT",
+  "actuality_reason": "coverage: 3 independent outlets since 2026-09-30 20:22 UTC",
+  "underlying_time": null,
+  "disclosed_at": "None",
+  "newly_disclosed": [],
+  "kage": [
+   "ai",
+   "software_platform_security_gaming"
+  ],
+  "broad": "BROAD",
+  "strength": "STRONG",
+  "mechanisms": [
+   "ai_launch"
+  ],
+  "momentum": "STRONG",
+  "momentum_evidence": [
+   "3 independent outlets carried this same event in the last 72 hours",
+   "3 articles on it in the last 24 hours",
+   "611 Telegram forwards",
+   "203 Telegram reactions"
+  ],
+  "hook": "⚡️ Google снесла Astra и Opus 5.5 — компания неожиданно релизнула Gemini 4 Argon.",
+  "reason": "current (coverage: 3 independent outlets since 2026-09-30 20:22 UTC); broad (a new flagship AI model release); strong mechanisms ['ai_launch']; momentum strong (3 independent outlets carried this same event in the last 72 hours; 3 articles on it in the last 24 hours; 611 Telegram forwards; 203 Telegram reactions)"
+ },
+ "outlets": [
+  "habr",
+  "habr.com",
+  "бэкдор"
+ ],
+ "first_seen": "2026-09-30 20:22:27+00:00",
+ "evidence_attempts": [
+  {
+   "order": 1,
+   "event_id": "f9ccaca1-c76f-43e8-8524-8e5170e6aa98",
+   "source": "Бэкдор",
+   "title": "**⚡️**** Google снесла Astra и Opus 5.5 —** компания неожиданно релизнула Gemini 4 Argon.",
+   "url": "https://t.me/https://t.me/whackdoor/31858",
+   "acquisition": [
+    {
+     "type": "TELEGRAM_POST",
+     "status": "OK",
+     "chars": 556
+    }
+   ],
+   "package_quality": "BLOCKING",
+   "body_chars": 89,
+   "preflight": "PENDING",
+   "checks": {},
+   "reason": "only 0 characters of stored body evidence - the article itself must be acquired before any claim can be checked"
+  },
+  {
+   "order": 2,
+   "event_id": "b57513a9-af67-41c9-9b16-6e0556b3d4fe",
+   "source": "Habr: Artificial Intelligence",
+   "title": "Gemini 4 Argon: новая нейросеть Google, которая опережает Astra, Opus и Fable",
+   "url": "https://habr.com/ru/companies/gptunnel/articles/1088864/?utm_campaign=1088864&utm_source=habrahabr&utm_medium=rss",
+   "acquisition": [
+    {
+     "type": "STORED_BODY",
+     "status": "OK",
+     "chars": 322
+    },
+    {
+     "type": "STORED_BODY",
+     "status": "OK",
+     "chars": 12
+    },
+    {
+     "type": "ORIGINAL_ARTICLE",
+     "status": "FULL_TEXT",
+     "chars": 16237
+    }
+   ],
+   "package_quality": "STRONG",
+   "body_chars": 897,
+   "preflight": "FAIL",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "UNSUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "SUPPORTED",
+    "chronology": "SUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "reason": "the body evidence does not support: action"
+  },
+  {
+   "order": 3,
+   "event_id": "b99c79fd-2106-4677-bfea-d2f8493dd9cb",
+   "source": "Google News RU: ИИ",
+   "title": "Google представили Gemini 4 Argon: модель обошла GPT-6 Astra, Fable 5.1 и Opus 5.5 на DeepSWE - habr.com",
+   "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTE56MW1ySjBJSEk5a2RLanYtb1dVcXZ1QWMxSTVfNVBDV1cyRFA3SkMxWlJJbWFURzhkdXgtbi1zYXdPWG9MOU9nUtIBWEFVX3lxTE9Od0I0dFB4eVlGY1pMZFJnQ3A5elRwQXU2azFYdTc1bGVtS0xSNlUtRC1XdS1EMWtfUTBKTGxoWjVCZzlhbVVqaDZSOHRsTXlmakF1aVhjWGQ?oc=5",
+   "acquisition": [
+    {
+     "type": "STORED_BODY",
+     "status": "OK",
+     "chars": 102
+    },
+    {
+     "type": "ORIGINAL_ARTICLE",
+     "status": "FETCH_FAILED",
+     "chars": 0
+    }
+   ],
+   "package_quality": "BLOCKING",
+   "body_chars": 102,
+   "preflight": "PENDING",
+   "checks": {},
+   "reason": "only 0 characters of stored body evidence - the article itself must be acquired before any claim can be checked"
+  }
+ ],
+ "evidence_copy": {
+  "event_id": "b99c79fd-2106-4677-bfea-d2f8493dd9cb",
+  "title": "Google представили Gemini 4 Argon: модель обошла GPT-6 Astra, Fable 5.1 и Opus 5.5 на DeepSWE - habr.com",
+  "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTE56MW1ySjBJSEk5a2RLanYtb1dVcXZ1QWMxSTVfNVBDV1cyRFA3SkMxWlJJbWFURzhkdXgtbi1zYXdPWG9MOU9nUtIBWEFVX3lxTE9Od0I0dFB4eVlGY1pMZFJnQ3A5elRwQXU2azFYdTc1bGVtS0xSNlUtRC1XdS1EMWtfUTBKTGxoWjVCZzlhbVVqaDZSOHRsTXlmakF1aVhjWGQ?oc=5"
+ },
+ "preflight": {
+  "status": "PENDING",
+  "checks": {},
+  "reason": "only 0 characters of stored body evidence - the article itself must be acquired before any claim can be checked"
+ },
+ "reason": "STOPPED: evidence preflight PENDING on every allowed copy - no generation",
+ "vision_verdicts": [],
+ "generated": [],
+ "llm_calls": [],
+ "llm_spent_usd": "0",
+ "llm_ledger_usd": null,
+ "image_ledger_usd": null
+}

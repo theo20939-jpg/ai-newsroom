@@ -1,0 +1,88 @@
+{
+ "post_id": "4f63475f-c56f-41ac-b373-4b70162b441f",
+ "format": "meme_trend",
+ "premise": "Google pulls back the curtain to tease Gemini 4 Argon",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Google's next-gen Gemini is coming soon — but you can't try it just yet.",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": "https://www.androidauthority.com/gemini-4-argon-3717601/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "Google shares its latest frontier model: Gemini 4 Argon\nSearch results for\nAll search results\nBest daily deals\nLogin\nAffiliate links on Android Authority may earn us a commission.\nLearn more.\nGeneral technology\nGoogle pulls back the curtain to tease Gemini 4 Argon\nGoogle's next-gen Gemini is coming soon — but you can't try it just yet.\nBy\nStephen Schenck\n•\nSep 30, 2026\n— 5:24 PM ET\n•\n0\n•\nJoe Maring / Android Authority\nAdd Android Authority on Google:\nPreferred Source\nGoogle Discover\nTL;DR\nGemini 4 Argon is coming soon as Google’s most capable AI model to date.\nBenchmarks show highly competitive scores across a wide range of agentic tasks.\nGoogle is still testing Argon with limited groups, but access will eventually expand to AI Ultra subscribers.\nNew AI models drop so frequently, it’s difficult to even think of a week that’s not particularly packed with them, but these last few days have proven especially fruitful, giving us everything from\nClaude Sonnet 5.5\nto\nGPT-6.1 Sol\n. For a while now, we’d been wondering when Google would finally be ready to introduce the next big evolution of Gemini, and today the company finally starts outlining exactly what to expect.\nGoogle’s next frontier model is Gemini 4 Argon. As Google\nexplains\n, access is getting started with a very limited group of testers, focusing on cybersecurity defense. Once Google’s convinced that Gemini 4 Argon is sufficiently robust, access will start expanding to\nGoogle AI Ultra subscribers\n.\nUnsurprisingly, Google is making a big push to highlight the performance of Gemini 4 Argon, and while it’s not running circles around the competition, the data does reveal an edge in many areas:\nGoogle\nWhile Gemini 4 Argon makes steady gains in tasks like coding, maybe its most pronounced win here occurs when Gemini is given some long-horizon legal assignments to tackle in that Harvey’s Legal Agent Benchmark. Google also points out Argon’s finesse with economic and general business tasks.\nLike many of the other flagship models we’re following, the improvements Google’s been prioritizing for Gemini 4 Argon aren’t just directly about the model’s raw performance. Those include efforts to strengthen Gemini’s resistance to being used for nefarious purposes, or distilling the model in order to reproduce its functionality.\nUltimately, the benchmarks are impressive, but we’re going to want some actual hands-on experience with Gemini 4 Argon before we start getting really excited about it — and like we said, that’s not happening today. Google’s not even offering an ETA much beyond “soon,” and when Argon does eventually open for public consumption, it’s going to be initially limited to Google’s highest paid AI tier. API customers can expect pricing of $2 for every million input tokens (cached tokens will be available for 95% off), and $10 per million output tokens.\nAs we know, we’ll eventually see Gemini 4 Argon trickle down to all us hoi polloi on unpaid Gemini, too — just don’t hold your breath for it.\nNews\nGoogle\nGoogle Gemini\nFollow\nThank you for being part of our community. Read our\nComment Policy\nbefore posting.",
+   "status": "FULL_TEXT",
+   "original_url": null,
+   "resolution_method": null
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "Google's next-gen Gemini is coming soon — but you can't try it just yet.",
+   "source_url": "https://www.androidauthority.com/gemini-4-argon-3717601/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Google's next-gen Gemini is coming soon — but you can't try it just yet."
+  },
+  {
+   "kind": "FACT",
+   "text": "Gemini 4 Argon is coming soon as Google’s most capable AI model to date.",
+   "source_url": "https://www.androidauthority.com/gemini-4-argon-3717601/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Gemini 4 Argon is coming soon as Google’s most capable AI model to date."
+  },
+  {
+   "kind": "FACT",
+   "text": "Benchmarks show highly competitive scores across a wide range of agentic tasks.",
+   "source_url": "https://www.androidauthority.com/gemini-4-argon-3717601/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Benchmarks show highly competitive scores across a wide range of agentic tasks."
+  },
+  {
+   "kind": "FACT",
+   "text": "New AI models drop so frequently, it’s difficult to even think of a week that’s not particularly packed with them, but these last few days have proven especially fruitful, giving us everything from Claude Sonnet 5.5 to GPT-6.1 Sol.",
+   "source_url": "https://www.androidauthority.com/gemini-4-argon-3717601/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "New AI models drop so frequently, it’s difficult to even think of a week that’s not particularly packed with them, but these last few days have proven especially fruitful, giving us everything from Claude Sonnet 5.5 to GPT-6.1 Sol."
+  },
+  {
+   "kind": "FACT",
+   "text": "For a while now, we’d been wondering when Google would finally be ready to introduce the next big evolution of Gemini, and today the company finally starts outlining exactly what to expect.",
+   "source_url": "https://www.androidauthority.com/gemini-4-argon-3717601/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "For a while now, we’d been wondering when Google would finally be ready to introduce the next big evolution of Gemini, and today the company finally starts outlining exactly what to expect."
+  },
+  {
+   "kind": "FACT",
+   "text": "Like many of the other flagship models we’re following, the improvements Google’s been prioritizing for Gemini 4 Argon aren’t just directly about the model’s raw performance.",
+   "source_url": "https://www.androidauthority.com/gemini-4-argon-3717601/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Like many of the other flagship models we’re following, the improvements Google’s been prioritizing for Gemini 4 Argon aren’t just directly about the model’s raw performance."
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "INVALID",
+  "url": null,
+  "width": null,
+  "height": null,
+  "mime_type": null,
+  "source": null,
+  "reason": "3 candidate(s), none validated at a usable size"
+ },
+ "quality": "STRONG",
+ "why": "6 premise facts from 1 fetched source(s)",
+ "excluded_bodies": [],
+ "dateline": "Sep 30, 2026"
+}

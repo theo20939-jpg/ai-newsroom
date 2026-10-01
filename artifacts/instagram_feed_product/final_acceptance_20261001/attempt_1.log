@@ -1,0 +1,46 @@
+C:\Users\Theodor\AppData\Local\Programs\Python\Python313\Lib\site-packages\PIL\Image.py:1136: UserWarning: Palette images with Transparency expressed in bytes should be converted to RGBA images
+  warnings.warn(
+getMe preflight: {'ok': True, 'id': 7688429343, 'username': 'nnj_newsroombot'}
+{
+ "selected_event": "Google announces Gemini 4 Argon as its new frontier model",
+ "preflight": {
+  "status": "PENDING",
+  "checks": {},
+  "reason": "only 0 characters of stored body evidence - the article itself must be acquired before any claim can be checked"
+ },
+ "reason": "STOPPED: evidence preflight PENDING on every allowed copy - no generation",
+ "gate": null,
+ "chosen_format": null,
+ "llm_spent_usd": "0",
+ "image_ledger_usd": null,
+ "attempts": [
+  [
+   "iXBT News",
+   "FAIL"
+  ],
+  [
+   "9to5Google",
+   "FAIL"
+  ],
+  [
+   "Android Authority",
+   "FAIL"
+  ],
+  [
+   "TechCrunch AI",
+   "FAIL"
+  ],
+  [
+   "Engadget",
+   "PENDING"
+  ],
+  [
+   "Google News: Artificial Intelligence",
+   "PENDING"
+  ],
+  [
+   "Google News: Artificial Intelligence",
+   "PENDING"
+  ]
+ ]
+}

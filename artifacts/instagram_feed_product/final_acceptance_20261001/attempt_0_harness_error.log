@@ -1,0 +1,29 @@
+getMe preflight: {'ok': True, 'id': 7688429343, 'username': 'nnj_newsroombot'}
+Traceback (most recent call last):
+  File "C:\Users\Theodor\ai-newsroom\.worktrees\instagram-b61\scripts\_instagram_final_acceptance_run.py", line 149, in <module>
+    runpy.run_path(sys.argv[0], run_name="__main__")
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen runpy>", line 287, in run_path
+  File "<frozen runpy>", line 98, in _run_module_code
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\Theodor\ai-newsroom\.worktrees\instagram-b61\scripts\_instagram_viral_nominated_canary.py", line 216, in <module>
+    asyncio.run(main())
+    ~~~~~~~~~~~^^^^^^^^
+  File "C:\Users\Theodor\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py", line 195, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "C:\Users\Theodor\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\Theodor\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 725, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "C:\Users\Theodor\ai-newsroom\.worktrees\instagram-b61\scripts\_instagram_viral_nominated_canary.py", line 179, in main
+    event_id, event_row, package, preflight = await cc._viral_evidence_copy(
+                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        session, event, planned_id, planned_row, slot_format=FeedFormat.MEME_TREND, now=now)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Theodor\ai-newsroom\.worktrees\instagram-b61\worker\content_cycle.py", line 1151, in _viral_evidence_copy
+    package = await _feed_evidence_package(session, copy_id, row, slot_format, launch=launch)
+                    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: main.<locals>.record_package() got an unexpected keyword argument 'launch'

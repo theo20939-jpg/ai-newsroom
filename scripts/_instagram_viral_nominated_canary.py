@@ -150,8 +150,8 @@ async def main() -> None:
     attempts: list = []
     real_package = cc._feed_evidence_package
 
-    async def record_package(session, copy_id, row, slot_format):
-        package = await real_package(session, copy_id, row, slot_format)
+    async def record_package(session, copy_id, row, slot_format, **kw):
+        package = await real_package(session, copy_id, row, slot_format, **kw)
         body = package.preflight_lines()
         pf = viral_evidence_preflight(event, title=row.title or "", body_lines=body, published_at=getattr(row, "published_at", None), now=now)
         n = len(attempts) + 1

@@ -1,0 +1,48 @@
+{
+ "post_id": "7adab019-054b-4fc3-b6fb-55d85103c56c",
+ "format": "meme_trend",
+ "premise": "Google's first Gemini 4 model is 'Argon'",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Google trained Gemini 4 Argon to be highly capable in knowledge work, cybersecurity defense and creative writing.",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": "https://www.engadget.com/2274263/google-gemini-4-model-argon/",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "",
+   "status": "HEADLINE_ONLY",
+   "original_url": null,
+   "resolution_method": null
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "Google trained Gemini 4 Argon to be highly capable in knowledge work, cybersecurity defense and creative writing.",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Google trained Gemini 4 Argon to be highly capable in knowledge work, cybersecurity defense and creative writing."
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "NOT_AVAILABLE",
+  "url": null,
+  "width": null,
+  "height": null,
+  "mime_type": null,
+  "source": null,
+  "reason": "no source image discovered"
+ },
+ "quality": "BLOCKING",
+ "why": "launch story without its substance: no source sentence says what is new, what it can do or what changed - the Director would have to invent the launch",
+ "excluded_bodies": [],
+ "dateline": null
+}

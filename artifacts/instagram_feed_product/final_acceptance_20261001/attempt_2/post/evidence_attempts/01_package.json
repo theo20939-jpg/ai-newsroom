@@ -1,0 +1,40 @@
+{
+ "post_id": "f9ccaca1-c76f-43e8-8524-8e5170e6aa98",
+ "format": "meme_trend",
+ "premise": "**⚡️**** Google снесла Astra и Opus 5.5 —** компания неожиданно релизнула Gemini 4 Argon.",
+ "sources": [
+  {
+   "url": "https://t.me/https://t.me/whackdoor/31858",
+   "source_type": "TELEGRAM_POST",
+   "text": "**⚡️**** Google снесла Astra и Opus 5.5 —** компания неожиданно релизнула Gemini 4 Argon. Модель разносит флагманы OpenAI и Anthropic в большинстве бенчей: • Лимит выходных токенов — **1 млн,** но нейронка может долго думать. • Модель **заточена под сложные и длинные задачи** в кодинге, бизнесе и кибербезопасности. • Взлетает **в топ-1 на ключевых бенчах.** • Стоит 2 бакса за вход и 10 баксов за выход за 1 млн токенов. • Модель раскатали пока для ограниченного круга тестеров. **Релиз для всех уже скоро!** Google влетает в битву с двух ног. 👍 [Бэкдор]",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "**⚡️**** Google снесла Astra и Opus 5.5 —** компания неожиданно релизнула Gemini 4 Argon.",
+   "source_url": "https://t.me/https://t.me/whackdoor/31858",
+   "source_type": "TELEGRAM_POST",
+   "grounding": "verbatim_source_text",
+   "display_preview": "**⚡️**** Google снесла Astra и Opus 5.5 —** компания неожиданно релизнула Gemini 4 Argon."
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "NOT_AVAILABLE",
+  "url": null,
+  "width": null,
+  "height": null,
+  "mime_type": null,
+  "source": null,
+  "reason": "no source image discovered"
+ },
+ "quality": "BLOCKING",
+ "why": "launch story without its substance: no source sentence says what is new, what it can do or what changed - the Director would have to invent the launch",
+ "excluded_bodies": [],
+ "dateline": null
+}

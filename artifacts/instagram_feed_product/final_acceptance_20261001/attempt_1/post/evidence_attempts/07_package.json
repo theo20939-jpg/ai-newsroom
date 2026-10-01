@@ -1,0 +1,48 @@
+{
+ "post_id": "585a2516-16bf-407b-a3b1-651d2ebf0d95",
+ "format": "meme_trend",
+ "premise": "Gemini 4 Argon: our next era of frontier intelligence - blog.google",
+ "sources": [
+  {
+   "url": null,
+   "source_type": "STORED_BODY",
+   "text": "Gemini 4 Argon: our next era of frontier intelligence blog.google",
+   "status": "OK",
+   "original_url": null,
+   "resolution_method": null
+  },
+  {
+   "url": "https://news.google.com/rss/articles/CBMikAFBVV95cUxNRjB3amppaF9yb1FhSmxoUW5GUEtCREcxbW1ScXJRRWN5ZGtIM0N0d21wVEI3ZTd5ZHY4N09KRWNwX3U2Z3JBeDNWakYxYXlBVE95NEpKWW5vcWFKZlA5Qkdka3hGZG9INUZtMVN2VTJhWG1TTldVSE1JVm5VaVlvcnpWRlhzX0V1NGJXZGhfMEY?oc=5",
+   "source_type": "ORIGINAL_ARTICLE",
+   "text": "",
+   "status": "FETCH_FAILED",
+   "original_url": null,
+   "resolution_method": null
+  }
+ ],
+ "steps": [],
+ "facts": [
+  {
+   "kind": "FACT",
+   "text": "Gemini 4 Argon: our next era of frontier intelligence blog.google",
+   "source_url": null,
+   "source_type": "STORED_BODY",
+   "grounding": "verbatim_source_text",
+   "display_preview": "Gemini 4 Argon: our next era of frontier intelligence blog.google"
+  }
+ ],
+ "limitations": [],
+ "media": {
+  "status": "NOT_AVAILABLE",
+  "url": null,
+  "width": null,
+  "height": null,
+  "mime_type": null,
+  "source": null,
+  "reason": "connect_timeout"
+ },
+ "quality": "BLOCKING",
+ "why": "launch story without its substance: no source sentence says what is new, what it can do or what changed - the Director would have to invent the launch",
+ "excluded_bodies": [],
+ "dateline": null
+}
