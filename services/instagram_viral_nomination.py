@@ -377,7 +377,9 @@ _LOADED: dict[str, re.Pattern[str]] = {  # causal / intent / secrecy claims a ho
     "secret": _rx(r"\bsecret(ly)?\b", r"\bтайно\b"),
     "deliberate": _rx(r"\bdeliberate(ly)?\b", r"\bintentional(ly)?\b", r"\bнамеренно\b"),
 }
-_DASH = re.compile(r"\s+[—–]\s+")
+# a dash followed by lower case continues the clause ("Google представила Gemini 4 Argon — новую флагманскую модель ...": an apposition inside ONE
+# body sentence, whose first half is not a headline piece); a dash before a capital / digit / quote joins a headline to its lede
+_DASH = re.compile(r"\s+[—–]\s+(?![a-zа-яё])")
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?…])\s+(?=[A-ZА-ЯЁ«\"“])")
 _ABBREVIATION = re.compile(r"(?:\b[A-Z]\.){2,}$|\b(?:Dept|Inc|Corp|Co|Mr|Ms|Mrs|Dr|St|No|vs|Jr|Sr|Gov|Sen|Rep|Gen|Lt|Col)\.$")
 

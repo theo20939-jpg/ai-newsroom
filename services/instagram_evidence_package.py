@@ -220,8 +220,15 @@ def _blocks(text: str) -> list[str]:
                       or (len(line.split()) >= 6 and line[:1].isupper() and re.search(r"[a-zа-яё,;(]$", blocks[-1].rstrip()) is None)
                       # nor after a SHORT unpunctuated line (<= 3 words): that is page metadata - a byline, a category, a date
                       # ("Артур Томилко" / "AI" / "10 авг") - not a sentence an inline link broke (its continuation starts in lower case)
+                      # ... unless that short line is itself the text of an inline link inside a sentence (it starts in lower case: "has" /
+                      # "launched" / "Gemini 4 Argon, a new model ..."): the sentence continues after it instead of being cut there
                       or (line[:1].isupper() and prev_line is not None and len(prev_line.split()) <= 3 and prev_line.rstrip()[-1:] not in ".!?:;…"
-                          and (len(line.split()) >= 6 or (len(line.split()) >= 4 and line.rstrip()[-1:] in ".!?…"))))
+                          and not prev_line[:1].islower()
+                          and (len(line.split()) >= 6 or (len(line.split()) >= 4 and line.rstrip()[-1:] in ".!?…")))
+                      # a prose line right after the article's own dateline ("4:43 PM PDT · September 30, 2026") opens its own block - the
+                      # dateline is metadata, not the start of the sentence that follows it
+                      or (prev_line is not None and len(prev_line) <= DATELINE_CHARS and _DATE_LINE.search(prev_line) is not None
+                          and len(line.split()) >= 4))
         if starts_new:
             blocks.append(line)
         else:
@@ -251,6 +258,13 @@ def classify_line(sentence: str) -> str | None:
     return FACT
 
 
+def _states_launch(premise: str, sentence: str) -> bool:
+    """The viral preflight's own reading of 'the launch happened' (a done-verb naming the product; never a plan, rumour, teaser or denial)."""
+    from services.instagram_viral_nomination import launch_established
+
+    return launch_established(premise, [sentence])
+
+
 def extract_items(source: EvidenceSource, *, premise: str, how_to: bool = True) -> list[EvidenceItem]:
     """Verbatim, provenance-tagged lines of one source. The post's OWN article (or the article its Telegram post links) is about this
     story by construction: its prose lines are facts. Any other body (stored description, official doc, a recap body) contributes a
@@ -263,11 +277,16 @@ def extract_items(source: EvidenceSource, *, premise: str, how_to: bool = True) 
     for block in _blocks(body):
         for sentence in _sentences(block):
             kind = classify_line(sentence)
+            # a SHORT sentence that says the launch happened ("Acme has launched the Nova 3 phone today.") is the lede of many launch articles;
+            # the length floors below would drop exactly the sentence the viral preflight needs for the hook's action
+            states_launch = own and 24 <= len(sentence) < 60 and kind in (None, FACT) and not _BOILERPLATE_RX.search(sentence) and _states_launch(premise, sentence)
+            if states_launch:
+                kind = FACT
             if kind is None:
                 continue
             if kind == LIMITATION and not how_to:
                 kind = FACT  # a story that mentions a restriction states a fact; a caveat is a how-to's limitation
-            if kind == FACT and (len(sentence) < 60 if own else len(_stems(sentence) & target) < 2):
+            if kind == FACT and not states_launch and (len(sentence) < 60 if own else len(_stems(sentence) & target) < 2):
                 continue
             exact = " ".join(sentence.split())
             items.append(EvidenceItem(kind=kind, text=exact, source_url=source.url, source_type=source.source_type,
@@ -409,6 +428,18 @@ def _select_facts(items: Iterable[EvidenceItem], premise: str, limit: int, *, la
         lede = next((i for i in range(len(ordered)) if complete[i]), None)
         if lede is not None and lede not in chosen and len(chosen) < limit:
             chosen.append(lede)
+        # the sentence that says the launch HAPPENED ("Alphabet has launched Gemini 4 Argon ...", "Honor представила ...") is evidence the
+        # viral preflight needs for the hook's action: the first complete body sentence the product-naming launch reading accepts (never a plan,
+        # a rumour, a teaser or a denial) keeps a slot, whatever its substance score - a package that keeps the specs and drops it is incomplete
+        from services.instagram_viral_nomination import launch_established
+
+        if limit and not any(launch_established(premise, [ordered[i].text]) for i in chosen):
+            happened = next((i for i in range(len(ordered)) if complete[i] and i not in chosen
+                             and launch_established(premise, [ordered[i].text])), None)
+            if happened is not None:
+                if len(chosen) >= limit:
+                    chosen.pop()  # the last-chosen slot (a premise / lede / name fact is never the one dropped: those were added first)
+                chosen.append(happened)
         # every NAME the headline states (a chip, a platform, a partner - capitalised Latin-script, as its quantities above) keeps its first
         # supporting sentence: 'прошлогодний Snapdragon' in a gadget headline needs the chip sentence, whatever its substance score
         named = 0

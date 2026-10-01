@@ -168,6 +168,57 @@ def test_the_launch_sentence_must_itself_be_realised():
     assert launch_established("Nimbus выпустила Model X", ["Nimbus plans more.", "Nimbus released Model X today."])
 
 
+def test_a_russian_launch_clause_is_not_cut_from_its_lowercase_dash_apposition():
+    """The saved iXBT fact was retained, but the preflight split it at the dash and then discarded the headline-shaped first half."""
+    hook = "Google представила Gemini 4 Argon с миллионом выходных токенов"
+    body = [
+        "Google представила Gemini 4 Argon — новую флагманскую модель семейства Gemini, ориентированную на сложные многошаговые задачи.",
+        "Модель может долго работать над одной задачей и генерировать до миллиона выходных токенов за один запрос. " + FILLER,
+        "30.09.2026",
+    ]
+    result = _check(hook, body, [hook])
+    assert result.checks["action"] == "SUPPORTED"
+
+
+def test_inline_link_lines_keep_the_complete_realised_launch_sentence():
+    """The saved TechCrunch body put 'launched' and the product name on separate inline-link extraction lines."""
+    title = "Google releases Gemini 4 Argon, called its most powerful model yet"
+    article = "\n".join([
+        title,
+        "Lucas Ropek",
+        "4:43 PM PDT · September 30, 2026",
+        "Google parent company Alphabet has",
+        "launched",
+        "Gemini 4 Argon, a new AI model built to handle a variety of tasks such as coding, research, and writing.",
+        "The model can sustain deep reasoning across complex workflows and analyze long videos and charts.",
+        FILLER,
+    ])
+    package = assemble_package(post_id="argon", fmt="meme_trend", premise=title, sources=_items([article]),
+                               media=SourceMedia(status=NOT_AVAILABLE), launch=True)
+    launch_fact = "Google parent company Alphabet has launched Gemini 4 Argon, a new AI model built to handle a variety of tasks such as coding, research, and writing."
+    assert launch_fact in [fact.exact_text for fact in package.facts]
+    assert _check(title, package.preflight_lines(), [title]).checks["action"] == "SUPPORTED"
+
+
+def test_a_short_realised_launch_sentence_keeps_a_slot_beside_substantive_facts():
+    title = "Acme launches Nova 3 phone"
+    launch = "Acme has launched the Nova 3 phone today."
+    specs = [
+        "The Nova 3 phone has a 7,000 mAh battery and supports 120 W wired charging.",
+        "Its 6.8-inch display is brighter than the display in the previous Nova 2 phone.",
+        "The Nova 3 phone weighs 190 grams and uses a new lightweight titanium frame.",
+        "Its camera captures 200 MP photos and records 8K video at 30 frames per second.",
+        "The phone comes with 12 GB of memory and 256 GB of built-in storage.",
+        "Acme says the battery retains 80% of its capacity after 1,000 charging cycles.",
+        "The Nova 3 phone is priced from $499 and is available in four colour finishes.",
+    ]
+    package = assemble_package(post_id="nova", fmt="meme_trend", premise=title, sources=_items([*specs[:4], launch, *specs[4:]]),
+                               media=SourceMedia(status=NOT_AVAILABLE), launch=True)
+    facts = [fact.exact_text for fact in package.facts]
+    assert launch in facts and len(facts) == 6
+    assert sum("battery" in fact.lower() or "camera" in fact.lower() or "display" in fact.lower() for fact in facts) >= 2
+
+
 def test_future_and_absent_launch_dates_do_not_support_chronology():
     base = "Nimbus released Model X. " + FILLER
     assert _check("Nimbus выпустила Model X", [base]).checks["chronology"] == "UNSUPPORTED"

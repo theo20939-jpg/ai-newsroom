@@ -1,0 +1,538 @@
+{
+ "provider_calls": 0,
+ "image_calls": 0,
+ "gemini": [
+  {
+   "name": "gemini/attempt_1/01 Google представила Gemini 4 Argon с миллионом выходных токен",
+   "quality": "STRONG",
+   "preflight": "FAIL",
+   "action": "SUPPORTED",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "SUPPORTED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "full_article_launch_sentences": [
+    "Google представила Gemini 4 Argon с миллионом выходных токенов Новая модель рассчитана на многочасовую работу над сложными задачами 30 сентября 2026, 23:58 Искусственный интеллект Google Darth Sahara 3",
+    "Google представила Gemini 4 Argon — новую флагманскую модель семейства Gemini, ориентированную на сложные многошаговые задачи."
+   ],
+   "retained_facts": [
+    {
+     "text": "Google представила Gemini 4 Argon — новую флагманскую модель семейства Gemini, ориентированную на сложные многошаговые задачи.",
+     "launch_established": true,
+     "substance": false
+    },
+    {
+     "text": "Главная особенность модели — возможность генерировать до 1 млн выходных токенов за один запрос, тогда как у предыдущего поколения этот предел составлял 64 000.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "Google делает ставку на сценарии, в которых модель может долго работать над одной задачей, последовательно выполняя множество действий.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "В другом проекте модель переработала 32 000 строк SIMD-кода: получившаяся версия на Rust, по данным Google, выполнялась в 2,7 раза быстрее предыдущего варианта.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "Ещё один проект с несколькими агентами Argon помог найти способы оптимизации памяти в инфраструктуре компани, а после внедрения решений было высвобождено более 300 ТиБ оперативной памяти: потенциальный эффект Google оценивает в 500 ТиБ–1 ПиБ.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "Argon способна самостоятельно искать уязвимости, проверять найденные проблемы и предлагать или осуществлять их исправление.",
+     "launch_established": false,
+     "substance": true
+    }
+   ],
+   "retained_chars": 945
+  },
+  {
+   "name": "gemini/attempt_1/02 Google announces Gemini 4 Argon as its new frontier model",
+   "quality": "STRONG",
+   "preflight": "FAIL",
+   "action": "UNSUPPORTED",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "UNSUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "SUPPORTED",
+    "chronology": "SUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "full_article_launch_sentences": [
+    "Google announces Gemini 4 Argon as its new frontier model Abner Li Sep 30 2026"
+   ],
+   "retained_facts": [
+    {
+     "text": "Gemini 4 Argon is Google’s “next era of frontier intelligence” and built for “deep reasoning across complex, long-horizon workflows.” It follows the cancellation of Gemini 3.5 Pro and focus on 3.8 Flash.",
+     "launch_established": false,
+     "substance": false
+    },
+    {
+     "text": "With this new model (which has a new naming scheme), Google wants to offer “frontier-level capabilities” across coding, knowledge work, cybersecurity defense, and creative writing.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "Gemini 4 Argon’s output token limit is 1M tokens (up from 64K) to allow for longer and more complex use cases.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "This is paired with expanded coding, reasoning, and multimodal capabilities.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "In terms of benchmarks, Google touts a DeepSWE v1.1 score of 77.9%.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "“On AutomationBench, Zapier’s benchmark measuring end-to-end execution across core business functions, Argon ranks #1 with a score of 51.3%.” “…on LVBench, which measures long video understanding, Argon is state of the art with a score of 91.7%.”",
+     "launch_established": false,
+     "substance": true
+    }
+   ],
+   "retained_chars": 882
+  },
+  {
+   "name": "gemini/attempt_1/03 Google pulls back the curtain to tease Gemini 4 Argon",
+   "quality": "STRONG",
+   "preflight": "FAIL",
+   "action": "UNSUPPORTED",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "UNSUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "SUPPORTED",
+    "chronology": "SUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "full_article_launch_sentences": [],
+   "retained_facts": [
+    {
+     "text": "Google's next-gen Gemini is coming soon — but you can't try it just yet.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "Gemini 4 Argon is coming soon as Google’s most capable AI model to date.",
+     "launch_established": false,
+     "substance": false
+    },
+    {
+     "text": "Benchmarks show highly competitive scores across a wide range of agentic tasks.",
+     "launch_established": false,
+     "substance": false
+    },
+    {
+     "text": "New AI models drop so frequently, it’s difficult to even think of a week that’s not particularly packed with them, but these last few days have proven especially fruitful, giving us everything from Claude Sonnet 5.5 to GPT-6.1 Sol.",
+     "launch_established": false,
+     "substance": false
+    },
+    {
+     "text": "For a while now, we’d been wondering when Google would finally be ready to introduce the next big evolution of Gemini, and today the company finally starts outlining exactly what to expect.",
+     "launch_established": false,
+     "substance": false
+    },
+    {
+     "text": "Like many of the other flagship models we’re following, the improvements Google’s been prioritizing for Gemini 4 Argon aren’t just directly about the model’s raw performance.",
+     "launch_established": false,
+     "substance": true
+    }
+   ],
+   "retained_chars": 817
+  },
+  {
+   "name": "gemini/attempt_1/04 Google releases Gemini 4 Argon, called its most powerful mod",
+   "quality": "STRONG",
+   "preflight": "PASS",
+   "action": "SUPPORTED",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "SUPPORTED",
+    "chronology": "SUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "full_article_launch_sentences": [
+    "Google parent company Alphabet has launched Gemini 4 Argon, a new AI model built to handle a variety of tasks such as coding, research, and writing."
+   ],
+   "retained_facts": [
+    {
+     "text": "Google parent company Alphabet has launched Gemini 4 Argon, a new AI model built to handle a variety of tasks such as coding, research, and writing.",
+     "launch_established": true,
+     "substance": true
+    },
+    {
+     "text": "But it’s cybersecurity that Gemini 4 Argon is supposed to have a particular knack for, according to Google.",
+     "launch_established": false,
+     "substance": false
+    },
+    {
+     "text": "Argon is only being rolled out to a select group of the company’s cyber partners through its Fairwind Program, Google’s security initiative.",
+     "launch_established": false,
+     "substance": false
+    },
+    {
+     "text": "The model was trained specifically for defensive cyber work, and the company says it can “autonomously find, validate, and patch critical software vulnerabilities.”",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "Argon is also said to be good at coding and engineering, with the company noting that its own staff have already been using the model for their daily work, including debugging and codebase migrations.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "In its blog, Google claims that Argon scored significantly higher than OpenAI’s GPT-6 Astra and Anthropic’s Fable and Opus models across a variety of AI benchmarks.",
+     "launch_established": false,
+     "substance": true
+    }
+   ],
+   "retained_chars": 923
+  },
+  {
+   "name": "gemini/attempt_2/02 Gemini 4 Argon: новая нейросеть Google, которая опережает As",
+   "quality": "STRONG",
+   "preflight": "FAIL",
+   "action": "UNSUPPORTED",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "UNSUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "SUPPORTED",
+    "chronology": "SUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "full_article_launch_sentences": [],
+   "retained_facts": [
+    {
+     "text": "Gemini 4 Argon: новая нейросеть Google обошла GPT-6 Astra, Opus 5.5 и Fable 5.1 Простой 7 мин 3.2K Блог компании GPTunneL Искусственный интеллект IT-компании Исследования и прогнозы в IT * Информационная безопасность * Обзор 30 сентября Google продемонстрирова",
+     "launch_established": false,
+     "substance": false
+    },
+    {
+     "text": "Миллион токенов на выходе Главная техническая новость – лимит ответа вырос с 64000 токенов до 1000000.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "Google объясняет, что с таким запасом модель может решить сложную задачу за один заход, а не по кусочкам.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "Vals Index оценивает экономическую пользу в финансах, коде, юриспруденции и налогах: 68,9% против 67% у Opus 5.5.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "Результаты на Vals Index по версии Google AutomationBench от Zapier проверяет, как модель доводит до конца бизнес-процессы: 51,3% против 42,5% у Opus 5.5 и 31,4% у Fable 5.1.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "Google называет 77,9% новым рекордом (Opus 5.5 набрал 74,2%, Astra 74,1%, Fable 5.1 67,4%).",
+     "launch_established": false,
+     "substance": true
+    }
+   ],
+   "retained_chars": 897
+  }
+ ],
+ "saved": [
+  {
+   "name": "saved/honor",
+   "quality": "STRONG",
+   "preflight": "PASS",
+   "action": "SUPPORTED",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "SUPPORTED",
+    "chronology": "SUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "full_article_launch_sentences": [
+    "Компания Honor представила в Китае флагманский игровой смартфон Magic 9 Super Edition.",
+    "Honor Magic 9 Super Edition уже доступен для предзаказа в Китае."
+   ],
+   "retained_facts": [
+    {
+     "text": "Компания Honor представила в Китае флагманский игровой смартфон Magic 9 Super Edition.",
+     "launch_established": true,
+     "substance": false
+    },
+    {
+     "text": "В основе устройства используется мощный чип Qualcomm Snapdragon 8 Elite Gen 5.",
+     "launch_established": false,
+     "substance": false
+    },
+    {
+     "text": "Honor Magic 9 Super Edition оснащён 6,81-дюймовым LTPS OLED-дисплеем с разрешением 2788 × 1280 пикселей, частотой обновления 120 Гц, поддержкой HDR, пиковой (локальной) яркостью 10 000 кд/м 2 (глобальная яркость 2000 кд/м 2) и высокочастотной ШИМ-регулировкой ",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "Аппарат получил 50-Мп фронтальную камеру и блок из трёх основных камер на задней панели, включающий основной 200-Мп сенсор Samsung S5KHP5 размером 1/1,55 дюйма, сверхширокоугольную камеру на 12 Мп (оптика f/2.4) и 50-Мп телеобъектив (оптика f/2.4) Sony LYTIA с",
+     "launch_established": false,
+     "substance": false
+    },
+    {
+     "text": "Смартфон может похвастаться очень ёмким аккумулятором на 11 000 мА·ч, созданным по технологии Qinghai Lake.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "В числе других особенностей новинки отмечаются движок Phantom Engine 3.0, оперативная память LPDDR5X, накопитель UFS 4.1, чип Honor RF Enhancement C3, а также система охлаждения, включающая вентилятор Honor Dongfeng Turbine (скорость работы — 30 тыс. об/мин) и",
+     "launch_established": false,
+     "substance": true
+    }
+   ],
+   "retained_chars": 1203
+  },
+  {
+   "name": "saved/sonnet_en",
+   "quality": "STRONG",
+   "preflight": "PASS",
+   "action": "SUPPORTED",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "SUPPORTED",
+    "chronology": "SUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "full_article_launch_sentences": [
+    "Anthropic is upgrading Claude Sonnet, replacing Sonnet 5 from June with Sonnet 5.5 as the best medium-sized model.",
+    "Introducing Claude Sonnet 5.5, the second model in the Claude 5.5 family.",
+    "Sonnet 5.5 is now live in Claude Code! 🎉 https://t.co/bU5dcnKQyl — Lydia Hallie ✨ (@lydiahallie) September 28, 2026"
+   ],
+   "retained_facts": [
+    {
+     "text": "Anthropic is upgrading Claude Sonnet, replacing Sonnet 5 from June with Sonnet 5.5 as the best medium-sized model.",
+     "launch_established": true,
+     "substance": false
+    },
+    {
+     "text": "It’s a clear upgrade over Sonnet 5, runs more than 30% faster, and costs up to 30% less for most work.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "Anthropic says Sonnet 5.5 is strongest at everyday tasks with a clear scope, including fixing bugs and creating polished documents, slides, and spreadsheets.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "The company also highlights its design capabilities, from refining user interfaces to producing slides that follow templates and need minimal editing.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "Sonnet 5.5 keeps Sonnet 5’s pricing: $2 per million input tokens, $10 per million output tokens, and $0.20 per million cache reads.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "With cybersecurity capabilities comparable to Opus 5, Sonnet 5.5 is the first Sonnet model to launch with cyber safeguards and fallbacks similar to those used for Anthropic’s most capable models.",
+     "launch_established": false,
+     "substance": true
+    }
+   ],
+   "retained_chars": 849
+  },
+  {
+   "name": "saved/sonnet_ru",
+   "quality": "STRONG",
+   "preflight": "FAIL",
+   "action": "SUPPORTED",
+   "checks": {
+    "actor": "SUPPORTED",
+    "action": "SUPPORTED",
+    "target": "NOT_USED",
+    "quantity": "SUPPORTED",
+    "chronology": "UNSUPPORTED",
+    "claim:rogue": "NOT_USED",
+    "claim:without_knowledge": "NOT_USED",
+    "claim:tried_to_hack": "NOT_USED",
+    "claim:secret": "NOT_USED",
+    "claim:deliberate": "NOT_USED"
+   },
+   "full_article_launch_sentences": [
+    "Американская ИИ-компания Anthropic презентовала новую экономичную модель искусственного интеллекта Claude Sonnet 5.5, которая работает на 30% быстрее предшественницы и приближается по возможностям к флагманским решениям."
+   ],
+   "retained_facts": [
+    {
+     "text": "Американская ИИ-компания Anthropic презентовала новую экономичную модель искусственного интеллекта Claude Sonnet 5.5, которая работает на 30% быстрее предшественницы и приближается по возможностям к флагманским решениям.",
+     "launch_established": true,
+     "substance": true
+    },
+    {
+     "text": "Разработчики спроектировали Claude Sonnet 5.5 как сбалансированное решение для программирования, анализа документов, создания презентаций и проектирования интерфейсов.",
+     "launch_established": false,
+     "substance": false
+    },
+    {
+     "text": "Новинка выполняет задачи значительно эффективнее и тратит до 30% меньше вычислительных токенов по сравнению с базовой версией Sonnet 5.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "В тестах на написание программного кода нейросеть набрала 70,6%, показав колоссальный отрыв от прошлой модификации с ее 10,3%.",
+     "launch_established": false,
+     "substance": true
+    },
+    {
+     "text": "В ряде профессиональных испытаний ИИ практически сравнялся по результатам с премиальной моделью Opus 5.5, но стоимость ее использования для клиентов осталась в два раза ниже.",
+     "launch_established": false,
+     "substance": false
+    },
+    {
+     "text": "Создатели также значительно улучшили зрение ИИ и способность воспринимать сложные графические данные.",
+     "launch_established": false,
+     "substance": true
+    }
+   ],
+   "retained_chars": 923
+  }
+ ],
+ "negatives": [
+  {
+   "name": "negative/future",
+   "quality": "THIN",
+   "preflight": "PENDING",
+   "action": null,
+   "checks": {},
+   "full_article_launch_sentences": [],
+   "retained_facts": [
+    {
+     "text": "The phone has a 7,000 mAh battery and charges faster than the Nova 2 model.",
+     "launch_established": false,
+     "substance": true
+    }
+   ],
+   "retained_chars": 75
+  },
+  {
+   "name": "negative/planned",
+   "quality": "THIN",
+   "preflight": "PENDING",
+   "action": null,
+   "checks": {},
+   "full_article_launch_sentences": [],
+   "retained_facts": [
+    {
+     "text": "The Nova 3 phone has a 7,000 mAh battery and supports faster charging.",
+     "launch_established": false,
+     "substance": true
+    }
+   ],
+   "retained_chars": 70
+  },
+  {
+   "name": "negative/rumoured",
+   "quality": "THIN",
+   "preflight": "PENDING",
+   "action": null,
+   "checks": {},
+   "full_article_launch_sentences": [],
+   "retained_facts": [
+    {
+     "text": "The Nova 3 phone reportedly has a 7,000 mAh battery and supports faster charging.",
+     "launch_established": false,
+     "substance": true
+    }
+   ],
+   "retained_chars": 81
+  },
+  {
+   "name": "negative/leaked",
+   "quality": "THIN",
+   "preflight": "PENDING",
+   "action": null,
+   "checks": {},
+   "full_article_launch_sentences": [],
+   "retained_facts": [
+    {
+     "text": "The leaked Nova 3 phone has a 7,000 mAh battery and supports faster charging.",
+     "launch_established": false,
+     "substance": true
+    }
+   ],
+   "retained_chars": 77
+  },
+  {
+   "name": "negative/cancelled",
+   "quality": "THIN",
+   "preflight": "PENDING",
+   "action": null,
+   "checks": {},
+   "full_article_launch_sentences": [],
+   "retained_facts": [
+    {
+     "text": "The Nova 3 phone had a 7,000 mAh battery and supported faster charging.",
+     "launch_established": false,
+     "substance": true
+    }
+   ],
+   "retained_chars": 71
+  },
+  {
+   "name": "negative/vague",
+   "quality": "THIN",
+   "preflight": "PENDING",
+   "action": null,
+   "checks": {},
+   "full_article_launch_sentences": [],
+   "retained_facts": [
+    {
+     "text": "The company talked about its 7,000 mAh battery research and faster charging.",
+     "launch_established": false,
+     "substance": true
+    }
+   ],
+   "retained_chars": 76
+  }
+ ]
+}
