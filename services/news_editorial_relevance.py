@@ -40,6 +40,8 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from services.news_current_delta import CurrentDeltaDecision, evaluate_current_delta
+
 CORE = "CORE"
 ADJACENT = "ADJACENT"
 PERIPHERAL = "PERIPHERAL"
@@ -142,6 +144,7 @@ class PreGenerationEditorialDecision:
     standard_score: int | None
     editorial_relevance: EditorialRelevanceDecision
     product_quality: ProductQualityDecision
+    current_delta: CurrentDeltaDecision
     effective_standard_score: int | None
     standard_eligible: bool
     viral: ViralTechDecision
@@ -978,6 +981,7 @@ def evaluate_pre_generation_candidate(
 ) -> PreGenerationEditorialDecision:
     relevance = classify_editorial_relevance(title, content)
     product_quality = classify_product_quality(title, content, product_loop=product_loop)
+    current_delta = evaluate_current_delta(title=title, content=content, now=now)
     # Existing enforced article acquisition may rescue a thin RSS teaser before Research.
     # RSS-only mode must fail closed before buying provider calls for an empty shell.
     evidence_ready = not require_source_detail or source_has_publishable_detail(title, content)
@@ -1002,6 +1006,7 @@ def evaluate_pre_generation_candidate(
     )
     standard_eligible = (
         standard_score is not None
+        and current_delta.eligible
         and relevance.tier != OUT_OF_SCOPE
         and not product_quality.business_noise
         and evidence_ready
@@ -1015,7 +1020,10 @@ def evaluate_pre_generation_candidate(
         forwards_count=forwards_count, reactions_count=reactions_count,
         primary_evidence=primary_evidence, credible_confirmations=credible_confirmations,
     )
-    viral_eligible = evidence_ready and relevance.tier != OUT_OF_SCOPE and viral.eligible
+    viral_eligible = (
+        current_delta.eligible and evidence_ready
+        and relevance.tier != OUT_OF_SCOPE and viral.eligible
+    )
     final_eligible = standard_eligible or viral_eligible
     if standard_eligible and viral_eligible:
         path = "BOTH"
@@ -1032,6 +1040,7 @@ def evaluate_pre_generation_candidate(
         standard_score=standard_score,
         editorial_relevance=relevance,
         product_quality=product_quality,
+        current_delta=current_delta,
         effective_standard_score=effective,
         standard_eligible=standard_eligible,
         viral=viral,
@@ -1041,6 +1050,7 @@ def evaluate_pre_generation_candidate(
         reason=(
             f"{path}: standard={standard_score}, effective={effective}, relevance={relevance.tier}, "
             f"product_lane={product_quality.lane}; evidence_ready={evidence_ready}; "
+            f"current_delta={current_delta.classification} ({current_delta.reason}); "
             f"viral={viral.total} ({viral.reason})"
         ),
     )

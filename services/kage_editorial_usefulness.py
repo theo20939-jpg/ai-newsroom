@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Any
 
 from services.kage_evidence_first import _GAP_OR_META, content_stems, minimum_story_contract, select_evidence_cards
+from services.news_current_delta import evaluate_current_delta
 
-GUARD_VERSION = "1"
+GUARD_VERSION = "2"
 
 # Small, generic paraphrase groups (not story-specific): each maps to one canonical token.
 _SYNONYM_GROUPS: tuple[tuple[str, ...], ...] = (
@@ -59,7 +61,7 @@ def communicated_fact_ids(text: str, cards: list[dict[str, Any]]) -> list[int]:
 
 def evaluate_editorial_usefulness(
     *, title: str, body: str, research: Mapping[str, Any], intelligence: Mapping[str, Any],
-    source_headline: str = "",
+    source_headline: str = "", now: datetime | None = None,
 ) -> dict[str, Any]:
     try:
         story = minimum_story_contract(research, intelligence, source_headline=source_headline)
@@ -71,11 +73,30 @@ def evaluate_editorial_usefulness(
                 "reason": "no_story_contract", "headline_fact_ids": [], "body_fact_ids": [], "new_body_fact_ids": []}
     core_ids = [item["id"] for item in story["core_facts"]]
     substantive = [card for card in cards if not _GAP_OR_META.search(card["fact"])]
+    current_delta = evaluate_current_delta(
+        title=title,
+        content=body,
+        old_event_context=" ".join(
+            [source_headline, *(str(item.get("fact") or "") for item in story["core_facts"])]
+        ),
+        now=now,
+        require_headline_delta=True,
+        require_body_delta=True,
+    )
     result: dict[str, Any] = {
         "guard_version": GUARD_VERSION, "core_fact_ids": core_ids,
         "applicable": len(core_ids) >= 2, "passed": True, "reason": None,
         "headline_fact_ids": [], "body_fact_ids": [], "new_body_fact_ids": [],
+        "current_delta_classification": current_delta.classification,
+        "underlying_old_event": current_delta.underlying_old_event,
+        "weak_disclosure": current_delta.weak_disclosure,
+        "material_current_delta": current_delta.material_current_delta,
+        "headline_foregrounds_delta": current_delta.headline_foregrounds_delta,
+        "body_explains_delta": current_delta.body_explains_delta,
     }
+    if not current_delta.eligible:
+        result.update(applicable=True, passed=False, reason=current_delta.reason)
+        return result
     if not result["applicable"]:
         result["reason"] = "fewer_than_two_core_facts"
         return result
