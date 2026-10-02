@@ -604,3 +604,49 @@ async def test_live_trigger_never_ships_a_generated_slide_without_its_image_or_a
         db_session, AsyncMock(), opportunity=_news_opportunity(), opportunity_summary="s", gateway=RoutingFakeGateway(bare),
         prompt_repository=FilePromptRepository(_PROMPTS), phase_a_enabled=True)
     assert typographic.reason == "creative_director_failed:MediaFirstContractError"
+
+
+@pytest.mark.asyncio
+async def test_six_valid_graphic_plans_hold_before_delivery_when_autonomous_generation_is_off(db_session, monkeypatch) -> None:
+    """Regression for live delivery 2880-2886: valid graphic plans may pass the Director contract,
+    but six asset-less executions cannot reach Telegram as a degraded carousel."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from uuid import uuid4
+
+    import services.instagram_automatic_trigger as trigger
+    from tests.test_instagram_phase_b42_orchestration import RoutingFakeGateway, _news_opportunity, _patch_delivery
+
+    photo = _photo()
+
+    async def fake_source(session, story_id):
+        return photo, SimpleNamespace(id=uuid4(), candidate_id="cand-assetless"), 1, 100
+
+    slides = []
+    for index in range(6):
+        role = "hook" if index == 0 else ("takeaway" if index == 5 else "evidence")
+        slide = _slide_dict(
+            role, "Ты видишь разницу" if index == 0 else f"Факт номер {index + 1}", "graphic",
+            [_r("graphic", 0.08, 0.12, 0.84, 0.36, graphic_type="flow_diagram", tone="accent",
+                flow_steps=[f"ШАГ {index + 1}", "ПРОВЕРКА", "ВЫВОД"]), _text(y=0.56)],
+            slide_body=f"Конкретное объяснение номер {index + 1} связывает задачу, проверку и результат без нового факта.",
+        )
+        slides.append(slide)
+    output = _v10_output(slides)
+    output["content_archetype"] = "trend_generative"
+    output["creative_execution_plan"]["media_strategy"] = "graphic"
+
+    monkeypatch.setattr(trigger, "_resolve_single_source_image", fake_source)
+    monkeypatch.setattr(
+        trigger, "_run_director_sequence",
+        AsyncMock(return_value=(cd.CreativeGenerationOutcome(carousel=InstagramCarouselCreative.model_validate(output)), [])),
+    )
+    _patch_delivery(monkeypatch)
+    monkeypatch.setattr(settings, "instagram_image_generation_mode", "off")
+    outcome = await trigger.evaluate_and_submit_instagram_opportunity(
+        db_session, AsyncMock(), opportunity=_news_opportunity(), opportunity_summary="s",
+        gateway=RoutingFakeGateway(output), prompt_repository=FilePromptRepository(_PROMPTS), phase_a_enabled=True,
+    )
+    assert outcome.reason == "media_quality_hold" and outcome.gate_decision == "hold"
+    assert outcome.delivery_sent is False and outcome.delivery_reason == "too_many_nonvisual_slides:1,2,3,4,5,6"
+    assert trigger.deliver_instagram_package.await_count == 0

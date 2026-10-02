@@ -156,7 +156,7 @@ def test_evidence_bound_gemini_story_gets_one_cover_only_deterministic_text_anch
     renders = render_instagram_carousel(_gemini_brand_package())
     cover = renders[0]
     anchor = cover.evidence.notes["product_brand_anchor"]
-    assert anchor["status"] == "READY"
+    assert anchor["status"] == "DRAWN_ON_COVER"
     assert anchor["identity"] == "google_gemini"
     assert anchor["label"] == "GOOGLE · GEMINI"
     assert anchor["asset_kind"] == "deterministic_text"
@@ -165,7 +165,7 @@ def test_evidence_bound_gemini_story_gets_one_cover_only_deterministic_text_anch
     assert any(region.kind == "product_brand_anchor" and not region.clipped for region in cover.evidence.text_regions)
     assert cover.evidence.visible_brand_mark_count == 1  # canonical KAGE mark remains exactly one
     assert cover.evidence.text_clipped is False
-    assert renders[1].evidence.notes["product_brand_anchor"]["status"] == "COVER_ONLY"
+    assert renders[1].evidence.notes["product_brand_anchor"]["status"] == "NOT_PRIMARY_SLIDE"
 
 
 def test_incidental_company_mention_without_hook_identity_never_adds_brand_anchor() -> None:

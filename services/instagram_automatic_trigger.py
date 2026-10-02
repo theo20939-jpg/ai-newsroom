@@ -1251,6 +1251,20 @@ async def evaluate_and_submit_instagram_opportunity(
         return InstagramTriggerCandidateOutcome(
             event_id=opportunity.id, accepted=True, reason=f"creative_media_failed:{type(exc).__name__}",
         )
+    if carousel is not None and media_first:
+        from services.instagram_creative_media import media_first_carousel_hold_reason
+
+        media_hold = media_first_carousel_hold_reason(carousel, creative_media)
+        if media_hold:
+            logger.warning("instagram_media_first_quality_hold", extra={
+                "opportunity_id": opportunity.id, "reason": media_hold,
+                "image_generation_mode": settings.instagram_image_generation_mode,
+            })
+            return _decision_outcome(
+                opportunity=opportunity, reason="media_quality_hold", trend_signal=trend_context,
+                duplicate=phase_a_plan.duplicate, accepted=True, gate_decision="hold",
+                delivery_sent=False, delivery_reason=media_hold,
+            )
     if generated_promotions and creative_media.status not in {"source_media", "generated_media", "typographic", "graphic", "media_plan_ready"}:
         # generation for a promoted slide did not produce a picture: the unpromoted plan renders text-led (priority 3) - no second paid call
         logger.warning("instagram_generated_fallback_failed", extra={"opportunity_id": opportunity.id, "status": creative_media.status})

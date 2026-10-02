@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from PIL import Image
 
 from services.instagram_carousel_layouts import render_carousel_slide
-from services.instagram_brand_anchor import apply_brand_anchor, resolve_brand_anchor
+from services.instagram_brand_anchor import place_brand_anchor_in_carousel, resolve_brand_anchor
 from services.instagram_content_package import InstagramContentPackage
 from services.instagram_data_layouts import render_data_layout
 from services.instagram_editorial_layouts import LayoutResult, render_breaking_layout, render_news_layout
@@ -269,6 +269,7 @@ def render_instagram_carousel(
         else []
     )
     brand_anchor = resolve_brand_anchor(package)
+    layouts: list[LayoutResult] = []
     for slide in slides:
         index = int(slide["index"])
         role = str(slide.get("role", ""))
@@ -308,6 +309,13 @@ def render_instagram_carousel(
             FOCAL_FRAMING.reset(framing)
             framing = FOCAL_FRAMING.set(True)  # the generated picture is framed and graded exactly like a recap hero photo
         zone = HERO_ZONE.set((generated_zone if generated_mode == HERO else None) or (hero_copy_zone(subject[0]) if recap and subject is not None and role == "story" else None))
+        layout_plan = slide.get("layout")
+        if index == 0:
+            from services.instagram_brand_anchor import reserve_brand_anchor_row
+
+            layout_plan, brand_row_reserved = reserve_brand_anchor_row(layout_plan, brand_anchor)
+        else:
+            brand_row_reserved = False
         try:
             layout = render_carousel_slide(
                 spec=profile_spec(InstagramRenderProfile.CAROUSEL_SLIDE), role=role, index=index, total=total,
@@ -327,7 +335,7 @@ def render_instagram_carousel(
                 # docstring.
                 media_asset_identity=(asset_identities.get(index) if asset_identities is not None else None),
                 # Phase B.5: declarative layout + the resolver's subject->asset map (never a shared hero).
-                layout_plan=slide.get("layout"),
+                layout_plan=layout_plan,
                 recap=package.media_plan.get("content_archetype") == "news_recap",
                 editorial_fallback=bool(package.media_plan.get("media_first")),
                 ui_paths=package.media_plan.get("content_archetype") == "ai_hack",
@@ -343,14 +351,15 @@ def render_instagram_carousel(
             FOCAL_FRAMING.reset(framing)
             BAND_MEDIA_ASPECT.reset(band)
             HERO_ZONE.reset(zone)
-        if index == 0:
-            layout = apply_brand_anchor(layout, brand_anchor)
-        else:
-            layout.notes["product_brand_anchor"] = {
-                "status": "COVER_ONLY", "identity": brand_anchor.identity,
-                "reason": "product brand anchor is deliberately limited to the hook slide",
-            }
-        results.append(_result_from_layout(layout, package, profile=InstagramRenderProfile.CAROUSEL_SLIDE, slide_index=index, slide_count=total))
+        layout.notes["brand_anchor_row_reserved"] = brand_row_reserved
+        layouts.append(layout)
+
+    layouts = place_brand_anchor_in_carousel(layouts, brand_anchor)
+
+    results = [
+        _result_from_layout(layout, package, profile=InstagramRenderProfile.CAROUSEL_SLIDE, slide_index=index, slide_count=total)
+        for index, layout in enumerate(layouts)
+    ]
     return results
 
 

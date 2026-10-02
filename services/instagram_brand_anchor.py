@@ -8,6 +8,7 @@ then the safe fallback is a small deterministic text chip, never a reconstructed
 from __future__ import annotations
 
 import re
+from copy import deepcopy
 from dataclasses import dataclass, replace
 from typing import Pattern
 
@@ -36,6 +37,10 @@ class BrandAnchorDecision:
     asset_kind: str | None = None
     asset_source: str | None = None
     reason: str | None = None
+
+
+class BrandAnchorPlacementError(ValueError):
+    pass
 
 
 _IDENTITIES = (
@@ -123,6 +128,78 @@ def apply_brand_anchor(layout: LayoutResult, decision: BrandAnchorDecision) -> L
     region = TextRegionSpec(kind="product_brand_anchor", box=chip, clipped=False)
     notes = {
         **layout.notes,
-        "product_brand_anchor": {**decision.__dict__, "placement": "TOP_LEFT" if chip == candidates[0] else "TOP_RIGHT"},
+        "product_brand_anchor": {
+            **decision.__dict__,
+            "status": "DRAWN_ON_COVER",
+            "placement": "TOP_LEFT" if chip == candidates[0] else "TOP_RIGHT",
+        },
     }
     return replace(layout, image=canvas.convert("RGB"), text_regions=[*layout.text_regions, region], notes=notes)
+
+
+def reserve_brand_anchor_row(layout_plan: dict | None, decision: BrandAnchorDecision) -> tuple[dict | None, bool]:
+    """Reserve a small cover eyebrow row before layout execution.
+
+    Declarative coordinates are normalized. The whole cover text system moves by one deterministic
+    delta, preserving its internal spacing; if that would invade the KAGE footer zone, the plan is
+    left alone and carousel-level fallback placement handles it.
+    """
+    if decision.status != "READY" or not isinstance(layout_plan, dict):
+        return layout_plan, False
+    plan = deepcopy(layout_plan)
+    text = [r for r in plan.get("regions") or [] if r.get("kind") == "text"]
+    if not text:
+        return layout_plan, False
+    top = min(float(r.get("y") or 0) for r in text)
+    reserved_bottom = 0.14
+    if top >= reserved_bottom:
+        return plan, True
+    delta = reserved_bottom - top
+    if max(float(r.get("y") or 0) + float(r.get("h") or 0) + delta for r in text) > 0.91:
+        return layout_plan, False
+    for region in text:
+        region["y"] = round(float(region.get("y") or 0) + delta, 4)
+    return plan, True
+
+
+def mark_fallback_anchor(layout: LayoutResult) -> LayoutResult:
+    anchor = dict(layout.notes.get("product_brand_anchor") or {})
+    if anchor.get("status") != "DRAWN_ON_COVER":
+        return layout
+    anchor["status"] = "DRAWN_ON_FALLBACK_SLIDE"
+    return replace(layout, notes={**layout.notes, "product_brand_anchor": anchor})
+
+
+def place_brand_anchor_in_carousel(
+    layouts: list[LayoutResult], decision: BrandAnchorDecision,
+) -> list[LayoutResult]:
+    """Draw exactly one READY anchor: cover first, then the earliest collision-free slide."""
+    if not layouts:
+        return layouts
+    placed = list(layouts)
+    if decision.status != "READY":
+        placed[0] = apply_brand_anchor(placed[0], decision)
+        for layout in placed[1:]:
+            layout.notes["product_brand_anchor"] = {
+                "status": "NOT_APPLICABLE", "identity": decision.identity, "reason": decision.reason,
+            }
+        return placed
+
+    placed[0] = apply_brand_anchor(placed[0], decision)
+    drawn = placed[0].notes.get("product_brand_anchor", {}).get("status") == "DRAWN_ON_COVER"
+    if not drawn:
+        for index in range(1, len(placed)):
+            candidate = apply_brand_anchor(placed[index], decision)
+            if candidate.notes.get("product_brand_anchor", {}).get("status") == "DRAWN_ON_COVER":
+                placed[index] = mark_fallback_anchor(candidate)
+                drawn = True
+                break
+    if not drawn:
+        raise BrandAnchorPlacementError("READY product brand anchor has no collision-free carousel placement")
+    for layout in placed:
+        if "product_brand_anchor" not in layout.notes:
+            layout.notes["product_brand_anchor"] = {
+                "status": "NOT_PRIMARY_SLIDE", "identity": decision.identity,
+                "reason": "one primary subject-brand anchor already drawn",
+            }
+    return placed

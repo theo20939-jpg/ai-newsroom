@@ -121,6 +121,40 @@ class InstagramCreativeMediaResult:
         }
 
 
+def media_first_carousel_hold_reason(
+    creative: Any, result: InstagramCreativeMediaResult,
+) -> str | None:
+    """Return the fail-closed reason for a degraded normal carousel, if any.
+
+    A 4-6 slide media-first carousel may deliberately spend one beat on typography or a
+    deterministic graphic. Every other slide must carry resolver-owned pixels with a persisted
+    reference and content identity. A SOURCE/GENERATED slide is never reclassified as that one
+    rhythm break merely because its execution failed.
+    """
+    slides = list(getattr(creative, "slides", ()) or ())
+    if getattr(creative, "content_archetype", None) == "news_recap" or not 4 <= len(slides) <= 6:
+        return None
+    assets = {int(a.asset_key): a for a in result.assets if a.asset_key.isdigit()}
+    nonvisual: list[int] = []
+    for index, slide in enumerate(slides):
+        asset = assets.get(index)
+        declared = _slide_value(slide, "media_source")
+        required = declared in {"source", "generated"} or (
+            asset is not None and asset.media_mode in {InstagramMediaMode.SOURCE, InstagramMediaMode.GENERATED}
+        )
+        if asset is None or asset.image is None:
+            if required:
+                status = asset.status if asset is not None else "missing_execution_record"
+                return f"slide_{index + 1}_required_media_missing:{status}"
+            nonvisual.append(index + 1)
+            continue
+        if not asset.asset_ref or not asset.asset_identity:
+            return f"slide_{index + 1}_visual_not_persisted"
+    if len(nonvisual) > 1:
+        return f"too_many_nonvisual_slides:{','.join(map(str, nonvisual))}"
+    return None
+
+
 def derive_image_identity(image: Image.Image) -> str:
     """Content-addressed identity of the decoded pixels (resolver-owned, deterministic)."""
     digest = hashlib.sha256(f"{image.size[0]}x{image.size[1]}:{image.mode}".encode("ascii"))
