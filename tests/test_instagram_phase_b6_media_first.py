@@ -58,7 +58,7 @@ def test_v10_makes_generated_media_first_class_and_v91_is_untouched() -> None:
     assert v10["version"] == "10" and "generated_media is not available" not in text
     assert "GENERATED media is FIRST-CLASS" in text and "There is no typographic-only slide" in text
     assert "generation_brief" in text and "content_ref is `generated`" in text
-    assert cd.CAROUSEL_PROMPT_VERSION == "10.11" and "10" in cd.MEDIA_FIRST_CAROUSEL_VERSIONS and "10.1" in cd.MEDIA_FIRST_CAROUSEL_VERSIONS and "10.1" in cd._EVIDENCE_HANDLE_CAROUSEL_VERSIONS
+    assert cd.CAROUSEL_PROMPT_VERSION == "10.13" and "10" in cd.MEDIA_FIRST_CAROUSEL_VERSIONS and "10.1" in cd.MEDIA_FIRST_CAROUSEL_VERSIONS and "10.1" in cd._EVIDENCE_HANDLE_CAROUSEL_VERSIONS
 
 
 def test_v10_schema_requires_a_visual_source_on_every_slide_and_never_typographic() -> None:
@@ -565,7 +565,7 @@ async def test_live_trigger_runs_the_media_first_pipeline_end_to_end(db_session,
     # now also generates; one attempt each, no retries
     assert len(calls) == 2 and all(c["max_attempts"] == 1 for c in calls)
     obs = captured["package"].media_plan["b4_observability"]
-    assert obs["prompt_version"] == "10.11" and obs["text_only_slides"] == [] and obs["typographic_final_media_slides"] == []
+    assert obs["prompt_version"] == "10.13" and obs["text_only_slides"] == [] and obs["typographic_final_media_slides"] == []
     assert [s["media_source"] for s in obs["slides"]] == ["generated", "generated", "source"]
     promoted = captured["package"].media_plan["generated_no_photo_slides"]
     assert [(p["slide"], p["treatment"]) for p in promoted] == [(1, "generated")] and promoted[0]["before"] != []

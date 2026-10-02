@@ -99,7 +99,7 @@ def _prompt():
 
 
 def test_v9_replaces_the_stale_v8_visual_rules_and_v8_is_untouched() -> None:
-    assert CAROUSEL_PROMPT_VERSION == "10.11"
+    assert CAROUSEL_PROMPT_VERSION == "10.13"
     rules = " ".join(_prompt().rules)
     for stale in ("Do not plan black or dark surfaces", "light editorial paper or soft grey", "nothing is ever placed over an image"):
         assert stale not in rules
@@ -377,8 +377,8 @@ async def test_creative_director_request_is_bounded_and_otherwise_unchanged() ->
     assert cd._CREATIVE_DIRECTOR_MAX_TOKENS == 16_000
     # 2026-09-26: the per-post cap derived from the measured all-in cost per slide (a 10-slide carousel: ceil(1.25 x 1227 x 10))
     assert request.max_tokens == cd.director_output_cap(director_input, cd.CAROUSEL_PROMPT_NAME) == 15_338
-    prompt = repo.resolve(cd.CAROUSEL_PROMPT_NAME, "10.11")
-    assert cd._CAROUSEL_PROMPT_VERSION == "10.11"
+    prompt = repo.resolve(cd.CAROUSEL_PROMPT_NAME, "10.13")
+    assert cd._CAROUSEL_PROMPT_VERSION == "10.13"
     assert request.response_mode == "json_schema" and request.response_schema == prompt.output_schema
     assert request.messages[0].content[0].text == prompt.system + "\n\nRULES:\n" + "\n".join(f"- {r}" for r in prompt.rules)
     assert request.messages[1].content[0].text == cd._build_user_text(director_input, evidence_handles=True)

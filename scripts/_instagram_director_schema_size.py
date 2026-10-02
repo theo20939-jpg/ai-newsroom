@@ -1,6 +1,6 @@
 """Director output-size analysis for the output-token cap (founder task 2026-09-26: derive the cap from the schema, not an arbitrary number).
 
-For each active Director prompt (carousel 10.11, single 7, reel 8) it walks the output JSON schema and reports:
+For each active Director prompt (carousel 10.13, single 7, reel 8) it walks the output JSON schema and reports:
   - the schema-constrained worst case per slide / for the top level (every string at its maxLength, every array at its maxItems);
   - the fields the schema leaves UNBOUNDED (no maxLength / maxItems) - they make a pure schema bound infinite;
 and measures the REAL size of every saved successful Director response (JSON characters, output and reasoning tokens).
@@ -16,7 +16,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-PROMPTS = {"carousel": ("instagram_creative_director_carousel", "10.11"), "single": ("instagram_creative_director_single", "7"),
+PROMPTS = {"carousel": ("instagram_creative_director_carousel", "10.13"), "single": ("instagram_creative_director_single", "7"),
            "reel": ("instagram_creative_director_reel", "8")}
 KEY_OVERHEAD = 8  # quotes, colon, comma and indentation around a key
 
