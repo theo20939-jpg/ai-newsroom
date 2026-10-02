@@ -42,25 +42,143 @@ report.md), unchanged here, not reinterpreted.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
+from database.models.content_draft import ContentDraft
 from database.models.news_event import NewsEvent
 from database.models.story_link import NewsEventStoryLink
+from database.models.story_telegram_delivery import (
+    DeliveryStatus,
+    StoryTelegramDelivery,
+)
 from services.story_confidence import compute_confidence_band
 from services.story_delta_engine import compute_story_delta
 from services.story_memory import SEMANTIC_DUPLICATE, STORY_UPDATE, SUPPORTING_SOURCE
 from services.story_suppression import compute_would_suppress
-from services.story_telegram_delivery import FAIL_CLOSED_ROUTE_TO_REVIEW, determine_reply_target, get_root_delivery
+from services.story_telegram_delivery import (
+    FAIL_CLOSED_ROUTE_TO_REVIEW,
+    determine_reply_target,
+    get_root_delivery,
+)
 
 # Match types Story Memory itself already defines as "no material new information" - see this
 # module's own docstring for why STORY_UPDATE/UNCERTAIN_MATCH/RELATED_STORY/NEW_STORY are
 # deliberately excluded from this set. Still the cheap pre-filter before the V2 recompute below -
 # no need to touch the delta engine at all for a match_type that can never suppress regardless.
 _NO_MATERIAL_UPDATE_MATCH_TYPES = frozenset({SEMANTIC_DUPLICATE, SUPPORTING_SOURCE})
+
+# KAGE NEWS publication-boundary premise identity. Story Memory deliberately favors precision
+# and can split English and Russian copies of one event into separate Stories. KAGE 11.10 copy is
+# Russian regardless of source language, so the already-generated draft is the first durable,
+# same-language representation available on both sides of such a split. This guard compares the
+# full headline + body (never headline equality) against recently delivered NEWS drafts and only
+# blocks a dense overlap: six shared five-character full-premise stems, >=25% of the smaller
+# premise, and three shared headline stems as an identity anchor. The thresholds are frozen from
+# the 2026-10-02 live Grok/Maduro incident (9 premise stems, 0.290, 4 headline stems) and the full
+# 68-delivery saved corpus; the headline anchor excludes the related-but-new OpenAI subpoena.
+_NEWS_PREMISE_WINDOW = timedelta(hours=24)
+_NEWS_PREMISE_STEM_CHARS = 5
+_NEWS_PREMISE_MIN_SHARED = 6
+_NEWS_PREMISE_MIN_OVERLAP = 0.25
+_NEWS_PREMISE_MIN_HEADLINE_SHARED = 3
+_NEWS_PREMISE_STOP_WORDS = frozenset({
+    "the", "and", "for", "with", "this", "that", "как", "что", "это", "для", "или", "при",
+    "про", "его", "она", "они", "уже", "еще", "после", "почему", "когда", "который", "данным",
+    "также", "компания",
+})
+
+
+def _news_premise_stems(title: str | None, body: str | None) -> set[str]:
+    tokens = re.findall(r"[a-zа-яё0-9]+", f"{title or ''} {body or ''}".lower())
+    return {
+        token[:_NEWS_PREMISE_STEM_CHARS]
+        for token in tokens
+        if len(token) > 2 and token not in _NEWS_PREMISE_STOP_WORDS
+    }
+
+
+def news_premise_similarity(
+    title: str | None, body: str | None, other_title: str | None, other_body: str | None,
+) -> tuple[float, tuple[str, ...]]:
+    """Deterministic full-premise overlap used by the cross-Story delivery guard."""
+    left = _news_premise_stems(title, body)
+    right = _news_premise_stems(other_title, other_body)
+    if not left or not right:
+        return 0.0, ()
+    shared = tuple(sorted(left & right))
+    return round(len(shared) / min(len(left), len(right)), 3), shared
+
+
+@dataclass(frozen=True)
+class PublishedPremiseDuplicateCheck:
+    blocked: bool
+    reason: str
+    matched_delivery_id: UUID | None = None
+    matched_message_id: int | None = None
+    matched_story_id: UUID | None = None
+    overlap: float = 0.0
+    shared_stems: tuple[str, ...] = ()
+    headline_shared_stems: tuple[str, ...] = ()
+    candidate_count: int = 0
+
+
+async def check_published_premise_duplicate(
+    session: AsyncSession, *, draft_id: UUID, now: datetime | None = None,
+) -> PublishedPremiseDuplicateCheck:
+    """Block a same-premise NEWS draft even when Story Memory split source languages.
+
+    Read-only and bounded to successful deliveries in the last 24 hours. The current draft must
+    already exist, which places this after generation but still before visual work or Telegram.
+    """
+    draft = await session.get(ContentDraft, draft_id)
+    if draft is None:
+        return PublishedPremiseDuplicateCheck(False, "current draft missing - no premise comparison")
+    reference_now = now or datetime.now(UTC)
+    rows = (await session.execute(
+        select(StoryTelegramDelivery, ContentDraft)
+        .join(ContentDraft, ContentDraft.id == StoryTelegramDelivery.content_draft_id)
+        .where(
+            StoryTelegramDelivery.delivery_status == DeliveryStatus.SENT,
+            StoryTelegramDelivery.sent_at >= reference_now - _NEWS_PREMISE_WINDOW,
+            StoryTelegramDelivery.content_draft_id != draft_id,
+        )
+        .order_by(StoryTelegramDelivery.sent_at.desc())
+    )).all()
+    for delivery, prior in rows:
+        overlap, shared = news_premise_similarity(draft.title, draft.body, prior.title, prior.body)
+        _headline_overlap, headline_shared = news_premise_similarity(
+            draft.title, None, prior.title, None,
+        )
+        if (
+            len(shared) < _NEWS_PREMISE_MIN_SHARED
+            or overlap < _NEWS_PREMISE_MIN_OVERLAP
+            or len(headline_shared) < _NEWS_PREMISE_MIN_HEADLINE_SHARED
+        ):
+            continue
+        return PublishedPremiseDuplicateCheck(
+            True,
+            f"same full NEWS premise already delivered as message {delivery.telegram_message_id}; "
+            f"shared_stems={len(shared)} headline_shared_stems={len(headline_shared)} "
+            f"overlap={overlap:.3f}",
+            matched_delivery_id=delivery.id,
+            matched_message_id=delivery.telegram_message_id,
+            matched_story_id=delivery.story_id,
+            overlap=overlap,
+            shared_stems=shared,
+            headline_shared_stems=headline_shared,
+            candidate_count=len(rows),
+        )
+    return PublishedPremiseDuplicateCheck(
+        False, f"no recent delivered NEWS draft has the same full premise ({len(rows)} candidates checked)",
+        candidate_count=len(rows),
+    )
 
 
 @dataclass(frozen=True)

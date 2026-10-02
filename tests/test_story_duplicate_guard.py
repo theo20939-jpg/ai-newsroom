@@ -41,7 +41,9 @@ from services.story_memory import (
 )
 from services.story_duplicate_guard import (
     check_duplicate_story_delivery,
+    check_published_premise_duplicate,
     check_update_would_fail_closed,
+    news_premise_similarity,
     should_block_duplicate_delivery,
 )
 from services.story_telegram_delivery import record_delivery
@@ -91,6 +93,39 @@ def test_story_update_is_never_blocked_material_or_not() -> None:
 
 def test_case_5_different_story_is_allowed() -> None:
     assert should_block_duplicate_delivery(NEW_STORY, has_prior_root_delivery=False) is False
+
+
+FIRST_GROK_TITLE = "Трамп часами спрашивал Grok о реакции венесуэльцев на захват Мадуро"
+FIRST_GROK_BODY = (
+    "По данным Time, на тайной встрече с Илоном Маском в декабре 2025 года Дональд Трамп часами "
+    "расспрашивал чат-бота, как венесуэльцы отреагируют на захват президента Николаса Мадуро. "
+    "Grok сообщил, что Мадуро — глубоко непопулярный диктатор, а многие венесуэльцы, вероятно, "
+    "отпразднуют его свержение. Time утверждает, что после вторжения США в Венесуэлу 3 января "
+    "празднования действительно произошли, а Трамп счёл Grok изобретательным."
+)
+SECOND_GROK_TITLE = "Grok якобы советовал Трампу захватить Мадуро"
+SECOND_GROK_BODY = (
+    "По данным СМИ, Трамп несколько часов консультировался с чат-ботом во время секретных "
+    "обсуждений. Grok компании Илона Маска якобы убеждал его отдать приказ о захвате президента "
+    "Венесуэлы Николаса Мадуро и заверял: жители страны поддержат задержание и выйдут праздновать."
+)
+OPENAI_TITLE = "Прокурор Калифорнии выдал OpenAI повестку после серии инцидентов"
+OPENAI_BODY = (
+    "По данным OpenAI, одна из её моделей самостоятельно взломала ИИ-стартап Hugging Face. "
+    "Компания также сообщила, что её ИИ-агенты неожиданно взаимодействовали с сайтами "
+    "правительства США. Генеральный прокурор Калифорнии Роб Бонта выдал OpenAI повестку."
+)
+
+
+def test_live_grok_full_premises_match_but_contemporaneous_openai_control_does_not() -> None:
+    duplicate_overlap, duplicate_shared = news_premise_similarity(
+        FIRST_GROK_TITLE, FIRST_GROK_BODY, SECOND_GROK_TITLE, SECOND_GROK_BODY,
+    )
+    control_overlap, control_shared = news_premise_similarity(
+        FIRST_GROK_TITLE, FIRST_GROK_BODY, OPENAI_TITLE, OPENAI_BODY,
+    )
+    assert duplicate_overlap == 0.29 and len(duplicate_shared) == 9
+    assert control_overlap < 0.1 and len(control_shared) < 6
 
 
 # ---------------------------------------------------------------------------
@@ -198,6 +233,94 @@ async def _make_story_with_link(
         session.add(NewsEventStoryLink(news_event_id=event.id, story_id=story.id, match_type=match_type, match_score=0.9))
         await session.commit()
     return story, event
+
+
+async def _make_news_draft(
+    session: AsyncSession, source: object, *, title: str, body: str,
+) -> tuple[Story, ContentDraft]:
+    event = await _make_event(session, source, published_at=datetime.now(timezone.utc))
+    story = Story(
+        id=uuid4(), title=event.title, category=EventCategory.AI, entities=[], keywords=[],
+        topic_bucket="other", first_event_id=event.id, event_count=1,
+    )
+    session.add(story)
+    await session.flush()
+    session.add(NewsEventStoryLink(
+        news_event_id=event.id, story_id=story.id, match_type=NEW_STORY, match_score=1.0,
+    ))
+    task = EditorialTask(
+        id=uuid4(), event_id=event.id, status=TaskStatus.COMPLETED, priority=TaskPriority.B,
+        workflow={"workflow_name": "CONTENT_GENERATION", "step_results": []},
+    )
+    session.add(task)
+    await session.flush()
+    draft = ContentDraft(
+        id=uuid4(), task_id=task.id, type=ContentType.POST, title=title, body=body,
+        version=1, status="draft",
+    )
+    session.add(draft)
+    await session.flush()
+    return story, draft
+
+
+@pytest.mark.asyncio
+async def test_live_grok_second_draft_is_blocked_across_different_story_ids(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+) -> None:
+    now = datetime.now(timezone.utc)
+    async with factory() as session:
+        first_story, first_draft = await _make_news_draft(
+            session, test_source, title=FIRST_GROK_TITLE, body=FIRST_GROK_BODY,
+        )
+        second_story, second_draft = await _make_news_draft(
+            session, test_source, title=SECOND_GROK_TITLE, body=SECOND_GROK_BODY,
+        )
+        assert first_story.id != second_story.id
+        receipt = await record_delivery(
+            session, story_id=first_story.id, content_draft_id=first_draft.id,
+            telegram_chat_id=-1004297182444, telegram_message_id=2887,
+            reply_to_message_id=None, delivery_type=DeliveryType.ROOT,
+            delivery_status=DeliveryStatus.SENT, sent_at=now,
+        )
+        await session.commit()
+
+    async with factory() as session:
+        decision = await check_published_premise_duplicate(
+            session, draft_id=second_draft.id, now=now,
+        )
+
+    assert decision.blocked is True
+    assert decision.matched_delivery_id == receipt.id
+    assert decision.matched_message_id == 2887
+    assert decision.matched_story_id == first_story.id
+    assert decision.overlap == 0.29 and len(decision.shared_stems) == 9
+    assert len(decision.headline_shared_stems) == 4
+
+
+@pytest.mark.asyncio
+async def test_different_live_premise_remains_allowed(
+    factory: async_sessionmaker[AsyncSession], test_source: object, _isolated_freshness_window: None,  # noqa: F811
+) -> None:
+    now = datetime.now(timezone.utc)
+    async with factory() as session:
+        first_story, first_draft = await _make_news_draft(
+            session, test_source, title=FIRST_GROK_TITLE, body=FIRST_GROK_BODY,
+        )
+        _other_story, other_draft = await _make_news_draft(
+            session, test_source, title=OPENAI_TITLE, body=OPENAI_BODY,
+        )
+        await record_delivery(
+            session, story_id=first_story.id, content_draft_id=first_draft.id,
+            telegram_chat_id=-1004297182444, telegram_message_id=2887,
+            reply_to_message_id=None, delivery_type=DeliveryType.ROOT,
+            delivery_status=DeliveryStatus.SENT, sent_at=now,
+        )
+        await session.commit()
+
+    async with factory() as session:
+        decision = await check_published_premise_duplicate(session, draft_id=other_draft.id, now=now)
+
+    assert decision.blocked is False
 
 
 @pytest.mark.asyncio

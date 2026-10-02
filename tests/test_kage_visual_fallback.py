@@ -519,11 +519,13 @@ async def test_2865_controlled_accepted_visual_reuses_bytes_without_generation(
 
 
 @pytest.mark.asyncio
-async def test_2865_generation_failure_sends_the_typography_card(factory, test_source, monkeypatch):
+async def test_2865_generation_failure_holds_instead_of_sending_typography(factory, test_source, monkeypatch):
     run = await _cycle(factory, test_source, monkeypatch, M2865, USEFUL_2865_BODY, [],
                        generation_error="generation_error:RuntimeError")
-    photo = _assert_photo_post(run)
-    assert photo.filename == "kage-typography_card.png" and photo.data == vf.render_typography_card(TITLE_2865)
+    run.bot.send_message.assert_not_called()
+    run.bot.send_photo.assert_not_called()
+    assert run.outcome["status"] == "VISUAL_HOLD" and run.outcome["reason"] == "no_visual_resolved"
+    assert run.draft_status == HOLD_FOR_VISUAL_STATUS and run.receipts == 0
     audit = run.lineage["stages"]["visual_fallback"]
     assert audit["tier"] == vf.TIER_TYPOGRAPHY and audit["typography_provider_cost_usd"] == "0"
     assert audit["generation_reason"] == "generation_error:RuntimeError"

@@ -64,7 +64,11 @@ from services.presentation_director import (
     decide_presentation,
 )
 from services.editorial_recomposition import RecompositionResult, maybe_recompose
-from services.story_duplicate_guard import check_duplicate_story_delivery, check_update_would_fail_closed
+from services.story_duplicate_guard import (
+    check_duplicate_story_delivery,
+    check_published_premise_duplicate,
+    check_update_would_fail_closed,
+)
 from services.image_persistence import (
     EditorialImageCandidate,
     get_editorial_image_candidates,
@@ -699,6 +703,11 @@ async def _kage_visual_fallback_photo(
                                                 "typography_reason": fallback.typography_reason})
     if fallback.image_bytes is None:
         return None, fallback.reason
+    if fallback.tier == TIER_TYPOGRAPHY:
+        # A typography card remains available to explicit debugging/emergency tooling, but it is
+        # not a valid autonomous NEWS visual. The resolver still records the zero-cost fallback;
+        # the production delivery boundary converts it to VISUAL_HOLD.
+        return None, HOLD_REASON_NO_VISUAL_RESOLVED
     extension = "png" if fallback.tier == TIER_TYPOGRAPHY else "jpg"
     return BufferedInputFile(fallback.image_bytes, filename=f"kage-{fallback.tier}.{extension}"), "ok"
 
@@ -2070,6 +2079,56 @@ async def _run_content_cycle_impl(
             if not usefulness["passed"]:
                 result.editorial_usefulness_block += 1
                 logger.warning("kage_editorial_usefulness_blocked", extra={"task_id": str(outcome.task_id), **usefulness})
+                _kage_active_attempt.set(None)
+                continue
+            # KAGE NEWS 2026-10-02: Story Memory can split English and Russian copies of the same
+            # event into separate story_ids. Compare the full already-generated Russian premise
+            # with recent successful NEWS deliveries before any visual work or Telegram call.
+            async with session_factory() as premise_session:
+                premise_duplicate = await check_published_premise_duplicate(
+                    premise_session, draft_id=outcome.content_draft.id,
+                )
+                await update_attempt_audit(
+                    premise_session, task_id=outcome.task_id, section="stage", value={
+                        "name": "published_premise_duplicate_guard",
+                        "blocked": premise_duplicate.blocked,
+                        "reason": premise_duplicate.reason,
+                        "matched_delivery_id": (
+                            str(premise_duplicate.matched_delivery_id)
+                            if premise_duplicate.matched_delivery_id else None
+                        ),
+                        "matched_message_id": premise_duplicate.matched_message_id,
+                        "matched_story_id": (
+                            str(premise_duplicate.matched_story_id)
+                            if premise_duplicate.matched_story_id else None
+                        ),
+                        "overlap": premise_duplicate.overlap,
+                        "shared_stems": list(premise_duplicate.shared_stems),
+                        "headline_shared_stems": list(premise_duplicate.headline_shared_stems),
+                        "candidate_count": premise_duplicate.candidate_count,
+                    },
+                )
+                if premise_duplicate.blocked:
+                    await premise_session.execute(
+                        update(ContentDraft).where(ContentDraft.id == outcome.content_draft.id)
+                        .values(status="draft_blocked_duplicate_premise")
+                    )
+                    premise_story_link = await premise_session.get(
+                        ContentDraftStoryLink, outcome.content_draft.id
+                    )
+                    await record_terminal_outcome(
+                        premise_session, task_id=outcome.task_id, status="DUPLICATE_SUPERSEDED",
+                        draft_id=outcome.content_draft.id,
+                        story_id=(premise_story_link.story_id if premise_story_link else None),
+                        reason=premise_duplicate.reason,
+                    )
+                await premise_session.commit()
+            if premise_duplicate.blocked:
+                result.duplicate_blocked += 1
+                logger.info(
+                    "published_premise_duplicate_blocked",
+                    extra={"event_id": str(event_id), "reason": premise_duplicate.reason},
+                )
                 _kage_active_attempt.set(None)
                 continue
             result.final_publication_pass += 1
