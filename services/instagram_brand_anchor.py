@@ -8,8 +8,10 @@ then the safe fallback is a small deterministic text chip, never a reconstructed
 from __future__ import annotations
 
 import re
+from hashlib import sha256
 from copy import deepcopy
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Pattern
 
 from PIL import Image, ImageDraw
@@ -27,6 +29,7 @@ class BrandIdentity:
     company_pattern: Pattern[str]
     product_pattern: Pattern[str] | None = None
     verified_asset_path: str | None = None
+    verified_asset_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -36,6 +39,7 @@ class BrandAnchorDecision:
     label: str | None = None
     asset_kind: str | None = None
     asset_source: str | None = None
+    asset_sha256: str | None = None
     reason: str | None = None
 
 
@@ -45,7 +49,12 @@ class BrandAnchorPlacementError(ValueError):
 
 _IDENTITIES = (
     BrandIdentity("google_gemini", "GOOGLE · GEMINI", re.compile(r"\bgoogle\b", re.I), re.compile(r"\bgemini(?:\s+\d+(?:\.\d+)*(?:\s+[a-z][\w-]*)?)?\b", re.I)),
-    BrandIdentity("openai", "OPENAI", re.compile(r"\bopenai\b", re.I), re.compile(r"\b(?:chatgpt|gpt[-\s]?\d+(?:\.\d+)*|sora)\b", re.I)),
+    BrandIdentity(
+        "openai", "OPENAI", re.compile(r"\bopenai\b", re.I),
+        re.compile(r"\b(?:chatgpt|gpt[-\s]?\d+(?:\.\d+)*|sora)\b", re.I),
+        "assets/brand/subjects/openai/OAI_OpenAI_Wordmark_White.png",
+        "c2a4b58c101ea5b5dbfc23561371da8b5aac9090aa3c2b09f1a9d9cdc6b508c5",
+    ),
     BrandIdentity("apple", "APPLE", re.compile(r"\bapple\b", re.I), re.compile(r"\b(?:iphone|ipad|macbook|vision\s+pro)\b", re.I)),
     BrandIdentity("samsung", "SAMSUNG", re.compile(r"\bsamsung\b", re.I), re.compile(r"\bgalaxy(?:\s+[a-z]\d+)?\b", re.I)),
 )
@@ -80,7 +89,8 @@ def resolve_brand_anchor(package: InstagramContentPackage) -> BrandAnchorDecisio
         if identity.verified_asset_path:
             return BrandAnchorDecision(
                 status="READY", identity=identity.key, label=identity.label, asset_kind="verified_asset",
-                asset_source=identity.verified_asset_path, reason="hook identity corroborated by stored story evidence",
+                asset_source=identity.verified_asset_path, asset_sha256=identity.verified_asset_sha256,
+                reason="hook identity corroborated by stored story evidence",
             )
         return BrandAnchorDecision(
             status="READY", identity=identity.key, label=identity.label, asset_kind="deterministic_text",
@@ -94,21 +104,34 @@ def _intersects(a: tuple[int, int, int, int], b: tuple[int, int, int, int], *, p
 
 
 def apply_brand_anchor(layout: LayoutResult, decision: BrandAnchorDecision) -> LayoutResult:
-    """Add one secondary text chip without changing the canonical KAGE mark count."""
+    """Add one secondary verified wordmark or text chip without changing the canonical KAGE mark count."""
     if decision.status != "READY" or not decision.label:
         notes = {**layout.notes, "product_brand_anchor": decision.__dict__}
         return replace(layout, notes=notes)
-    if decision.asset_kind != "deterministic_text":
-        notes = {**layout.notes, "product_brand_anchor": decision.__dict__}
-        return replace(layout, notes=notes)
-
     canvas = layout.image.convert("RGBA")
     draw = ImageDraw.Draw(canvas, "RGBA")
-    font = ig_font(34, "semibold")
-    text_box = draw.textbbox((0, 0), decision.label, font=font)
-    text_width = text_box[2] - text_box[0]
     chip_h = 58
-    chip_w = text_width + 64
+    asset: Image.Image | None = None
+    asset_error: str | None = None
+    if decision.asset_kind == "verified_asset" and decision.asset_source:
+        path = Path(__file__).resolve().parents[1] / decision.asset_source
+        try:
+            data = path.read_bytes()
+            digest = sha256(data).hexdigest()
+            if decision.asset_sha256 and digest != decision.asset_sha256:
+                raise ValueError("verified asset checksum mismatch")
+            asset = Image.open(path).convert("RGBA")
+            target_h = 50
+            asset = asset.resize((round(asset.width * target_h / asset.height), target_h), Image.Resampling.LANCZOS)
+            chip_h = 68
+            chip_w = asset.width + 24
+        except (OSError, ValueError) as exc:
+            asset_error = type(exc).__name__
+    if asset is None:
+        font = ig_font(34, "semibold")
+        text_box = draw.textbbox((0, 0), decision.label, font=font)
+        text_width = text_box[2] - text_box[0]
+        chip_w = text_width + 64
     margin_x, margin_y = 64, 56
     candidates = (
         (margin_x, margin_y, margin_x + chip_w, margin_y + chip_h),
@@ -122,15 +145,20 @@ def apply_brand_anchor(layout: LayoutResult, decision: BrandAnchorDecision) -> L
 
     radius = 14
     draw.rounded_rectangle(chip, radius=radius, fill=(*tok.INK, 224), outline=(*tok.GREY_STRONG, 150), width=2)
-    draw.rounded_rectangle((chip[0], chip[1], chip[0] + 9, chip[3]), radius=4, fill=(*tok.RED, 255))
-    text_y = chip[1] + (chip_h - (text_box[3] - text_box[1])) // 2 - text_box[1]
-    draw.text((chip[0] + 35, text_y), decision.label, font=font, fill=(*tok.WHITE, 255))
+    if asset is not None:
+        canvas.alpha_composite(asset, (chip[0] + 12, chip[1] + (chip_h - asset.height) // 2))
+    else:
+        draw.rounded_rectangle((chip[0], chip[1], chip[0] + 9, chip[3]), radius=4, fill=(*tok.RED, 255))
+        text_y = chip[1] + (chip_h - (text_box[3] - text_box[1])) // 2 - text_box[1]
+        draw.text((chip[0] + 35, text_y), decision.label, font=font, fill=(*tok.WHITE, 255))
     region = TextRegionSpec(kind="product_brand_anchor", box=chip, clipped=False)
     notes = {
         **layout.notes,
         "product_brand_anchor": {
             **decision.__dict__,
             "status": "DRAWN_ON_COVER",
+            "asset_kind": "verified_asset" if asset is not None else "deterministic_text",
+            "asset_fallback_reason": None if asset is not None else asset_error,
             "placement": "TOP_LEFT" if chip == candidates[0] else "TOP_RIGHT",
         },
     }

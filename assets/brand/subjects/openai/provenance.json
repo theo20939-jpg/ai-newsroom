@@ -1,0 +1,10 @@
+{
+  "identity": "openai",
+  "asset": "OAI_OpenAI_Wordmark_White.png",
+  "source_page": "https://openai.com/brand/",
+  "source_download": "https://cdn.openai.com/brand/openai-logos.zip",
+  "retrieved_at": "2026-10-03",
+  "source_archive_sha256": "c54e85ab5884228f89f0230dd8effa8d588cad78166fe954135f4afa553222db",
+  "asset_sha256": "c2a4b58c101ea5b5dbfc23561371da8b5aac9090aa3c2b09f1a9d9cdc6b508c5",
+  "usage": "Official OpenAI wordmark, used unchanged as a secondary story-subject anchor under OpenAI brand guidelines."
+}

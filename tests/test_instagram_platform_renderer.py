@@ -168,6 +168,29 @@ def test_evidence_bound_gemini_story_gets_one_cover_only_deterministic_text_anch
     assert renders[1].evidence.notes["product_brand_anchor"]["status"] == "NOT_PRIMARY_SLIDE"
 
 
+def test_evidence_bound_openai_story_uses_checksum_verified_official_wordmark() -> None:
+    pkg = _gemini_brand_package()
+    slides = [dict(slide) for slide in pkg.media_plan["slides"]]
+    slides[0]["text"] = "ChatGPT попал в новую схему обмана"
+    media_plan = {**pkg.media_plan, "slides": slides}
+    openai_pkg = replace(pkg, media_plan=media_plan, director_evidence={
+        "evidence": ["OpenAI confirmed ChatGPT's name in its announcement"],
+        "editorial_decision": {
+            "topic": "Фейковый ChatGPT ведёт к установке malware",
+            "source_summary": "Поддельная реклама ChatGPT ведёт на вредоносную установку.",
+            "angle": "Как устроена схема вокруг ChatGPT.",
+        },
+    })
+    cover = render_instagram_carousel(openai_pkg)[0]
+    anchor = cover.evidence.notes["product_brand_anchor"]
+    assert anchor["status"] == "DRAWN_ON_COVER"
+    assert anchor["identity"] == "openai"
+    assert anchor["asset_kind"] == "verified_asset"
+    assert anchor["asset_sha256"] == "c2a4b58c101ea5b5dbfc23561371da8b5aac9090aa3c2b09f1a9d9cdc6b508c5"
+    assert anchor["asset_fallback_reason"] is None
+    assert any(region.kind == "product_brand_anchor" and not region.clipped for region in cover.evidence.text_regions)
+
+
 def test_incidental_company_mention_without_hook_identity_never_adds_brand_anchor() -> None:
     pkg = _gemini_brand_package()
     slides = [dict(slide) for slide in pkg.media_plan["slides"]]
